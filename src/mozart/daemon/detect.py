@@ -101,17 +101,27 @@ async def try_daemon_route(
         )
         return False, None
     except ValueError as e:
-        # Non-JSONDecodeError ValueErrors (e.g. Pydantic ValidationError)
-        # indicate real daemon-side bugs — log at WARNING so operators
-        # notice, and return the error details so callers can distinguish
-        # "daemon not running" from "daemon has a protocol bug".
+        # ValueErrors from readline() indicate response exceeded the
+        # StreamReader buffer limit (e.g. large CheckpointState payload).
+        # The daemon IS running — re-raise as DaemonError so callers
+        # don't fall through to "conductor not running" messaging.
+        error_msg = str(e)
+        is_limit_error = "chunk exceed the limit" in error_msg
         _logger.warning(
             "daemon_route_protocol_error",
             method=method,
-            error=str(e),
+            error=error_msg,
             error_type="ValueError",
+            is_limit_error=is_limit_error,
         )
-        return False, {"error": str(e), "error_type": type(e).__name__}
+        if is_limit_error:
+            from mozart.daemon.exceptions import DaemonError
+
+            raise DaemonError(
+                f"Response too large for '{method}' — the job's checkpoint "
+                f"exceeds the IPC buffer limit"
+            ) from e
+        return False, {"error": error_msg, "error_type": type(e).__name__}
     except Exception as e:
         from mozart.daemon.exceptions import JobSubmissionError, ResourceExhaustedError
 

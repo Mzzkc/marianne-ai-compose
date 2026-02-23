@@ -23,8 +23,12 @@ from mozart.daemon.task_utils import log_task_exception
 
 _logger = get_logger("daemon.ipc.server")
 
-# Maximum size of a single JSON-RPC message (1 MB).
-MAX_MESSAGE_BYTES = 1_048_576
+# Maximum size of a single JSON-RPC message.
+# Must accommodate full CheckpointState payloads — jobs with many sheets,
+# stdout_tail (up to 10 KB/sheet), synthesis_results, and config_snapshot
+# can easily reach 4-8 MB.  Bumped from 1 MiB after real-world jobs
+# (21 sheets) exceeded the limit and broke `mozart status`.
+MAX_MESSAGE_BYTES = 16_777_216  # 16 MiB
 
 # Default limit on concurrent client connections.
 DEFAULT_MAX_CONNECTIONS = 20

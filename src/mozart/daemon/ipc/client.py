@@ -28,8 +28,9 @@ from mozart.daemon.types import DaemonStatus, JobRequest, JobResponse
 _logger = get_logger("daemon.ipc.client")
 
 # Match the server's limit so large status responses (CheckpointState with
-# many sheets) aren't rejected by the StreamReader.
-_MAX_MESSAGE_BYTES = 1_048_576  # 1 MiB — same as server.MAX_MESSAGE_BYTES
+# many sheets, synthesis_results, stdout_tail) aren't rejected by the
+# StreamReader.  See server.py for rationale on the 16 MiB value.
+_MAX_MESSAGE_BYTES = 16_777_216  # 16 MiB — same as server.MAX_MESSAGE_BYTES
 
 
 class DaemonClient:

@@ -15,7 +15,6 @@ from mozart.daemon.detect import (
     try_daemon_route,
 )
 
-
 # =============================================================================
 # _resolve_socket_path
 # =============================================================================
@@ -193,8 +192,13 @@ class TestTryDaemonRoute:
         assert routed is False
         assert result is None
 
-    async def test_value_error_returns_false_none(self):
-        """ValueError during routing returns (False, None)."""
+    async def test_value_error_returns_false_with_error_details(self):
+        """ValueError during routing returns (False, error_details).
+
+        Non-JSONDecodeError ValueErrors indicate daemon-side bugs, so the
+        error details are returned to help callers distinguish "daemon not
+        running" from "daemon has a protocol bug".
+        """
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
             client.is_daemon_running = AsyncMock(return_value=True)
@@ -203,7 +207,29 @@ class TestTryDaemonRoute:
             routed, result = await try_daemon_route("job.status", {})
 
         assert routed is False
-        assert result is None
+        assert result == {"error": "invalid params", "error_type": "ValueError"}
+
+    async def test_buffer_limit_error_raises_daemon_error(self):
+        """StreamReader buffer overflow re-raises as DaemonError.
+
+        When readline() raises ValueError with 'chunk exceed the limit',
+        the daemon IS running but the response was too large.  This must
+        propagate as DaemonError so callers show "conductor error" instead
+        of the misleading "conductor not running".
+        """
+        from mozart.daemon.exceptions import DaemonError
+
+        with patch(_CLIENT_PATH) as MockClient:
+            client = MockClient.return_value
+            client.is_daemon_running = AsyncMock(return_value=True)
+            client.call = AsyncMock(
+                side_effect=ValueError(
+                    "Separator is not found, and chunk exceed the limit"
+                ),
+            )
+
+            with pytest.raises(DaemonError, match="Response too large"):
+                await try_daemon_route("job.status", {})
 
     async def test_unexpected_exception_returns_false_none(self):
         """Arbitrary exceptions return (False, None) — safety guarantee."""
