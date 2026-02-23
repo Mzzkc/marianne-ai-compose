@@ -1,0 +1,472 @@
+# Implementation Score: Config Auto-Reload, Reconciliation, and Timeout Fix
+#
+# Executes the implementation plan from:
+#   docs/plans/2026-02-23-config-reload-and-reconciliation-implementation.md
+#
+# 13 sheets across 4 stages:
+#   Stage 1: Timeout fix + reconciliation module (parallel, independent)
+#   Stage 2: CLI + daemon _reconstruct_config rewrite (sequential deps)
+#   Stage 3: Wiring, registry, modify, test updates (parallel after stage 2)
+#   Stage 4: Documentation + skills sweep + audit score
+#
+# Usage:
+#   mozart validate scores/config-reload-implementation.yaml
+#   mozart run scores/config-reload-implementation.yaml
+
+name: "config-reload-implementation"
+description: "Implement config auto-reload, reconciliation, and timeout fix per design doc"
+
+workspace: "/home/emzi/Projects/mozart-ai-compose"
+
+backend:
+  type: claude_cli
+  skip_permissions: true
+  timeout_seconds: 1800
+  disable_mcp: true
+  output_format: json
+  allowed_tools:
+    - Read
+    - Write
+    - Edit
+    - Glob
+    - Grep
+    - Bash
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+sheet:
+  size: 1
+  total_items: 9
+
+  dependencies:
+    # Stage 1: Independent foundation (sheets 1-2 parallel)
+    # Sheet 1: Timeout constant change
+    # Sheet 2: Reconciliation module (new file)
+    # Sheet 3: CLI _reconstruct_config rewrite (depends on reconciliation)
+    3: [2]
+    # Sheet 4: Daemon _reconstruct_config mirror (depends on CLI rewrite for pattern)
+    4: [3]
+    # Sheet 5: Wiring + modify + registry (depends on all rewrites)
+    5: [3, 4]
+    # Sheet 6: All test updates (depends on implementation)
+    6: [5]
+    # Sheet 7: Run tests, verify everything passes
+    7: [1, 6]
+    # Sheet 8: Documentation sweep (depends on passing tests)
+    8: [7]
+    # Sheet 9: Audit score authoring (independent of docs, depends on passing tests)
+    9: [7]
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+  fail_fast: true
+
+retry:
+  max_retries: 3
+  base_delay_seconds: 30
+  max_completion_attempts: 2
+  completion_threshold_percent: 50
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 3000
+  lookback_sheets: 3
+
+prompt:
+  variables:
+    project_root: "/home/emzi/Projects/mozart-ai-compose"
+    plan_path: "docs/plans/2026-02-23-config-reload-and-reconciliation-implementation.md"
+    design_path: "docs/plans/2026-02-23-config-reload-and-reconciliation-design.md"
+
+  template: |
+    You are implementing changes to the Mozart AI Compose project.
+    Workspace: {{ workspace }}
+
+    IMPORTANT RULES:
+    - Read the implementation plan at {{ workspace }}/{{ plan_path }} for full context
+    - Read the design doc at {{ workspace }}/{{ design_path }} for architectural decisions
+    - Read CLAUDE.md for project conventions
+    - Write tests FIRST (TDD), then implement
+    - Run tests after each change to verify
+    - Commit after each logical unit of work
+    - Do NOT modify files outside the scope of your task
+    - Do NOT add emojis to files
+
+    {% if sheet_num == 1 %}
+    =========================================================================
+    TASK 1: Validation Command Timeout (300s -> 3600s)
+    =========================================================================
+
+    Read the plan, specifically "Task 1" and "Task 2".
+
+    Changes:
+    1. In src/mozart/core/constants.py line 77: change VALIDATION_COMMAND_TIMEOUT_SECONDS from 300 to 3600
+    2. Update the docstring to say "1 hour" instead of "5 minutes"
+    3. In src/mozart/core/config/execution.py lines 384-390: update the ValidationRule.timeout_seconds description to reference "3600s / 1 hour" instead of "300s"
+
+    After making changes:
+    - Run: pytest tests/test_validation_checks.py -v -x
+    - Verify all tests pass
+    - Commit with message: "fix: increase validation command timeout default from 300s to 3600s"
+
+    Write TASK_1_COMPLETE to stdout when done.
+
+    {% elif sheet_num == 2 %}
+    =========================================================================
+    TASK 2: Config Reconciliation Module (NEW FILE)
+    =========================================================================
+
+    Read the plan, specifically "Task 7: Config Reconciliation Module".
+    Read the design doc section "3. Config Reconciliation on Reload" for the full architecture.
+
+    You need to create TWO files:
+
+    1. src/mozart/execution/reconciliation.py — The reconciliation module
+    2. tests/test_reconciliation.py — Tests for it
+
+    The module must contain:
+    - METADATA_FIELDS frozenset (config fields that don't need reconciliation mapping)
+    - CONFIG_STATE_MAPPING dict (config section -> list of checkpoint fields to reset)
+    - ReconciliationReport dataclass
+    - reconcile_config() function
+
+    For the mapping, read:
+    - src/mozart/core/config/__init__.py (or the job.py within config/) to get ALL JobConfig top-level fields
+    - src/mozart/core/checkpoint.py to get ALL CheckpointState fields
+
+    CRITICAL: The CONFIG_STATE_MAPPING must cover EVERY top-level field in JobConfig
+    that isn't in METADATA_FIELDS. The structural test enforces this.
+
+    The test file must contain:
+    - test_mapping_covers_all_config_sections (structural completeness test)
+    - test_mapped_fields_exist_on_checkpoint_state
+    - test_no_changes_returns_empty_report
+    - test_cost_limits_change_resets_cost_state
+    - test_unchanged_section_not_reset
+    - test_rate_limit_change_resets_counters
+
+    TDD: Write tests first, run them to see them fail, then implement.
+
+    After implementation:
+    - Run: pytest tests/test_reconciliation.py -v -x
+    - Verify all tests pass
+    - Commit with message: "feat: add config reconciliation module with structural test"
+
+    Write TASK_2_COMPLETE to stdout when done.
+
+    {% elif sheet_num == 3 %}
+    =========================================================================
+    TASK 3: Rewrite _reconstruct_config() in CLI (resume.py)
+    =========================================================================
+
+    Read the plan, specifically "Task 3: Rewrite _reconstruct_config() in CLI".
+
+    This is the core behavior change. New priority:
+    1. Explicit --config file.yaml (unchanged)
+    2. Auto-reload from stored config_path if file exists (NEW default)
+    3. Cached config_snapshot fallback when file is gone
+    4. Error
+
+    Changes to src/mozart/cli/commands/resume.py:
+    1. In ResumeContext dataclass: remove reload_config field, add no_reload: bool = False
+    2. Remove the --reload-config / -r typer.Option (lines 98-104)
+    3. Add --no-reload typer.Option
+    4. Rewrite _reconstruct_config() to use new priority (see plan for exact code)
+    5. Add _report_config_changes() helper function
+    6. Update _resume_job() signature: replace reload_config with no_reload
+    7. Update _resume_job_direct() to pass ctx.no_reload
+    8. Update the resume() function's asyncio.run() call
+    9. Update docstrings and examples
+
+    The function signature becomes:
+      def _reconstruct_config(found_state, config_file, no_reload) -> tuple[JobConfig, bool]
+
+    After implementation:
+    - Run: python -c "from mozart.cli.commands.resume import _reconstruct_config; print('import OK')"
+    - Verify no import errors
+    - Commit with message: "feat: auto-reload config on resume, remove --reload-config flag"
+
+    Write TASK_3_COMPLETE to stdout when done.
+
+    {% elif sheet_num == 4 %}
+    =========================================================================
+    TASK 4: Mirror _reconstruct_config() in Daemon (job_service.py)
+    =========================================================================
+
+    Read the plan, specifically "Task 4: Update _reconstruct_config() in Daemon".
+
+    Mirror the auto-reload priority in src/mozart/daemon/job_service.py:
+    1. Rewrite _reconstruct_config() (lines 818-884) with new priority:
+       - Priority 1: Explicit config object
+       - Priority 2: Auto-reload from file (config_path or state.config_path)
+       - Priority 3: Cached config_snapshot
+       - Priority 4: Error
+    2. Remove reload_config parameter from _reconstruct_config()
+    3. Remove reload_config parameter from resume_job() method (lines 247-258)
+    4. Update the call to _reconstruct_config() in resume_job()
+    5. Update the snapshot update logic (lines 312-317)
+
+    After implementation:
+    - Run: python -c "from mozart.daemon.job_service import JobService; print('import OK')"
+    - Verify no import errors
+    - Commit with message: "feat: auto-reload config in daemon job_service"
+
+    Write TASK_4_COMPLETE to stdout when done.
+
+    {% elif sheet_num == 5 %}
+    =========================================================================
+    TASK 5: Wire Reconciliation + Update Modify + Registry Methods
+    =========================================================================
+
+    Read the plan Tasks 5, 8, and 9. This sheet covers three related changes:
+
+    **Part A: Wire reconciliation into resume paths**
+    1. In src/mozart/cli/commands/resume.py _resume_job_direct():
+       After _reconstruct_config() call, add reconcile_config() call
+    2. In src/mozart/daemon/job_service.py resume_job():
+       After _reconstruct_config() call, add reconcile_config() call
+       Remove the old cost_limit_reached = False line (reconciliation handles it)
+
+    **Part B: Update modify command (pause.py)**
+    1. In src/mozart/cli/commands/pause.py around line 652-661:
+       Change reload_config=True to no_reload=False in the _resume_job() call
+    2. Update the hint text around line 676 that references "-r --config"
+
+    **Part C: Registry metadata update method**
+    1. In src/mozart/daemon/registry.py: add update_config_metadata() method
+    2. In src/mozart/daemon/manager.py: add update_job_config_metadata() method
+
+    After implementation:
+    - Run: python -c "from mozart.cli.commands.pause import modify; print('import OK')"
+    - Run: python -c "from mozart.daemon.registry import JobRegistry; print('import OK')"
+    - Verify no import errors
+    - Commit each part separately:
+      - "feat: wire config reconciliation into resume paths"
+      - "refactor: update modify command for auto-reload default"
+      - "feat: add config metadata update methods to registry and manager"
+
+    Write TASK_5_COMPLETE to stdout when done.
+
+    {% elif sheet_num == 6 %}
+    =========================================================================
+    TASK 6: Update ALL Test Files
+    =========================================================================
+
+    Read the plan Tasks 3 (Step 1), 4 (Step 1), and 6.
+
+    Update test files to match the new _reconstruct_config() signature and behavior:
+
+    **File 1: tests/test_cli_run_resume.py**
+    - Rewrite TestReconstructConfig class
+    - Replace reload_config parameter with no_reload
+    - Test new priority order: explicit config > auto-reload > snapshot > error
+    - Test --no-reload flag behavior
+    - See plan Task 3 Step 1 for exact test code
+
+    **File 2: tests/test_cli.py**
+    - Find all _reconstruct_config calls (around lines 796-990)
+    - Replace reload_config=False with no_reload=False
+    - Replace reload_config=True tests with auto-reload tests
+    - Update test names and docstrings
+
+    **File 3: tests/test_daemon_job_service.py**
+    - Find test_reload_config_with_no_path_raises (line ~542)
+    - Replace with auto-reload tests
+    - See plan Task 4 Step 1 for test code
+
+    After all updates:
+    - Run: pytest tests/test_cli_run_resume.py tests/test_cli.py tests/test_daemon_job_service.py -v -x --timeout=60
+    - Verify all pass
+    - Commit with message: "test: update all reconstruct config tests for auto-reload"
+
+    Write TASK_6_COMPLETE to stdout when done.
+
+    {% elif sheet_num == 7 %}
+    =========================================================================
+    TASK 7: Full Test Suite + Type Check + Lint
+    =========================================================================
+
+    Run the full verification suite:
+
+    1. Run: pytest tests/ -x --timeout=120
+       - If failures occur, investigate and fix them
+       - Focus on failures related to reload_config, _reconstruct_config, reconciliation
+       - Do NOT fix pre-existing failures unrelated to this work
+
+    2. Run: mypy src/mozart/execution/reconciliation.py src/mozart/cli/commands/resume.py src/mozart/daemon/job_service.py --ignore-missing-imports
+       - Fix any type errors
+
+    3. Run: ruff check src/mozart/execution/reconciliation.py src/mozart/cli/commands/resume.py src/mozart/daemon/job_service.py src/mozart/daemon/registry.py src/mozart/daemon/manager.py src/mozart/cli/commands/pause.py
+       - Fix any lint errors
+
+    If any fixes are needed, commit them:
+    - "fix: resolve test/type/lint issues from config reload changes"
+
+    Report the full test results in stdout.
+
+    Write TASK_7_COMPLETE to stdout when done.
+
+    {% elif sheet_num == 8 %}
+    =========================================================================
+    TASK 8: Documentation + Skills Sweep
+    =========================================================================
+
+    Read the plan Tasks 2, 10, and 11.
+
+    Update ALL references to --reload-config and the old 300s timeout across docs and skills.
+
+    **Timeout references (300s -> 3600s):**
+    - docs/score-writing-guide.md: search for "300" near "command" or "timeout"
+    - docs/configuration-reference.md: timeout table row
+
+    **--reload-config removal:**
+    - docs/cli-reference.md: remove flag from resume options, add --no-reload, update examples
+    - CHANGELOG.md: update the --reload-config entry
+    - examples/README.md: update resume example
+    - CLAUDE.md: update resume examples, remove reload-config mentions
+
+    **Skills:**
+    - ~/.claude/skills/mozart-usage.md: 12+ references to remove/update
+    - ~/.claude/skills/mozart-score-authoring.md: pitfall #17, timeout reference
+
+    Use Grep to find ALL occurrences before editing. Do not miss any.
+    After Grep, edit each file systematically.
+
+    Commit separately:
+    - "docs: update validation command timeout references to 3600s"
+    - "docs: remove --reload-config references, document auto-reload default"
+
+    Write TASK_8_COMPLETE to stdout when done.
+
+    {% elif sheet_num == 9 %}
+    =========================================================================
+    TASK 9: Workspace Status Audit Score
+    =========================================================================
+
+    Read the plan Task 12 and the design doc section "4. Workspace Status Audit Score".
+    Read the mozart-score-authoring skill guidance at {{ workspace }}/docs/score-writing-guide.md
+
+    Create scores/workspace-status-audit.yaml — a fan-out score that audits every code
+    subsystem for workspace-resident status tracking.
+
+    Architecture:
+    - Stage 1: Setup/framing (1 sheet) — define what "workspace status remnant" means
+    - Stage 2: Fan-out with 6 instances (parallel) — each audits a different subsystem:
+      1. src/mozart/cli/commands/ — CLI commands that write to workspace
+      2. src/mozart/daemon/ — daemon code that writes to workspace
+      3. src/mozart/execution/runner/ — runner code beyond logs/artifacts
+      4. src/mozart/state/ — state backends and workspace-relative paths
+      5. src/mozart/execution/validation/ — validation engine workspace writes
+      6. All src/mozart/ — broad grep for workspace path writes and .mozart-* patterns
+    - Stage 3: Synthesis (1 sheet) — cross-reference findings, produce VERDICT
+
+    Use the fan-out pattern from examples/parallel-research-fanout.yaml as a reference.
+    Ensure all validation paths use {workspace} not {{ workspace }}.
+    Ensure prompt template uses {{ workspace }} not {workspace}.
+    The workspace should be an absolute path under /home/emzi/Projects/mozart-ai-compose.
+
+    After creating:
+    - Run: mozart validate scores/workspace-status-audit.yaml
+    - Fix any validation errors
+    - Commit with message: "feat: add workspace status audit score"
+
+    Write TASK_9_COMPLETE to stdout when done.
+
+    {% endif %}
+
+validations:
+  # Sheet 1: Timeout constant
+  - type: command_succeeds
+    command: 'grep -q "VALIDATION_COMMAND_TIMEOUT_SECONDS = 3600" "{workspace}/src/mozart/core/constants.py"'
+    condition: "sheet_num == 1"
+    description: "Timeout constant updated to 3600"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python -c "from mozart.core.constants import VALIDATION_COMMAND_TIMEOUT_SECONDS; assert VALIDATION_COMMAND_TIMEOUT_SECONDS == 3600"'
+    condition: "sheet_num == 1"
+    description: "Constant importable and correct"
+
+  # Sheet 2: Reconciliation module
+  - type: file_exists
+    path: "{workspace}/src/mozart/execution/reconciliation.py"
+    condition: "sheet_num == 2"
+    description: "Reconciliation module created"
+  - type: file_exists
+    path: "{workspace}/tests/test_reconciliation.py"
+    condition: "sheet_num == 2"
+    description: "Reconciliation tests created"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python -m pytest tests/test_reconciliation.py -v -x --timeout=60 2>&1 | tail -5'
+    condition: "sheet_num == 2"
+    description: "Reconciliation tests pass"
+
+  # Sheet 3: CLI _reconstruct_config
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python -c "from mozart.cli.commands.resume import _reconstruct_config; print(\"OK\")"'
+    condition: "sheet_num == 3"
+    description: "CLI _reconstruct_config importable"
+  - type: command_succeeds
+    command: '! grep -q "reload.config" "{workspace}/src/mozart/cli/commands/resume.py"'
+    condition: "sheet_num == 3"
+    description: "No reload_config references in resume.py"
+
+  # Sheet 4: Daemon _reconstruct_config
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python -c "from mozart.daemon.job_service import JobService; print(\"OK\")"'
+    condition: "sheet_num == 4"
+    description: "Daemon job_service importable"
+  - type: command_succeeds
+    command: '! grep -q "reload.config" "{workspace}/src/mozart/daemon/job_service.py"'
+    condition: "sheet_num == 4"
+    description: "No reload_config references in job_service.py"
+
+  # Sheet 5: Wiring + modify + registry
+  - type: command_succeeds
+    command: '! grep -q "reload_config=True" "{workspace}/src/mozart/cli/commands/pause.py"'
+    condition: "sheet_num == 5"
+    description: "No reload_config=True in pause.py"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python -c "from mozart.daemon.registry import JobRegistry; print(\"OK\")"'
+    condition: "sheet_num == 5"
+    description: "Registry importable"
+
+  # Sheet 6: Test updates
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python -m pytest tests/test_cli_run_resume.py tests/test_daemon_job_service.py -v -x --timeout=60 2>&1 | tail -5'
+    condition: "sheet_num == 6"
+    description: "Updated tests pass"
+
+  # Sheet 7: Full test suite
+  - type: command_succeeds
+    command: 'cd "{workspace}" && python -m pytest tests/ -x --timeout=120 2>&1 | tail -10'
+    condition: "sheet_num == 7"
+    description: "Full test suite passes"
+    timeout_seconds: 3600
+
+  # Sheet 8: Documentation
+  - type: command_succeeds
+    command: '! grep -q "\-\-reload-config" "{workspace}/docs/cli-reference.md"'
+    condition: "sheet_num == 8"
+    description: "No --reload-config in cli-reference.md"
+  - type: command_succeeds
+    command: '! grep -q "\-\-reload-config" "{workspace}/CLAUDE.md"'
+    condition: "sheet_num == 8"
+    description: "No --reload-config in CLAUDE.md"
+
+  # Sheet 9: Audit score
+  - type: file_exists
+    path: "{workspace}/scores/workspace-status-audit.yaml"
+    condition: "sheet_num == 9"
+    description: "Audit score created"
+  - type: command_succeeds
+    command: 'cd "{workspace}" && mozart validate scores/workspace-status-audit.yaml 2>&1 | grep -q "Valid"'
+    condition: "sheet_num == 9"
+    description: "Audit score validates successfully"
+
+notifications:
+  - type: desktop
+    on_events:
+      - job_complete
+      - job_failed
