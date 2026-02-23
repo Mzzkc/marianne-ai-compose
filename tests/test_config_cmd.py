@@ -138,6 +138,85 @@ class TestConfigShow:
         assert result.exit_code == 0
         assert "defaults" in result.output
 
+    def test_show_essential_only_by_default(self) -> None:
+        """Default show displays essential fields but not advanced ones."""
+        from mozart.daemon.config import DaemonConfig
+
+        live_config = DaemonConfig()
+        live_dict = live_config.model_dump(mode="json")
+
+        with patch(
+            "mozart.cli.commands.config_cmd._try_live_config",
+            return_value=live_dict,
+        ):
+            result = runner.invoke(config_app, ["show"])
+
+        assert result.exit_code == 0
+        assert "max_concurrent_jobs" in result.output
+        assert "log_level" in result.output
+        # Advanced fields should NOT appear
+        assert "socket.backlog" not in result.output
+        assert "observer.watch_interval_seconds" not in result.output
+        # Hint should appear
+        assert "--all" in result.output
+
+    def test_show_all_flag(self) -> None:
+        """--all shows advanced fields too."""
+        from mozart.daemon.config import DaemonConfig
+
+        live_config = DaemonConfig()
+        live_dict = live_config.model_dump(mode="json")
+
+        with patch(
+            "mozart.cli.commands.config_cmd._try_live_config",
+            return_value=live_dict,
+        ):
+            result = runner.invoke(config_app, ["show", "--all"])
+
+        assert result.exit_code == 0
+        assert "max_concurrent_jobs" in result.output
+        assert "socket.backlog" in result.output
+        assert "observer.watch_interval_seconds" in result.output
+        # No hint when --all is used
+        assert "Showing essential fields" not in result.output
+
+    def test_show_section_filter(self) -> None:
+        """--section filters to a specific config section."""
+        from mozart.daemon.config import DaemonConfig
+
+        live_config = DaemonConfig()
+        live_dict = live_config.model_dump(mode="json")
+
+        with patch(
+            "mozart.cli.commands.config_cmd._try_live_config",
+            return_value=live_dict,
+        ):
+            result = runner.invoke(config_app, ["show", "--section", "profiler"])
+
+        assert result.exit_code == 0
+        assert "profiler.enabled" in result.output
+        assert "profiler.strace_enabled" in result.output
+        # Non-profiler fields should not appear
+        assert "max_concurrent_jobs" not in result.output
+        assert "socket.path" not in result.output
+
+    def test_show_section_unknown(self) -> None:
+        """Unknown section shows empty table without crashing."""
+        from mozart.daemon.config import DaemonConfig
+
+        live_config = DaemonConfig()
+        live_dict = live_config.model_dump(mode="json")
+
+        with patch(
+            "mozart.cli.commands.config_cmd._try_live_config",
+            return_value=live_dict,
+        ):
+            result = runner.invoke(config_app, ["show", "--section", "nonexistent"])
+
+        assert result.exit_code == 0
+        # Should not contain any config keys
+        assert "max_concurrent_jobs" not in result.output
+
 
 class TestFlattenModel:
     """Tests for _flatten_model helper used in config display."""

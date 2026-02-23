@@ -24,6 +24,18 @@ from ..output import console
 
 _logger = logging.getLogger(__name__)
 
+# Keys shown by default (without --all).  Matches the "Essential Fields"
+# section in docs/configuration-reference.md.
+ESSENTIAL_KEYS: frozenset[str] = frozenset({
+    "max_concurrent_jobs",
+    "log_level",
+    "log_file",
+    "job_timeout_seconds",
+    "learning.enabled",
+    "learning.backend.type",
+    "profiler.enabled",
+})
+
 config_app = typer.Typer(
     name="config",
     help="Manage conductor configuration.",
@@ -140,17 +152,28 @@ def show(
         "-c",
         help="Path to daemon config file (default: ~/.mozart/daemon.yaml)",
     ),
+    show_all: bool = typer.Option(
+        False,
+        "--all",
+        "-a",
+        help="Show all fields (default: essential only)",
+    ),
+    section: str | None = typer.Option(
+        None,
+        "--section",
+        "-s",
+        help="Show only fields in a section (e.g., profiler, learning, socket)",
+    ),
 ) -> None:
     """Display current daemon configuration as a table.
 
-    Shows all configuration values with their current and default settings.
-    When the conductor is running, displays the live in-memory config
-    (reflecting any SIGHUP reloads). Falls back to disk-based display
-    when the conductor is not running.
+    By default shows only essential fields.  Use --all for the full config
+    or --section to drill into a specific section.
 
     Examples:
         mozart config show
-        mozart config show --config /etc/mozart/daemon.yaml
+        mozart config show --all
+        mozart config show --section profiler
     """
     from mozart.daemon.config import DaemonConfig
 
@@ -191,7 +214,17 @@ def show(
     # Flatten the config for display
     flat = _flatten_model(effective.model_dump(), prefix="")
 
-    for key, value in flat.items():
+    # Filter keys based on flags
+    if section is not None:
+        prefix = section.rstrip(".")
+        visible_keys = [k for k in flat if k == prefix or k.startswith(f"{prefix}.")]
+    elif not show_all:
+        visible_keys = [k for k in flat if k in ESSENTIAL_KEYS]
+    else:
+        visible_keys = list(flat.keys())
+
+    for key in visible_keys:
+        value = flat[key]
         if is_live:
             source_display = "[green]live[/green]"
         else:
@@ -201,6 +234,12 @@ def show(
         table.add_row(key, str(value), source_display)
 
     console.print(table)
+
+    if not show_all and section is None:
+        console.print(
+            "\n[dim]Showing essential fields. "
+            "Use --all for full config, --section <name> for a section.[/dim]"
+        )
 
 
 def _flatten_model(
