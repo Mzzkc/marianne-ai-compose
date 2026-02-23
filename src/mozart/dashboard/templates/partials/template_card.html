@@ -81,7 +81,7 @@
             </button>
 
             <button type="button"
-                    hx-post="/api/templates/{{ template.name }}/use"
+                    hx-post="/api/scores/templates/{{ template.name }}/use"
                     hx-swap="none"
                     hx-trigger="click"
                     class="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
@@ -94,7 +94,7 @@
 
         <!-- Quick Download Link -->
         <div class="mt-2 text-center">
-            <a href="/api/templates/{{ template.name }}/download"
+            <a href="/api/scores/templates/{{ template.name }}/download"
                download="{{ template.filename }}"
                class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
                 <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

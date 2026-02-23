@@ -282,12 +282,9 @@ document.addEventListener('alpine:init', () => {
             const text = `[${this.formatTimestamp(log.timestamp)}] ${log.level.toUpperCase()}: ${log.message}`;
             navigator.clipboard.writeText(text).then(() => {
                 // Show notification
-                if (window.app && window.app.addNotification) {
-                    window.app.addNotification({
-                        type: 'success',
-                        title: 'Copied',
-                        message: 'Log line copied to clipboard'
-                    });
+                var store = window.Alpine && window.Alpine.store('app');
+                if (store && store.addNotification) {
+                    store.addNotification('Copied', 'Log line copied to clipboard', 'success', 3000);
                 }
             });
         },

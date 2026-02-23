@@ -123,6 +123,18 @@ def create_app(
         allow_headers=["Content-Type", "Authorization", "X-Mozart-API-Key"],
     )
 
+    # Security headers middleware
+    from mozart.dashboard.auth.security import SecurityConfig, SecurityHeadersMiddleware
+
+    security_config = SecurityConfig.from_env()
+    app.add_middleware(SecurityHeadersMiddleware, config=security_config)
+
+    # Rate limiting middleware
+    from mozart.dashboard.auth.rate_limit import RateLimitConfig, RateLimitMiddleware
+
+    rate_config = RateLimitConfig()
+    app.add_middleware(RateLimitMiddleware, config=rate_config)
+
     # Configure template and static file paths
     dashboard_dir = Path(__file__).parent
     templates_dir = dashboard_dir / "templates"
@@ -139,6 +151,7 @@ def create_app(
     from mozart.dashboard.routes import router as base_router
     from mozart.dashboard.routes.artifacts import router as artifacts_router
     from mozart.dashboard.routes.jobs import router as jobs_router
+    from mozart.dashboard.routes.monitor import router as monitor_router
     from mozart.dashboard.routes.pages import router as pages_router
     from mozart.dashboard.routes.scores import router as scores_router
     from mozart.dashboard.routes.stream import router as stream_router
@@ -149,6 +162,7 @@ def create_app(
     app.include_router(pages_router)
     app.include_router(scores_router)
     app.include_router(stream_router)
+    app.include_router(monitor_router)
 
     # Health check endpoint (at root level)
     @app.get("/health", tags=["System"])

@@ -95,7 +95,7 @@
         {% include 'components/header.html' %}
 
         <!-- Main Content Area -->
-        <main class="flex-1">
+        <main id="main-content" class="flex-1">
             {% block content %}
             <div class="py-6">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -134,24 +134,28 @@
         // Global HTMX error handling
         document.body.addEventListener('htmx:responseError', function(evt) {
             console.error('HTMX Response Error:', evt.detail);
-            if (window.app && window.app.addNotification) {
-                window.app.addNotification({
-                    type: 'error',
-                    title: 'Request Failed',
-                    message: `HTTP ${evt.detail.xhr.status}: ${evt.detail.xhr.statusText}`
-                });
+            var store = window.Alpine && window.Alpine.store('app');
+            if (store && store.addNotification) {
+                store.addNotification(
+                    'Request Failed',
+                    'HTTP ' + evt.detail.xhr.status + ': ' + evt.detail.xhr.statusText,
+                    'error',
+                    5000
+                );
             }
         });
 
         // Global HTMX timeout handling
         document.body.addEventListener('htmx:timeout', function(evt) {
             console.warn('HTMX Timeout:', evt.detail);
-            if (window.app && window.app.addNotification) {
-                window.app.addNotification({
-                    type: 'warning',
-                    title: 'Request Timeout',
-                    message: 'The request took too long to complete'
-                });
+            var store = window.Alpine && window.Alpine.store('app');
+            if (store && store.addNotification) {
+                store.addNotification(
+                    'Request Timeout',
+                    'The request took too long to complete',
+                    'warning',
+                    5000
+                );
             }
         });
 

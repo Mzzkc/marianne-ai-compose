@@ -414,7 +414,7 @@ def analyze_template(name: str, content: str) -> TemplateResponse:
         )
 
 
-@router.get("/api/templates/list", response_model=TemplateListResponse, tags=["Templates"])
+@router.get("/templates/list", response_model=TemplateListResponse, tags=["Templates"])
 async def list_available_templates(
     category: str | None = None,
     complexity: str | None = None,
@@ -468,7 +468,7 @@ async def list_available_templates(
     )
 
 
-@router.get("/api/templates/{template_name}", response_model=TemplateResponse, tags=["Templates"])
+@router.get("/templates/{template_name}", response_model=TemplateResponse, tags=["Templates"])
 async def get_template(template_name: str) -> TemplateResponse:
     """Get detailed information about a specific template.
 
@@ -496,7 +496,7 @@ async def get_template(template_name: str) -> TemplateResponse:
         ) from None
 
 
-@router.get("/api/templates/{template_name}/download", tags=["Templates"])
+@router.get("/templates/{template_name}/download", tags=["Templates"])
 async def download_template(template_name: str) -> PlainTextResponse:
     """Download a template as a YAML file.
 
@@ -531,7 +531,7 @@ async def download_template(template_name: str) -> PlainTextResponse:
         ) from None
 
 
-@router.post("/api/templates/{template_name}/use", tags=["Templates"])
+@router.post("/templates/{template_name}/use", tags=["Templates"])
 async def use_template(template_name: str) -> RedirectResponse:
     """Use a template by redirecting to editor with template content.
 
