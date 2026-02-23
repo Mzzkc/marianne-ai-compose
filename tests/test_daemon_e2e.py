@@ -28,8 +28,6 @@ from mozart.daemon.manager import JobManager
 from mozart.daemon.process import DaemonProcess
 from mozart.daemon.system_probe import SystemProbe
 from mozart.daemon.types import JobRequest, JobResponse
-from mozart.learning.global_store import GlobalLearningStore
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -37,6 +35,22 @@ from mozart.learning.global_store import GlobalLearningStore
 
 # Minimal fixture config path (created during test setup).
 FIXTURE_CONFIG = Path(__file__).parent / "fixtures" / "test-daemon-job.yaml"
+
+
+def _make_unique_config(tmp_path: Path, index: int) -> Path:
+    """Create a uniquely-named copy of the fixture config.
+
+    Each copy has a different ``name`` field so the daemon treats them
+    as distinct jobs (job name IS the job ID — no dedup).
+    """
+    import shutil
+    dest = tmp_path / f"job-{index}.yaml"
+    shutil.copy2(FIXTURE_CONFIG, dest)
+    # Overwrite the name field so each config produces a unique job ID
+    text = dest.read_text()
+    text = text.replace('name: "test-daemon-job"', f'name: "test-daemon-job-{index}"')
+    dest.write_text(text)
+    return dest
 
 
 def _make_daemon_config(tmp_path: Path) -> DaemonConfig:
@@ -122,7 +136,7 @@ async def daemon(tmp_path: Path):
 
         try:
             await asyncio.wait_for(daemon_task, timeout=15.0)
-        except (asyncio.TimeoutError, asyncio.CancelledError):
+        except (TimeoutError, asyncio.CancelledError):
             daemon_task.cancel()
             try:
                 await daemon_task
@@ -416,7 +430,7 @@ class TestConcurrentJobs:
     """Tests for concurrent job submission and limit enforcement."""
 
     async def test_concurrent_jobs_respect_limit(
-        self, daemon: tuple[DaemonClient, DaemonConfig],
+        self, daemon: tuple[DaemonClient, DaemonConfig], tmp_path: Path,
     ):
         """At most max_concurrent_jobs run simultaneously."""
         client, config = daemon
@@ -452,10 +466,11 @@ class TestConcurrentJobs:
             "mozart.daemon.job_service.JobService.start_job",
             side_effect=_tracked_start,
         ):
-            # Submit 3 jobs but only 2 should run at once
+            # Submit 3 jobs with unique names (no dedup — same name is rejected)
             responses = []
-            for _ in range(3):
-                req = JobRequest(config_path=FIXTURE_CONFIG)
+            for i in range(3):
+                cfg = _make_unique_config(tmp_path, i)
+                req = JobRequest(config_path=cfg)
                 r = await client.submit_job(req)
                 assert r.status == "accepted"
                 responses.append(r)
@@ -472,7 +487,7 @@ class TestConcurrentJobs:
             await asyncio.sleep(1.0)
 
     async def test_concurrent_job_crash_isolation(
-        self, daemon: tuple[DaemonClient, DaemonConfig],
+        self, daemon: tuple[DaemonClient, DaemonConfig], tmp_path: Path,
     ):
         """One crashing job does not affect concurrently running jobs.
 
@@ -511,10 +526,11 @@ class TestConcurrentJobs:
             "mozart.daemon.job_service.JobService.start_job",
             side_effect=_per_job_start,
         ):
-            # Submit 3 jobs
+            # Submit 3 jobs with unique names (no dedup)
             responses = []
-            for _ in range(3):
-                req = JobRequest(config_path=FIXTURE_CONFIG)
+            for i in range(3):
+                cfg = _make_unique_config(tmp_path, i)
+                req = JobRequest(config_path=cfg)
                 r = await client.submit_job(req)
                 assert r.status == "accepted"
                 responses.append(r)
@@ -525,21 +541,34 @@ class TestConcurrentJobs:
             # Release all jobs simultaneously
             gate.set()
 
-            # Wait for all to settle
-            await asyncio.sleep(2.0)
-
-            jobs = await client.list_jobs()
-            status_map = {j["job_id"]: j["status"] for j in jobs}
+            # Poll until all jobs reach terminal state (or timeout).
+            # Fixed sleeps are flaky because the semaphore (max_concurrent_jobs=2)
+            # serializes job-2 behind job-0/job-1, and the manager's post-completion
+            # chain (observer stop, snapshot, registry update) adds variable latency.
+            deadline = asyncio.get_event_loop().time() + 10.0
+            status_map: dict[str, str] = {}
+            while asyncio.get_event_loop().time() < deadline:
+                jobs = await client.list_jobs()
+                status_map = {j["job_id"]: j["status"] for j in jobs}
+                terminal = sum(
+                    1 for s in status_map.values()
+                    if s in ("completed", "failed", "cancelled")
+                )
+                if terminal >= 3:
+                    break
+                await asyncio.sleep(0.2)
 
             # Verify: job #2 failed, jobs #1 and #3 completed
             failed_count = sum(1 for s in status_map.values() if s == "failed")
             completed_count = sum(1 for s in status_map.values() if s == "completed")
 
             assert failed_count == 1, f"Expected 1 failed job, got {failed_count}: {status_map}"
-            assert completed_count == 2, f"Expected 2 completed jobs, got {completed_count}: {status_map}"
+            assert completed_count == 2, (
+                f"Expected 2 completed jobs, got {completed_count}: {status_map}"
+            )
 
     async def test_multiple_jobs_complete_independently(
-        self, daemon: tuple[DaemonClient, DaemonConfig],
+        self, daemon: tuple[DaemonClient, DaemonConfig], tmp_path: Path,
     ):
         """Two submitted jobs both complete and show in job list."""
         client, config = daemon
@@ -562,8 +591,10 @@ class TestConcurrentJobs:
             "mozart.daemon.job_service.JobService.start_job",
             side_effect=_fast_start,
         ):
-            r1 = await client.submit_job(JobRequest(config_path=FIXTURE_CONFIG))
-            r2 = await client.submit_job(JobRequest(config_path=FIXTURE_CONFIG))
+            cfg1 = _make_unique_config(tmp_path, 0)
+            cfg2 = _make_unique_config(tmp_path, 1)
+            r1 = await client.submit_job(JobRequest(config_path=cfg1))
+            r2 = await client.submit_job(JobRequest(config_path=cfg2))
             assert r1.status == "accepted"
             assert r2.status == "accepted"
 
@@ -811,7 +842,7 @@ class TestBackpressureIntegration:
 
             try:
                 await asyncio.wait_for(daemon_task, timeout=15.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 daemon_task.cancel()
                 try:
                     await daemon_task
@@ -927,7 +958,7 @@ class TestRealE2EExecution:
 
             try:
                 await asyncio.wait_for(daemon_task, timeout=15.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 daemon_task.cancel()
                 try:
                     await daemon_task
@@ -1149,7 +1180,7 @@ class TestCrossJobLearning:
 
             try:
                 await asyncio.wait_for(daemon_task, timeout=15.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 daemon_task.cancel()
                 try:
                     await daemon_task
@@ -1219,9 +1250,12 @@ class TestCrossJobLearning:
         pattern_names = [p.pattern_name for p in patterns]
         assert "exponential_backoff_works" in pattern_names
 
-        # Submit Job B — it gets the SAME shared store via the service
+        # Submit Job B with a unique config name so it gets a different
+        # job_id (job name IS the job ID — no dedup). This lets the
+        # exclude_job_id filter work correctly in pattern discovery.
         workspace_b = config.pid_file.parent / "ws-b"
-        req_b = JobRequest(config_path=FIXTURE_CONFIG, workspace=workspace_b)
+        config_b = _make_unique_config(config.pid_file.parent, 2)
+        req_b = JobRequest(config_path=config_b, workspace=workspace_b)
         resp_b = await client.submit_job(req_b)
         assert resp_b.status == "accepted"
 
@@ -1385,7 +1419,7 @@ class TestMonitorCancellation:
 
             try:
                 await asyncio.wait_for(daemon_task, timeout=15.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 daemon_task.cancel()
                 try:
                     await daemon_task
@@ -1519,6 +1553,7 @@ class TestMonitorCancellation:
     async def test_monitor_cancels_oldest_of_multiple_jobs(
         self,
         monitored_daemon: tuple[DaemonClient, DaemonConfig, dict[str, Any]],
+        tmp_path: Path,
     ):
         """When multiple jobs run, monitor cancels the OLDEST one first.
 
@@ -1555,15 +1590,17 @@ class TestMonitorCancellation:
             "mozart.daemon.job_service.JobService.start_job",
             side_effect=_long_running,
         ):
-            # Submit job A (older)
-            resp_a = await client.submit_job(JobRequest(config_path=FIXTURE_CONFIG))
+            # Submit job A (older) — unique config names to avoid rejection
+            cfg_a = _make_unique_config(tmp_path, 0)
+            cfg_b = _make_unique_config(tmp_path, 1)
+            resp_a = await client.submit_job(JobRequest(config_path=cfg_a))
             assert resp_a.status == "accepted"
 
             # Wait for A to start, then submit B
             await asyncio.wait_for(started_a.wait(), timeout=5.0)
             await asyncio.sleep(0.1)
 
-            resp_b = await client.submit_job(JobRequest(config_path=FIXTURE_CONFIG))
+            resp_b = await client.submit_job(JobRequest(config_path=cfg_b))
             assert resp_b.status == "accepted"
 
             await asyncio.wait_for(started_b.wait(), timeout=5.0)
