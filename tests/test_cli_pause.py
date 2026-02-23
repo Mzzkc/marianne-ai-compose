@@ -406,7 +406,7 @@ class TestPauseCommand:
         result = runner.invoke(app, ["pause", "--help"])
         assert result.exit_code == 0
         assert "Pause a running Mozart job" in result.output
-        assert "--workspace" in result.output
+        # --workspace is a hidden debug option, not shown in help
         assert "--wait" in result.output
         assert "--timeout" in result.output
         assert "--json" in result.output
@@ -1275,6 +1275,211 @@ class TestPauseJsonEdgeCases:
         output = _parse_json_output(result.stdout)
         assert output["error_code"] == "E504"
         assert "signal_file" in output
+
+
+# ============================================================================
+# Conductor-Routed Modify Tests (stale-status recovery, #97)
+# ============================================================================
+
+
+class TestModifyConductorRouted:
+    """Tests for modify --resume via conductor with stale/changing status.
+
+    These tests simulate the conductor-routed path where the daemon reports
+    status and handles pause/resume RPCs. The autouse _no_daemon fixture is
+    overridden per-test via monkeypatch.
+    """
+
+    @pytest.fixture()
+    def valid_config(self, tmp_path: Path) -> Path:
+        """Create a minimal valid config for modify tests."""
+        import yaml as _yaml
+
+        cfg = {
+            "name": "test-modify-job",
+            "backend": {"type": "claude_cli", "skip_permissions": True},
+            "sheet": {"size": 10, "total_items": 30},
+            "prompt": {"template": "Test {{ sheet_num }}"},
+        }
+        p = tmp_path / "cfg.yaml"
+        p.write_text(_yaml.dump(cfg))
+        return p
+
+    @staticmethod
+    def _make_route(
+        status_response: dict,
+        pause_response: dict | Exception | None = None,
+        resume_response: dict | Exception | None = None,
+    ):
+        """Build a mock try_daemon_route that returns per-method responses."""
+        async def _route(method: str, params: dict, **kw: object):
+            if method == "job.status":
+                return True, status_response
+            if method == "job.pause":
+                if isinstance(pause_response, Exception):
+                    raise pause_response
+                return True, (pause_response or {"paused": False})
+            if method == "job.resume":
+                if isinstance(resume_response, Exception):
+                    raise resume_response
+                return True, (resume_response or {"accepted": True})
+            return False, None
+        return _route
+
+    def test_modify_resume_stale_running_no_e503(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        valid_config: Path,
+    ) -> None:
+        """When daemon reports RUNNING but pause fails, no E503 is shown."""
+        route = self._make_route(
+            status_response={
+                "job_id": "stale-job",
+                "status": "running",
+                "job_name": "Stale Job",
+                "total_sheets": 3,
+                "last_completed_sheet": 1,
+            },
+            # Pause fails — job actually failed between status and pause
+            pause_response={"paused": False, "error": "Job is failed, not running"},
+            resume_response={"accepted": True, "job_id": "stale-job"},
+        )
+        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+
+        result = runner.invoke(app, [
+            "modify", "stale-job",
+            "--config", str(valid_config),
+            "--resume",
+        ])
+
+        # The key assertion: no scary E503 error shown
+        assert "E503" not in result.output
+        # But the friendly "no longer running" message appears
+        assert "no longer running" in result.output
+        # Config validation still shown
+        assert "Config validated" in result.output
+
+    def test_modify_resume_daemon_returns_failed(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        valid_config: Path,
+    ) -> None:
+        """When daemon correctly reports FAILED, pause is skipped entirely."""
+        route = self._make_route(
+            status_response={
+                "job_id": "failed-job",
+                "status": "failed",
+                "job_name": "Failed Job",
+                "total_sheets": 5,
+                "last_completed_sheet": 2,
+                "error_message": "Max retries exceeded",
+            },
+            resume_response={"accepted": True, "job_id": "failed-job"},
+        )
+        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+
+        result = runner.invoke(app, [
+            "modify", "failed-job",
+            "--config", str(valid_config),
+            "--resume",
+        ])
+
+        # No pause attempt, no error
+        assert "E503" not in result.output
+        assert "Pause signal" not in result.output
+        # Straight to resume
+        assert "Config validated" in result.output
+        assert "Resuming with new config" in result.output
+
+    def test_modify_resume_pause_connection_error_quiet(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        valid_config: Path,
+    ) -> None:
+        """Connection error during pause is suppressed with --resume."""
+        from mozart.daemon.exceptions import DaemonError
+
+        route = self._make_route(
+            status_response={
+                "job_id": "conn-err-job",
+                "status": "running",
+                "job_name": "Conn Err Job",
+                "total_sheets": 3,
+                "last_completed_sheet": 1,
+            },
+            pause_response=DaemonError("socket refused"),
+            resume_response={"accepted": True, "job_id": "conn-err-job"},
+        )
+        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+
+        result = runner.invoke(app, [
+            "modify", "conn-err-job",
+            "--config", str(valid_config),
+            "--resume",
+        ])
+
+        # Error suppressed thanks to quiet=True
+        assert "E503" not in result.output
+        assert "socket refused" not in result.output
+        # Recovery path proceeds
+        assert "no longer running" in result.output
+
+    def test_modify_no_resume_pause_failure_shows_e503(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        valid_config: Path,
+    ) -> None:
+        """Without --resume, pause failure shows E503 as before."""
+        route = self._make_route(
+            status_response={
+                "job_id": "err-job",
+                "status": "running",
+                "job_name": "Err Job",
+                "total_sheets": 3,
+                "last_completed_sheet": 1,
+            },
+            pause_response={"paused": False, "error": "Job is failed"},
+        )
+        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+
+        result = runner.invoke(app, [
+            "modify", "err-job",
+            "--config", str(valid_config),
+            # No --resume flag
+        ])
+
+        # Without --resume, error IS shown
+        assert result.exit_code == 1
+        assert "E503" in result.output
+
+    def test_modify_resume_json_stale_running(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        valid_config: Path,
+    ) -> None:
+        """JSON output with stale RUNNING + --resume has no E503."""
+        route = self._make_route(
+            status_response={
+                "job_id": "json-job",
+                "status": "running",
+                "job_name": "JSON Job",
+                "total_sheets": 3,
+                "last_completed_sheet": 1,
+            },
+            pause_response={"paused": False, "error": "stale"},
+            resume_response={"accepted": True, "job_id": "json-job"},
+        )
+        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+
+        result = runner.invoke(app, [
+            "modify", "json-job",
+            "--config", str(valid_config),
+            "--resume",
+            "--json",
+        ])
+
+        # No JSON error block with E503
+        assert "E503" not in result.output
 
 
 if __name__ == "__main__":

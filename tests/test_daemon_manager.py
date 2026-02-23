@@ -486,20 +486,38 @@ class TestGetJobStatus:
 
     @pytest.mark.asyncio
     async def test_get_status_returns_meta(self, manager: JobManager):
-        """get_job_status returns metadata for a known job."""
+        """get_job_status returns metadata for a known running job."""
         manager._job_meta["job-1"] = JobMeta(
             job_id="job-1",
             config_path=Path("/tmp/a.yaml"),
             workspace=Path("/tmp/wa"),
             status=DaemonJobStatus.RUNNING,
         )
-        # Mock async get_status to return None (no checkpoint state found)
-        manager._service.get_status = AsyncMock(return_value=None)
+        # Simulate a running asyncio task so the stale-status guard passes
+        loop = asyncio.get_event_loop()
+        fake_task = loop.create_future()
+        manager._jobs["job-1"] = fake_task
 
         status = await manager.get_job_status("job-1")
         assert status["job_id"] == "job-1"
         assert status["status"] == "running"
         assert status["workspace"] == str(Path("/tmp/wa"))
+
+    @pytest.mark.asyncio
+    async def test_get_status_stale_running_corrected(self, manager: JobManager):
+        """get_job_status corrects stale RUNNING status to FAILED."""
+        manager._job_meta["stale-1"] = JobMeta(
+            job_id="stale-1",
+            config_path=Path("/tmp/a.yaml"),
+            workspace=Path("/tmp/wa"),
+            status=DaemonJobStatus.RUNNING,
+        )
+        # No task in _jobs — simulates daemon restart with stale meta
+
+        status = await manager.get_job_status("stale-1")
+        assert status["status"] in ("failed", DaemonJobStatus.FAILED)
+        # Meta should also be corrected in place
+        assert manager._job_meta["stale-1"].status == DaemonJobStatus.FAILED
 
 
 # ─── Pause Job ─────────────────────────────────────────────────────────
@@ -536,6 +554,10 @@ class TestPauseJob:
             workspace=Path("/tmp/workspace"),
             status=DaemonJobStatus.RUNNING,
         )
+        # Simulate a running asyncio task so the stale-status guard passes
+        loop = asyncio.get_event_loop()
+        fake_task = loop.create_future()
+        manager._jobs["job-1"] = fake_task
         manager._service.pause_job = AsyncMock(return_value=True)
 
         result = await manager.pause_job("job-1", workspace=Path("/tmp/workspace"))
@@ -554,6 +576,10 @@ class TestPauseJob:
             workspace=Path("/tmp/meta-workspace"),
             status=DaemonJobStatus.RUNNING,
         )
+        # Simulate a running asyncio task so the stale-status guard passes
+        loop = asyncio.get_event_loop()
+        fake_task = loop.create_future()
+        manager._jobs["job-1"] = fake_task
         manager._service.pause_job = AsyncMock(return_value=True)
 
         await manager.pause_job("job-1")

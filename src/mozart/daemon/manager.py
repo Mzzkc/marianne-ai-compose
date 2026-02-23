@@ -536,6 +536,35 @@ class JobManager:
                     exc_info=True,
                 )
 
+        # 2b. Detect stale RUNNING status (no live state + no running task).
+        #     This happens when meta was restored from the registry after a
+        #     daemon restart but the job's process no longer exists.
+        if meta is not None and meta.status == DaemonJobStatus.RUNNING:
+            task = self._jobs.get(job_id)
+            if task is None or task.done():
+                _logger.info(
+                    "get_job_status.stale_running_corrected",
+                    job_id=job_id,
+                )
+                meta.status = DaemonJobStatus.FAILED
+                await self._registry.update_status(
+                    job_id, DaemonJobStatus.FAILED.value,
+                )
+                # Now fall through to return the corrected checkpoint
+                # or metadata below.
+                try:
+                    checkpoint_json = await self._registry.load_checkpoint(
+                        job_id,
+                    )
+                    if checkpoint_json is not None:
+                        import json as _json
+                        data = _json.loads(checkpoint_json)
+                        # Override the checkpoint's stale status
+                        data["status"] = "failed"
+                        return data
+                except Exception:
+                    pass
+
         # 3. Basic metadata (job never produced a checkpoint, or active job
         #    whose registry checkpoint is stale)
         if meta is not None:

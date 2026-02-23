@@ -299,11 +299,17 @@ async def _pause_via_conductor(
     job_id: str,
     params: dict[str, str | None],
     json_output: bool,
+    *,
+    quiet: bool = False,
 ) -> bool:
     """Pause a running job via the conductor RPC.
 
     Returns True if pause signal was sent, False on failure.
-    Prints status/error messages to console.
+
+    Args:
+        quiet: When True, suppress error output. Useful when the caller
+            plans to handle failures itself (e.g., ``_modify_job`` with
+            ``--resume`` will recover from pause failures).
     """
     from mozart.daemon.detect import try_daemon_route
 
@@ -312,16 +318,17 @@ async def _pause_via_conductor(
             "job.pause", params,
         )
     except (OSError, ConnectionError, DaemonError) as exc:
-        if json_output:
-            result = {
-                "success": False,
-                "error_code": "E503",
-                "job_id": job_id,
-                "message": str(exc),
-            }
-            console.print(json.dumps(result, indent=2))
-        else:
-            console.print(f"[red]Error [E503]:[/red] {exc}")
+        if not quiet:
+            if json_output:
+                result = {
+                    "success": False,
+                    "error_code": "E503",
+                    "job_id": job_id,
+                    "message": str(exc),
+                }
+                console.print(json.dumps(result, indent=2))
+            else:
+                console.print(f"[red]Error [E503]:[/red] {exc}")
         return False
 
     if not pause_routed:
@@ -335,7 +342,7 @@ async def _pause_via_conductor(
         console.print(
             f"Pause signal sent to job '[cyan]{job_id}[/cyan]'."
         )
-    elif not paused:
+    elif not paused and not quiet:
         error_msg = (
             pause_result.get("error", "")
             if isinstance(pause_result, dict) else ""
@@ -563,7 +570,9 @@ async def _modify_job(
         # Pause through conductor if available, otherwise filesystem
         pause_ok = True
         if routed:
-            pause_ok = await _pause_via_conductor(job_id, params, json_output)
+            pause_ok = await _pause_via_conductor(
+                job_id, params, json_output, quiet=resume_flag,
+            )
         else:
             await _pause_via_filesystem(
                 job_id, found_workspace, wait, resume_flag,
