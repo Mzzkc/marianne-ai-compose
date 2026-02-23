@@ -1,10 +1,11 @@
 """Tests for mozart.backends.claude_cli module.
 
 Covers ClaudeCliBackend: initialization, from_config, _build_command,
-_inject_preamble, _parse_returncode, set_output_log_path, apply_overrides,
-clear_overrides, set_prompt_extensions, _prepare_log_files, _write_output_logs,
-_handle_execution_timeout, _build_completed_result, _kill_orphaned_process,
-_execute_impl error paths, _await_process_exit, health_check, and execute.
+_inject_preamble_and_extensions, set_preamble, _parse_returncode,
+set_output_log_path, apply_overrides, clear_overrides, set_prompt_extensions,
+_prepare_log_files, _write_output_logs, _handle_execution_timeout,
+_build_completed_result, _kill_orphaned_process, _execute_impl error paths,
+_await_process_exit, health_check, and execute.
 """
 
 from __future__ import annotations
@@ -17,10 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mozart.backends.base import ExecutionResult
-from mozart.backends.claude_cli import (
-    MOZART_DEFAULT_PREAMBLE,
-    ClaudeCliBackend,
-)
+from mozart.backends.claude_cli import ClaudeCliBackend
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
@@ -198,38 +196,46 @@ class TestBuildCommand:
             backend_no_cli._build_command("Hello")
 
     def test_preamble_injected_in_prompt(self, backend: ClaudeCliBackend):
+        backend.set_preamble("<mozart-preamble>Test</mozart-preamble>")
         cmd = backend._build_command("Do the task")
         prompt_arg = cmd[cmd.index("-p") + 1]
         assert "mozart-preamble" in prompt_arg
         assert "Do the task" in prompt_arg
 
 
-# ─── _inject_preamble ───────────────────────────────────────────────
+# ─── _inject_preamble_and_extensions ─────────────────────────────────
 
 
-class TestInjectPreamble:
-    """Tests for ClaudeCliBackend._inject_preamble()."""
+class TestInjectPreambleAndExtensions:
+    """Tests for ClaudeCliBackend._inject_preamble_and_extensions()."""
 
-    def test_prepends_default_preamble(self, backend: ClaudeCliBackend):
-        result = backend._inject_preamble("My prompt")
-        assert result.startswith(MOZART_DEFAULT_PREAMBLE)
+    def test_preamble_prepended(self, backend: ClaudeCliBackend):
+        backend.set_preamble("<mozart-preamble>Context info</mozart-preamble>")
+        result = backend._inject_preamble_and_extensions("My prompt")
+        assert result.startswith("<mozart-preamble>")
         assert "My prompt" in result
+
+    def test_no_preamble_returns_prompt_unchanged(self, backend: ClaudeCliBackend):
+        result = backend._inject_preamble_and_extensions("My prompt")
+        assert result == "My prompt"
 
     def test_with_extensions(self, backend: ClaudeCliBackend):
         backend.set_prompt_extensions(["Extension 1", "Extension 2"])
-        result = backend._inject_preamble("My prompt")
+        result = backend._inject_preamble_and_extensions("My prompt")
         assert "Extension 1" in result
         assert "Extension 2" in result
         assert "My prompt" in result
 
+    def test_preamble_and_extensions_order(self, backend: ClaudeCliBackend):
+        backend.set_preamble("<mozart-preamble>Preamble</mozart-preamble>")
+        backend.set_prompt_extensions(["Extension"])
+        result = backend._inject_preamble_and_extensions("My prompt")
+        assert result.index("Preamble") < result.index("My prompt") < result.index("Extension")
+
     def test_empty_extensions_ignored(self, backend: ClaudeCliBackend):
         backend.set_prompt_extensions(["", "  ", "Real extension"])
-        result = backend._inject_preamble("My prompt")
+        result = backend._inject_preamble_and_extensions("My prompt")
         assert "Real extension" in result
-        # Empty extensions should not be included
-        parts = result.split("\n")
-        non_empty = [p for p in parts if p.strip()]
-        assert len(non_empty) > 0
 
 
 # ─── set_prompt_extensions ───────────────────────────────────────────

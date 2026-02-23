@@ -1512,13 +1512,17 @@ class SheetExecutionMixin:
                     )
                     state.mark_sheet_failed(sheet_num, error_message=msg)
                     await self.state_backend.save(state)
-                    return
+                    raise FatalError(msg)
                 continue
             consecutive_guard_waits = 0
 
             # Execute backend with per-sheet configuration
             result = await self._configure_and_execute_sheet(
-                sheet_num, current_prompt, current_mode,
+                sheet_num,
+                state.total_sheets,
+                current_prompt,
+                current_mode,
+                retry_count=normal_attempts,
             )
 
             # Post-execution bookkeeping: snapshots, output, cost, history
@@ -1680,19 +1684,24 @@ class SheetExecutionMixin:
     async def _configure_and_execute_sheet(
         self,
         sheet_num: int,
+        total_sheets: int,
         current_prompt: str,
         current_mode: SheetExecutionMode,
+        retry_count: int = 0,
     ) -> ExecutionResult:
         """Configure per-sheet backend settings and execute the prompt.
 
-        Handles output log paths, prompt extensions, timeout overrides, and
-        per-sheet backend overrides (GH#76, GH#78). Uses the override lock
-        to prevent concurrent sheets from stomping on each other's settings.
+        Handles preamble, output log paths, prompt extensions, timeout
+        overrides, and per-sheet backend overrides (GH#76, GH#78). Uses
+        the override lock to prevent concurrent sheets from stomping on
+        each other's settings.
 
         Args:
             sheet_num: Sheet number being executed.
+            total_sheets: Total number of sheets in the concert.
             current_prompt: The prompt to execute.
             current_mode: Current execution mode (for display).
+            retry_count: Number of previous failed attempts (0 = first run).
 
         Returns:
             ExecutionResult from the backend.
@@ -1700,6 +1709,18 @@ class SheetExecutionMixin:
         # Per-sheet output log for real-time visibility
         output_log_base = self.config.workspace / "logs" / f"sheet-{sheet_num:02d}"
         self.backend.set_output_log_path(output_log_base)
+
+        # Dynamic preamble — context-aware identity, position, retry status
+        from mozart.prompts.preamble import build_preamble
+
+        preamble = build_preamble(
+            sheet_num=sheet_num,
+            total_sheets=total_sheets,
+            workspace=self.config.workspace,
+            retry_count=retry_count,
+            is_parallel=self.config.parallel.enabled,
+        )
+        self.backend.set_preamble(preamble)
 
         # Prompt extensions (GH#76): score-level + sheet-level
         extensions = [

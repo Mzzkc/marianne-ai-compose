@@ -267,10 +267,24 @@ class Backend(ABC):
         global config. Default implementation is a no-op.
         """
 
+    def set_preamble(self, _preamble: str | None) -> None:  # noqa: B027
+        """Set the dynamic preamble for the next execution.
+
+        Called per-sheet by the runner with a context-aware preamble built by
+        ``build_preamble()``. The preamble includes sheet identity, position,
+        workspace, and retry status.
+
+        Override in subclasses that support prompt injection.
+        Default implementation is a no-op for backends without this capability.
+
+        Args:
+            _preamble: Preamble text to prepend, or None to clear.
+        """
+
     def set_prompt_extensions(self, _extensions: list[str]) -> None:  # noqa: B027
         """Set prompt extensions for the next execution.
 
-        Extensions are additional directive blocks injected after the default
+        Extensions are additional directive blocks injected after the
         preamble. Called per-sheet by the runner to apply score-level and
         sheet-level prompt extensions (GH#76).
 

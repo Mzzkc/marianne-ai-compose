@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from mozart.backends.ollama import OllamaBackend, OllamaMessage, StreamChunk
+from mozart.backends.ollama import OllamaBackend, OllamaMessage
 
 # =============================================================================
 # Fixtures
@@ -716,16 +716,115 @@ class TestClose:
 
 
 # =============================================================================
-# Test Streaming (basic coverage)
+# Test Preamble and Prompt Extensions
 # =============================================================================
 
 
-class TestStreamChunk:
-    """Tests for StreamChunk dataclass."""
+@pytest.mark.asyncio
+class TestOllamaPreamble:
+    """Tests for preamble and prompt extension injection in Ollama backend."""
 
-    def test_stream_chunk_defaults(self):
-        """Test StreamChunk default values."""
-        chunk = StreamChunk(content="Hello")
-        assert chunk.content == "Hello"
-        assert chunk.done is False
-        assert chunk.tool_calls == []
+    async def test_preamble_prepended_to_user_message(
+        self, ollama_backend, mock_httpx_response, sample_ollama_response
+    ):
+        """set_preamble() content is prepended to the user message."""
+        ollama_backend.set_preamble("<mozart-preamble>Identity</mozart-preamble>")
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.is_closed = False
+        mock_client.post = AsyncMock(
+            return_value=mock_httpx_response(sample_ollama_response)
+        )
+
+        with patch.object(ollama_backend, "_get_client", return_value=mock_client):
+            await ollama_backend.execute("Do the task")
+
+        # Inspect the messages sent to the API
+        call_args = mock_client.post.call_args
+        payload = call_args.kwargs.get("json") or call_args[1].get("json")
+        user_content = payload["messages"][0]["content"]
+
+        assert user_content.startswith("<mozart-preamble>")
+        assert "Do the task" in user_content
+
+    async def test_extensions_appended_to_user_message(
+        self, ollama_backend, mock_httpx_response, sample_ollama_response
+    ):
+        """set_prompt_extensions() content is appended to the user message."""
+        ollama_backend.set_prompt_extensions(["Extension A"])
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.is_closed = False
+        mock_client.post = AsyncMock(
+            return_value=mock_httpx_response(sample_ollama_response)
+        )
+
+        with patch.object(ollama_backend, "_get_client", return_value=mock_client):
+            await ollama_backend.execute("Do the task")
+
+        call_args = mock_client.post.call_args
+        payload = call_args.kwargs.get("json") or call_args[1].get("json")
+        user_content = payload["messages"][0]["content"]
+
+        assert "Extension A" in user_content
+        assert user_content.index("Do the task") < user_content.index("Extension A")
+
+    async def test_preamble_and_extensions_together(
+        self, ollama_backend, mock_httpx_response, sample_ollama_response
+    ):
+        """Preamble + prompt + extensions in correct order."""
+        ollama_backend.set_preamble("<mozart-preamble>Preamble</mozart-preamble>")
+        ollama_backend.set_prompt_extensions(["Extension"])
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.is_closed = False
+        mock_client.post = AsyncMock(
+            return_value=mock_httpx_response(sample_ollama_response)
+        )
+
+        with patch.object(ollama_backend, "_get_client", return_value=mock_client):
+            await ollama_backend.execute("My prompt")
+
+        call_args = mock_client.post.call_args
+        payload = call_args.kwargs.get("json") or call_args[1].get("json")
+        user_content = payload["messages"][0]["content"]
+
+        assert user_content.index("Preamble") < user_content.index("My prompt")
+        assert user_content.index("My prompt") < user_content.index("Extension")
+
+    async def test_no_injection_when_neither_set(
+        self, ollama_backend, mock_httpx_response, sample_ollama_response
+    ):
+        """Without preamble or extensions, prompt is sent unchanged."""
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.is_closed = False
+        mock_client.post = AsyncMock(
+            return_value=mock_httpx_response(sample_ollama_response)
+        )
+
+        with patch.object(ollama_backend, "_get_client", return_value=mock_client):
+            await ollama_backend.execute("Plain prompt")
+
+        call_args = mock_client.post.call_args
+        payload = call_args.kwargs.get("json") or call_args[1].get("json")
+        user_content = payload["messages"][0]["content"]
+
+        assert user_content == "Plain prompt"
+
+    def test_set_preamble_stores_value(self, ollama_backend):
+        """set_preamble() stores the preamble."""
+        ollama_backend.set_preamble("test")
+        assert ollama_backend._preamble == "test"
+
+    def test_set_preamble_none_clears(self, ollama_backend):
+        """set_preamble(None) clears the preamble."""
+        ollama_backend.set_preamble("test")
+        ollama_backend.set_preamble(None)
+        assert ollama_backend._preamble is None
+
+    def test_set_prompt_extensions_filters_empty(self, ollama_backend):
+        """set_prompt_extensions() filters empty strings."""
+        ollama_backend.set_prompt_extensions(["Valid", "", "  ", "Also valid"])
+        assert ollama_backend._prompt_extensions == ["Valid", "Also valid"]
+
+

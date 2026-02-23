@@ -40,21 +40,6 @@ GRACEFUL_TERMINATION_TIMEOUT: float = 5.0  # Seconds to wait for graceful termin
 STREAM_READ_TIMEOUT: float = 1.0  # Seconds between stream read checks
 PROCESS_EXIT_TIMEOUT: float = 5.0  # Seconds to wait for process exit after streams close
 
-# Mozart Default Preamble — injected into every prompt.
-# Concise, actionable directives for Mozart-orchestrated agents (GH#76).
-MOZART_DEFAULT_PREAMBLE = """\
-<mozart-preamble>
-You are orchestrated by Mozart AI Compose. Follow these rules:
-
-1. **Complete the task fully.** Partial work is retried from scratch.
-2. **Never wrap `mozart` with `timeout`.** Mozart handles its own \
-timeouts; external wrappers corrupt state.
-3. **Write outputs to the workspace directory** provided in the task.
-4. **Exit cleanly.** Avoid background processes that outlive your session.
-5. **Respect validation requirements** listed at the end of the prompt \
-— they are checked automatically.
-</mozart-preamble>
-"""
 
 
 class ClaudeCliBackend(Backend):
@@ -128,8 +113,12 @@ class ClaudeCliBackend(Backend):
         # This ensures consistent classification with the runner
         self._error_classifier = ErrorClassifier()
 
+        # Dynamic preamble — context-aware identity/position/retry info built
+        # per-sheet by the runner via set_preamble().
+        self._preamble: str | None = None
+
         # Prompt extensions (GH#76) — additional directives injected after the
-        # default preamble and before the user prompt. Set per-sheet by runner
+        # preamble and before the user prompt. Set per-sheet by runner
         # via set_prompt_extensions().
         self._prompt_extensions: list[str] = []
 
@@ -196,10 +185,18 @@ class ClaudeCliBackend(Backend):
             self._stdout_log_path = path.with_suffix(".stdout.log")
             self._stderr_log_path = path.with_suffix(".stderr.log")
 
+    def set_preamble(self, preamble: str | None) -> None:
+        """Set the dynamic preamble for the next execution.
+
+        Args:
+            preamble: Preamble text to prepend, or None to clear.
+        """
+        self._preamble = preamble
+
     def set_prompt_extensions(self, extensions: list[str]) -> None:
         """Set prompt extensions for the next execution.
 
-        Extensions are additional directive blocks injected after the default
+        Extensions are additional directive blocks injected after the
         preamble. Called per-sheet by the runner to apply score-level and
         sheet-level extensions.
 
@@ -208,12 +205,11 @@ class ClaudeCliBackend(Backend):
         """
         self._prompt_extensions = [e for e in extensions if e.strip()]
 
-    def _inject_preamble(self, prompt: str) -> str:
-        """Inject Mozart default preamble into prompt.
+    def _inject_preamble_and_extensions(self, prompt: str) -> str:
+        """Inject preamble and extensions into the prompt.
 
-        Prepends the concise default preamble that every Mozart-orchestrated
-        agent receives. Then appends any prompt extensions that were set on
-        this backend instance (from score-level or sheet-level config).
+        If a preamble has been set via ``set_preamble()``, it is prepended.
+        Any prompt extensions are appended after the user prompt.
 
         Args:
             prompt: The original user prompt.
@@ -221,7 +217,13 @@ class ClaudeCliBackend(Backend):
         Returns:
             Prompt with preamble prepended and extensions appended.
         """
-        parts = [MOZART_DEFAULT_PREAMBLE, prompt]
+        if not self._preamble and not self._prompt_extensions:
+            return prompt
+
+        parts: list[str] = []
+        if self._preamble:
+            parts.append(self._preamble)
+        parts.append(prompt)
         if self._prompt_extensions:
             parts.append("\n".join(self._prompt_extensions))
         return "\n".join(parts)
@@ -234,7 +236,7 @@ class ClaudeCliBackend(Backend):
         if not self._claude_path:
             raise RuntimeError("claude CLI not found in PATH")
 
-        safe_prompt = self._inject_preamble(prompt)
+        safe_prompt = self._inject_preamble_and_extensions(prompt)
 
         cmd = [self._claude_path, "-p", safe_prompt]
 

@@ -14,8 +14,7 @@ import json
 import re
 import time
 import uuid
-from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -102,15 +101,6 @@ class ToolCall:
 
 
 @dataclass
-class StreamChunk:
-    """A chunk from streaming response."""
-
-    content: str
-    done: bool = False
-    tool_calls: list[ToolCall] = field(default_factory=list)
-
-
-@dataclass
 class OllamaMessage:
     """A message in the Ollama conversation format."""
 
@@ -135,7 +125,6 @@ class OllamaBackend(HttpxClientMixin, Backend):
     Implements the Backend protocol for local Ollama models. Supports:
     - MCP tool schema translation to Ollama function format
     - Multi-turn agentic loop for tool calling
-    - Streaming responses with progress tracking
     - Health checks via /api/tags endpoint
 
     Example usage:
@@ -175,6 +164,8 @@ class OllamaBackend(HttpxClientMixin, Backend):
         self.max_tool_iterations = max_tool_iterations
         self.mcp_proxy = mcp_proxy
         self._working_directory: Path | None = None
+        self._preamble: str | None = None
+        self._prompt_extensions: list[str] = []
 
         # HTTP client lifecycle via shared mixin
         self._init_httpx_mixin(self.base_url, self.timeout, connect_timeout=10.0)
@@ -203,6 +194,14 @@ class OllamaBackend(HttpxClientMixin, Backend):
     def name(self) -> str:
         """Human-readable backend name."""
         return f"ollama:{self.model}"
+
+    def set_preamble(self, preamble: str | None) -> None:
+        """Set the dynamic preamble for the next execution."""
+        self._preamble = preamble
+
+    def set_prompt_extensions(self, extensions: list[str]) -> None:
+        """Set prompt extensions for the next execution."""
+        self._prompt_extensions = [e for e in extensions if e.strip()]
 
     async def execute(
         self,
@@ -242,8 +241,17 @@ class OllamaBackend(HttpxClientMixin, Backend):
         )
 
         try:
-            # Build initial messages
-            messages = [OllamaMessage(role="user", content=prompt)]
+            # Build initial messages, injecting preamble/extensions
+            if self._preamble or self._prompt_extensions:
+                parts: list[str] = []
+                if self._preamble:
+                    parts.append(self._preamble)
+                parts.append(prompt)
+                if self._prompt_extensions:
+                    parts.append("\n".join(self._prompt_extensions))
+                messages = [OllamaMessage(role="user", content="\n".join(parts))]
+            else:
+                messages = [OllamaMessage(role="user", content=prompt)]
 
             # Get tools if MCP proxy is available
             tools: list[OllamaToolDef] = []
@@ -505,11 +513,12 @@ class OllamaBackend(HttpxClientMixin, Backend):
             return await self.mcp_proxy.execute_tool(
                 tool_call.name, tool_call.arguments
             )
-        except Exception as e:
+        except (OSError, TimeoutError, ValueError, RuntimeError) as e:
             _logger.warning(
                 "tool_execution_failed",
                 tool_name=tool_call.name,
                 error=str(e),
+                exc_info=True,
             )
             return ToolResult(
                 content=[ContentBlock(type="text", text=f"Error: {e}")],
@@ -613,7 +622,7 @@ class OllamaBackend(HttpxClientMixin, Backend):
 
                 tool_calls.append(ToolCall(id=call_id, name=name, arguments=args))
 
-            except Exception as e:
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError) as e:
                 _logger.warning(
                     "tool_call_parse_error", error=str(e), index=idx, raw=str(raw),
                 )
@@ -719,49 +728,11 @@ class OllamaBackend(HttpxClientMixin, Backend):
 
             return available
 
-        except Exception as e:
-            _logger.warning("ollama_health_check_error", error=str(e))
+        except (httpx.HTTPError, OSError, ValueError) as e:
+            _logger.warning("ollama_health_check_error", error=str(e), exc_info=True)
             return False
 
     async def close(self) -> None:
         """Close HTTP client and release resources."""
         await self._close_httpx_client()
 
-    async def _stream_response(
-        self, endpoint: str, payload: OllamaChatRequest,
-    ) -> AsyncIterator[StreamChunk]:
-        """Stream response from Ollama API.
-
-        Used for real-time output during long completions.
-
-        Args:
-            endpoint: API endpoint (e.g., "/api/chat")
-            payload: Request payload (will have stream=True added)
-
-        Yields:
-            StreamChunk objects with partial content
-        """
-        client = await self._get_client()
-        payload = {**payload, "stream": True}
-
-        async with client.stream("POST", endpoint, json=payload) as response:
-            response.raise_for_status()
-            try:
-                async for line in response.aiter_lines():
-                    if not line:
-                        continue
-                    try:
-                        data = json.loads(line)
-                        msg = data.get("message", {})
-                        yield StreamChunk(
-                            content=msg.get("content", ""),
-                            done=data.get("done", False),
-                            tool_calls=self._parse_tool_calls(msg.get("tool_calls", [])),
-                        )
-                    except json.JSONDecodeError:
-                        continue
-            finally:
-                # Ensure response body is fully consumed so the connection
-                # can be returned to the pool, even if the caller abandons
-                # the iterator mid-stream
-                await response.aclose()

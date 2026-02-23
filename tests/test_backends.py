@@ -673,63 +673,42 @@ class TestClaudeCliBackendRateLimitDetection:
 
 
 class TestClaudeCliBackendPreamble:
-    """Test Mozart default preamble injection."""
+    """Test dynamic preamble injection via set_preamble()."""
 
     @pytest.fixture
     def backend(self) -> ClaudeCliBackend:
         """Create backend for testing."""
         return ClaudeCliBackend()
 
-    def test_preamble_injected(self, backend: ClaudeCliBackend) -> None:
-        """Test that preamble is injected into prompts."""
-        original_prompt = "Do something interesting"
-        result = backend._inject_preamble(original_prompt)
+    def test_preamble_injected_when_set(self, backend: ClaudeCliBackend) -> None:
+        """Test that set_preamble() content is prepended to prompts."""
+        backend.set_preamble("<mozart-preamble>Test preamble</mozart-preamble>")
+        result = backend._inject_preamble_and_extensions("Do something")
 
-        # Should contain the original prompt
-        assert original_prompt in result
+        assert "Test preamble" in result
+        assert "Do something" in result
+        assert result.index("Test preamble") < result.index("Do something")
 
-        # Should contain the preamble markers
-        assert "<mozart-preamble>" in result
-        assert "</mozart-preamble>" in result
+    def test_no_preamble_no_wrapping(self, backend: ClaudeCliBackend) -> None:
+        """Without set_preamble(), prompt is returned unchanged."""
+        result = backend._inject_preamble_and_extensions("My prompt")
+        assert result == "My prompt"
 
-        # Should contain key directives
-        assert "Mozart AI Compose" in result
-
-    def test_preamble_contains_correct_directives(
-        self, backend: ClaudeCliBackend
-    ) -> None:
-        """Test that preamble includes correct directives."""
-        result = backend._inject_preamble("test")
-
-        # Should instruct on timeout handling
-        assert "timeout" in result.lower()
-
-        # Should mention workspace and validation
-        assert "workspace" in result.lower()
-        assert "validation" in result.lower()
-
-    def test_preamble_is_concise(
-        self, backend: ClaudeCliBackend
-    ) -> None:
-        """Test that preamble is concise (GH#76 replaced verbose imperative)."""
-        result = backend._inject_preamble("test")
-
-        # The concise preamble should be under 500 chars (was ~2000+ before)
-        preamble_end = result.index("</mozart-preamble>") + len("</mozart-preamble>")
-        preamble = result[:preamble_end]
-        assert len(preamble) < 600
+    def test_preamble_cleared_with_none(self, backend: ClaudeCliBackend) -> None:
+        """set_preamble(None) clears any previous preamble."""
+        backend.set_preamble("<mozart-preamble>First</mozart-preamble>")
+        backend.set_preamble(None)
+        result = backend._inject_preamble_and_extensions("My prompt")
+        assert result == "My prompt"
 
     def test_build_command_includes_preamble(self, backend: ClaudeCliBackend) -> None:
         """Test that _build_command injects the preamble."""
-        # Mock claude path to avoid "not found" error
         backend._claude_path = "/usr/bin/claude"
+        backend.set_preamble("<mozart-preamble>Dynamic</mozart-preamble>")
 
         cmd = backend._build_command("My original prompt")
-
-        # The prompt should be in the command (second element after -p)
         prompt_arg = cmd[cmd.index("-p") + 1]
 
-        # Should contain both preamble and original prompt
         assert "<mozart-preamble>" in prompt_arg
         assert "My original prompt" in prompt_arg
 
@@ -760,16 +739,21 @@ class TestClaudeCliBackendPromptExtensions:
     def test_extensions_injected_into_prompt(self, backend: ClaudeCliBackend) -> None:
         """Extensions appear in the injected prompt."""
         backend.set_prompt_extensions(["Always review edge cases"])
-        result = backend._inject_preamble("Do the task")
+        result = backend._inject_preamble_and_extensions("Do the task")
         assert "Always review edge cases" in result
         assert "Do the task" in result
-        assert "<mozart-preamble>" in result
 
     def test_no_extensions_no_extra_content(self, backend: ClaudeCliBackend) -> None:
-        """Without extensions, only preamble + prompt."""
-        result = backend._inject_preamble("Do the task")
-        assert "Do the task" in result
-        assert "<mozart-preamble>" in result
+        """Without extensions or preamble, prompt is unchanged."""
+        result = backend._inject_preamble_and_extensions("Do the task")
+        assert result == "Do the task"
+
+    def test_preamble_and_extensions_together(self, backend: ClaudeCliBackend) -> None:
+        """Preamble + extensions + prompt are all present in correct order."""
+        backend.set_preamble("<mozart-preamble>Context</mozart-preamble>")
+        backend.set_prompt_extensions(["Custom directive"])
+        result = backend._inject_preamble_and_extensions("My prompt")
+        assert result.index("Context") < result.index("My prompt") < result.index("Custom directive")
 
     def test_extensions_in_build_command(self, backend: ClaudeCliBackend) -> None:
         """Extensions flow through _build_command to the CLI args."""
@@ -1235,6 +1219,7 @@ class TestBuildCommand:
     def test_preamble_injected(self) -> None:
         """Verify the preamble is injected into the prompt."""
         backend = self._make_backend()
+        backend.set_preamble("<mozart-preamble>Test</mozart-preamble>")
         cmd = backend._build_command("user prompt")
         p_idx = cmd.index("-p")
         full_prompt = cmd[p_idx + 1]
