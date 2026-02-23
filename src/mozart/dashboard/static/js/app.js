@@ -14,6 +14,8 @@ document.addEventListener('alpine:init', () => {
                    (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches),
 
         connectionStatus: 'disconnected', // 'connected', 'connecting', 'disconnected'
+        _connectionLostShown: false, // show banner only after initial connection succeeds then drops
+        _hadConnection: false,
         isRefreshing: false,
         mobileMenuOpen: false,
 
@@ -90,12 +92,22 @@ document.addEventListener('alpine:init', () => {
 
         // Connection status management
         setConnectionStatus(status) {
+            const prev = this.connectionStatus;
             this.connectionStatus = status;
 
             if (status === 'connected') {
-                this.addNotification('Connected', 'Live updates enabled', 'success', 3000);
+                this._hadConnection = true;
+                this._connectionLostShown = false;
+                if (prev === 'disconnected' && prev !== status) {
+                    this.addNotification('Connected', 'Live updates enabled', 'success', 3000);
+                }
             } else if (status === 'disconnected') {
-                this.addNotification('Disconnected', 'Live updates disabled', 'warning', 5000);
+                if (this._hadConnection) {
+                    this._connectionLostShown = true;
+                }
+                if (prev === 'connected') {
+                    this.addNotification('Disconnected', 'Live updates disabled', 'warning', 5000);
+                }
             }
         },
 
@@ -488,6 +500,53 @@ ${errorInfo.details ? `\nDetails:\n${errorInfo.details}` : ''}`;
                     5000
                 );
                 this.setConnectionStatus('disconnected');
+            });
+
+            // Handle htmx request timeouts
+            document.addEventListener('htmx:timeout', (e) => {
+                this.addNotification(
+                    'Request Timeout',
+                    'The server took too long to respond. Try again.',
+                    'warning',
+                    6000
+                );
+            });
+
+            // Intercept non-2xx htmx swaps to render friendly inline errors
+            // instead of raw JSON or blank content
+            document.addEventListener('htmx:beforeSwap', (e) => {
+                const status = e.detail.xhr.status;
+                if (status >= 400) {
+                    // Allow the swap but replace content with a user-friendly error
+                    e.detail.shouldSwap = true;
+                    e.detail.isError = false;
+
+                    let message = 'Something went wrong.';
+                    let hint = '';
+                    if (status === 404) {
+                        message = 'The requested resource was not found.';
+                        hint = 'It may have been removed or the URL is incorrect.';
+                    } else if (status === 502 || status === 503) {
+                        message = 'The server is temporarily unavailable.';
+                        hint = 'The conductor may not be running. Start it with <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">mozart start</code>.';
+                    } else if (status === 500) {
+                        message = 'An internal server error occurred.';
+                        hint = 'Check the server logs for details.';
+                    } else if (status === 429) {
+                        message = 'Too many requests. Please slow down.';
+                        hint = 'Wait a moment and try again.';
+                    }
+
+                    e.detail.serverResponse = `
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-10 w-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                            <h3 class="mt-3 text-sm font-medium text-gray-900 dark:text-white">Error ${status}</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">${message}</p>
+                            ${hint ? '<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">' + hint + '</p>' : ''}
+                        </div>`;
+                }
             });
 
             // Handle SSE connection status (not regular htmx requests)
@@ -1034,6 +1093,7 @@ retry_count: 3
                     extensions: [
                         window.CodeMirror6.basicSetup,
                         window.CodeMirror6.yaml(),
+                        this._decorationCompartment.of([]),
                     ]
                 });
 
@@ -1066,6 +1126,7 @@ retry_count: 3
                     extensions: [
                         window.CodeMirror6.basicSetup,
                         window.CodeMirror6.yaml(),
+                        this._decorationCompartment.of([]),
                     ]
                 });
 

@@ -1,0 +1,60 @@
+{# Reusable metric gauge card component.
+   Usage: {% include 'components/gauge_card.html' %} inside an Alpine scope
+   that provides: label, value, subtitle, color ('blue'|'green'|'yellow'|'red'|'purple'),
+   and optional percent (0-100) for the circular gauge.
+#}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+    <div class="p-4">
+        <div class="flex items-center justify-between">
+            <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate"
+                   x-text="label">-</p>
+                <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white"
+                   x-text="value">-</p>
+                <p class="mt-0.5 text-xs"
+                   :class="{
+                       'text-blue-600 dark:text-blue-400': color === 'blue',
+                       'text-green-600 dark:text-green-400': color === 'green',
+                       'text-yellow-600 dark:text-yellow-400': color === 'yellow',
+                       'text-red-600 dark:text-red-400': color === 'red',
+                       'text-purple-600 dark:text-purple-400': color === 'purple',
+                       'text-gray-500 dark:text-gray-400': !color
+                   }"
+                   x-text="subtitle">-</p>
+            </div>
+            <!-- Mini progress ring -->
+            <div x-show="typeof percent === 'number'"
+                 class="flex-shrink-0 ml-3">
+                <svg class="w-12 h-12 transform -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15.9"
+                            fill="none"
+                            stroke="currentColor"
+                            class="text-gray-200 dark:text-gray-700"
+                            stroke-width="3"></circle>
+                    <circle cx="18" cy="18" r="15.9"
+                            fill="none"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                            :stroke-dasharray="`${(percent || 0)} 100`"
+                            :class="{
+                                'stroke-blue-500': color === 'blue',
+                                'stroke-green-500': color === 'green',
+                                'stroke-yellow-500': color === 'yellow',
+                                'stroke-red-500': color === 'red',
+                                'stroke-purple-500': color === 'purple'
+                            }"></circle>
+                </svg>
+            </div>
+        </div>
+    </div>
+    <!-- Bottom accent bar -->
+    <div class="h-1"
+         :class="{
+             'bg-blue-500': color === 'blue',
+             'bg-green-500': color === 'green',
+             'bg-yellow-500': color === 'yellow',
+             'bg-red-500': color === 'red',
+             'bg-purple-500': color === 'purple',
+             'bg-gray-300 dark:bg-gray-600': !color
+         }"></div>
+</div>

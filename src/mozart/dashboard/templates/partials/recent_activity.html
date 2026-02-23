@@ -1,0 +1,71 @@
+<!-- Recent Activity List (htmx partial) -->
+<!-- Rendered by GET /api/dashboard/recent/partial -->
+<div class="divide-y divide-gray-200 dark:divide-gray-700">
+    {% if recent_jobs %}
+        {% for job in recent_jobs %}
+        <div class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+            <a href="/jobs/{{ job.job_id }}/details"
+               class="flex items-center justify-between"
+               hx-get="/jobs/{{ job.job_id }}/details"
+               hx-target="#main-content"
+               hx-push-url="true">
+                <div class="flex items-center space-x-4 min-w-0">
+                    <!-- Status indicator -->
+                    <div class="flex-shrink-0">
+                        <div class="h-3 w-3 rounded-full
+                            {% if job.status.value == 'running' %}bg-green-400 animate-pulse
+                            {% elif job.status.value == 'completed' %}bg-green-500
+                            {% elif job.status.value == 'failed' %}bg-red-500
+                            {% elif job.status.value == 'paused' %}bg-yellow-400
+                            {% elif job.status.value == 'cancelled' %}bg-gray-400
+                            {% else %}bg-gray-400{% endif %}">
+                        </div>
+                    </div>
+
+                    <!-- Job info -->
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center space-x-2">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ job.job_name }}</p>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                                {% if job.status.value == 'running' %}bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200
+                                {% elif job.status.value == 'completed' %}bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200
+                                {% elif job.status.value == 'failed' %}bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200
+                                {% elif job.status.value == 'paused' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200
+                                {% else %}bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200{% endif %}">
+                                {{ job.status.value | title }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div class="flex items-center space-x-3 text-sm text-gray-500 dark:text-gray-400 flex-shrink-0 ml-4">
+                    {% if job.status.value == 'running' %}
+                    <span class="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-700 text-xs">
+                        {{ job.progress_percent | round(0) | int }}%
+                    </span>
+                    {% endif %}
+                    <span class="text-xs">{{ job.updated_at.strftime('%H:%M') }}</span>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <!-- Empty state -->
+        <div class="px-6 py-8 text-center">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No jobs yet</h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Get started by creating your first Mozart score.
+            </p>
+            <div class="mt-4">
+                <a href="/editor"
+                   class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 dark:text-blue-300 dark:bg-blue-900 dark:hover:bg-blue-800 transition-colors">
+                    Open Score Editor
+                </a>
+            </div>
+        </div>
+    {% endif %}
+</div>

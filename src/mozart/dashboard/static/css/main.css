@@ -1473,3 +1473,204 @@ body {
     background-color: rgba(59, 130, 246, 0.2);
   }
 }
+
+/* =================================================================== */
+/* Loading & Indicator Styles                                           */
+/* =================================================================== */
+
+/* Per-section loading indicator: sits inside a container with relative positioning */
+.section-loading-indicator {
+  display: none;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 5;
+}
+
+.htmx-request .section-loading-indicator,
+.htmx-request.section-loading-indicator {
+  display: flex;
+}
+
+/* Spinner used inside section indicators */
+.section-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--color-border-primary);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Skeleton shimmer for loading placeholders */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-tertiary) 25%,
+    var(--color-bg-secondary) 50%,
+    var(--color-bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* =================================================================== */
+/* Connection & Status Banners                                          */
+/* =================================================================== */
+
+.connection-banner {
+  transition: all var(--transition-normal);
+}
+
+/* =================================================================== */
+/* Breadcrumb Styles                                                    */
+/* =================================================================== */
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.breadcrumb a {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.breadcrumb a:hover {
+  color: var(--color-text-primary);
+}
+
+.breadcrumb a:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.breadcrumb-separator {
+  color: var(--color-text-tertiary);
+}
+
+.breadcrumb-current {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* =================================================================== */
+/* Empty State Styles                                                   */
+/* =================================================================== */
+
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+}
+
+.empty-state-icon {
+  margin: 0 auto;
+  width: 3rem;
+  height: 3rem;
+  color: var(--color-text-tertiary);
+}
+
+.empty-state-title {
+  margin-top: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.empty-state-description {
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  max-width: 28rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* =================================================================== */
+/* Keyboard & Focus Accessibility                                       */
+/* =================================================================== */
+
+/* Skip to content link */
+.skip-to-content {
+  position: absolute;
+  top: -100%;
+  left: 0.5rem;
+  z-index: 100;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: top var(--transition-fast);
+}
+
+.skip-to-content:focus {
+  top: 0.5rem;
+}
+
+/* Visible focus rings on interactive elements */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* Tab navigation highlight for nav links */
+nav a:focus-visible {
+  border-radius: var(--radius-md);
+}
+
+/* =================================================================== */
+/* Scrollable Tab Navigation                                            */
+/* =================================================================== */
+
+/* Hide scrollbar for horizontal tab overflow on narrow screens */
+[role="tablist"] {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+[role="tablist"]::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+/* =================================================================== */
+/* Inline Error States (htmx swap errors)                               */
+/* =================================================================== */
+
+.inline-error {
+  text-align: center;
+  padding: var(--spacing-xl) var(--spacing-lg);
+}
+
+.inline-error svg {
+  margin: 0 auto;
+}
+
+.inline-error h3 {
+  margin-top: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.inline-error p {
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}

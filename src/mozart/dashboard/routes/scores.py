@@ -359,8 +359,19 @@ async def submit_score(
     if schema_error:
         raise HTTPException(status_code=400, detail=f"Invalid config: {schema_error}")
 
-    # Submit via job control service
-    workspace = Path(request.workspace) if request.workspace else None
+    # Validate workspace path to prevent path traversal (same allow-list as validate endpoint)
+    workspace: Path | None = None
+    if request.workspace:
+        ws = Path(request.workspace).resolve()
+        cwd = Path.cwd().resolve()
+        home = Path.home().resolve()
+        if not (ws.is_relative_to(cwd) or ws.is_relative_to(home)):
+            _logger.warning("Rejected workspace outside allowed roots: %s", request.workspace)
+            raise HTTPException(
+                status_code=400,
+                detail="Workspace path must be under the current directory or user home",
+            )
+        workspace = ws
     try:
         result = await job_service.start_job(
             config_content=content,

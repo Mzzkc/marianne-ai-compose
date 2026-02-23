@@ -150,6 +150,7 @@ def create_app(
     # Register routes
     from mozart.dashboard.routes import router as base_router
     from mozart.dashboard.routes.artifacts import router as artifacts_router
+    from mozart.dashboard.routes.dashboard import router as dashboard_router
     from mozart.dashboard.routes.jobs import router as jobs_router
     from mozart.dashboard.routes.monitor import router as monitor_router
     from mozart.dashboard.routes.pages import router as pages_router
@@ -157,6 +158,7 @@ def create_app(
     from mozart.dashboard.routes.stream import router as stream_router
 
     app.include_router(base_router)
+    app.include_router(dashboard_router)
     app.include_router(jobs_router)
     app.include_router(artifacts_router)
     app.include_router(pages_router)

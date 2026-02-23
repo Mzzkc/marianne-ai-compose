@@ -11,7 +11,8 @@
      style="display: none;"
      role="dialog"
      aria-modal="true"
-     aria-labelledby="error-dialog-title">
+     aria-labelledby="error-dialog-title"
+     @keydown.escape.window="if ($store.app.errorDialog.show) $store.app.hideErrorDialog()"
 
     <!-- Background overlay -->
     <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">

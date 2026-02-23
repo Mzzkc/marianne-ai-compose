@@ -23,9 +23,9 @@ async def dashboard_home(
     request: Request,
     templates: Jinja2Templates = Depends(get_templates),
 ) -> HTMLResponse:
-    """Redirect to jobs list page."""
+    """Render the dashboard overview page."""
     return templates.TemplateResponse(
-        "pages/jobs_list.html",
+        "pages/index.html",
         {"request": request}
     )
 
@@ -164,6 +164,18 @@ async def job_logs_page(
         )
 
 
+@router.get("/monitor", response_class=HTMLResponse)
+async def monitor_page(
+    request: Request,
+    templates: Jinja2Templates = Depends(get_templates),
+) -> HTMLResponse:
+    """Render the system monitoring page."""
+    return templates.TemplateResponse(
+        "pages/monitor.html",
+        {"request": request}
+    )
+
+
 @router.get("/templates", response_class=HTMLResponse)
 async def templates_page(
     request: Request,
@@ -179,16 +191,12 @@ async def templates_page(
 @router.get("/editor", response_class=HTMLResponse)
 async def score_editor_page(
     request: Request,
-    template: str | None = None,
     templates: Jinja2Templates = Depends(get_templates),
 ) -> HTMLResponse:
     """Render the score editor page."""
     return templates.TemplateResponse(
         "pages/score_editor.html",
-        {
-            "request": request,
-            "template_name": template,
-        }
+        {"request": request}
     )
 
 

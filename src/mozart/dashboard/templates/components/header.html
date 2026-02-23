@@ -21,9 +21,10 @@
 
             <!-- Navigation Links -->
             {% set current_path = request.url.path if request else '/' %}
-            <nav class="hidden md:flex space-x-8">
+            <nav class="hidden md:flex space-x-8" aria-label="Main navigation">
                 <a href="/"
                    class="px-3 py-2 rounded-md text-sm font-medium transition-colors {% if current_path == '/' %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30{% else %}text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white{% endif %}"
+                   {% if current_path == '/' %}aria-current="page"{% endif %}
                    hx-get="/"
                    hx-target="#main-content"
                    hx-push-url="true">
@@ -31,6 +32,7 @@
                 </a>
                 <a href="/jobs"
                    class="px-3 py-2 rounded-md text-sm font-medium transition-colors {% if current_path.startswith('/jobs') %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30{% else %}text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white{% endif %}"
+                   {% if current_path.startswith('/jobs') %}aria-current="page"{% endif %}
                    hx-get="/jobs"
                    hx-target="#main-content"
                    hx-push-url="true">
@@ -38,6 +40,7 @@
                 </a>
                 <a href="/monitor"
                    class="px-3 py-2 rounded-md text-sm font-medium transition-colors {% if current_path == '/monitor' %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30{% else %}text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white{% endif %}"
+                   {% if current_path == '/monitor' %}aria-current="page"{% endif %}
                    hx-get="/monitor"
                    hx-target="#main-content"
                    hx-push-url="true">
@@ -45,6 +48,7 @@
                 </a>
                 <a href="/templates"
                    class="px-3 py-2 rounded-md text-sm font-medium transition-colors {% if current_path == '/templates' %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30{% else %}text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white{% endif %}"
+                   {% if current_path == '/templates' %}aria-current="page"{% endif %}
                    hx-get="/templates"
                    hx-target="#main-content"
                    hx-push-url="true">
@@ -52,6 +56,7 @@
                 </a>
                 <a href="/editor"
                    class="px-3 py-2 rounded-md text-sm font-medium transition-colors {% if current_path == '/editor' %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30{% else %}text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white{% endif %}"
+                   {% if current_path == '/editor' %}aria-current="page"{% endif %}
                    hx-get="/editor"
                    hx-target="#main-content"
                    hx-push-url="true">
@@ -62,7 +67,7 @@
             <!-- Right Side Actions -->
             <div class="flex items-center space-x-4">
                 <!-- Connection Status -->
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center space-x-2" role="status" aria-live="polite">
                     <div class="h-2 w-2 rounded-full"
                          :class="connectionStatus === 'connected' ? 'bg-green-400' : connectionStatus === 'connecting' ? 'bg-yellow-400' : 'bg-red-400'">
                     </div>
@@ -73,6 +78,7 @@
 
                 <!-- Dark Mode Toggle -->
                 <button @click="toggleDarkMode()"
+                        aria-label="Toggle dark mode"
                         class="p-2 text-gray-400 hover:text-gray-500 dark:text-gray-300 dark:hover:text-gray-200 transition-colors">
                     <!-- Sun Icon (for dark mode) -->
                     <svg x-show="!isDarkMode" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -86,6 +92,7 @@
 
                 <!-- Settings Button -->
                 <button @click="openSettingsModal()"
+                        aria-label="Dashboard settings"
                         class="p-2 text-gray-400 hover:text-gray-500 dark:text-gray-300 dark:hover:text-gray-200 transition-colors">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -97,6 +104,8 @@
             <!-- Mobile menu button -->
             <div class="md:hidden">
                 <button @click="mobileMenuOpen = !mobileMenuOpen"
+                        :aria-expanded="mobileMenuOpen"
+                        aria-label="Toggle navigation menu"
                         class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path x-show="!mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
@@ -115,7 +124,9 @@
          x-transition:leave="transition ease-in duration-75"
          x-transition:leave-start="transform opacity-100 scale-100"
          x-transition:leave-end="transform opacity-0 scale-95"
-         class="md:hidden">
+         class="md:hidden"
+         role="navigation"
+         aria-label="Mobile navigation">
         <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white dark:bg-gray-800 shadow-lg">
             <a href="/"
                class="block px-3 py-2 rounded-md text-base font-medium {% if current_path == '/' %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30{% else %}text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}"

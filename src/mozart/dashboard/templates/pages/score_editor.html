@@ -11,6 +11,13 @@
 {% block content %}
 <div class="py-6">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Breadcrumb -->
+        <nav class="breadcrumb mb-4" aria-label="Breadcrumb">
+            <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true">Dashboard</a>
+            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <span class="breadcrumb-current" aria-current="page">Editor</span>
+        </nav>
+
         <!-- Page Header -->
         <div class="sm:flex sm:items-center sm:justify-between mb-6">
             <div class="sm:flex-auto">

@@ -8,6 +8,13 @@
      x-init="connect()"
      @beforeunload.window="disconnect()">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Breadcrumb -->
+        <nav class="breadcrumb mb-4" aria-label="Breadcrumb">
+            <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true">Dashboard</a>
+            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <span class="breadcrumb-current" aria-current="page">Monitor</span>
+        </nav>
+
         <!-- Page Header -->
         <div class="mb-6 flex items-center justify-between flex-wrap gap-4">
             <div>
@@ -261,6 +268,12 @@ function monitorPage() {
             } catch {
                 this.conductor = null;
             }
+        },
+
+        // Alpine lifecycle: called when component element is removed from DOM
+        // (e.g., htmx SPA navigation swapping #main-content)
+        destroy() {
+            this.disconnect();
         },
 
         // Utility: format uptime seconds to human-readable

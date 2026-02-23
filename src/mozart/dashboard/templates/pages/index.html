@@ -109,7 +109,13 @@
                     <div id="recent-activity"
                          hx-get="/api/dashboard/recent/partial"
                          hx-trigger="load, every 15s"
-                         hx-swap="innerHTML">
+                         hx-swap="innerHTML"
+                         hx-indicator="#recent-activity-spinner"
+                         class="relative">
+                        <!-- Per-section spinner -->
+                        <div id="recent-activity-spinner" class="section-loading-indicator">
+                            <div class="section-spinner"></div>
+                        </div>
                         <!-- Loading placeholder -->
                         <div class="px-6 py-4 animate-pulse">
                             {% for i in range(3) %}
@@ -134,6 +140,9 @@
             </h3>
             <div class="flex flex-wrap gap-3">
                 <a href="/editor"
+                   hx-get="/editor"
+                   hx-target="#main-content"
+                   hx-push-url="true"
                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors">
                     <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>

@@ -1,0 +1,30 @@
+{# System resources summary card for the dashboard home page.
+   Polls /api/dashboard/system/partial to display latest system metrics.
+#}
+<div class="bg-white dark:bg-gray-800 shadow rounded-lg h-full">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                System Resources
+            </h3>
+            <a href="/monitor"
+               class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium">
+                Details
+            </a>
+        </div>
+    </div>
+    <div id="system-resources-data"
+         hx-get="/api/dashboard/system/partial"
+         hx-trigger="load, every 15s"
+         hx-swap="innerHTML"
+         hx-indicator="#system-resources-spinner"
+         class="px-6 py-4 relative">
+        <!-- Per-section spinner -->
+        <div id="system-resources-spinner" class="section-loading-indicator">
+            <div class="section-spinner"></div>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+            Loading system metrics...
+        </p>
+    </div>
+</div>

@@ -47,6 +47,7 @@ class RateLimitConfig:
             "/docs",
             "/openapi.json",
             "/redoc",
+            "/static",
         ]
     )
     by_api_key: bool = False

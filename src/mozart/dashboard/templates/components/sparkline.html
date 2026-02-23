@@ -1,0 +1,38 @@
+{# CSS-only sparkline component for memory timeline.
+   Expects Alpine scope with:
+   - history: array of snapshot objects (each with system_memory_used_mb / system_memory_total_mb)
+   - sparklineLabel: string label (e.g. "Memory Timeline")
+#}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white"
+            x-text="sparklineLabel || 'Memory Timeline'">Memory Timeline</h3>
+        <span class="text-xs text-gray-500 dark:text-gray-400"
+              x-text="'Last ' + (history || []).length + ' snapshots'"></span>
+    </div>
+    <div class="px-4 py-3">
+        <!-- Sparkline bars -->
+        <div class="flex items-end h-16 gap-px"
+             x-show="history && history.length > 0">
+            <template x-for="(snap, i) in (history || [])" :key="i">
+                <div class="flex-1 rounded-t transition-all duration-200"
+                     :class="(snap.system_memory_used_mb / (snap.system_memory_total_mb || 1)) > 0.8 ? 'bg-red-400 dark:bg-red-500' : (snap.system_memory_used_mb / (snap.system_memory_total_mb || 1)) > 0.6 ? 'bg-yellow-400 dark:bg-yellow-500' : 'bg-blue-400 dark:bg-blue-500'"
+                     :style="`height: ${Math.max(2, (snap.system_memory_used_mb / (snap.system_memory_total_mb || 1)) * 100)}%`"
+                     :title="`${snap.system_memory_used_mb?.toFixed(0)} / ${snap.system_memory_total_mb?.toFixed(0)} MB`">
+                </div>
+            </template>
+        </div>
+        <!-- Empty state -->
+        <div x-show="!history || history.length === 0"
+             class="h-16 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+            Waiting for snapshot data...
+        </div>
+        <!-- Scale labels -->
+        <div class="flex justify-between mt-1 text-xs text-gray-400 dark:text-gray-500"
+             x-show="history && history.length > 0">
+            <span>0%</span>
+            <span>50%</span>
+            <span>100%</span>
+        </div>
+    </div>
+</div>

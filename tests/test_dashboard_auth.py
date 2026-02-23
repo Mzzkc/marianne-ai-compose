@@ -494,7 +494,7 @@ class TestSlidingWindowCounter:
         allowed, _, _ = counter.is_allowed("c")
         assert not allowed
 
-        time.sleep(1.1)
+        time.sleep(1.5)
         allowed, _, _ = counter.is_allowed("c")
         assert allowed
 

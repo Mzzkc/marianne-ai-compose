@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import typer
 
@@ -66,7 +66,7 @@ class TestDashboardStateBackendSelection:
             patch("mozart.state.JsonStateBackend", mock_json_cls),
             patch("mozart.dashboard.create_app", mock_create_app),
         ):
-            result = runner.invoke(
+            runner.invoke(
                 _app, ["dashboard", "--workspace", str(tmp_path)]
             )
 
@@ -86,7 +86,7 @@ class TestDashboardStateBackendSelection:
             patch("mozart.state.JsonStateBackend", mock_json_cls),
             patch("mozart.dashboard.create_app", mock_create_app),
         ):
-            result = runner.invoke(
+            runner.invoke(
                 _app, ["dashboard", "--workspace", str(tmp_path)]
             )
 
