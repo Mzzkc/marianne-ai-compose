@@ -1,0 +1,1157 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║       MOZART MONITOR CONCERT — "mozart htop"                               ║
+# ║                                                                            ║
+# ║  Implements the full system monitor from the design document:              ║
+# ║  docs/plans/2026-02-23-mozart-monitor-htop-design.md                      ║
+# ║                                                                            ║
+# ║  Features:                                                                ║
+# ║  - Real-time per-process CPU/MEM/GPU/strace monitoring                    ║
+# ║  - SQLite time-series storage + JSONL streaming                           ║
+# ║  - Job-centric TUI (Textual) with drill-down                             ║
+# ║  - Anomaly detection → semantic learning integration                      ║
+# ║  - Correlation analysis → resource-aware scheduling hints                 ║
+# ║  - AI-readable JSON output + log enrichment                              ║
+# ║  - MCP server cleanup                                                     ║
+# ║                                                                            ║
+# ║  Architecture: B-Hybrid (daemon collects, separate persistent storage)    ║
+# ║                                                                            ║
+# ║  Execution Flow (10 stages, 14 concrete sheets):                          ║
+# ║                                                                            ║
+# ║    Stage 1:  Inventory + MCP cleanup + dependency setup                   ║
+# ║         |                                                                  ║
+# ║         +------+-------+-------+                                          ║
+# ║         v      v       v       v                                          ║
+# ║    Stage 2 x3: Foundation (PARALLEL)                                      ║
+# ║      [Models+Storage] [Probes] [Anomaly+PatternTypes]                    ║
+# ║         |      |       |                                                  ║
+# ║         +------+-------+                                                  ║
+# ║                v                                                          ║
+# ║    Stage 3:  ProfilerCollector + daemon wiring                            ║
+# ║    Stage 4:  Foundation tests                                             ║
+# ║         |                                                                  ║
+# ║         +------+-------+                                                  ║
+# ║         v      v       v                                                  ║
+# ║    Stage 5 x2: UI Layer (PARALLEL)                                        ║
+# ║      [TUI+reader] [CLI commands]                                          ║
+# ║         |      |                                                          ║
+# ║         +------+                                                          ║
+# ║              v                                                            ║
+# ║    Stage 6:  Correlation analyzer + learning integration                  ║
+# ║    Stage 7:  Log enrichment + diagnose --resources                        ║
+# ║    Stage 8:  Dashboard SSE + integration tests                            ║
+# ║    Stage 9:  Full verification                                            ║
+# ║    Stage 10: Commit & push                                                ║
+# ║                                                                            ║
+# ║  Usage:                                                                    ║
+# ║    cd ~/Projects/mozart-ai-compose                                         ║
+# ║    mozart start                                                            ║
+# ║    mozart run scores/mozart-monitor-concert.yaml                          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "mozart-monitor-concert"
+description: "Implement mozart htop — real-time system monitor with TUI, logging, and learning integration"
+
+workspace: "./monitor-workspace"
+
+workspace_lifecycle:
+  archive_on_fresh: true
+  max_archives: 5
+
+backend:
+  type: claude_cli
+  skip_permissions: true
+  working_directory: /home/emzi/Projects/mozart-ai-compose
+  timeout_seconds: 3600
+  output_format: json
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 3000
+  lookback_sheets: 5
+  capture_files:
+    - "{{ workspace }}/*.md"
+
+sheet:
+  size: 1
+  total_items: 10
+
+  fan_out:
+    2: 3
+    5: 2
+
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+    8: [7]
+    9: [8]
+    10: [9]
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+
+retry:
+  max_retries: 2
+  max_completion_attempts: 2
+  completion_threshold_percent: 50
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 600
+
+cost_limits:
+  enabled: true
+  max_cost_per_sheet: 5.00
+  max_cost_per_job: 60.00
+
+prompt:
+  template: |
+    {{ preamble }}
+
+    {% if stage == 1 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 1: INVENTORY + MCP CLEANUP + DEPENDENCY SETUP                      ║
+    ║  "Know the terrain before you build"                                      ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    **Step 1: Read the design document in full**
+    Read `docs/plans/2026-02-23-mozart-monitor-htop-design.md` completely.
+    This is your blueprint — every decision has been made. Implement it faithfully.
+
+    **Step 2: Inventory existing code that will be modified or extended**
+    Read these files completely:
+    - `src/mozart/daemon/monitor.py` — ResourceMonitor (will be extended)
+    - `src/mozart/daemon/system_probe.py` — SystemProbe (will be extended)
+    - `src/mozart/daemon/event_bus.py` — EventBus (will add new event types)
+    - `src/mozart/daemon/semantic_analyzer.py` — SemanticAnalyzer (will subscribe to anomalies)
+    - `src/mozart/daemon/backpressure.py` — BackpressureController (will add scheduling hints)
+    - `src/mozart/daemon/process.py` — DaemonProcess (will wire profiler)
+    - `src/mozart/daemon/config.py` — DaemonConfig (will add profiler config)
+    - `src/mozart/daemon/pgroup.py` — ProcessGroupManager (strace uses this)
+    - `src/mozart/learning/patterns.py` — PatternType enum (will add new types)
+
+    ```bash
+    echo "=== EXISTING DAEMON STRUCTURE ==="
+    find src/mozart/daemon -name "*.py" | sort
+    echo "=== EXISTING CLI COMMANDS ==="
+    ls src/mozart/cli/commands/
+    echo "=== EXISTING TESTS ==="
+    ls tests/test_daemon_*.py
+    echo "=== CHECK DEPENDENCIES ==="
+    pip show textual psutil pynvml 2>&1
+    echo "=== PYTHON VERSION ==="
+    python --version
+    ```
+
+    **Step 3: Install missing dependencies**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    pip install textual pynvml 2>&1 | tail -5
+    ```
+
+    **Step 4: MCP Server Cleanup**
+    Remove unused MCP server directories. Keep ONLY github and playwright.
+
+    ```bash
+    MCP_DIR="/home/emzi/.claude/plugins/marketplaces/claude-plugins-official/external_plugins"
+    echo "=== BEFORE CLEANUP ==="
+    ls "$MCP_DIR/"
+
+    # Remove unused servers
+    for server in greptile stripe context7 supabase asana firebase serena slack linear laravel-boost gitlab; do
+      if [ -d "$MCP_DIR/$server" ]; then
+        rm -rf "$MCP_DIR/$server"
+        echo "Removed: $server"
+      fi
+    done
+
+    echo "=== AFTER CLEANUP ==="
+    ls "$MCP_DIR/"
+    ```
+
+    **Step 5: Create the profiler package skeleton**
+    ```bash
+    mkdir -p src/mozart/daemon/profiler
+    mkdir -p src/mozart/tui/panels
+    ```
+
+    Create empty `__init__.py` files for:
+    - `src/mozart/daemon/profiler/__init__.py`
+    - `src/mozart/tui/__init__.py`
+    - `src/mozart/tui/panels/__init__.py`
+
+    **Step 6: Verify existing tests pass**
+    ```bash
+    pytest tests/ -x --timeout=120 -q --tb=line 2>&1 | tail -10
+    ```
+
+    **Output to:** {{ workspace }}/01-inventory.md
+    Include: design summary, code inventory table, dependency status,
+    MCP cleanup results, test baseline, any concerns.
+
+    {% elif stage == 2 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 2: FOUNDATION — {{ foundation_names[instance] | upper }}            ║
+    ║  Instance {{ instance }} of {{ fan_count }} (PARALLEL)                      ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    {{ readonly_for_other_instances }}
+
+    Read {{ workspace }}/01-inventory.md for context.
+    Read `docs/plans/2026-02-23-mozart-monitor-htop-design.md` for the design.
+
+    {% if instance == 1 %}
+    {# ═══════════════ MODELS + STORAGE ═══════════════ #}
+
+    You are implementing **Pydantic models and SQLite storage** for the profiler.
+
+    **File 1: `src/mozart/daemon/profiler/models.py`**
+
+    Create Pydantic models matching the design:
+
+    - `ProfilerConfig` — configuration for the profiler subsystem
+      - `enabled: bool = True`
+      - `interval_seconds: float = 5.0`
+      - `strace_enabled: bool = True`
+      - `strace_full_on_demand: bool = True`
+      - `gpu_enabled: bool = True`
+      - `storage_path: Path = Path("~/.mozart/monitor.db")`
+      - `jsonl_path: Path = Path("~/.mozart/monitor.jsonl")`
+      - `jsonl_max_bytes: int = 52428800` (50MB)
+      - Nested `retention` and `anomaly` and `correlation` configs per design
+
+    - `ProcessMetric` — per-process snapshot data
+      - `pid`, `ppid`, `command`, `state`, `cpu_percent`, `rss_mb`, `vms_mb`
+      - `threads`, `open_fds`, `age_seconds`
+      - `job_id: str | None`, `sheet_num: int | None`
+      - `syscall_counts: dict[str, int]`, `syscall_time_pct: dict[str, float]`
+
+    - `GpuMetric` — per-GPU data
+      - `index`, `utilization_pct`, `memory_used_mb`, `memory_total_mb`, `temperature_c`
+
+    - `SystemSnapshot` — point-in-time complete snapshot
+      - `timestamp`, `daemon_pid`
+      - System memory fields, load averages
+      - `processes: list[ProcessMetric]`
+      - `gpus: list[GpuMetric]`
+      - `pressure_level`, `running_jobs`, `active_sheets`
+      - `zombie_count`, `zombie_pids`
+
+    - `ProcessEvent` — lifecycle event
+      - `timestamp`, `pid`, `event_type` (spawn/exit/signal/kill/oom)
+      - `exit_code`, `signal_num`, `job_id`, `sheet_num`, `details`
+
+    - `Anomaly` — detected anomaly
+      - `timestamp`, `anomaly_type` (memory_spike/runaway_process/zombie/fd_exhaustion)
+      - `pid`, `job_id`, `sheet_num`, `description`, `severity`
+      - `metric_value`, `threshold`
+
+    - `ResourceEstimate` — scheduling hint
+      - `estimated_peak_memory_mb`, `estimated_cpu_seconds`, `confidence`
+
+    **File 2: `src/mozart/daemon/profiler/storage.py`**
+
+    Create `MonitorStorage` class:
+    - `__init__(self, db_path: Path, jsonl_path: Path | None = None)`
+    - `async def initialize()` — create tables + indexes (use the exact schema from the design doc)
+    - `async def write_snapshot(snapshot: SystemSnapshot)` — insert into snapshots + process_metrics
+    - `async def write_event(event: ProcessEvent)` — insert into process_events
+    - `async def read_snapshots(since: float, limit: int = 100) -> list[SystemSnapshot]`
+    - `async def read_events(since: float, limit: int = 100) -> list[ProcessEvent]`
+    - `async def read_process_history(pid: int, since: float) -> list[ProcessMetric]`
+    - `async def read_job_resource_profile(job_id: str) -> dict` — aggregate per-job
+    - `async def cleanup(retention: RetentionConfig)` — apply retention policy
+    - `def append_jsonl(snapshot: SystemSnapshot)` — write one NDJSON line with rotation
+    - Use `aiosqlite` for async SQLite access
+
+    Make sure to use `run_in_executor` or `aiosqlite` for non-blocking I/O.
+    All SQLite operations must not block the event loop.
+
+    **Output to:** {{ workspace }}/02-models-storage.md
+    Include: files created, class summary, import verification.
+
+    {% elif instance == 2 %}
+    {# ═══════════════ GPU PROBE + STRACE MANAGER ═══════════════ #}
+
+    You are implementing **GPU probing and strace management**.
+
+    **File 1: `src/mozart/daemon/profiler/gpu_probe.py`**
+
+    Create `GpuProbe` class (static methods, same pattern as SystemProbe):
+
+    - `get_gpu_metrics() -> list[GpuMetric]`
+      - Try pynvml first: `nvmlInit()`, iterate devices, get utilization/memory/temp
+      - Fallback: shell `nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader`
+      - Graceful return `[]` if no GPU / no drivers
+    - Handle all import/runtime errors gracefully (no GPU is normal)
+    - `_pynvml_available: bool` flag set at import time
+
+    **File 2: `src/mozart/daemon/profiler/strace_manager.py`**
+
+    Create `StraceManager` class:
+
+    - `__init__(self, enabled: bool = True)`
+    - `async def attach(pid: int) -> bool` — spawn `strace -c -p PID -e trace=all` as subprocess
+      - Track the strace subprocess PID
+      - If strace not available, log warning and return False
+    - `async def detach(pid: int) -> dict[str, Any] | None` — send SIGINT to strace, parse output
+      - Parse the strace -c summary table format into `{syscall_name: count}` and `{syscall_name: time_pct}`
+    - `async def attach_full_trace(pid: int, output_file: Path) -> bool` — on-demand `strace -f -t -p PID -o output_file`
+    - `async def detach_all()` — cleanup all strace processes
+    - Track attached PIDs in a dict: `_attached: dict[int, subprocess.Process]`
+    - Parse strace -c output format:
+      ```
+      % time     seconds  usecs/call     calls    errors syscall
+      ------ ----------- ----------- --------- --------- ----------------
+       40.12    0.123456          82      1500           write
+       28.33    0.087654          27      3200           read
+      ```
+    - Handle: strace not installed, permission denied, process already exited
+
+    For both files:
+    - Follow the existing `SystemProbe` pattern (try primary → fallback → graceful None)
+    - Use `asyncio.create_subprocess_exec` for subprocess management
+    - Register strace PIDs with ProcessGroupManager for cleanup
+
+    **Output to:** {{ workspace }}/02-probes.md
+    Include: files created, capability detection results, edge cases handled.
+
+    {% elif instance == 3 %}
+    {# ═══════════════ ANOMALY DETECTION + NEW PATTERN TYPES ═══════════════ #}
+
+    You are implementing **anomaly detection and learning system extensions**.
+
+    **File 1: `src/mozart/daemon/profiler/anomaly.py`**
+
+    Create `AnomalyDetector` class:
+
+    - `__init__(self, config: AnomalyConfig)` — thresholds from config
+    - `detect(current: SystemSnapshot, history: list[SystemSnapshot]) -> list[Anomaly]`
+      - **Memory spike**: RSS increased >50% (configurable) in last N snapshots (30s window)
+      - **Runaway process**: Any child >90% CPU for >60s (configurable)
+      - **Zombie detected**: zombie_count > 0
+      - **FD exhaustion**: Any process with open_fds > 1000
+      - **Memory pressure**: System available memory < 10% of total
+    - Each anomaly includes: type, severity (info/warning/critical), affected PID/job, description
+
+    **File 2: Extend `src/mozart/learning/patterns.py`**
+
+    Add two new PatternTypes to the existing enum:
+
+    ```python
+    RESOURCE_ANOMALY = "resource_anomaly"
+    """Resource anomaly detected during execution (memory spike, zombie, OOM)."""
+
+    RESOURCE_CORRELATION = "resource_correlation"
+    """Learned correlation between resource usage and outcomes."""
+    ```
+
+    Add guidance templates for these new types:
+    ```python
+    PatternType.RESOURCE_ANOMALY: "⚡ Resource anomaly: {desc} (seen {freq}x){trust}",
+    PatternType.RESOURCE_CORRELATION: "📊 Resource pattern: {desc}{trust}",
+    ```
+
+    **File 3: Extend `src/mozart/daemon/config.py`**
+
+    Add `ProfilerConfig` section to `DaemonConfig` as an optional field:
+    ```python
+    profiler: ProfilerConfig = ProfilerConfig()
+    ```
+    Import from `profiler.models`. Make it work with existing config loading.
+
+    **Verify:**
+    ```bash
+    python -c "
+    from mozart.learning.patterns import PatternType
+    print('RESOURCE_ANOMALY:', PatternType.RESOURCE_ANOMALY.value)
+    print('RESOURCE_CORRELATION:', PatternType.RESOURCE_CORRELATION.value)
+    "
+    pytest tests/test_validation_checks.py -x -q --tb=short 2>&1 | tail -5
+    ```
+
+    **Output to:** {{ workspace }}/02-anomaly-patterns.md
+    Include: anomaly types, detection thresholds, new pattern types, config changes.
+
+    {% endif %}
+
+    {% elif stage == 3 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 3: PROFILER COLLECTOR + DAEMON WIRING                              ║
+    ║  "Connect the pieces and wire into the daemon lifecycle"                  ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read the foundation outputs:
+    - {{ workspace }}/02-models-storage.md
+    - {{ workspace }}/02-probes.md
+    - {{ workspace }}/02-anomaly-patterns.md
+    Read `docs/plans/2026-02-23-mozart-monitor-htop-design.md`
+
+    **File 1: `src/mozart/daemon/profiler/collector.py`**
+
+    Create `ProfilerCollector` class — the central orchestrator:
+
+    - `__init__(self, config: ProfilerConfig, monitor: ResourceMonitor, pgroup: ProcessGroupManager, event_bus: EventBus, manager: JobManager | None = None)`
+    - `async def start()` — initialize storage, start collection loop, start strace manager
+    - `async def stop()` — stop loop, detach all strace, flush storage
+    - `async def collect_snapshot() -> SystemSnapshot` — gather all metrics:
+      1. System memory from `SystemProbe.get_memory_mb()` + `/proc/meminfo`
+      2. Per-process metrics from `psutil.Process.children(recursive=True)`
+      3. GPU metrics from `GpuProbe.get_gpu_metrics()`
+      4. Map PIDs to job_id/sheet_num via `pgroup`/`manager`
+      5. Get strace summaries from `StraceManager` for each attached PID
+      6. Get pressure level from monitor/backpressure
+    - Collection loop:
+      1. Collect snapshot
+      2. Write to storage (SQLite + JSONL)
+      3. Run anomaly detection
+      4. Publish anomalies to EventBus as `monitor.anomaly` events
+      5. Attach strace to new child processes, detach from exited ones
+      6. Sleep for interval
+    - Handle process lifecycle events from EventBus:
+      - Subscribe to `sheet.started` → attach strace to new PID
+      - Subscribe to `sheet.completed`/`sheet.failed` → record exit event, detach strace
+
+    **File 2: `src/mozart/daemon/profiler/__init__.py`**
+
+    Export: `ProfilerCollector`, `MonitorStorage`, `GpuProbe`, `StraceManager`,
+    `AnomalyDetector`, `SystemSnapshot`, `ProcessMetric`, `ProcessEvent`, `Anomaly`
+
+    **File 3: Wire into `src/mozart/daemon/process.py`**
+
+    In `DaemonProcess.run()`, after the monitor is started (step 8):
+    1. Create `ProfilerCollector` with config, monitor, pgroup, event_bus, manager
+    2. Start it: `await self._profiler.start()`
+    3. In shutdown: `await self._profiler.stop()` before `await self._monitor.stop()`
+
+    Register new IPC methods:
+    - `daemon.top` → returns latest snapshot as JSON
+    - `daemon.top.stream` → returns JSONL path for streaming
+    - `daemon.events` → returns recent process events
+
+    **File 4: Add `monitor.anomaly` event type to `src/mozart/daemon/types.py`**
+
+    Add to ObserverEvent documentation that `monitor.anomaly` events have:
+    ```python
+    {"event": "monitor.anomaly", "data": {"anomaly_type": "memory_spike", ...}}
+    ```
+
+    **Verify everything imports and existing tests still pass:**
+    ```bash
+    python -c "
+    from mozart.daemon.profiler import ProfilerCollector, MonitorStorage
+    from mozart.daemon.profiler import GpuProbe, StraceManager, AnomalyDetector
+    from mozart.daemon.profiler.models import SystemSnapshot, ProcessMetric
+    print('All profiler imports OK')
+    "
+    pytest tests/ -x --timeout=120 -q --tb=line 2>&1 | tail -10
+    ```
+
+    **Output to:** {{ workspace }}/03-collector-wiring.md
+
+    {% elif stage == 4 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 4: FOUNDATION TESTS                                                ║
+    ║  "Prove every component works before building the UI"                     ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read {{ workspace }}/03-collector-wiring.md for context.
+
+    **Create: `tests/test_profiler.py`**
+
+    Comprehensive tests for the profiler subsystem:
+
+    **MonitorStorage tests:**
+    - `test_initialize_creates_tables` — verify schema
+    - `test_write_and_read_snapshot` — round-trip
+    - `test_write_and_read_events` — round-trip for process events
+    - `test_read_job_resource_profile` — aggregate query
+    - `test_cleanup_removes_old_data` — retention enforcement
+    - `test_jsonl_append_and_rotate` — JSONL writing + rotation at size limit
+    - `test_concurrent_writes` — multiple async writers don't corrupt
+
+    **GpuProbe tests:**
+    - `test_no_gpu_returns_empty` — graceful when no GPU
+    - `test_pynvml_fallback_to_nvidia_smi` — mock pynvml failure
+    - `test_no_nvidia_smi_returns_empty` — both fail gracefully
+
+    **StraceManager tests:**
+    - `test_attach_and_detach` — mock subprocess, verify parse
+    - `test_strace_not_installed` — graceful skip
+    - `test_attach_already_exited_process` — handles ESRCH
+    - `test_parse_strace_summary` — parse the -c output format
+    - `test_detach_all_cleanup` — all strace processes terminated
+
+    **AnomalyDetector tests:**
+    - `test_memory_spike_detection` — 50% increase triggers
+    - `test_memory_spike_below_threshold` — 40% doesn't trigger
+    - `test_runaway_process_detection` — >90% CPU >60s
+    - `test_zombie_detection` — zombie_count > 0
+    - `test_no_anomalies_in_normal_operation` — clean snapshot returns []
+    - `test_multiple_anomalies` — can detect several simultaneously
+
+    **ProfilerCollector tests:**
+    - `test_collect_snapshot_structure` — verify all fields populated
+    - `test_lifecycle_start_stop` — clean start and shutdown
+    - `test_anomaly_published_to_event_bus` — verify event bus integration
+    - `test_strace_attached_on_sheet_start` — event subscription works
+
+    **PatternType tests:**
+    - `test_resource_anomaly_pattern_type_exists`
+    - `test_resource_correlation_pattern_type_exists`
+
+    Use `pytest`, `tmp_path` for storage, mock psutil/subprocess for probes.
+    Do NOT use `unittest.mock.patch` on things you can inject — use constructor injection.
+
+    **Run all tests:**
+    ```bash
+    pytest tests/test_profiler.py -v --tb=short 2>&1 | tail -40
+    pytest tests/ -x --timeout=120 -q --tb=line 2>&1 | tail -10
+    ```
+
+    **Output to:** {{ workspace }}/04-tests.md
+    Include: test count, pass/fail, any issues discovered and fixed.
+
+    {% elif stage == 5 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 5: UI LAYER — {{ ui_names[instance] | upper }}                      ║
+    ║  Instance {{ instance }} of {{ fan_count }} (PARALLEL)                      ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    {{ readonly_for_other_instances }}
+
+    Read {{ workspace }}/04-tests.md and `docs/plans/2026-02-23-mozart-monitor-htop-design.md`.
+
+    {% if instance == 1 %}
+    {# ═══════════════ TUI APP + READER ═══════════════ #}
+
+    You are implementing the **Textual TUI application** and the **data reader**.
+
+    **File 1: `src/mozart/tui/reader.py`**
+
+    Create `MonitorReader` class — reads data from storage for display:
+
+    - `__init__(self, storage: MonitorStorage | None = None, jsonl_path: Path | None = None, ipc_client: DaemonClient | None = None)`
+    - `async def get_latest_snapshot() -> SystemSnapshot | None` — from SQLite, JSONL tail, or IPC
+    - `async def get_events(since: float, limit: int = 50) -> list[ProcessEvent]`
+    - `async def get_snapshots(since: float, limit: int = 100) -> list[SystemSnapshot]`
+    - `async def stream_snapshots() -> AsyncIterator[SystemSnapshot]` — tail JSONL or poll IPC
+    - Auto-detect data source: try IPC first, then SQLite, then JSONL
+
+    **File 2: `src/mozart/tui/app.py`**
+
+    Create the Textual application with the job-centric layout from the design:
+
+    ```python
+    from textual.app import App, ComposeResult
+    from textual.widgets import Header, Footer, Static
+    from textual.containers import Horizontal, Vertical
+    ```
+
+    Layout (matching the design doc TUI mockup):
+    - **Header bar**: Conductor status, memory bar, CPU bar, GPU indicator, pressure level
+    - **Jobs panel** (main area): Tree of jobs → sheets → processes with inline metrics
+    - **Timeline panel**: Scrollable event list (spawns, exits, signals, anomalies, learning)
+    - **Detail panel** (bottom): Shows details of selected item
+
+    Key bindings: j/k navigate, Enter drill-down, t attach trace, s sort, f filter, l learning, q quit
+
+    Use `set_interval(2.0, self.refresh_data)` for live updates.
+    Use reactive properties for data binding.
+
+    **File 3: `src/mozart/tui/panels/header.py`**
+
+    `HeaderPanel(Static)` — renders system summary with Rich markup:
+    - Conductor UP/DOWN + uptime
+    - Memory bar (Rich progress bar style)
+    - CPU percentage
+    - GPU status (or "—" if none)
+    - Pressure level with color coding (green/yellow/red)
+
+    **File 4: `src/mozart/tui/panels/jobs.py`**
+
+    `JobsPanel(Static)` — renders the job tree:
+    - Each job: name, progress bar, sheet count
+    - Under each job: running/completed/failed sheets with PID, CPU, MEM, age
+    - Inline syscall summary for running processes
+    - Color coding: green=done, yellow=running, red=failed
+
+    **File 5: `src/mozart/tui/panels/timeline.py`**
+
+    `TimelinePanel(Static)` — renders event timeline:
+    - Chronological list of process events + anomalies + learning insights
+    - Color-coded by type: blue=spawn, green=exit, yellow=signal, red=anomaly, purple=learning
+    - Scrollable with max 100 visible events
+
+    **File 6: `src/mozart/tui/panels/detail.py`**
+
+    `DetailPanel(Static)` — drill-down view for selected item:
+    - For a process: full strace summary, open FDs, environment, full command
+    - For a completed sheet: validation results, stdout tail, retry history
+    - For an anomaly: description, affected resources, historical context
+
+    **Verify TUI launches:**
+    ```bash
+    python -c "
+    from mozart.tui.app import MonitorApp
+    print('TUI imports OK')
+    # Don't actually run it — headless environment
+    "
+    ```
+
+    **Output to:** {{ workspace }}/05-tui.md
+    Include: files created, widget hierarchy, known limitations in headless.
+
+    {% elif instance == 2 %}
+    {# ═══════════════ CLI COMMANDS ═══════════════ #}
+
+    You are implementing the **CLI commands** for the monitor.
+
+    **File 1: `src/mozart/cli/commands/top.py`**
+
+    Create the `mozart top` command with three modes:
+
+    ```python
+    import typer
+
+    top_app = typer.Typer()
+
+    @top_app.callback(invoke_without_command=True)
+    def top(
+        json_output: bool = typer.Option(False, "--json", help="Stream JSON snapshots"),
+        history: str = typer.Option(None, "--history", help="Replay historical data (e.g., '1h', '30m')"),
+        trace_pid: int = typer.Option(None, "--trace", help="Attach full strace to PID"),
+        filter_job: str = typer.Option(None, "--job", "-j", help="Filter by job ID"),
+        interval: float = typer.Option(2.0, "--interval", "-i", help="Refresh interval seconds"),
+    ):
+    ```
+
+    **Mode 1: TUI (default)**
+    - Import and run `MonitorApp` from `mozart.tui.app`
+    - Pass filter/interval options
+
+    **Mode 2: JSON (`--json`)**
+    - Stream NDJSON to stdout, one complete snapshot per line
+    - Each snapshot includes: system, gpus, jobs, processes, events, anomalies, learning
+    - Use the reader to tail JSONL or poll IPC
+
+    **Mode 3: History (`--history 1h`)**
+    - Parse duration string into seconds
+    - Read from SQLite and replay snapshots
+    - In TUI mode: show historical playback
+    - In JSON mode: dump historical data
+
+    **Mode 4: Trace (`--trace PID`)**
+    - Request full strace attachment via IPC
+    - Stream trace output to terminal
+
+    **File 2: Register in `src/mozart/cli/__init__.py` or `src/mozart/cli/commands/__init__.py`**
+
+    Add the `top` command to the main CLI app so `mozart top` works.
+
+    **File 3: Extend `src/mozart/cli/commands/diagnose.py`**
+
+    Add `--resources` flag to the existing diagnose command:
+
+    ```python
+    @diagnose_app.command()
+    def diagnose(
+        ...,
+        resources: bool = typer.Option(False, "--resources", help="Include resource profile"),
+    ):
+    ```
+
+    When `--resources` is set, include the resource profile from MonitorStorage:
+    - Peak memory per sheet
+    - CPU-time per sheet
+    - Process spawn count
+    - Syscall hotspots
+    - Anomalies detected during the job
+
+    **Verify CLI registration:**
+    ```bash
+    mozart top --help 2>&1
+    mozart diagnose --help 2>&1
+    ```
+
+    **Output to:** {{ workspace }}/05-cli.md
+    Include: commands added, flags, help output verification.
+
+    {% endif %}
+
+    {% elif stage == 6 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 6: CORRELATION ANALYZER + LEARNING INTEGRATION                     ║
+    ║  "Close the loop: resources inform learning, learning informs scheduling" ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read previous outputs and the design document.
+
+    **File 1: `src/mozart/daemon/profiler/correlation.py`**
+
+    Create `CorrelationAnalyzer` class:
+
+    - `__init__(self, storage: MonitorStorage, learning_hub: LearningHub, config: CorrelationConfig)`
+    - `async def start(event_bus: EventBus)` — start periodic analysis loop
+    - `async def stop()`
+    - `async def analyze()` — run correlation analysis:
+      1. Query completed jobs from storage (last 7 days)
+      2. For each job: get peak memory, total CPU, syscall distribution, anomalies
+      3. Cross-reference with job outcomes (success/failure from learning store)
+      4. Statistical analysis:
+         - Memory vs failure rate (binned histogram)
+         - Syscall hotspots vs failure rate
+         - Anomaly presence vs failure rate
+         - Execution duration vs failure rate
+      5. Generate `RESOURCE_CORRELATION` patterns for correlations with confidence > 0.6
+      6. Store in LearningHub
+
+    Keep the analysis simple and statistical — NO LLM calls. This is pure data.
+    Minimum sample size: 5 jobs before generating correlations.
+
+    **File 2: Extend `src/mozart/daemon/semantic_analyzer.py`**
+
+    Subscribe to `monitor.anomaly` events (in addition to existing sheet events):
+    - When a `monitor.anomaly` event arrives:
+      - Don't call the LLM (anomalies are already classified)
+      - Store directly as `RESOURCE_ANOMALY` pattern in LearningHub
+      - Include context tags: anomaly type, affected job/sheet, severity
+
+    **File 3: Extend `src/mozart/daemon/backpressure.py`**
+
+    Add resource-aware scheduling method:
+
+    ```python
+    async def estimate_job_resource_needs(
+        self, job_config_hash: str
+    ) -> ResourceEstimate | None:
+        """Query learned resource patterns for similar job types."""
+    ```
+
+    - Query LearningHub for `RESOURCE_CORRELATION` patterns matching the job config hash
+    - Return `ResourceEstimate` if sufficient data exists
+    - This is advisory — the controller uses it to adjust thresholds, not block jobs
+
+    **File 4: Wire CorrelationAnalyzer into `src/mozart/daemon/process.py`**
+
+    In DaemonProcess.run(), after ProfilerCollector is started:
+    - Create CorrelationAnalyzer with storage, learning_hub, config
+    - Start it on the event bus
+    - Stop it during shutdown
+
+    **Verify:**
+    ```bash
+    python -c "
+    from mozart.daemon.profiler.correlation import CorrelationAnalyzer
+    from mozart.daemon.backpressure import BackpressureController
+    print('Correlation + Backpressure imports OK')
+    "
+    pytest tests/ -x --timeout=120 -q --tb=line 2>&1 | tail -10
+    ```
+
+    **Output to:** {{ workspace }}/06-correlation.md
+
+    {% elif stage == 7 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 7: LOG ENRICHMENT + DIAGNOSE --RESOURCES                           ║
+    ║  "Every sheet event gets resource context for AI debugging"               ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read previous outputs.
+
+    **File 1: Extend sheet event logging**
+
+    In the execution runner (find where sheet.completed/sheet.failed events are fired),
+    add a `resource_context` field to the event data:
+
+    ```python
+    # When firing sheet events, if profiler is available:
+    resource_context = {
+        "rss_mb": current_snapshot.daemon_rss_mb,
+        "cpu_pct": process_metric.cpu_percent if process_metric else None,
+        "syscall_hotspot": top_syscall_summary,  # e.g., "write 40%"
+        "anomalies_active": [a.anomaly_type for a in active_anomalies],
+    }
+    ```
+
+    The ProfilerCollector should expose a method:
+    ```python
+    def get_resource_context_for_pid(self, pid: int) -> dict[str, Any]:
+        """Get current resource context for a specific PID."""
+    ```
+
+    **File 2: Implement `diagnose --resources` data gathering**
+
+    Create a function (in profiler or in the diagnose command) that produces the
+    one-shot AI diagnostic from the design:
+
+    ```python
+    async def generate_resource_report(job_id: str, storage: MonitorStorage) -> str:
+        """Generate comprehensive resource report for a job."""
+    ```
+
+    Output format (text, designed for AI consumption):
+    ```
+    Resource Profile for job 'my-review-job':
+      Peak memory: 1.2GB at 14:32:15 (Sheet 3, PID 12350)
+      Total CPU-time: 847s across 6 processes
+      ...
+    ```
+
+    **Verify:**
+    ```bash
+    pytest tests/ -x --timeout=120 -q --tb=line 2>&1 | tail -10
+    ```
+
+    **Output to:** {{ workspace }}/07-log-enrichment.md
+
+    {% elif stage == 8 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 8: DASHBOARD SSE + INTEGRATION TESTS                               ║
+    ║  "Wire the web dashboard and prove everything works end-to-end"           ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read previous outputs.
+
+    **Part 1: Dashboard SSE endpoint**
+
+    Check if `src/mozart/dashboard/` exists and is functional.
+
+    If it exists: Add a new SSE endpoint `/api/monitor/stream`:
+    - Reads from JSONL or polls IPC
+    - Streams NDJSON events to connected clients
+    - Each event is a SystemSnapshot JSON
+
+    If the dashboard is not yet functional: Create a minimal placeholder that
+    documents where the endpoint will go, and skip the implementation. The
+    TUI and CLI are the priority.
+
+    **Part 2: Integration tests**
+
+    Create `tests/test_profiler_integration.py`:
+
+    - `test_profiler_collector_lifecycle` — start, collect N snapshots, stop, verify storage
+    - `test_anomaly_to_learning_flow` — inject anomaly, verify RESOURCE_ANOMALY pattern stored
+    - `test_event_bus_monitor_events` — verify monitor.anomaly events published
+    - `test_snapshot_json_serialization` — verify NDJSON output is valid JSON
+    - `test_diagnose_resources_output` — verify resource report format
+    - `test_profiler_config_in_daemon_config` — verify DaemonConfig loads with profiler section
+
+    **Part 3: Run ALL tests**
+    ```bash
+    pytest tests/test_profiler.py tests/test_profiler_integration.py -v --tb=short 2>&1 | tail -40
+    pytest tests/ -x --timeout=120 -q --tb=line 2>&1 | tail -10
+    ```
+
+    **Output to:** {{ workspace }}/08-dashboard-integration.md
+
+    {% elif stage == 9 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 9: FULL VERIFICATION                                                ║
+    ║  "Prove everything works — tests, types, lint, imports"                   ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    **1. Run ALL tests:**
+    ```bash
+    pytest tests/ -x --timeout=120 -v --tb=short 2>&1 | tail -50
+    ```
+
+    **2. Run profiler-specific tests:**
+    ```bash
+    pytest tests/test_profiler.py tests/test_profiler_integration.py -v --tb=short 2>&1 | tail -40
+    ```
+
+    **3. Type check new code:**
+    ```bash
+    mypy src/mozart/daemon/profiler/ --ignore-missing-imports 2>&1 | tail -20
+    mypy src/mozart/tui/ --ignore-missing-imports 2>&1 | tail -20
+    mypy src/mozart/cli/commands/top.py --ignore-missing-imports 2>&1 | tail -10
+    ```
+
+    **4. Lint new code:**
+    ```bash
+    ruff check src/mozart/daemon/profiler/ 2>&1 | tail -20
+    ruff check src/mozart/tui/ 2>&1 | tail -20
+    ruff check src/mozart/cli/commands/top.py 2>&1 | tail -10
+    ```
+
+    **5. Import canary:**
+    ```bash
+    python -c "
+    # Profiler
+    from mozart.daemon.profiler import ProfilerCollector, MonitorStorage
+    from mozart.daemon.profiler import GpuProbe, StraceManager, AnomalyDetector
+    from mozart.daemon.profiler.models import SystemSnapshot, ProcessMetric, ProcessEvent, Anomaly
+    from mozart.daemon.profiler.models import ProfilerConfig, GpuMetric, ResourceEstimate
+    from mozart.daemon.profiler.correlation import CorrelationAnalyzer
+
+    # TUI
+    from mozart.tui.app import MonitorApp
+    from mozart.tui.reader import MonitorReader
+
+    # CLI
+    # (just verify the module exists)
+    import mozart.cli.commands.top
+
+    # Learning extensions
+    from mozart.learning.patterns import PatternType
+    assert hasattr(PatternType, 'RESOURCE_ANOMALY')
+    assert hasattr(PatternType, 'RESOURCE_CORRELATION')
+
+    print('ALL IMPORTS OK')
+    "
+    ```
+
+    **6. CLI help canary:**
+    ```bash
+    mozart top --help 2>&1 || echo "top command not registered yet"
+    mozart validate examples/sheet-review.yaml --json 2>/dev/null
+    echo "Exit code: $?"
+    ```
+
+    **7. Verify MCP cleanup persisted:**
+    ```bash
+    ls /home/emzi/.claude/plugins/marketplaces/claude-plugins-official/external_plugins/
+    ```
+
+    Fix any issues found. Create summary with:
+    - Test counts: total, passed, failed
+    - Type check status
+    - Lint status
+    - Import verification
+    - New files created (full list)
+    - New classes/functions (summary)
+    - Known limitations
+
+    **Output to:** {{ workspace }}/09-verification.md
+
+    {% elif stage == 10 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 10: COMMIT & PUSH                                                   ║
+    ║  "Ship it"                                                                ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read {{ workspace }}/09-verification.md.
+
+    **If verification passed:**
+
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    echo "Branch: $(git branch --show-current)"
+    git status --short | head -30
+    ```
+
+    Stage ONLY the new/modified source and test files explicitly:
+    ```bash
+    git add src/mozart/daemon/profiler/
+    git add src/mozart/tui/
+    git add src/mozart/cli/commands/top.py
+    git add src/mozart/learning/patterns.py
+    git add src/mozart/daemon/config.py
+    git add src/mozart/daemon/process.py
+    git add src/mozart/daemon/semantic_analyzer.py
+    git add src/mozart/daemon/backpressure.py
+    git add tests/test_profiler.py
+    git add tests/test_profiler_integration.py
+    # Add any other modified files that were part of this work
+    ```
+
+    DO NOT use `git add .` or `git add -A`.
+
+    Write commit message to {{ workspace }}/10-commit-message.txt:
+
+    ```
+    feat(monitor): add mozart htop — real-time system monitor with TUI
+
+    New profiler subsystem for the daemon with:
+    - Per-process CPU/MEM/strace monitoring (ProfilerCollector)
+    - SQLite time-series storage + JSONL streaming (MonitorStorage)
+    - GPU probing with pynvml/nvidia-smi fallback (GpuProbe)
+    - strace -c summary attachment per child process (StraceManager)
+    - Heuristic anomaly detection (AnomalyDetector)
+    - Job-centric Textual TUI with drill-down (MonitorApp)
+    - CLI: mozart top, mozart top --json, mozart top --history
+    - Correlation analysis → RESOURCE_CORRELATION patterns
+    - Resource-aware scheduling hints in BackpressureController
+    - Resource context enrichment in sheet event logs
+    - New PatternTypes: RESOURCE_ANOMALY, RESOURCE_CORRELATION
+
+    Also: removed 11 unused MCP servers (kept github + playwright)
+
+    Design: docs/plans/2026-02-23-mozart-monitor-htop-design.md
+    ```
+
+    Commit and push:
+    ```bash
+    git commit -F {{ workspace }}/10-commit-message.txt
+    git push origin main
+    ```
+
+    **If verification FAILED:**
+    Do NOT commit. List what needs fixing in the output file.
+
+    **Output to:** {{ workspace }}/10-commit.md
+
+    {% endif %}
+
+  variables:
+    preamble: |
+      ╔══════════════════════════════════════════════════════════════════════════╗
+      ║       MOZART MONITOR CONCERT — "mozart htop"                           ║
+      ║  Real-time system monitor + logging + learning integration            ║
+      ╚══════════════════════════════════════════════════════════════════════════╝
+
+      **Project:** /home/emzi/Projects/mozart-ai-compose
+      **Design:** docs/plans/2026-02-23-mozart-monitor-htop-design.md
+      **Branch:** main (push directly to main)
+
+      **CRITICAL RULES:**
+      1. Read the design document FULLY before writing code
+      2. Follow existing code patterns (async, Pydantic v2, Protocol classes)
+      3. All new code must have type hints
+      4. Never use `git add .` — stage files explicitly
+      5. Run `pytest -x` after every significant change
+      6. Handle all edge cases gracefully (no GPU, no strace, no psutil)
+
+    foundation_names:
+      1: "Models + Storage"
+      2: "GPU Probe + strace Manager"
+      3: "Anomaly Detection + PatternTypes"
+
+    ui_names:
+      1: "TUI App + Reader"
+      2: "CLI Commands"
+
+    readonly_for_other_instances: |
+      **PARALLEL STAGE: Only modify files in YOUR scope.**
+      Do NOT modify files that other parallel instances are working on.
+      Write ONLY your designated output files.
+
+validations:
+  # Stage 1: Inventory
+  - type: file_exists
+    path: "{workspace}/01-inventory.md"
+    condition: "stage >= 1"
+    description: "Inventory report exists"
+
+  - type: command_succeeds
+    command: 'test -d /home/emzi/Projects/mozart-ai-compose/src/mozart/daemon/profiler'
+    condition: "stage >= 1"
+    description: "Profiler package directory created"
+
+  # Stage 2: Foundation files
+  - type: file_exists
+    path: "{workspace}/02-models-storage.md"
+    condition: "stage == 2 and instance == 1"
+    description: "Models + Storage report"
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "from mozart.daemon.profiler.models import SystemSnapshot, ProcessMetric, ProfilerConfig; print(\"OK\")"'
+    condition: "stage == 2 and instance == 1"
+    description: "Profiler models import"
+
+  - type: file_exists
+    path: "{workspace}/02-probes.md"
+    condition: "stage == 2 and instance == 2"
+    description: "Probes report"
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "from mozart.daemon.profiler.gpu_probe import GpuProbe; from mozart.daemon.profiler.strace_manager import StraceManager; print(\"OK\")"'
+    condition: "stage == 2 and instance == 2"
+    description: "Probe modules import"
+
+  - type: file_exists
+    path: "{workspace}/02-anomaly-patterns.md"
+    condition: "stage == 2 and instance == 3"
+    description: "Anomaly + patterns report"
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "from mozart.learning.patterns import PatternType; assert hasattr(PatternType, \"RESOURCE_ANOMALY\"); print(\"OK\")"'
+    condition: "stage == 2 and instance == 3"
+    description: "New PatternTypes exist"
+
+  # Stage 3: Collector + wiring
+  - type: file_exists
+    path: "{workspace}/03-collector-wiring.md"
+    condition: "stage >= 3"
+    description: "Collector wiring report"
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "from mozart.daemon.profiler import ProfilerCollector, MonitorStorage; print(\"OK\")"'
+    condition: "stage >= 3"
+    description: "ProfilerCollector imports"
+
+  # Stage 4: Tests
+  - type: file_exists
+    path: "{workspace}/04-tests.md"
+    condition: "stage >= 4"
+    description: "Test report exists"
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_profiler.py -x -q --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage >= 4"
+    description: "Profiler tests pass"
+
+  # Stage 5: UI layer
+  - type: file_exists
+    path: "{workspace}/05-tui.md"
+    condition: "stage == 5 and instance == 1"
+    description: "TUI report"
+
+  - type: file_exists
+    path: "{workspace}/05-cli.md"
+    condition: "stage == 5 and instance == 2"
+    description: "CLI report"
+
+  # Stage 6: Correlation
+  - type: file_exists
+    path: "{workspace}/06-correlation.md"
+    condition: "stage >= 6"
+    description: "Correlation analyzer report"
+
+  # Stage 7: Log enrichment
+  - type: file_exists
+    path: "{workspace}/07-log-enrichment.md"
+    condition: "stage >= 7"
+    description: "Log enrichment report"
+
+  # Stage 8: Integration
+  - type: file_exists
+    path: "{workspace}/08-dashboard-integration.md"
+    condition: "stage >= 8"
+    description: "Dashboard + integration report"
+
+  # Stage 9: Verification
+  - type: file_exists
+    path: "{workspace}/09-verification.md"
+    condition: "stage >= 9"
+    description: "Verification report"
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/ -x --timeout=120 -q --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage >= 9"
+    description: "Full test suite passes"
+
+  # Stage 10: Commit
+  - type: file_exists
+    path: "{workspace}/10-commit.md"
+    condition: "stage >= 10"
+    description: "Commit report"
+
+concert:
+  enabled: true
+  max_chain_depth: 3
+  cooldown_between_jobs_seconds: 120
+  inherit_workspace: false
+
+on_success:
+  - type: run_job
+    job_path: "scores/mozart-monitor-concert.yaml"
+    description: "Chain to next iteration"
+    detached: true
+    fresh: true
+    job_workspace: "monitor-workspace"

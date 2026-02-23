@@ -50,6 +50,7 @@ htmlcov/
 # Investigation/debug artifacts
 investigation-results/
 debug-*.yaml
+temp-scores/
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Mozart Workspaces and Generated Content
@@ -73,10 +74,15 @@ mozart-opus-evolution-v*.yaml
 !mozart-code-quality-review.yaml
 !mozart-worktree-isolation.yaml
 
+# scores/ directory contains curated, committed score files
+!scores/**
+
 # Project-specific context (personal, not for public repo)
 CLAUDE.md
 memory-bank/
 STATUS.md
+temp-scores/
+workspaces/
 
 # State files (keep structure, ignore contents)
 *.json.tmp
