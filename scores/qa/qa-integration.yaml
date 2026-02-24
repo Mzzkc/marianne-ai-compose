@@ -1,0 +1,441 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║       QA INTEGRATION — Cross-Module End-to-End Tests                       ║
+# ║                                                                            ║
+# ║  Tests real code paths across module boundaries. Minimal mocking.          ║
+# ║                                                                            ║
+# ║  Stage 1: Identify integration gaps from module score coverage reports     ║
+# ║  Stage 2 x3: Write integration tests (config→runner, IPC→manager, e2e)   ║
+# ║  Stage 3: Merge and verify all integration tests pass                      ║
+# ║  Stage 4: Full suite regression check                                      ║
+# ║  Stage 5: Commit                                                           ║
+# ║                                                                            ║
+# ║  Requires: qa-foundation + all module scores complete                      ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "qa-integration"
+description: "Cross-module integration tests: config→runner, IPC→manager→events, end-to-end workflows"
+
+workspace: "/home/emzi/Projects/mozart-ai-compose/.qa-integration-workspace"
+
+workspace_lifecycle:
+  archive_on_fresh: true
+  max_archives: 3
+
+backend:
+  type: claude_cli
+  skip_permissions: true
+  working_directory: /home/emzi/Projects/mozart-ai-compose
+  timeout_seconds: 3000
+  output_format: json
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 4000
+  lookback_sheets: 5
+
+sheet:
+  size: 1
+  total_items: 5
+
+  fan_out:
+    2: 3
+
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+
+retry:
+  max_retries: 2
+  max_completion_attempts: 2
+  completion_threshold_percent: 50
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+cost_limits:
+  enabled: false
+
+prompt:
+  variables:
+    preamble: |
+      ╔══════════════════════════════════════════════════════════════════════════════╗
+      ║  QA INTEGRATION — Cross-Module End-to-End Tests                            ║
+      ║  Config→Runner · IPC→Manager→Events · Full Workflows                      ║
+      ╚══════════════════════════════════════════════════════════════════════════════╝
+
+      **Project:** /home/emzi/Projects/mozart-ai-compose
+      **Branch:** main (push directly)
+      **Virtual env:** .venv
+
+      ## Integration Testing Philosophy
+      These tests exercise REAL code paths across module boundaries. Minimal mocking —
+      only mock external I/O (filesystem, network, Claude CLI). Internal module
+      interactions must use real implementations.
+
+      ## Source Scope (entire codebase — tests cross boundaries)
+      - `src/mozart/core/` — config, checkpoint, fan-out, errors
+      - `src/mozart/execution/` — runner, lifecycle, recovery
+      - `src/mozart/daemon/` — manager, IPC, event bus, scheduler
+      - `src/mozart/cli/` — commands
+      - `src/mozart/validation/` — checks, runner
+      - `src/mozart/healing/` — coordinator, remedies
+
+      ## Test File
+      - `tests/test_cross_module_integration.py` — all integration tests go here
+
+      CRITICAL RULES:
+      1. Read actual source code for BOTH sides of each integration boundary.
+      2. Mock only external I/O — never mock module internals.
+      3. Each test should exercise at least 2 modules working together.
+      4. Every new test must have type hints.
+      5. Run tests: `pytest tests/test_cross_module_integration.py -x -v --timeout=120`
+      6. Never use `git add .` — stage files explicitly.
+
+    integration_types:
+      1:
+        name: "Config to Execution Pipeline"
+        directive: |
+          Write integration tests for the config → validate → runner → execute → checkpoint chain.
+
+          Tests to write:
+
+          1. **Parse real YAML → create runner → execute sheet with mock backend:**
+             - Load an actual example YAML (e.g., examples/sheet-review.yaml)
+             - Parse it through JobConfig validation
+             - Create a real SheetRunner with a mock backend
+             - Execute a sheet and verify checkpoint state is saved correctly
+             - Verify events fire through the real event system
+
+          2. **Config with fan-out → expansion → parallel execution:**
+             - Load a config with fan_out defined
+             - Verify expand_fan_out produces correct sheet count
+             - Create runners for each expanded sheet
+             - Execute in parallel and verify all checkpoints consistent
+
+          3. **Config validation failures → proper error propagation:**
+             - Load intentionally invalid config
+             - Verify validation catches the error
+             - Verify error classification works (ClassifiedError has correct code)
+             - Verify error message is human-readable
+
+          4. **Template rendering → prompt generation → backend invocation:**
+             - Create a config with Jinja template variables
+             - Render the template for multiple stages
+             - Verify the rendered prompt contains expected variable substitutions
+             - Pass to mock backend and verify it receives the correct prompt
+
+          After writing, run:
+          ```bash
+          pytest tests/test_cross_module_integration.py -x -v --timeout=120 -k "config"
+          ```
+
+      2:
+        name: "IPC to Manager to Event Bus"
+        directive: |
+          Write integration tests for the IPC → manager → runner → event bus chain.
+
+          Tests to write:
+
+          1. **IPC client → server → handler → manager:**
+             - Start a real IPC server on a temp Unix socket
+             - Connect a real IPC client
+             - Submit a job via JSON-RPC
+             - Verify manager receives and registers the job
+             - Clean up socket after test
+
+          2. **Manager → runner → event bus propagation:**
+             - Create a real manager with mock backend
+             - Submit a job
+             - Verify event bus receives: job.submitted, sheet.started, sheet.completed
+             - Verify event payloads contain correct job/sheet IDs
+
+          3. **Event bus → multiple subscribers:**
+             - Subscribe 3 different handlers to sheet.completed
+             - Run a job through the manager
+             - Verify all 3 handlers received the event
+             - Verify ordering is consistent
+
+          4. **Rate limit event flow:**
+             - Configure a runner that hits rate limits (mock backend returns rate limit)
+             - Verify rate limit event propagates through event bus
+             - Verify rate coordinator receives the rate limit data
+             - Verify retry happens after cooldown
+
+          After writing, run:
+          ```bash
+          pytest tests/test_cross_module_integration.py -x -v --timeout=120 -k "ipc or manager or event"
+          ```
+
+      3:
+        name: "End-to-End Workflows"
+        directive: |
+          Write integration tests for complete Mozart workflows.
+
+          Tests to write:
+
+          1. **Fan-out → parallel execution → fan-in:**
+             - Create a config with fan_out: {2: 3}
+             - Execute through real expansion + parallel runner
+             - Verify 3 instances created, all complete, results merged
+
+          2. **Error → retry → self-healing → success:**
+             - Configure a backend that fails twice then succeeds
+             - Enable self-healing with a remedy that creates a missing file
+             - Verify: first attempt fails, retry fails, healing kicks in, third attempt succeeds
+             - Verify checkpoint reflects the full retry/healing history
+
+          3. **Prelude → template rendering → execution → cadenza:**
+             - Create a config with prelude and cadenza
+             - Verify prelude content is prepended to the prompt
+             - Execute a sheet
+             - Verify cadenza runs after completion
+
+          4. **Pause → checkpoint → resume:**
+             - Start a multi-sheet job
+             - Pause after first sheet completes
+             - Verify checkpoint is saved with correct state
+             - Resume and verify execution continues from sheet 2
+             - Verify final state shows all sheets complete
+
+          5. **Validation chain: run → validate → report:**
+             - Execute a sheet that creates expected output files
+             - Run validations (file_exists, content_contains, command_succeeds)
+             - Verify validation results are correct
+             - Verify reporter produces human-readable output
+
+          After writing, run:
+          ```bash
+          pytest tests/test_cross_module_integration.py -x -v --timeout=120 -k "e2e or workflow"
+          ```
+
+  template: |
+    {{ preamble }}
+
+    *Stage {{ stage }}/{{ total_stages }} ({{ ((stage / total_stages) * 100) | round }}%)*
+    {% if fan_count > 1 %}*Instance {{ instance }}/{{ fan_count }}*{% endif %}
+
+    {% if stage == 1 %}
+    # Stage 1: Identify Integration Gaps
+
+    Review the current test suite to find gaps in cross-module coverage.
+
+    **Step 1: Check if any integration tests exist**
+    ```bash
+    ls tests/test_*integration* tests/test_*e2e* 2>/dev/null
+    ```
+
+    **Step 2: Map module boundaries**
+    Read the key boundary interfaces:
+    - `src/mozart/core/config/job.py` → how config feeds into runner
+    - `src/mozart/execution/runner/base.py` → how runner uses config + backend
+    - `src/mozart/daemon/manager.py` → how manager orchestrates jobs
+    - `src/mozart/daemon/ipc/handler.py` → how IPC commands reach manager
+    - `src/mozart/daemon/event_bus.py` → how events flow
+
+    **Step 3: Identify untested integration paths**
+    For each pair of modules that interact, check if any test exercises the
+    real (non-mocked) interaction. List the gaps.
+
+    **Output to:** {{ workspace }}/01-audit.md
+
+    Format:
+    ```markdown
+    IMPLEMENTATION_COMPLETE: yes
+
+    # Integration Test Gap Analysis
+
+    ## Coverage Summary
+    | Module Boundary | Current Coverage | Gap Description |
+    |----------------|-----------------|-----------------|
+
+    ## Test Classification
+    | Test File | Test Function | Classification | Reason |
+    |-----------|---------------|----------------|--------|
+
+    ## Existing Integration Tests
+    - List any tests that already cross module boundaries
+
+    ## Priority Integration Gaps
+    1. [Most critical untested boundary]
+    ...
+    ```
+
+
+    {% elif stage == 2 %}
+    {% set task = integration_types[instance] %}
+
+    # Stage 2: {{ task.name }}
+
+    Read {{ workspace }}/01-audit.md for the gap analysis.
+
+    {{ task.directive }}
+
+    **PARALLEL STAGE:** You are instance {{ instance }} of {{ fan_count }}.
+    - Instance 1: Config → Execution pipeline tests
+    - Instance 2: IPC → Manager → Event Bus tests
+    - Instance 3: End-to-end workflow tests
+
+    All instances write to `tests/test_cross_module_integration.py`.
+    To avoid conflicts, use distinct class names:
+    - Instance 1: `class TestConfigExecutionIntegration`
+    - Instance 2: `class TestIPCManagerIntegration`
+    - Instance 3: `class TestEndToEndWorkflows`
+
+    **Output to:** {{ workspace }}/02-{{ task.name | lower | replace(" ", "-") | replace("→", "to") }}.md
+    Include `IMPLEMENTATION_COMPLETE: yes` at the top.
+
+
+    {% elif stage == 3 %}
+    # Stage 3: Merge & Conflict Resolution
+
+    Three parallel instances wrote to the same file. Merge their work.
+
+    Read all reports:
+    - {{ workspace }}/02-config-to-execution-pipeline.md
+    - {{ workspace }}/02-ipc-to-manager-to-event-bus.md
+    - {{ workspace }}/02-end-to-end-workflows.md
+
+    **Step 1: Check the integration test file**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    wc -l tests/test_cross_module_integration.py
+    ```
+
+    **Step 2: Run all integration tests**
+    ```bash
+    .venv/bin/pytest tests/test_cross_module_integration.py -x -v --timeout=120 2>&1 | tail -30
+    ```
+
+    **Step 3: Fix any failures.** Since all instances write to the same file,
+    check for:
+    - Duplicate imports at the top
+    - Conflicting fixture names
+    - Tests that modify shared state
+
+    **Output to:** {{ workspace }}/03-merge.md
+    Include `IMPLEMENTATION_COMPLETE: yes` at the top.
+
+
+    {% elif stage == 4 %}
+    # Stage 4: Full Suite Regression Check
+
+    **Step 1: Run the complete test suite**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    .venv/bin/pytest tests/ -x --timeout=120 -q 2>&1 | tail -20
+    ```
+
+    **Step 2: If any regressions**, fix them. Integration tests should not break
+    unit tests. If they do, the integration test is likely modifying global state.
+
+    **Output to:** {{ workspace }}/04-regression.md
+    Include `IMPLEMENTATION_COMPLETE: yes` at the top.
+
+
+    {% elif stage == 5 %}
+    # Stage 5: Commit
+
+    **Step 1: Verify**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    .venv/bin/pytest tests/ -x --timeout=120 -q 2>&1 | tail -10
+    ```
+
+    **Step 2: Stage and commit**
+    ```bash
+    git add tests/test_cross_module_integration.py
+    git diff --cached --stat
+
+    git commit -m "test(integration): cross-module e2e tests
+
+    - Config → validate → runner → checkpoint pipeline
+    - IPC → manager → event bus propagation
+    - Fan-out/fan-in, error/retry/healing, pause/resume workflows
+    - Minimal mocking — real module interactions
+
+    Co-Authored-By: Mozart AI Compose <noreply@mozart.ai>"
+
+    git push
+    ```
+
+    **Output to:** {{ workspace }}/05-commit.md
+    Include `IMPLEMENTATION_COMPLETE: yes` at the top.
+
+    {% endif %}
+
+validations:
+  # Stage 1: Gap analysis
+  - type: file_exists
+    path: "{workspace}/01-audit.md"
+    condition: "stage >= 1"
+    description: "Gap analysis exists"
+
+  - type: content_contains
+    path: "{workspace}/01-audit.md"
+    pattern: "IMPLEMENTATION_COMPLETE: yes"
+    condition: "stage >= 1"
+    description: "Gap analysis marked complete"
+
+  - type: content_regex
+    path: "{workspace}/01-audit.md"
+    pattern: "## (Coverage Summary|Priority Integration Gaps)\\s+[\\|1]"
+    condition: "stage >= 1"
+    description: "Gap analysis has substantive content"
+
+  # Stage 2: Integration test file created with real content
+  - type: file_exists
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_cross_module_integration.py"
+    condition: "stage >= 2"
+    description: "Integration test file created"
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && count=$(.venv/bin/pytest tests/test_cross_module_integration.py --collect-only -q --timeout=30 2>&1 | tail -1 | grep -oE "^[0-9]+") && test "$count" -ge 8'
+    condition: "stage >= 2"
+    description: "Integration file has >= 8 tests"
+    timeout_seconds: 120
+
+  # Stage 2: Per-instance class names exist (anti-fudge)
+  - type: content_contains
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_cross_module_integration.py"
+    pattern: "class TestConfigExecutionIntegration"
+    condition: "stage == 2 and instance == 1"
+    description: "Config→Execution test class exists"
+
+  - type: content_contains
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_cross_module_integration.py"
+    pattern: "class TestIPCManagerIntegration"
+    condition: "stage == 2 and instance == 2"
+    description: "IPC→Manager test class exists"
+
+  - type: content_contains
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_cross_module_integration.py"
+    pattern: "class TestEndToEndWorkflows"
+    condition: "stage == 2 and instance == 3"
+    description: "E2E workflow test class exists"
+
+  # Stage 3: All integration tests pass
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_cross_module_integration.py -x -q --timeout=120 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage >= 3"
+    description: "All integration tests pass"
+    timeout_seconds: 600
+
+  # Stage 4: Full suite
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/ -x --timeout=120 -q --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage >= 4"
+    description: "Full test suite passes (no regressions)"
+    timeout_seconds: 900
+
+  # Stage 5: Committed
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && test -z "$(git status --porcelain tests/test_cross_module_integration.py)"'
+    condition: "stage >= 5"
+    description: "Integration tests committed"
