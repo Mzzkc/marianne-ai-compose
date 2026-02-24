@@ -426,17 +426,17 @@ validations:
     condition: "stage >= 1"
     description: "Audit marked complete"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/01-audit.md"
-    pattern: "## Coverage Summary"
+    pattern: "## Coverage Summary\\s+\\|"
     condition: "stage >= 1"
-    description: "Audit contains coverage data"
+    description: "Audit has coverage table with data rows"
 
-  - type: content_contains
+  - type: content_regex
     path: "{workspace}/01-audit.md"
-    pattern: "## Test Classification"
+    pattern: "## Test Classification\\s+\\|"
     condition: "stage >= 1"
-    description: "Audit contains test classifications"
+    description: "Audit has classification table with data rows"
 
   # Stage 2: Per-instance reports
   - type: file_exists
@@ -454,14 +454,20 @@ validations:
     condition: "stage == 2 and instance == 3"
     description: "Adversarial test report exists"
 
-  # Stage 2: Instance 1 — existing tests still pass after fixes
+  # Stage 2: Instance 1 — existing tests still pass AND changes were made
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_runner*.py tests/test_lifecycle.py tests/test_recovery_mixin.py tests/test_sheet_execution*.py tests/test_escalation_learning.py -x -q --timeout=120 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
     condition: "stage == 2 and instance == 1"
     description: "Existing module tests pass after flaky fixes"
     timeout_seconds: 300
 
-  # Stage 2: Actual test files created
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && git diff --name-only HEAD | grep -qE "tests/test_(runner|lifecycle|recovery|sheet_execution|escalation)"'
+    condition: "stage == 2 and instance == 1"
+    description: "Instance 1 actually modified existing test files"
+    stage: 2
+
+  # Stage 2: Actual test files created with real content
   - type: file_exists
     path: "/home/emzi/Projects/mozart-ai-compose/tests/test_execution_property_based.py"
     condition: "stage == 2 and instance == 2"
@@ -471,6 +477,32 @@ validations:
     path: "/home/emzi/Projects/mozart-ai-compose/tests/test_execution_adversarial.py"
     condition: "stage == 2 and instance == 3"
     description: "Adversarial test file created"
+
+  # Stage 2: Test files use required techniques
+  - type: content_regex
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_execution_property_based.py"
+    pattern: "@given"
+    condition: "stage == 2 and instance == 2"
+    description: "Property-based tests use @given decorator"
+
+  - type: content_regex
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_execution_adversarial.py"
+    pattern: "pytest\\.mark\\.adversarial"
+    condition: "stage == 2 and instance == 3"
+    description: "Adversarial tests use @pytest.mark.adversarial"
+
+  # Stage 2: Minimum test count — no trivial single-test files
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && count=$(.venv/bin/pytest tests/test_execution_property_based.py --collect-only -q --timeout=30 2>&1 | tail -1 | grep -oE "^[0-9]+") && test "$count" -ge 10'
+    condition: "stage == 2 and instance == 2"
+    description: "Property-based file has >= 10 tests"
+    timeout_seconds: 120
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && count=$(.venv/bin/pytest tests/test_execution_adversarial.py --collect-only -q --timeout=30 2>&1 | tail -1 | grep -oE "^[0-9]+") && test "$count" -ge 10'
+    condition: "stage == 2 and instance == 3"
+    description: "Adversarial file has >= 10 tests"
+    timeout_seconds: 120
 
   # Stage 2: Tests actually pass
   - type: command_succeeds
@@ -485,12 +517,19 @@ validations:
     description: "Adversarial tests pass"
     timeout_seconds: 300
 
-  # Stage 3: Merge
+  # Stage 3: Merge — all tests pass and quality gate holds
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_runner*.py tests/test_lifecycle.py tests/test_recovery_mixin.py tests/test_sheet_execution*.py tests/test_escalation_learning.py tests/test_execution_property_based.py tests/test_execution_adversarial.py -x -q --timeout=120 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
     condition: "stage >= 3"
     description: "All execution module tests pass"
     timeout_seconds: 600
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_quality_gate.py -x -q --timeout=60 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage >= 3"
+    description: "Quality gate meta-tests pass"
+    timeout_seconds: 120
+    stage: 2
 
   # Stage 4: Coverage gate
   - type: command_succeeds
