@@ -1,0 +1,1038 @@
+# dashboard-daemon-bridge.yaml
+#
+# Connects the Mozart Dashboard to the live conductor daemon, replacing the
+# local SQLite StateBackend with real-time IPC data. Adds four backend
+# service layers, new API endpoints, and enriched frontend views.
+#
+# Design doc: docs/plans/2026-02-25-dashboard-daemon-data-bridge-design.md
+#
+# Execution flow: 14 sequential stages
+#   1-2:  Backend data layers (adapter, IPC methods)
+#   3-5:  Service layers (events, analytics, system view)
+#   6:    Wire into app.py + update existing routes
+#   7-8:  Index + jobs list page enhancements
+#   9:    Job detail page enhancements
+#   10:   Monitor page enhancements
+#   11:   Analytics page (new)
+#   12:   Integration testing
+#   13:   Browser verification (Playwright)
+#   14:   Polish + edge cases
+#
+# Usage:
+#   mozart validate scores/dashboard-daemon-bridge.yaml
+#   mozart run scores/dashboard-daemon-bridge.yaml
+
+name: "dashboard-daemon-bridge"
+description: "Connect dashboard to live conductor daemon with real-time data"
+
+workspace: "/home/emzi/Projects/mozart-ai-compose/workspace-dashboard-bridge"
+
+backend:
+  type: claude_cli
+  skip_permissions: true
+  timeout_seconds: 3600
+  disable_mcp: true
+  timeout_overrides:
+    6: 5400    # app.py wiring — touches many files, route updates
+    9: 5400    # Job detail — most complex page enhancement
+    11: 5400   # Analytics page — full new page build
+    12: 5400   # Integration testing — full suite
+    13: 5400   # Browser verification — starts server, takes screenshots
+
+sheet:
+  size: 1
+  total_items: 14
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+    8: [6]      # Jobs list can parallel with index page
+    9: [6]      # Job detail can parallel with index/jobs
+    10: [6]     # Monitor can parallel with above
+    11: [6]     # Analytics can parallel with above
+    12: [7, 8, 9, 10, 11]   # Integration after all pages
+    13: [12]
+    14: [13]
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 3000
+  lookback_sheets: 3
+
+retry:
+  max_retries: 2
+  max_completion_attempts: 3
+  completion_threshold_percent: 60
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+pause_between_sheets_seconds: 5
+
+prompt:
+  variables:
+    project: "/home/emzi/Projects/mozart-ai-compose"
+    design_doc: "docs/plans/2026-02-25-dashboard-daemon-data-bridge-design.md"
+
+  template: |
+    {% macro project_context() %}
+    ## Project Context — Mozart Dashboard ↔ Daemon Bridge
+
+    You are implementing the dashboard-daemon data bridge for Mozart,
+    an AI orchestration framework. The dashboard currently reads from a local
+    SQLite StateBackend. You're replacing that data source with live IPC
+    calls to the running conductor daemon.
+
+    **Project root:** `{{ project }}`
+    **Venv activation:** `source {{ project }}/.venv/bin/activate`
+
+    **Key patterns:**
+    - FastAPI + Jinja2 templates + htmx + Alpine.js frontend
+    - DaemonClient IPC over Unix socket (JSON-RPC 2.0)
+    - StateBackend ABC in `src/mozart/state/base.py`
+    - Existing dashboard routes in `src/mozart/dashboard/routes/`
+    - Tailwind CSS CDN + dark mode support
+
+    **Design doc:** `{{ project }}/{{ design_doc }}`
+
+    Read the design doc for the full architecture. Your changes must:
+    - Keep all existing dashboard tests passing
+    - Follow existing code patterns (read before writing)
+    - Use type hints throughout
+    - Not break any existing functionality
+    {% endmacro %}
+
+    {% macro dev_workflow() %}
+    ## Development Workflow
+
+    1. Read existing code first — understand before modifying
+    2. Write tests alongside implementation
+    3. Run relevant tests after changes
+    4. Run ruff on modified files
+    5. Git commit with conventional commit message
+
+    ```bash
+    cd {{ project }}
+    source .venv/bin/activate
+    pytest tests/test_dashboard*.py -x -q --tb=short
+    ruff check src/mozart/dashboard/
+    ```
+
+    After committing, print a summary of what changed and what files were touched.
+    {% endmacro %}
+
+    {% macro frontend_patterns() %}
+    ## Frontend Patterns
+
+    Follow these established patterns exactly:
+    - **Pages** extend `base.html` via `{% raw %}{% extends "base.html" %}{% endraw %}`
+    - **Partials** are htmx targets loaded via `hx-get`, return HTML fragments
+    - **Alpine.js** for local state: `x-data="{ ... }"` per section
+    - **htmx** for polling: `hx-trigger="load, every Ns"` with `hx-swap="innerHTML"`
+    - **SSE** via native EventSource in Alpine `init()` for real-time data
+    - **Tailwind CSS** classes only, dark mode with `dark:` prefix
+    - **Status colors**: green=success, red=failed, amber=warning, blue=running, gray=pending
+    - **Responsive**: `lg:grid-cols-N` breakpoints, stack on mobile
+
+    Read `src/mozart/dashboard/templates/base.html` and an existing page template
+    before writing any templates.
+    {% endmacro %}
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% if stage == 1 %}
+    # Stage 1: DaemonStateAdapter — StateBackend over DaemonClient
+
+    {{ project_context() }}
+
+    ## What to Build
+
+    Create `src/mozart/dashboard/state/__init__.py` (empty) and
+    `src/mozart/dashboard/state/daemon_adapter.py` with:
+
+    **`DaemonStateAdapter(StateBackend)`** that wraps `DaemonClient`:
+    - `__init__(self, client: DaemonClient)` — store the client
+    - `async load(self, job_id: str) -> CheckpointState | None` — calls
+      `client.get_job_status(job_id, "")`, parses result into `CheckpointState`.
+      Returns `None` if job not found (catches `DaemonError`).
+    - `async list_jobs(self) -> list[CheckpointState]` — calls `client.list_jobs()`
+      for the roster. For each job, calls `client.get_job_status(job_id, "")` to
+      get rich data. Returns list of `CheckpointState` objects. If `get_job_status`
+      fails for a job, construct a minimal `CheckpointState` from the roster data
+      (job_id, status, submitted_at).
+    - Write methods (`save`, `delete`, `get_next_sheet`, `mark_sheet_status`) raise
+      `NotImplementedError("Dashboard is read-only")`.
+    - `async close(self)` — no-op (DaemonClient has no persistent connection).
+
+    **Important implementation details:**
+    - `DaemonClient.list_jobs()` returns `list[dict]` with keys: `job_id`, `status`,
+      `config_path`, `workspace`, `submitted_at`, `started_at`, `error_message`.
+    - `DaemonClient.get_job_status()` returns a dict that can be parsed as
+      `CheckpointState(**data)` — it's the `model_dump(mode="json")` output.
+    - Read `src/mozart/state/base.py` for the full `StateBackend` interface.
+    - Read `src/mozart/daemon/ipc/client.py` for `DaemonClient` methods.
+    - Read `src/mozart/core/checkpoint.py` for `CheckpointState` model.
+
+    **Tests:** Create `tests/test_daemon_state_adapter.py`:
+    - Mock `DaemonClient` to avoid needing a running daemon
+    - Test `list_jobs()` returns `CheckpointState` objects
+    - Test `load()` returns `CheckpointState` for known job
+    - Test `load()` returns `None` for unknown job
+    - Test write methods raise `NotImplementedError`
+    - Test `list_jobs()` gracefully handles individual job failures
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): add DaemonStateAdapter — StateBackend over DaemonClient`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 2 %}
+    # Stage 2: New Daemon IPC Methods
+
+    {{ project_context() }}
+
+    ## What to Build
+
+    Add two new IPC methods to the daemon and corresponding client convenience methods.
+
+    ### Daemon side (`src/mozart/daemon/process.py`)
+
+    In `_register_methods()`, add two handlers after the existing `daemon.observer_events`:
+
+    1. **`daemon.rate_limits`** — returns rate limit state
+       ```python
+       async def handle_rate_limits(_p: dict, _w: Any) -> dict:
+           coordinator = manager._rate_coordinator
+           if coordinator is None:
+               return {"backends": {}, "active_limits": 0}
+           # Extract _active_limits and recent _events from coordinator
+           return {
+               "backends": {k: {"resume_at": v} for k, v in coordinator._active_limits.items()},
+               "active_limits": len(coordinator._active_limits),
+               "recent_events_count": len(coordinator._events),
+           }
+       ```
+       Read `src/mozart/daemon/rate_coordinator.py` to understand the data shape.
+
+    2. **`daemon.learning.patterns`** — returns recent learning insights
+       ```python
+       async def handle_learning_patterns(params: dict, _w: Any) -> dict:
+           hub = manager._learning_hub
+           if hub is None:
+               return {"patterns": []}
+           limit = params.get("limit", 20)
+           # Get recent patterns from the learning store
+           # Read LearningHub and GlobalLearningStore to find the right query
+           return {"patterns": [...]}
+       ```
+       Read `src/mozart/daemon/learning_hub.py` and `src/mozart/learning/store/base.py`
+       to understand what pattern data is available.
+
+    Register both:
+    ```python
+    handler.register("daemon.rate_limits", handle_rate_limits)
+    handler.register("daemon.learning.patterns", handle_learning_patterns)
+    ```
+
+    ### Client side (`src/mozart/daemon/ipc/client.py`)
+
+    Add convenience methods:
+    ```python
+    async def rate_limits(self) -> dict[str, Any]:
+        return cast(dict[str, Any], await self.call("daemon.rate_limits"))
+
+    async def learning_patterns(self, limit: int = 20) -> dict[str, Any]:
+        return cast(dict[str, Any], await self.call("daemon.learning.patterns", {"limit": limit}))
+    ```
+
+    **Tests:** Add tests to verify the IPC methods work (mock the manager internals).
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(daemon): add rate_limits and learning.patterns IPC methods`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 3 %}
+    # Stage 3: DaemonEventBridge — EventBus → SSE
+
+    {{ project_context() }}
+
+    ## What to Build
+
+    Create `src/mozart/dashboard/services/event_bridge.py`:
+
+    **`DaemonEventBridge`** that polls daemon for events and provides SSE streams.
+
+    ```python
+    class DaemonEventBridge:
+        def __init__(self, client: DaemonClient, poll_interval: float = 2.0):
+            self._client = client
+            self._poll_interval = poll_interval
+            self._last_timestamps: dict[str, float] = {}  # job_id → last seen
+
+        async def job_events(self, job_id: str) -> AsyncIterator[dict]:
+            """Yield SSE events for a specific job. Polls daemon.observer_events."""
+            ...
+
+        async def all_events(self, limit: int = 50) -> AsyncIterator[dict]:
+            """Yield SSE events across all jobs. For the event timeline."""
+            ...
+
+        async def observer_events(self, job_id: str, limit: int = 20) -> list[dict]:
+            """Get recent observer events for a job (one-shot, not streaming)."""
+            ...
+    ```
+
+    **Implementation:**
+    - `job_events()` polls `client.call("daemon.observer_events", {"job_id": job_id, "limit": 50})`
+      in a loop with `asyncio.sleep(poll_interval)` between polls
+    - Deduplicates by tracking the latest timestamp per job
+    - Transforms events into SSE format: `{"event": event_type, "data": json_payload}`
+    - `all_events()` calls `client.list_jobs()` first, then polls observer_events for each
+
+    Also create `src/mozart/dashboard/routes/events.py`:
+    - `GET /api/events/stream` — SSE endpoint using `all_events()`
+    - `GET /api/jobs/{job_id}/observer` — JSON endpoint using `observer_events()`
+
+    Register the router in app.py later (stage 6).
+
+    **Tests:** Create `tests/test_event_bridge.py` with mocked DaemonClient.
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): add DaemonEventBridge for real-time event streaming`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 4 %}
+    # Stage 4: DaemonAnalytics — Aggregated Stats Engine
+
+    {{ project_context() }}
+
+    ## What to Build
+
+    Create `src/mozart/dashboard/services/analytics.py`:
+
+    **`DaemonAnalytics`** that computes aggregate statistics from daemon data.
+
+    ```python
+    class DaemonAnalytics:
+        def __init__(self, adapter: DaemonStateAdapter, cache_ttl: float = 10.0):
+            self._adapter = adapter
+            self._cache_ttl = cache_ttl
+            self._cache: dict[str, tuple[float, Any]] = {}
+
+        async def get_stats(self) -> dict:
+            """Dashboard stats: total, running, completed, failed, success_rate,
+            total_spend, throughput_sheets_per_hour."""
+            ...
+
+        async def cost_rollup(self) -> dict:
+            """Cost breakdown by job, total spend, avg cost per job."""
+            ...
+
+        async def validation_stats(self) -> dict:
+            """Validation pass rates by rule type, overall pass rate."""
+            ...
+
+        async def error_breakdown(self) -> dict:
+            """Error counts by category: transient, rate_limit, permanent."""
+            ...
+
+        async def duration_stats(self) -> dict:
+            """Avg sheet duration, total job durations, slowest sheets."""
+            ...
+
+        def _cached(self, key: str, ttl: float | None = None) -> Any | None:
+            """Return cached value if not expired."""
+            ...
+
+        def _set_cache(self, key: str, value: Any) -> None:
+            ...
+    ```
+
+    **Implementation details:**
+    - All methods call `self._adapter.list_jobs()` (cached) and iterate CheckpointStates
+    - `get_stats()` counts by status, sums `total_estimated_cost`, calculates throughput
+    - `cost_rollup()` groups costs by job_id
+    - `validation_stats()` iterates `sheets[N].validation_details` across all jobs
+    - `error_breakdown()` iterates `sheets[N].error_history` entries
+    - `duration_stats()` computes from `sheets[N].execution_duration_seconds`
+
+    Also create `src/mozart/dashboard/routes/analytics.py`:
+    - `GET /api/analytics/stats` — Full stats (JSON)
+    - `GET /api/analytics/costs` — Cost rollup (JSON)
+    - `GET /api/analytics/validations` — Validation stats (JSON)
+    - `GET /api/analytics/errors` — Error breakdown (JSON)
+
+    **Tests:** Create `tests/test_dashboard_analytics.py` with mock adapter returning
+    fabricated CheckpointStates.
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): add DaemonAnalytics for aggregate statistics`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 5 %}
+    # Stage 5: DaemonSystemView — Live System Health
+
+    {{ project_context() }}
+
+    ## What to Build
+
+    Create `src/mozart/dashboard/services/system_view.py`:
+
+    **`DaemonSystemView`** wrapping daemon profiler and system state.
+
+    ```python
+    class DaemonSystemView:
+        def __init__(self, client: DaemonClient):
+            self._client = client
+
+        async def get_snapshot(self) -> dict | None:
+            """Get latest SystemSnapshot from daemon. Returns None if daemon down."""
+            try:
+                return await self._client.call("daemon.top")
+            except Exception:
+                return None
+
+        async def get_daemon_status(self) -> dict | None:
+            """Get daemon status (pid, uptime, running_jobs, memory)."""
+            try:
+                result = await self._client.status()
+                return result.model_dump()
+            except Exception:
+                return None
+
+        async def rate_limit_state(self) -> dict:
+            """Current rate limit state per backend."""
+            try:
+                return await self._client.rate_limits()
+            except Exception:
+                return {"backends": {}, "active_limits": 0}
+
+        async def pressure_level(self) -> dict:
+            """Backpressure level from latest snapshot."""
+            snap = await self.get_snapshot()
+            if snap is None:
+                return {"level": "unknown", "color": "gray"}
+            level = snap.get("pressure_level", "NONE")
+            colors = {"NONE": "green", "LOW": "yellow", "MEDIUM": "amber",
+                      "HIGH": "orange", "CRITICAL": "red"}
+            return {"level": level, "color": colors.get(level, "gray")}
+
+        async def learning_patterns(self, limit: int = 20) -> list[dict]:
+            """Recent learning insights."""
+            try:
+                result = await self._client.learning_patterns(limit)
+                return result.get("patterns", [])
+            except Exception:
+                return []
+    ```
+
+    Also create `src/mozart/dashboard/routes/system.py`:
+    - `GET /api/system/rate-limits` — Rate limit state (JSON)
+    - `GET /api/system/pressure` — Backpressure level (JSON)
+    - `GET /api/system/learning` — Learning patterns (JSON)
+
+    **Tests:** Create `tests/test_dashboard_system_view.py` with mocked DaemonClient.
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): add DaemonSystemView for live system health`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 6 %}
+    # Stage 6: Wire Everything into app.py + Update Existing Routes
+
+    {{ project_context() }}
+
+    ## What to Build
+
+    This stage connects all the new services to the existing application.
+
+    ### 1. Update `src/mozart/dashboard/app.py`
+
+    In `create_app()`:
+    - Import `DaemonStateAdapter`, `DaemonEventBridge`, `DaemonAnalytics`, `DaemonSystemView`
+    - After middleware setup, create `DaemonClient` pointed at the daemon socket
+    - Create `DaemonStateAdapter(client)` and assign as `_state_backend`
+    - Create the three service instances, store on `app.state`:
+      ```python
+      app.state.event_bridge = DaemonEventBridge(client)
+      app.state.analytics = DaemonAnalytics(adapter)
+      app.state.system_view = DaemonSystemView(client)
+      ```
+    - Register new routers:
+      ```python
+      from mozart.dashboard.routes.analytics import router as analytics_router
+      from mozart.dashboard.routes.events import router as events_router
+      from mozart.dashboard.routes.system import router as system_router
+      app.include_router(analytics_router)
+      app.include_router(events_router)
+      app.include_router(system_router)
+      ```
+
+    **Socket path:** Use the same pattern as `services/job_control.py`:
+    ```python
+    try:
+        from mozart.daemon.config import DaemonConfig
+        socket_path = DaemonConfig().socket.path
+    except Exception:
+        socket_path = Path.home() / ".mozart" / "daemon.sock"
+    ```
+
+    ### 2. Update `src/mozart/dashboard/routes/dashboard.py`
+
+    - `get_dashboard_stats()` — use `app.state.analytics.get_stats()` instead of
+      manually counting from `backend.list_jobs()`
+    - `get_recent_jobs()` — use adapter's `list_jobs()` (already wired via backend)
+    - `get_system_partial()` — use `app.state.system_view.get_snapshot()` instead
+      of reading `monitor.db`
+
+    ### 3. Update `src/mozart/dashboard/routes/monitor.py`
+
+    - `get_monitor_snapshot()` — use `app.state.system_view.get_snapshot()`
+    - SSE stream — poll `system_view.get_snapshot()` instead of reading JSONL/sqlite
+
+    ### 4. Update `src/mozart/dashboard/templates/components/header.html`
+
+    - Add "Analytics" nav item between "Monitor" and "Templates"
+
+    Read every file you're modifying FIRST. Understand the current implementation
+    before changing it. Don't break existing tests.
+
+    **Run full dashboard tests after all changes:**
+    ```bash
+    pytest tests/test_dashboard*.py -x -q --tb=short
+    ```
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): wire daemon services into app and existing routes`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 7 %}
+    # Stage 7: Index Page Enhancement
+
+    {{ project_context() }}
+    {{ frontend_patterns() }}
+
+    ## What to Build
+
+    Enhance `src/mozart/dashboard/templates/pages/index.html`:
+
+    ### Enhanced Stats Cards
+
+    Update the stats partial `src/mozart/dashboard/templates/partials/dashboard_stats.html`:
+    - Add **Total Spend** card: `$X.XX` from analytics
+    - Add **Throughput** card: `X sheets/hr` from analytics
+    - Add trend indicator (up/down arrow) if data supports it
+
+    ### Enhanced Active Jobs Panel
+
+    Each running job card should show:
+    - Progress ring (circular progress indicator)
+    - Sheets completed / total
+    - Live cost: `$X.XX`
+    - Current sheet status
+    - ETA based on avg sheet duration
+
+    ### New: Event Timeline Panel
+
+    Create `src/mozart/dashboard/templates/partials/event_timeline.html`:
+    - Fetch from `/api/events/stream` via SSE or poll `/api/jobs/{id}/observer`
+    - Show last 50 events across all jobs
+    - Each event: colored dot (green=completed, red=failed, blue=started, amber=retry),
+      job name, event description, relative timestamp
+    - Auto-scroll to newest, pause on hover
+
+    ### Updated System Resources
+
+    Pull from daemon profiler instead of monitor.db:
+    - Memory bar with percentage
+    - Load average
+    - Pressure level badge
+
+    Read the existing index.html and partials BEFORE modifying. Keep the same
+    layout structure (grid, cards, panels) — just enrich the data.
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): enrich index page with daemon data + event timeline`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 8 %}
+    # Stage 8: Jobs List Page Enhancement
+
+    {{ project_context() }}
+    {{ frontend_patterns() }}
+
+    ## What to Build
+
+    Enhance `src/mozart/dashboard/templates/pages/jobs_list.html` and
+    `src/mozart/dashboard/templates/partials/jobs_list_content.html`:
+
+    ### Enriched Job Rows
+
+    Each job in the list should show:
+    - Status badge (existing — keep)
+    - **Progress bar**: filled proportionally to `last_completed_sheet / total_sheets`
+    - **Sheets**: `X / Y` completed
+    - **Cost**: `$X.XX` total estimated cost
+    - **Duration**: human-readable elapsed time
+    - **Retries**: total retry count
+    - **Validation**: pass rate percentage with color (green ≥90%, amber ≥70%, red <70%)
+
+    ### Sortable Columns
+
+    Add sort controls to the table header. Use Alpine.js to sort client-side:
+    ```javascript
+    x-data="{ sortBy: 'submitted_at', sortDir: 'desc', jobs: [...] }"
+    ```
+    Sort by: status, progress, cost, duration, submitted_at
+
+    ### Aggregate Footer
+
+    Add a summary row at the bottom:
+    - Total jobs shown
+    - Total cost across all listed jobs
+    - Average success rate
+
+    ### Route Updates
+
+    If needed, update `src/mozart/dashboard/routes/__init__.py` to include
+    new fields in `JobSummary` model (cost, duration, retry_count, validation_rate).
+
+    Read the existing jobs_list.html, jobs_list_content.html, and the routes
+    that serve them BEFORE modifying.
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): enrich jobs list with progress, cost, validation data`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 9 %}
+    # Stage 9: Job Detail Page Enhancement
+
+    {{ project_context() }}
+    {{ frontend_patterns() }}
+
+    ## What to Build
+
+    Enhance `src/mozart/dashboard/templates/pages/job_detail.html`:
+
+    ### Cost Breakdown Section
+
+    Add a panel showing per-sheet costs:
+    - Table or bar visualization: sheet number → estimated cost
+    - Total cost prominently displayed
+    - Cost per successful sheet vs failed sheet
+
+    ### Validation Heatmap Section
+
+    Create `src/mozart/dashboard/templates/partials/validation_heatmap.html`:
+    - Grid showing sheets (rows) × validation rules (columns)
+    - Green cell = passed, red = failed, gray = not applicable
+    - Include rule descriptions as tooltips or column headers
+
+    ### Error History Timeline
+
+    - Chronological list of errors from `sheets[N].error_history`
+    - Each entry: timestamp, error type badge (transient=amber, rate_limit=blue, permanent=red),
+      error message, sheet number, attempt number
+
+    ### Observer Feed Section
+
+    Create `src/mozart/dashboard/templates/partials/observer_feed.html`:
+    - Fetch from `/api/jobs/{job_id}/observer`
+    - Show file events: created (green +), modified (blue ~), deleted (red -)
+    - Show process events: spawned, exited
+    - Relative timestamps, newest first
+
+    ### Semantic Insights Section
+
+    - Fetch learning patterns for this job from `/api/system/learning`
+    - Display as cards: pattern description, confidence badge, times applied
+
+    ### Enhanced Sheets Table
+
+    Add columns to the existing sheets table:
+    - **Cost**: per-sheet estimated cost
+    - **Duration**: execution time
+    - **Confidence**: confidence score (0-1 as percentage)
+
+    ### Route Updates
+
+    Update the job detail route to pass enriched data:
+    - Observer events (from event bridge)
+    - Learning patterns (from system view)
+
+    Read the existing job_detail.html carefully. It has complex Alpine.js state
+    management and SSE integration. Don't break the existing functionality.
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): enrich job detail with cost, validation, observer, insights`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 10 %}
+    # Stage 10: Monitor Page Enhancement
+
+    {{ project_context() }}
+    {{ frontend_patterns() }}
+
+    ## What to Build
+
+    Enhance `src/mozart/dashboard/templates/pages/monitor.html`:
+
+    ### Rate Limit Gauges Panel
+
+    Create `src/mozart/dashboard/templates/partials/rate_limits.html`:
+    - Fetch from `/api/system/rate-limits`
+    - For each backend with active limits: gauge showing time until window resets
+    - Event count in current window
+    - Color: green = no limits, amber = approaching, red = actively limited
+
+    ### Backpressure Indicator
+
+    Create `src/mozart/dashboard/templates/partials/pressure_gauge.html`:
+    - Fetch from `/api/system/pressure`
+    - Large visual indicator: NONE (green) → LOW (yellow) → MEDIUM (amber) →
+      HIGH (orange) → CRITICAL (red)
+    - Associated delay displayed: "0s delay" to "60s delay"
+
+    ### Anomaly Feed
+
+    Add an anomaly section to the monitor page:
+    - Pull from the profiler events (anomalies)
+    - Each anomaly: severity badge, type, description, timestamp
+    - Color by severity: LOW=blue, MEDIUM=amber, HIGH=orange, CRITICAL=red
+
+    ### Integration
+
+    The monitor page already has a `monitorPage()` Alpine.js data function that
+    polls `/api/monitor/snapshot`. Add the new panels as additional sections
+    that refresh on the same polling interval (3s).
+
+    Read the existing monitor.html carefully before modifying. It has complex
+    Alpine.js state management with groupedProcesses(), formatters, etc.
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): add rate limits, backpressure, anomalies to monitor`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 11 %}
+    # Stage 11: Analytics Page (New Page)
+
+    {{ project_context() }}
+    {{ frontend_patterns() }}
+
+    ## What to Build
+
+    Create `src/mozart/dashboard/templates/pages/analytics.html`:
+
+    This is a NEW page extending `base.html`. It's the executive/analyst view.
+
+    ### Hero Numbers Row
+
+    Four large stat cards at the top:
+    1. **Total Spend** — `$XX.XX` with trend arrow
+    2. **Success Rate** — `XX%` with color (green ≥90%, amber ≥70%, red <70%)
+    3. **Avg Cost/Job** — `$X.XX`
+    4. **Throughput** — `X sheets/hr`
+
+    Fetch from `/api/analytics/stats`.
+
+    ### Cost Breakdown Panel
+
+    - Table: job name → total cost, sheets, cost per sheet
+    - Sort by cost descending
+    - Fetch from `/api/analytics/costs`
+
+    ### Validation Analysis Panel
+
+    - Overall pass rate prominently displayed
+    - If validation details available: breakdown by rule type
+    - Fetch from `/api/analytics/validations`
+
+    ### Error Classification Panel
+
+    - Three-column breakdown: Transient | Rate Limit | Permanent
+    - Count and percentage for each category
+    - Fetch from `/api/analytics/errors`
+
+    ### Learning Insights Panel
+
+    - Recent patterns from the learning hub
+    - Each pattern: description, confidence score, times applied
+    - Fetch from `/api/system/learning`
+
+    ### Page Route
+
+    Add to `src/mozart/dashboard/routes/pages.py`:
+    ```python
+    @router.get("/analytics")
+    async def analytics_page(request: Request):
+        templates = get_templates()
+        return templates.TemplateResponse("pages/analytics.html", {"request": request})
+    ```
+
+    ### Auto-Refresh
+
+    Use htmx polling on each section: `hx-trigger="load, every 30s"` (analytics
+    data doesn't need fast polling).
+
+    Read existing pages (especially `index.html`) for layout patterns before building.
+    Match the visual style exactly — card borders, dark mode, spacing, typography.
+
+    {{ dev_workflow() }}
+
+    Commit: `feat(dashboard): add analytics page with cost, validation, error analysis`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 12 %}
+    # Stage 12: Integration Testing
+
+    {{ project_context() }}
+
+    ## What to Do
+
+    1. **Run the full dashboard test suite:**
+       ```bash
+       cd {{ project }} && source .venv/bin/activate
+       pytest tests/test_dashboard*.py -x -v --tb=short
+       ```
+
+    2. **Fix any failures.** Read error messages carefully. Common issues:
+       - Import errors from new modules
+       - Route registration order conflicts
+       - Template rendering errors (missing variables)
+       - Mock setup changes needed for DaemonClient
+
+    3. **Run type checking:**
+       ```bash
+       mypy src/mozart/dashboard/ --no-error-summary --ignore-missing-imports
+       ```
+
+    4. **Run linting:**
+       ```bash
+       ruff check src/mozart/dashboard/
+       ```
+
+    5. **Fix all issues found.**
+
+    6. **Run the full project test suite** to catch regressions:
+       ```bash
+       pytest tests/ -x -q --tb=short --timeout=120
+       ```
+
+    7. **Start the dashboard and verify every page loads:**
+       ```bash
+       cd {{ project }}
+       source .venv/bin/activate
+       python -m uvicorn mozart.dashboard.app:create_app --factory --port 8099 &
+       sleep 3
+       # Check all pages return 200
+       for path in / /jobs /monitor /analytics /health; do
+           status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8099$path)
+           echo "$path: $status"
+       done
+       kill %1
+       ```
+
+    8. **Commit any fixes:**
+
+    {{ dev_workflow() }}
+
+    Commit: `fix(dashboard): resolve integration issues from daemon bridge wiring`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 13 %}
+    # Stage 13: Browser Verification (Playwright)
+
+    {{ project_context() }}
+
+    ## What to Do
+
+    Start the dashboard and verify it works in a real browser using Playwright.
+
+    1. **Start the dashboard:**
+       ```bash
+       cd {{ project }}
+       source .venv/bin/activate
+       python -m uvicorn mozart.dashboard.app:create_app --factory --port 8099 &
+       DASHBOARD_PID=$!
+       sleep 3
+       ```
+
+    2. **Install Playwright if needed:**
+       ```bash
+       pip install playwright
+       python -m playwright install chromium
+       ```
+
+    3. **Write and run a verification script** at `{{ workspace }}/verify_dashboard.py`:
+       - Navigate to each page: /, /jobs, /monitor, /analytics
+       - Take a screenshot of each page
+       - Check browser console for errors (no CSP violations, no JS errors)
+       - Verify Tailwind styles applied (check for specific CSS classes)
+       - Verify dark mode toggle works
+       - Verify conductor status dot renders
+       - Verify navigation highlighting works
+
+    4. **Check the screenshots** — save to `{{ workspace }}/screenshots/`
+
+    5. **Stop the dashboard:**
+       ```bash
+       kill $DASHBOARD_PID
+       ```
+
+    6. **Report findings.** List any issues found with screenshots as evidence.
+       Fix any issues that are quick fixes (CSS tweaks, missing data handling).
+
+    {{ dev_workflow() }}
+
+    Commit: `test(dashboard): browser verification of daemon bridge integration`
+
+    {# ════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 14 %}
+    # Stage 14: Polish — Loading States, Error Handling, Empty States
+
+    {{ project_context() }}
+
+    ## What to Do
+
+    Review every new and modified template for edge cases:
+
+    ### When Daemon Is Not Running
+    - DaemonStateAdapter should handle `DaemonNotRunningError` gracefully
+    - Pages should show "Conductor not running" message instead of crashing
+    - Stats should show zeros or "N/A"
+
+    ### Loading States
+    - Every htmx-loaded section should show a skeleton/spinner while loading
+    - Check existing patterns in index.html and monitor.html for reference
+
+    ### Empty States
+    - No jobs: "No jobs found. Submit a job with `mozart run`."
+    - No events: "No events yet. Events appear when jobs are running."
+    - No analytics data: "Not enough data. Run some jobs first."
+    - No learning patterns: "No patterns discovered yet."
+
+    ### Error Handling
+    - Rate limit/system endpoints should handle daemon disconnection
+    - Analytics should handle partial data gracefully
+    - Observer feed should handle missing observer recorder
+
+    ### Final Checks
+    1. Run full test suite: `pytest tests/ -x -q --tb=short --timeout=120`
+    2. Run linting: `ruff check src/mozart/dashboard/`
+    3. Verify all pages still load: start server, curl each route
+    4. Commit all polish changes
+
+    {{ dev_workflow() }}
+
+    Commit: `fix(dashboard): polish edge cases, loading states, error handling`
+    {% endif %}
+
+validations:
+  # Stages 1-5: New module tests pass
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_daemon_state_adapter.py -x -q --tb=short 2>&1 || true'
+    condition: "stage == 1"
+    description: "DaemonStateAdapter tests pass"
+    timeout_seconds: 600
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --timeout=120 -k "rate_limit or learning" 2>&1 | tail -5'
+    condition: "stage == 2"
+    description: "IPC method tests pass"
+    timeout_seconds: 600
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_event_bridge.py -x -q --tb=short 2>&1 || true'
+    condition: "stage == 3"
+    description: "Event bridge tests pass"
+    timeout_seconds: 600
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard_analytics.py -x -q --tb=short 2>&1 || true'
+    condition: "stage == 4"
+    description: "Analytics tests pass"
+    timeout_seconds: 600
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard_system_view.py -x -q --tb=short 2>&1 || true'
+    condition: "stage == 5"
+    description: "System view tests pass"
+    timeout_seconds: 600
+
+  # Stage 6: Full dashboard test suite
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short'
+    condition: "stage == 6"
+    description: "All dashboard tests pass after wiring"
+    timeout_seconds: 1800
+
+  # Stages 7-11: Dashboard tests still pass after frontend changes
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short'
+    condition: "stage >= 7 and stage <= 11"
+    description: "Dashboard tests pass after frontend changes"
+    timeout_seconds: 900
+
+  # Stage 12: Full project test suite
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --timeout=120'
+    condition: "stage == 12"
+    description: "Full test suite passes"
+    timeout_seconds: 1800
+
+  # Stage 12: Linting
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m ruff check src/mozart/dashboard/ 2>&1 | tail -1 | grep -qE "(^All checks|found 0)"'
+    condition: "stage == 12"
+    description: "Ruff lint passes on dashboard"
+    timeout_seconds: 300
+
+  # Stage 13: Screenshots exist
+  - type: command_succeeds
+    command: 'ls /home/emzi/Projects/mozart-ai-compose/workspace-dashboard-bridge/screenshots/*.png 2>/dev/null | wc -l | grep -qv "^0$"'
+    condition: "stage == 13"
+    description: "Browser screenshots were captured"
+    timeout_seconds: 60
+
+  # Stage 14: Final full suite
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --timeout=120'
+    condition: "stage == 14"
+    description: "Full test suite passes after polish"
+    timeout_seconds: 1800
+
+  # Commit verification for all stages
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && git log -1 --oneline | grep -qE "(feat|fix|test)\(dashboard\)|feat\(daemon\)"'
+    description: "Changes committed with conventional commit"
+    timeout_seconds: 60
