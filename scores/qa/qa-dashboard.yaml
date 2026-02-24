@@ -1,0 +1,552 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║       QA DASHBOARD — Routes, Services, Auth, SSE, Security                 ║
+# ║                                                                            ║
+# ║  Adversarial testing overhaul for Mozart's web dashboard.                  ║
+# ║                                                                            ║
+# ║  Stage 1: Audit existing tests — classify strong/weak/flaky/useless        ║
+# ║  Stage 2 x3: Overhaul (fix flaky | property-based | adversarial edges)    ║
+# ║  Stage 3: Merge parallel work, resolve conflicts                           ║
+# ║  Stage 4: Coverage gate — verify >= 80%, write targeted gap tests          ║
+# ║  Stage 5: Commit all changes                                               ║
+# ║                                                                            ║
+# ║  Requires: qa-foundation (hypothesis installed, conftest_adversarial.py)   ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "qa-dashboard"
+description: "Adversarial testing overhaul for dashboard modules: routes, services, auth, SSE, security"
+
+workspace: "/home/emzi/Projects/mozart-ai-compose/.qa-dashboard-workspace"
+
+workspace_lifecycle:
+  archive_on_fresh: true
+  max_archives: 3
+
+backend:
+  type: claude_cli
+  skip_permissions: true
+  working_directory: /home/emzi/Projects/mozart-ai-compose
+  timeout_seconds: 3000
+  output_format: json
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 4000
+  lookback_sheets: 5
+
+sheet:
+  size: 1
+  total_items: 5
+
+  fan_out:
+    2: 3
+
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+
+retry:
+  max_retries: 2
+  max_completion_attempts: 2
+  completion_threshold_percent: 50
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+cost_limits:
+  enabled: false
+
+prompt:
+  variables:
+    preamble: |
+      ╔══════════════════════════════════════════════════════════════════════════════╗
+      ║  QA DASHBOARD — Adversarial Testing Overhaul                               ║
+      ║  Routes · Services · Auth · SSE · Security · Job Control                   ║
+      ╚══════════════════════════════════════════════════════════════════════════════╝
+
+      **Project:** /home/emzi/Projects/mozart-ai-compose
+      **Branch:** main (push directly)
+      **Virtual env:** .venv
+
+      ## Source Scope (ONLY touch tests for these modules)
+      - `src/mozart/dashboard/` — routes/, services/, auth, static, templates
+
+      ## Test Scope
+      - `tests/test_dashboard.py`
+      - `tests/test_dashboard_routes.py`
+      - `tests/test_dashboard_routes_extended.py`
+      - `tests/test_dashboard_sse.py`
+      - `tests/test_dashboard_auth.py`
+      - `tests/test_dashboard_security.py`
+      - `tests/test_dashboard_stream_artifacts.py`
+      - `tests/test_dashboard_integration.py`
+      - `tests/test_dashboard_rate_limit.py`
+      - `tests/test_dashboard_error_handling.py`
+      - `tests/test_dashboard_realtime_validation.py`
+      - `tests/test_dashboard_job_control.py`
+      - `tests/test_dashboard_pages.py`
+      - `tests/test_dashboard_edge_cases.py`
+      - `tests/test_dashboard_e2e.py`
+      - `tests/test_dashboard_cli_command.py`
+      - New files you create in `tests/` for this module
+
+      ## Shared Infrastructure (from qa-foundation)
+      - `tests/conftest_adversarial.py` — hypothesis strategies, adversarial fixtures, strict_mock()
+      - `tests/test_quality_gate.py` — quality standards reference
+
+      CRITICAL RULES:
+      1. Read actual source code before writing tests. Understand what the code does.
+      2. Tests must test BEHAVIOR, not implementation. Ask: "Would this test fail if the behavior broke?"
+      3. Use `from tests.conftest_adversarial import` for shared strategies.
+      4. Every new test must have type hints.
+      5. Run tests after every change: `pytest tests/test_dashboard*.py -x -q --timeout=60`
+      6. Never use `git add .` — stage files explicitly.
+
+    overhaul_types:
+      1:
+        name: "Fix Flaky & Weak Tests"
+        directive: |
+          Your job: Find and fix every flaky and weak test in the test scope.
+
+          **Read the audit report at {{ workspace }}/01-audit.md first.** The audit
+          classifies each test as strong/weak/flaky/useless. Focus on what the audit
+          actually found — don't hunt for patterns that aren't there.
+
+          For each test the audit classified as "flaky" or "weak", apply the
+          appropriate fix based on the specific problem identified:
+
+          **Common flaky patterns and their fixes:**
+          - `asyncio.sleep(N)` for coordination → polling loop with deadline
+          - `assert elapsed < N` where N < 30 → widen to `assert elapsed < 30.0`
+          - Bare `MagicMock()` → `create_autospec(RealClass, instance=True)`
+          - Order-dependent tests → isolate shared state in fixtures
+
+          **Common weak patterns and their fixes:**
+          - `assert isinstance(x, Type)` without value checks → add value assertions
+          - `assert len(x) > 0` without content checks → assert specific content
+          - No assertions at all → add meaningful assertions or delete if truly useless
+          - Tests that mock the thing they're testing → rewrite to test behavior
+
+          If the audit found problems not in these lists, fix them using your judgment.
+
+          After EACH file modified, run:
+          ```bash
+          pytest <file> -x -q --timeout=60
+          ```
+
+      2:
+        name: "Add Property-Based Tests"
+        directive: |
+          Your job: Write hypothesis @given tests for dashboard-layer models.
+
+          **Read the audit report at {{ workspace }}/01-audit.md first.**
+          **Read `tests/conftest_adversarial.py` for available strategies.**
+
+          Property-based test targets:
+
+          1. **Dashboard API response models**: All response shapes round-trip JSON correctly
+          2. **Auth token handling**: Token generation → validation round-trip
+          3. **Rate limit state**: Rate limit counters are monotonically non-decreasing
+          4. **SSE event formatting**: Any event data produces valid SSE wire format
+          5. **Job status serialization**: Any job state serializes to valid dashboard JSON
+
+          Use `@pytest.mark.property_based` on all hypothesis tests.
+          Use `@settings(max_examples=50)` for CI speed.
+
+          Create new file: `tests/test_dashboard_property_based.py`
+
+          After writing, run:
+          ```bash
+          pytest tests/test_dashboard_property_based.py -v --timeout=120
+          ```
+
+      3:
+        name: "Add Adversarial Edge Case Tests"
+        directive: |
+          Your job: Write adversarial tests that try to break the dashboard.
+
+          **Read the audit report at {{ workspace }}/01-audit.md for coverage gaps.**
+          **Read `tests/conftest_adversarial.py` for adversarial fixtures.**
+
+          Target areas:
+
+          1. **SSE edge cases:**
+             - Client disconnects mid-stream
+             - SSE with 100 concurrent connections
+             - Event data containing SSE delimiter characters
+             - Reconnection with Last-Event-ID
+             - SSE when no jobs exist
+
+          2. **Auth adversarial:**
+             - Expired tokens
+             - Malformed tokens (not valid base64, truncated)
+             - Missing auth header entirely
+             - Auth header with wrong scheme (Basic vs Bearer)
+             - Token replay attacks
+
+          3. **XSS / injection:**
+             - Job names containing `<script>` tags
+             - Sheet descriptions with HTML entities
+             - Error messages with JavaScript
+             - Template injection in user-controlled data
+
+          4. **Rate limiting:**
+             - 100 simultaneous requests from same client
+             - Rate limit reset timing
+             - Rate limit bypass via different auth tokens
+
+          5. **Job control edge cases:**
+             - Control non-existent job ID
+             - Control with invalid action
+             - Concurrent pause + cancel on same job
+             - Control when conductor is shutting down
+
+          6. **Empty / extreme states:**
+             - Dashboard with 0 jobs
+             - Dashboard with 1000 jobs
+             - Artifact streaming for 100MB file
+             - Pages with all sheets failed
+             - Pages with Unicode-heavy content
+
+          Use `@pytest.mark.adversarial` on all these tests.
+          Use `pytest.mark.parametrize` extensively.
+
+          Create new file: `tests/test_dashboard_adversarial.py`
+
+          After writing, run:
+          ```bash
+          pytest tests/test_dashboard_adversarial.py -v --timeout=120
+          ```
+
+  template: |
+    {{ preamble }}
+
+    *Stage {{ stage }}/{{ total_stages }} ({{ ((stage / total_stages) * 100) | round }}%)*
+    {% if fan_count > 1 %}*Instance {{ instance }}/{{ fan_count }}*{% endif %}
+
+    {% if stage == 1 %}
+    # Stage 1: Audit Existing Tests
+
+    Read every test file in scope and classify each test function.
+
+    **Test files to audit:**
+    ```bash
+    ls tests/test_dashboard*.py 2>/dev/null | wc -l
+    ls tests/test_dashboard*.py 2>/dev/null
+    ```
+
+    With 16 files, batch your reads. Start with routes, auth, security, SSE.
+
+    **For each test file**, read it and classify every `def test_*` function as:
+
+    - **Strong**: Tests behavior with meaningful assertions, handles edge cases, no timing deps
+    - **Weak**: Uses bare MagicMock, trivial assertions (`assert True`, `isinstance` only), tests implementation not behavior
+    - **Flaky**: Uses `asyncio.sleep` for coordination, tight timing (`elapsed < 5`), PID assumptions
+    - **Useless**: No assertions at all, or only checks import works
+
+    **Also measure coverage:**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    .venv/bin/pytest tests/test_dashboard*.py -x -q --cov=mozart.dashboard --cov-report=term-missing:skip-covered --timeout=120 2>&1 | tail -40
+    ```
+
+    **Output to:** {{ workspace }}/01-audit.md
+
+    Format:
+    ```markdown
+    IMPLEMENTATION_COMPLETE: yes
+
+    # Dashboard Module Test Audit
+
+    ## Coverage Summary
+    | Source File | Coverage | Uncovered Lines |
+    |-------------|----------|-----------------|
+
+    ## Test Classification
+    | Test File | Test Function | Classification | Reason |
+    |-----------|---------------|----------------|--------|
+
+    ## Summary
+    - Total tests: N
+    - Strong: N (X%)
+    - Weak: N (X%)
+    - Flaky: N (X%)
+    - Useless: N (X%)
+
+    ## Top Priority Fixes
+    1. [Most impactful improvement]
+    ...
+    ```
+
+
+    {% elif stage == 2 %}
+    {% set task = overhaul_types[instance] %}
+
+    # Stage 2: {{ task.name }}
+
+    Read {{ workspace }}/01-audit.md for the audit results.
+
+    {{ task.directive }}
+
+    **PARALLEL STAGE:** You are instance {{ instance }} of {{ fan_count }}.
+    - Instance 1: Fix flaky & weak tests (modifies existing test files)
+    - Instance 2: Add property-based tests (creates new file)
+    - Instance 3: Add adversarial edge cases (creates new file)
+
+    If you need to modify a file another instance owns, note it in your output
+    but don't touch it.
+
+    **Output to:** {{ workspace }}/02-{{ task.name | lower | replace(" ", "-") | replace("&", "and") }}.md
+    Include `IMPLEMENTATION_COMPLETE: yes` at the top.
+
+
+    {% elif stage == 3 %}
+    # Stage 3: Merge & Conflict Resolution
+
+    Three parallel instances just modified tests independently. Make it all work together.
+
+    Read all reports:
+    - {{ workspace }}/02-fix-flaky-and-weak-tests.md
+    - {{ workspace }}/02-add-property-based-tests.md
+    - {{ workspace }}/02-add-adversarial-edge-case-tests.md
+
+    **Step 1: Check for conflicts**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    git diff --stat
+    ```
+
+    **Step 2: Run the full module test suite**
+    ```bash
+    .venv/bin/pytest tests/test_dashboard*.py tests/test_dashboard_property_based.py tests/test_dashboard_adversarial.py -x -v --timeout=120 2>&1 | tail -30
+    ```
+
+    **Step 3: Fix any failures.** Common conflicts and resolution strategies:
+    - If instance 1 changed an existing test that instance 2/3 imported or referenced,
+      update the import/reference to match instance 1's changes.
+    - If instance 2 or 3 created helpers that duplicate what instance 1 already fixed,
+      remove the duplicate and use instance 1's version.
+    - If two new test files have name collisions, rename the less specific one.
+    - If tests fail because shared fixtures changed, update the tests to match.
+
+    **Step 4: Run the quality gate to verify no flaky patterns remain**
+    ```bash
+    .venv/bin/pytest tests/test_quality_gate.py -v --timeout=60
+    ```
+
+    **Output to:** {{ workspace }}/03-merge.md
+    Include `IMPLEMENTATION_COMPLETE: yes` at the top.
+
+
+    {% elif stage == 4 %}
+    # Stage 4: Coverage Gate
+
+    Verify the module hits >= 80% coverage. Write targeted tests for any gaps.
+
+    **Step 1: Measure coverage**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    .venv/bin/pytest tests/test_dashboard*.py tests/test_dashboard_property_based.py tests/test_dashboard_adversarial.py -x -q --cov=mozart.dashboard --cov-report=term-missing --timeout=120 2>&1 | tail -40
+    ```
+
+    **Step 2: If any source file is below 80%**, read the uncovered lines and write
+    targeted tests that exercise those specific code paths.
+
+    **Step 3: Re-run coverage to verify**
+
+    Target: every source file >= 80%.
+
+    **Output to:** {{ workspace }}/04-coverage.md
+    Include `IMPLEMENTATION_COMPLETE: yes` at the top.
+    Include before/after coverage table.
+
+
+    {% elif stage == 5 %}
+    # Stage 5: Commit All Changes
+
+    **Step 1: Run full test suite to verify nothing regressed**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    .venv/bin/pytest tests/ -x --timeout=120 -q 2>&1 | tail -10
+    ```
+
+    **Step 2: Stage only test files modified by this score**
+    ```bash
+    git status --short | grep -E "test_.*\.py$"
+    git add tests/test_dashboard_property_based.py tests/test_dashboard_adversarial.py
+    git diff --cached --stat
+    ```
+
+    **Step 3: Commit and push**
+    ```bash
+    git commit -m "test(dashboard): adversarial overhaul — property-based + edge cases
+
+    - Add hypothesis property-based tests for API responses, auth, SSE
+    - Add adversarial tests for XSS, rate limits, connection drops, empty states
+    - Fix flaky patterns: replace asyncio.sleep with polling, widen timing bounds
+    - Replace bare MagicMock() with create_autospec()
+    - Coverage: dashboard modules now >= 80%
+
+    Co-Authored-By: Mozart AI Compose <noreply@mozart.ai>"
+
+    git push
+    ```
+
+    **Output to:** {{ workspace }}/05-commit.md
+    Include `IMPLEMENTATION_COMPLETE: yes` at the top.
+
+    {% endif %}
+
+validations:
+  # Stage 1: Audit exists with substantive content
+  - type: file_exists
+    path: "{workspace}/01-audit.md"
+    condition: "stage >= 1"
+    description: "Audit report exists"
+
+  - type: content_contains
+    path: "{workspace}/01-audit.md"
+    pattern: "IMPLEMENTATION_COMPLETE: yes"
+    condition: "stage >= 1"
+    description: "Audit marked complete"
+
+  - type: content_regex
+    path: "{workspace}/01-audit.md"
+    pattern: "## Coverage Summary\\s+\\|"
+    condition: "stage >= 1"
+    description: "Audit has coverage table with data rows"
+
+  - type: content_regex
+    path: "{workspace}/01-audit.md"
+    pattern: "## Test Classification\\s+\\|"
+    condition: "stage >= 1"
+    description: "Audit has classification table with data rows"
+
+  # Stage 2: Per-instance reports
+  - type: file_exists
+    path: "{workspace}/02-fix-flaky-and-weak-tests.md"
+    condition: "stage == 2 and instance == 1"
+    description: "Flaky fix report exists"
+
+  - type: file_exists
+    path: "{workspace}/02-add-property-based-tests.md"
+    condition: "stage == 2 and instance == 2"
+    description: "Property-based test report exists"
+
+  - type: file_exists
+    path: "{workspace}/02-add-adversarial-edge-case-tests.md"
+    condition: "stage == 2 and instance == 3"
+    description: "Adversarial test report exists"
+
+  # Stage 2: Instance 1 — existing tests pass AND changes were made
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_dashboard*.py -x -q --timeout=120 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage == 2 and instance == 1"
+    description: "Existing dashboard tests pass after flaky fixes"
+    timeout_seconds: 300
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && git diff --name-only HEAD | grep -qE "tests/test_dashboard"'
+    condition: "stage == 2 and instance == 1"
+    description: "Instance 1 actually modified existing test files"
+    stage: 2
+
+  # Stage 2: Actual test files created with real content
+  - type: file_exists
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_dashboard_property_based.py"
+    condition: "stage == 2 and instance == 2"
+    description: "Property-based test file created"
+
+  - type: file_exists
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_dashboard_adversarial.py"
+    condition: "stage == 2 and instance == 3"
+    description: "Adversarial test file created"
+
+  # Stage 2: Test files use required techniques
+  - type: content_regex
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_dashboard_property_based.py"
+    pattern: "@given"
+    condition: "stage == 2 and instance == 2"
+    description: "Property-based tests use @given decorator"
+
+  - type: content_regex
+    path: "/home/emzi/Projects/mozart-ai-compose/tests/test_dashboard_adversarial.py"
+    pattern: "pytest\\.mark\\.adversarial"
+    condition: "stage == 2 and instance == 3"
+    description: "Adversarial tests use @pytest.mark.adversarial"
+
+  # Stage 2: Minimum test count
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && count=$(.venv/bin/pytest tests/test_dashboard_property_based.py --collect-only -q --timeout=30 2>&1 | tail -1 | grep -oE "^[0-9]+") && test "$count" -ge 10'
+    condition: "stage == 2 and instance == 2"
+    description: "Property-based file has >= 10 tests"
+    timeout_seconds: 120
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && count=$(.venv/bin/pytest tests/test_dashboard_adversarial.py --collect-only -q --timeout=30 2>&1 | tail -1 | grep -oE "^[0-9]+") && test "$count" -ge 10'
+    condition: "stage == 2 and instance == 3"
+    description: "Adversarial file has >= 10 tests"
+    timeout_seconds: 120
+
+  # Stage 2: Tests pass
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_dashboard_property_based.py -x -q --timeout=120 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage == 2 and instance == 2"
+    description: "Property-based tests pass"
+    timeout_seconds: 300
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_dashboard_adversarial.py -x -q --timeout=120 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage == 2 and instance == 3"
+    description: "Adversarial tests pass"
+    timeout_seconds: 300
+
+  # Stage 3: Merge — all tests pass and quality gate holds
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_dashboard*.py tests/test_dashboard_property_based.py tests/test_dashboard_adversarial.py -x -q --timeout=120 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage >= 3"
+    description: "All dashboard module tests pass"
+    timeout_seconds: 600
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_quality_gate.py -x -q --timeout=60 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage >= 3"
+    description: "Quality gate meta-tests pass"
+    timeout_seconds: 120
+    stage: 2
+
+  # Stage 4: Coverage gate
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_dashboard*.py tests/test_dashboard_property_based.py tests/test_dashboard_adversarial.py -x -q --cov=mozart.dashboard --cov-report=json:/tmp/qa-dashboard-cov.json --timeout=120 --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed" && python3 -c "
+      import json
+      with open('/tmp/qa-dashboard-cov.json') as f:
+          data = json.load(f)
+      pct = data.get('totals', {}).get('percent_covered', 0)
+      assert pct >= 80, f'Coverage {pct:.1f}% < 80%'
+      print(f'Coverage: {pct:.1f}% >= 80% PASSED')
+      "
+    condition: "stage >= 4"
+    description: "Dashboard module coverage >= 80%"
+    timeout_seconds: 600
+    stage: 2
+
+  # Stage 5: Full suite passes and changes committed
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/ -x --timeout=120 -q --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage >= 5"
+    description: "Full test suite passes"
+    timeout_seconds: 900
+    stage: 1
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && test -z "$(git status --porcelain tests/)"'
+    condition: "stage >= 5"
+    description: "Test changes committed (no unstaged test files)"
+    stage: 2
