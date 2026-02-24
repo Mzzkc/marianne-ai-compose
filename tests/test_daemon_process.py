@@ -348,11 +348,12 @@ class TestDaemonProcess:
         registered_methods = {call.args[0] for call in handler.register.call_args_list}
         expected = {
             "job.submit", "job.status", "job.pause", "job.resume",
-            "job.cancel", "job.list", "job.clear", "job.errors",
-            "job.diagnose", "job.history", "job.recover",
+            "job.modify", "job.cancel", "job.list", "job.clear",
+            "job.errors", "job.diagnose", "job.history", "job.recover",
             "daemon.status", "daemon.shutdown", "daemon.config",
             "daemon.health", "daemon.ready",
             "daemon.top", "daemon.top.stream", "daemon.events",
+            "daemon.observer_events",
         }
         assert registered_methods == expected
 

@@ -477,10 +477,30 @@ class DaemonProcess:
                 job_ids=params.get("job_ids"),
             )
 
+        async def handle_modify(params: dict[str, Any], _w: Any) -> dict[str, Any]:
+            from mozart.daemon.exceptions import JobSubmissionError
+            config_path = params.get("config_path")
+            if not config_path:
+                return {
+                    "job_id": params.get("job_id", ""),
+                    "status": "rejected",
+                    "message": "config_path required",
+                }
+            try:
+                response = await manager.modify_job(
+                    params["job_id"],
+                    Path(config_path),
+                    _workspace_path(params.get("workspace")),
+                )
+                return response.model_dump()
+            except JobSubmissionError as e:
+                return {"job_id": params.get("job_id", ""), "status": "rejected", "message": str(e)}
+
         handler.register("job.submit", handle_submit)
         handler.register("job.status", handle_job_status)
         handler.register("job.pause", handle_pause)
         handler.register("job.resume", handle_resume)
+        handler.register("job.modify", handle_modify)
         handler.register("job.cancel", handle_cancel)
         handler.register("job.list", handle_list)
         handler.register("job.clear", handle_clear_jobs)
@@ -526,6 +546,21 @@ class DaemonProcess:
         handler.register("daemon.top", handle_top)
         handler.register("daemon.top.stream", handle_top_stream)
         handler.register("daemon.events", handle_events)
+
+        # Observer event recorder IPC — per-job behavioral events
+        async def handle_observer_events(
+            params: dict[str, Any], _w: Any,
+        ) -> dict[str, Any]:
+            if manager.observer_recorder is None:
+                return {"events": []}
+            job_id = params.get("job_id")
+            limit = params.get("limit", 50)
+            events = manager.observer_recorder.get_recent_events(
+                job_id, limit=limit,
+            )
+            return {"events": events}
+
+        handler.register("daemon.observer_events", handle_observer_events)
 
     def _track_signal_task(self, task: asyncio.Task[Any]) -> None:
         """Store a signal-spawned task and attach an error callback."""

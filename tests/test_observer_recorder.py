@@ -6,6 +6,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -724,6 +725,115 @@ class TestGetRecentEvents:
     def test_unknown_job_returns_empty(self) -> None:
         recorder = self._make_recorder()
         assert recorder.get_recent_events("nonexistent", limit=10) == []
+
+
+class TestObserverEventsIPC:
+    """Verify the daemon.observer_events IPC handler in _register_methods."""
+
+    def _extract_handler(self, method_name: str) -> Any:
+        """Register RPC methods and extract the handler for *method_name*."""
+        from unittest.mock import MagicMock
+
+        from mozart.daemon.config import DaemonConfig
+        from mozart.daemon.process import DaemonProcess
+
+        config = DaemonConfig()
+        dp = DaemonProcess(config)
+        handler = MagicMock()
+        manager = MagicMock()
+        dp._register_methods(handler, manager, health=None)
+
+        for call in handler.register.call_args_list:
+            if call.args[0] == method_name:
+                return call.args[1], manager
+        pytest.fail(f"Handler {method_name!r} not registered")
+
+    @pytest.mark.asyncio
+    async def test_handler_registered(self) -> None:
+        """daemon.observer_events must be in registered RPC methods."""
+        from unittest.mock import MagicMock
+
+        from mozart.daemon.config import DaemonConfig
+        from mozart.daemon.process import DaemonProcess
+
+        config = DaemonConfig()
+        dp = DaemonProcess(config)
+        handler = MagicMock()
+        manager = MagicMock()
+        dp._register_methods(handler, manager, health=None)
+
+        registered = {c.args[0] for c in handler.register.call_args_list}
+        assert "daemon.observer_events" in registered
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_recorder_is_none(self) -> None:
+        """When observer_recorder is None, return {"events": []}."""
+        handler_fn, manager = self._extract_handler("daemon.observer_events")
+        manager.observer_recorder = None
+
+        result = await handler_fn({"job_id": None, "limit": 10}, None)
+        assert result == {"events": []}
+
+    @pytest.mark.asyncio
+    async def test_delegates_to_recorder(self, tmp_path: Path) -> None:
+        """When observer_recorder exists, delegate to get_recent_events."""
+        handler_fn, manager = self._extract_handler("daemon.observer_events")
+        recorder = ObserverRecorder(config=ObserverConfig())
+        recorder.register_job("job-1", tmp_path)
+        recorder._handle_event({
+            "job_id": "job-1",
+            "sheet_num": 0,
+            "event": "observer.file_created",
+            "data": {"path": "output.md"},
+            "timestamp": 1000.0,
+        })
+        manager.observer_recorder = recorder
+
+        result = await handler_fn({"job_id": "job-1", "limit": 50}, None)
+        assert len(result["events"]) == 1
+        assert result["events"][0]["event"] == "observer.file_created"
+
+    @pytest.mark.asyncio
+    async def test_defaults_limit_to_50(self, tmp_path: Path) -> None:
+        """When limit is omitted, default to 50."""
+        handler_fn, manager = self._extract_handler("daemon.observer_events")
+        recorder = ObserverRecorder(config=ObserverConfig())
+        recorder.register_job("job-1", tmp_path)
+        for i in range(60):
+            recorder._handle_event({
+                "job_id": "job-1",
+                "sheet_num": 0,
+                "event": "observer.file_created",
+                "data": {"path": f"file-{i}.md"},
+                "timestamp": 1000.0 + i,
+            })
+        manager.observer_recorder = recorder
+
+        result = await handler_fn({"job_id": "job-1"}, None)
+        assert len(result["events"]) == 50
+
+    @pytest.mark.asyncio
+    async def test_null_job_id_returns_all_jobs(self, tmp_path: Path) -> None:
+        """job_id=null aggregates events across all registered jobs."""
+        handler_fn, manager = self._extract_handler("daemon.observer_events")
+        recorder = ObserverRecorder(config=ObserverConfig())
+        ws1, ws2 = tmp_path / "ws1", tmp_path / "ws2"
+        ws1.mkdir()
+        ws2.mkdir()
+        recorder.register_job("job-1", ws1)
+        recorder.register_job("job-2", ws2)
+        for jid in ("job-1", "job-2"):
+            recorder._handle_event({
+                "job_id": jid,
+                "sheet_num": 0,
+                "event": "observer.process_spawned",
+                "data": {"pid": 1234},
+                "timestamp": 1000.0,
+            })
+        manager.observer_recorder = recorder
+
+        result = await handler_fn({"job_id": None, "limit": 50}, None)
+        assert len(result["events"]) == 2
 
 
 class _BrokenWriter:
