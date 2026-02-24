@@ -5,8 +5,8 @@ execution of paused or failed jobs.
 
 ★ Insight ─────────────────────────────────────
 1. **Config reconstruction hierarchy**: The resume command has a clear priority
-   for config sources: (1) provided --config file, (2) --reload-config from
-   original path, (3) cached config_snapshot, (4) stored config_path. This
+   for config sources: (1) provided --config file, (2) auto-reload from stored
+   config_path if file exists, (3) cached config_snapshot fallback. This
    fallback chain ensures maximum flexibility while maintaining state consistency.
 
 2. **Resumable state validation**: Only PAUSED, FAILED, and RUNNING jobs can be
@@ -24,6 +24,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.panel import Panel
@@ -59,7 +60,7 @@ class ResumeContext:
     workspace: Path | None
     force: bool
     escalation: bool = False
-    reload_config: bool = False
+    no_reload: bool = False
     self_healing: bool = False
     auto_confirm: bool = False
 
@@ -95,12 +96,11 @@ def resume(
         "-e",
         help="Enable human-in-the-loop escalation for low-confidence sheets",
     ),
-    reload_config: bool = typer.Option(
+    no_reload: bool = typer.Option(
         False,
-        "--reload-config",
-        "-r",
-        help="Reload config from yaml file instead of using cached snapshot. "
-        "Use with --config to specify a new file, or it will reload from the original path.",
+        "--no-reload",
+        help="Use cached config snapshot instead of auto-reloading from YAML file. "
+        "By default, Mozart reloads from the original config path if the file exists.",
     ),
     self_healing: bool = typer.Option(
         False,
@@ -117,22 +117,19 @@ def resume(
 ) -> None:
     """Resume a paused or failed job.
 
-    Loads the job state from the state backend and continues execution
-    from where it left off. The job configuration is reconstructed from
-    the stored config_snapshot, or you can provide a config file with --config.
+    Loads the job state and continues execution from where it left off.
+    By default, Mozart auto-reloads config from the original YAML file
+    if it still exists on disk. Use --no-reload to use the cached snapshot.
 
     Examples:
         mozart resume my-job
         mozart resume my-job --config job.yaml
-        mozart resume my-job --workspace ./workspace
-        mozart resume my-job --escalation
-        mozart resume my-job --reload-config  # Reload from original yaml
-        mozart resume my-job -r --config updated.yaml  # Use updated config
+        mozart resume my-job --no-reload  # Use cached config snapshot
     """
     asyncio.run(
         _resume_job(
             job_id, config_file, workspace, force, escalation,
-            reload_config, self_healing, yes
+            no_reload, self_healing, yes
         )
     )
 
@@ -161,7 +158,9 @@ async def _find_job_state(
     found_state, found_backend = await require_job_state(job_id, workspace)
 
     # Check if job is in a resumable state
-    resumable_statuses = {JobStatus.PAUSED, JobStatus.FAILED, JobStatus.RUNNING, JobStatus.CANCELLED}
+    resumable_statuses = {
+        JobStatus.PAUSED, JobStatus.FAILED, JobStatus.RUNNING, JobStatus.CANCELLED,
+    }
     if found_state.status not in resumable_statuses:
         if found_state.status == JobStatus.COMPLETED and not force:
             console.print(
@@ -184,20 +183,20 @@ async def _find_job_state(
 def _reconstruct_config(
     found_state: CheckpointState,
     config_file: Path | None,
-    reload_config: bool,
+    no_reload: bool,
 ) -> tuple[JobConfig, bool]:
-    """Reconstruct JobConfig using 4-tier priority fallback.
+    """Reconstruct JobConfig using priority fallback with auto-reload.
 
     Priority order:
-    1. Provided --config file
-    2. --reload-config from original path
-    3. Cached config_snapshot in state
-    4. Stored config_path (last resort)
+    1. Provided --config file (always wins)
+    2. Auto-reload from stored config_path (default, if file exists)
+    3. Cached config_snapshot (fallback when file gone or --no-reload)
+    4. Error (nothing available)
 
     Args:
         found_state: Job checkpoint state with config_snapshot/config_path.
         config_file: Optional explicit config file path.
-        reload_config: Whether to reload from original yaml path.
+        no_reload: If True, skip auto-reload and use cached snapshot.
 
     Returns:
         Tuple of (config, was_reloaded).
@@ -215,38 +214,36 @@ def _reconstruct_config(
             console.print(f"[red]Error loading config file:[/red] {e}")
             raise typer.Exit(1) from None
 
-    # Priority 2: If reload_config, force reload from config_path
-    if reload_config:
-        if found_state.config_path:
-            config_path = Path(found_state.config_path)
-            if config_path.exists():
-                try:
-                    config = JobConfig.from_yaml(config_path)
-                    console.print(
-                        f"[cyan]Reloaded config from:[/cyan] {config_path}"
-                    )
-                    return config, True
-                except Exception as e:
-                    console.print(f"[red]Error reloading config:[/red] {e}")
-                    raise typer.Exit(1) from None
-            else:
+    # Priority 2: Auto-reload from stored config_path (unless --no-reload)
+    if not no_reload and found_state.config_path:
+        config_path = Path(found_state.config_path)
+        if config_path.exists():
+            try:
+                config = JobConfig.from_yaml(config_path)
                 console.print(
-                    f"[red]Cannot reload: config file not found:[/red] {config_path}\n"
-                    "[dim]Hint: Use --config to specify a new config file.[/dim]"
+                    f"[cyan]Config reloaded from:[/cyan] {config_path}"
                 )
-                raise typer.Exit(1)
+                # Report changes if snapshot exists for comparison
+                if found_state.config_snapshot:
+                    _report_config_changes(found_state.config_snapshot, config)
+                return config, True
+            except Exception as e:
+                console.print(f"[red]Error reloading config:[/red] {e}")
+                raise typer.Exit(1) from None
         else:
+            # File doesn't exist — fall through to snapshot
             console.print(
-                "[red]Cannot reload: no config_path stored in state.[/red]\n"
-                "[dim]Hint: Use --config to specify a config file.[/dim]"
+                f"[dim]Config file not found on disk: {config_path}[/dim]"
             )
-            raise typer.Exit(1)
 
-    # Priority 3: Reconstruct from config_snapshot (default)
+    # Priority 3: Cached config_snapshot (fallback)
     if found_state.config_snapshot:
         try:
             config = JobConfig.model_validate(found_state.config_snapshot)
-            console.print("[dim]Reconstructed config from saved state[/dim]")
+            if no_reload:
+                console.print("[dim]Using cached config snapshot (--no-reload)[/dim]")
+            else:
+                console.print("[dim]Using cached config snapshot[/dim]")
             return config, False
         except Exception as e:
             console.print(f"[red]Error reconstructing config from snapshot:[/red] {e}")
@@ -254,24 +251,6 @@ def _reconstruct_config(
                 "[dim]Hint: Provide a config file with --config flag.[/dim]"
             )
             raise typer.Exit(1) from None
-
-    # Priority 4: Try to load from stored config_path as last resort
-    if found_state.config_path:
-        config_path = Path(found_state.config_path)
-        if config_path.exists():
-            try:
-                config = JobConfig.from_yaml(config_path)
-                console.print(f"[dim]Loaded config from stored path: {config_path}[/dim]")
-                return config, False
-            except Exception as e:
-                console.print(f"[red]Error loading stored config:[/red] {e}")
-                raise typer.Exit(1) from None
-        else:
-            console.print(
-                f"[yellow]Stored config file not found:[/yellow] {config_path}"
-            )
-            console.print("[dim]Hint: Provide a config file with --config flag.[/dim]")
-            raise typer.Exit(1)
 
     console.print(
         "[red]Cannot resume: No config available.[/red]\n"
@@ -281,13 +260,30 @@ def _reconstruct_config(
     raise typer.Exit(1)
 
 
+def _report_config_changes(
+    old_snapshot: dict[str, Any],
+    new_config: JobConfig,
+) -> None:
+    """Report config changes between cached snapshot and reloaded config."""
+    new_snapshot = new_config.model_dump(mode="json")
+    changed_sections: list[str] = []
+    for key in set(old_snapshot) | set(new_snapshot):
+        if old_snapshot.get(key) != new_snapshot.get(key):
+            changed_sections.append(key)
+    if changed_sections:
+        console.print(
+            f"[dim]Config changed: {len(changed_sections)} section(s) updated "
+            f"({', '.join(sorted(changed_sections))})[/dim]"
+        )
+
+
 async def _resume_job(
     job_id: str,
     config_file: Path | None,
     workspace: Path | None,
     force: bool,
     escalation: bool = False,
-    reload_config: bool = False,
+    no_reload: bool = False,
     self_healing: bool = False,
     auto_confirm: bool = False,
 ) -> None:
@@ -303,7 +299,7 @@ async def _resume_job(
         workspace: Optional workspace directory to search.
         force: Force resume even if job appears completed.
         escalation: Enable human-in-the-loop escalation for low-confidence sheets.
-        reload_config: If True, reload config from yaml file instead of cached snapshot.
+        no_reload: If True, skip auto-reload and use cached config snapshot.
         self_healing: Enable automatic diagnosis and remediation.
         auto_confirm: Auto-confirm suggested fixes.
     """
@@ -370,7 +366,7 @@ async def _resume_job(
         workspace=workspace,
         force=force,
         escalation=escalation,
-        reload_config=reload_config,
+        no_reload=no_reload,
         self_healing=self_healing,
         auto_confirm=auto_confirm,
     )
@@ -390,7 +386,7 @@ async def _resume_job_direct(ctx: ResumeContext) -> None:
 
     # Phase 2: Reconstruct config
     config, config_was_reloaded = _reconstruct_config(
-        found_state, ctx.config_file, ctx.reload_config
+        found_state, ctx.config_file, ctx.no_reload
     )
 
     # Update config_snapshot in state if config was reloaded

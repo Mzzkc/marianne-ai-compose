@@ -791,11 +791,11 @@ class TestFindJobState:
 class TestReconstructConfig:
     """Unit tests for _reconstruct_config() in resume.py.
 
-    Tests the 4-tier priority fallback for config reconstruction:
+    Tests the auto-reload priority fallback for config reconstruction:
     1. Provided --config file
-    2. --reload-config from original path
-    3. Cached config_snapshot
-    4. Stored config_path
+    2. Auto-reload from stored config_path (default)
+    3. Cached config_snapshot (fallback)
+    4. Error
     """
 
     @pytest.fixture
@@ -829,12 +829,12 @@ class TestReconstructConfig:
             },
         )
 
-        config, was_reloaded = _reconstruct_config(state, config_path, reload_config=False)
+        config, was_reloaded = _reconstruct_config(state, config_path, no_reload=False)
         assert config.name == "test-job"
         assert was_reloaded is True
 
-    def test_priority2_reload_from_stored_path(self, tmp_path: Path, config_dict: dict) -> None:
-        """Test Priority 2: --reload-config uses stored config_path."""
+    def test_priority2_auto_reload_from_stored_path(self, tmp_path: Path, config_dict: dict) -> None:
+        """Test Priority 2: auto-reload from stored config_path when file exists."""
         import yaml
 
         from mozart.cli.commands.resume import _reconstruct_config
@@ -851,12 +851,12 @@ class TestReconstructConfig:
             config_path=str(config_path),
         )
 
-        config, was_reloaded = _reconstruct_config(state, config_file=None, reload_config=True)
+        config, was_reloaded = _reconstruct_config(state, config_file=None, no_reload=False)
         assert config.name == "test-job"
         assert was_reloaded is True
 
-    def test_priority2_reload_missing_path_exits(self, tmp_path: Path) -> None:
-        """Test Priority 2: --reload-config exits when stored config_path missing."""
+    def test_priority2_file_missing_falls_through_to_snapshot(self, tmp_path: Path, config_dict: dict) -> None:
+        """Test Priority 2 -> 3: missing file falls through to snapshot."""
         from mozart.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
@@ -866,14 +866,25 @@ class TestReconstructConfig:
             last_completed_sheet=2,
             status=JobStatus.PAUSED,
             config_path=str(tmp_path / "gone.yaml"),
+            config_snapshot=config_dict,
         )
 
-        with pytest.raises((SystemExit, ClickExit)):
-            _reconstruct_config(state, config_file=None, reload_config=True)
+        config, was_reloaded = _reconstruct_config(state, config_file=None, no_reload=False)
+        assert config.name == "test-job"
+        assert was_reloaded is False
 
-    def test_priority2_reload_no_config_path_exits(self) -> None:
-        """Test Priority 2: --reload-config exits when no config_path stored."""
+    def test_no_reload_skips_auto_reload(self, tmp_path: Path, config_dict: dict) -> None:
+        """Test --no-reload skips auto-reload and uses snapshot."""
+        import yaml
+
         from mozart.cli.commands.resume import _reconstruct_config
+
+        config_path = tmp_path / "original.yaml"
+        config_path.write_text(yaml.dump({
+            "name": "yaml-config",
+            "sheet": {"size": 5, "total_items": 10},
+            "prompt": {"template": "From YAML"},
+        }))
 
         state = CheckpointState(
             job_id="test-job",
@@ -881,14 +892,16 @@ class TestReconstructConfig:
             total_sheets=5,
             last_completed_sheet=2,
             status=JobStatus.PAUSED,
-            config_path=None,
+            config_path=str(config_path),
+            config_snapshot=config_dict,
         )
 
-        with pytest.raises((SystemExit, ClickExit)):
-            _reconstruct_config(state, config_file=None, reload_config=True)
+        config, was_reloaded = _reconstruct_config(state, config_file=None, no_reload=True)
+        assert config.name == "test-job"  # snapshot, not yaml file
+        assert was_reloaded is False
 
     def test_priority3_config_snapshot(self, config_dict: dict) -> None:
-        """Test Priority 3: reconstruct from config_snapshot in state."""
+        """Test Priority 3: reconstruct from config_snapshot when no path."""
         from mozart.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
@@ -900,7 +913,7 @@ class TestReconstructConfig:
             config_snapshot=config_dict,
         )
 
-        config, was_reloaded = _reconstruct_config(state, config_file=None, reload_config=False)
+        config, was_reloaded = _reconstruct_config(state, config_file=None, no_reload=False)
         assert config.name == "test-job"
         assert was_reloaded is False
 
@@ -918,30 +931,7 @@ class TestReconstructConfig:
         )
 
         with pytest.raises((SystemExit, ClickExit)):
-            _reconstruct_config(state, config_file=None, reload_config=False)
-
-    def test_priority4_stored_config_path(self, tmp_path: Path, config_dict: dict) -> None:
-        """Test Priority 4: loads from stored config_path as last resort."""
-        import yaml
-
-        from mozart.cli.commands.resume import _reconstruct_config
-
-        config_path = tmp_path / "stored.yaml"
-        config_path.write_text(yaml.dump(config_dict))
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            config_snapshot=None,
-            config_path=str(config_path),
-        )
-
-        config, was_reloaded = _reconstruct_config(state, config_file=None, reload_config=False)
-        assert config.name == "test-job"
-        assert was_reloaded is False
+            _reconstruct_config(state, config_file=None, no_reload=False)
 
     def test_no_config_available_exits(self) -> None:
         """Test all priorities exhausted raises Exit."""
@@ -958,10 +948,10 @@ class TestReconstructConfig:
         )
 
         with pytest.raises((SystemExit, ClickExit)):
-            _reconstruct_config(state, config_file=None, reload_config=False)
+            _reconstruct_config(state, config_file=None, no_reload=False)
 
     def test_config_file_overrides_snapshot(self, tmp_path: Path) -> None:
-        """Test Priority 1 overrides existing snapshot (not used)."""
+        """Test Priority 1 overrides existing snapshot."""
         import yaml
 
         from mozart.cli.commands.resume import _reconstruct_config
@@ -987,7 +977,7 @@ class TestReconstructConfig:
             },
         )
 
-        config, was_reloaded = _reconstruct_config(state, config_path, reload_config=False)
+        config, was_reloaded = _reconstruct_config(state, config_path, no_reload=False)
         assert config.name == "new-config"
         assert was_reloaded is True
 

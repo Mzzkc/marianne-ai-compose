@@ -391,7 +391,7 @@ class TestFindJobState:
 
 
 class TestReconstructConfig:
-    """Tests for _reconstruct_config 4-tier priority fallback."""
+    """Tests for _reconstruct_config auto-reload priority fallback."""
 
     def test_priority_1_explicit_config_file(self, sample_yaml_config: Path) -> None:
         """Provided --config file should take highest priority."""
@@ -400,13 +400,31 @@ class TestReconstructConfig:
         state = CheckpointState(
             job_id="test", job_name="Test", total_sheets=3,
             config_snapshot={"name": "snapshot-config"},
+            config_path="/some/other/path.yaml",
         )
-        config, was_reloaded = _reconstruct_config(state, sample_yaml_config, reload_config=False)
+        config, was_reloaded = _reconstruct_config(
+            state, config_file=sample_yaml_config, no_reload=False,
+        )
         assert config.name == "test-job"
         assert was_reloaded is True
 
-    def test_priority_3_config_snapshot(self) -> None:
-        """Config snapshot in state should be used when no file provided."""
+    def test_priority_2_auto_reload_from_config_path(self, sample_yaml_config: Path) -> None:
+        """Should auto-reload from stored config_path when file exists."""
+        from mozart.cli.commands.resume import _reconstruct_config
+
+        state = CheckpointState(
+            job_id="test", job_name="Test", total_sheets=3,
+            config_snapshot={"name": "old-snapshot"},
+            config_path=str(sample_yaml_config),
+        )
+        config, was_reloaded = _reconstruct_config(
+            state, config_file=None, no_reload=False,
+        )
+        assert config.name == "test-job"  # from YAML, not snapshot
+        assert was_reloaded is True
+
+    def test_priority_3_snapshot_fallback_when_file_missing(self, tmp_path: Path) -> None:
+        """Should fall back to snapshot when config_path file doesn't exist."""
         from mozart.cli.commands.resume import _reconstruct_config
 
         snapshot = {
@@ -418,9 +436,54 @@ class TestReconstructConfig:
         state = CheckpointState(
             job_id="test", job_name="Test", total_sheets=3,
             config_snapshot=snapshot,
+            config_path=str(tmp_path / "deleted.yaml"),
         )
-        config, was_reloaded = _reconstruct_config(state, None, reload_config=False)
+        config, was_reloaded = _reconstruct_config(
+            state, config_file=None, no_reload=False,
+        )
         assert config.name == "snapshot-job"
+        assert was_reloaded is False
+
+    def test_priority_3_snapshot_fallback_when_no_config_path(self) -> None:
+        """Should fall back to snapshot when no config_path stored."""
+        from mozart.cli.commands.resume import _reconstruct_config
+
+        snapshot = {
+            "name": "snapshot-job",
+            "backend": {"type": "claude_cli"},
+            "sheet": {"size": 5, "total_items": 15},
+            "prompt": {"template": "Test {{ sheet_num }}"},
+        }
+        state = CheckpointState(
+            job_id="test", job_name="Test", total_sheets=3,
+            config_snapshot=snapshot,
+            config_path=None,
+        )
+        config, was_reloaded = _reconstruct_config(
+            state, config_file=None, no_reload=False,
+        )
+        assert config.name == "snapshot-job"
+        assert was_reloaded is False
+
+    def test_no_reload_flag_skips_auto_reload(self, sample_yaml_config: Path) -> None:
+        """--no-reload should skip auto-reload and use snapshot."""
+        from mozart.cli.commands.resume import _reconstruct_config
+
+        snapshot = {
+            "name": "snapshot-job",
+            "backend": {"type": "claude_cli"},
+            "sheet": {"size": 5, "total_items": 15},
+            "prompt": {"template": "Test {{ sheet_num }}"},
+        }
+        state = CheckpointState(
+            job_id="test", job_name="Test", total_sheets=3,
+            config_snapshot=snapshot,
+            config_path=str(sample_yaml_config),
+        )
+        config, was_reloaded = _reconstruct_config(
+            state, config_file=None, no_reload=True,
+        )
+        assert config.name == "snapshot-job"  # snapshot, NOT yaml file
         assert was_reloaded is False
 
     def test_no_config_available_raises(self) -> None:
@@ -434,59 +497,21 @@ class TestReconstructConfig:
             config_snapshot=None, config_path=None,
         )
         with pytest.raises(typer.Exit):
-            _reconstruct_config(state, None, reload_config=False)
+            _reconstruct_config(state, config_file=None, no_reload=False)
 
-    def test_priority_2_reload_config(self, sample_yaml_config: Path) -> None:
-        """--reload-config should reload from stored config_path."""
+    def test_explicit_config_wins_over_no_reload(self, sample_yaml_config: Path) -> None:
+        """--config should win even when --no-reload is set."""
         from mozart.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
             job_id="test", job_name="Test", total_sheets=3,
-            config_path=str(sample_yaml_config),
+            config_snapshot={"name": "snapshot"},
         )
-        config, was_reloaded = _reconstruct_config(state, None, reload_config=True)
-        assert config.name == "test-job"
+        config, was_reloaded = _reconstruct_config(
+            state, config_file=sample_yaml_config, no_reload=True,
+        )
+        assert config.name == "test-job"  # explicit file wins
         assert was_reloaded is True
-
-    def test_reload_config_missing_path(self) -> None:
-        """--reload-config without stored path should fail."""
-        import typer
-
-        from mozart.cli.commands.resume import _reconstruct_config
-
-        state = CheckpointState(
-            job_id="test", job_name="Test", total_sheets=3,
-            config_path=None,
-        )
-        with pytest.raises(typer.Exit):
-            _reconstruct_config(state, None, reload_config=True)
-
-    def test_priority_4_stored_config_path(self, sample_yaml_config: Path) -> None:
-        """Stored config_path should be used as last resort."""
-        from mozart.cli.commands.resume import _reconstruct_config
-
-        state = CheckpointState(
-            job_id="test", job_name="Test", total_sheets=3,
-            config_snapshot=None,
-            config_path=str(sample_yaml_config),
-        )
-        config, was_reloaded = _reconstruct_config(state, None, reload_config=False)
-        assert config.name == "test-job"
-        assert was_reloaded is False
-
-    def test_stored_config_path_missing_file(self, tmp_path: Path) -> None:
-        """Stored config_path pointing to missing file should fail."""
-        import typer
-
-        from mozart.cli.commands.resume import _reconstruct_config
-
-        state = CheckpointState(
-            job_id="test", job_name="Test", total_sheets=3,
-            config_snapshot=None,
-            config_path=str(tmp_path / "deleted.yaml"),
-        )
-        with pytest.raises(typer.Exit):
-            _reconstruct_config(state, None, reload_config=False)
 
 
 # =============================================================================
