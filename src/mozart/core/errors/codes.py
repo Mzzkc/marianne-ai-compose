@@ -407,13 +407,19 @@ class ErrorCode(str, Enum):
             ErrorCode.EXECUTION_INTERRUPTED,
             ErrorCode.EXECUTION_OOM,
             ErrorCode.BACKEND_AUTH,
+            ErrorCode.BACKEND_NOT_FOUND,
             ErrorCode.CONFIG_INVALID,
             ErrorCode.CONFIG_MISSING_FIELD,
+            ErrorCode.CONFIG_PATH_NOT_FOUND,
             ErrorCode.CONFIG_PARSE_ERROR,
             ErrorCode.CONFIG_MCP_ERROR,
             ErrorCode.CONFIG_CLI_MODE_ERROR,
             ErrorCode.STATE_CORRUPTION,
             ErrorCode.STATE_VERSION_MISMATCH,
+            ErrorCode.PREFLIGHT_PATH_MISSING,
+            ErrorCode.PREFLIGHT_PROMPT_TOO_LARGE,
+            ErrorCode.PREFLIGHT_WORKING_DIR_INVALID,
+            ErrorCode.PREFLIGHT_VALIDATION_SETUP,
         }
         return self not in non_retriable
 

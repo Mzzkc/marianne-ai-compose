@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Pause/Modify Workflow — 2026-01-13
 - **`mozart pause`** — Gracefully pause running jobs at next sheet boundary
 - **`mozart modify`** — Combine pause + config update + optional resume in one command
-- **`--reload-config` on resume** — Reload configuration from YAML instead of cached snapshot
+- **Auto-reload config on resume** — Config automatically reloads from the original YAML file on resume (cached snapshot is fallback). Use `--no-reload` for deterministic replay from cache
 
 #### Learning System Enhancements — 2025-12-27 to 2026-02-04
 - **Pattern broadcasting** — Automatic pattern sharing across jobs with auto-retirement

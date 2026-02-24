@@ -334,16 +334,22 @@ class JsonOutcomeStore:
 
         # Atomic write: write to temp file, then rename
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            dir=self.store_path.parent,
-            suffix=".tmp",
-            delete=False,
-        ) as f:
-            json.dump(data, f, indent=2)
-            temp_path = Path(f.name)
+        temp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                dir=self.store_path.parent,
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                json.dump(data, f, indent=2)
+                temp_path = Path(f.name)
 
-        temp_path.rename(self.store_path)
+            temp_path.rename(self.store_path)
+        except BaseException:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink(missing_ok=True)
+            raise
 
     async def _load(self) -> None:
         """Load outcomes from JSON file.

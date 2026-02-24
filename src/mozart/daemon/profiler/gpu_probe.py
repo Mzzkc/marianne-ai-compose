@@ -22,9 +22,15 @@ _logger = get_logger("daemon.profiler.gpu_probe")
 
 # Check pynvml availability once at import time.
 # Use nvidia-ml-py (not the deprecated pynvml package) — same module name.
+# Suppress FutureWarning from the legacy pynvml package at import time
+# so it doesn't pollute CLI output (even `mozart status` triggers this).
+import warnings
+
 _pynvml_available: bool = False
 try:
-    import pynvml as _pynvml
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        import pynvml as _pynvml
 
     _pynvml_available = True
 except ImportError:

@@ -90,7 +90,7 @@ Resume a paused or failed job.
 Usage: mozart resume [OPTIONS] JOB_ID
 ```
 
-Loads the job state from the state backend and continues execution from where it left off. The job configuration is reconstructed from the stored `config_snapshot`, or you can provide a config file with `--config`.
+Loads the job state and continues execution from where it left off. By default, Mozart auto-reloads the config from the original YAML file if it still exists on disk. Falls back to the cached `config_snapshot` when the file is gone. Use `--no-reload` to force using the cached snapshot.
 
 #### Arguments
 
@@ -106,7 +106,7 @@ Loads the job state from the state backend and continues execution from where it
 | `--workspace` | `-w` | | *(hidden)* Debug override: bypass conductor for resume |
 | `--force` | `-f` | false | Force resume even if job appears completed |
 | `--escalation` | `-e` | false | Enable human-in-the-loop escalation — **not currently supported** (blocked in conductor mode) |
-| `--reload-config` | `-r` | false | Reload config from YAML file instead of cached snapshot. Use with `--config` to specify a new file |
+| `--no-reload` | | false | Use cached config snapshot instead of auto-reloading from YAML file |
 | `--self-healing` | `-H` | false | Enable automatic diagnosis and remediation when retries are exhausted |
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
 
@@ -119,8 +119,11 @@ mozart resume my-job
 # Resume with explicit config
 mozart resume my-job --config job.yaml
 
-# Resume with updated config
-mozart resume my-job --reload-config --config updated.yaml
+# Resume with explicit config file (overrides auto-reload)
+mozart resume my-job --config updated.yaml
+
+# Resume using cached snapshot (skip auto-reload)
+mozart resume my-job --no-reload
 
 # Force restart completed job
 mozart resume my-job --force

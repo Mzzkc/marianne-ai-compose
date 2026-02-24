@@ -16,7 +16,7 @@ from rich.text import Text
 from textual.containers import VerticalScroll
 from textual.widgets import Static, Tree
 
-from mozart.daemon.profiler.models import ProcessMetric, SystemSnapshot
+from mozart.daemon.profiler.models import JobProgress, ProcessMetric, SystemSnapshot
 
 
 def _format_bytes_mb(mb: float) -> str:
@@ -184,15 +184,27 @@ class JobsPanel(VerticalScroll):
 
         tree.clear()
 
+        # Index job progress by job_id for O(1) lookup
+        progress_by_job: dict[str, JobProgress] = {
+            jp.job_id: jp for jp in snap.job_progress
+        }
+
         for job_id, procs in sorted(by_job.items()):
-            sheet_nums = {p.sheet_num for p in procs if p.sheet_num is not None}
-            total_sheets = max(len(sheet_nums), 1)
-            running = [p for p in procs if p.state in ("R", "S", "D")]
-            progress = _format_progress_bar(len(running), total_sheets)
+            jp = progress_by_job.get(job_id)
+            if jp and jp.total_sheets > 0:
+                progress = _format_progress_bar(jp.last_completed_sheet, jp.total_sheets)
+                sheet_label = f"Sheet {jp.current_sheet or '-'}/{jp.total_sheets}"
+            else:
+                # Fallback: no live state available, show process count
+                sheet_nums = {p.sheet_num for p in procs if p.sheet_num is not None}
+                total_sheets = max(len(sheet_nums), 1)
+                running = [p for p in procs if p.state in ("R", "S", "D")]
+                progress = _format_progress_bar(len(running), total_sheets)
+                sheet_label = f"Sheet {len(running)}/{total_sheets}"
 
             job_label = Text.from_markup(
                 f"[bold]\u25b6 {job_id}[/bold]  "
-                f"Sheet {len(running)}/{total_sheets} {progress}"
+                f"{sheet_label} {progress}"
             )
             job_data: dict[str, Any] = {
                 "type": "job",

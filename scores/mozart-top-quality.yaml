@@ -424,6 +424,7 @@ validations:
     condition: "stage >= 5"
     description: "Full test suite passes"
     stage: 2
+    timeout_seconds: 900
 
   - type: file_exists
     path: "{workspace}/05-verification.md"

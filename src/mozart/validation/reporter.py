@@ -5,12 +5,15 @@ terminal display with Rich and JSON output for tooling.
 """
 
 import json
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from rich.console import Console
 from rich.panel import Panel
 
 from mozart.validation.base import ValidationIssue, ValidationSeverity
+
+if TYPE_CHECKING:
+    from mozart.validation.rendering import RenderingPreview
 
 
 class ValidationIssueDict(TypedDict, total=False):
@@ -191,6 +194,124 @@ class ValidationReporter:
             result["metadata"] = issue.metadata
 
         return result
+
+    def report_rendering_terminal(
+        self,
+        preview: "RenderingPreview",
+        verbose: bool = False,
+    ) -> None:
+        """Output a rendering preview to the terminal.
+
+        Args:
+            preview: The rendering preview to display.
+            verbose: If False, show sheet 1 only. If True, show all sheets.
+        """
+        sheets_to_show = preview.sheets if verbose else preview.sheets[:1]
+
+        for sp in sheets_to_show:
+            header = f"Rendering Preview (Sheet {sp.sheet_num} of {preview.total_sheets})"
+            if verbose and (sp.stage is not None or sp.instance is not None):
+                parts: list[str] = []
+                if sp.stage is not None:
+                    parts.append(f"stage={sp.stage}")
+                if sp.instance is not None:
+                    parts.append(f"instance={sp.instance}")
+                header += f" \\[{', '.join(parts)}]"
+
+            self.console.print(f"\n[bold]{header}:[/bold]")
+
+            # Prompt snippet in a Rich Panel
+            if sp.render_error:
+                self.console.print(
+                    Panel(
+                        f"[red]{sp.render_error}[/red]",
+                        title="Prompt",
+                        border_style="dim",
+                        expand=False,
+                    )
+                )
+            else:
+                self.console.print("  Prompt:")
+                self.console.print(
+                    Panel(
+                        sp.prompt_snippet,
+                        border_style="dim",
+                        expand=False,
+                    )
+                )
+
+            # Validations
+            if sp.expanded_validations:
+                self.console.print(
+                    f"  Validations (expanded for sheet {sp.sheet_num}):"
+                )
+                for ev in sp.expanded_validations:
+                    num = ev.index + 1
+                    path_display = ev.expanded_path or ""
+                    if not ev.applicable:
+                        self.console.print(
+                            f"    [dim]{num}. {ev.type}: {path_display}"
+                            f" (not applicable: {ev.condition})[/dim]"
+                        )
+                    else:
+                        self.console.print(
+                            f"    {num}. {ev.type}: {path_display}"
+                        )
+
+        # Render errors summary
+        if preview.render_errors:
+            self.console.print("\n[red bold]Render Errors:[/red bold]")
+            for err in preview.render_errors:
+                self.console.print(f"  [red]{err}[/red]")
+
+    def report_rendering_json(self, preview: "RenderingPreview") -> dict[str, Any]:
+        """Return a rendering preview as a JSON-serializable dict.
+
+        Args:
+            preview: The rendering preview to serialize.
+
+        Returns:
+            Dict with total_sheets, has_fan_out, has_dependencies,
+            render_errors, and a sheets array.
+        """
+        sheets: list[dict[str, Any]] = []
+        for sp in preview.sheets:
+            validations: list[dict[str, Any]] = []
+            for ev in sp.expanded_validations:
+                v: dict[str, Any] = {
+                    "index": ev.index,
+                    "type": ev.type,
+                    "applicable": ev.applicable,
+                }
+                if ev.description:
+                    v["description"] = ev.description
+                if ev.expanded_path:
+                    v["expanded_path"] = ev.expanded_path
+                if ev.pattern:
+                    v["pattern"] = ev.pattern
+                if ev.condition:
+                    v["condition"] = ev.condition
+                validations.append(v)
+
+            sheet_dict: dict[str, Any] = {
+                "sheet_num": sp.sheet_num,
+                "item_range": list(sp.item_range),
+                "stage": sp.stage,
+                "instance": sp.instance,
+                "fan_count": sp.fan_count,
+                "prompt_snippet": sp.prompt_snippet,
+                "render_error": sp.render_error,
+                "validations": validations,
+            }
+            sheets.append(sheet_dict)
+
+        return {
+            "total_sheets": preview.total_sheets,
+            "has_fan_out": preview.has_fan_out,
+            "has_dependencies": preview.has_dependencies,
+            "render_errors": preview.render_errors,
+            "sheets": sheets,
+        }
 
     def format_plain(self, issues: list[ValidationIssue]) -> str:
         """Format issues as plain text for logs.

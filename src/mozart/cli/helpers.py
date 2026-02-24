@@ -15,7 +15,7 @@ import asyncio
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import typer
 from rich.console import Console
@@ -429,6 +429,53 @@ def require_conductor(
     raise typer.Exit(1)
 
 
+async def await_early_failure(
+    job_id: str,
+    *,
+    timeout: float = 1.5,
+    poll_interval: float = 0.2,
+) -> dict[str, Any] | None:
+    """Poll job status briefly to detect early failures after submission.
+
+    After a job is submitted and accepted, template rendering errors or
+    other immediate failures happen within milliseconds.  This function
+    polls the daemon for up to ``timeout`` seconds so the CLI can report
+    the failure inline instead of printing a cheerful "Job queued".
+
+    Fail-open: any exception returns ``None`` so this never blocks the CLI.
+    """
+    try:
+        from mozart.daemon.detect import _resolve_socket_path
+        from mozart.daemon.ipc.client import DaemonClient
+
+        socket_path = _resolve_socket_path(None)
+        client = DaemonClient(socket_path)
+
+        _terminal_states = {"failed", "cancelled"}
+        _active_states = {"running", "queued"}
+
+        elapsed = 0.0
+        while elapsed < timeout:
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+
+            result = await client.call("job.status", {"job_id": job_id})
+            if not isinstance(result, dict):
+                continue
+
+            status = result.get("status", "")
+            if status in _terminal_states:
+                return result
+            if status == "completed":
+                return result
+            if status in _active_states:
+                continue
+
+        return None
+    except Exception:
+        return None
+
+
 def get_last_activity_time(job: CheckpointState) -> datetime | None:
     """Get the most recent activity timestamp from the job.
 
@@ -476,6 +523,8 @@ __all__ = [
     "create_notifiers_from_config",
     # Conductor helpers
     "require_conductor",
+    # Early failure detection
+    "await_early_failure",
     # Utilities
     "get_last_activity_time",
 ]

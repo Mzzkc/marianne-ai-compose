@@ -417,7 +417,7 @@ class TestTemplateAPI:
 
     def test_list_templates(self, client):
         """Test listing all available templates."""
-        response = client.get("/api/scores/api/templates/list")
+        response = client.get("/api/scores/templates/list")
 
         assert response.status_code == 200
         data = response.json()
@@ -434,7 +434,7 @@ class TestTemplateAPI:
 
     def test_list_templates_with_category_filter(self, client):
         """Test filtering templates by category."""
-        response = client.get("/api/scores/api/templates/list?category=workflow")
+        response = client.get("/api/scores/templates/list?category=workflow")
 
         assert response.status_code == 200
         data = response.json()
@@ -445,7 +445,7 @@ class TestTemplateAPI:
 
     def test_list_templates_with_complexity_filter(self, client):
         """Test filtering templates by complexity."""
-        response = client.get("/api/scores/api/templates/list?complexity=simple")
+        response = client.get("/api/scores/templates/list?complexity=simple")
 
         assert response.status_code == 200
         data = response.json()
@@ -456,7 +456,7 @@ class TestTemplateAPI:
 
     def test_list_templates_with_search(self, client):
         """Test searching templates."""
-        response = client.get("/api/scores/api/templates/list?search=task")
+        response = client.get("/api/scores/templates/list?search=task")
 
         assert response.status_code == 200
         data = response.json()
@@ -472,13 +472,13 @@ class TestTemplateAPI:
     def test_get_template_success(self, client):
         """Test getting a specific template."""
         # First get list of templates
-        list_response = client.get("/api/scores/api/templates/list")
+        list_response = client.get("/api/scores/templates/list")
         templates = list_response.json()["templates"]
 
         if templates:
             # Get the first template
             template_name = templates[0]["name"]
-            response = client.get(f"/api/scores/api/templates/{template_name}")
+            response = client.get(f"/api/scores/templates/{template_name}")
 
             assert response.status_code == 200
             data = response.json()
@@ -495,7 +495,7 @@ class TestTemplateAPI:
 
     def test_get_template_not_found(self, client):
         """Test getting a non-existent template."""
-        response = client.get("/api/scores/api/templates/non-existent-template-xyz")
+        response = client.get("/api/scores/templates/non-existent-template-xyz")
 
         assert response.status_code == 404
         data = response.json()
@@ -504,12 +504,12 @@ class TestTemplateAPI:
     def test_download_template_success(self, client):
         """Test downloading a template as YAML."""
         # First get list of templates
-        list_response = client.get("/api/scores/api/templates/list")
+        list_response = client.get("/api/scores/templates/list")
         templates = list_response.json()["templates"]
 
         if templates:
             template_name = templates[0]["name"]
-            response = client.get(f"/api/scores/api/templates/{template_name}/download")
+            response = client.get(f"/api/scores/templates/{template_name}/download")
 
             assert response.status_code == 200
             # Should be YAML content type
@@ -522,20 +522,20 @@ class TestTemplateAPI:
 
     def test_download_template_not_found(self, client):
         """Test downloading a non-existent template."""
-        response = client.get("/api/scores/api/templates/non-existent-xyz/download")
+        response = client.get("/api/scores/templates/non-existent-xyz/download")
 
         assert response.status_code == 404
 
     def test_use_template_success(self, client):
         """Test using a template redirects to editor."""
         # First get list of templates
-        list_response = client.get("/api/scores/api/templates/list")
+        list_response = client.get("/api/scores/templates/list")
         templates = list_response.json()["templates"]
 
         if templates:
             template_name = templates[0]["name"]
             response = client.post(
-                f"/api/scores/api/templates/{template_name}/use",
+                f"/api/scores/templates/{template_name}/use",
                 follow_redirects=False
             )
 
@@ -549,7 +549,7 @@ class TestTemplateAPI:
     def test_use_template_not_found(self, client):
         """Test using a non-existent template."""
         response = client.post(
-            "/api/scores/api/templates/non-existent-xyz/use",
+            "/api/scores/templates/non-existent-xyz/use",
             follow_redirects=False
         )
 

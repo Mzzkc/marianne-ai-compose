@@ -1,6 +1,6 @@
 """Monitor commands — ``mozart top`` real-time system monitor.
 
-Provides three operating modes:
+Provides four operating modes:
 
 1. **TUI (default)** — Rich Textual-based terminal UI showing job-centric
    process tree, event timeline, and system metrics.
@@ -10,6 +10,9 @@ Provides three operating modes:
 
 3. **History (``--history 1h``)** — Replays historical snapshots from
    the profiler SQLite database.
+
+4. **Trace (``--trace PID``)** — Attaches full strace to a specific process
+   and streams trace output to the terminal.
 """
 
 from __future__ import annotations
@@ -18,7 +21,9 @@ import asyncio
 import json
 import re
 import sys
+import tempfile
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import typer
@@ -69,6 +74,9 @@ def top(
     history: str | None = typer.Option(
         None, "--history", help="Replay historical data (e.g., '1h', '30m')"
     ),
+    trace_pid: int | None = typer.Option(
+        None, "--trace", help="Attach full strace to PID and stream output"
+    ),
     filter_job: str | None = typer.Option(
         None, "--job", "-j", help="Filter by job ID"
     ),
@@ -87,8 +95,11 @@ def top(
         mozart top --history 1h       # Replay last hour
         mozart top --job my-review    # Filter by job
         mozart top --interval 5       # 5-second refresh
+        mozart top --trace 12345      # Attach full strace to PID
     """
-    if history is not None:
+    if trace_pid is not None:
+        asyncio.run(_trace_mode(trace_pid))
+    elif history is not None:
         duration_seconds = _parse_duration(history)
         if json_output:
             asyncio.run(_history_json(duration_seconds, filter_job=filter_job))
@@ -326,6 +337,63 @@ def _get_storage() -> MonitorStorage:
         raise typer.Exit(1)
 
     return MonitorStorage(db_path=db_path)
+
+
+# =============================================================================
+# Mode 4: Trace (--trace PID)
+# =============================================================================
+
+
+async def _trace_mode(pid: int) -> None:
+    """Attach full strace to a process and stream output to stdout.
+
+    Uses StraceManager to attach ``strace -f -t -p PID``, writing output
+    to a temporary file and tailing it to stdout in real-time.
+    """
+    from mozart.daemon.profiler.strace_manager import StraceManager
+
+    if not StraceManager.is_available():
+        console.print(
+            "[red]strace is not available on this system.[/red]\n"
+            "[dim]Install strace to use the --trace option.[/dim]"
+        )
+        raise typer.Exit(1)
+
+    mgr = StraceManager(enabled=True)
+    trace_dir = Path(tempfile.mkdtemp(prefix="mozart-trace-"))
+    trace_file = trace_dir / f"trace-{pid}.log"
+
+    console.print(f"[dim]Attaching strace to PID {pid}...[/dim]")
+    console.print(f"[dim]Trace output: {trace_file}[/dim]")
+    console.print("[dim]Press Ctrl+C to stop.[/dim]\n")
+
+    success = await mgr.attach_full_trace(pid, trace_file)
+    if not success:
+        console.print(
+            f"[red]Failed to attach strace to PID {pid}.[/red]\n"
+            "[dim]Possible causes: process not found, permission denied, "
+            "or strace not available.[/dim]"
+        )
+        raise typer.Exit(1)
+
+    # Tail the trace output file
+    try:
+        # Wait briefly for strace to start writing
+        await asyncio.sleep(0.5)
+
+        with open(trace_file, encoding="utf-8", errors="replace") as f:
+            while True:
+                line = f.readline()
+                if line:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                else:
+                    await asyncio.sleep(0.1)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Stopping trace...[/dim]")
+    finally:
+        await mgr.detach_all()
+        console.print(f"[dim]Trace saved to: {trace_file}[/dim]")
 
 
 # =============================================================================

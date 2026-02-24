@@ -11,7 +11,6 @@ These tests verify that:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -20,7 +19,7 @@ import pytest
 from typer.testing import CliRunner
 
 from mozart.cli import app
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetStatus
+from mozart.core.checkpoint import CheckpointState, JobStatus
 
 runner = CliRunner()
 
@@ -233,10 +232,20 @@ class TestResumeRoutesThruConductor:
 
     def test_resume_succeeds_via_conductor(self):
         """Resume command works when conductor accepts."""
-        with patch(
-            "mozart.daemon.detect.try_daemon_route",
-            new_callable=AsyncMock,
-            return_value=(True, {"job_id": "test-job", "status": "accepted", "message": "Queued"}),
+        with (
+            patch(
+                "mozart.daemon.detect.try_daemon_route",
+                new_callable=AsyncMock,
+                return_value=(
+                    True,
+                    {"job_id": "test-job", "status": "accepted", "message": "Queued"},
+                ),
+            ),
+            patch(
+                "mozart.cli.commands.resume.await_early_failure",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             result = runner.invoke(app, ["resume", "test-job"])
 
@@ -617,10 +626,9 @@ class TestTryDaemonRouteSafety:
                 "mozart.daemon.ipc.client.DaemonClient.call",
                 new_callable=AsyncMock,
                 side_effect=JobSubmissionError("Job not found"),
-            ),
+            ),pytest.raises(JobSubmissionError)
         ):
-            with pytest.raises(JobSubmissionError):
-                await try_daemon_route("job.status", {"job_id": "x"})
+            await try_daemon_route("job.status", {"job_id": "x"})
 
 
 # ─── Filesystem fallback helpers remain private ─────────────────────
@@ -698,6 +706,6 @@ class TestDocumentationConsistency:
                     stripped = line.strip()
                     if stripped.startswith("#") or stripped.startswith('"""'):
                         continue
-                    assert False, (
+                    raise AssertionError(
                         f"mozartd reference in {py_file}:{i+1}: {line.strip()}"
                     )

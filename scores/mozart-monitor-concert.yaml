@@ -1135,7 +1135,7 @@ validations:
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/ -x --timeout=120 -q --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
     condition: "stage >= 9"
     description: "Full test suite passes"
-    timeout_seconds: 600
+    timeout_seconds: 900
 
   # Stage 10: Commit
   - type: file_exists

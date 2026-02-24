@@ -272,13 +272,29 @@ class TestInitializeState:
     async def test_running_job_with_alive_pid_raises_fatal(
         self, mixin: _TestableLifecycleMixin
     ):
-        """When resuming a RUNNING job whose PID is alive, raises FatalError."""
+        """When resuming a RUNNING job whose PID is alive AND different, raises FatalError."""
         existing = _make_state(status=JobStatus.RUNNING)
-        existing.pid = os.getpid()  # Current process is alive
+        existing.pid = os.getpid() + 1  # Different alive process
         mixin.state_backend.load = AsyncMock(return_value=existing)
 
-        with pytest.raises(FatalError, match="already running"):
-            await mixin._initialize_state(start_sheet=None)
+        # Simulate the different PID being alive
+        with patch("os.kill", return_value=None):  # no exception = alive
+            with pytest.raises(FatalError, match="already running"):
+                await mixin._initialize_state(start_sheet=None)
+
+    @pytest.mark.asyncio
+    async def test_running_job_with_same_pid_recovers_as_zombie(
+        self, mixin: _TestableLifecycleMixin
+    ):
+        """When PID matches current process (daemon mode), recover as zombie."""
+        existing = _make_state(status=JobStatus.RUNNING)
+        existing.pid = os.getpid()  # Same process — daemon mode stale PID
+        mixin.state_backend.load = AsyncMock(return_value=existing)
+
+        state = await mixin._initialize_state(start_sheet=None)
+
+        assert state.status == JobStatus.PAUSED
+        assert state.pid is None
 
     @pytest.mark.asyncio
     async def test_running_job_with_dead_pid_recovers(

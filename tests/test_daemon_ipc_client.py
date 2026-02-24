@@ -18,7 +18,6 @@ from mozart.daemon.ipc.handler import RequestHandler
 from mozart.daemon.ipc.server import DaemonServer
 from mozart.daemon.types import DaemonStatus, JobRequest, JobResponse
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -27,6 +26,9 @@ from mozart.daemon.types import DaemonStatus, JobRequest, JobResponse
 def _make_test_handler() -> RequestHandler:
     """Build a handler that mimics real daemon methods."""
     handler = RequestHandler()
+
+    async def _daemon_health(_params: dict[str, Any], _writer: asyncio.StreamWriter) -> Any:
+        return {"status": "alive"}
 
     async def _daemon_status(_params: dict[str, Any], _writer: asyncio.StreamWriter) -> Any:
         return {
@@ -65,6 +67,7 @@ def _make_test_handler() -> RequestHandler:
     async def _job_fail(_params: dict[str, Any], _writer: asyncio.StreamWriter) -> Any:
         raise JobSubmissionError("job not found: nonexistent")
 
+    handler.register("daemon.health", _daemon_health)
     handler.register("daemon.status", _daemon_status)
     handler.register("job.submit", _job_submit)
     handler.register("job.status", _job_status)

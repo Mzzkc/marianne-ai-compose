@@ -111,9 +111,9 @@ mozart pause my-job --workspace ./workspace
 # Modify config and resume (one command)
 mozart modify my-job --config updated.yaml --workspace ./workspace --resume
 
-# Or use the two-step workflow
+# Or use the two-step workflow (config auto-reloads on resume)
 mozart pause my-job -w ./workspace
-mozart resume my-job --reload-config -c updated.yaml -w ./workspace
+mozart resume my-job -c updated.yaml -w ./workspace
 ```
 
 For comprehensive Mozart usage guidance, see: `/home/emzi/.claude/skills/mozart-usage.md`

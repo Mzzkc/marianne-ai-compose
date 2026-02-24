@@ -119,7 +119,19 @@ def validate(
     reporter = ValidationReporter(console)
 
     if json_output:
-        console.print(reporter.report_json(issues))
+        import json as json_mod
+
+        from mozart.validation.rendering import generate_preview
+
+        # Build combined JSON with validation issues and rendering preview
+        validation_data = json_mod.loads(reporter.report_json(issues))
+        preview = generate_preview(config, config_file)
+        validation_data["rendering"] = reporter.report_rendering_json(preview)
+        console.print(
+            json_mod.dumps(validation_data, indent=2),
+            soft_wrap=True,
+            highlight=False,
+        )
     else:
         reporter.report_terminal(issues, config.name)
 
@@ -135,6 +147,26 @@ def validate(
             # Show DAG visualization if dependencies configured (v17 evolution)
             if config.sheet.dependencies:
                 _show_dag_visualization(config, verbose)
+
+            # Show rendering preview when validation passes
+            from mozart.validation.rendering import generate_preview
+
+            preview = generate_preview(
+                config,
+                config_file,
+                max_sheets=1 if not verbose else None,
+            )
+            reporter.report_rendering_terminal(preview, verbose=verbose)
+
+            # Report any rendering errors
+            for err in preview.render_errors:
+                console.print(f"  [red]Rendering error:[/red] {err}")
+            for sheet in preview.sheets:
+                if sheet.render_error:
+                    console.print(
+                        f"  [red]Sheet {sheet.sheet_num} render error:[/red]"
+                        f" {sheet.render_error}"
+                    )
 
     # Exit with appropriate code
     exit_code = runner.get_exit_code(issues)

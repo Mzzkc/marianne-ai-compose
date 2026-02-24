@@ -376,7 +376,7 @@ class OutcomeMigrator:
                 timestamp=parsed_timestamp,
             )
         except Exception as e:
-            _logger.debug("outcome_parse_failed", error=str(e))
+            _logger.warning("outcome_parse_failed", error=str(e), exc_info=True)
             return None
 
     def _detect_patterns_from_store(self) -> int:

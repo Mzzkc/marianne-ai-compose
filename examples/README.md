@@ -188,7 +188,7 @@ mozart modify nonfiction-book -c examples/nonfiction-book-v2.yaml -r -w ./book-w
 # Or use the two-step workflow for inspection
 mozart pause my-job -w ./workspace
 # Inspect state, make config changes...
-mozart resume my-job -w ./workspace --reload-config -c updated.yaml
+mozart resume my-job -w ./workspace --config updated.yaml
 ```
 
 **When to use pause/modify:**

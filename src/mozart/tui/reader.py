@@ -169,7 +169,8 @@ class MonitorReader:
                     {"job_id": job_id, "limit": limit},
                 )
                 if result and isinstance(result, dict):
-                    return result.get("events", [])
+                    events: list[dict[str, Any]] = result.get("events", [])
+                    return events
             except Exception:
                 _logger.debug("reader.observer_events_failed", exc_info=True)
         return []

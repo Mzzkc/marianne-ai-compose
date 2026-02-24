@@ -107,6 +107,30 @@ class GpuMetric(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Per-job progress model
+# ---------------------------------------------------------------------------
+
+
+class JobProgress(BaseModel):
+    """Progress snapshot for a single running job.
+
+    Populated from CheckpointState in ``_live_states`` during
+    ``collect_snapshot()``.  Consumed by the TUI jobs panel for
+    accurate progress bars.
+    """
+
+    job_id: str = Field(description="Job identifier")
+    total_sheets: int = Field(default=1, ge=1, description="Total sheets in the job")
+    last_completed_sheet: int = Field(
+        default=0, ge=0, description="Last fully completed sheet number"
+    )
+    current_sheet: int | None = Field(
+        default=None, description="Currently executing sheet number"
+    )
+    status: str = Field(default="unknown", description="Job status string")
+
+
+# ---------------------------------------------------------------------------
 # System snapshot model
 # ---------------------------------------------------------------------------
 
@@ -148,6 +172,12 @@ class SystemSnapshot(BaseModel):
     # Zombies
     zombie_count: int = Field(default=0, ge=0)
     zombie_pids: list[int] = Field(default_factory=list)
+
+    # Per-job progress (populated from CheckpointState live states)
+    job_progress: list[JobProgress] = Field(default_factory=list)
+
+    # Conductor uptime (seconds since daemon started)
+    conductor_uptime_seconds: float = Field(default=0.0, ge=0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +385,7 @@ __all__ = [
     "CorrelationConfig",
     "EventType",
     "GpuMetric",
+    "JobProgress",
     "ProcessEvent",
     "ProcessMetric",
     "ProfilerConfig",

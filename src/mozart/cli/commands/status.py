@@ -556,6 +556,15 @@ def _output_status_json(job: CheckpointState) -> None:
         },
         "circuit_breaker": cb_state,
         "hook_results_count": len(job.hook_results),
+        "hooks_configured": len(
+            job.config_snapshot.get("on_success", []) if job.config_snapshot else []
+        ),
+        "hooks_interrupted": bool(
+            job.status == JobStatus.COMPLETED
+            and job.config_snapshot
+            and job.config_snapshot.get("on_success")
+            and not job.hook_results
+        ),
         "hook_failures": [
             {
                 "hook_name": h.get("hook_name", h.get("name", "unknown")),
@@ -744,7 +753,45 @@ def _render_cost_summary(job: CheckpointState) -> None:
 
 
 def _render_hook_results(job: CheckpointState) -> None:
-    """Render hook execution results if any are recorded."""
+    """Render hook execution results if any are recorded.
+
+    Also warns when hooks were configured but no results exist,
+    indicating hooks were interrupted (e.g., daemon restart during
+    cooldown) or never executed.
+    """
+    # Check if on_success hooks were configured
+    configured_hooks: list[dict[str, Any]] = []
+    if job.config_snapshot:
+        configured_hooks = job.config_snapshot.get("on_success", [])
+
+    if not job.hook_results and not configured_hooks:
+        return
+
+    if configured_hooks and not job.hook_results:
+        # Only warn about missing hook results for completed jobs.
+        # Running/pending jobs haven't reached hook execution yet.
+        if job.status != JobStatus.COMPLETED:
+            return
+        console.print("\n[bold]Hook Results[/bold]")
+        console.print(
+            f"  [yellow]WARNING:[/yellow] {len(configured_hooks)} on_success "
+            f"hook(s) configured but no results recorded"
+        )
+        console.print(
+            "  [dim]Hooks may have been interrupted (e.g., conductor restart "
+            "during cooldown)[/dim]"
+        )
+        for hook_cfg in configured_hooks:
+            hook_type = hook_cfg.get("type", "unknown")
+            desc = hook_cfg.get("description", "")
+            label = f"{hook_type}: {desc}" if desc else hook_type
+            job_path = hook_cfg.get("job_path", "")
+            if job_path:
+                console.print(f"  [yellow]\u2022[/yellow] {label} \u2192 {job_path}")
+            else:
+                console.print(f"  [yellow]\u2022[/yellow] {label}")
+        return
+
     if not job.hook_results:
         return
 
@@ -758,15 +805,23 @@ def _render_hook_results(job: CheckpointState) -> None:
                   f"[green]Passed: {passed}[/green] | "
                   f"[red]Failed: {failed}[/red]")
 
+    # Warn if fewer results than configured hooks
+    if configured_hooks and len(job.hook_results) < len(configured_hooks):
+        missing = len(configured_hooks) - len(job.hook_results)
+        console.print(
+            f"  [yellow]WARNING:[/yellow] {missing} hook(s) did not produce results"
+        )
+
     # Show details for failed hooks (most useful for diagnostics)
     failed_hooks = [hr for hr in job.hook_results if not hr.get("success", False)]
     for hook in failed_hooks[-3:]:  # Last 3 failures
-        hook_name = hook.get("hook_name", hook.get("name", "unknown"))
-        event = hook.get("event", "?")
-        error = hook.get("error", hook.get("error_message", ""))
-        if len(error) > 60:
-            error = error[:57] + "..."
-        console.print(f"  [red]\u2022[/red] {hook_name} ({event}): {error}")
+        hook_type = hook.get("hook_type", hook.get("hook_name", "unknown"))
+        desc = hook.get("description", "")
+        error = hook.get("error_message", hook.get("error", ""))
+        if len(error) > 80:
+            error = error[:77] + "..."
+        label = f"{hook_type}: {desc}" if desc else hook_type
+        console.print(f"  [red]\u2022[/red] {label} \u2014 {error}")
 
 
 def _render_progress_snapshots(job: CheckpointState) -> None:

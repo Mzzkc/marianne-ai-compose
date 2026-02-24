@@ -20,7 +20,6 @@ from mozart.daemon.detect import is_daemon_available, try_daemon_route
 from mozart.daemon.ipc.handler import RequestHandler
 from mozart.daemon.ipc.server import DaemonServer
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -29,6 +28,9 @@ from mozart.daemon.ipc.server import DaemonServer
 def _make_detect_handler() -> RequestHandler:
     """Build a handler with methods needed for detection tests."""
     handler = RequestHandler()
+
+    async def _health(_params: dict[str, Any], _writer: asyncio.StreamWriter) -> Any:
+        return {"status": "alive"}
 
     async def _status(_params: dict[str, Any], _writer: asyncio.StreamWriter) -> Any:
         return {
@@ -43,6 +45,7 @@ def _make_detect_handler() -> RequestHandler:
     async def _echo(params: dict[str, Any], _writer: asyncio.StreamWriter) -> Any:
         return {"echo": params}
 
+    handler.register("daemon.health", _health)
     handler.register("daemon.status", _status)
     handler.register("test.echo", _echo)
     return handler

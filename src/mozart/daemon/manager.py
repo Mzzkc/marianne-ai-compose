@@ -1041,6 +1041,11 @@ class JobManager:
     # ─── Properties ───────────────────────────────────────────────────
 
     @property
+    def uptime_seconds(self) -> float:
+        """Seconds since the daemon started (monotonic clock)."""
+        return time.monotonic() - self._start_time
+
+    @property
     def shutting_down(self) -> bool:
         """Whether the manager is in the process of shutting down."""
         return self._shutting_down

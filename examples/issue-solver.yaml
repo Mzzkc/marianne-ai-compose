@@ -1412,12 +1412,14 @@ validations:
     description: "Verification script passes"
     condition: "sheet_num >= 17"
     stage: 2
+    timeout_seconds: 600
 
   - type: command_succeeds
     command: 'cd "{workspace}/.." && pytest -x -q --tb=no'
     description: "Test suite passes"
     condition: "sheet_num >= 17"
     stage: 2
+    timeout_seconds: 900
 
   # ── Stage 16: Commit (sheet 18) ──────────────────────────────────────────
   - type: file_exists

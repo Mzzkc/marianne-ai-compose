@@ -196,6 +196,14 @@ class PatternAggregator:
 
         Uses the weighter to recalculate priorities based on current
         effectiveness and recency.
+
+        Patterns with zero applications (never tested via the per-sheet
+        feedback path) keep their initial priority. The frequency factor
+        in calculate_priority() crushes single-occurrence patterns to
+        ~0.075, which falls below the default min_priority=0.3 query
+        threshold and prevents them from ever being injected. By skipping
+        unapplied patterns, they retain their initial 0.5 priority until
+        the system has real feedback data to recalculate from.
         """
         # Get all patterns (even low priority ones for recalculation)
         max_patterns_for_reweight = 1000
@@ -204,6 +212,10 @@ class PatternAggregator:
         # Batch-compute new priorities, then update all at once with executemany
         updates: list[tuple[float, str]] = []
         for pattern in patterns:
+            total_applications = pattern.led_to_success_count + pattern.led_to_failure_count
+            if total_applications == 0:
+                continue  # Keep initial priority — not yet tested
+
             new_priority = self.weighter.calculate_priority(
                 occurrence_count=pattern.occurrence_count,
                 led_to_success_count=pattern.led_to_success_count,
@@ -213,11 +225,12 @@ class PatternAggregator:
             )
             updates.append((new_priority, pattern.id))
 
-        with self.global_store._get_connection() as conn:
-            conn.executemany(
-                "UPDATE patterns SET priority_score = ? WHERE id = ?",
-                updates,
-            )
+        if updates:
+            with self.global_store._get_connection() as conn:
+                conn.executemany(
+                    "UPDATE patterns SET priority_score = ? WHERE id = ?",
+                    updates,
+                )
 
     def _record_pattern_applications(
         self,

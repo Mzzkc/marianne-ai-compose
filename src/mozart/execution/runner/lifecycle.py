@@ -388,25 +388,38 @@ class LifecycleMixin:
             if state.status == JobStatus.RUNNING and state.pid is not None:
                 import os
 
-                try:
-                    os.kill(state.pid, 0)  # Check if process is alive
-                    # Process is alive - refuse to start
-                    raise FatalError(
-                        f"Job is already running (PID {state.pid}). "
-                        f"Use 'mozart status {job_id}' to check, or kill the other process first."
+                if state.pid == os.getpid():
+                    # Same process — stale PID from a previous coroutine run
+                    # in daemon mode.  All jobs share the daemon process, so
+                    # os.kill(pid, 0) would succeed even though no runner is
+                    # active.  Treat as zombie.
+                    state.mark_zombie_detected(
+                        "Stale PID matches current process — recovering for resume"
                     )
-                except ProcessLookupError:
-                    # Process is dead - zombie state, recover it
-                    state.mark_zombie_detected("Detected on state load - process no longer running")
                     await self.state_backend.save(state)
-                except PermissionError:
-                    # Can't check (different user) - warn but continue
-                    self._logger.warning(
-                        "cannot_check_running_process",
-                        job_id=job_id,
-                        pid=state.pid,
-                        reason="permission denied",
-                    )
+                else:
+                    try:
+                        os.kill(state.pid, 0)  # Check if process is alive
+                        # Process is alive - refuse to start
+                        raise FatalError(
+                            f"Job is already running (PID {state.pid}). "
+                            f"Use 'mozart status {job_id}' to check, "
+                            "or kill the other process first."
+                        )
+                    except ProcessLookupError:
+                        # Process is dead - zombie state, recover it
+                        state.mark_zombie_detected(
+                            "Detected on state load - process no longer running",
+                        )
+                        await self.state_backend.save(state)
+                    except PermissionError:
+                        # Can't check (different user) - warn but continue
+                        self._logger.warning(
+                            "cannot_check_running_process",
+                            job_id=job_id,
+                            pid=state.pid,
+                            reason="permission denied",
+                        )
 
             self.console.print(
                 f"[yellow]Resuming from sheet {state.last_completed_sheet + 1}[/yellow]"
@@ -421,6 +434,15 @@ class LifecycleMixin:
                 if skipped not in state.sheets:
                     state.sheets[skipped] = SheetState(sheet_num=skipped)
                 state.sheets[skipped].status = SheetStatus.COMPLETED
+
+        # Pre-populate all sheets so every sheet 1..total_sheets has a
+        # record from the start.  Without this, sheets only get created
+        # in mark_sheet_started(), which means a pause before a sheet
+        # starts leaves no DB record — causing the sheet to be silently
+        # skipped on resume.
+        for sheet_num in range(1, state.total_sheets + 1):
+            if sheet_num not in state.sheets:
+                state.sheets[sheet_num] = SheetState(sheet_num=sheet_num)
 
         return state
 
@@ -517,6 +539,42 @@ class LifecycleMixin:
 
         hooks_succeeded = sum(1 for r in results if r.success)
         hooks_failed = len(results) - hooks_succeeded
+
+        # Persist hook results to checkpoint state so `mozart status` can
+        # display them and failures aren't silently lost.
+        for r in results:
+            state.record_hook_result({
+                "hook_type": r.hook_type,
+                "description": r.description,
+                "success": r.success,
+                "exit_code": r.exit_code,
+                "error_message": r.error_message,
+                "duration_seconds": round(r.duration_seconds, 2),
+                "chained_job_path": str(r.chained_job_path) if r.chained_job_path else None,
+                "chained_job_info": r.chained_job_info,
+            })
+
+        # If any hook failed, downgrade job status from COMPLETED to FAILED.
+        # A successful job that can't fire its on_success chain is not truly
+        # complete — the concert is broken and the user needs to know.
+        if hooks_failed > 0:
+            failed_descs = [
+                r.error_message or r.description or r.hook_type
+                for r in results if not r.success
+            ]
+            state.status = JobStatus.FAILED
+            state.error_message = (
+                f"Job sheets passed but {hooks_failed} on_success hook(s) failed: "
+                + "; ".join(failed_descs[:3])
+            )
+            self._logger.error(
+                "hooks.failure_downgrades_job",
+                job_id=state.job_id,
+                hooks_failed=hooks_failed,
+                errors=failed_descs,
+            )
+
+        await self.state_backend.save(state)
 
         # Update summary with hook results
         if self._summary:

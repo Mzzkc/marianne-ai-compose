@@ -90,27 +90,27 @@ class SheetValidationResult:
     @property
     def all_passed(self) -> bool:
         """Check if all validations passed."""
-        return all(r.passed for r in self.results)
+        return all(result.passed for result in self.results)
 
     @property
     def passed_count(self) -> int:
         """Count of passed validations."""
-        return sum(1 for r in self.results if r.passed)
+        return sum(1 for result in self.results if result.passed)
 
     @property
     def failed_count(self) -> int:
         """Count of failed validations (excluding skipped)."""
         return sum(
-            1 for r in self.results
-            if not r.passed and r.failure_category != "skipped"
+            1 for result in self.results
+            if not result.passed and result.failure_category != "skipped"
         )
 
     @property
     def skipped_count(self) -> int:
         """Count of skipped validations (due to staged fail-fast)."""
         return sum(
-            1 for r in self.results
-            if r.failure_category == "skipped"
+            1 for result in self.results
+            if result.failure_category == "skipped"
         )
 
     @property
@@ -156,23 +156,23 @@ class SheetValidationResult:
 
     def get_passed_rules(self) -> list[ValidationRule]:
         """Get rules that passed."""
-        return [r.rule for r in self.results if r.passed]
+        return [result.rule for result in self.results if result.passed]
 
     def get_failed_rules(self) -> list[ValidationRule]:
         """Get rules that failed."""
-        return [r.rule for r in self.results if not r.passed]
+        return [result.rule for result in self.results if not result.passed]
 
     def get_passed_results(self) -> list[ValidationResult]:
         """Get results that passed."""
-        return [r for r in self.results if r.passed]
+        return [result for result in self.results if result.passed]
 
     def get_failed_results(self) -> list[ValidationResult]:
         """Get results that failed."""
-        return [r for r in self.results if not r.passed]
+        return [result for result in self.results if not result.passed]
 
     def to_dict_list(self) -> list[ValidationDetailDict]:
         """Convert all results to serializable list."""
-        return [r.to_dict() for r in self.results]
+        return [result.to_dict() for result in self.results]
 
     def get_semantic_summary(self) -> dict[str, Any]:
         """Aggregate semantic information from failed validations."""

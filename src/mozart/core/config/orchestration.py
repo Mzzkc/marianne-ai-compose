@@ -260,7 +260,7 @@ class ConcertConfig(BaseModel):
         "Prevents infinite loops. Use with caution for values > 10.",
     )
     cooldown_between_jobs_seconds: float = Field(
-        default=30.0,
+        default=5.0,
         ge=0,
         description="Minimum wait time between job transitions (resource management)",
     )

@@ -618,37 +618,66 @@ async def _modify_job(
         console.print(f"[dim]Job name: {new_config.name}[/dim]")
         console.print(f"[dim]Sheets: {new_config.sheet.total_sheets}[/dim]")
 
-    # If resume flag is set, wait for pause to take effect then resume
+    # If resume flag is set, let the daemon handle pause→resume atomically
     if resume_flag:
-        if job_was_running and routed and pause_ok:
-            # Pause is async — poll until the job is actually paused/failed
-            _resumable = {"paused", "failed", "cancelled"}
-            deadline = asyncio.get_event_loop().time() + timeout
-            paused_ok = False
-            while asyncio.get_event_loop().time() < deadline:
-                await asyncio.sleep(0.5)
-                try:
-                    _, st = await try_daemon_route("job.status", params)
-                    if isinstance(st, dict) and st.get("status", "") in _resumable:
-                        paused_ok = True
-                        break
-                except Exception:
-                    break
-            if not paused_ok:
+        if routed:
+            # Atomic modify via daemon — CLI returns immediately
+            modify_params = {
+                "job_id": job_id,
+                "config_path": str(config_file),
+                "workspace": ws_str,
+            }
+            try:
+                _, modify_result = await try_daemon_route("job.modify", modify_params)
+            except (OSError, ConnectionError, DaemonError) as exc:
+                output_error(
+                    str(exc),
+                    error_code="E506",
+                    json_output=json_output,
+                    job_id=job_id,
+                )
+                raise typer.Exit(1) from None
+
+            if isinstance(modify_result, dict):
+                status = modify_result.get("status", "")
+                if status == "rejected":
+                    msg = modify_result.get("message", "Modify rejected")
+                    if json_output:
+                        console.print(json.dumps(modify_result, indent=2))
+                    else:
+                        console.print(f"[red]Error:[/red] {msg}")
+                    raise typer.Exit(1)
+
+                msg = modify_result.get("message", "Modify accepted")
+                if json_output:
+                    console.print(json.dumps(modify_result, indent=2))
+                else:
+                    console.print(f"[green]{msg}[/green]")
+                    console.print(f"\nMonitor: [bold]mozart status {job_id}[/bold]")
+            return
+
+        # Non-daemon fallback: poll for pause then resume directly
+        if job_was_running:
+            # Filesystem pause already sent above — wait for it
+            if found_backend:
+                from ..helpers import _wait_for_pause_ack as wait_for_pause_ack
                 if not json_output:
                     console.print(
-                        f"[red]Error:[/red] Timed out waiting for job "
-                        f"'{job_id}' to pause ({timeout}s)"
+                        f"[dim]Waiting for job to pause (timeout: {timeout}s)...[/dim]"
                     )
-                raise typer.Exit(1)
+                paused_ok = await wait_for_pause_ack(found_backend, job_id, timeout)
+                if not paused_ok:
+                    if not json_output:
+                        console.print(
+                            f"[red]Error:[/red] Timed out waiting for job "
+                            f"'{job_id}' to pause ({timeout}s)"
+                        )
+                    raise typer.Exit(1)
 
         if not json_output:
             console.print()
             console.print("[cyan]Resuming with new config...[/cyan]")
 
-        # Resume with new config (auto-reload is default)
-        # Pass the user's explicit --workspace (None if not specified) so the
-        # daemon uses its own stored workspace rather than a heuristic guess.
         await _resume_job(
             job_id=job_id,
             config_file=config_file,

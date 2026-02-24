@@ -29,6 +29,7 @@ from mozart.daemon.profiler.gpu_probe import GpuProbe
 from mozart.daemon.profiler.models import (
     Anomaly,
     EventType,
+    JobProgress,
     ProcessEvent,
     ProcessMetric,
     ProfilerConfig,
@@ -267,6 +268,25 @@ class ProfilerCollector:
             running_jobs = self._manager.running_count
             active_sheets = self._manager.active_job_count
 
+        # 8. Per-job progress from live CheckpointState
+        job_progress_list: list[JobProgress] = []
+        if self._manager is not None:
+            for jid, state in self._manager._live_states.items():
+                job_progress_list.append(
+                    JobProgress(
+                        job_id=jid,
+                        total_sheets=getattr(state, "total_sheets", 1),
+                        last_completed_sheet=getattr(state, "last_completed_sheet", 0),
+                        current_sheet=getattr(state, "current_sheet", None),
+                        status=getattr(state, "status", "unknown"),
+                    )
+                )
+
+        # 9. Conductor uptime
+        conductor_uptime = 0.0
+        if self._manager is not None:
+            conductor_uptime = self._manager.uptime_seconds
+
         snapshot = SystemSnapshot(
             timestamp=now,
             daemon_pid=daemon_pid,
@@ -284,6 +304,8 @@ class ProfilerCollector:
             active_sheets=active_sheets,
             zombie_count=zombie_count,
             zombie_pids=zombie_pids,
+            job_progress=job_progress_list,
+            conductor_uptime_seconds=conductor_uptime,
         )
 
         self._latest_snapshot = snapshot
@@ -360,6 +382,9 @@ class ProfilerCollector:
         except (_psutil.NoSuchProcess, _psutil.AccessDenied, OSError):
             return processes, zombie_count, zombie_pids
 
+        # Build PID → (job_id, sheet_num) map once per collection cycle
+        pid_job_map = self._build_pid_job_map()
+
         for child in children:
             try:
                 with child.oneshot():
@@ -383,8 +408,10 @@ class ProfilerCollector:
                     except (_psutil.AccessDenied, OSError):
                         num_fds = 0
 
-                    # Map PID to job_id / sheet_num
-                    job_id, sheet_num = self._map_pid_to_job(child.pid)
+                    # Look up job mapping from the pre-built map
+                    job_id, sheet_num = pid_job_map.get(
+                        child.pid, (None, None),
+                    )
 
                     proc_metric = ProcessMetric(
                         pid=child.pid,
@@ -411,40 +438,74 @@ class ProfilerCollector:
     # PID → Job mapping
     # ------------------------------------------------------------------
 
-    def _map_pid_to_job(self, pid: int) -> tuple[str | None, int | None]:
-        """Map a child process PID to its job_id and sheet_num.
+    def _build_pid_job_map(self) -> dict[int, tuple[str | None, int | None]]:
+        """Build a PID → (job_id, sheet_num) map for all daemon children.
 
-        Uses the JobManager's live state to find which job/sheet a PID
-        belongs to.  The CheckpointState tracks the runner ``pid`` and
-        ``current_sheet``.  Falls back to (None, None) if no mapping.
+        Uses workspace-path matching instead of the broken PID-based
+        approach.  In daemon mode, ``CheckpointState.pid`` is always the
+        daemon PID (all jobs share one process), making PID matching
+        useless.
+
+        Algorithm:
+        1. Get direct children of the daemon process.
+        2. For each direct child, read its command line and check if it
+           contains a running job's workspace path.
+        3. When matched, that child and ALL its descendants belong to
+           that job.  The sheet_num comes from the job's
+           ``current_sheet`` in ``_live_states``.
+        4. Unmatched processes get ``(None, None)`` (shown as orphans).
+
+        Called once per collection cycle — O(children * jobs) string
+        comparisons instead of the old O(children * children) psutil
+        walks.
         """
-        if self._manager is None:
-            return None, None
+        result: dict[int, tuple[str | None, int | None]] = {}
 
-        # Walk through live states — each contains the runner PID and
-        # the currently executing sheet number.
-        for job_id, state in self._manager._live_states.items():
-            runner_pid = getattr(state, "pid", None)
-            if runner_pid is None:
+        if self._manager is None or _psutil is None:
+            return result
+
+        # Collect job workspace paths for matching
+        job_workspaces: list[tuple[str, str, int | None]] = []
+        for job_id, meta in self._manager._job_meta.items():
+            ws_path = str(meta.workspace)
+            state = self._manager._live_states.get(job_id)
+            current_sheet = getattr(state, "current_sheet", None) if state else None
+            job_workspaces.append((job_id, ws_path, current_sheet))
+
+        if not job_workspaces:
+            return result
+
+        try:
+            daemon_proc = _psutil.Process(os.getpid())
+            direct_children = daemon_proc.children(recursive=False)
+        except (_psutil.NoSuchProcess, _psutil.AccessDenied, OSError):
+            return result
+
+        for child in direct_children:
+            try:
+                cmdline = " ".join(child.cmdline())
+            except (_psutil.NoSuchProcess, _psutil.AccessDenied, _psutil.ZombieProcess):
                 continue
 
-            # Direct match: the child IS the runner process
-            if runner_pid == pid:
-                current_sheet = getattr(state, "current_sheet", None)
-                return job_id, current_sheet
+            # Match this direct child's cmdline against job workspaces
+            matched_job_id: str | None = None
+            matched_sheet: int | None = None
+            for job_id, ws_path, current_sheet in job_workspaces:
+                if ws_path in cmdline:
+                    matched_job_id = job_id
+                    matched_sheet = current_sheet
+                    break
 
-            # Indirect match: the child is a descendant of the runner
-            if _psutil is not None:
+            if matched_job_id is not None:
+                result[child.pid] = (matched_job_id, matched_sheet)
+                # All descendants of this child belong to the same job
                 try:
-                    runner_proc = _psutil.Process(runner_pid)
-                    child_pids = {c.pid for c in runner_proc.children(recursive=True)}
-                    if pid in child_pids:
-                        current_sheet = getattr(state, "current_sheet", None)
-                        return job_id, current_sheet
+                    for desc in child.children(recursive=True):
+                        result[desc.pid] = (matched_job_id, matched_sheet)
                 except (_psutil.NoSuchProcess, _psutil.AccessDenied, OSError):
                     pass
 
-        return None, None
+        return result
 
     # ------------------------------------------------------------------
     # System memory
@@ -546,17 +607,18 @@ class ProfilerCollector:
         data = event.get("data") or {}
         pid = data.get("pid")
 
-        if pid:
-            # Record process event
-            proc_event = ProcessEvent(
-                pid=pid,
-                event_type=EventType.SPAWN,
-                job_id=job_id,
-                sheet_num=sheet_num,
-                details=f"Sheet {sheet_num} started",
-            )
-            self._record_event(proc_event)
+        # Always record the timeline event (pid=0 fallback when runner
+        # doesn't send a PID, which is the common case).
+        proc_event = ProcessEvent(
+            pid=pid or 0,
+            event_type=EventType.SPAWN,
+            job_id=job_id,
+            sheet_num=sheet_num,
+            details=f"Sheet {sheet_num} started",
+        )
+        self._record_event(proc_event)
 
+        if pid:
             # Attach strace (non-blocking — fire and forget via task)
             if self._strace.enabled:
                 asyncio.create_task(
@@ -591,19 +653,20 @@ class ProfilerCollector:
         if data is not None:
             data["resource_context"] = resource_ctx
 
-        if pid:
-            event_type = EventType.EXIT
-            proc_event = ProcessEvent(
-                pid=pid,
-                event_type=event_type,
-                exit_code=exit_code,
-                job_id=job_id,
-                sheet_num=sheet_num,
-                details=f"Sheet {sheet_num} "
-                f"{'completed' if 'completed' in event_name else 'failed'}",
-            )
-            self._record_event(proc_event)
+        # Always record the timeline event (pid=0 fallback when runner
+        # doesn't send a PID, which is the common case).
+        proc_event = ProcessEvent(
+            pid=pid or 0,
+            event_type=EventType.EXIT,
+            exit_code=exit_code,
+            job_id=job_id,
+            sheet_num=sheet_num,
+            details=f"Sheet {sheet_num} "
+            f"{'completed' if 'completed' in event_name else 'failed'}",
+        )
+        self._record_event(proc_event)
 
+        if pid:
             # Detach strace and collect summary
             if self._strace.enabled:
                 asyncio.create_task(

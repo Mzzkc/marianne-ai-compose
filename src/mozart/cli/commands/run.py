@@ -21,7 +21,7 @@ from rich.table import Table
 
 from mozart.core.logging import get_logger
 
-from ..helpers import is_quiet
+from ..helpers import await_early_failure, is_quiet
 from ..output import console
 
 _logger = get_logger("cli.run")
@@ -132,7 +132,7 @@ def run(
     if dry_run:
         if not json_output:
             console.print("\n[yellow]Dry run - not executing[/yellow]")
-            _show_dry_run(config)
+            _show_dry_run(config, config_file)
         else:
             console.print(json.dumps({
                 "dry_run": True,
@@ -200,22 +200,41 @@ async def _try_daemon_submit(
         if not routed:
             return False
 
-        if json_output:
-            console.print(json.dumps(result, indent=2))
-        else:
-            status = result.get("status", "unknown") if isinstance(result, dict) else "unknown"
-            job_id = result.get("job_id", "?") if isinstance(result, dict) else "?"
-            msg = result.get("message", "") if isinstance(result, dict) else ""
-            if status == "accepted":
-                console.print(f"[green]Job submitted to daemon:[/green] {job_id}")
-                if msg:
-                    console.print(f"  {msg}")
-                console.print(
-                    f"\n[dim]Monitor with:[/dim] mozart status {job_id} --watch"
-                )
+        status = result.get("status", "unknown") if isinstance(result, dict) else "unknown"
+        job_id = result.get("job_id", "?") if isinstance(result, dict) else "?"
+        msg = result.get("message", "") if isinstance(result, dict) else ""
+
+        if status != "accepted":
+            if json_output:
+                console.print(json.dumps(result, indent=2))
             else:
                 console.print(f"[yellow]Daemon rejected job:[/yellow] {msg}")
-                return False
+            return False
+
+        # Poll briefly to catch early failures (e.g. template errors)
+        early = await await_early_failure(job_id)
+        early_status = early.get("status", "") if isinstance(early, dict) else ""
+        early_failed = early_status in ("failed", "cancelled")
+
+        if json_output:
+            if early_failed:
+                console.print(json.dumps(early, indent=2))
+                raise typer.Exit(1)
+            console.print(json.dumps(result, indent=2))
+        else:
+            if early_failed:
+                err = early.get("error_message", "") if isinstance(early, dict) else ""
+                console.print(f"[red]Job failed:[/red] {job_id}")
+                if err:
+                    console.print(f"  {err}")
+                console.print(f"\n[dim]Full details:[/dim] mozart diagnose {job_id}")
+                raise typer.Exit(1)
+            console.print(f"[green]Job submitted to daemon:[/green] {job_id}")
+            if msg:
+                console.print(f"  {msg}")
+            console.print(
+                f"\n[dim]Monitor with:[/dim] mozart status {job_id} --watch"
+            )
 
         return True
     except (OSError, ConnectionError, TimeoutError) as exc:
@@ -223,7 +242,7 @@ async def _try_daemon_submit(
         return False
 
 
-def _show_dry_run(config: JobConfig) -> None:
+def _show_dry_run(config: JobConfig, config_path: Path) -> None:
     """Show what would be executed in dry run mode."""
     table = Table(title="Sheet Plan")
     table.add_column("Sheet", style="cyan")
@@ -240,6 +259,21 @@ def _show_dry_run(config: JobConfig) -> None:
         )
 
     console.print(table)
+
+    # Rendering preview (show sheet 1 as representative)
+    from mozart.validation.rendering import generate_preview
+    from mozart.validation.reporter import ValidationReporter
+
+    reporter = ValidationReporter(console)
+    preview = generate_preview(config, config_path, max_sheets=1)
+    reporter.report_rendering_terminal(preview)
+
+    # Show dependency info if configured
+    if config.sheet.dependencies:
+        console.print("\n[bold]Sheet Dependencies:[/bold]")
+        for sheet_num, deps in sorted(config.sheet.dependencies.items()):
+            dep_list = ", ".join(str(d) for d in deps)
+            console.print(f"  Sheet {sheet_num} depends on: {dep_list}")
 
 
 # =============================================================================

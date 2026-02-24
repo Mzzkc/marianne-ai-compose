@@ -299,7 +299,7 @@ class TestSchemaVersionTracking:
         with store._get_connection() as conn:
             cursor = conn.execute("SELECT version FROM schema_version")
             row = cursor.fetchone()
-        assert row["version"] == 12  # current SCHEMA_VERSION
+        assert row["version"] == 13  # current SCHEMA_VERSION
 
     def test_schema_version_single_row(self, store: GlobalLearningStoreBase):
         """Only one row exists in schema_version after init."""

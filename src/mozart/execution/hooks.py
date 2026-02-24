@@ -634,6 +634,12 @@ class HookExecutor:
             )
 
         except Exception as e:
+            _logger.warning(
+                "hook.shell_command_failed",
+                description=hook.description,
+                error=str(e),
+                exc_info=True,
+            )
             return HookResult(
                 hook_type="run_command",
                 description=hook.description,
@@ -700,6 +706,12 @@ class HookExecutor:
             )
 
         except Exception as e:
+            _logger.warning(
+                "hook.script_execution_failed",
+                description=hook.description,
+                error=str(e),
+                exc_info=True,
+            )
             return HookResult(
                 hook_type="run_script",
                 description=hook.description,

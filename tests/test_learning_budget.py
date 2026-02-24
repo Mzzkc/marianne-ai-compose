@@ -333,12 +333,16 @@ class TestExplorationBudgetHistory:
     def test_returns_ordered_records(
         self, store: GlobalLearningStore, job_hash: str,
     ) -> None:
+        import time
+
         store.update_exploration_budget(
             job_hash=job_hash, budget_value=0.10, adjustment_type="initial",
         )
+        time.sleep(0.01)  # Ensure distinct timestamps for ordering
         store.update_exploration_budget(
             job_hash=job_hash, budget_value=0.15, adjustment_type="boost",
         )
+        time.sleep(0.01)
         store.update_exploration_budget(
             job_hash=job_hash, budget_value=0.14, adjustment_type="decay",
         )

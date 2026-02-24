@@ -117,7 +117,6 @@ class MonitorApp(App[None]):
         self._latest_snapshot: SystemSnapshot | None = None
         self._conductor_up: bool = False
         self._mount_time: float = 0.0
-        self._first_snapshot_time: float = 0.0
 
     def compose(self) -> ComposeResult:
         """Build the widget tree."""
@@ -156,13 +155,11 @@ class MonitorApp(App[None]):
             else:
                 self._conductor_up = snapshot is not None
 
-            # Track uptime from first successful snapshot
-            if snapshot is not None and self._first_snapshot_time == 0.0:
-                self._first_snapshot_time = time.monotonic()
-
+            # Use conductor uptime from the snapshot (actual daemon
+            # lifetime) instead of TUI session time.
             uptime = 0.0
-            if self._first_snapshot_time > 0.0:
-                uptime = time.monotonic() - self._first_snapshot_time
+            if snapshot is not None:
+                uptime = snapshot.conductor_uptime_seconds
 
             # Update header
             header = self.query_one("#header-panel", HeaderPanel)

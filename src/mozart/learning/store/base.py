@@ -91,7 +91,8 @@ class GlobalLearningStoreBase:
     # v10: Added proper column migration for existing tables
     # v11: Renamed outcome_improved → pattern_led_to_success in pattern_applications
     # v12: Renamed first_attempt_success → success_without_retry in executions
-    SCHEMA_VERSION = 12
+    # v13: Repair unapplied pattern priorities crushed by frequency factor
+    SCHEMA_VERSION = 13
 
     # Expected columns for tables that may need migration
     # Format: {table_name: [(column_name, column_definition), ...]}
@@ -264,6 +265,9 @@ class GlobalLearningStoreBase:
             if current_version < self.SCHEMA_VERSION:
                 # First migrate columns (for existing tables)
                 self._migrate_columns(conn)
+                # Data migrations for specific version transitions
+                if current_version < 13:
+                    self._repair_unapplied_pattern_priorities(conn)
                 # Then create/update schema (creates new tables and indexes)
                 self._create_schema(conn)
 
@@ -705,6 +709,40 @@ class GlobalLearningStoreBase:
                         else:
                             raise
 
+    def _repair_unapplied_pattern_priorities(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Restore initial priority for patterns that were never applied.
+
+        v12 and earlier: ``_update_all_priorities()`` in the aggregator
+        recalculated ALL pattern priorities after every job completion,
+        including patterns with zero applications. The frequency factor
+        (``log(2)/log(100) ≈ 0.15``) crushed single-occurrence patterns
+        from 0.5 → ~0.075, below the default ``min_priority=0.3`` query
+        threshold. This made them invisible to the injection path, so
+        per-sheet feedback never fired and priorities never recovered.
+
+        This one-time repair restores such patterns to 0.5 so they can
+        be queried, injected, and receive real feedback.
+        """
+        try:
+            cursor = conn.execute(
+                """
+                UPDATE patterns SET priority_score = 0.5
+                WHERE (led_to_success_count + led_to_failure_count) = 0
+                  AND priority_score < 0.3
+                """
+            )
+            repaired = cursor.rowcount
+            if repaired > 0:
+                self._logger.info(
+                    "repaired_unapplied_pattern_priorities",
+                    count=repaired,
+                )
+        except sqlite3.OperationalError:
+            # patterns table may not exist yet on fresh DBs
+            pass
+
     @staticmethod
     def hash_workspace(workspace_path: Path) -> str:
         """Generate a stable hash for a workspace path.
@@ -740,21 +778,30 @@ class GlobalLearningStoreBase:
         combined = f"{job_name}:{config_hash or ''}"
         return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
+    _DATA_TABLES = (
+        "pattern_applications",
+        "error_recoveries",
+        "patterns",
+        "executions",
+        "workspace_clusters",
+        "rate_limit_events",
+        "escalation_decisions",
+        "pattern_discovery_events",
+        "evolution_trajectory",
+        "exploration_budget",
+        "entropy_responses",
+        "pattern_entropy_history",
+    )
+    """All data tables (excludes schema_version) cleared by ``clear_all()``."""
+
     def clear_all(self) -> None:
         """Clear all data from the global store.
 
         WARNING: This is destructive and should only be used for testing.
         """
         with self._get_connection() as conn:
-            conn.execute("DELETE FROM pattern_applications")
-            conn.execute("DELETE FROM error_recoveries")
-            conn.execute("DELETE FROM patterns")
-            conn.execute("DELETE FROM executions")
-            conn.execute("DELETE FROM workspace_clusters")
-            conn.execute("DELETE FROM rate_limit_events")
-            conn.execute("DELETE FROM escalation_decisions")
-            conn.execute("DELETE FROM pattern_discovery_events")
-            conn.execute("DELETE FROM evolution_trajectory")
+            for table in self._DATA_TABLES:
+                conn.execute(f"DELETE FROM {table}")  # noqa: S608 -- table names are hardcoded constants
 
         _logger.warning("Cleared all data from global learning store")
 

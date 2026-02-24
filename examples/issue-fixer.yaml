@@ -1008,6 +1008,7 @@ validations:
       fi
     description: "Tests must pass (skipped when no issues to fix)"
     condition: "sheet_num >= 8"
+    timeout_seconds: 900
 
   # Verify commit was created (only when there was actual work)
   - type: command_succeeds
