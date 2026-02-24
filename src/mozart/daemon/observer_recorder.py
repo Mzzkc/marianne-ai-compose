@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import json
+import time
 from collections import deque
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -39,13 +40,88 @@ _ALL_OBSERVER_EVENTS = _FILE_EVENTS | _PROCESS_EVENTS
 
 
 class ObserverRecorder:
-    """EventBus subscriber that persists observer events to per-job JSONL files."""
+    """EventBus subscriber that persists observer events to per-job JSONL files.
 
-    def __init__(self, config: ObserverConfig, event_bus: EventBus) -> None:
+    Thread-safety: This class is NOT thread-safe. All methods must be called
+    from the same asyncio event loop. The coalesce buffer and file handles
+    are safe from concurrent access because asyncio is cooperative — the
+    EventBus drain loop and explicit flush() calls cannot interleave within
+    synchronous code sections. Do NOT add ``await`` statements inside
+    ``_write_event()`` or ``_flush_state()`` without re-evaluating
+    concurrency safety.
+
+    Lifecycle follows the SemanticAnalyzer pattern::
+
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(event_bus)
+        # ... events flow ...
+        await recorder.stop(event_bus)
+    """
+
+    def __init__(self, config: ObserverConfig) -> None:
         self._config = config
-        self._event_bus = event_bus
+        self._event_bus: EventBus | None = None
         self._sub_id: str | None = None
+        self._flush_task: asyncio.Task[None] | None = None
         self._jobs: dict[str, _JobRecorderState] = {}
+
+    async def start(self, event_bus: EventBus) -> None:
+        """Subscribe to observer.* events and start the coalesce flush timer.
+
+        Args:
+            event_bus: The EventBus instance to subscribe to.
+        """
+        if not self._config.enabled:
+            _logger.info("observer_recorder.disabled")
+            return
+
+        self._event_bus = event_bus
+        self._sub_id = event_bus.subscribe(
+            callback=self._handle_event,
+            event_filter=lambda e: e.get("event", "").startswith("observer."),
+        )
+
+        # Start periodic coalesce flush if window > 0
+        if self._config.coalesce_window_seconds > 0:
+            self._flush_task = asyncio.create_task(
+                self._periodic_flush(), name="observer-recorder-flush",
+            )
+
+        _logger.info(
+            "observer_recorder.started",
+            persist_events=self._config.persist_events,
+            coalesce_window=self._config.coalesce_window_seconds,
+        )
+
+    async def stop(self, event_bus: EventBus | None = None) -> None:
+        """Unsubscribe, cancel flush timer, flush all, close all file handles.
+
+        Args:
+            event_bus: The EventBus instance to unsubscribe from.
+                Falls back to the bus stored from ``start()``.
+        """
+        bus = event_bus or self._event_bus
+
+        # Unsubscribe from event bus
+        if self._sub_id is not None and bus is not None:
+            bus.unsubscribe(self._sub_id)
+            self._sub_id = None
+
+        # Cancel periodic flush task
+        if self._flush_task is not None:
+            self._flush_task.cancel()
+            try:
+                await self._flush_task
+            except asyncio.CancelledError:
+                pass
+            self._flush_task = None
+
+        # REVIEW FIX 6: Close all remaining job states to prevent file handle leaks
+        for job_id in list(self._jobs.keys()):
+            self.unregister_job(job_id)
+
+        self._event_bus = None
+        _logger.info("observer_recorder.stopped")
 
     def register_job(self, job_id: str, workspace: Path) -> None:
         """Start recording events for a job."""
@@ -82,6 +158,33 @@ class ObserverRecorder:
             return
         self._flush_state(state)
 
+    def get_recent_events(
+        self, job_id: str | None, *, limit: int = 50,
+    ) -> list[ObserverEvent]:
+        """Return recent events from the in-memory ring buffer.
+
+        Args:
+            job_id: Specific job ID, or ``None`` to aggregate all jobs.
+            limit: Maximum number of events to return.
+
+        Returns:
+            List of events, newest first.
+        """
+        if job_id is not None:
+            state = self._jobs.get(job_id)
+            if state is None:
+                return []
+            # Slice from tail (newest) and reverse for newest-first ordering
+            events = list(state.recent_events)
+            return list(reversed(events[-limit:]))
+
+        # Aggregate across all jobs, sorted by timestamp descending
+        all_events: list[ObserverEvent] = []
+        for state in self._jobs.values():
+            all_events.extend(state.recent_events)
+        all_events.sort(key=lambda e: e.get("timestamp", 0), reverse=True)
+        return all_events[:limit]
+
     def _handle_event(self, event: ObserverEvent) -> None:
         """EventBus callback — route events through coalescing or direct write."""
         job_id = event.get("job_id", "")
@@ -102,7 +205,7 @@ class ObserverRecorder:
             if rel_path and self._should_exclude(rel_path):
                 return
 
-        # REVIEW FIX 3: Always add to ring buffer immediately, even during
+        # Always add to ring buffer immediately, even during
         # coalescing. Without this, the TUI hides active files.
         state.recent_events.append(event)
 
@@ -115,7 +218,7 @@ class ObserverRecorder:
         else:
             self._write_event_to_file(state, event)
 
-        # REVIEW FIX 2: Check size cap after writes; defer truncation to avoid
+        # Check size cap after writes; defer truncation to avoid
         # blocking the EventBus drain loop.
         if (
             state.file_handle is not None
@@ -130,13 +233,38 @@ class ObserverRecorder:
                 self._enforce_size_cap_sync(job_id)
                 state.truncating = False
 
+    async def _periodic_flush(self) -> None:
+        """Periodically flush expired coalesce buffer entries.
+
+        Runs every ``coalesce_window_seconds``, iterates all jobs, and
+        flushes buffer entries whose event timestamp is older than the window.
+        """
+        interval = self._config.coalesce_window_seconds
+        while True:
+            await asyncio.sleep(interval)
+            now = time.time()
+            for state in self._jobs.values():
+                expired = [
+                    path for path, (ts, _) in state.coalesce_buffer.items()
+                    if now - ts > interval
+                ]
+                for path in expired:
+                    _, event = state.coalesce_buffer.pop(path)
+                    self._write_event_to_file(state, event)
+                # Flush after writing expired entries
+                if expired and state.file_handle is not None:
+                    try:
+                        state.file_handle.flush()
+                    except OSError:
+                        pass
+
     def _coalesce_or_buffer(
         self, state: _JobRecorderState, event: ObserverEvent,
     ) -> None:
         """Buffer a file_modified event, coalescing with prior same-path event."""
         data = event.get("data") or {}
         path = data.get("path", "")
-        # REVIEW FIX 4: Compare event['timestamp'], not wall clock
+        # Compare event['timestamp'], not wall clock
         event_ts = event["timestamp"]
 
         if path in state.coalesce_buffer:
@@ -193,7 +321,7 @@ class ObserverRecorder:
     def _enforce_size_cap_sync(self, job_id: str) -> None:
         """Truncate JSONL preserving line boundaries (synchronous).
 
-        REVIEW FIX 1: After seeking to midpoint, readline() consumes the
+        After seeking to midpoint, readline() consumes the
         partial line so every surviving line is a complete JSON object.
 
         Because the file is opened in append mode (writes always go to end),
@@ -240,7 +368,7 @@ class ObserverRecorder:
             )
 
     async def _enforce_size_cap_async(self, job_id: str) -> None:
-        """REVIEW FIX 2: Async wrapper for size cap enforcement.
+        """Async wrapper for size cap enforcement.
 
         Defers truncation to a background task so it doesn't block the
         EventBus drain loop.

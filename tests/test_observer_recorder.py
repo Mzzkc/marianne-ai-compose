@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from pathlib import Path
@@ -51,9 +52,7 @@ class TestPathExclusion:
 
     def _make_recorder(self, **config_kwargs: object) -> ObserverRecorder:
         config = ObserverConfig(**config_kwargs)
-        bus = AsyncMock()
-        bus.subscribe = lambda callback, event_filter=None: "sub-id"
-        return ObserverRecorder(config=config, event_bus=bus)
+        return ObserverRecorder(config=config)
 
     def test_default_excludes_git(self) -> None:
         recorder = self._make_recorder()
@@ -98,9 +97,7 @@ class TestJSONLPersistence:
 
     def _make_recorder(self, **config_kwargs: object) -> ObserverRecorder:
         config = ObserverConfig(**config_kwargs)
-        bus = AsyncMock()
-        bus.subscribe = lambda callback, event_filter=None: "sub-id"
-        return ObserverRecorder(config=config, event_bus=bus)
+        return ObserverRecorder(config=config)
 
     def test_register_creates_state(self, tmp_path: Path) -> None:
         recorder = self._make_recorder()
@@ -259,9 +256,7 @@ class TestCoalescing:
 
     def _make_recorder(self, **kw: object) -> ObserverRecorder:
         config = ObserverConfig(**kw)
-        bus = AsyncMock()
-        bus.subscribe = lambda callback, event_filter=None: "sub-id"
-        return ObserverRecorder(config=config, event_bus=bus)
+        return ObserverRecorder(config=config)
 
     def test_rapid_same_file_mods_coalesce(self, tmp_path: Path) -> None:
         """Multiple edits to same file within window produce one JSONL line."""
@@ -421,9 +416,7 @@ class TestSizeCap:
 
     def _make_recorder(self, **kw: object) -> ObserverRecorder:
         config = ObserverConfig(**kw)
-        bus = AsyncMock()
-        bus.subscribe = lambda callback, event_filter=None: "sub-id"
-        return ObserverRecorder(config=config, event_bus=bus)
+        return ObserverRecorder(config=config)
 
     @pytest.mark.asyncio
     async def test_truncates_when_over_cap(self, tmp_path: Path) -> None:
@@ -491,6 +484,246 @@ class TestSizeCap:
                 assert "event" in parsed, f"Line {i} missing 'event' key"
             except json.JSONDecodeError:
                 pytest.fail(f"Line {i} is corrupt JSONL: {line!r}")
+
+
+class TestLifecycle:
+    """Verify start/stop subscribes/unsubscribes from EventBus.
+
+    REVIEW FIX 1: Uses SemanticAnalyzer pattern — event_bus passed to start()/stop().
+    REVIEW FIX 2: start() launches coalesce flush timer task.
+    REVIEW FIX 4: Verifies unsubscribe() is called with the correct sub_id.
+    REVIEW FIX 6: stop() closes all file handles for still-registered jobs.
+    """
+
+    @pytest.mark.asyncio
+    async def test_start_subscribes(self) -> None:
+        """start(event_bus) should subscribe and store the sub_id."""
+        config = ObserverConfig()
+        bus = AsyncMock()
+        bus.subscribe = lambda callback, event_filter=None: "sub-123"
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(bus)
+        assert recorder._sub_id == "sub-123"
+        await recorder.stop(bus)
+
+    @pytest.mark.asyncio
+    async def test_stop_unsubscribes(self) -> None:
+        """stop(event_bus) should call unsubscribe and clear _sub_id."""
+        config = ObserverConfig()
+        bus = AsyncMock()
+        bus.subscribe = lambda callback, event_filter=None: "sub-123"
+        bus.unsubscribe = lambda sub_id: True
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(bus)
+        await recorder.stop(bus)
+        assert recorder._sub_id is None
+
+    @pytest.mark.asyncio
+    async def test_stop_calls_unsubscribe_with_correct_id(self) -> None:
+        """REVIEW FIX 4: Verify unsubscribe() receives the exact sub_id."""
+        config = ObserverConfig()
+        unsubscribe_calls: list[str] = []
+        bus = AsyncMock()
+        bus.subscribe = lambda callback, event_filter=None: "sub-456"
+        bus.unsubscribe = lambda sub_id: unsubscribe_calls.append(sub_id) or True
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(bus)
+        await recorder.stop(bus)
+        assert unsubscribe_calls == ["sub-456"]
+
+    @pytest.mark.asyncio
+    async def test_disabled_does_not_subscribe(self) -> None:
+        """When observer is disabled, start() should not subscribe."""
+        config = ObserverConfig(enabled=False)
+        bus = AsyncMock()
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(bus)
+        assert recorder._sub_id is None
+        await recorder.stop(bus)
+
+    @pytest.mark.asyncio
+    async def test_start_launches_coalesce_flush_timer(self) -> None:
+        """REVIEW FIX 2: start() should create a periodic flush task when window > 0."""
+        config = ObserverConfig(coalesce_window_seconds=1.0)
+        bus = AsyncMock()
+        bus.subscribe = lambda callback, event_filter=None: "sub-id"
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(bus)
+        assert recorder._flush_task is not None
+        assert not recorder._flush_task.done()
+        await recorder.stop(bus)
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_coalesce_flush_timer(self) -> None:
+        """REVIEW FIX 2: stop() should cancel the periodic flush task."""
+        config = ObserverConfig(coalesce_window_seconds=1.0)
+        bus = AsyncMock()
+        bus.subscribe = lambda callback, event_filter=None: "sub-id"
+        bus.unsubscribe = lambda sub_id: True
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(bus)
+        flush_task = recorder._flush_task
+        await recorder.stop(bus)
+        assert recorder._flush_task is None
+        assert flush_task.cancelled() or flush_task.done()
+
+    @pytest.mark.asyncio
+    async def test_no_flush_timer_when_zero_window(self) -> None:
+        """REVIEW FIX 2: No flush timer when coalesce_window_seconds == 0."""
+        config = ObserverConfig(coalesce_window_seconds=0.0)
+        bus = AsyncMock()
+        bus.subscribe = lambda callback, event_filter=None: "sub-id"
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(bus)
+        assert recorder._flush_task is None
+        await recorder.stop(bus)
+
+    @pytest.mark.asyncio
+    async def test_stop_closes_all_remaining_jobs(self, tmp_path: Path) -> None:
+        """REVIEW FIX 6: stop() should unregister all still-registered jobs."""
+        config = ObserverConfig()
+        bus = AsyncMock()
+        bus.subscribe = lambda callback, event_filter=None: "sub-id"
+        bus.unsubscribe = lambda sub_id: True
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(bus)
+
+        ws1, ws2 = tmp_path / "ws1", tmp_path / "ws2"
+        ws1.mkdir()
+        ws2.mkdir()
+        recorder.register_job("job-1", ws1)
+        recorder.register_job("job-2", ws2)
+
+        await recorder.stop(bus)
+        # All jobs should be unregistered
+        assert len(recorder._jobs) == 0
+
+    @pytest.mark.asyncio
+    async def test_periodic_flush_expires_coalesced_events(
+        self, tmp_path: Path,
+    ) -> None:
+        """REVIEW FIX 2: The periodic flush timer writes expired coalesce entries."""
+        config = ObserverConfig(coalesce_window_seconds=0.2)
+        bus = AsyncMock()
+        bus.subscribe = lambda callback, event_filter=None: "sub-id"
+        bus.unsubscribe = lambda sub_id: True
+        recorder = ObserverRecorder(config=config)
+        await recorder.start(bus)
+        recorder.register_job("job-1", tmp_path)
+
+        # Buffer a file_modified event via _handle_event (it goes into coalesce buffer)
+        recorder._handle_event({
+            "job_id": "job-1",
+            "sheet_num": 0,
+            "event": "observer.file_modified",
+            "data": {"path": "delayed-file.md"},
+            "timestamp": time.time(),
+        })
+
+        # The event should be in coalesce buffer, not yet in JSONL
+        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        assert jsonl_path.read_text().strip() == ""
+
+        # Wait for the periodic flush to fire (window=0.2s, so wait a bit longer)
+        await asyncio.sleep(0.5)
+
+        # Now the event should have been flushed to disk
+        content = jsonl_path.read_text().strip()
+        assert content != "", "Periodic flush should have written the coalesced event"
+        parsed = json.loads(content)
+        assert parsed["data"]["path"] == "delayed-file.md"
+
+        await recorder.stop(bus)
+
+
+class TestGetRecentEvents:
+    """Verify in-memory ring buffer retrieval.
+
+    REVIEW FIX 5: get_recent_events returns newest-first ordering.
+    """
+
+    def _make_recorder(self) -> ObserverRecorder:
+        config = ObserverConfig()
+        return ObserverRecorder(config=config)
+
+    def _make_recorder_started(self, bus: AsyncMock) -> ObserverRecorder:
+        config = ObserverConfig()
+        bus.subscribe = lambda callback, event_filter=None: "sub-id"
+        return ObserverRecorder(config=config)
+
+    def test_returns_events_for_job(self, tmp_path: Path) -> None:
+        recorder = self._make_recorder()
+        recorder.register_job("job-1", tmp_path)
+        event: ObserverEvent = {
+            "job_id": "job-1",
+            "sheet_num": 0,
+            "event": "observer.process_spawned",
+            "data": {"pid": 1234, "name": "pytest"},
+            "timestamp": time.time(),
+        }
+        recorder._handle_event(event)
+        recent = recorder.get_recent_events("job-1", limit=10)
+        assert len(recent) == 1
+        assert recent[0]["event"] == "observer.process_spawned"
+
+    def test_respects_limit(self, tmp_path: Path) -> None:
+        recorder = self._make_recorder()
+        recorder.register_job("job-1", tmp_path)
+        for i in range(20):
+            event: ObserverEvent = {
+                "job_id": "job-1",
+                "sheet_num": 0,
+                "event": "observer.file_created",
+                "data": {"path": f"file-{i}.md"},
+                "timestamp": time.time(),
+            }
+            recorder._handle_event(event)
+        recent = recorder.get_recent_events("job-1", limit=5)
+        assert len(recent) == 5
+
+    def test_returns_newest_first(self, tmp_path: Path) -> None:
+        """REVIEW FIX 5: Write 20 events, request 3, verify they're the last 3 newest-first."""
+        recorder = self._make_recorder()
+        recorder.register_job("job-1", tmp_path)
+        for i in range(20):
+            event: ObserverEvent = {
+                "job_id": "job-1",
+                "sheet_num": 0,
+                "event": "observer.file_created",
+                "data": {"path": f"file-{i:02d}.md"},
+                "timestamp": 1000.0 + i,
+            }
+            recorder._handle_event(event)
+
+        recent = recorder.get_recent_events("job-1", limit=3)
+        assert len(recent) == 3
+        # Newest first: file-19, file-18, file-17
+        assert recent[0]["data"]["path"] == "file-19.md"
+        assert recent[1]["data"]["path"] == "file-18.md"
+        assert recent[2]["data"]["path"] == "file-17.md"
+
+    def test_none_job_id_returns_all(self, tmp_path: Path) -> None:
+        recorder = self._make_recorder()
+        ws1, ws2 = tmp_path / "ws1", tmp_path / "ws2"
+        ws1.mkdir()
+        ws2.mkdir()
+        recorder.register_job("job-1", ws1)
+        recorder.register_job("job-2", ws2)
+        for jid in ("job-1", "job-2"):
+            event: ObserverEvent = {
+                "job_id": jid,
+                "sheet_num": 0,
+                "event": "observer.process_spawned",
+                "data": {"pid": 1234, "name": "test"},
+                "timestamp": time.time(),
+            }
+            recorder._handle_event(event)
+        recent = recorder.get_recent_events(None, limit=50)
+        assert len(recent) == 2
+
+    def test_unknown_job_returns_empty(self) -> None:
+        recorder = self._make_recorder()
+        assert recorder.get_recent_events("nonexistent", limit=10) == []
 
 
 class _BrokenWriter:
