@@ -17,6 +17,16 @@ from mozart.daemon.observer_recorder import ObserverRecorder
 from mozart.daemon.types import ObserverEvent
 
 
+@pytest.fixture(autouse=True)
+def _cleanup_handles():
+    """Prevent FD leaks on test failure — explicit cleanup of file handles."""
+    yield
+    # GC will close handles, but explicit cleanup prevents FD exhaustion
+    import gc
+
+    gc.collect()
+
+
 class TestObserverConfigPersistence:
     """Verify new persistence fields on ObserverConfig."""
 
