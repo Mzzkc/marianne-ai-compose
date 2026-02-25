@@ -26,13 +26,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mozart.backends.base import Backend
 from mozart.core.checkpoint import CheckpointState
 from mozart.core.config import JobConfig
 from mozart.daemon.config import DaemonConfig
-from mozart.daemon.exceptions import JobSubmissionError
 from mozart.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 from mozart.execution.runner.models import GracefulShutdownError, RunnerContext
-
+from mozart.state.base import StateBackend
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -93,8 +93,8 @@ def _make_runner_base(
 
     ws = workspace or str(tmp_path / "workspace")
     config = _make_config(tmp_path, {"workspace": ws})
-    backend = MagicMock()
-    state_backend = AsyncMock()
+    backend = MagicMock(spec=Backend)
+    state_backend = AsyncMock(spec=StateBackend)
 
     ctx = RunnerContext(pause_event=pause_event)
     runner = JobRunnerBase(config, backend, state_backend, context=ctx)
@@ -135,7 +135,7 @@ class TestPauseEventOnJobRunnerBase:
         from mozart.execution.runner.base import JobRunnerBase
 
         config = _make_config(tmp_path)
-        runner = JobRunnerBase(config, MagicMock(), AsyncMock())
+        runner = JobRunnerBase(config, MagicMock(spec=Backend), AsyncMock(spec=StateBackend))
         assert runner._pause_event is None
 
     def test_pause_event_none_when_context_omits_it(self, tmp_path: Path) -> None:
@@ -547,8 +547,10 @@ class TestIPCPauseNoWorkspace:
 
         config_path = Path("/tmp/new-config.yaml")
         # modify_job should use self.pause_job, not service.pause_job
-        with patch.object(manager, "pause_job", new_callable=AsyncMock, return_value=True) as mock_pause:
-            response = await manager.modify_job("job-1", config_path)
+        with patch.object(
+            manager, "pause_job", new_callable=AsyncMock, return_value=True,
+        ) as mock_pause:
+            await manager.modify_job("job-1", config_path)
             mock_pause.assert_awaited_once_with("job-1")
 
 
@@ -584,6 +586,7 @@ class TestPauseForceFlag:
 
     def test_pause_has_force_option(self) -> None:
         import inspect
+
         from mozart.cli.commands.pause import pause
         sig = inspect.signature(pause)
         assert "force" in sig.parameters
