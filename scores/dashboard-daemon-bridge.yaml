@@ -960,59 +960,59 @@ prompt:
 validations:
   # Stages 1-5: New module tests pass
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_daemon_state_adapter.py -x -q --tb=short 2>&1 || true'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_daemon_state_adapter.py -x -q --tb=short --no-cov'
     condition: "stage == 1"
     description: "DaemonStateAdapter tests pass"
     timeout_seconds: 600
 
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --timeout=120 -k "rate_limit or learning" 2>&1 | tail -5'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --no-cov --timeout=120 -k "rate_limit or learning"'
     condition: "stage == 2"
     description: "IPC method tests pass"
     timeout_seconds: 600
 
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_event_bridge.py -x -q --tb=short 2>&1 || true'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_event_bridge.py -x -q --tb=short --no-cov'
     condition: "stage == 3"
     description: "Event bridge tests pass"
     timeout_seconds: 600
 
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard_analytics.py -x -q --tb=short 2>&1 || true'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard_analytics.py -x -q --tb=short --no-cov'
     condition: "stage == 4"
     description: "Analytics tests pass"
     timeout_seconds: 600
 
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard_system_view.py -x -q --tb=short 2>&1 || true'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard_system_view.py -x -q --tb=short --no-cov'
     condition: "stage == 5"
     description: "System view tests pass"
     timeout_seconds: 600
 
   # Stage 6: Full dashboard test suite
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short --no-cov'
     condition: "stage == 6"
     description: "All dashboard tests pass after wiring"
     timeout_seconds: 1800
 
   # Stages 7-11: Dashboard tests still pass after frontend changes
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short --no-cov'
     condition: "stage >= 7 and stage <= 11"
     description: "Dashboard tests pass after frontend changes"
     timeout_seconds: 900
 
   # Stage 12: Full project test suite
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --timeout=120'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --no-cov --timeout=120'
     condition: "stage == 12"
     description: "Full test suite passes"
     timeout_seconds: 1800
 
   # Stage 12: Linting
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m ruff check src/mozart/dashboard/ 2>&1 | tail -1 | grep -qE "(^All checks|found 0)"'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m ruff check src/mozart/dashboard/'
     condition: "stage == 12"
     description: "Ruff lint passes on dashboard"
     timeout_seconds: 300
@@ -1026,7 +1026,7 @@ validations:
 
   # Stage 14: Final full suite
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --timeout=120'
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --no-cov --timeout=120'
     condition: "stage == 14"
     description: "Full test suite passes after polish"
     timeout_seconds: 1800
