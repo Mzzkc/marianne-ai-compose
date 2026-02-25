@@ -57,8 +57,12 @@ class SecurityConfig:
     # Security headers
     content_security_policy: str = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+        "https://cdn.tailwindcss.com https://cdn.jsdelivr.net "
+        "https://unpkg.com; "
+        "style-src 'self' 'unsafe-inline' "
+        "https://cdn.tailwindcss.com https://cdn.jsdelivr.net "
+        "https://unpkg.com; "
         "font-src 'self' https://cdn.jsdelivr.net; "
         "img-src 'self' data:; "
         "connect-src 'self'"
@@ -129,23 +133,31 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         if self.config.add_security_headers:
-            # Add security headers
-            response.headers["Content-Security-Policy"] = (
-                self.config.content_security_policy
-            )
-            response.headers["Strict-Transport-Security"] = (
-                self.config.strict_transport_security
-            )
+            content_type = response.headers.get("content-type", "")
+            is_html = "text/html" in content_type
+
+            # Always add non-CSP security headers
             response.headers["X-Content-Type-Options"] = (
                 self.config.x_content_type_options
             )
             response.headers["X-Frame-Options"] = self.config.x_frame_options
-            response.headers["X-XSS-Protection"] = self.config.x_xss_protection
             response.headers["Referrer-Policy"] = self.config.referrer_policy
 
             # Remove potentially dangerous headers
             if "Server" in response.headers:
                 del response.headers["Server"]
+
+            # CSP and HSTS only on HTML responses
+            if is_html:
+                response.headers["Content-Security-Policy"] = (
+                    self.config.content_security_policy
+                )
+                response.headers["Strict-Transport-Security"] = (
+                    self.config.strict_transport_security
+                )
+                response.headers["X-XSS-Protection"] = (
+                    self.config.x_xss_protection
+                )
 
         return response
 

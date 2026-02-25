@@ -216,9 +216,15 @@ class SheetExecutionMixin:
             suggested_wait_seconds: float | None = None,
         ) -> None: ...
 
+        def _resolve_wait_duration(
+            self, suggested_wait_seconds: float | None,
+        ) -> float: ...
+
         def _classify_execution(
             self, result: ExecutionResult,
         ) -> ClassificationResult: ...
+
+        def _get_effective_model(self) -> str | None: ...
 
         # Methods from CostMixin
         async def _track_cost(
@@ -816,14 +822,15 @@ class SheetExecutionMixin:
                     suggested_wait=pending_recovery["suggested_wait"],
                     actual_wait=pending_recovery["actual_wait"],
                     recovery_success=False,
-                    model=self.config.backend.model,
+                    model=self._get_effective_model(),
                 )
-                self._logger.debug(
-                    "learning.recovery_recorded",
+                self._logger.info(
+                    "recovery.failure_recorded",
                     sheet_num=context.sheet_num,
                     error_code=pending_recovery["error_code"],
+                    suggested_wait=pending_recovery["suggested_wait"],
                     actual_wait=pending_recovery["actual_wait"],
-                    recovery_success=False,
+                    new_error_code=error.error_code.value,
                 )
             except (sqlite3.Error, OSError) as e:
                 self._logger.warning(
@@ -898,6 +905,24 @@ class SheetExecutionMixin:
     ) -> FailureHandlingResult:
         """Handle rate limit errors by clearing history and waiting."""
         context.error_history.clear()
+
+        # Calculate actual wait duration before waiting
+        wait_seconds = self._resolve_wait_duration(error.suggested_wait_seconds)
+
+        # Track pending recovery for learning outcome
+        if self._global_learning_store is not None:
+            pending_recovery = {
+                "error_code": error.error_code.value,
+                "suggested_wait": error.suggested_wait_seconds or 0.0,
+                "actual_wait": wait_seconds,
+            }
+            self._logger.debug(
+                "recovery.rate_limit_pending",
+                sheet_num=context.sheet_num,
+                error_code=error.error_code.value,
+                wait_seconds=wait_seconds,
+            )
+
         await self._handle_rate_limit(
             context.state,
             error_code=error.error_code.value,
@@ -1145,6 +1170,14 @@ class SheetExecutionMixin:
                 "suggested_wait": error.suggested_wait_seconds or 0.0,
                 "actual_wait": retry_recommendation.delay_seconds,
             }
+            self._logger.debug(
+                "recovery.attempt_initiated",
+                sheet_num=context.sheet_num,
+                error_code=error.error_code.value,
+                suggested_wait=error.suggested_wait_seconds or 0.0,
+                actual_wait=retry_recommendation.delay_seconds,
+                attempt_number=normal_attempts,
+            )
 
         # Active Broadcast Polling
         await self._poll_broadcast_discoveries(context.state.job_id, context.sheet_num)
@@ -2343,14 +2376,15 @@ class SheetExecutionMixin:
                     suggested_wait=pending_recovery["suggested_wait"],
                     actual_wait=pending_recovery["actual_wait"],
                     recovery_success=True,
-                    model=self.config.backend.model,
+                    model=self._get_effective_model(),
                 )
-                self._logger.debug(
-                    "learning.recovery_recorded",
+                self._logger.info(
+                    "recovery.success_recorded",
                     sheet_num=sheet_num,
                     error_code=pending_recovery["error_code"],
+                    suggested_wait=pending_recovery["suggested_wait"],
                     actual_wait=pending_recovery["actual_wait"],
-                    recovery_success=True,
+                    recovery_type="retry" if "E1" in pending_recovery["error_code"] else "unknown",
                 )
             except (sqlite3.Error, OSError) as e:
                 self._logger.warning(

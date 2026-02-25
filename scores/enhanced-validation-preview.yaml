@@ -1,0 +1,825 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║        ENHANCED VALIDATION: RENDERING PREVIEWS & BEST-PRACTICE CHECKS     ║
+# ║                                                                            ║
+# ║  Implements the "Enhanced Validation with Rendering Previews and           ║
+# ║  Best-Practice Checks" plan in 9 sequential stages.                        ║
+# ║                                                                            ║
+# ║  Stage→Sheet mapping:                                                      ║
+# ║    1: Create 9 best-practice validation checks (new file)                  ║
+# ║    2: Wire checks into __init__.py and runner.py                           ║
+# ║    3: Test all 9 best-practice checks                                      ║
+# ║    4: Create rendering preview engine (new file)                           ║
+# ║    5: Test rendering preview engine                                        ║
+# ║    6: Add rendering output methods to reporter                             ║
+# ║    7: Wire rendering into validate command                                 ║
+# ║    8: Wire rendering into dry-run                                          ║
+# ║    9: Full verification — pytest, mypy, ruff                               ║
+# ║                                                                            ║
+# ║  Usage:                                                                    ║
+# ║    mozart start   # if not already running                                 ║
+# ║    mozart run scores/enhanced-validation-preview.yaml                      ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "enhanced-validation-preview"
+description: "Add rendering previews and best-practice checks to mozart validate and --dry-run"
+workspace: "./.enhanced-validation-workspace"
+
+backend:
+  type: claude_cli
+  skip_permissions: true
+  disable_mcp: true
+  timeout_seconds: 2400
+  timeout_overrides:
+    1: 3600
+    4: 3600
+    9: 3600
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 3000
+  lookback_sheets: 3
+  capture_files:
+    - "{{ workspace }}/*.md"
+
+sheet:
+  size: 1
+  total_items: 9
+
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+    8: [6]
+    9: [7, 8]
+
+parallel:
+  enabled: true
+  max_concurrent: 2
+
+retry:
+  max_retries: 2
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+prompt:
+  template: |
+    {{ preamble }}
+
+    {% if stage == 1 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 1: CREATE 9 BEST-PRACTICE VALIDATION CHECKS                        ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Create a new file: `src/mozart/validation/checks/best_practices.py`
+
+    This file implements 9 new validation checks following the EXACT same protocol
+    as existing checks in `src/mozart/validation/checks/config.py`. Each check
+    is a class with `check_id`, `severity`, `description` properties and a
+    `check(config, config_path, raw_yaml)` method returning `list[ValidationIssue]`.
+
+    **Read these files first** to understand the patterns:
+    - `src/mozart/validation/checks/config.py` — existing check implementations
+    - `src/mozart/validation/base.py` — `ValidationIssue`, `ValidationSeverity`, `ValidationCheck` protocol
+    - `src/mozart/validation/checks/_helpers.py` — `find_line_in_yaml`, `resolve_path`
+    - `src/mozart/core/config/job.py` — `JobConfig`, `SheetConfig` (for `fan_out`, `fan_out_stage_map`)
+    - `src/mozart/core/config/backend.py` — `BackendConfig` (for `skip_permissions`, `disable_mcp`)
+
+    **The 9 checks to implement:**
+    {% raw %}
+    ### V201: JinjaInValidationPathCheck (WARNING)
+    Detects `{{ workspace }}` or `{{ sheet_num }}` in validation paths. Validation
+    paths use Python `.format()` syntax (`{workspace}`), not Jinja (`{{ workspace }}`).
+    Scan `config.validations` for paths containing `{{`.
+    Suggestion: "Use {workspace} not {{ workspace }} in validation paths"
+
+    ### V202: FormatSyntaxInTemplateCheck (WARNING)
+    Detects `{sheet_num}`, `{workspace}`, `{start_item}`, `{end_item}`, `{stage}`,
+    `{instance}`, `{fan_count}`, `{total_sheets}`, `{total_stages}` in the prompt
+    template. These are format-string syntax and should be `{{ name }}` in Jinja.
+    **Only flag known built-in names** to avoid false positives on user text with
+    braces. Check in `config.prompt.template` (the raw template string, not the
+    rendered output). Look for `{name}` but NOT `{{ name }}` — the pattern is
+    a single-brace variable reference for a known built-in name. Use regex like
+    r'(?<!\{)\{(name)\}(?!\})' to match single-brace but not double-brace.
+    {% endraw %}
+    ### V203: NoValidationsCheck (WARNING)
+    Fires when `len(config.validations) == 0`. Every job should have at least
+    one validation — without them, sheets always "pass" and you learn nothing.
+    Suggestion: "Add at least one validation rule — see docs/score-writing-guide.md"
+
+    ### V204: MissingSkipPermissionsCheck (WARNING)
+    Fires when `config.backend.type == "claude_cli"` and
+    `config.backend.skip_permissions is False`. Claude CLI will prompt for
+    permission approval, which hangs in unattended mode.
+    Suggestion: "Set backend.skip_permissions: true for unattended execution"
+
+    ### V205: FileExistsOnlyCheck (INFO)
+    Fires when ALL validations are `file_exists` type (and there's at least one).
+    `file_exists` alone can't detect stale files from previous runs.
+    Suggestion: "Consider adding file_modified or content checks to detect stale files"
+
+    ### V206: FanOutWithoutDependenciesCheck (WARNING)
+    Fires when `config.sheet.fan_out_stage_map is not None` (fan-out is configured)
+    but `config.sheet.dependencies` is empty or None. Stages may run out of order.
+    Suggestion: "Add sheet.dependencies to control stage execution order"
+
+    ### V207: FanOutWithoutParallelCheck (INFO)
+    Fires when `config.sheet.fan_out_stage_map is not None` but
+    `config.parallel.enabled is False`. Fan-out instances will run sequentially.
+    Suggestion: "Enable parallel.enabled: true to run fan-out instances concurrently"
+    {% raw %}
+    ### V208: VariableShadowingCheck (WARNING)
+    Fires when any key in `config.prompt.variables` matches a built-in name:
+    `workspace`, `sheet_num`, `total_sheets`, `start_item`, `end_item`,
+    `stage`, `instance`, `fan_count`, `total_stages`.
+    User variables that shadow these will override the real values.
+    Suggestion: "Rename variable '{name}' — it shadows the built-in {name}"
+    {% endraw %}
+    ### V209: MissingDisableMcpCheck (INFO)
+    Fires when `config.backend.type == "claude_cli"` and
+    `config.backend.disable_mcp is False`. MCP can cause deadlocks in
+    unattended orchestration.
+    Suggestion: "Set backend.disable_mcp: true to prevent MCP deadlocks"
+
+    **Implementation requirements:**
+    - Each class: `check_id` property, `severity` property, `description` property, `check()` method
+    - Import from: `mozart.validation.base` (ValidationIssue, ValidationSeverity)
+    - Import from: `mozart.validation.checks._helpers` (find_line_in_yaml)
+    - Import from: `mozart.core.config` (JobConfig)
+    - Use `find_line_in_yaml(raw_yaml, ...)` where useful for line numbers
+    - Return `list[ValidationIssue]` (empty list if check passes)
+    - Include helpful `suggestion` text on every issue
+    - Include `metadata` dict with relevant keys for debugging
+
+    **Output to:** {{ workspace }}/01-best-practice-checks.md
+
+    Report: list of all 9 classes created, their check IDs, and a summary of
+    what each detects. Include the full file path created.
+
+    {% elif stage == 2 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 2: WIRE CHECKS INTO EXPORTS AND RUNNER                             ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read {{ workspace }}/01-best-practice-checks.md for what was created.
+
+    **Step 1: Update `src/mozart/validation/checks/__init__.py`**
+
+    Add imports for all 9 new classes from `mozart.validation.checks.best_practices`:
+    ```python
+    from mozart.validation.checks.best_practices import (
+        JinjaInValidationPathCheck,
+        FormatSyntaxInTemplateCheck,
+        NoValidationsCheck,
+        MissingSkipPermissionsCheck,
+        FileExistsOnlyCheck,
+        FanOutWithoutDependenciesCheck,
+        FanOutWithoutParallelCheck,
+        VariableShadowingCheck,
+        MissingDisableMcpCheck,
+    )
+    ```
+
+    Add all 9 to `__all__` under a "# Best-practice checks" comment section.
+
+    **Step 2: Update `src/mozart/validation/runner.py`**
+
+    Import the 9 new check classes from `mozart.validation.checks`.
+    Add them to `create_default_checks()` after the existing checks, under a
+    `# Best-practice checks` comment:
+
+    ```python
+    # Best-practice checks
+    JinjaInValidationPathCheck(),
+    FormatSyntaxInTemplateCheck(),
+    NoValidationsCheck(),
+    MissingSkipPermissionsCheck(),
+    FileExistsOnlyCheck(),
+    FanOutWithoutDependenciesCheck(),
+    FanOutWithoutParallelCheck(),
+    VariableShadowingCheck(),
+    MissingDisableMcpCheck(),
+    ```
+
+    **Step 3: Quick smoke test**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    python -c "from mozart.validation import create_default_checks; checks = create_default_checks(); print(f'{len(checks)} checks loaded'); print([c.check_id for c in checks])"
+    ```
+
+    This should show 22 checks (13 existing + 9 new).
+
+    **Output to:** {{ workspace }}/02-wiring.md
+
+    {% elif stage == 3 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 3: TEST ALL 9 BEST-PRACTICE CHECKS                                ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read {{ workspace }}/01-best-practice-checks.md for what was created.
+    Read `src/mozart/validation/checks/best_practices.py` for the implementations.
+    Read `tests/test_validation_checks.py` for existing test patterns.
+
+    Create a new file: `tests/test_best_practice_checks.py`
+
+    **Test structure:** Each check needs at least two tests:
+    1. A "passes" test — clean config produces no issues from this check
+    2. A "triggers" test — config with the anti-pattern produces the expected issue
+
+    **Test patterns to follow** (from existing tests):
+    - Use `tmp_path` fixture for config file creation
+    - Create YAML as a `dedent(""" ... """).strip()` string
+    - Write to `tmp_path / "test.yaml"` and load via `JobConfig.from_yaml()`
+    - Instantiate the check class directly and call `.check(config, path, yaml)`
+    - Assert `len(issues)`, `issues[0].check_id`, `issues[0].severity`
+
+    **Tests to write (~20 tests):**
+    {% raw %}
+    For V201 (JinjaInValidationPathCheck):
+    - test_v201_clean_path_passes — path: "{workspace}/foo.md" produces no issues
+    - test_v201_jinja_in_path_triggers — path: "{{ workspace }}/foo.md" produces V201
+
+    For V202 (FormatSyntaxInTemplateCheck):
+    - test_v202_jinja_syntax_passes — template with `{{ sheet_num }}` produces no issues
+    - test_v202_format_syntax_triggers — template with `{sheet_num}` produces V202
+    {% endraw %}
+    For V203 (NoValidationsCheck):
+    - test_v203_with_validations_passes — config with validations produces no issues
+    - test_v203_no_validations_triggers — config without validations produces V203
+
+    For V204 (MissingSkipPermissionsCheck):
+    - test_v204_skip_permissions_true_passes — skip_permissions: true produces no issues
+    - test_v204_skip_permissions_false_triggers — skip_permissions: false produces V204
+    - test_v204_non_claude_backend_passes — backend.type: anthropic_api produces no issues
+
+    For V205 (FileExistsOnlyCheck):
+    - test_v205_mixed_validations_passes — file_exists + content_contains produces no issues
+    - test_v205_all_file_exists_triggers — all file_exists produces V205
+    - test_v205_no_validations_passes — zero validations produces no issues (V203 handles that)
+
+    For V206 (FanOutWithoutDependenciesCheck):
+    - test_v206_fanout_with_deps_passes — fan_out + dependencies produces no issues
+    - test_v206_fanout_no_deps_triggers — fan_out without dependencies produces V206
+
+    For V207 (FanOutWithoutParallelCheck):
+    - test_v207_fanout_parallel_passes — fan_out + parallel.enabled produces no issues
+    - test_v207_fanout_no_parallel_triggers — fan_out without parallel produces V207
+
+    For V208 (VariableShadowingCheck):
+    - test_v208_unique_variables_passes — variables with non-builtin names produces no issues
+    - test_v208_shadowing_triggers — variables with key "workspace" produces V208
+
+    For V209 (MissingDisableMcpCheck):
+    - test_v209_disable_mcp_true_passes — disable_mcp: true produces no issues
+    - test_v209_disable_mcp_false_triggers — disable_mcp: false produces V209
+
+    **Important:** For fan-out tests (V206, V207), the YAML config needs valid
+    fan-out specification. Example:
+    ```yaml
+    sheet:
+      size: 1
+      total_items: 3
+      fan_out:
+        2: 2
+    ```
+
+    **Run the tests after writing:**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    source .venv/bin/activate
+    pytest tests/test_best_practice_checks.py -v
+    ```
+
+    Fix any failures. All tests must pass.
+
+    **Then run the full suite to check for regressions:**
+    ```bash
+    pytest tests/ -x -q --tb=short 2>&1 | tail -30
+    ```
+
+    The `minimal_config` fixture in `tests/test_validation_checks.py` has no
+    validations and no workspace, so V203 (NoValidationsCheck) will fire on it.
+    This should be fine since existing tests check specific check results, not
+    zero-total-issues from the full runner. But verify this — if any existing
+    test fails due to the new checks, investigate and fix.
+
+    **Output to:** {{ workspace }}/03-tests-best-practices.md
+
+    Include: test file path, test count, all passing output, and full suite result.
+
+    {% elif stage == 4 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 4: CREATE RENDERING PREVIEW ENGINE                                 ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Create a new file: `src/mozart/validation/rendering.py`
+
+    **Read these files first** to understand the template system:
+    - `src/mozart/prompts/templating.py` — `PromptBuilder`, `SheetContext`, `build_sheet_context`
+    - `src/mozart/core/config/job.py` — `SheetConfig.get_fan_out_metadata()`
+    - `src/mozart/core/fan_out.py` — `FanOutMetadata`
+    - `src/mozart/execution/validation/engine.py` — `_check_condition` logic (lines 104-145)
+    - `src/mozart/core/config/__init__.py` — `JobConfig`, `ValidationRule`
+
+    **Data structures** (use `@dataclass`):
+
+    ```python
+    from __future__ import annotations
+    from dataclasses import dataclass, field
+    from pathlib import Path
+
+    @dataclass
+    class ExpandedValidation:
+        index: int
+        type: str
+        description: str | None
+        raw_path: str | None
+        expanded_path: str | None
+        pattern: str | None
+        condition: str | None
+        applicable: bool
+
+    @dataclass
+    class SheetPreview:
+        sheet_num: int
+        item_range: tuple[int, int]
+        rendered_prompt: str | None
+        prompt_snippet: str
+        expanded_validations: list[ExpandedValidation]
+        stage: int | None
+        instance: int | None
+        fan_count: int | None
+        render_error: str | None
+
+    @dataclass
+    class RenderingPreview:
+        sheets: list[SheetPreview]
+        total_sheets: int
+        has_fan_out: bool
+        has_dependencies: bool
+        render_errors: list[str] = field(default_factory=list)
+    ```
+
+    **Core function:**
+
+    ```python
+    def generate_preview(
+        config: JobConfig,
+        config_path: Path,
+        *,
+        max_sheets: int | None = None,
+    ) -> RenderingPreview:
+    ```
+
+    **Logic for each sheet** (1..total_sheets, capped by max_sheets):
+
+    1. **Build SheetContext** — use `PromptBuilder.build_sheet_context()`.
+       Pass `sheet_num`, `total_sheets`, `workspace=config.workspace`.
+       Get fan-out metadata via `config.sheet.get_fan_out_metadata(sheet_num)`.
+       Set `stage`, `instance`, `fan_count`, `total_stages`.
+       Leave `previous_outputs` and `previous_files` empty (not available at preview time).
+
+    2. **Resolve prelude/cadenza files** — if `config.sheet.prelude` exists, try to
+       read each file. Use the same Jinja rendering for the file path that
+       the template system uses. If a file doesn't exist, skip gracefully.
+       Populate `injected_context`, `injected_skills`, `injected_tools` on the context.
+
+    3. **Render template** — use `PromptBuilder.build_sheet_prompt(context)`.
+       Wrap in try/except for `jinja2.TemplateError` — store error in `render_error`.
+
+    4. **Expand validation paths** — for each `config.validations`, apply single-brace
+       format replacement using a dict built from the sheet context:
+       `str(config.workspace)` for workspace, `str(sheet_num)` for sheet_num, etc.
+       Catch `KeyError` if a variable is not available.
+
+    5. **Check validation applicability** — evaluate `condition` against the context.
+       Reimplement the condition logic (it's simple — split on " and ", then for
+       each part parse `var op value` where op is `>=`, `<=`, `==`, `!=`, `>`, `<`).
+       Return True if condition is None.
+
+    6. **Build snippet** — first 15 lines of rendered prompt, with "..." appended
+       if truncated.
+
+    **Helper functions:**
+    - `_expand_path(template: str, context: dict[str, str]) -> str`
+    - `_check_condition(condition: str | None, context: dict[str, int]) -> bool`
+    - `_build_snippet(text: str, max_lines: int = 15) -> str`
+
+    **Output to:** {{ workspace }}/04-rendering-engine.md
+
+    Report: file path, all classes/functions created, and a summary.
+
+    {% elif stage == 5 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 5: TEST RENDERING PREVIEW ENGINE                                   ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read {{ workspace }}/04-rendering-engine.md for what was created.
+    Read `src/mozart/validation/rendering.py` for the implementation.
+
+    Create a new file: `tests/test_validation_rendering.py`
+
+    **Tests to write (~12 tests):**
+
+    1. **test_basic_rendering** — simple config with inline template, renders
+       sheet 1 correctly. Verify `preview.sheets[0].rendered_prompt` contains
+       expected text, `sheet_num == 1`, `item_range` correct.
+
+    2. **test_validation_path_expansion** — config with validation
+       path: "single-brace workspace/output-single-brace sheet_num.md"
+       verifies expanded path has actual values.
+
+    3. **test_conditional_applicability** — validation with `condition: "sheet_num >= 3"`
+       is marked `applicable=False` for sheet 1.
+
+    4. **test_fan_out_metadata** — config with fan_out, verify `stage`, `instance`,
+       `fan_count` appear correctly in preview.
+
+    5. **test_jinja_error_captured** — broken template stores error in
+       `render_error`, doesn't raise.
+
+    6. **test_snippet_truncation** — template that renders to 30+ lines, verify
+       `prompt_snippet` has ~15 lines plus "...".
+
+    7. **test_max_sheets_limiting** — `max_sheets=1` only renders 1 sheet even
+       if config has 5.
+
+    8. **test_template_file_resolution** — config with `template_file` pointing
+       to a real file in `tmp_path`, verify rendered output comes from that file.
+
+    9. **test_missing_template_file** — config with non-existent `template_file`,
+       error captured in `render_errors`.
+
+    10. **test_multiple_validations_expanded** — config with 3 validations, all
+        expanded correctly for sheet 1.
+
+    11. **test_has_fan_out_flag** — preview.has_fan_out is True when fan_out
+        configured, False otherwise.
+
+    12. **test_has_dependencies_flag** — preview.has_dependencies is True when
+        dependencies configured.
+
+    **Test patterns:**
+    - Use `tmp_path` for config files and template files
+    - Create YAML configs as dedented strings
+    - Call `generate_preview(config, config_path, max_sheets=N)`
+    - Assert on the returned `RenderingPreview` dataclass fields
+
+    **Run tests:**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    source .venv/bin/activate
+    pytest tests/test_validation_rendering.py -v
+    ```
+
+    Fix any failures. Then run the full suite:
+    ```bash
+    pytest tests/ -x -q --tb=short 2>&1 | tail -30
+    ```
+
+    **Output to:** {{ workspace }}/05-tests-rendering.md
+
+    {% elif stage == 6 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 6: ADD RENDERING OUTPUT METHODS TO REPORTER                        ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read {{ workspace }}/04-rendering-engine.md and `src/mozart/validation/rendering.py`.
+    Read `src/mozart/validation/reporter.py` for the existing reporter.
+
+    **Modify** `src/mozart/validation/reporter.py` to add two methods to `ValidationReporter`:
+
+    ### Method 1: `report_rendering_terminal(self, preview, verbose=False) -> None`
+
+    The `preview` parameter type is `RenderingPreview` from `mozart.validation.rendering`.
+
+    **Default (verbose=False):** Show sheet 1 only (representative).
+    ```
+    Rendering Preview (Sheet 1 of 5):
+      Prompt:
+      (Rich Panel with prompt snippet, dim border, expand=False)
+      Validations (expanded for sheet 1):
+        1. file_exists: /home/user/ws/output-1.md
+        2. content_contains: /home/user/ws/output-1.md
+    ```
+
+    **Verbose (verbose=True):** Show all sheets with their metadata (stage, instance).
+
+    Use Rich `Panel` for prompt snippets — dim border, `expand=False`.
+    Show render errors in red. Show non-applicable validations as dimmed.
+
+    ### Method 2: `report_rendering_json(self, preview) -> dict`
+
+    Return a dict with:
+    - `total_sheets`, `has_fan_out`, `has_dependencies`, `render_errors`
+    - `sheets` array with `sheet_num`, `item_range`, `stage`, `instance`,
+      `fan_count`, `prompt_snippet`, `render_error`, and `validations` sub-array.
+
+    **Import needed:** Add `RenderingPreview` import guarded with `TYPE_CHECKING`:
+    ```python
+    from typing import TYPE_CHECKING
+    if TYPE_CHECKING:
+        from mozart.validation.rendering import RenderingPreview
+    ```
+
+    Then use string annotation in the method signature: `preview: "RenderingPreview"`.
+
+    **Verify** with a quick import check:
+    ```bash
+    python -c "from mozart.validation.reporter import ValidationReporter; print('OK')"
+    ```
+
+    **Output to:** {{ workspace }}/06-reporter.md
+
+    {% elif stage == 7 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 7: WIRE RENDERING INTO VALIDATE COMMAND                            ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read {{ workspace }}/06-reporter.md for what was added to the reporter.
+    Read `src/mozart/cli/commands/validate.py`.
+    Read `src/mozart/validation/rendering.py` for `generate_preview`.
+
+    **Modify** `src/mozart/cli/commands/validate.py`:
+
+    After existing check reporting (around line 133), when no errors and NOT
+    in JSON mode, add rendering preview:
+
+    ```python
+    # Show rendering preview when validation passes
+    if not json_output and not runner.has_errors(issues):
+        from mozart.validation.rendering import generate_preview
+        preview = generate_preview(config, config_file, max_sheets=1 if not verbose else None)
+        reporter.report_rendering_terminal(preview, verbose=verbose)
+
+        # Report any rendering errors
+        for err in preview.render_errors:
+            console.print(f"  [red]Rendering error:[/red] {err}")
+        for sheet in preview.sheets:
+            if sheet.render_error:
+                console.print(f"  [red]Sheet {sheet.sheet_num} render error:[/red] {sheet.render_error}")
+    ```
+
+    For JSON output, build the JSON dict to include both validation issues and
+    rendering preview. Read the current JSON output structure in
+    `reporter.report_json()` and extend it.
+
+    **Test the wiring:**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    source .venv/bin/activate
+
+    # Basic validation — should show rendering preview
+    mozart validate examples/sheet-review.yaml
+
+    # Verbose — should show all sheets
+    mozart validate examples/sheet-review.yaml -v
+
+    # JSON — should include rendering data
+    mozart validate examples/sheet-review.yaml --json | python3 -m json.tool | head -40
+    ```
+
+    Capture the output and verify it looks correct.
+
+    **Output to:** {{ workspace }}/07-validate-wiring.md
+
+    {% elif stage == 8 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 8: WIRE RENDERING INTO DRY-RUN                                     ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Read {{ workspace }}/06-reporter.md for reporter methods.
+    Read `src/mozart/cli/commands/run.py` — specifically the `_show_dry_run` function
+    and where it's called (around line 135).
+
+    **Modify** `src/mozart/cli/commands/run.py`:
+
+    1. **Change `_show_dry_run` signature** to accept `config_path`:
+       ```python
+       def _show_dry_run(config: JobConfig, config_path: Path) -> None:
+       ```
+
+    2. **Update the caller** (around line 135) to pass `config_file`:
+       ```python
+       _show_dry_run(config, config_file)
+       ```
+       Find the variable name used for the config file path — it's `config_file`
+       based on the Argument definition.
+
+    3. **After the existing sheet plan table**, add rendering preview:
+       ```python
+       from mozart.validation.rendering import generate_preview
+       from mozart.validation.reporter import ValidationReporter
+       reporter = ValidationReporter(console)
+       preview = generate_preview(config, config_path, max_sheets=1)
+       reporter.report_rendering_terminal(preview)
+       ```
+
+    4. **Also show DAG** if dependencies configured — check if the validate
+       command's `_show_dag_visualization` is importable, or just inline the
+       dependency display.
+
+    **Test the wiring:**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    source .venv/bin/activate
+
+    # Dry run — should show rendering preview after sheet plan
+    mozart run examples/sheet-review.yaml --dry-run
+    ```
+
+    **Important:** The dry-run path should NOT require a running conductor since
+    `--dry-run` exits before job submission. Verify this works without the conductor.
+
+    **Output to:** {{ workspace }}/08-dryrun-wiring.md
+
+    {% elif stage == 9 %}
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║  STAGE 9: FULL VERIFICATION                                               ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+
+    **ALL of these must pass.**
+
+    **Step 1: Run the new test files**
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    source .venv/bin/activate
+    pytest tests/test_best_practice_checks.py tests/test_validation_rendering.py -v
+    ```
+
+    **Step 2: Run the full test suite**
+    ```bash
+    pytest tests/ -x -q --tb=short 2>&1 | tee {{ workspace }}/09-test-output.txt | tail -30
+    ```
+
+    **Step 3: Type check**
+    ```bash
+    mypy src/ --ignore-missing-imports 2>&1 | tee {{ workspace }}/09-mypy-output.txt | tail -20
+    ```
+
+    **Step 4: Lint**
+    ```bash
+    ruff check src/ 2>&1 | tee {{ workspace }}/09-ruff-output.txt | tail -20
+    ```
+
+    **Step 5: Import check**
+    ```bash
+    python -c "from mozart.validation.rendering import generate_preview; print('rendering OK')"
+    python -c "from mozart.validation.checks.best_practices import NoValidationsCheck; print('checks OK')"
+    python -c "from mozart.validation import create_default_checks; c = create_default_checks(); print(f'{len(c)} checks')"
+    ```
+
+    **Step 6: Manual smoke tests**
+    ```bash
+    # Validate — should show new best-practice warnings and rendering preview
+    mozart validate examples/sheet-review.yaml -v 2>&1 | head -50
+
+    # Dry run — should show enhanced output
+    mozart run examples/sheet-review.yaml --dry-run 2>&1 | head -50
+    ```
+
+    **If ANY check fails:** Debug and fix the issue. Re-run ALL checks after fixing.
+
+    **Output to:** {{ workspace }}/09-verification.md
+
+    ```markdown
+    # Final Verification
+
+    ## Results
+    | Check | Status | Details |
+    |-------|--------|---------|
+    | New tests | pass/fail | N passed, N failed |
+    | Full suite | pass/fail | N passed, N failed |
+    | mypy | pass/fail | N errors |
+    | ruff | pass/fail | N issues |
+    | Import check | pass/fail | |
+    | validate smoke | pass/fail | |
+    | dry-run smoke | pass/fail | |
+
+    ## All Checks Passed
+    YES / NO
+    ```
+
+    {% endif %}
+
+  variables:
+    preamble: |
+      ╔══════════════════════════════════════════════════════════════════════════╗
+      ║     ENHANCED VALIDATION: RENDERING PREVIEWS & BEST-PRACTICE CHECKS    ║
+      ║                                                                        ║
+      ║  You are implementing a feature for Mozart AI Compose.                 ║
+      ║  Work in /home/emzi/Projects/mozart-ai-compose (the project root).     ║
+      ║  The virtualenv is at .venv — activate with: source .venv/bin/activate ║
+      ║                                                                        ║
+      ║  You are part of a multi-stage pipeline. Each stage has a focused      ║
+      ║  job. Do your job well. The next stage builds on your output.          ║
+      ╚══════════════════════════════════════════════════════════════════════════╝
+
+      **IMPORTANT RULES:**
+      - Read existing code before writing. Understand patterns before adding.
+      - Follow existing code style exactly (see config.py, paths.py for check patterns).
+      - Do NOT modify files outside the scope of your stage.
+      - Run tests after every change.
+      - Write your stage report to the workspace directory.
+
+validations:
+  # Stage 1: Best-practice checks file created
+  - type: file_exists
+    path: "{workspace}/01-best-practice-checks.md"
+    description: "Stage 1 report exists"
+    condition: "sheet_num >= 1"
+  - type: command_succeeds
+    command: 'test -f /home/emzi/Projects/mozart-ai-compose/src/mozart/validation/checks/best_practices.py'
+    description: "best_practices.py file created"
+    condition: "sheet_num >= 1"
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && python -c "from mozart.validation.checks.best_practices import NoValidationsCheck; print(\"OK\")"'
+    description: "best_practices.py imports successfully"
+    condition: "sheet_num >= 1"
+
+  # Stage 2: Wiring
+  - type: file_exists
+    path: "{workspace}/02-wiring.md"
+    description: "Stage 2 report exists"
+    condition: "sheet_num >= 2"
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && python -c "from mozart.validation import create_default_checks; c = create_default_checks(); assert len(c) >= 22, f\"Expected >=22 checks, got {len(c)}\"; print(f\"{len(c)} checks OK\")"'
+    description: "create_default_checks returns >=22 checks"
+    condition: "sheet_num >= 2"
+
+  # Stage 3: Best-practice tests
+  - type: file_exists
+    path: "{workspace}/03-tests-best-practices.md"
+    description: "Stage 3 report exists"
+    condition: "sheet_num >= 3"
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && source .venv/bin/activate && pytest tests/test_best_practice_checks.py -q --tb=no 2>&1 | tail -1 | grep -qE "passed"'
+    description: "Best-practice tests pass"
+    condition: "sheet_num >= 3"
+    timeout_seconds: 900
+
+  # Stage 4: Rendering engine
+  - type: file_exists
+    path: "{workspace}/04-rendering-engine.md"
+    description: "Stage 4 report exists"
+    condition: "sheet_num >= 4"
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && python -c "from mozart.validation.rendering import generate_preview, RenderingPreview; print(\"OK\")"'
+    description: "rendering.py imports successfully"
+    condition: "sheet_num >= 4"
+
+  # Stage 5: Rendering tests
+  - type: file_exists
+    path: "{workspace}/05-tests-rendering.md"
+    description: "Stage 5 report exists"
+    condition: "sheet_num >= 5"
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && source .venv/bin/activate && pytest tests/test_validation_rendering.py -q --tb=no 2>&1 | tail -1 | grep -qE "passed"'
+    description: "Rendering tests pass"
+    condition: "sheet_num >= 5"
+    timeout_seconds: 900
+
+  # Stage 6: Reporter
+  - type: file_exists
+    path: "{workspace}/06-reporter.md"
+    description: "Stage 6 report exists"
+    condition: "sheet_num >= 6"
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && python -c "from mozart.validation.reporter import ValidationReporter; r = ValidationReporter(); assert hasattr(r, \"report_rendering_terminal\"); assert hasattr(r, \"report_rendering_json\"); print(\"OK\")"'
+    description: "Reporter has rendering methods"
+    condition: "sheet_num >= 6"
+
+  # Stage 7: Validate wiring
+  - type: file_exists
+    path: "{workspace}/07-validate-wiring.md"
+    description: "Stage 7 report exists"
+    condition: "sheet_num >= 7"
+
+  # Stage 8: Dry-run wiring
+  - type: file_exists
+    path: "{workspace}/08-dryrun-wiring.md"
+    description: "Stage 8 report exists"
+    condition: "sheet_num >= 8"
+
+  # Stage 9: Full verification
+  - type: file_exists
+    path: "{workspace}/09-verification.md"
+    description: "Stage 9 report exists"
+    condition: "sheet_num == 9"
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && source .venv/bin/activate && pytest tests/ -x -q --tb=no 2>&1 | tail -1 | grep -qE "passed"'
+    description: "Full test suite passes"
+    condition: "sheet_num == 9"
+    stage: 2
+    timeout_seconds: 900
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && source .venv/bin/activate && ruff check src/ 2>&1; test $? -eq 0'
+    description: "Ruff lint passes"
+    condition: "sheet_num == 9"
+    stage: 2
+    timeout_seconds: 900

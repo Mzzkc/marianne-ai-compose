@@ -48,6 +48,14 @@ class RateLimitConfig:
             "/openapi.json",
             "/redoc",
             "/static",
+            "/",           # page routes
+            "/jobs",
+            "/monitor",
+            "/templates",
+            "/editor",
+            "/api/dashboard",   # htmx partials (stats, recent, system)
+            "/api/templates",   # template grid partial
+            "/api/monitor",     # monitor snapshot polling
         ]
     )
     by_api_key: bool = False
@@ -110,6 +118,36 @@ class SlidingWindowCounter:
             remaining = self.max_requests - current_count - 1
 
             return True, remaining, self.window_seconds
+
+    def check_only(self, key: str) -> tuple[bool, int, int]:
+        """Check if request would be allowed without recording it.
+
+        Args:
+            key: Client identifier (IP or API key)
+
+        Returns:
+            Tuple of (allowed, remaining_requests, reset_time_seconds)
+        """
+        now = time.time()
+        window_start = now - self.window_seconds
+
+        with self._lock:
+            self._cleanup_bucket(key, window_start)
+
+            current_count = len(self._buckets[key])
+
+            if current_count >= self.max_requests:
+                oldest = self._buckets[key][0] if self._buckets[key] else now
+                reset_time = int(oldest + self.window_seconds - now) + 1
+                return False, 0, reset_time
+
+            remaining = self.max_requests - current_count - 1
+            return True, remaining, self.window_seconds
+
+    def record(self, key: str) -> None:
+        """Record a request (call only after check_only passes)."""
+        with self._lock:
+            self._buckets[key].append(time.time())
 
     def get_count(self, key: str) -> int:
         """Get current request count for key.
@@ -175,9 +213,9 @@ class RateLimiter:
         if not self.config.enabled:
             return True, {"enabled": False}
 
-        # Check all limits (burst -> minute -> hour)
-        burst_ok, burst_remaining, burst_reset = self.burst_counter.is_allowed(
-            key
+        # Check all tiers first (read-only) before recording
+        burst_ok, burst_remaining, burst_reset = (
+            self.burst_counter.check_only(key)
         )
         if not burst_ok:
             return False, {
@@ -188,7 +226,7 @@ class RateLimiter:
             }
 
         minute_ok, minute_remaining, minute_reset = (
-            self.minute_counter.is_allowed(key)
+            self.minute_counter.check_only(key)
         )
         if not minute_ok:
             return False, {
@@ -198,7 +236,9 @@ class RateLimiter:
                 "retry_after": minute_reset,
             }
 
-        hour_ok, hour_remaining, hour_reset = self.hour_counter.is_allowed(key)
+        hour_ok, hour_remaining, hour_reset = (
+            self.hour_counter.check_only(key)
+        )
         if not hour_ok:
             return False, {
                 "limit": "hour",
@@ -206,6 +246,11 @@ class RateLimiter:
                 "reset": hour_reset,
                 "retry_after": hour_reset,
             }
+
+        # All checks passed — record the request in all tiers
+        self.burst_counter.record(key)
+        self.minute_counter.record(key)
+        self.hour_counter.record(key)
 
         return True, {
             "limit": "none",

@@ -169,16 +169,21 @@ class MonitorApp(App[None]):
                 uptime_seconds=uptime,
             )
 
-            # Update jobs panel
-            jobs = self.query_one("#jobs-panel", JobsPanel)
-            jobs.update_data(snapshot)
-
             # Update timeline with recent events
             since = time.time() - 300.0  # last 5 minutes
             events = await self._reader.get_events(since, limit=50)
 
-            # REVIEW FIX 3: Sequential IPC call — don't parallel with above
             observer_events = await self._reader.get_observer_events(limit=50)
+
+            # Filter file events from observer data for the jobs panel
+            observer_file_events = [
+                e for e in observer_events
+                if e.get("event", "").startswith("observer.file_")
+            ]
+
+            # Update jobs panel with snapshot and observer file events
+            jobs = self.query_one("#jobs-panel", JobsPanel)
+            jobs.update_data(snapshot, observer_file_events=observer_file_events)
 
             timeline = self.query_one("#timeline-panel", TimelinePanel)
             timeline.update_data(events=events, observer_events=observer_events)

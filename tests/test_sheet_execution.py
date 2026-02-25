@@ -1472,6 +1472,9 @@ class TestHandleExecutionFailure:
         mock_store.check_recent_pattern_discoveries.return_value = []
         mixin._global_learning_store = mock_store
 
+        # Set cli_model so _get_effective_model() returns a value
+        mixin.config.backend.cli_model = "claude-sonnet-4-5-20250929"
+
         pending = {
             "error_code": "E301",
             "suggested_wait": 5.0,
@@ -1499,7 +1502,7 @@ class TestHandleExecutionFailure:
             suggested_wait=5.0,
             actual_wait=10.0,
             recovery_success=False,
-            model=mixin.config.backend.model,
+            model="claude-sonnet-4-5-20250929",
         )
         assert result.action == "continue"
 

@@ -55,14 +55,12 @@ class TestCapture:
 
     def test_capture_copies_json_files(self, mgr, workspace):
         result = mgr.capture("test-job", workspace)
-        from pathlib import Path
         snap = Path(result)
         assert (snap / "my-job.json").exists()
         assert (snap / "my-job.json").read_text() == '{"status": "completed"}'
 
     def test_capture_copies_log_files(self, mgr, workspace):
         result = mgr.capture("test-job", workspace)
-        from pathlib import Path
         snap = Path(result)
         assert (snap / "mozart.log").exists()
         assert (snap / "mozart.log").read_text() == "INFO: job completed"
@@ -94,7 +92,6 @@ class TestCapture:
     def test_capture_preserves_additional_json_files(self, mgr, workspace):
         (workspace / "extra.json").write_text('{"extra": true}')
         result = mgr.capture("test-job", workspace)
-        from pathlib import Path
         snap = Path(result)
         assert (snap / "extra.json").exists()
 
@@ -102,7 +99,6 @@ class TestCapture:
         (workspace / "subdir").mkdir()
         (workspace / "subdir" / "nested.json").write_text("{}")
         result = mgr.capture("test-job", workspace)
-        from pathlib import Path
         snap = Path(result)
         # Only top-level files are captured
         assert not (snap / "subdir").exists()
@@ -218,7 +214,6 @@ class TestEdgeCases:
         (ws / "mozart.log").write_text("some logs")
         result = mgr.capture("log-only-job", ws)
         assert result is not None
-        from pathlib import Path
         snap = Path(result)
         assert (snap / "mozart.log").exists()
 

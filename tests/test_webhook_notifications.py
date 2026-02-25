@@ -220,7 +220,7 @@ class TestSend:
     @pytest.mark.asyncio
     async def test_successful_send(self, context: NotificationContext):
         n = WebhookNotifier(url="https://example.com/hook")
-        mock_response = MagicMock()
+        mock_response = MagicMock(spec=httpx.Response)
         mock_response.is_success = True
 
         mock_client = AsyncMock()
@@ -234,7 +234,7 @@ class TestSend:
     async def test_client_error_no_retry(self, context: NotificationContext):
         """4xx errors are not retried."""
         n = WebhookNotifier(url="https://example.com/hook", max_retries=2)
-        mock_response = MagicMock()
+        mock_response = MagicMock(spec=httpx.Response)
         mock_response.is_success = False
         mock_response.status_code = 400
         mock_response.text = "Bad Request"
@@ -253,7 +253,7 @@ class TestSend:
     async def test_server_error_retries(self, context: NotificationContext):
         """5xx errors are retried."""
         n = WebhookNotifier(url="https://example.com/hook", max_retries=1, retry_delay=0)
-        mock_response = MagicMock()
+        mock_response = MagicMock(spec=httpx.Response)
         mock_response.is_success = False
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
@@ -294,6 +294,8 @@ class TestSend:
     async def test_close_when_no_client(self):
         n = WebhookNotifier(url="https://example.com")
         await n.close()  # Should not raise
+        # Verify no exception raised by reaching this point
+        assert n._client is None  # Client should remain None
 
 
 # ─── MockWebhookNotifier ─────────────────────────────────────────────

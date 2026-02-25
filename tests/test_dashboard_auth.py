@@ -751,6 +751,8 @@ class TestSecurityHeadersMiddleware:
 
     @staticmethod
     def _create_app(config=None):
+        from starlette.responses import HTMLResponse
+
         app = FastAPI()
         app.add_middleware(SecurityHeadersMiddleware, config=config)
 
@@ -758,13 +760,17 @@ class TestSecurityHeadersMiddleware:
         def mock_endpoint():
             return {"ok": True}
 
+        @app.get("/test-html")
+        def mock_html_endpoint():
+            return HTMLResponse("<html><body>ok</body></html>")
+
         return app
 
-    def test_adds_security_headers(self) -> None:
-        """Default config adds all security headers."""
+    def test_adds_security_headers_on_html(self) -> None:
+        """Default config adds all security headers on HTML responses."""
         app = self._create_app()
         client = TestClient(app)
-        resp = client.get("/test")
+        resp = client.get("/test-html")
         assert resp.status_code == 200
         assert "Content-Security-Policy" in resp.headers
         assert "X-Content-Type-Options" in resp.headers
@@ -773,12 +779,26 @@ class TestSecurityHeadersMiddleware:
         assert "Referrer-Policy" in resp.headers
         assert "Strict-Transport-Security" in resp.headers
 
+    def test_adds_common_headers_on_json(self) -> None:
+        """Non-CSP security headers are added on JSON responses."""
+        app = self._create_app()
+        client = TestClient(app)
+        resp = client.get("/test")
+        assert resp.status_code == 200
+        assert "X-Content-Type-Options" in resp.headers
+        assert "X-Frame-Options" in resp.headers
+        assert "Referrer-Policy" in resp.headers
+        # CSP, HSTS, XSS-Protection only on HTML
+        assert "Content-Security-Policy" not in resp.headers
+        assert "Strict-Transport-Security" not in resp.headers
+        assert "X-XSS-Protection" not in resp.headers
+
     def test_disabled_headers(self) -> None:
         """When add_security_headers=False, no security headers are added."""
         config = SecurityConfig(add_security_headers=False)
         app = self._create_app(config)
         client = TestClient(app)
-        resp = client.get("/test")
+        resp = client.get("/test-html")
         assert resp.status_code == 200
         assert "Content-Security-Policy" not in resp.headers
 
@@ -786,7 +806,7 @@ class TestSecurityHeadersMiddleware:
         """CSP header contains expected directives."""
         app = self._create_app()
         client = TestClient(app)
-        resp = client.get("/test")
+        resp = client.get("/test-html")
         csp = resp.headers.get("Content-Security-Policy", "")
         assert "default-src" in csp
         assert "'self'" in csp

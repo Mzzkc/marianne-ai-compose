@@ -62,6 +62,13 @@ from mozart.learning.store.models import (
 
 # Import all mixins
 from mozart.learning.store.patterns import PatternMixin
+from mozart.learning.store.patterns_lifecycle import (
+    DEGRADATION_THRESHOLD,
+    MIN_OCCURRENCES_FOR_PROMOTION,
+    PROMOTION_EFFECTIVENESS_THRESHOLD,
+    QUARANTINE_EFFECTIVENESS_THRESHOLD,
+    PatternLifecycleMixin,
+)
 from mozart.learning.store.rate_limits import RateLimitMixin
 
 
@@ -72,6 +79,7 @@ class GlobalLearningStore(  # type: ignore[misc]
     DriftMixin,
     EscalationMixin,
     BudgetMixin,
+    PatternLifecycleMixin,
     GlobalLearningStoreBase,
 ):
     """Global learning store combining all mixins.
@@ -203,6 +211,12 @@ __all__ = [
     "DriftMixin",
     "EscalationMixin",
     "BudgetMixin",
+    "PatternLifecycleMixin",
+    # Pattern lifecycle constants
+    "MIN_OCCURRENCES_FOR_PROMOTION",
+    "PROMOTION_EFFECTIVENESS_THRESHOLD",
+    "QUARANTINE_EFFECTIVENESS_THRESHOLD",
+    "DEGRADATION_THRESHOLD",
     # Models - Enums
     "QuarantineStatus",
     # Models - Core records

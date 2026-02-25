@@ -1,0 +1,881 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║              MOZART DASHBOARD REBUILD                                       ║
+# ║                                                                             ║
+# ║  Tears down the broken frontend and rebuilds it page by page with          ║
+# ║  HTTP rendering verification at every stage. Backend stays untouched.      ║
+# ║                                                                             ║
+# ║  The previous concert produced blind code — templates/CSS/JS that were     ║
+# ║  never rendered in a browser. This score fixes that: every page-building   ║
+# ║  stage starts the dashboard and verifies the page returns valid HTML.      ║
+# ║                                                                             ║
+# ║  Structure (9 sequential stages):                                           ║
+# ║    Stage 1:  Teardown + Foundation (delete old frontend, create base)      ║
+# ║    Stage 2:  Dashboard Overview page                                        ║
+# ║    Stage 3:  Jobs List + Job Detail pages                                  ║
+# ║    Stage 4:  Job Logs page                                                  ║
+# ║    Stage 5:  System Monitor page                                            ║
+# ║    Stage 6:  Score Editor + Templates pages                                ║
+# ║    Stage 7:  Cross-page polish (nav, dark mode, empty/error states)        ║
+# ║    Stage 8:  Full verification + fix                                        ║
+# ║    Stage 9:  Commit + push                                                  ║
+# ║                                                                             ║
+# ║  Usage:                                                                     ║
+# ║    cd ~/Projects/mozart-ai-compose                                          ║
+# ║    mozart start                                                             ║
+# ║    mozart run scores/mozart-dashboard-rebuild.yaml                         ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "mozart-dashboard-rebuild"
+description: "Tear down and rebuild dashboard frontend with rendering verification at every stage"
+
+workspace: "/home/emzi/Projects/mozart-ai-compose/dashboard-rebuild-workspace"
+
+workspace_lifecycle:
+  archive_on_fresh: true
+  max_archives: 3
+
+backend:
+  type: claude_cli
+  skip_permissions: true
+  disable_mcp: true
+  working_directory: /home/emzi/Projects/mozart-ai-compose
+  timeout_seconds: 3600
+  output_format: json
+
+sheet:
+  size: 1
+  total_items: 9
+
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+    7: [6]
+    8: [7]
+    9: [8]
+
+  prelude:
+    - file: /home/emzi/Projects/mozart-ai-compose/docs/plans/2026-02-23-dashboard-concert-overhaul-design.md
+      as: context
+
+parallel:
+  enabled: false
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 3000
+  lookback_sheets: 2
+
+retry:
+  max_retries: 2
+  max_completion_attempts: 2
+  completion_threshold_percent: 50
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+cost_limits:
+  max_cost_per_sheet: 12.0
+
+prompt:
+  variables:
+    preamble: |
+      ╔══════════════════════════════════════════════════════════════════════════╗
+      ║  MOZART DASHBOARD REBUILD                                              ║
+      ║  Tearing down blind code. Building pages you can actually see.         ║
+      ╚══════════════════════════════════════════════════════════════════════════╝
+
+      **Project:** /home/emzi/Projects/mozart-ai-compose
+      **Branch:** main (push directly)
+      **Tech:** FastAPI + Jinja2 + htmx 2.0 + Alpine.js 3.x + Tailwind CDN
+      **Scope:** `src/mozart/dashboard/templates/`, `static/css/`, `static/js/`
+
+      **THE BACKEND IS SOLID. DO NOT MODIFY:**
+      - `src/mozart/dashboard/app.py` — app factory (keep as-is)
+      - `src/mozart/dashboard/routes/` — all route handlers (keep as-is)
+      - `src/mozart/dashboard/services/` — SSE manager, job control (keep as-is)
+      - `src/mozart/dashboard/auth/` — middleware (keep as-is)
+      - `tests/test_dashboard*.py` — test suite (keep as-is)
+
+      **YOU MUST REBUILD:**
+      - `src/mozart/dashboard/templates/` — all templates (pages, partials, components)
+      - `src/mozart/dashboard/static/css/main.css` — stylesheet
+      - `src/mozart/dashboard/static/js/app.js` — Alpine.js application
+      - Keep `src/mozart/dashboard/static/codemirror/` (bundled library)
+
+      CRITICAL RULES:
+      1. READ the route handlers before building templates. They pass specific
+         context variables — your templates must use the same variable names.
+      2. Every template you create MUST render without errors. After building,
+         start the dashboard and load the page to verify.
+      3. Use pinned CDN versions (specified below). Do NOT use unpinned @latest.
+      4. Tailwind utility classes for styling. Minimal custom CSS.
+      5. htmx for dynamic updates. Alpine.js for client-side state only.
+
+      CDN VERSIONS (use exactly these):
+      - Tailwind: https://cdn.tailwindcss.com/3.4.17
+      - htmx: https://unpkg.com/htmx.org@2.0.4
+      - htmx SSE extension: https://unpkg.com/htmx-ext-sse@2.3.0/sse.js
+      - Alpine.js: https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js
+
+      RENDERING VERIFICATION:
+      After building templates, verify they render by running:
+      ```bash
+      cd /home/emzi/Projects/mozart-ai-compose
+      timeout 15 .venv/bin/python3 -c "
+      import subprocess, time, sys, urllib.request
+      p = subprocess.Popen(
+          [sys.executable, '-m', 'uvicorn', 'mozart.dashboard.app:create_app',
+           '--factory', '--port', '18923', '--host', '127.0.0.1'],
+          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+      time.sleep(3)
+      try:
+          for path in ['/', '/jobs', '/monitor', '/editor', '/templates']:
+              r = urllib.request.urlopen(f'http://127.0.0.1:18923{path}', timeout=5)
+              print(f'{path}: {r.status} ({len(r.read())} bytes)')
+      finally:
+          p.terminate(); p.wait()
+      "
+      ```
+      Only check the pages YOU built in this stage. If a page returns 500,
+      read the error and fix the template.
+
+    # Template names expected by routes (from pages.py) — agents MUST match these
+    route_templates: |
+      PAGES (routes/pages.py):
+        GET /                    → pages/index.html          ctx: {request}
+        GET /jobs                → pages/jobs_list.html      ctx: {request}
+        GET /jobs/{id}/details   → pages/job_detail.html     ctx: {request, job: JobDetail}
+        GET /jobs/{id}/logs      → pages/job_logs.html       ctx: {request, job: JobDetail}
+        GET /monitor             → pages/monitor.html        ctx: {request}
+        GET /templates           → pages/templates.html      ctx: {request}
+        GET /editor              → pages/score_editor.html   ctx: {request}
+
+      PARTIALS (routes/pages.py, routes/dashboard.py):
+        GET /jobs/list                   → partials/jobs_list_content.html   ctx: {request, jobs, total_jobs, ...}
+        GET /api/dashboard/stats/partial → partials/dashboard_stats.html     ctx: {request, stats: DashboardStats}
+        GET /api/dashboard/recent/partial → partials/recent_activity.html    ctx: {request, jobs: [JobSummary]}
+        GET /api/dashboard/system/partial → partials/system_resources.html   ctx: {request, system: {...}}
+        GET /api/templates/list          → partials/templates_grid.html      ctx: {request, templates: [...]}
+        Error fallback                   → partials/error_message.html       ctx: {request, error_title, error_message}
+
+      READ the route handler code to see exact context variable shapes.
+      READ routes/__init__.py for JobSummary, JobDetail, DashboardStats models.
+
+  template: |
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# MACROS                                                                 #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% macro save_to(filename) %}
+
+    ---
+    **Save result to:** {{ workspace }}/{{ filename }}
+    Include `COMPLETE: yes` at the top of the file.
+    Summarize what you built, what pages now render, and any issues remaining.
+    {% endmacro %}
+
+    {% macro verify_pages(pages) %}
+    ## Verify Your Work
+
+    Start the dashboard and check every page you built renders correctly:
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    timeout 15 .venv/bin/python3 -c "
+    import subprocess, time, sys, urllib.request
+    p = subprocess.Popen(
+        [sys.executable, '-m', 'uvicorn', 'mozart.dashboard.app:create_app',
+         '--factory', '--port', '18923', '--host', '127.0.0.1'],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(3)
+    try:
+        for path in {{ pages }}:
+            try:
+                r = urllib.request.urlopen(f'http://127.0.0.1:18923{path}', timeout=5)
+                print(f'  OK: {path} → {r.status} ({len(r.read())} bytes)')
+            except Exception as e:
+                print(f'  FAIL: {path} → {e}')
+    finally:
+        p.terminate(); p.wait()
+    "
+    ```
+
+    If ANY page fails, read the error, fix the template, and re-verify.
+    Do NOT finish this stage with broken pages.
+    {% endmacro %}
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# PREAMBLE                                                               #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {{ preamble }}
+
+    *Stage {{ stage }}/{{ total_stages }}*
+
+    {{ route_templates }}
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# STAGE 1: TEARDOWN + FOUNDATION                                         #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% if stage == 1 %}
+
+    # Stage 1: Teardown + Foundation
+
+    The previous dashboard frontend is broken beyond repair — templates crash,
+    CSS is unstyled (no Tailwind loaded), JS references are wrong, Alpine.js
+    bindings point to nonexistent stores. Tear it all down and build a clean
+    foundation.
+
+    ## Step 1: Delete Old Frontend
+
+    Delete ALL files in these directories (but keep the directories):
+    - `src/mozart/dashboard/templates/pages/` — delete all .html files
+    - `src/mozart/dashboard/templates/partials/` — delete all .html files
+    - `src/mozart/dashboard/templates/components/` — delete all .html files
+    - `src/mozart/dashboard/templates/base.html` — delete
+
+    Delete these files:
+    - `src/mozart/dashboard/static/css/main.css`
+    - `src/mozart/dashboard/static/js/app.js`
+
+    **Keep:** `src/mozart/dashboard/static/codemirror/` (bundled library)
+
+    ## Step 2: Create Foundation
+
+    **base.html** — The master layout that all pages extend.
+    - HTML5 doctype with `lang="en"`
+    - `<head>`: meta charset, viewport, title block, Tailwind CDN, htmx, Alpine.js
+    - Body with `x-data="mozartApp"` for Alpine.js root state
+    - Include `components/header.html` for persistent navigation
+    - `{% raw %}{% block content %}{% endblock %}{% endraw %}` for page content
+    - Include `components/footer.html`
+    - Load `static/js/app.js` before closing body
+    - Dark mode support via class on `<html>` element
+
+    **components/header.html** — Navigation bar
+    - Mozart logo/name linking to /
+    - Nav links: Dashboard (/), Jobs (/jobs), Monitor (/monitor),
+      Templates (/templates), Editor (/editor)
+    - Active page indicator (highlight current nav item)
+    - Dark mode toggle button
+    - Conductor status indicator (green/red dot)
+
+    **components/footer.html** — Minimal footer
+    - Mozart version, link to docs
+
+    **static/css/main.css** — CSS custom properties and minimal overrides
+    - CSS variables for colors (--color-primary, --color-success, etc.)
+    - Dark mode variable overrides
+    - Any styling that Tailwind utilities can't handle
+    - Keep it SMALL — Tailwind should do 95% of the work
+
+    **static/js/app.js** — Alpine.js application state
+    - `mozartApp` component with:
+      - `darkMode`: boolean, persisted to localStorage
+      - `notifications`: array of {message, type, id}
+      - `addNotification(message, type)`: add with auto-dismiss
+      - `removeNotification(id)`: remove by id
+    - Dark mode initialization from localStorage or system preference
+    - HTMX event listeners for error handling
+
+    **pages/index.html** — Placeholder overview page
+    - Extends base.html
+    - Shows "Dashboard" heading
+    - Placeholder content: "Dashboard overview coming in Stage 2"
+    - This ensures / returns 200 after teardown
+
+    **partials/error_message.html** — Error display partial
+    - Shows `error_title` and `error_message` from context
+    - Styled with red/warning colors
+    - Used by multiple route error handlers — MUST exist from Stage 1
+
+    ## Step 3: Verify Foundation
+
+    {{ verify_pages(["'/'"])  }}
+
+    Also run:
+    ```bash
+    pytest tests/test_dashboard*.py -x -q --tb=short 2>&1 | tail -5
+    python -c "from mozart.dashboard.app import create_app; print('OK')"
+    ```
+
+    {{ save_to("01-foundation.md") }}
+
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# STAGE 2: DASHBOARD OVERVIEW                                            #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 2 %}
+
+    # Stage 2: Dashboard Overview Page
+
+    Build the main landing page — the first thing users see when they open
+    the dashboard. This must work with or without a running conductor.
+
+    ## Read First
+
+    Before writing any templates:
+    1. Read `routes/dashboard.py` — understand the stats, recent jobs, and
+       system resources API endpoints and what data they return
+    2. Read `routes/__init__.py` — understand JobSummary, DashboardStats models
+    3. Read the current `pages/index.html` (your placeholder from Stage 1)
+
+    ## Build: pages/index.html
+
+    The overview page layout:
+
+    **Top row: Stats cards** (loaded via htmx from `/api/dashboard/stats/partial`)
+    - Total jobs, Running, Completed, Failed, Success rate
+    - Cards with icons, numbers, and trend indicators
+    - Auto-refresh every 10 seconds: `hx-trigger="every 10s"`
+
+    **Middle: Active jobs panel** (loaded via htmx from `/jobs/list?status=running`)
+    - Table or card list of currently running jobs
+    - Each job shows: name, progress (sheet X/Y), duration, status badge
+    - Click to navigate to job detail page
+    - Auto-refresh every 5 seconds
+
+    **Bottom row:**
+    - Left: Recent activity (loaded from `/api/dashboard/recent/partial`)
+    - Right: System resources (loaded from `/api/dashboard/system/partial`)
+
+    **Empty state:** When no jobs exist, show a helpful message with a link
+    to the score editor ("Create your first score →").
+
+    ## Build: partials/dashboard_stats.html
+
+    Receives `stats` context with: total_jobs, running, completed, failed,
+    success_rate. Render as a row of stat cards with Tailwind styling.
+
+    ## Build: partials/recent_activity.html
+
+    Receives `jobs` context (list of JobSummary). Render as a compact list
+    showing job name, status badge, and time.
+
+    ## Build: partials/system_resources.html
+
+    Receives `system` context with memory, CPU, load averages. Render as
+    gauge-style cards. Handle the case where system data is None (daemon
+    not running).
+
+    ## Build: components/status_badge.html
+
+    Reusable status badge component. Include via Jinja2 macro or as a
+    standalone partial. Colors: running=blue, completed=green, failed=red,
+    paused=yellow, pending=gray.
+
+    {{ verify_pages(["'/'"])  }}
+
+    {{ save_to("02-overview.md") }}
+
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# STAGE 3: JOBS PAGES                                                    #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 3 %}
+
+    # Stage 3: Jobs List + Job Detail Pages
+
+    Two closely related pages that share components (status badges, progress
+    bars, sheet rows).
+
+    ## Read First
+
+    1. Read `routes/pages.py` — jobs_page, job_details_page, jobs_list_partial
+    2. Read `routes/jobs.py` — API endpoints for job data
+    3. Read `routes/__init__.py` — JobSummary, JobDetail, SheetInfo models
+
+    ## Build: pages/jobs_list.html
+
+    The jobs listing page:
+    - Filter bar: status dropdown (all/running/completed/failed/paused), search
+    - Job table loaded via htmx from `/jobs/list`
+    - Columns: Name, Status (badge), Progress (X/Y sheets), Duration, Submitted
+    - Click row → navigate to `/jobs/{id}/details`
+    - Auto-refresh running jobs every 10 seconds
+
+    ## Build: partials/jobs_list_content.html
+
+    Receives: `jobs` (list of JobSummary), `total_jobs`, `filtered_jobs`,
+    `applied_filter`. Render as table rows. Handle empty state ("No jobs
+    match your filter").
+
+    ## Build: pages/job_detail.html
+
+    The individual job detail page:
+    - Header: job name, status badge, action buttons (pause/resume/cancel)
+    - Progress bar showing sheet completion
+    - Sheet table: number, status, attempts, validation result, duration
+    - Click sheet → expand inline to show validation details
+    - SSE connection for live updates: `hx-ext="sse" sse-connect="/api/jobs/{id}/stream"`
+    - Links to: logs page, workspace artifacts
+    - Action buttons use htmx POST to `/api/jobs/{id}/pause`, `/resume`, etc.
+
+    ## Build: components/progress_bar.html
+
+    Reusable progress bar. Takes percentage, shows filled/unfilled segments
+    with color coding.
+
+    {{ verify_pages(["'/'", "'/jobs'"])  }}
+
+    Note: /jobs/{id}/details requires a real job ID so the verification
+    script can't test it directly. Verify it manually by reading the
+    template for Jinja2 errors, or write a quick test:
+    ```bash
+    python -c "
+    from mozart.dashboard.app import create_app
+    from fastapi.testclient import TestClient
+    app = create_app()
+    client = TestClient(app)
+    r = client.get('/jobs/nonexistent/details')
+    print(f'/jobs/nonexistent/details: {r.status_code}')
+    # 404 is correct (job doesn't exist)
+    "
+    ```
+
+    {{ save_to("03-jobs.md") }}
+
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# STAGE 4: JOB LOGS PAGE                                                 #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 4 %}
+
+    # Stage 4: Job Logs Page
+
+    ## Read First
+
+    1. Read `routes/pages.py` — job_logs_page handler
+    2. Read `routes/stream.py` — SSE log streaming endpoint, static log endpoint
+    3. Read `services/sse_manager.py` — how SSE broadcasting works
+
+    ## Build: pages/job_logs.html
+
+    The log viewer page:
+    - Header: job name, status badge, link back to job detail
+    - Log output area: monospace font, dark background, scrollable
+    - SSE streaming: connect to `/api/jobs/{id}/logs` for live tail
+    - htmx SSE integration: `hx-ext="sse" sse-connect="/api/jobs/{id}/logs"`
+    - Auto-scroll to bottom on new content (with option to pause auto-scroll)
+    - Download button: link to `/api/jobs/{id}/logs/static`
+    - Log level indicators: color-code ERROR (red), WARNING (yellow), INFO (default)
+
+    **Key UX:** The log viewer should feel like a terminal. Dark background,
+    green/white text, monospace font. New lines appear at the bottom.
+
+    ## Build: components/log_viewer.html
+
+    Reusable log display component. Can be included in job_logs.html and
+    potentially in the job detail page for a compact log preview.
+
+    {{ verify_pages(["'/'", "'/jobs'", "'/monitor'"])  }}
+
+    For the logs page specifically, test with a fake job ID (expect 404):
+    ```bash
+    python -c "
+    from mozart.dashboard.app import create_app
+    from fastapi.testclient import TestClient
+    app = create_app()
+    client = TestClient(app)
+    r = client.get('/jobs/nonexistent/logs')
+    print(f'/jobs/nonexistent/logs: {r.status_code}')
+    "
+    ```
+
+    {{ save_to("04-logs.md") }}
+
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# STAGE 5: SYSTEM MONITOR PAGE                                           #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 5 %}
+
+    # Stage 5: System Monitor Page
+
+    The web equivalent of `mozart top`. Same data source, different interface.
+
+    ## Read First
+
+    1. Read `routes/monitor.py` — snapshot and stream endpoints
+    2. Read `routes/pages.py` — monitor_page handler
+    3. Read the design doc (injected above) for the monitor section
+
+    ## Build: pages/monitor.html
+
+    The monitoring dashboard:
+
+    **Header bar:**
+    - Conductor status (UP/DOWN with colored dot)
+    - Memory usage, CPU load, daemon PID
+    - Pressure level indicator (none/low/medium/high/critical)
+
+    **Process tree:**
+    - Jobs as collapsible groups
+    - Under each job: active sheets with their processes
+    - Show: PID, command (truncated), state, CPU%, memory (RSS), age
+    - Group child processes under their parent using PPID data
+    - Auto-refresh via SSE or polling: `/api/monitor/stream` or
+      `/api/monitor/snapshot` every 3 seconds
+
+    **System metrics:**
+    - Memory: total, available, used (progress bar)
+    - Load averages: 1m, 5m, 15m
+    - GPU status if available
+
+    **Empty state:** When conductor is not running, show a clear message:
+    "Conductor is not running. Start it with: mozart start"
+
+    Use htmx polling for updates:
+    ```html
+    <div hx-get="/api/monitor/snapshot" hx-trigger="every 3s"
+         hx-swap="innerHTML">
+      <!-- monitor content refreshed here -->
+    </div>
+    ```
+
+    Note: The `/api/monitor/snapshot` endpoint returns JSON. You may need
+    to create a partial that the page loads, or use Alpine.js to fetch
+    JSON and render client-side. Choose whichever approach is cleaner.
+
+    {{ verify_pages(["'/'", "'/jobs'", "'/monitor'"])  }}
+
+    {{ save_to("05-monitor.md") }}
+
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# STAGE 6: SCORE EDITOR + TEMPLATES                                      #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 6 %}
+
+    # Stage 6: Score Editor + Templates Pages
+
+    ## Read First
+
+    1. Read `routes/scores.py` — validation, submission, template management
+    2. Read `routes/pages.py` — score_editor_page, templates_page,
+       templates_list_partial handlers
+    3. Check what CodeMirror files exist in `static/codemirror/`
+
+    ## Build: pages/score_editor.html
+
+    The score authoring page:
+    - CodeMirror YAML editor (use bundled `static/codemirror/codemirror.min.js`)
+    - "Validate" button: POST to `/api/scores/validate` via htmx
+    - Validation results panel: show errors (red), warnings (yellow), info (blue)
+    - "Submit to Conductor" button: POST to `/api/scores/submit`
+    - "Load Template" button: opens template picker
+    - "New Score" button: clears editor
+
+    CodeMirror integration:
+    ```html
+    <link rel="stylesheet" href="/static/codemirror/codemirror.min.css">
+    <script src="/static/codemirror/codemirror.min.js"></script>
+    ```
+
+    ## Build: pages/templates.html
+
+    The template browser:
+    - Grid of template cards loaded via htmx from `/api/templates/list`
+    - Filter by category, complexity, search text
+    - Each card: name, description, complexity badge, "Use" button
+    - "Use" button navigates to editor with template pre-loaded
+
+    ## Build: partials/templates_grid.html
+
+    Receives `templates` list. Render as a responsive grid of cards.
+    Handle empty state ("No templates found").
+
+    {{ verify_pages(["'/'", "'/jobs'", "'/monitor'", "'/editor'", "'/templates'"])  }}
+
+    {{ save_to("06-editor.md") }}
+
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# STAGE 7: CROSS-PAGE POLISH                                             #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 7 %}
+
+    # Stage 7: Cross-Page Polish
+
+    All 6 pages exist. Now make them cohesive.
+
+    ## Read Everything
+
+    Read every template in `templates/pages/`, `templates/partials/`,
+    `templates/components/`, plus `base.html`, `main.css`, and `app.js`.
+    Understand the full picture before making changes.
+
+    ## Polish Checklist
+
+    1. **Navigation consistency.** Every page uses the same header with the
+       same nav links. Active page MUST be highlighted. Verify by loading
+       each page and checking the nav state.
+
+    2. **Dark mode.** Toggle must work on every page. All Tailwind classes
+       must have `dark:` variants where colors are used. Text, backgrounds,
+       borders, cards — all must look good in both modes. Test by toggling.
+
+    3. **Empty states.** Each page must handle zero data gracefully:
+       - Overview: "No jobs yet. Create your first score →"
+       - Jobs list: "No jobs match your filter"
+       - Monitor: "Conductor is not running"
+       - Templates: "No templates found"
+       - Editor: Clean empty editor ready for input
+
+    4. **Error states.** What happens when:
+       - Daemon is not running (API calls fail)?
+       - SSE connection drops?
+       - A page loads with an invalid job ID?
+       Each scenario needs a user-friendly message, not a raw error.
+
+    5. **Loading states.** Every htmx request should show a loading indicator.
+       Use `hx-indicator` with a consistent spinner or skeleton pattern.
+       Define the indicator style in base.html or main.css.
+
+    6. **Responsive layout.** Dashboard must be usable at 1280px and 1920px.
+       Test by checking that content doesn't overflow or have horizontal
+       scrollbars at those widths.
+
+    7. **Breadcrumbs.** Detail pages (job detail, job logs) should show
+       breadcrumb navigation: Dashboard > Jobs > {job name}.
+
+    8. **Page titles.** Each page sets `<title>` via a template block:
+       "Mozart - Dashboard", "Mozart - Jobs", etc.
+
+    ## Verify Everything
+
+    {{ verify_pages(["'/'", "'/jobs'", "'/monitor'", "'/editor'", "'/templates'"])  }}
+
+    Also verify dark mode toggle works (check that the JS is correct):
+    ```bash
+    python -c "
+    from mozart.dashboard.app import create_app
+    from fastapi.testclient import TestClient
+    app = create_app()
+    client = TestClient(app)
+    r = client.get('/')
+    assert 'darkMode' in r.text or 'dark-mode' in r.text, 'Dark mode not wired'
+    assert 'hx-' in r.text, 'No htmx attributes found'
+    print('OK: Dark mode and htmx present')
+    "
+    ```
+
+    {{ save_to("07-polish.md") }}
+
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# STAGE 8: FULL VERIFICATION + FIX                                       #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 8 %}
+
+    # Stage 8: Full Verification + Fix
+
+    Run everything. Fix everything. No blind hope.
+
+    ## 1. Tests
+
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    .venv/bin/pytest tests/test_dashboard*.py -v --tb=short 2>&1 | tail -30
+    ```
+
+    If tests fail, read the failure, fix the code, re-run. Do NOT skip
+    failing tests. If a test expects a template that was renamed, update
+    the test.
+
+    ## 2. Type Checking
+
+    ```bash
+    .venv/bin/mypy src/mozart/dashboard/ --ignore-missing-imports 2>&1 | tail -20
+    ```
+
+    Fix any type errors in files you modified (templates are not type-checked,
+    but Python files are).
+
+    ## 3. Lint
+
+    ```bash
+    .venv/bin/ruff check src/mozart/dashboard/ 2>&1 | tail -20
+    ```
+
+    Fix lint violations in files you modified.
+
+    ## 4. Page Rendering
+
+    Start the dashboard and verify ALL pages return valid HTML:
+
+    {{ verify_pages(["'/'", "'/jobs'", "'/monitor'", "'/editor'", "'/templates'"])  }}
+
+    ## 5. Import Canary
+
+    ```bash
+    python -c "
+    from mozart.dashboard.app import create_app
+    from mozart.dashboard.routes.dashboard import router as dash_router
+    from mozart.dashboard.routes.jobs import router as jobs_router
+    from mozart.dashboard.routes.pages import router as pages_router
+    from mozart.dashboard.routes.scores import router as scores_router
+    from mozart.dashboard.routes.stream import router as stream_router
+    from mozart.dashboard.routes.monitor import router as monitor_router
+    from mozart.dashboard.routes.artifacts import router as artifacts_router
+    print('All imports OK')
+    "
+    ```
+
+    ## Fix Cycle
+
+    For each failure:
+    1. Read the error
+    2. Read the file
+    3. Fix the issue
+    4. Re-run the check
+
+    Repeat until ALL checks pass. Do not declare done with known failures.
+
+    {{ save_to("08-verification.md") }}
+
+
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+    {# STAGE 9: COMMIT + PUSH                                                 #}
+    {# ═══════════════════════════════════════════════════════════════════════ #}
+
+    {% elif stage == 9 %}
+
+    # Stage 9: Commit + Push
+
+    ## Pre-Commit Verification
+
+    Run all checks one final time:
+    ```bash
+    cd /home/emzi/Projects/mozart-ai-compose
+    .venv/bin/pytest tests/test_dashboard*.py -x -q --tb=short
+    python -c "from mozart.dashboard.app import create_app; print('OK')"
+    echo "Branch: $(git branch --show-current)"
+    ```
+
+    If ANY check fails, fix it before committing.
+
+    ## Stage Files
+
+    ```bash
+    git status --short | head -50
+    ```
+
+    Stage ONLY dashboard-related files:
+    - `src/mozart/dashboard/templates/**` — all rebuilt templates
+    - `src/mozart/dashboard/static/css/main.css` — new stylesheet
+    - `src/mozart/dashboard/static/js/app.js` — new Alpine.js app
+    - Any test files that were updated
+
+    **NEVER `git add .`** — stage files explicitly by path.
+
+    Review the diff before committing:
+    ```bash
+    git diff --cached --stat
+    ```
+
+    ## Commit
+
+    Write a commit message describing the rebuild:
+    ```
+    feat(dashboard): rebuild frontend with Tailwind + htmx + Alpine.js
+
+    Previous frontend was non-functional — templates crashed, CSS was
+    unstyled (no Tailwind loaded), Alpine.js bindings were broken.
+
+    Rebuilt all 7 page templates, 6+ partials, and shared components
+    from scratch with verified rendering at each stage.
+
+    - Tailwind CDN for styling (pinned v3.4.17)
+    - htmx 2.0 for partial page updates and SSE
+    - Alpine.js 3.x for client-side state (dark mode, notifications)
+    - All pages verified to render without errors
+    ```
+
+    ## Push
+
+    ```bash
+    git push origin main
+    ```
+
+    {{ save_to("09-commit.md") }}
+
+    {% endif %}
+
+
+validations:
+  # ─── Universal: dashboard imports ───
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "from mozart.dashboard.app import create_app; print(\"OK\")"'
+    condition: "stage >= 1"
+    stage: 1
+    description: "Dashboard imports successfully"
+
+  # ─── Stage 1+: base page renders ───
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && timeout 20 .venv/bin/python3 scripts/check-dashboard-page.py 18923 /'
+    condition: "stage >= 1"
+    stage: 2
+    description: "Dashboard overview page renders"
+    timeout_seconds: 30
+
+  # ─── Stage 3+: jobs page renders ───
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && timeout 20 .venv/bin/python3 scripts/check-dashboard-page.py 18924 /jobs'
+    condition: "stage >= 3"
+    stage: 2
+    description: "Jobs list page renders"
+    timeout_seconds: 30
+
+  # ─── Stage 5+: monitor page renders ───
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && timeout 20 .venv/bin/python3 scripts/check-dashboard-page.py 18925 /monitor'
+    condition: "stage >= 5"
+    stage: 2
+    description: "Monitor page renders"
+    timeout_seconds: 30
+
+  # ─── Stage 6+: editor and templates pages render ───
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && timeout 20 .venv/bin/python3 scripts/check-dashboard-page.py 18926 /editor /templates'
+    condition: "stage >= 6"
+    stage: 2
+    description: "Editor and templates pages render"
+    timeout_seconds: 30
+
+  # ─── Stage 7+: ALL pages render (full sweep) ───
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && timeout 25 .venv/bin/python3 scripts/check-dashboard-page.py 18927 / /jobs /monitor /editor /templates'
+    condition: "stage >= 7"
+    stage: 1
+    description: "All dashboard pages render"
+    timeout_seconds: 30
+
+  # ─── Stage 8+: full test suite ───
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/pytest tests/test_dashboard*.py -x -q --tb=no --no-header 2>&1 | tail -1 | grep -qE "[0-9]+ passed"'
+    condition: "stage >= 8"
+    stage: 2
+    description: "Dashboard test suite passes"
+    timeout_seconds: 600
+
+  # ─── Stage 9: commit report ───
+  - type: file_exists
+    path: "{workspace}/09-commit.md"
+    condition: "stage >= 9"
+    stage: 1
+    description: "Commit report exists"
+
+state_backend: sqlite
+pause_between_sheets_seconds: 5

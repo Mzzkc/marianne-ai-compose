@@ -21,9 +21,12 @@ def _write_file(path: Path, content: str) -> None:
     path.write_text(content)
 
 
-def _format_markdown_insights(patterns: list[Any]) -> str:
+def _format_markdown_insights(patterns: list[Any], filter_note: str = "") -> str:
     """Format SEMANTIC_INSIGHT patterns as structured markdown."""
     lines = ["# Semantic Insights\n"]
+
+    if filter_note:
+        lines.append(f"_{filter_note}_\n")
 
     if not patterns:
         lines.append("No semantic insights found in the learning store.\n")
@@ -136,14 +139,25 @@ def _format_markdown_entropy(entropy_metrics: Any, alerts: list[Any]) -> str:
     return "\n".join(lines)
 
 
-def _format_markdown_health(patterns: list[Any]) -> str:
+def _format_markdown_health(patterns: list[Any], filter_note: str = "") -> str:
     """Format pattern health data as structured markdown."""
+    from mozart.learning.store.models import QuarantineStatus
+
     lines = ["# Pattern Health\n"]
 
+    if filter_note:
+        lines.append(f"_{filter_note}_\n")
+
+    # Fix: Compare against QuarantineStatus enum, not string
     quarantined = [
         p
         for p in patterns
-        if getattr(p, "quarantine_status", "") == "QUARANTINED"
+        if getattr(p, "quarantine_status", None) == QuarantineStatus.QUARANTINED
+    ]
+    pending = [
+        p
+        for p in patterns
+        if getattr(p, "quarantine_status", None) == QuarantineStatus.PENDING
     ]
     low_trust = [p for p in patterns if (p.trust_score or 1.0) < 0.3]
     high_variance = [p for p in patterns if (p.variance or 0) > 0.5]
@@ -156,6 +170,16 @@ def _format_markdown_health(patterns: list[Any]) -> str:
             f"{p.description or 'no description'}"
         )
     if not quarantined:
+        lines.append("None.\n")
+    lines.append("")
+
+    lines.append(f"## Pending Validation Patterns ({len(pending)})\n")
+    for p in pending:
+        lines.append(
+            f"- **{p.pattern_name}** (`{p.id}`): "
+            f"eff={p.effectiveness_score:.1%}, trust={p.trust_score:.2f}"
+        )
+    if not pending:
         lines.append("None.\n")
     lines.append("")
 
@@ -247,6 +271,20 @@ def learning_export(
         int,
         typer.Option("--since", "-s", help="Export data from last N days"),
     ] = 30,
+    include_pending: Annotated[
+        bool,
+        typer.Option(
+            "--include-pending/--no-include-pending",
+            help="Include PENDING quarantine patterns in export (default: True)",
+        ),
+    ] = True,
+    min_effectiveness: Annotated[
+        float,
+        typer.Option(
+            "--min-effectiveness",
+            help="Minimum effectiveness score (0.0-1.0) for exported patterns",
+        ),
+    ] = 0.0,
 ) -> None:
     """Export learning store data to workspace files.
 
@@ -257,8 +295,11 @@ def learning_export(
     Examples:
         mozart learning-export --output-dir ./workspace/learning
         mozart learning-export --format json --since 60
+        mozart learning-export --min-effectiveness 0.6 --no-include-pending
     """
     from mozart.learning.global_store import get_global_store
+    from mozart.learning.patterns import PatternType
+    from mozart.learning.store.models import QuarantineStatus
 
     store = get_global_store()
     out = Path(output_dir)
@@ -266,12 +307,41 @@ def learning_export(
 
     ext = "json" if fmt == "json" else "md"
 
-    # 1. Semantic insights
-    insights = store.get_patterns(
-        pattern_type="SEMANTIC_INSIGHT",
-        min_priority=0.0,
-        limit=200,
+    # Build filter description for headers
+    filters_desc = []
+    if not include_pending:
+        filters_desc.append("excluding PENDING patterns")
+    if min_effectiveness > 0.0:
+        filters_desc.append(f"min_effectiveness >= {min_effectiveness:.1%}")
+    filter_note = (
+        f"Filters applied: {', '.join(filters_desc)}"
+        if filters_desc
+        else "No filters applied (all patterns exported)"
     )
+
+    # 1. Semantic insights
+    # Fix: Use PatternType.SEMANTIC_INSIGHT.value (lowercase "semantic_insight")
+    # Apply effectiveness filter by checking effectiveness_score after retrieval
+    all_semantic = store.get_patterns(
+        pattern_type=PatternType.SEMANTIC_INSIGHT.value,
+        min_priority=0.0,
+        limit=1000,
+        exclude_quarantined=False,  # Handle PENDING separately
+    )
+
+    # Apply custom filters
+    insights = []
+    for p in all_semantic:
+        # Filter by quarantine status
+        q_status = getattr(p, "quarantine_status", None)
+        if not include_pending and q_status == QuarantineStatus.PENDING:
+            continue
+
+        # Filter by effectiveness
+        if (p.effectiveness_score or 0.0) < min_effectiveness:
+            continue
+
+        insights.append(p)
     if fmt == "json":
         insights_data: Any = [
             {
@@ -294,7 +364,7 @@ def learning_export(
     else:
         _write_file(
             out / f"semantic-insights.{ext}",
-            _format_markdown_insights(insights),
+            _format_markdown_insights(insights, filter_note),
         )
 
     # 2. Drift report
@@ -382,7 +452,7 @@ def learning_export(
     else:
         _write_file(
             out / f"pattern-health.{ext}",
-            _format_markdown_health(all_patterns),
+            _format_markdown_health(all_patterns, filter_note),
         )
 
     # 5. Evolution history

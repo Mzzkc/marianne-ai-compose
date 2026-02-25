@@ -56,6 +56,8 @@ class TestSecurityHeadersMiddleware:
     @pytest.fixture
     def app_with_security(self):
         """Create app with security headers middleware."""
+        from starlette.responses import HTMLResponse
+
         app = FastAPI()
 
         @app.get("/")
@@ -66,29 +68,48 @@ class TestSecurityHeadersMiddleware:
         async def api_data():
             return {"data": "value"}
 
+        @app.get("/html")
+        async def html_page():
+            return HTMLResponse("<html><body>ok</body></html>")
+
         config = SecurityConfig()
         app.add_middleware(SecurityHeadersMiddleware, config=config)
         return app
 
     def test_adds_security_headers(self, app_with_security):
-        """Test security headers are added to responses."""
+        """Test all security headers are added to HTML responses."""
+        client = TestClient(app_with_security)
+        response = client.get("/html")
+
+        assert response.status_code == 200
+
+        # CSP, HSTS, XSS-Protection only on HTML
+        assert "Content-Security-Policy" in response.headers
+        assert "Strict-Transport-Security" in response.headers
+        assert "X-XSS-Protection" in response.headers
+        # Common headers on all responses
+        assert "X-Content-Type-Options" in response.headers
+        assert "X-Frame-Options" in response.headers
+        assert "Referrer-Policy" in response.headers
+
+    def test_json_gets_common_headers_only(self, app_with_security):
+        """Test JSON responses get common headers but not CSP/HSTS."""
         client = TestClient(app_with_security)
         response = client.get("/")
 
         assert response.status_code == 200
-
-        # Check security headers
-        assert "Content-Security-Policy" in response.headers
-        assert "Strict-Transport-Security" in response.headers
         assert "X-Content-Type-Options" in response.headers
         assert "X-Frame-Options" in response.headers
-        assert "X-XSS-Protection" in response.headers
         assert "Referrer-Policy" in response.headers
+        # CSP, HSTS, XSS-Protection not on JSON
+        assert "Content-Security-Policy" not in response.headers
+        assert "Strict-Transport-Security" not in response.headers
+        assert "X-XSS-Protection" not in response.headers
 
     def test_csp_header_content(self, app_with_security):
         """Test CSP header has expected directives."""
         client = TestClient(app_with_security)
-        response = client.get("/")
+        response = client.get("/html")
 
         csp = response.headers["Content-Security-Policy"]
 
@@ -99,7 +120,7 @@ class TestSecurityHeadersMiddleware:
     def test_hsts_header(self, app_with_security):
         """Test HSTS header is properly configured."""
         client = TestClient(app_with_security)
-        response = client.get("/")
+        response = client.get("/html")
 
         hsts = response.headers["Strict-Transport-Security"]
 

@@ -34,38 +34,48 @@ document.addEventListener('alpine:init', () => {
     }));
 });
 
+/* Helper to dispatch notifications via Alpine.js v3 API */
+function notifyUser(message, type) {
+    const el = document.querySelector('[x-data]');
+    if (el && el._x_dataStack) {
+        Alpine.$data(el).addNotification(message, type);
+    }
+}
+
 /* htmx error handling */
 document.addEventListener('htmx:responseError', (event) => {
     const status = event.detail.xhr?.status;
     const msg = status === 0
         ? 'Network error — is the server running?'
         : `Request failed (${status})`;
-
-    const app = document.querySelector('[x-data]')?.__x;
-    if (app && app.$data?.addNotification) {
-        app.$data.addNotification(msg, 'error');
-    }
+    notifyUser(msg, 'error');
 });
 
 /* htmx connection error */
 document.addEventListener('htmx:sendError', () => {
-    const app = document.querySelector('[x-data]')?.__x;
-    if (app && app.$data?.addNotification) {
-        app.$data.addNotification('Connection lost — retrying...', 'warning');
-    }
+    notifyUser('Connection lost — retrying...', 'warning');
 });
 
-/* Health check response handler — update conductor dot */
-document.addEventListener('htmx:afterRequest', (event) => {
-    if (event.detail.pathInfo?.requestPath === '/health') {
+/* Conductor status response handler — update dot color, prevent swap */
+document.addEventListener('htmx:beforeSwap', (event) => {
+    if (event.detail.pathInfo?.requestPath === '/api/jobs/daemon/status') {
         const dot = document.getElementById('conductor-dot');
-        if (!dot) return;
-        if (event.detail.successful) {
-            dot.className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse-dot';
-        } else {
-            dot.className = 'w-2 h-2 rounded-full bg-red-500';
+        if (dot) {
+            try {
+                const data = JSON.parse(event.detail.xhr?.responseText || '{}');
+                if (data.connected) {
+                    dot.className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse-dot';
+                } else {
+                    dot.className = 'w-2 h-2 rounded-full bg-red-500';
+                }
+            } catch (e) {
+                if (event.detail.xhr?.status === 200) {
+                    dot.className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse-dot';
+                } else {
+                    dot.className = 'w-2 h-2 rounded-full bg-red-500';
+                }
+            }
         }
-        // Prevent htmx from swapping the health JSON into the dot
         event.detail.shouldSwap = false;
     }
 });

@@ -174,6 +174,31 @@ class SemanticLearningConfig(BaseModel):
         description="Maximum concurrent LLM analysis tasks. "
         "Controls API cost and system load.",
     )
+    entropy_threshold: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=1.0,
+        description="Entropy threshold for triggering diversity injection. "
+        "When pattern diversity index drops below this value, the learning "
+        "system automatically boosts exploration budget to escape local optima. "
+        "Default 0.1 (10% of max entropy) catches severe pattern collapse.",
+    )
+    exploration_budget: float = Field(
+        default=0.15,
+        ge=0.05,
+        le=0.50,
+        description="Exploration budget boost amount when entropy response triggers. "
+        "This percentage of pattern applications will use random selection "
+        "instead of highest-effectiveness to inject diversity. "
+        "Default 0.15 (15%) balances exploration vs exploitation.",
+    )
+    entropy_check_interval_seconds: float = Field(
+        default=3600.0,
+        ge=60.0,
+        description="Interval between entropy checks in seconds. "
+        "Entropy is also checked after every 10 completed jobs. "
+        "Default 3600s (1 hour) prevents excessive checking overhead.",
+    )
 
     @field_validator("analyze_on")
     @classmethod

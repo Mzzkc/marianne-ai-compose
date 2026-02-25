@@ -104,6 +104,7 @@ class JobsPanel(VerticalScroll):
         self._items: list[dict[str, Any]] = []
         self._tree: Tree[dict[str, Any]] | None = None
         self._empty_label: Static | None = None
+        self._observer_file_events: list[dict[str, Any]] = []
 
     def compose(self) -> Any:
         """Build the widget tree with a Tree for collapsible jobs."""
@@ -143,9 +144,15 @@ class JobsPanel(VerticalScroll):
         if self._items:
             self._selected_index = max(self._selected_index - 1, 0)
 
-    def update_data(self, snapshot: SystemSnapshot | None) -> None:
+    def update_data(
+        self,
+        snapshot: SystemSnapshot | None,
+        observer_file_events: list[dict[str, Any]] | None = None,
+    ) -> None:
         """Update the panel with new snapshot data."""
         self._snapshot = snapshot
+        if observer_file_events is not None:
+            self._observer_file_events = observer_file_events
         self._render_jobs()
 
     def _render_jobs(self) -> None:
@@ -206,10 +213,17 @@ class JobsPanel(VerticalScroll):
                 f"[bold]\u25b6 {job_id}[/bold]  "
                 f"{sheet_label} {progress}"
             )
+            # Attach observer file events filtered for this job
+            job_file_events = [
+                e for e in self._observer_file_events
+                if e.get("job_id") == job_id
+                and e.get("event", "").startswith("observer.file_")
+            ]
             job_data: dict[str, Any] = {
                 "type": "job",
                 "job_id": job_id,
                 "processes": procs,
+                "observer_file_events": job_file_events,
             }
             job_node = tree.root.add(job_label, data=job_data, expand=not auto_collapse)
             items.append(job_data)

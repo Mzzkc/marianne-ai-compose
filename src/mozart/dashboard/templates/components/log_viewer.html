@@ -75,6 +75,28 @@
          clearLines() {
              this.lines = [];
              this.lineCount = 0;
+         },
+
+         init() {
+             const source = new EventSource('/api/jobs/{{ job_id }}/logs');
+             source.addEventListener('log', (e) => {
+                 try {
+                     const data = JSON.parse(e.data);
+                     this.addLine(data);
+                 } catch(err) { console.debug('SSE log parse error:', err); }
+             });
+             source.addEventListener('log_complete', () => {
+                 this.connected = false;
+             });
+             source.addEventListener('error', () => {
+                 this.connected = false;
+             });
+             source.onopen = () => { this.connected = true; };
+             this._source = source;
+         },
+
+         destroy() {
+             if (this._source) this._source.close();
          }
      }"
      class="flex flex-col h-full">
@@ -148,25 +170,7 @@
         </div>
     </div>
 
-    <!-- SSE connection (hidden) -->
-    <div hx-ext="sse"
-         sse-connect="/api/jobs/{{ job_id }}/logs"
-         class="hidden"
-         @sse-message="
-             try {
-                 const data = JSON.parse($event.data || '{}');
-                 if ($event.type === 'log') {
-                     addLine(data);
-                 }
-             } catch(e) { console.error('SSE parse error:', e); }
-         "
-         @sse-open="connected = true"
-         @sse-error="connected = false"
-         @sse-close="connected = false">
-        <div sse-swap="log"></div>
-        <div sse-swap="log_complete"></div>
-        <div sse-swap="error"></div>
-    </div>
+    <!-- SSE connection managed by Alpine.js init/destroy -->
 
     <!-- Log output area -->
     <div x-ref="logOutput"
@@ -249,6 +253,25 @@
                  const el = this.$refs.compactOutput;
                  if (el) el.scrollTop = el.scrollHeight;
              });
+         },
+
+         init() {
+             const source = new EventSource('/api/jobs/{{ job_id }}/logs?tail_lines=20');
+             source.addEventListener('log', (e) => {
+                 try {
+                     const data = JSON.parse(e.data);
+                     this.addLine(data);
+                 } catch(err) { console.debug('SSE log parse error:', err); }
+             });
+             source.addEventListener('error', () => {
+                 this.connected = false;
+             });
+             source.onopen = () => { this.connected = true; };
+             this._source = source;
+         },
+
+         destroy() {
+             if (this._source) this._source.close();
          }
      }"
      class="rounded-lg overflow-hidden border border-gray-700">
@@ -266,20 +289,7 @@
         </a>
     </div>
 
-    <!-- SSE connection (hidden) -->
-    <div hx-ext="sse"
-         sse-connect="/api/jobs/{{ job_id }}/logs?tail_lines=20"
-         class="hidden"
-         @sse-message="
-             try {
-                 const data = JSON.parse($event.data || '{}');
-                 if ($event.type === 'log') addLine(data);
-             } catch(e) {}
-         "
-         @sse-open="connected = true"
-         @sse-error="connected = false">
-        <div sse-swap="log"></div>
-    </div>
+    <!-- SSE connection managed by Alpine.js init/destroy -->
 
     <!-- Compact output -->
     <div x-ref="compactOutput"

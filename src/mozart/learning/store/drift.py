@@ -20,7 +20,7 @@ import sqlite3
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from mozart.core.logging import MozartLogger
 
@@ -932,3 +932,94 @@ class DriftMixin:
             }
 
             return recurring
+
+    def record_evolution_cycle(
+        self,
+        cycle_number: int,
+        candidates_generated: int,
+        candidates_applied: int,
+        changes_summary: str,
+        outcome: Literal["SUCCESS", "PARTIAL", "DEFERRED"],
+        learning_snapshot: dict[str, Any],
+    ) -> str:
+        """Record evolution cycle metadata to trajectory table.
+
+        v25 Evolution: Simplified wrapper for recording evolution cycles with
+        essential metadata. Maps to the more detailed record_evolution_entry()
+        internal method.
+
+        This method provides a simpler interface focused on what evolution
+        cycles need to record: how many candidates were generated/applied,
+        what changed, and the outcome.
+
+        Args:
+            cycle_number: Evolution cycle number (e.g., 25 for v25).
+            candidates_generated: Number of evolution candidates generated.
+            candidates_applied: Number of candidates successfully applied.
+            changes_summary: Git diff summary or description of changes.
+            outcome: Evolution outcome - SUCCESS, PARTIAL, or DEFERRED.
+            learning_snapshot: Dict containing learning metrics at time of cycle.
+
+        Returns:
+            The ID of the created trajectory entry.
+
+        Raises:
+            sqlite3.IntegrityError: If an entry for this cycle already exists.
+
+        Example:
+            >>> store = GlobalLearningStore()
+            >>> entry_id = store.record_evolution_cycle(
+            ...     cycle_number=25,
+            ...     candidates_generated=5,
+            ...     candidates_applied=3,
+            ...     changes_summary="Fixed learning export, wired pattern lifecycle",
+            ...     outcome="SUCCESS",
+            ...     learning_snapshot={
+            ...         "patterns": 6,
+            ...         "entropy": 0.000,
+            ...         "recovery_rate": 0.0
+            ...     }
+            ... )
+        """
+        # Map to the detailed record_evolution_entry method
+        # Use defaults for fields not in the simplified interface
+        return self.record_evolution_entry(
+            cycle=cycle_number,
+            evolutions_completed=candidates_applied,
+            evolutions_deferred=candidates_generated - candidates_applied,
+            issue_classes=[outcome.lower()],
+            cv_avg=0.0,  # Not used in new cycles
+            implementation_loc=0,  # Can be computed from git diff if needed
+            test_loc=0,
+            loc_accuracy=1.0,  # Default to perfect accuracy
+            research_candidates_resolved=0,
+            research_candidates_created=0,
+            notes=(
+                f"{changes_summary}\n\nOutcome: {outcome}"
+                f"\nLearning snapshot: {json.dumps(learning_snapshot)}"
+            ),
+        )
+
+    def get_evolution_history(self, last_n: int = 10) -> list[EvolutionTrajectoryEntry]:
+        """Retrieve last N evolution cycles for context.
+
+        v25 Evolution: Simplified wrapper for retrieving evolution history.
+        Maps to the more detailed get_trajectory() method.
+
+        This provides a simpler interface focused on getting recent evolution
+        history for context in future cycles.
+
+        Args:
+            last_n: Number of recent cycles to retrieve (default: 10).
+
+        Returns:
+            List of EvolutionTrajectoryEntry objects, ordered by cycle descending
+            (most recent first).
+
+        Example:
+            >>> store = GlobalLearningStore()
+            >>> recent_cycles = store.get_evolution_history(last_n=5)
+            >>> for entry in recent_cycles:
+            ...     print(f"Cycle {entry.cycle}: {entry.evolutions_completed} completed")
+        """
+        return self.get_trajectory(limit=last_n)

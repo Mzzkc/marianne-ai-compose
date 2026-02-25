@@ -926,7 +926,9 @@ class TestRunnerIsolationSetup:
         """Create a mock backend with working_directory attribute."""
         from unittest.mock import MagicMock
 
-        backend = MagicMock()
+        from mozart.backends.base import Backend
+
+        backend = MagicMock(spec=Backend)
         backend.working_directory = None
         return backend
 

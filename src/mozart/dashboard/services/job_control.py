@@ -71,9 +71,13 @@ class JobControlService:
         self._workspace_root = workspace_root or Path.cwd()
         self._running_processes: dict[str, asyncio.subprocess.Process] = {}
         self._process_start_times: dict[str, float] = {}  # Track when processes started
-        from mozart.daemon.config import DaemonConfig
-
-        self._daemon_client = DaemonClient(DaemonConfig().socket.path)
+        try:
+            from mozart.daemon.config import DaemonConfig
+            self._daemon_client = DaemonClient(DaemonConfig().socket.path)
+        except Exception:
+            from pathlib import Path as _Path
+            default_socket = _Path.home() / ".mozart" / "daemon.sock"
+            self._daemon_client = DaemonClient(default_socket)
 
     async def is_daemon_available(self) -> bool:
         """Check if the Mozart conductor is running and reachable."""

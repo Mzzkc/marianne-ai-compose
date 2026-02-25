@@ -30,6 +30,9 @@ _EVENT_COLORS: dict[str, str] = {
     "anomaly": "bold yellow",
     "learning": "magenta",
     "observer_process": "magenta",
+    "observer_file_created": "green",
+    "observer_file_modified": "yellow",
+    "observer_file_deleted": "red",
 }
 
 
@@ -136,7 +139,6 @@ class TimelinePanel(RichLog):
             entries.append((anom.timestamp, line))
 
         # Observer process events (from JobObserver via ObserverRecorder)
-        # REVIEW FIX 2: Merge into entries by timestamp, don't append after sort
         for obs in self._observer_events:
             evt_name = obs.get("event", "")
             if not evt_name.startswith("observer.process_"):
@@ -145,12 +147,39 @@ class TimelinePanel(RichLog):
             ts_str = _format_timestamp(ts)
             data = obs.get("data") or {}
             pid = data.get("pid", "?")
-            # REVIEW FIX 1: process_spawned has {pid, name}, process_exited has {pid, role}
             label = data.get("name", data.get("role", ""))
             action = "SPAWN" if "spawned" in evt_name else "EXIT"
             color = _EVENT_COLORS["observer_process"]
             job_label = obs.get("job_id", "")
             line = f"{ts_str}  [{color}]\u2699 {action:<6s}[/] {job_label:<20s} PID {pid} {label}"
+            entries.append((ts, line))
+
+        # Observer file events (from JobObserver via ObserverRecorder)
+        for obs in self._observer_events:
+            evt_name = obs.get("event", "")
+            if not evt_name.startswith("observer.file_"):
+                continue
+            ts = obs.get("timestamp", time.time())
+            ts_str = _format_timestamp(ts)
+            data = obs.get("data") or {}
+            path = data.get("path", "?")
+            # Truncate long paths
+            if len(path) > 40:
+                path = "..." + path[-37:]
+            job_label = obs.get("job_id", "")
+            if "created" in evt_name:
+                action = "CREATE"
+                color = _EVENT_COLORS["observer_file_created"]
+                icon = "\U0001f4c4"  # page facing up
+            elif "deleted" in evt_name:
+                action = "DELETE"
+                color = _EVENT_COLORS["observer_file_deleted"]
+                icon = "\U0001f5d1"  # wastebasket
+            else:
+                action = "MODIFY"
+                color = _EVENT_COLORS["observer_file_modified"]
+                icon = "\u270f"  # pencil
+            line = f"{ts_str}  [{color}]{icon} {action:<6s}[/] {job_label:<20s} {path}"
             entries.append((ts, line))
 
         # Learning insights

@@ -29,6 +29,7 @@ Architecture:
 
 from mozart.learning.store.patterns_broadcast import PatternBroadcastMixin
 from mozart.learning.store.patterns_crud import PatternCrudMixin
+from mozart.learning.store.patterns_lifecycle import PatternLifecycleMixin
 from mozart.learning.store.patterns_quarantine import PatternQuarantineMixin
 from mozart.learning.store.patterns_query import PatternQueryMixin
 from mozart.learning.store.patterns_success_factors import PatternSuccessFactorsMixin
@@ -42,6 +43,7 @@ class PatternMixin(
     PatternTrustMixin,
     PatternSuccessFactorsMixin,
     PatternBroadcastMixin,
+    PatternLifecycleMixin,
 ):
     """Mixin providing all pattern-related methods for GlobalLearningStore.
 
@@ -56,6 +58,7 @@ class PatternMixin(
     - PatternTrustMixin: calculate_trust_score, get_high/low_trust_patterns
     - PatternSuccessFactorsMixin: update_success_factors, analyze_pattern_why
     - PatternBroadcastMixin: record_pattern_discovery, check_recent_pattern_discoveries
+    - PatternLifecycleMixin: promote_ready_patterns, update_quarantine_status (v25)
     """
 
     pass
@@ -71,4 +74,5 @@ __all__ = [
     "PatternTrustMixin",
     "PatternSuccessFactorsMixin",
     "PatternBroadcastMixin",
+    "PatternLifecycleMixin",
 ]

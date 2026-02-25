@@ -5,7 +5,7 @@
 # ║  synthesizes evolution candidates, implements with 2 rounds of review/fix,║
 # ║  integrates, and commits. Self-chains via on_success.                     ║
 # ║                                                                            ║
-# ║  10 logical stages → 34 expanded sheets:                                  ║
+# ║  11 logical stages → 35 expanded sheets:                                  ║
 # ║    Stage 1:     Extract learning data (1 sheet)                           ║
 # ║    Stage 2x5:   TDF analysis — COMP/SCI/CULT/EXP/META (5 sheets)         ║
 # ║    Stage 3:     Synthesize evolution plan (1 sheet)                       ║
@@ -16,6 +16,7 @@
 # ║    Stage 8x5:   Fix R2 (up to 5 sheets, skip_when)                       ║
 # ║    Stage 9:     Integrate all candidates (1 sheet)                        ║
 # ║    Stage 10:    Commit + evolution log (1 sheet)                          ║
+# ║    Stage 11:    Record trajectory (1 sheet)                               ║
 # ║                                                                            ║
 # ║  Design doc: docs/plans/2026-02-24-evolution-concert-design.md            ║
 # ║                                                                            ║
@@ -52,7 +53,7 @@ backend:
 
 sheet:
   size: 1
-  total_items: 10
+  total_items: 11
 
   fan_out:
     2: 5     # TDF analysis (COMP/SCI/CULT/EXP/META)
@@ -72,6 +73,7 @@ sheet:
     8: [7]
     9: [4, 5, 6, 7, 8]
     10: [9]
+    11: [10]
 
   prelude:
     - file: "/home/emzi/Projects/mozart-ai-compose/scores/evolution-prelude.md"
@@ -88,6 +90,7 @@ sheet:
   #   28-32    → Stage 8  (Fix R2 x5)
   #   33       → Stage 9  (Integrate)
   #   34       → Stage 10 (Commit + Log)
+  #   35       → Stage 11 (Record Trajectory)
 
   skip_when_command:
     # Stage 4: Skip implementation if candidate N not in plan
@@ -185,9 +188,7 @@ retry:
   max_completion_attempts: 2
 
 cost_limits:
-  enabled: true
-  max_cost_per_sheet: 5.00
-  max_cost_per_job: 150.00
+  enabled: false
 
 stale_detection:
   enabled: true
@@ -686,6 +687,42 @@ prompt:
        Verified through 2 rounds of review/fix."
        ```
 
+    {% elif stage == 11 %}
+    {# ═══════════════════════════════════════════════════════════════════ #}
+    {# STAGE 11: RECORD EVOLUTION TRAJECTORY                              #}
+    {# ═══════════════════════════════════════════════════════════════════ #}
+
+    Record this evolution cycle in Mozart's learning store.
+
+    Read {{ workspace }}/evolution-plan.md to extract:
+    - Candidate count (from "Candidate Count: N")
+    - Implementation outcomes (count how many 04-impl-*.md files exist)
+    - Overall cycle outcome based on integration status
+
+    Write a Python script to {{ workspace }}/record-trajectory.py that:
+
+    1. Imports GlobalLearningStore from mozart.learning.store
+    2. Instantiates the store with default path
+    3. Calls record_evolution_cycle() with:
+       - cycle_number: 25 (this cycle)
+       - candidates_generated: [extracted from plan]
+       - candidates_applied: [count of 04-impl-*.md files]
+       - changes_summary: Git diff --stat summary from project root
+       - outcome: "SUCCESS" if integration ready, "PARTIAL" if some candidates applied, "DEFERRED" if none
+       - learning_snapshot: dict with current learning metrics (patterns count, entropy, recovery rate)
+    4. Prints confirmation message with entry ID
+
+    Then execute the script:
+    ```
+    cd /home/emzi/Projects/mozart-ai-compose
+    python {{ workspace }}/record-trajectory.py
+    ```
+
+    Write confirmation to {{ workspace }}/evolution-recorded.txt with:
+    - "Cycle 25 recorded" marker
+    - Entry ID returned by record_evolution_cycle()
+    - Summary of what was recorded
+
     {% endif %}
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -907,3 +944,23 @@ validations:
     condition: "stage == 10"
     stage: 2
     description: "Evolution log includes TDF reflection"
+
+  # --- Stage 11: Record Trajectory ---
+  - type: file_exists
+    path: "{workspace}/evolution-recorded.txt"
+    condition: "stage == 11"
+    stage: 1
+    description: "Evolution trajectory recording confirmation exists"
+
+  - type: content_regex
+    path: "{workspace}/evolution-recorded.txt"
+    pattern: "Cycle 25 recorded"
+    condition: "stage == 11"
+    stage: 2
+    description: "Confirmation contains cycle 25 marker"
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && python3 -c "from mozart.learning.store import GlobalLearningStore; s = GlobalLearningStore(); entries = s.get_trajectory(limit=1); assert len(entries) > 0 and entries[0].cycle == 25"'
+    condition: "stage == 11"
+    stage: 3
+    description: "Trajectory entry exists in database for cycle 25"

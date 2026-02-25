@@ -43,6 +43,27 @@
              } catch (e) {
                  console.error('Failed to load sheet details:', e);
              }
+         },
+
+         init() {
+             {% if job.status.value in ('running', 'paused', 'pending') %}
+             const source = new EventSource('/api/jobs/{{ job.job_id }}/stream');
+             source.addEventListener('job_status', (e) => {
+                 try {
+                     const data = JSON.parse(e.data);
+                     if (data.status) this.status = data.status;
+                     if (data.progress_percent !== undefined) this.progress = data.progress_percent;
+                     if (data.completed_sheets !== undefined) this.completedSheets = data.completed_sheets;
+                     if (data.total_sheets !== undefined) this.totalSheets = data.total_sheets;
+                 } catch(err) { console.debug('SSE status parse error:', err); }
+             });
+             source.addEventListener('job_finished', () => { location.reload(); });
+             this._source = source;
+             {% endif %}
+         },
+
+         destroy() {
+             if (this._source) this._source.close();
          }
      }">
 
@@ -173,24 +194,7 @@
     </div>
     {% endif %}
 
-    <!-- SSE connection for live updates (only for active jobs) -->
-    {% if job.status.value in ('running', 'paused', 'pending') %}
-    <div hx-ext="sse"
-         sse-connect="/api/jobs/{{ job.job_id }}/stream"
-         sse-swap="job_status"
-         hx-swap="none"
-         class="hidden"
-         @htmx:sse-message.window="
-             try {
-                 const data = JSON.parse($event.detail.data || '{}');
-                 if (data.status) status = data.status;
-                 if (data.progress_percent !== undefined) progress = data.progress_percent;
-                 if (data.completed_sheets !== undefined) completedSheets = data.completed_sheets;
-                 if (data.total_sheets !== undefined) totalSheets = data.total_sheets;
-             } catch(e) {}
-         ">
-    </div>
-    {% endif %}
+    <!-- SSE connection for live updates managed by Alpine.js init/destroy -->
 
     <!-- Sheets table -->
     <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
