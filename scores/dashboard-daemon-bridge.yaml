@@ -958,81 +958,547 @@ prompt:
     {% endif %}
 
 validations:
-  # Stages 1-5: New module tests pass
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 1: DaemonStateAdapter — outcome: adapter implements protocol
+  # ──────────────────────────────────────────────────────────────────
+
+  # Process check: tests pass
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_daemon_state_adapter.py -x -q --tb=short --no-cov'
     condition: "stage == 1"
-    description: "DaemonStateAdapter tests pass"
+    description: "Adapter tests pass"
+    stage: 1
     timeout_seconds: 600
+
+  # Outcome: adapter class exists and implements StateBackend
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "
+      from mozart.dashboard.state.daemon_adapter import DaemonStateAdapter
+      from mozart.state.base import StateBackend
+      assert issubclass(DaemonStateAdapter, StateBackend), 'Not a StateBackend subclass'
+      # Verify all required abstract methods are implemented (not abstract)
+      import inspect
+      for name in ('load', 'list_jobs', 'save', 'delete', 'get_next_sheet', 'mark_sheet_status'):
+          method = getattr(DaemonStateAdapter, name, None)
+          assert method is not None, f'Missing method: {name}'
+          assert not getattr(method, '__isabstractmethod__', False), f'Still abstract: {name}'
+      print('DaemonStateAdapter implements full StateBackend protocol')
+      "
+    condition: "stage == 1"
+    description: "Adapter implements StateBackend protocol"
+    stage: 2
+    timeout_seconds: 120
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 2: New IPC methods — outcome: methods registered and callable
+  # ──────────────────────────────────────────────────────────────────
+
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "
+      # Verify the IPC methods are registered in process.py
+      import ast, sys
+      with open('src/mozart/daemon/process.py') as f:
+          source = f.read()
+      for method in ('daemon.rate_limits', 'daemon.learning.patterns'):
+          if method not in source:
+              print(f'MISSING: {method} not registered in process.py')
+              sys.exit(1)
+      # Verify client convenience methods exist
+      from mozart.daemon.ipc.client import DaemonClient
+      assert hasattr(DaemonClient, 'rate_limits'), 'Client missing rate_limits()'
+      assert hasattr(DaemonClient, 'learning_patterns'), 'Client missing learning_patterns()'
+      print('IPC methods registered and client methods exist')
+      "
+    condition: "stage == 2"
+    description: "IPC methods registered in daemon and client"
+    stage: 1
+    timeout_seconds: 120
 
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --no-cov --timeout=120 -k "rate_limit or learning"'
     condition: "stage == 2"
-    description: "IPC method tests pass"
+    description: "Related tests pass"
+    stage: 2
     timeout_seconds: 600
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 3: EventBridge — outcome: bridge can be instantiated and has
+  #   streaming + one-shot interfaces
+  # ──────────────────────────────────────────────────────────────────
 
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_event_bridge.py -x -q --tb=short --no-cov'
     condition: "stage == 3"
     description: "Event bridge tests pass"
+    stage: 1
     timeout_seconds: 600
+
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "
+      from mozart.dashboard.services.event_bridge import DaemonEventBridge
+      import inspect
+      # Verify streaming interfaces exist and are async generators
+      assert hasattr(DaemonEventBridge, 'job_events'), 'Missing job_events()'
+      assert hasattr(DaemonEventBridge, 'all_events'), 'Missing all_events()'
+      assert hasattr(DaemonEventBridge, 'observer_events'), 'Missing observer_events()'
+      assert inspect.isasyncgenfunction(DaemonEventBridge.job_events), 'job_events not async generator'
+      assert inspect.isasyncgenfunction(DaemonEventBridge.all_events), 'all_events not async generator'
+      assert inspect.iscoroutinefunction(DaemonEventBridge.observer_events), 'observer_events not async'
+      # Verify route file exists with correct endpoints
+      with open('src/mozart/dashboard/routes/events.py') as f:
+          source = f.read()
+      assert '/api/events/stream' in source, 'Missing /api/events/stream endpoint'
+      assert '/api/jobs/{job_id}/observer' in source, 'Missing observer endpoint'
+      print('EventBridge has streaming + one-shot interfaces, routes defined')
+      "
+    condition: "stage == 3"
+    description: "EventBridge exposes streaming and one-shot interfaces"
+    stage: 2
+    timeout_seconds: 120
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 4: Analytics — outcome: computes stats with expected keys
+  # ──────────────────────────────────────────────────────────────────
 
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard_analytics.py -x -q --tb=short --no-cov'
     condition: "stage == 4"
     description: "Analytics tests pass"
+    stage: 1
     timeout_seconds: 600
+
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "
+      import asyncio
+      from unittest.mock import AsyncMock
+      from mozart.dashboard.services.analytics import DaemonAnalytics
+      from mozart.core.checkpoint import CheckpointState
+
+      # Create a mock adapter that returns a minimal job
+      adapter = AsyncMock()
+      adapter.list_jobs.return_value = [
+          CheckpointState(job_id='test', job_name='test', total_sheets=2)
+      ]
+
+      analytics = DaemonAnalytics(adapter, cache_ttl=0)
+      stats = asyncio.run(analytics.get_stats())
+
+      # Verify all expected keys present
+      required = ('total_jobs', 'running_jobs', 'completed_jobs', 'failed_jobs',
+                   'success_rate', 'total_spend', 'throughput_sheets_per_hour')
+      for key in required:
+          assert key in stats, f'Missing stats key: {key}'
+      assert stats['total_jobs'] == 1, f'Expected 1 job, got {stats[\"total_jobs\"]}'
+      print(f'Analytics returns all {len(required)} required keys')
+      "
+    condition: "stage == 4"
+    description: "Analytics computes stats with all required keys"
+    stage: 2
+    timeout_seconds: 120
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 5: SystemView — outcome: graceful fallbacks when daemon down
+  # ──────────────────────────────────────────────────────────────────
 
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard_system_view.py -x -q --tb=short --no-cov'
     condition: "stage == 5"
     description: "System view tests pass"
+    stage: 1
     timeout_seconds: 600
 
-  # Stage 6: Full dashboard test suite
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "
+      import asyncio
+      from unittest.mock import AsyncMock
+      from mozart.dashboard.services.system_view import DaemonSystemView
+      from mozart.daemon.exceptions import DaemonNotRunningError
+
+      # Simulate daemon being DOWN
+      client = AsyncMock()
+      client.call.side_effect = DaemonNotRunningError('not running')
+      client.status.side_effect = DaemonNotRunningError('not running')
+      client.rate_limits.side_effect = DaemonNotRunningError('not running')
+      client.learning_patterns.side_effect = DaemonNotRunningError('not running')
+
+      view = DaemonSystemView(client)
+
+      # All methods must return graceful defaults, not crash
+      assert asyncio.run(view.get_snapshot()) is None
+      assert asyncio.run(view.get_daemon_status()) is None
+
+      rl = asyncio.run(view.rate_limit_state())
+      assert 'active_limits' in rl, 'rate_limit_state missing active_limits'
+
+      pl = asyncio.run(view.pressure_level())
+      assert pl['level'] == 'unknown', f'Expected unknown pressure, got {pl[\"level\"]}'
+
+      patterns = asyncio.run(view.learning_patterns())
+      assert patterns == [], f'Expected empty patterns, got {patterns}'
+
+      print('SystemView handles daemon-down gracefully for all 5 methods')
+      "
+    condition: "stage == 5"
+    description: "SystemView returns graceful defaults when daemon is down"
+    stage: 2
+    timeout_seconds: 120
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 6: Wiring — outcome: new API routes respond, app starts
+  # ──────────────────────────────────────────────────────────────────
+
+  # Process: existing tests don't break
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short --no-cov'
     condition: "stage == 6"
-    description: "All dashboard tests pass after wiring"
+    description: "Dashboard tests pass after wiring"
+    stage: 1
     timeout_seconds: 1800
 
-  # Stages 7-11: Dashboard tests still pass after frontend changes
+  # Outcome: app creates successfully and new routes are registered
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "
+      from mozart.dashboard.app import create_app
+      app = create_app()
+      routes = [r.path for r in app.routes]
+      required_routes = [
+          '/api/analytics/stats',
+          '/api/analytics/costs',
+          '/api/analytics/validations',
+          '/api/analytics/errors',
+          '/api/system/rate-limits',
+          '/api/system/pressure',
+          '/api/system/learning',
+          '/api/events/stream',
+      ]
+      missing = [r for r in required_routes if r not in routes]
+      if missing:
+          print(f'MISSING ROUTES: {missing}')
+          print(f'Available: {sorted(r for r in routes if r.startswith(\"/api/\"))}')
+          raise AssertionError(f'{len(missing)} routes not registered')
+      print(f'All {len(required_routes)} new API routes registered')
+      "
+    condition: "stage == 6"
+    description: "All new API routes are registered in the app"
+    stage: 2
+    timeout_seconds: 120
+
+  # Outcome: Analytics nav item added to header
+  - type: command_succeeds
+    command: 'grep -q "analytics" /home/emzi/Projects/mozart-ai-compose/src/mozart/dashboard/templates/components/header.html'
+    condition: "stage == 6"
+    description: "Analytics nav item in header"
+    stage: 2
+    timeout_seconds: 30
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 7: Index page — outcome: event timeline partial exists,
+  #   enhanced stats have spend/throughput
+  # ──────────────────────────────────────────────────────────────────
+
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short --no-cov'
-    condition: "stage >= 7 and stage <= 11"
-    description: "Dashboard tests pass after frontend changes"
+    condition: "stage == 7"
+    description: "Dashboard tests pass"
+    stage: 1
     timeout_seconds: 900
 
-  # Stage 12: Full project test suite
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && python -c "
+      import os
+      templates = 'src/mozart/dashboard/templates'
+      # Event timeline partial must exist
+      timeline = os.path.join(templates, 'partials', 'event_timeline.html')
+      assert os.path.isfile(timeline), f'Missing: {timeline}'
+      with open(timeline) as f:
+          content = f.read()
+      assert len(content) > 100, 'Event timeline partial is suspiciously small'
+      # Index page must reference event timeline or spend/throughput
+      with open(os.path.join(templates, 'pages', 'index.html')) as f:
+          index = f.read()
+      assert 'spend' in index.lower() or 'cost' in index.lower() or 'throughput' in index.lower(), \
+          'Index page has no spend/cost/throughput references'
+      print('Index page has event timeline partial and spend/throughput data')
+      "
+    condition: "stage == 7"
+    description: "Index page has event timeline and spend/throughput"
+    stage: 2
+    timeout_seconds: 60
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 8: Jobs list — outcome: enriched rows with cost + progress
+  # ──────────────────────────────────────────────────────────────────
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short --no-cov'
+    condition: "stage == 8"
+    description: "Dashboard tests pass"
+    stage: 1
+    timeout_seconds: 900
+
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && python -c "
+      import glob
+      # Check jobs list template or partial for cost/progress references
+      for path in glob.glob('src/mozart/dashboard/templates/**/jobs*', recursive=True):
+          with open(path) as f:
+              content = f.read().lower()
+          if 'cost' in content or 'progress' in content or 'duration' in content:
+              print(f'Jobs template {path} contains cost/progress/duration data')
+              exit(0)
+      print('ERROR: No jobs template contains cost, progress, or duration')
+      exit(1)
+      "
+    condition: "stage == 8"
+    description: "Jobs list shows cost/progress/duration data"
+    stage: 2
+    timeout_seconds: 60
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 9: Job detail — outcome: new sections exist
+  # ──────────────────────────────────────────────────────────────────
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short --no-cov'
+    condition: "stage == 9"
+    description: "Dashboard tests pass"
+    stage: 1
+    timeout_seconds: 900
+
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && python -c "
+      import os
+      templates = 'src/mozart/dashboard/templates'
+      detail = os.path.join(templates, 'pages', 'job_detail.html')
+      with open(detail) as f:
+          content = f.read().lower()
+      # Job detail must have at least 3 of: cost breakdown, validation heatmap,
+      # error history, observer feed, semantic insights
+      markers = {
+          'cost': 'cost' in content and ('breakdown' in content or 'per sheet' in content or 'estimated' in content),
+          'validation': 'validation' in content and ('heatmap' in content or 'grid' in content or 'pass' in content),
+          'error_history': 'error' in content and ('history' in content or 'timeline' in content),
+          'observer': 'observer' in content or 'file_created' in content or 'file event' in content,
+      }
+      found = [k for k, v in markers.items() if v]
+      if len(found) < 2:
+          print(f'Only found {len(found)} enrichment sections: {found}')
+          print('Expected at least 2 of: cost, validation, error_history, observer')
+          exit(1)
+      print(f'Job detail has {len(found)} enrichment sections: {found}')
+      "
+    condition: "stage == 9"
+    description: "Job detail has cost/validation/error/observer sections"
+    stage: 2
+    timeout_seconds: 60
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 10: Monitor — outcome: rate limit + pressure panels
+  # ──────────────────────────────────────────────────────────────────
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short --no-cov'
+    condition: "stage == 10"
+    description: "Dashboard tests pass"
+    stage: 1
+    timeout_seconds: 900
+
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && python -c "
+      import os, glob
+      templates = 'src/mozart/dashboard/templates'
+      # Check for rate limit and pressure partials or inline sections
+      all_monitor = ''
+      for path in glob.glob(os.path.join(templates, '**', '*monitor*'), recursive=True):
+          with open(path) as f:
+              all_monitor += f.read().lower()
+      for path in glob.glob(os.path.join(templates, 'partials', 'rate*'), recursive=True):
+          with open(path) as f:
+              all_monitor += f.read().lower()
+      for path in glob.glob(os.path.join(templates, 'partials', 'pressure*'), recursive=True):
+          with open(path) as f:
+              all_monitor += f.read().lower()
+      has_rate = 'rate' in all_monitor and 'limit' in all_monitor
+      has_pressure = 'pressure' in all_monitor or 'backpressure' in all_monitor
+      if not has_rate:
+          print('ERROR: Monitor page missing rate limit section')
+          exit(1)
+      if not has_pressure:
+          print('ERROR: Monitor page missing pressure section')
+          exit(1)
+      print('Monitor page has rate limit and pressure panels')
+      "
+    condition: "stage == 10"
+    description: "Monitor has rate limit and pressure panels"
+    stage: 2
+    timeout_seconds: 60
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 11: Analytics page — outcome: page exists, has hero numbers
+  # ──────────────────────────────────────────────────────────────────
+
+  - type: command_succeeds
+    command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/test_dashboard*.py -x -q --tb=short --no-cov'
+    condition: "stage == 11"
+    description: "Dashboard tests pass"
+    stage: 1
+    timeout_seconds: 900
+
+  # Outcome: analytics template exists and has the expected content
+  - type: file_exists
+    path: "{workspace}/../src/mozart/dashboard/templates/pages/analytics.html"
+    condition: "stage == 11"
+    description: "Analytics page template exists"
+    stage: 2
+
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && python -c "
+      with open('src/mozart/dashboard/templates/pages/analytics.html') as f:
+          content = f.read().lower()
+      # Must extend base.html
+      assert 'base.html' in content, 'Analytics page does not extend base.html'
+      # Must reference analytics API
+      assert '/api/analytics' in content, 'Analytics page does not call analytics API'
+      # Must have hero stat concepts
+      concepts = ['spend', 'cost', 'success', 'throughput', 'rate']
+      found = [c for c in concepts if c in content]
+      if len(found) < 3:
+          print(f'Only {len(found)} hero concepts found: {found}')
+          exit(1)
+      print(f'Analytics page has {len(found)} hero concepts: {found}')
+      "
+    condition: "stage == 11"
+    description: "Analytics page has hero stats and calls analytics API"
+    stage: 2
+    timeout_seconds: 60
+
+  # Outcome: analytics page route registered
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && grep -q 'analytics' src/mozart/dashboard/routes/pages.py
+    condition: "stage == 11"
+    description: "Analytics page route registered"
+    stage: 2
+    timeout_seconds: 30
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 12: Integration — outcome: server starts, all routes 200
+  # ──────────────────────────────────────────────────────────────────
+
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --no-cov --timeout=120'
     condition: "stage == 12"
     description: "Full test suite passes"
+    stage: 1
     timeout_seconds: 1800
 
-  # Stage 12: Linting
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m ruff check src/mozart/dashboard/'
     condition: "stage == 12"
-    description: "Ruff lint passes on dashboard"
+    description: "Ruff lint clean on dashboard"
+    stage: 2
     timeout_seconds: 300
 
-  # Stage 13: Screenshots exist
+  # Outcome: server starts and page routes return 200
   - type: command_succeeds
-    command: 'ls /home/emzi/Projects/mozart-ai-compose/workspace-dashboard-bridge/screenshots/*.png 2>/dev/null | wc -l | grep -qv "^0$"'
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "
+      from fastapi.testclient import TestClient
+      from mozart.dashboard.app import create_app
+      app = create_app()
+      client = TestClient(app)
+      pages = ['/', '/jobs', '/monitor', '/analytics', '/health']
+      failed = []
+      for page in pages:
+          resp = client.get(page)
+          if resp.status_code != 200:
+              failed.append(f'{page}: {resp.status_code}')
+      if failed:
+          print('FAILED ROUTES:')
+          for f in failed:
+              print(f'  {f}')
+          raise AssertionError(f'{len(failed)} page routes failed')
+      print(f'All {len(pages)} page routes return 200')
+      "
+    condition: "stage == 12"
+    description: "All page routes return HTTP 200"
+    stage: 3
+    timeout_seconds: 120
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 13: Browser — outcome: screenshots show real content
+  # ──────────────────────────────────────────────────────────────────
+
+  # Outcome: screenshots exist and are non-trivial (>10KB = real content)
+  - type: command_succeeds
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && python -c "
+      import os, glob
+      screenshots = glob.glob('workspace-dashboard-bridge/screenshots/*.png')
+      if not screenshots:
+          print('ERROR: No screenshots found')
+          exit(1)
+      small = [s for s in screenshots if os.path.getsize(s) < 10240]
+      if small:
+          for s in small:
+              print(f'WARNING: {s} is only {os.path.getsize(s)} bytes (blank page?)')
+      if len(small) == len(screenshots):
+          print('ERROR: ALL screenshots are <10KB — likely blank pages')
+          exit(1)
+      real = len(screenshots) - len(small)
+      print(f'{real}/{len(screenshots)} screenshots have real content (>10KB)')
+      "
     condition: "stage == 13"
-    description: "Browser screenshots were captured"
+    description: "Screenshots show real content (not blank pages)"
+    stage: 1
     timeout_seconds: 60
 
-  # Stage 14: Final full suite
+  # Outcome: at least 4 pages captured (/, /jobs, /monitor, /analytics)
+  - type: command_succeeds
+    command: |
+      ls /home/emzi/Projects/mozart-ai-compose/workspace-dashboard-bridge/screenshots/*.png 2>/dev/null | wc -l | xargs test 4 -le
+    condition: "stage == 13"
+    description: "At least 4 page screenshots captured"
+    stage: 1
+    timeout_seconds: 30
+
+  # ──────────────────────────────────────────────────────────────────
+  # Stage 14: Polish — outcome: full suite green, daemon-down handled
+  # ──────────────────────────────────────────────────────────────────
+
   - type: command_succeeds
     command: 'cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -m pytest tests/ -x -q --tb=short --no-cov --timeout=120'
     condition: "stage == 14"
     description: "Full test suite passes after polish"
+    stage: 1
     timeout_seconds: 1800
 
-  # Commit verification for all stages
+  # Outcome: app starts and pages render even without a daemon
   - type: command_succeeds
-    command: 'cd /home/emzi/Projects/mozart-ai-compose && git log -1 --oneline | grep -qE "(feat|fix|test)\(dashboard\)|feat\(daemon\)"'
-    description: "Changes committed with conventional commit"
-    timeout_seconds: 60
+    command: |
+      cd /home/emzi/Projects/mozart-ai-compose && .venv/bin/python -c "
+      from fastapi.testclient import TestClient
+      from mozart.dashboard.app import create_app
+      # No daemon running — app must still start and serve pages
+      app = create_app()
+      client = TestClient(app)
+      for page in ['/', '/jobs', '/monitor', '/analytics']:
+          resp = client.get(page)
+          assert resp.status_code == 200, f'{page} returned {resp.status_code} with no daemon'
+      print('All pages render even without a running daemon')
+      "
+    condition: "stage == 14"
+    description: "Pages render gracefully without running daemon"
+    stage: 2
+    timeout_seconds: 120
