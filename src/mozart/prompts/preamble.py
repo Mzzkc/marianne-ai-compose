@@ -57,6 +57,10 @@ def _build_first_run_preamble(
 
     lines.extend([
         "",
+        "Your prompt describes intent, not a prescription. Use your judgment — adapt",
+        "the approach if the codebase, context, or evidence demands it. Code samples",
+        "in the prompt are illustrations, not copy-paste targets.",
+        "",
         "Success: all validation requirements (at the end of your prompt) pass on the",
         "first automated check. Read them before you begin.",
         "",
@@ -82,6 +86,10 @@ def _build_retry_preamble(
         "",
         "The previous attempt failed validation. Study the workspace for evidence",
         "of what went wrong and do not repeat the same approach.",
+        "",
+        "Your prompt describes intent, not a prescription. Use your judgment — adapt",
+        "the approach if the codebase, context, or evidence demands it. Code samples",
+        "in the prompt are illustrations, not copy-paste targets.",
         "",
         "Success: all validation requirements (at the end of your prompt) pass on the",
         "first automated check. Read them before you begin.",
