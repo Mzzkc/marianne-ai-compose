@@ -12,6 +12,37 @@ Mozart has 4 SQLite databases with 3 different migration paradigms and no automa
 
 Mozart is daemon-driven and heading toward distributed fleet orchestration. Proper relational schema with typed, indexed columns is essential for cross-machine queries, aggregation, and analytics at scale.
 
+### Current State (Critical Context for Implementors)
+
+**The 35 missing columns** (audit date: 2026-02-25):
+
+**17 SheetState fields missing from `sheets` table:**
+stdout_tail, stderr_tail, output_truncated, prompt_metrics, preflight_warnings, progress_snapshots, last_activity_at, error_history, applied_patterns, grounding_passed, grounding_confidence, grounding_guidance, input_tokens, output_tokens, estimated_cost, cost_confidence, agent_feedback
+
+**18 CheckpointState fields missing from `jobs` table:**
+quota_waits, total_input_tokens, total_output_tokens, total_estimated_cost, cost_limit_reached, worktree_path, worktree_branch, worktree_locked, worktree_base_commit, isolation_mode, isolation_fallback_used, parallel_enabled, parallel_max_concurrent, parallel_batches_executed, sheets_in_progress, synthesis_results, hook_results, circuit_breaker_history
+
+**3 SystemSnapshot fields missing from profiler `snapshots` table:**
+zombie_pids, job_progress, conductor_uptime_seconds
+
+**Current migration paradigms by database:**
+
+| Database | File | Paradigm | Version |
+|----------|------|----------|---------|
+| State backend | `src/mozart/state/sqlite_backend.py` | Versioned methods (`_migrate_v1`..`_migrate_v4`), `schema_version` table | v4 |
+| Learning store | `src/mozart/learning/store/base.py` | `_COLUMN_MIGRATIONS` dict + `_COLUMN_RENAMES` dict + `schema_version` table | v13 |
+| Daemon registry | `src/mozart/daemon/registry.py` | Exception-based `ALTER TABLE` in `_migrate_schema()`, no version tracking | None |
+| Profiler | `src/mozart/daemon/profiler/storage.py` | `CREATE TABLE IF NOT EXISTS` only, no migration system | None |
+
+**Key files the implementor MUST read:**
+- `src/mozart/core/checkpoint.py` — CheckpointState and SheetState models (THE source of truth for fields)
+- `src/mozart/state/sqlite_backend.py` — Current SQLite save/load with manual column mapping (lines 330-590 are the critical save/load)
+- `src/mozart/daemon/registry.py` — JobRecord dataclass + registry DB (will be unified with state)
+- `src/mozart/learning/store/base.py` — Best existing migration pattern to learn from (lines 97-134 for `_COLUMN_MIGRATIONS`)
+- `src/mozart/learning/store/models.py` — Dataclass models for learning store tables
+- `src/mozart/daemon/profiler/models.py` — Pydantic models for profiler tables
+- `src/mozart/daemon/profiler/storage.py` — Profiler schema (lines 40-99)
+
 ---
 
 ## Architecture
