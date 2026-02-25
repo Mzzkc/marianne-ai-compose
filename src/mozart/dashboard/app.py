@@ -54,6 +54,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
+def _create_daemon_client() -> Any:
+    """Create a DaemonClient pointed at the daemon socket.
+
+    Returns the client instance, or ``None`` if construction fails
+    (e.g. daemon config unavailable).
+    """
+    try:
+        from mozart.daemon.ipc.client import DaemonClient
+
+        try:
+            from mozart.daemon.config import DaemonConfig
+            socket_path = DaemonConfig().socket.path
+        except Exception:
+            socket_path = Path.home() / ".mozart" / "daemon.sock"
+
+        return DaemonClient(socket_path)
+    except Exception:
+        return None
+
+
 def create_app(
     state_backend: StateBackend | None = None,
     state_dir: Path | str | None = None,
@@ -76,12 +96,21 @@ def create_app(
     global _state_backend, _templates
 
     # Configure state backend
+    daemon_client = None
     if state_backend is not None:
         _state_backend = state_backend
     elif state_dir is not None:
         _state_backend = JsonStateBackend(Path(state_dir))
     else:
-        _state_backend = JsonStateBackend(Path.cwd() / ".mozart-state")
+        # Production path: try DaemonStateAdapter backed by live IPC,
+        # fall back to local JSON state if daemon modules unavailable.
+        daemon_client = _create_daemon_client()
+        if daemon_client is not None:
+            from mozart.dashboard.state.daemon_adapter import DaemonStateAdapter
+
+            _state_backend = DaemonStateAdapter(daemon_client)
+        else:
+            _state_backend = JsonStateBackend(Path.cwd() / ".mozart-state")
 
     # Create app
     app = FastAPI(
@@ -147,24 +176,56 @@ def create_app(
     _templates = Jinja2Templates(directory=str(templates_dir))
     app.state.templates = _templates
 
+    # Wire daemon service layers when a DaemonClient is available.
+    # When tests pass an explicit state_backend the client is None
+    # and services are left unconfigured (tests set them manually).
+    if daemon_client is not None:
+        from mozart.dashboard.routes.analytics import set_analytics
+        from mozart.dashboard.routes.events import set_event_bridge
+        from mozart.dashboard.routes.system import set_system_view
+        from mozart.dashboard.services.analytics import DaemonAnalytics
+        from mozart.dashboard.services.event_bridge import DaemonEventBridge
+        from mozart.dashboard.services.system_view import DaemonSystemView
+
+        event_bridge = DaemonEventBridge(daemon_client)
+        analytics = DaemonAnalytics(_state_backend)
+        system_view = DaemonSystemView(daemon_client)
+
+        app.state.event_bridge = event_bridge
+        app.state.analytics = analytics
+        app.state.system_view = system_view
+
+        # Set module-level instances so route handlers can resolve them
+        set_event_bridge(event_bridge)
+        set_analytics(analytics)
+        set_system_view(system_view)
+
     # Register routes
     from mozart.dashboard.routes import router as base_router
+    from mozart.dashboard.routes.analytics import router as analytics_router
     from mozart.dashboard.routes.artifacts import router as artifacts_router
     from mozart.dashboard.routes.dashboard import router as dashboard_router
+    from mozart.dashboard.routes.events import router as events_router
     from mozart.dashboard.routes.jobs import router as jobs_router
     from mozart.dashboard.routes.monitor import router as monitor_router
     from mozart.dashboard.routes.pages import router as pages_router
     from mozart.dashboard.routes.scores import router as scores_router
     from mozart.dashboard.routes.stream import router as stream_router
+    from mozart.dashboard.routes.system import router as system_router
 
+    # Jobs router before base router so /api/jobs/daemon/status matches
+    # before the base router's /api/jobs/{job_id}/status wildcard
+    app.include_router(jobs_router)
     app.include_router(base_router)
     app.include_router(dashboard_router)
-    app.include_router(jobs_router)
     app.include_router(artifacts_router)
     app.include_router(pages_router)
     app.include_router(scores_router)
     app.include_router(stream_router)
     app.include_router(monitor_router)
+    app.include_router(analytics_router)
+    app.include_router(events_router)
+    app.include_router(system_router)
 
     # Health check endpoint (at root level)
     @app.get("/health", tags=["System"])

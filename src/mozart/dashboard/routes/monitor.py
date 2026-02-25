@@ -194,11 +194,66 @@ async def _stream_from_sqlite(
         pass
 
 
+async def _stream_from_daemon(
+    poll_interval: float = 2.0,
+) -> AsyncIterator[str]:
+    """Poll DaemonSystemView for snapshots and yield as SSE events.
+
+    Used when the daemon service layer is wired in ``app.py``.
+    """
+    from mozart.dashboard.routes.system import get_system_view
+
+    system_view = get_system_view()
+
+    yield f"event: connected\ndata: {json.dumps({'source': 'daemon'})}\n\n"
+
+    heartbeat_counter = 0
+
+    try:
+        while True:
+            try:
+                snap = await system_view.get_snapshot()
+                if snap is not None:
+                    snap_json = json.dumps(snap, separators=(",", ":"), default=str)
+                    yield f"event: snapshot\ndata: {snap_json}\n\n"
+                    heartbeat_counter = 0
+                else:
+                    heartbeat_counter += 1
+                    if heartbeat_counter >= 15:
+                        yield f"event: heartbeat\ndata: {json.dumps({'ts': time.time()})}\n\n"
+                        heartbeat_counter = 0
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                _logger.debug("monitor_stream.daemon_poll_error", exc_info=True)
+                heartbeat_counter += 1
+                if heartbeat_counter >= 15:
+                    yield f"event: heartbeat\ndata: {json.dumps({'ts': time.time()})}\n\n"
+                    heartbeat_counter = 0
+
+            await asyncio.sleep(poll_interval)
+    except asyncio.CancelledError:
+        pass
+
+
+def _daemon_available() -> bool:
+    """Check if DaemonSystemView is configured."""
+    try:
+        from mozart.dashboard.routes.system import get_system_view
+        get_system_view()
+        return True
+    except RuntimeError:
+        return False
+
+
 @router.get("/stream")
 async def stream_monitor(
     source: str = Query(
         default="auto",
-        description="Data source: 'jsonl', 'sqlite', or 'auto' (tries jsonl first)",
+        description=(
+            "Data source: 'daemon', 'jsonl', 'sqlite', "
+            "or 'auto' (tries daemon, then jsonl, then sqlite)"
+        ),
     ),
     poll_interval: float = Query(
         default=1.0,
@@ -214,7 +269,8 @@ async def stream_monitor(
 
     **Source selection:**
 
-    - ``auto`` (default): Uses JSONL file if it exists, falls back to SQLite.
+    - ``auto`` (default): Uses daemon IPC if configured, then JSONL, then SQLite.
+    - ``daemon``: Polls ``DaemonSystemView`` via IPC.
     - ``jsonl``: Tails ``~/.mozart/monitor.jsonl`` directly.
     - ``sqlite``: Polls ``~/.mozart/monitor.db`` for recent snapshots.
 
@@ -233,7 +289,9 @@ async def stream_monitor(
 
     # Resolve source
     if source == "auto":
-        if jsonl_path.exists():
+        if _daemon_available():
+            source = "daemon"
+        elif jsonl_path.exists():
             source = "jsonl"
         elif db_path.exists():
             source = "sqlite"
@@ -243,14 +301,16 @@ async def stream_monitor(
                 detail="No monitor data available. Is the conductor running with profiler enabled?",
             )
 
-    if source == "jsonl":
+    if source == "daemon":
+        generator = _stream_from_daemon(poll_interval=poll_interval)
+    elif source == "jsonl":
         generator = _tail_jsonl(jsonl_path, poll_interval=poll_interval)
     elif source == "sqlite":
         generator = _stream_from_sqlite(db_path, poll_interval=poll_interval)
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid source: {source}. Must be 'auto', 'jsonl', or 'sqlite'.",
+            detail=f"Invalid source: {source}. Must be 'auto', 'daemon', 'jsonl', or 'sqlite'.",
         )
 
     return StreamingResponse(
@@ -268,9 +328,23 @@ async def stream_monitor(
 async def get_latest_snapshot() -> dict[str, object]:
     """Get the most recent system snapshot (one-shot, not streaming).
 
-    Reads the last snapshot from SQLite storage.  Returns 503 if no
-    monitor data is available.
+    When ``DaemonSystemView`` is configured, fetches a live snapshot via
+    IPC.  Falls back to reading ``monitor.db`` when the daemon service
+    layer isn't wired.
     """
+    # Try DaemonSystemView first (set by app.py when daemon is available)
+    try:
+        from mozart.dashboard.routes.system import get_system_view
+        system_view = get_system_view()
+        snap = await system_view.get_snapshot()
+        if snap is not None:
+            return snap
+    except RuntimeError:
+        pass  # SystemView not configured — fall through to file-based path
+    except Exception:
+        _logger.debug("monitor_snapshot.daemon_error", exc_info=True)
+
+    # Fallback: read from monitor.db
     db_path = _DEFAULT_DB_PATH
 
     if not db_path.exists():

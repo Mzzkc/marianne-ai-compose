@@ -64,9 +64,27 @@ async def get_dashboard_stats(
 ) -> DashboardStats:
     """Get aggregate job statistics for the dashboard overview.
 
-    Returns counts by status and a success rate computed from
-    terminal (completed + failed) jobs.
+    When ``DaemonAnalytics`` is configured (daemon mode), delegates to it
+    for richer stats with caching.  Falls back to manual counting from
+    the state backend when analytics is unavailable (test / local mode).
     """
+    # Try DaemonAnalytics first (set by app.py when daemon is available)
+    try:
+        from mozart.dashboard.routes.analytics import get_analytics
+        analytics = get_analytics()
+        data = await analytics.get_stats()
+        return DashboardStats(
+            total_jobs=data.get("total_jobs", 0),
+            running_jobs=data.get("running_jobs", 0),
+            completed_jobs=data.get("completed_jobs", 0),
+            failed_jobs=data.get("failed_jobs", 0),
+            paused_jobs=data.get("paused_jobs", 0),
+            cancelled_jobs=data.get("cancelled_jobs", 0),
+            success_rate=data.get("success_rate", 0.0),
+        )
+    except RuntimeError:
+        pass  # Analytics not configured — fall through to manual counting
+
     all_jobs = await backend.list_jobs()
 
     counts: dict[str, int] = {
@@ -157,33 +175,58 @@ async def dashboard_system_partial(
 ) -> HTMLResponse:
     """Render system resource metrics as an HTML partial (htmx target).
 
-    Attempts to read the latest monitor snapshot. Returns a
-    'no data' placeholder if the profiler isn't running.
+    When ``DaemonSystemView`` is configured, fetches a live snapshot via
+    IPC.  Falls back to reading ``monitor.db`` directly when the daemon
+    service layer isn't wired (test / local mode).
     """
     snapshot_data: dict[str, object] | None = None
-    db_path = Path("~/.mozart/monitor.db").expanduser()
 
-    if db_path.exists():
-        try:
-            from mozart.dashboard.routes.monitor import get_monitor_storage
+    # Try DaemonSystemView first (set by app.py when daemon is available)
+    try:
+        from mozart.dashboard.routes.system import get_system_view
+        system_view = get_system_view()
+        snap_dict = await system_view.get_snapshot()
+        if snap_dict is not None:
+            mem_total = snap_dict.get("system_memory_total_mb", 0) or 1
+            mem_used = snap_dict.get("system_memory_used_mb", 0)
+            mem_pct = min((mem_used / mem_total) * 100, 100) if mem_total else 0
+            snapshot_data = {
+                "mem_used_mb": round(mem_used),
+                "mem_total_mb": round(mem_total),
+                "mem_pct": round(mem_pct, 1),
+                "load_1m": round(snap_dict.get("system_load_1m", 0), 2),
+                "process_count": snap_dict.get("mozart_process_count", 0),
+                "pressure": snap_dict.get("pressure_level", "none") or "none",
+            }
+    except RuntimeError:
+        pass  # SystemView not configured — fall through to file-based path
+    except Exception:
+        _logger.debug("dashboard.system_partial.daemon_error", exc_info=True)
 
-            storage = await get_monitor_storage(db_path)
-            snapshots = await storage.read_snapshots(since=time.time() - 60, limit=1)
-            if snapshots:
-                snap = snapshots[-1]
-                mem_total = getattr(snap, "system_memory_total_mb", 0) or 1
-                mem_used = getattr(snap, "system_memory_used_mb", 0)
-                mem_pct = min((mem_used / mem_total) * 100, 100)
-                snapshot_data = {
-                    "mem_used_mb": round(mem_used),
-                    "mem_total_mb": round(mem_total),
-                    "mem_pct": round(mem_pct, 1),
-                    "load_1m": round(getattr(snap, "system_load_1m", 0), 2),
-                    "process_count": getattr(snap, "mozart_process_count", 0),
-                    "pressure": getattr(snap, "pressure_level", "none") or "none",
-                }
-        except Exception:
-            _logger.debug("dashboard.system_partial.read_error", exc_info=True)
+    # Fallback: read from monitor.db directly
+    if snapshot_data is None:
+        db_path = Path("~/.mozart/monitor.db").expanduser()
+        if db_path.exists():
+            try:
+                from mozart.dashboard.routes.monitor import get_monitor_storage
+
+                storage = await get_monitor_storage(db_path)
+                snapshots = await storage.read_snapshots(since=time.time() - 60, limit=1)
+                if snapshots:
+                    snap = snapshots[-1]
+                    mem_total = getattr(snap, "system_memory_total_mb", 0) or 1
+                    mem_used = getattr(snap, "system_memory_used_mb", 0)
+                    mem_pct = min((mem_used / mem_total) * 100, 100)
+                    snapshot_data = {
+                        "mem_used_mb": round(mem_used),
+                        "mem_total_mb": round(mem_total),
+                        "mem_pct": round(mem_pct, 1),
+                        "load_1m": round(getattr(snap, "system_load_1m", 0), 2),
+                        "process_count": getattr(snap, "mozart_process_count", 0),
+                        "pressure": getattr(snap, "pressure_level", "none") or "none",
+                    }
+            except Exception:
+                _logger.debug("dashboard.system_partial.read_error", exc_info=True)
 
     return templates.TemplateResponse(
         "partials/system_resources.html",
