@@ -52,7 +52,6 @@ scores-internal/
 # Logs
 *.log
 logs/
-!.mozart/state/decisions.log
 
 # Test artifacts
 tests/temp/
@@ -83,6 +82,7 @@ mozart-*.yaml
 mozart-opus-evolution-v*.yaml
 
 # Project-specific context (personal, not for public repo)
+.mozart/
 CLAUDE.md
 memory-bank/
 STATUS.md
