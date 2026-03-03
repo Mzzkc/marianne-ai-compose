@@ -29,7 +29,7 @@
 name: "nonfiction-book"
 description: "Non-fiction book authoring using Snowflake Method with word count gates and consistency validation"
 
-workspace: "./book-workspace"
+workspace: "./workspaces/book-workspace"
 
 backend:
   type: claude_cli

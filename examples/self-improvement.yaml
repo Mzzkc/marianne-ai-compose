@@ -12,7 +12,7 @@
 name: "self-improvement"
 description: "Incremental codebase improvement with quality gates"
 
-workspace: "./improvement-workspace"
+workspace: "./workspaces/improvement-workspace"
 
 backend:
   type: claude_cli

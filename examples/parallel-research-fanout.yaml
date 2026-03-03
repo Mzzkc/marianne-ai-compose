@@ -29,7 +29,7 @@
 name: "fanout-research"
 description: "Multi-source research using fan-out for parallel search"
 
-workspace: "./fanout-workspace"
+workspace: "./workspaces/fanout-workspace"
 
 backend:
   type: claude_cli

@@ -29,7 +29,7 @@
 name: "training-data-curation"
 description: "High-quality ML training data curation with inter-annotator agreement validation"
 
-workspace: "./data-curation-workspace"
+workspace: "./workspaces/data-curation-workspace"
 
 backend:
   type: claude_cli

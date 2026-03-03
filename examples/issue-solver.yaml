@@ -31,7 +31,7 @@
 
 name: "issue-solver"
 description: "Auto-select and solve GitHub issues from roadmap with phased implementation"
-workspace: "./.issue-solver-workspace"
+workspace: "./workspaces/issue-solver-workspace"
 
 workspace_lifecycle:
   archive_on_fresh: true

@@ -38,7 +38,7 @@
 name: "fix-observability"
 description: "Fix all visibility gaps — detached hook logging, execution history, enhanced diagnostics"
 
-workspace: "./.observability-workspace"
+workspace: "./workspaces/observability-workspace"
 
 backend:
   type: claude_cli

@@ -94,5 +94,5 @@ nav:
   - API Reference: reference/
   - Architecture:
       - Distributed Learning: DISTRIBUTED-LEARNING-ARCHITECTURE.md
-      - Token Compression: TOKEN-COMPRESSION-STRATEGIES.md
-      - Opus Convergence: OPUS-CONVERGENCE-ANALYSIS.md
+      - Token Compression: research/TOKEN-COMPRESSION-STRATEGIES.md
+      - Opus Convergence: research/OPUS-CONVERGENCE-ANALYSIS.md

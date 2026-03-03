@@ -17,7 +17,7 @@
 name: "issue-fixer"
 description: "Investigate and fix one GitHub issue per run, generating subordinate scores for complex fixes"
 
-workspace: "./.bugfix-workspace"
+workspace: "./workspaces/bugfix-workspace"
 
 workspace_lifecycle:
   archive_on_fresh: true

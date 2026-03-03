@@ -4,7 +4,7 @@
 name: "observability-demo"
 description: "Demo job showcasing observability features"
 
-workspace: "./observability-workspace"
+workspace: "./workspaces/observability-workspace"
 
 # Backend configuration
 backend:

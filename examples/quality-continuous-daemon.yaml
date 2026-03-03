@@ -49,7 +49,7 @@
 name: "quality-continuous-daemon"
 description: "Phase 3 hardening & wiring — scheduler, rate coordinator, backpressure"
 
-workspace: "./.quality-daemon-workspace"
+workspace: "./workspaces/quality-daemon-workspace"
 
 workspace_lifecycle:
   archive_on_fresh: true
@@ -808,7 +808,7 @@ on_success:
     description: "Chain to next Phase 3 iteration"
     detached: true
     fresh: true
-    job_workspace: ".quality-daemon-workspace"
+    job_workspace: "workspaces/quality-daemon-workspace"
 
 concert:
   enabled: true

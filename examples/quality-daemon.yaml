@@ -11,7 +11,7 @@
 name: "quality-daemon"
 description: "Daemon-focused quality review — prioritizes daemon subsystem investigation"
 
-workspace: "./.quality-daemon-workspace"
+workspace: "./workspaces/quality-daemon-workspace"
 
 workspace_lifecycle:
   archive_on_fresh: true

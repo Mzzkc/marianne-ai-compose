@@ -6,7 +6,7 @@
 name: "cross-sheet-example"
 description: "Demonstrates cross-sheet context passing"
 
-workspace: "./cross-sheet-workspace"
+workspace: "./workspaces/cross-sheet-workspace"
 
 backend:
   type: claude_cli

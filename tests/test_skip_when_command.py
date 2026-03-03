@@ -84,10 +84,11 @@ class TestSkipWhenCommandNoConditions:
 class TestSkipWhenCommandExitCodes:
     """Tests for command exit code handling."""
 
-    async def test_command_exits_0_skips_sheet(self) -> None:
+    async def test_command_exits_0_skips_sheet(self, tmp_path: Path) -> None:
         """Command 'true' exits 0 -> sheet is skipped."""
         runner = _make_runner(
-            skip_when_command={1: {"command": "true", "description": "Always skip"}}
+            skip_when_command={1: {"command": "true", "description": "Always skip"}},
+            workspace=tmp_path,
         )
         state = _make_state()
 
@@ -96,10 +97,11 @@ class TestSkipWhenCommandExitCodes:
         assert result is not None
         assert "Always skip" in result
 
-    async def test_command_exits_nonzero_runs_sheet(self) -> None:
+    async def test_command_exits_nonzero_runs_sheet(self, tmp_path: Path) -> None:
         """Command 'false' exits 1 -> sheet runs (returns None)."""
         runner = _make_runner(
-            skip_when_command={1: {"command": "false"}}
+            skip_when_command={1: {"command": "false"}},
+            workspace=tmp_path,
         )
         state = _make_state()
 
@@ -136,12 +138,13 @@ class TestSkipWhenCommandWorkspace:
 class TestSkipWhenCommandFailOpen:
     """Tests for fail-open behavior on timeout and errors."""
 
-    async def test_timeout_fails_open(self) -> None:
+    async def test_timeout_fails_open(self, tmp_path: Path) -> None:
         """sleep 10 with timeout_seconds=0.1 -> returns None (fail-open)."""
         runner = _make_runner(
             skip_when_command={
                 1: {"command": "sleep 10", "timeout_seconds": 0.1}
-            }
+            },
+            workspace=tmp_path,
         )
         state = _make_state()
 
@@ -192,10 +195,11 @@ class TestSkipWhenCommandPrecedence:
 class TestSkipWhenCommandReasons:
     """Tests for skip reason messages."""
 
-    async def test_description_used_in_skip_reason(self) -> None:
+    async def test_description_used_in_skip_reason(self, tmp_path: Path) -> None:
         """Command 'true' with description 'Only 1 phase' -> reason contains it."""
         runner = _make_runner(
-            skip_when_command={1: {"command": "true", "description": "Only 1 phase"}}
+            skip_when_command={1: {"command": "true", "description": "Only 1 phase"}},
+            workspace=tmp_path,
         )
         state = _make_state()
 
@@ -204,10 +208,11 @@ class TestSkipWhenCommandReasons:
         assert result is not None
         assert "Only 1 phase" in result
 
-    async def test_no_description_uses_command_in_reason(self) -> None:
+    async def test_no_description_uses_command_in_reason(self, tmp_path: Path) -> None:
         """Command 'true' with no description -> reason contains 'Command succeeded'."""
         runner = _make_runner(
-            skip_when_command={1: {"command": "true"}}
+            skip_when_command={1: {"command": "true"}},
+            workspace=tmp_path,
         )
         state = _make_state()
 

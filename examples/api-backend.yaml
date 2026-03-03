@@ -15,7 +15,7 @@
 name: "api-sheet"
 description: "Sheet processing using Anthropic API"
 
-workspace: "./api-workspace"
+workspace: "./workspaces/api-workspace"
 
 backend:
   type: anthropic_api

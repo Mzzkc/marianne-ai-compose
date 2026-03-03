@@ -206,7 +206,7 @@ Use these examples as templates. Key customization points:
 Where outputs go. Each job needs its own workspace.
 
 ```yaml
-workspace: "./my-project-workspace"
+workspace: "./workspaces/my-project-workspace"
 ```
 
 ### 2. Backend Configuration

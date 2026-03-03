@@ -29,7 +29,7 @@
 name: "docs-generator"
 description: "Comprehensive documentation overhaul — audit, create, verify, publish"
 
-workspace: "./.docs-generator-workspace"
+workspace: "./workspaces/docs-generator-workspace"
 
 workspace_lifecycle:
   archive_on_fresh: true

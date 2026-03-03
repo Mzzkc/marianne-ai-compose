@@ -11,7 +11,7 @@
 name: "prelude-cadenza-demo"
 description: "Demonstrates prelude/cadenza context injection"
 
-workspace: "./prelude-demo-workspace"
+workspace: "./workspaces/prelude-demo-workspace"
 
 backend:
   type: claude_cli

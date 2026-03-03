@@ -4,7 +4,7 @@
 name: "commit-sheet-review"
 description: "Review all commits in sheets using coordinated expert agents"
 
-workspace: "./coordination-workspace"
+workspace: "./workspaces/coordination-workspace"
 
 backend:
   type: claude_cli

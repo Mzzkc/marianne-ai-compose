@@ -29,7 +29,7 @@
 name: "strategic-plan"
 description: "Strategic plan development using PESTEL, Porter's Five Forces, and SWOT with SMART goal validation"
 
-workspace: "./strategy-workspace"
+workspace: "./workspaces/strategy-workspace"
 
 backend:
   type: claude_cli

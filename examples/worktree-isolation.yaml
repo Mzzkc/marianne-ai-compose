@@ -17,7 +17,7 @@
 
 name: parallel-safe-code-review
 description: Code review with worktree isolation for parallel safety
-workspace: ./review-workspace
+workspace: ./workspaces/review-workspace
 working_directory: /path/to/your/repo  # Must be a git repository
 
 backend:

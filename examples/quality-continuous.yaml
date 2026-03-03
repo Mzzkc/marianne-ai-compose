@@ -43,7 +43,7 @@
 name: "quality-continuous"
 description: "Expert reviews + issue discovery + batched fixes + commits, self-chaining"
 
-workspace: "./.quality-workspace"
+workspace: "./workspaces/quality-workspace"
 
 workspace_lifecycle:
   archive_on_fresh: true

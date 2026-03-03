@@ -17,7 +17,7 @@
 name: "agent-spike"
 description: "Feasibility test for Task tool invocations in Claude -p mode"
 
-workspace: "./.agent-spike-workspace"
+workspace: "./workspaces/agent-spike-workspace"
 
 backend:
   type: claude_cli

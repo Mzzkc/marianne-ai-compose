@@ -28,7 +28,7 @@
 name: "systematic-literature-review"
 description: "PRISMA-compliant systematic literature review with quality gates at each phase"
 
-workspace: "./slr-workspace"
+workspace: "./workspaces/slr-workspace"
 
 backend:
   type: claude_cli
