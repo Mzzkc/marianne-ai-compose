@@ -455,6 +455,20 @@ class AnthropicApiBackend(Backend):
             _logger.warning("health_check_failed", error_type=type(e).__name__, error=str(e))
             return False
 
+    async def availability_check(self) -> bool:
+        """Check if the API client can be created without making an API call.
+
+        Unlike health_check(), this does NOT send a request or consume
+        API quota. Used after quota exhaustion waits.
+        """
+        if not self._api_key:
+            return False
+        try:
+            await self._get_client()
+            return True
+        except Exception:
+            return False
+
     async def close(self) -> None:
         """Close the async client connection (idempotent)."""
         if self._client is not None:

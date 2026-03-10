@@ -878,3 +878,15 @@ class ClaudeCliBackend(Backend):
         except (TimeoutError, OSError, RuntimeError) as e:
             _logger.warning("health_check_failed", error_type=type(e).__name__, error=str(e))
             return False
+
+    async def availability_check(self) -> bool:
+        """Check if the claude CLI binary exists and is executable.
+
+        Unlike health_check(), this does NOT send a prompt or consume
+        API quota. Used after quota exhaustion waits.
+        """
+        if not self._claude_path:
+            return False
+        return os.path.isfile(self._claude_path) and os.access(
+            self._claude_path, os.X_OK,
+        )

@@ -142,6 +142,17 @@ class Backend(ABC):
         """
         ...
 
+    async def availability_check(self) -> bool:
+        """Lightweight check: is the backend reachable without consuming API quota?
+
+        Unlike health_check(), this must NOT send prompts or consume tokens.
+        Used after quota exhaustion waits where sending a prompt would fail.
+
+        Default returns True (assume available). Backends override for
+        real checks.
+        """
+        return True
+
     @property
     @abstractmethod
     def name(self) -> str:

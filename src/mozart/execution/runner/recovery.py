@@ -382,22 +382,55 @@ class RecoveryMixin:
     ) -> None:
         """Run health check after rate limit wait and log resumption.
 
+        After quota exhaustion, uses the lightweight availability_check()
+        (no API calls) with retries, since sending a prompt would likely
+        fail again. After regular rate limits, uses full health_check().
+
         Args:
             state: Current job state.
             is_quota: True for quota exhaustion (E104).
 
         Raises:
-            FatalError: If health check fails after the wait.
+            FatalError: If checks fail after retries (quota) or
+                immediately (rate limit).
         """
         event_type = "quota_exhausted" if is_quota else "rate_limit"
         self.console.print("[blue]Running health check...[/blue]")
 
-        if not await self.backend.health_check():
-            self._logger.error(
-                f"{event_type}.health_check_failed",
-                job_id=state.job_id,
-            )
-            raise FatalError(f"Backend health check failed after {event_type} wait")
+        if is_quota:
+            # After quota exhaustion, use lightweight check that doesn't
+            # consume quota. Retry with backoff instead of immediately dying.
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                if await self.backend.availability_check():
+                    break
+                self._logger.warning(
+                    "quota_exhausted.availability_check_failed",
+                    job_id=state.job_id,
+                    attempt=attempt,
+                    max_retries=max_retries,
+                )
+                if attempt == max_retries:
+                    raise FatalError(
+                        f"Backend unavailable after {max_retries} availability "
+                        f"checks following {event_type} wait"
+                    )
+                retry_wait = 60.0 * attempt  # 1min, 2min, 3min
+                self.console.print(
+                    f"[yellow]Backend not yet available. "
+                    f"Retrying in {attempt} minute(s)... "
+                    f"({attempt}/{max_retries})[/yellow]"
+                )
+                await self._interruptible_sleep(retry_wait)
+        else:
+            if not await self.backend.health_check():
+                self._logger.error(
+                    f"{event_type}.health_check_failed",
+                    job_id=state.job_id,
+                )
+                raise FatalError(
+                    f"Backend health check failed after {event_type} wait"
+                )
 
         wait_count = state.quota_waits if is_quota else state.rate_limit_waits
         self._logger.info(

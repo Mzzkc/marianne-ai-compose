@@ -91,6 +91,7 @@ def mock_backend() -> AsyncMock:
         )
     )
     backend.health_check = AsyncMock(return_value=True)
+    backend.availability_check = AsyncMock(return_value=True)
     return backend
 
 
@@ -447,6 +448,123 @@ class TestRateLimitHandling:
             )
 
         assert "health check failed" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_quota_exhaustion_uses_availability_check(
+        self,
+        runner_with_global_store: JobRunner,
+    ) -> None:
+        """Quota exhaustion (E104) uses availability_check, not health_check."""
+        state = CheckpointState(
+            job_id="test-job",
+            job_name="Test Job",
+            total_sheets=3,
+            status=JobStatus.RUNNING,
+        )
+
+        runner_with_global_store.backend.availability_check = AsyncMock(
+            return_value=True,
+        )
+        runner_with_global_store.backend.health_check = AsyncMock(
+            return_value=True,
+        )
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await runner_with_global_store._handle_rate_limit(
+                state=state,
+                error_code="E104",
+                suggested_wait_seconds=1.0,
+            )
+
+        runner_with_global_store.backend.availability_check.assert_called_once()
+        runner_with_global_store.backend.health_check.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_quota_availability_check_retries_on_failure(
+        self,
+        runner_with_global_store: JobRunner,
+    ) -> None:
+        """Availability check retries with backoff before giving up."""
+        state = CheckpointState(
+            job_id="test-job",
+            job_name="Test Job",
+            total_sheets=3,
+            status=JobStatus.RUNNING,
+        )
+
+        # Fail twice, succeed on third attempt
+        runner_with_global_store.backend.availability_check = AsyncMock(
+            side_effect=[False, False, True],
+        )
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await runner_with_global_store._handle_rate_limit(
+                state=state,
+                error_code="E104",
+                suggested_wait_seconds=1.0,
+            )
+
+        assert runner_with_global_store.backend.availability_check.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_quota_availability_check_fatal_after_max_retries(
+        self,
+        runner_with_global_store: JobRunner,
+    ) -> None:
+        """FatalError raised after all availability check retries exhausted."""
+        state = CheckpointState(
+            job_id="test-job",
+            job_name="Test Job",
+            total_sheets=3,
+            status=JobStatus.RUNNING,
+        )
+
+        runner_with_global_store.backend.availability_check = AsyncMock(
+            return_value=False,
+        )
+
+        with (
+            pytest.raises(FatalError) as exc_info,
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            await runner_with_global_store._handle_rate_limit(
+                state=state,
+                error_code="E104",
+                suggested_wait_seconds=1.0,
+            )
+
+        assert "availability" in str(exc_info.value).lower()
+        assert runner_with_global_store.backend.availability_check.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_regular_rate_limit_still_uses_health_check(
+        self,
+        runner_with_global_store: JobRunner,
+    ) -> None:
+        """Regular rate limit (E101) still uses health_check, not availability_check."""
+        state = CheckpointState(
+            job_id="test-job",
+            job_name="Test Job",
+            total_sheets=3,
+            status=JobStatus.RUNNING,
+        )
+
+        runner_with_global_store.backend.health_check = AsyncMock(
+            return_value=True,
+        )
+        runner_with_global_store.backend.availability_check = AsyncMock(
+            return_value=True,
+        )
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await runner_with_global_store._handle_rate_limit(
+                state=state,
+                error_code="E101",
+                suggested_wait_seconds=1.0,
+            )
+
+        runner_with_global_store.backend.health_check.assert_called_once()
+        runner_with_global_store.backend.availability_check.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_records_to_global_store(

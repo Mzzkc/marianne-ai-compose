@@ -404,6 +404,23 @@ class PromptConfig(BaseModel):
         return self
 
 
+def _prepare_for_yaml(obj: Any) -> Any:
+    """Recursively convert Python objects to YAML-safe types.
+
+    Handles Path → str and Enum → value while preserving dict key types
+    (including integer keys from YAML variables).
+    """
+    if isinstance(obj, dict):
+        return {k: _prepare_for_yaml(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_prepare_for_yaml(v) for v in obj]
+    if isinstance(obj, Path):
+        return str(obj)
+    if isinstance(obj, Enum):
+        return obj.value
+    return obj
+
+
 class JobConfig(BaseModel):
     """Complete configuration for an orchestration job."""
 
@@ -524,6 +541,35 @@ class JobConfig(BaseModel):
                 stacklevel=2,
             )
         return self
+
+    def to_yaml(self, *, exclude_defaults: bool = False) -> str:
+        """Serialize this JobConfig to valid score YAML.
+
+        The output is semantically equivalent to the original config:
+        ``from_yaml_string(config.to_yaml())`` produces an equivalent config
+        (compared via ``model_dump()``). String-level identity with the
+        original YAML file is NOT guaranteed because workspace paths are
+        resolved to absolute at parse time and fan-out configs are expanded.
+
+        Args:
+            exclude_defaults: If True, omit fields that match their default
+                values for cleaner output. Defaults to False (lossless).
+
+        Returns:
+            A valid YAML string that ``from_yaml_string()`` can parse.
+        """
+        data = self.model_dump(
+            mode="python",
+            by_alias=True,
+            exclude_defaults=exclude_defaults,
+        )
+        data = _prepare_for_yaml(data)
+        return yaml.dump(
+            data,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+        )
 
     @classmethod
     def from_yaml(cls, path: Path) -> JobConfig:

@@ -788,3 +788,49 @@ class TestHealthCheck:
             new_callable=AsyncMock, side_effect=OSError("fail"),
         ):
             assert await backend.health_check() is False
+
+
+# ─── availability_check ────────────────────────────────────────────
+
+
+class TestAvailabilityCheck:
+    """Tests for availability_check() — lightweight, no-prompt check."""
+
+    @pytest.mark.asyncio
+    async def test_no_cli_returns_false(self, backend_no_cli: ClaudeCliBackend):
+        assert await backend_no_cli.availability_check() is False
+
+    @pytest.mark.asyncio
+    async def test_valid_binary_returns_true(self, backend: ClaudeCliBackend):
+        with (
+            patch("os.path.isfile", return_value=True),
+            patch("os.access", return_value=True),
+        ):
+            assert await backend.availability_check() is True
+
+    @pytest.mark.asyncio
+    async def test_missing_binary_returns_false(self, backend: ClaudeCliBackend):
+        with patch("os.path.isfile", return_value=False):
+            assert await backend.availability_check() is False
+
+    @pytest.mark.asyncio
+    async def test_not_executable_returns_false(self, backend: ClaudeCliBackend):
+        with (
+            patch("os.path.isfile", return_value=True),
+            patch("os.access", return_value=False),
+        ):
+            assert await backend.availability_check() is False
+
+    @pytest.mark.asyncio
+    async def test_does_not_call_execute_impl(self, backend: ClaudeCliBackend):
+        """availability_check must NOT send prompts or consume quota."""
+        with (
+            patch("os.path.isfile", return_value=True),
+            patch("os.access", return_value=True),
+            patch.object(
+                backend, "_execute_impl",
+                new_callable=AsyncMock,
+            ) as mock_exec,
+        ):
+            await backend.availability_check()
+            mock_exec.assert_not_called()
