@@ -357,8 +357,14 @@ class JobService:
         found_state.error_message = None
         found_state.pid = None  # Clear stale PID so runner doesn't false-positive
         # Update found_state.job_id to the conductor's runtime identity so
-        # all downstream publishes use the correct key.
+        # all downstream publishes use the correct key.  When the IDs
+        # differ, delete the old row first — otherwise the upsert creates
+        # a duplicate (different PK) and the orphaned row causes state
+        # drift on future resumes.  See issue #111.
+        original_id = found_state.job_id
         found_state.job_id = runtime_id
+        if original_id != runtime_id:
+            await found_backend.delete(original_id)
         await runner_backend.save(found_state)
 
         # Phase 3: Setup components and run
