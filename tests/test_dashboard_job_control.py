@@ -66,7 +66,7 @@ class TestJobControlService:
             assert result.status == JobStatus.RUNNING.value
             assert result.total_sheets == 2  # 20 items / 10 per sheet
             assert result.pid == 12345
-            assert result.workspace == Path("./test-workspace").resolve()
+            assert result.workspace == sample_config_file.parent / "test-workspace"
 
             # Verify subprocess was called correctly
             mock_subprocess.assert_called_once()

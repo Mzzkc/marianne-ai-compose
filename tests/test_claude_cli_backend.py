@@ -51,6 +51,10 @@ def _make_mock_process(
     proc.terminate = MagicMock()
     proc.kill = MagicMock()
     proc.wait = AsyncMock(return_value=returncode)
+    # stdin mock for PIPE: write is sync, drain is async, close is sync (#108)
+    mock_stdin = MagicMock(spec=asyncio.StreamWriter)
+    mock_stdin.drain = AsyncMock()
+    proc.stdin = mock_stdin
     return proc
 
 
@@ -195,12 +199,14 @@ class TestBuildCommand:
         with pytest.raises(RuntimeError, match="claude CLI not found"):
             backend_no_cli._build_command("Hello")
 
-    def test_preamble_injected_in_prompt(self, backend: ClaudeCliBackend):
+    def test_preamble_not_in_command_arg(self, backend: ClaudeCliBackend):
+        """Preamble is passed via stdin, not embedded in the command (#108)."""
         backend.set_preamble("<mozart-preamble>Test</mozart-preamble>")
         cmd = backend._build_command("Do the task")
-        prompt_arg = cmd[cmd.index("-p") + 1]
-        assert "mozart-preamble" in prompt_arg
-        assert "Do the task" in prompt_arg
+        p_idx = cmd.index("-p")
+        assert cmd[p_idx + 1] == "-"
+        assert "mozart-preamble" not in " ".join(cmd)
+        assert "Do the task" not in " ".join(cmd)
 
 
 # ─── _inject_preamble_and_extensions ─────────────────────────────────

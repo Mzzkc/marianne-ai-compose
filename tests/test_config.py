@@ -842,6 +842,91 @@ class TestJobConfig:
         assert config.conductor.preferences.prefer_minimal_output is True
 
 
+class TestWorkspacePathResolution109:
+    """Regression tests for #109: workspace resolves relative to score file, not process CWD."""
+
+    # Minimal valid score YAML — sheet and prompt are required by JobConfig
+    _SCORE_TEMPLATE = (
+        "name: {name}\nworkspace: {workspace}\n"
+        "sheet:\n  size: 1\n  total_items: 1\nprompt:\n  template: 'test'\n"
+    )
+
+    def _load(self, score_file: "Path") -> "JobConfig":
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return JobConfig.from_yaml(score_file)
+
+    def test_path_resolved_relative_to_score_file_not_cwd(
+        self, tmp_path: "Path", monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        """Relative workspace must resolve to score file's parent, not CWD."""
+        score_dir = tmp_path / "subdir"
+        score_dir.mkdir()
+        score_file = score_dir / "score.yaml"
+        score_file.write_text(self._SCORE_TEMPLATE.format(name="test-job", workspace="./outputs"))
+        monkeypatch.chdir(tmp_path)
+        config = self._load(score_file)
+        expected = (score_dir / "outputs").resolve()
+        assert config.workspace == expected
+        assert config.workspace != (tmp_path / "outputs").resolve()
+        assert config.workspace.is_absolute()
+
+    def test_absolute_path_unchanged(self, tmp_path: "Path") -> None:
+        """Absolute workspace in score must be preserved as-is."""
+        score_file = tmp_path / "score.yaml"
+        score_file.write_text(self._SCORE_TEMPLATE.format(name="test-job", workspace="/absolute/path"))
+        config = self._load(score_file)
+        assert config.workspace == Path("/absolute/path")
+
+    def test_dotdot_path_resolved_correctly(
+        self, tmp_path: "Path", monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        """Parent-directory traversal must resolve correctly relative to score file."""
+        score_dir = tmp_path / "a" / "b" / "c"
+        score_dir.mkdir(parents=True)
+        score_file = score_dir / "score.yaml"
+        score_file.write_text(self._SCORE_TEMPLATE.format(name="test-job", workspace="../../shared"))
+        monkeypatch.chdir(tmp_path)
+        config = self._load(score_file)
+        expected = (tmp_path / "a" / "shared").resolve()
+        assert config.workspace == expected
+        assert config.workspace.is_absolute()
+
+    def test_path_resolution_happens_before_ipc(
+        self, tmp_path: "Path", monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        """Config loaded via from_yaml has absolute workspace before any IPC."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        score_file = project_dir / "score.yaml"
+        score_file.write_text(self._SCORE_TEMPLATE.format(name="test-job", workspace="./workspaces/job"))
+        monkeypatch.chdir(tmp_path)
+        config = self._load(score_file)
+        expected = (project_dir / "workspaces" / "job").resolve()
+        assert config.workspace == expected
+        assert config.workspace.is_absolute()
+
+    def test_same_path_different_score_locations(
+        self, tmp_path: "Path", monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        """Same relative workspace in two score files at different dirs resolves differently."""
+        dir_a = tmp_path / "project_a"
+        dir_b = tmp_path / "project_b"
+        dir_a.mkdir()
+        dir_b.mkdir()
+        score_a = dir_a / "score.yaml"
+        score_b = dir_b / "score.yaml"
+        score_a.write_text(self._SCORE_TEMPLATE.format(name="job-a", workspace="./outputs"))
+        score_b.write_text(self._SCORE_TEMPLATE.format(name="job-b", workspace="./outputs"))
+        monkeypatch.chdir(tmp_path)
+        config_a = self._load(score_a)
+        config_b = self._load(score_b)
+        assert config_a.workspace == (dir_a / "outputs").resolve()
+        assert config_b.workspace == (dir_b / "outputs").resolve()
+        assert config_a.workspace != config_b.workspace
+
+
 class TestIsolationConfig:
     """Tests for IsolationConfig edge cases and defaults."""
 

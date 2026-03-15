@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
+import psutil
 import pytest
 
 from mozart.daemon.backpressure import BackpressureController, PressureLevel
@@ -49,7 +50,8 @@ def _fake_checkpoint(
     pid: int = 9999,
 ) -> MagicMock:
     """Build a mock CheckpointState with the fields profiler reads."""
-    state = MagicMock()
+    from mozart.core.checkpoint import CheckpointState
+    state = MagicMock(spec=CheckpointState)
     state.job_id = job_id
     state.total_sheets = total_sheets
     state.last_completed_sheet = last_completed_sheet
@@ -65,7 +67,7 @@ def _fake_psutil_process(
     children: list[Any] | None = None,
 ) -> MagicMock:
     """Build a mock psutil.Process."""
-    proc = MagicMock()
+    proc = MagicMock(spec=psutil.Process)
     proc.pid = pid
     proc.cmdline.return_value = cmdline
     proc.children.return_value = children or []
@@ -96,10 +98,10 @@ class TestFix1TimelineEventsWithoutPID:
         from mozart.daemon.profiler.models import ProfilerConfig
 
         config = ProfilerConfig(enabled=False, strace_enabled=False)
-        monitor = MagicMock()
-        pgroup = MagicMock()
-        event_bus = MagicMock()
-        event_bus.subscribe = MagicMock(return_value="sub-id")
+        monitor = MagicMock(spec=ResourceMonitor)
+        pgroup = MagicMock(spec=ProcessGroupManager)
+        event_bus = MagicMock(spec=EventBus)
+        event_bus.subscribe = MagicMock(spec=EventBus.subscribe, return_value="sub-id")
 
         collector = ProfilerCollector(config, monitor, pgroup, event_bus)
         return collector
@@ -226,12 +228,12 @@ class TestFix2WorkspacePIDMapping:
         from mozart.daemon.profiler.models import ProfilerConfig
 
         config = ProfilerConfig(enabled=False, strace_enabled=False)
-        monitor = MagicMock()
-        pgroup = MagicMock()
-        event_bus = MagicMock()
-        event_bus.subscribe = MagicMock(return_value="sub-id")
+        monitor = MagicMock(spec=ResourceMonitor)
+        pgroup = MagicMock(spec=ProcessGroupManager)
+        event_bus = MagicMock(spec=EventBus)
+        event_bus.subscribe = MagicMock(spec=EventBus.subscribe, return_value="sub-id")
 
-        manager = MagicMock()
+        manager = MagicMock(spec=JobManager)
         manager._job_meta = job_meta
         manager._live_states = live_states
 
@@ -299,7 +301,7 @@ class TestFix2WorkspacePIDMapping:
             cmdline=["claude", "-p", "Workspace: /home/user/.issue-solver-workspace"],
         )
 
-        daemon_proc = MagicMock()
+        daemon_proc = MagicMock(spec=psutil.Process)
         daemon_proc.children.return_value = [
             child_observer, child_enhanced, child_monitor, child_solver,
         ]
@@ -351,7 +353,7 @@ class TestFix2WorkspacePIDMapping:
             cmdline=["python3", "-m", "http.server"],  # No workspace
         )
 
-        daemon_proc = MagicMock()
+        daemon_proc = MagicMock(spec=psutil.Process)
         daemon_proc.children.return_value = [child_matched, child_orphan]
 
         with patch("mozart.daemon.profiler.collector._psutil") as mock_psutil:
@@ -400,7 +402,7 @@ class TestFix2WorkspacePIDMapping:
         live_states = {"j": _fake_checkpoint(job_id="j")}
         collector = self._make_collector_with_manager(jobs, live_states)
 
-        bad_child = MagicMock()
+        bad_child = MagicMock(spec=psutil.Process)
         bad_child.pid = 666
         bad_child.cmdline.side_effect = psutil.AccessDenied(pid=666)
 
@@ -408,7 +410,7 @@ class TestFix2WorkspacePIDMapping:
             pid=100, cmdline=["claude", "Workspace: /ws"],
         )
 
-        daemon_proc = MagicMock()
+        daemon_proc = MagicMock(spec=psutil.Process)
         daemon_proc.children.return_value = [bad_child, good_child]
 
         with patch("mozart.daemon.profiler.collector._psutil") as mock_psutil:

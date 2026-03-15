@@ -295,7 +295,7 @@ class TestSend:
     @pytest.mark.asyncio
     async def test_successful_send(self, context: NotificationContext):
         n = SlackNotifier(webhook_url="https://hooks.slack.com/test")
-        mock_response = MagicMock()
+        mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 200
 
         mock_client = AsyncMock()
@@ -308,7 +308,7 @@ class TestSend:
     @pytest.mark.asyncio
     async def test_webhook_error_status(self, context: NotificationContext):
         n = SlackNotifier(webhook_url="https://hooks.slack.com/test")
-        mock_response = MagicMock()
+        mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 400
         mock_response.text = "invalid_payload"
 

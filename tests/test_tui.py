@@ -26,6 +26,7 @@ from mozart.daemon.profiler.models import (
     ProcessMetric,
     SystemSnapshot,
 )
+from mozart.daemon.profiler.storage import MonitorStorage
 
 # ---------------------------------------------------------------------------
 # Test Fixtures
@@ -257,7 +258,7 @@ class TestMonitorReader:
         """IPC is preferred over SQLite when both are available."""
         from mozart.tui.reader import MonitorReader
 
-        storage = MagicMock()
+        storage = MagicMock(spec=MonitorStorage)
         reader = MonitorReader(ipc_client=mock_ipc_client, storage=storage)
         # Force source detection
         await reader._ensure_source()
@@ -268,7 +269,7 @@ class TestMonitorReader:
         """SQLite is preferred over JSONL when IPC is unavailable."""
         from mozart.tui.reader import MonitorReader
 
-        storage = MagicMock()
+        storage = MagicMock(spec=MonitorStorage)
         jsonl_path = tmp_path / "monitor.jsonl"
         jsonl_path.write_text('{"timestamp": 1000}\n')
 
@@ -296,7 +297,7 @@ class TestMonitorReader:
         client = AsyncMock()
         client.is_daemon_running = AsyncMock(return_value=False)
 
-        storage = MagicMock()
+        storage = MagicMock(spec=MonitorStorage)
         reader = MonitorReader(ipc_client=client, storage=storage)
         await reader._ensure_source()
         assert reader.source == "sqlite"
@@ -686,6 +687,7 @@ class TestDetailPanel:
         )
         panel = DetailPanel()
         panel.show_anomaly(anomaly)
+        assert panel is not None  # no crash is the test
 
     def test_show_item_process(self) -> None:
         """show_item dispatches to show_process for process items."""
@@ -694,6 +696,7 @@ class TestDetailPanel:
         proc = _make_process()
         panel = DetailPanel()
         panel.show_item({"type": "process", "process": proc})
+        assert panel is not None  # no crash is the test
 
     def test_show_item_job(self) -> None:
         """show_item shows job summary for job items."""
@@ -705,6 +708,7 @@ class TestDetailPanel:
         ]
         panel = DetailPanel()
         panel.show_item({"type": "job", "job_id": "test-job", "processes": procs})
+        assert panel is not None  # no crash is the test
 
     def test_show_item_none(self) -> None:
         """show_item with None calls show_empty."""

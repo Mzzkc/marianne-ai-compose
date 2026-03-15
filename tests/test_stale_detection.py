@@ -13,7 +13,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.backends.base import ExecutionResult
+from mozart.backends.base import Backend, ExecutionResult
+from mozart.core.config import JobConfig
 from mozart.core.config.execution import StaleDetectionConfig
 from mozart.execution.runner.sheet import SheetExecutionMixin, _StaleExecutionError
 
@@ -172,9 +173,9 @@ class _MinimalRunner(SheetExecutionMixin):
     ) -> None:
         from mozart.core.logging import get_logger
 
-        self.config = MagicMock()
+        self.config = MagicMock(spec=JobConfig)
         self.config.stale_detection = stale_config or StaleDetectionConfig()
-        self.backend = MagicMock()
+        self.backend = MagicMock(spec=Backend)
         self.backend.execute = AsyncMock(return_value=_make_success_result())
         self._logger = get_logger("test")
         self._current_sheet_num = 1

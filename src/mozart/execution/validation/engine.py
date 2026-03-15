@@ -453,7 +453,7 @@ class ValidationEngine:
         content = self._read_file_text(path)
 
         try:
-            regex_match = re.search(rule.pattern, content)
+            regex_match = re.search(rule.pattern, content, re.MULTILINE)
         except re.error as e:
             return ValidationResult(
                 rule=rule, passed=False,

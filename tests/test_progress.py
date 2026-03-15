@@ -399,6 +399,7 @@ class TestClaudeCliBackendProgress:
         mock_process.stdout = mock_stdout
         mock_process.stderr = mock_stderr
         mock_process.wait = AsyncMock()
+        mock_process.stdin = AsyncMock()
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             await backend.execute("test prompt")
@@ -448,6 +449,7 @@ class TestClaudeCliBackendProgress:
         mock_process.stdout = mock_stdout
         mock_process.stderr = mock_stderr
         mock_process.wait = AsyncMock()
+        mock_process.stdin = AsyncMock()
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             await backend.execute("test prompt")

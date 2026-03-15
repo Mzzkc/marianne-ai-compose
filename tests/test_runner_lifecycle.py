@@ -543,15 +543,14 @@ class TestShouldSkipSheet:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_expression_eval_error_skips_failclosed(self):
-        """Eval errors are fail-closed (sheet SKIPPED)."""
+    async def test_expression_eval_error_runs_failopen(self):
+        """Eval errors are fail-open (sheet RUNS) — Bug #116 fix."""
         runner = MockRunner()
         runner.config.sheet.skip_when = {1: "undefined_var"}
         runner.config.sheet.skip_when_command = None
         state = _make_state()
         result = await runner._should_skip_sheet(1, state)
-        assert result is not None
-        assert "EVAL ERROR" in result
+        assert result is None  # None = don't skip = fail-open
 
     @pytest.mark.asyncio
     async def test_no_condition_for_sheet(self):

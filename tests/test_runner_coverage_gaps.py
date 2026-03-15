@@ -2197,10 +2197,11 @@ class TestLifecycleSkipWhenCommand:
         return runner
 
     @pytest.mark.asyncio
-    async def test_skip_when_command_success(self) -> None:
+    async def test_skip_when_command_success(self, tmp_path: Path) -> None:
         """Command returning 0 triggers skip."""
         runner = self._make_runner()
         runner.config = _make_config(
+            workspace=str(tmp_path),
             sheet={
                 "size": 10,
                 "total_items": 30,
@@ -2556,3 +2557,155 @@ class TestSheetCheckpointAndStale:
 
         err = _SheetSkipped()
         assert isinstance(err, Exception)
+
+
+# =============================================================================
+# Bug #120 — Fan-in sheets get silent empty inputs from skipped upstream instances
+# =============================================================================
+
+
+class TestFanInSkippedUpstream120:
+    """Tests that fan-in sheets emit a warning when upstream instances are skipped.
+
+    The FILTER (skipped sheets absent from previous_outputs) was already correct.
+    The fix adds a structured WARNING log when upstream sheets have SKIPPED status.
+
+    All tests use fresh MagicMock() for _logger to prevent cross-test accumulation.
+    """
+
+    def _make_mixin(self) -> Any:
+        from mozart.execution.runner.context import ContextBuildingMixin
+
+        mixin = ContextBuildingMixin.__new__(ContextBuildingMixin)
+        mixin.config = _make_config()
+        mixin._logger = MagicMock()
+        mock_builder = MagicMock()
+        context_mock = MagicMock()
+        context_mock.previous_outputs = {}
+        context_mock.previous_files = {}
+        mock_builder.build_sheet_context.return_value = context_mock
+        mixin.prompt_builder = mock_builder
+        return mixin
+
+    def _make_cross_sheet(self) -> MagicMock:
+        cs = MagicMock()
+        cs.auto_capture_stdout = True
+        cs.lookback_sheets = 0
+        cs.max_output_chars = 1000
+        cs.capture_files = []
+        return cs
+
+    def test_skipped_upstream_excluded_from_previous_outputs(self) -> None:
+        """Skipped upstream excluded; completed upstream included (TEST-120-A).
+
+        FILTER was already correct — this is a regression gate.
+        """
+        mixin = self._make_mixin()
+        state = _make_state(total_sheets=3)
+        state.sheets[1] = SheetState(sheet_num=1, status=SheetStatus.SKIPPED)
+        state.sheets[2] = SheetState(sheet_num=2, status=SheetStatus.COMPLETED)
+        state.sheets[2].stdout_tail = "output from sheet 2"
+
+        context_mock = MagicMock()
+        context_mock.previous_outputs = {}
+        context_mock.previous_files = {}
+
+        mixin._populate_cross_sheet_context(
+            context_mock, state, 3, self._make_cross_sheet()
+        )
+
+        assert 1 not in context_mock.previous_outputs
+        assert 2 in context_mock.previous_outputs
+        assert context_mock.previous_outputs[2] == "output from sheet 2"
+
+    def test_warning_emitted_when_one_upstream_skipped(self) -> None:
+        """Structured warning fires when one fan-out upstream is skipped (TEST-120-B).
+
+        Primary fail-before-pass test — the fix IS this warning.
+        """
+        mixin = self._make_mixin()
+        state = _make_state(total_sheets=3)
+        state.sheets[1] = SheetState(sheet_num=1, status=SheetStatus.SKIPPED)
+        state.sheets[2] = SheetState(sheet_num=2, status=SheetStatus.COMPLETED)
+        state.sheets[2].stdout_tail = "output 2"
+
+        context_mock = MagicMock()
+        context_mock.previous_outputs = {}
+        context_mock.previous_files = {}
+
+        mixin._populate_cross_sheet_context(
+            context_mock, state, 3, self._make_cross_sheet()
+        )
+
+        mixin._logger.warning.assert_called_once()
+        call_args = mixin._logger.warning.call_args
+        assert call_args[0][0] == "fan_in_upstream_skipped"
+        assert call_args[1]["fan_in_sheet"] == 3
+        assert call_args[1]["skipped_sheets"] == [1]
+        assert call_args[1]["received_inputs"] == 1
+
+    def test_no_warning_when_all_upstreams_completed(self) -> None:
+        """No warning fires when all upstreams completed normally (TEST-120-C)."""
+        mixin = self._make_mixin()
+        state = _make_state(total_sheets=3)
+        state.sheets[1] = SheetState(sheet_num=1, status=SheetStatus.COMPLETED)
+        state.sheets[1].stdout_tail = "output 1"
+        state.sheets[2] = SheetState(sheet_num=2, status=SheetStatus.COMPLETED)
+        state.sheets[2].stdout_tail = "output 2"
+
+        context_mock = MagicMock()
+        context_mock.previous_outputs = {}
+        context_mock.previous_files = {}
+
+        mixin._populate_cross_sheet_context(
+            context_mock, state, 3, self._make_cross_sheet()
+        )
+
+        mixin._logger.warning.assert_not_called()
+
+    def test_all_upstreams_skipped_empty_outputs_with_warning(self) -> None:
+        """All skipped: previous_outputs empty + warning lists all skipped (TEST-120-D)."""
+        mixin = self._make_mixin()
+        state = _make_state(total_sheets=4)
+        for i in range(1, 4):
+            state.sheets[i] = SheetState(sheet_num=i, status=SheetStatus.SKIPPED)
+
+        context_mock = MagicMock()
+        context_mock.previous_outputs = {}
+        context_mock.previous_files = {}
+
+        mixin._populate_cross_sheet_context(
+            context_mock, state, 4, self._make_cross_sheet()
+        )
+
+        assert context_mock.previous_outputs == {}
+
+        mixin._logger.warning.assert_called_once()
+        call_args = mixin._logger.warning.call_args
+        assert call_args[0][0] == "fan_in_upstream_skipped"
+        assert call_args[1]["skipped_sheets"] == [1, 2, 3]
+        assert call_args[1]["received_inputs"] == 0
+
+    def test_no_false_warning_for_completed_sheets_with_empty_stdout(self) -> None:
+        """Completed sheets with empty stdout do NOT trigger warning (TEST-120-E).
+
+        Regression test for #120 — the discriminant is SKIPPED status, not empty output.
+        """
+        mixin = self._make_mixin()
+        state = _make_state(total_sheets=3)
+        # Completed sheets that ran but produced no output
+        state.sheets[1] = SheetState(sheet_num=1, status=SheetStatus.COMPLETED)
+        state.sheets[1].stdout_tail = ""
+        state.sheets[2] = SheetState(sheet_num=2, status=SheetStatus.COMPLETED)
+        state.sheets[2].stdout_tail = ""
+
+        context_mock = MagicMock()
+        context_mock.previous_outputs = {}
+        context_mock.previous_files = {}
+
+        mixin._populate_cross_sheet_context(
+            context_mock, state, 3, self._make_cross_sheet()
+        )
+
+        # Empty output from completed sheets must NOT trigger the warning
+        mixin._logger.warning.assert_not_called()

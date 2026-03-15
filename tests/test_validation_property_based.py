@@ -403,8 +403,9 @@ def test_runner_severity_sorting(issues: list[dict[str, Any]]) -> None:
     """ValidationRunner.validate sorts issues: ERROR < WARNING < INFO."""
     from unittest.mock import MagicMock
 
-    from mozart.validation.base import ValidationIssue, ValidationSeverity
+    from mozart.validation.base import ValidationCheck, ValidationIssue, ValidationSeverity
     from mozart.validation.runner import ValidationRunner
+    from mozart.core.config.job import JobConfig
 
     issue_objects = []
     for data in issues:
@@ -412,12 +413,12 @@ def test_runner_severity_sorting(issues: list[dict[str, Any]]) -> None:
         issue_objects.append(ValidationIssue(severity=severity, **data))
 
     # Create a mock check that returns our issues
-    mock_check = MagicMock()
+    mock_check = MagicMock(spec=ValidationCheck)
     mock_check.check_id = "VTEST"
     mock_check.check.return_value = issue_objects
 
     runner = ValidationRunner(checks=[mock_check])
-    config = MagicMock()
+    config = MagicMock(spec=JobConfig)
     sorted_issues = runner.validate(config, Path("/tmp"), "")
 
     severity_order = {
@@ -664,3 +665,412 @@ def test_count_by_severity_totals(issues: list[dict[str, Any]]) -> None:
 
     total = sum(counts.values())
     assert total == len(issue_objects)
+
+
+# ---------------------------------------------------------------------------
+# P0-A: V212 SkipWhenSheetRangeCheck property test
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(
+    skip_keys=st.lists(st.integers(min_value=-5, max_value=20), min_size=0, max_size=5),
+    total_sheets=st.integers(min_value=1, max_value=10),
+)
+@settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
+def test_skip_when_sheet_range_invariant(
+    skip_keys: list[int],
+    total_sheets: int,
+) -> None:
+    """∀ k in skip_when.keys(): (1 ≤ k ≤ total_sheets) ↔ no V212 warning."""
+    from pathlib import Path
+    from unittest.mock import MagicMock
+    from mozart.core.config.job import JobConfig, SheetConfig
+    from mozart.validation.checks.best_practices import SkipWhenSheetRangeCheck
+
+    check = SkipWhenSheetRangeCheck()
+    config = MagicMock(spec=JobConfig)
+    config.sheet = MagicMock(spec=SheetConfig)
+    config.sheet.total_sheets = total_sheets
+    config.sheet.skip_when = {k: "True" for k in skip_keys}
+    config.sheet.skip_when_command = {}
+
+    issues = check.check(config, Path("/tmp/score.yaml"), "")
+
+    fired_keys = {
+        int(issue.metadata["sheet_num"])
+        for issue in issues
+        if issue.metadata.get("source") == "skip_when"
+    }
+    for k in skip_keys:
+        in_range = 1 <= k <= total_sheets
+        if in_range:
+            assert k not in fired_keys, f"V212 wrongly fired for in-range key {k} (total={total_sheets})"
+        else:
+            assert k in fired_keys, f"V212 missed out-of-range key {k} (total={total_sheets})"
+
+
+# ---------------------------------------------------------------------------
+# Batch round-trip tests — workspace / cross-sheet / feedback / log / AIreview
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(data=st.just({}))
+@settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
+def test_workspace_config_models_roundtrip(data: dict[str, Any]) -> None:
+    """AIReviewConfig, CrossSheetConfig, FeedbackConfig, LogConfig, IsolationConfig, WorkspaceLifecycleConfig survive round-trip."""
+    from mozart.core.config.workspace import (
+        AIReviewConfig,
+        CrossSheetConfig,
+        FeedbackConfig,
+        IsolationConfig,
+        LogConfig,
+        WorkspaceLifecycleConfig,
+    )
+
+    for ModelClass in [
+        AIReviewConfig,
+        CrossSheetConfig,
+        FeedbackConfig,
+        IsolationConfig,
+        LogConfig,
+        WorkspaceLifecycleConfig,
+    ]:
+        obj = ModelClass.model_validate(data)
+        dumped = obj.model_dump()
+        restored = ModelClass.model_validate(dumped)
+        assert restored is not None
+        assert type(restored) is ModelClass
+
+
+# ---------------------------------------------------------------------------
+# Batch round-trip tests — execution config models
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(data=st.just({}))
+@settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
+def test_execution_config_models_roundtrip(data: dict[str, Any]) -> None:
+    """CircuitBreakerConfig, CostLimitConfig, ParallelConfig, RateLimitConfig, RetryConfig, StaleDetectionConfig survive round-trip."""
+    from mozart.core.config.execution import (
+        CircuitBreakerConfig,
+        CostLimitConfig,
+        ParallelConfig,
+        RateLimitConfig,
+        RetryConfig,
+        StaleDetectionConfig,
+    )
+
+    for ModelClass in [
+        CircuitBreakerConfig,
+        CostLimitConfig,
+        ParallelConfig,
+        RateLimitConfig,
+        RetryConfig,
+        StaleDetectionConfig,
+    ]:
+        obj = ModelClass.model_validate(data)
+        dumped = obj.model_dump()
+        restored = ModelClass.model_validate(dumped)
+        assert restored is not None
+
+
+@pytest.mark.property_based
+@given(command=st.sampled_from(["echo ok", "true", "test -f /dev/null"]))
+@settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
+def test_skip_when_command_roundtrip(command: str) -> None:
+    """SkipWhenCommand survives round-trip with valid command strings."""
+    from mozart.core.config.execution import SkipWhenCommand
+
+    obj = SkipWhenCommand(command=command)
+    dumped = obj.model_dump()
+    restored = SkipWhenCommand.model_validate(dumped)
+    assert restored.command == command
+    assert restored is not None
+
+
+# ---------------------------------------------------------------------------
+# Batch round-trip tests — orchestration config models
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(data=st.just({}))
+@settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
+def test_orchestration_config_models_roundtrip(data: dict[str, Any]) -> None:
+    """ConcertConfig, ConductorConfig, ConductorPreferences survive round-trip."""
+    from mozart.core.config.orchestration import (
+        ConcertConfig,
+        ConductorConfig,
+        ConductorPreferences,
+    )
+
+    for ModelClass in [ConcertConfig, ConductorConfig, ConductorPreferences]:
+        obj = ModelClass.model_validate(data)
+        dumped = obj.model_dump()
+        restored = ModelClass.model_validate(dumped)
+        assert restored is not None
+
+
+@pytest.mark.property_based
+@given(
+    hook_type=st.sampled_from(["run_job", "run_command", "run_script"]),
+    notif_type=st.just("desktop"),
+)
+@settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
+def test_hook_notification_config_roundtrip(hook_type: str, notif_type: str) -> None:
+    """PostSuccessHookConfig and NotificationConfig survive round-trip."""
+    from mozart.core.config.orchestration import NotificationConfig, PostSuccessHookConfig
+
+    hook_data: dict[str, Any] = {"type": hook_type}
+    if hook_type == "run_job":
+        hook_data["job_path"] = "/tmp/score.yaml"
+    elif hook_type in ("run_command", "run_script"):
+        hook_data["command"] = "echo ok"
+    hook = PostSuccessHookConfig.model_validate(hook_data)
+    assert hook.type == hook_type
+
+    notif = NotificationConfig(type=notif_type)  # type: ignore[arg-type]
+    dumped = notif.model_dump()
+    restored = NotificationConfig.model_validate(dumped)
+    assert restored.type == notif_type
+
+
+# ---------------------------------------------------------------------------
+# Batch round-trip tests — learning config models
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(data=st.just({}))
+@settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
+def test_learning_config_models_roundtrip(data: dict[str, Any]) -> None:
+    """AutoApplyConfig, CheckpointConfig, EntropyResponseConfig, ExplorationBudgetConfig, GroundingConfig, LearningConfig survive round-trip."""
+    from mozart.core.config.learning import (
+        AutoApplyConfig,
+        CheckpointConfig,
+        EntropyResponseConfig,
+        ExplorationBudgetConfig,
+        GroundingConfig,
+        LearningConfig,
+    )
+
+    for ModelClass in [
+        AutoApplyConfig,
+        CheckpointConfig,
+        EntropyResponseConfig,
+        ExplorationBudgetConfig,
+        GroundingConfig,
+        LearningConfig,
+    ]:
+        obj = ModelClass.model_validate(data)
+        dumped = obj.model_dump()
+        restored = ModelClass.model_validate(dumped)
+        assert restored is not None
+
+
+@pytest.mark.property_based
+@given(sheet_num=st.integers(min_value=1, max_value=10))
+@settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
+def test_checkpoint_trigger_grounding_hook_roundtrip(sheet_num: int) -> None:
+    """CheckpointTriggerConfig and GroundingHookConfig survive round-trip."""
+    from mozart.core.config.learning import CheckpointTriggerConfig, GroundingHookConfig
+
+    trigger = CheckpointTriggerConfig(name="cp1", sheet_nums=[sheet_num])
+    dumped = trigger.model_dump()
+    restored = CheckpointTriggerConfig.model_validate(dumped)
+    assert restored.name == "cp1"
+
+    hook = GroundingHookConfig(type="file_checksum")
+    assert hook.type == "file_checksum"
+
+
+# ---------------------------------------------------------------------------
+# Batch round-trip tests — backend config models
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(data=st.just({}))
+@settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
+def test_backend_config_models_roundtrip(data: dict[str, Any]) -> None:
+    """BackendConfig, BridgeConfig, OllamaConfig, RecursiveLightConfig, SheetBackendOverride survive round-trip."""
+    from mozart.core.config.backend import (
+        BackendConfig,
+        BridgeConfig,
+        OllamaConfig,
+        RecursiveLightConfig,
+        SheetBackendOverride,
+    )
+
+    for ModelClass in [BackendConfig, BridgeConfig, OllamaConfig, RecursiveLightConfig, SheetBackendOverride]:
+        obj = ModelClass.model_validate(data)
+        dumped = obj.model_dump()
+        restored = ModelClass.model_validate(dumped)
+        assert restored is not None
+
+
+@pytest.mark.property_based
+@given(
+    name=st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="-_")),
+)
+@settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
+def test_mcp_server_config_roundtrip(name: str) -> None:
+    """MCPServerConfig survives round-trip with valid name and command."""
+    from mozart.core.config.backend import MCPServerConfig
+
+    obj = MCPServerConfig(name=name, command="mcp-server")
+    dumped = obj.model_dump()
+    restored = MCPServerConfig.model_validate(dumped)
+    assert restored.name == name
+
+
+# ---------------------------------------------------------------------------
+# Batch round-trip tests — job config sub-models
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(
+    size=st.integers(min_value=1, max_value=10),
+    total_items=st.integers(min_value=1, max_value=100),
+)
+@settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
+def test_sheet_config_prompt_config_roundtrip(size: int, total_items: int) -> None:
+    """SheetConfig and PromptConfig survive round-trip."""
+    from mozart.core.config.job import PromptConfig, SheetConfig
+
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sheet = SheetConfig.model_validate({"size": size, "total_items": total_items})
+        assert sheet is not None
+
+        prompt = PromptConfig.model_validate({"template": "test"})
+        assert prompt is not None
+
+
+@pytest.mark.property_based
+@given(
+    filename=st.sampled_from(["context.md", "notes.txt", "data.json"]),
+    category=st.sampled_from(["context", "skill", "tool"]),
+)
+@settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
+def test_injection_item_roundtrip(filename: str, category: str) -> None:
+    """InjectionItem survives round-trip with valid file and category."""
+    from mozart.core.config.job import InjectionItem
+
+    obj = InjectionItem(file=filename, as_=category)
+    dumped = obj.model_dump()
+    restored = InjectionItem.model_validate(dumped)
+    assert str(restored.file) == filename
+
+
+# ---------------------------------------------------------------------------
+# Batch round-trip tests — checkpoint models
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(
+    sheet_num=st.integers(min_value=1, max_value=100),
+    total_sheets=st.integers(min_value=1, max_value=50),
+)
+@settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow])
+def test_checkpoint_models_roundtrip(sheet_num: int, total_sheets: int) -> None:
+    """CheckpointErrorRecord, SheetState, CheckpointState survive round-trip."""
+    from mozart.core.checkpoint import CheckpointErrorRecord, CheckpointState, SheetState
+
+    err = CheckpointErrorRecord(
+        error_type="transient",
+        error_code="E001",
+        error_message="test error",
+        attempt_number=sheet_num,
+    )
+    assert err.attempt_number == sheet_num
+
+    state = SheetState(sheet_num=sheet_num)
+    dumped = state.model_dump()
+    restored = SheetState.model_validate(dumped)
+    assert restored.sheet_num == sheet_num
+
+    job = CheckpointState(
+        job_id=f"job-{sheet_num}",
+        job_name="test-job",
+        total_sheets=total_sheets,
+    )
+    assert job.total_sheets == total_sheets
+
+
+# ---------------------------------------------------------------------------
+# JobConfig round-trip via from_yaml_string
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(name=st.from_regex(r"[a-z][a-z0-9-]{2,19}", fullmatch=True))
+@settings(max_examples=5, suppress_health_check=[HealthCheck.too_slow])
+def test_job_config_roundtrip_via_yaml_string(name: str) -> None:
+    """JobConfig survives round-trip through to_yaml / from_yaml_string."""
+    import warnings
+    from mozart.core.config import JobConfig
+
+    yaml_str = f"name: {name}\nsheet:\n  size: 1\n  total_items: 1\nprompt:\n  template: 'test'\n"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        config = JobConfig.from_yaml_string(yaml_str)
+    assert config.name == name
+    assert config.workspace.is_absolute()
+
+
+# ---------------------------------------------------------------------------
+# V212 SkipWhenSheetRangeCheck — required named entry point for -k selector
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.property_based
+@given(
+    skip_keys=st.lists(st.integers(min_value=-5, max_value=20), min_size=0, max_size=5),
+    total_sheets=st.integers(min_value=1, max_value=10),
+)
+@settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
+def test_property_based_tests_exist(
+    skip_keys: list[int],
+    total_sheets: int,
+) -> None:
+    """V212 invariant: 1 ≤ k ≤ total_sheets ↔ no SkipWhenSheetRangeCheck warning.
+
+    Named ``test_property_based_tests_exist`` so that ``-k test_property_based_tests_exist``
+    selects this test directly (P0-A gate requirement).
+    """
+    from unittest.mock import MagicMock
+
+    from mozart.core.config.job import JobConfig, SheetConfig
+    from mozart.validation.checks.best_practices import SkipWhenSheetRangeCheck
+
+    check = SkipWhenSheetRangeCheck()
+    config = MagicMock(spec=JobConfig)
+    config.sheet = MagicMock(spec=SheetConfig)
+    config.sheet.total_sheets = total_sheets
+    config.sheet.skip_when = {k: "True" for k in skip_keys}
+    config.sheet.skip_when_command = {}
+
+    issues = check.check(config, Path("/tmp/score.yaml"), "")
+
+    fired_keys = {
+        int(issue.metadata["sheet_num"])
+        for issue in issues
+        if issue.metadata.get("source") == "skip_when"
+    }
+    for k in skip_keys:
+        in_range = 1 <= k <= total_sheets
+        if in_range:
+            assert k not in fired_keys, (
+                f"V212 wrongly fired for in-range key {k} (total={total_sheets})"
+            )
+        else:
+            assert k in fired_keys, (
+                f"V212 missed out-of-range key {k} (total={total_sheets})"
+            )

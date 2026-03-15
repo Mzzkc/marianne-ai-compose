@@ -1319,6 +1319,8 @@ sheet:
 
 This skips sheet 5 when sheet 3's validations passed — useful for
 conditional error-handling stages that only run on failure.
+If the expression raises an exception, the sheet runs (fail-open). The
+error is logged at ERROR level.
 
 **Command-based (`skip_when_command`):** Skip sheets based on shell
 command exit codes. Exit 0 = skip the sheet, non-zero = run the sheet.

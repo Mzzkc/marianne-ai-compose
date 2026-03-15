@@ -14,6 +14,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from textual.widgets import Static
 
 from mozart.daemon.profiler.models import EventType, ProcessEvent
 from mozart.tui.panels.detail import DetailPanel
@@ -237,7 +238,7 @@ class TestDetailFileActivity:
         """show_file_activity renders file events with timestamps and paths."""
         panel = DetailPanel()
         # Compose widgets (needed for _content to be set)
-        panel._content = MagicMock()
+        panel._content = MagicMock(spec=Static)
 
         file_events = [
             _make_observer_event(
@@ -263,7 +264,7 @@ class TestDetailFileActivity:
     def test_show_file_activity_empty(self) -> None:
         """show_file_activity handles empty event list."""
         panel = DetailPanel()
-        panel._content = MagicMock()
+        panel._content = MagicMock(spec=Static)
 
         panel.show_file_activity([])
 
@@ -274,7 +275,7 @@ class TestDetailFileActivity:
     def test_show_item_with_file_activity(self) -> None:
         """show_item with type='job' includes file activity when observer_events present."""
         panel = DetailPanel()
-        panel._content = MagicMock()
+        panel._content = MagicMock(spec=Static)
 
         item: dict[str, Any] = {
             "type": "job",

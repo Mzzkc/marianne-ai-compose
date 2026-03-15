@@ -1155,3 +1155,115 @@ class TestExceptionHandling:
         assert r.passed is False
         assert r.error_type == "internal_error"
         assert "Validation error" in r.error_message
+
+
+# ===========================================================================
+# 12. Bug #105 — prompt.variables available in validation paths/commands
+# ===========================================================================
+
+
+class TestPromptVariablesInValidation105:
+    """Tests that prompt.variables are merged into validation context (Bug #105).
+
+    All tests use the merged-context pattern from sheet.py:395-396:
+        user_vars = {str(k): v for k, v in config.prompt.variables.items()}
+        validation_context = {**user_vars, **sheet_context.to_dict()}
+
+    Tests A–B verify the engine correctly expands user vars when they are
+    present in the context.  Tests C–E are regression gates.
+    """
+
+    def _make_engine_with_user_vars(
+        self,
+        workspace: Path,
+        user_vars: dict,
+        base_context: dict | None = None,
+    ) -> "ValidationEngine":
+        """Simulate the sheet.py construction site merge pattern."""
+        if base_context is None:
+            base_context = {"sheet_num": 1, "workspace": str(workspace)}
+        coerced = {str(k): v for k, v in user_vars.items()}
+        merged = {**coerced, **base_context}
+        return ValidationEngine(workspace=workspace, sheet_context=merged)
+
+    def test_path_rule_expands_user_variable(self, tmp_path: Path) -> None:
+        """Path template with a user var expands correctly (TEST-105-A).
+
+        Simulates: config.prompt.variables = {"my_output_dir": "analysis_results"}
+        path rule:  "{workspace}/{my_output_dir}/report.txt"
+        """
+        engine = self._make_engine_with_user_vars(
+            tmp_path,
+            user_vars={"my_output_dir": "analysis_results"},
+        )
+        # Key must be present in engine.sheet_context
+        assert "my_output_dir" in engine.sheet_context
+        assert engine.sheet_context["my_output_dir"] == "analysis_results"
+
+        # Expansion must succeed without KeyError
+        result = engine.expand_path("{workspace}/{my_output_dir}/report.txt")
+        assert "analysis_results" in result.parts
+
+    def test_command_rule_expands_user_variable(self, tmp_path: Path) -> None:
+        """Command rule with user var replaces token — no silent residue (TEST-105-B).
+
+        Simulates: config.prompt.variables = {"my_var": "production"}
+        command rule: "check_env.sh {my_var}"
+        """
+        engine = self._make_engine_with_user_vars(
+            tmp_path,
+            user_vars={"my_var": "production"},
+        )
+        assert "my_var" in engine.sheet_context
+
+        # Manually simulate _run_command_rule expansion loop
+        import shlex
+        context = dict(engine.sheet_context)
+        context["workspace"] = str(engine.workspace)
+        command = "check_env.sh {my_var}"
+        for key, value in context.items():
+            command = command.replace("{" + key + "}", shlex.quote(str(value)))
+
+        # The literal token must NOT remain (silent failure gate)
+        assert "{my_var}" not in command
+        assert "production" in command
+
+    def test_builtin_wins_over_user_variable_on_collision(
+        self, tmp_path: Path
+    ) -> None:
+        """Built-in workspace variable wins over user-defined one (TEST-105-C).
+
+        Merge order: {**user_vars, **sheet_context.to_dict()}
+        If user defines workspace=/user/custom, built-in workspace must win.
+        """
+        builtin_workspace = str(tmp_path)
+        user_workspace = "/user/custom/path"
+
+        coerced = {"workspace": user_workspace}
+        base = {"sheet_num": 1, "workspace": builtin_workspace}
+        merged = {**coerced, **base}  # built-in wins
+
+        engine = ValidationEngine(workspace=tmp_path, sheet_context=merged)
+        result = engine.expand_path("{workspace}/output.txt")
+        assert str(tmp_path) in str(result)
+        assert user_workspace not in str(result)
+
+    def test_missing_variable_still_raises_key_error(self, tmp_path: Path) -> None:
+        """Undefined variable in path template raises KeyError (TEST-105-D).
+
+        The fix must NOT swallow expansion errors for genuinely missing vars.
+        """
+        # Regression test for #105 — missing vars must still fail loudly
+        engine = _make_engine(tmp_path, {"sheet_num": 1})
+        with pytest.raises(KeyError):
+            engine.expand_path("{workspace}/output-{missing_var}.txt")
+
+    def test_integer_yaml_keys_coerced_to_str(self, tmp_path: Path) -> None:
+        """YAML integer keys (e.g., variables: {1: foo}) are coerced to str."""
+        # str() coercion is mandatory: str.format() requires string keys
+        user_vars = {1: "sheet_one_content"}  # integer key from YAML
+        engine = self._make_engine_with_user_vars(tmp_path, user_vars=user_vars)
+
+        # Key accessible as string "1", not integer 1
+        assert "1" in engine.sheet_context
+        assert engine.sheet_context["1"] == "sheet_one_content"

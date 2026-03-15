@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import re
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -99,12 +98,12 @@ def validate_schema(
         Tuple of (parsed_config, error_message). One will be None.
     """
     try:
-        # Create temporary directory for JobConfig.from_yaml() method
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir) / filename
-            temp_path.write_text(content)
-            config = JobConfig.from_yaml(temp_path)
-            return config, None
+        # Use from_yaml_string so workspace resolves from CWD (correct for
+        # dashboard editor content, which has no real file path context).
+        # from_yaml would resolve relative to a temp file that is deleted before
+        # extended validation runs, causing V002 false positives (#109).
+        config = JobConfig.from_yaml_string(content)
+        return config, None
 
     except ValidationError as e:
         return None, f"Schema validation failed: {e}"

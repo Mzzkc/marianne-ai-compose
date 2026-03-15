@@ -220,3 +220,111 @@ class TestSkipWhenCommandReasons:
 
         assert result is not None
         assert "Command succeeded" in result
+
+
+class TestSkipWhenFailOpenSemantics116:
+    """Tests for fail-open behavior on skip_when eval errors (Bug #116).
+
+    Bug #116 changed skip_when expression errors from fail-closed (sheet SKIPPED)
+    to fail-open (sheet RUNS), matching skip_when_command's existing behavior.
+
+    The fix is in lifecycle.py: except Exception block now returns None instead
+    of a skip-reason string.
+    """
+
+    async def test_skip_when_eval_error_sheet_runs(self) -> None:
+        """skip_when eval error -> None (sheet runs, fail-open) (TEST-116-A).
+
+        Primary fail-before-pass test.
+        """
+        # undefined_name_that_does_not_exist raises NameError in safe_builtins context
+        runner = _make_runner(
+            skip_when={1: "undefined_name_that_does_not_exist"},
+        )
+        state = _make_state()
+
+        result = await LifecycleMixin._should_skip_sheet(runner, 1, state)
+
+        assert result is None  # fail-open: sheet runs
+        runner._logger.error.assert_called_once()
+        call_args = runner._logger.error.call_args
+        assert call_args[0][0] == "skip_condition_eval_failed"
+
+    async def test_skip_when_command_timeout_sheet_runs(
+        self, tmp_path: Path
+    ) -> None:
+        """skip_when_command timeout -> None (non-regression gate) (TEST-116-B).
+
+        This was already fail-open before Bug #116 fix.
+        """
+        runner = _make_runner(
+            skip_when_command={1: {"command": "sleep 10", "timeout_seconds": 0.01}},
+            workspace=tmp_path,
+        )
+        state = _make_state()
+
+        result = await LifecycleMixin._should_skip_sheet(runner, 1, state)
+
+        assert result is None  # fail-open for timeout
+
+    async def test_skip_when_command_error_sheet_runs(
+        self, tmp_path: Path
+    ) -> None:
+        """skip_when_command subprocess error -> None (non-regression gate) (TEST-116-C).
+
+        Non-regression gate for #116 — skip_when_command subprocess error was already fail-open.
+        """
+        runner = _make_runner(
+            skip_when_command={
+                1: {"command": "/nonexistent/binary/that/does/not/exist"}
+            },
+            workspace=tmp_path,
+        )
+        state = _make_state()
+
+        result = await LifecycleMixin._should_skip_sheet(runner, 1, state)
+
+        assert result is None  # fail-open for subprocess error
+
+    async def test_both_fail_sheet_runs(self, tmp_path: Path) -> None:
+        """Both skip_when error and skip_when_command error -> sheet runs (TEST-116-D).
+
+        Parity invariant: when ALL skip logic fails, the default is always to run.
+        """
+        runner = _make_runner(
+            skip_when={1: "undefined_var_xyz"},
+            skip_when_command={1: {"command": "/nonexistent/binary"}},
+            workspace=tmp_path,
+        )
+        state = _make_state()
+
+        result = await LifecycleMixin._should_skip_sheet(runner, 1, state)
+
+        assert result is None  # fail-open for both mechanisms
+
+    async def test_normal_skip_when_true_skips_sheet(self) -> None:
+        """Normal skip_when evaluates True -> sheet IS skipped (TEST-116-E).
+
+        Regression test for #116 — the normal skip path must still work.
+        """
+        runner = _make_runner(
+            skip_when={1: "True"},
+        )
+        state = _make_state()
+
+        result = await LifecycleMixin._should_skip_sheet(runner, 1, state)
+
+        assert result is not None  # sheet IS skipped normally
+        runner._logger.error.assert_not_called()  # no error on clean eval
+
+    async def test_type_error_in_skip_when_expression_fails_open(self) -> None:
+        """TypeError in skip_when expression -> None (fail-open, not just NameError)."""
+        runner = _make_runner(
+            skip_when={1: "1 + 'string'"},
+        )
+        state = _make_state()
+
+        result = await LifecycleMixin._should_skip_sheet(runner, 1, state)
+
+        assert result is None
+        runner._logger.error.assert_called()

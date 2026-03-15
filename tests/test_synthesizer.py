@@ -15,6 +15,10 @@ import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
+from mozart.core.config import JobConfig
+from mozart.core.config.execution import ParallelConfig
+from mozart.core.config.workspace import IsolationConfig
+
 import pytest
 
 from mozart.core.checkpoint import CheckpointState
@@ -675,11 +679,11 @@ class TestSynthesizerRunnerIntegration:
         # Full integration requires backend setup
 
         # Create minimal mocks
-        mock_config = MagicMock()
+        mock_config = MagicMock(spec=JobConfig)
         mock_config.workspace = "."
-        mock_config.parallel = MagicMock()
+        mock_config.parallel = MagicMock(spec=ParallelConfig)
         mock_config.parallel.enabled = False
-        mock_config.isolation = MagicMock()
+        mock_config.isolation = MagicMock(spec=IsolationConfig)
         mock_config.isolation.enabled = False
 
         # Verify method exists

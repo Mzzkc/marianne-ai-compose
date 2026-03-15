@@ -576,6 +576,13 @@ class JobConfig(BaseModel):
         """Load job configuration from a YAML file."""
         with open(path) as f:
             data = yaml.safe_load(f)
+        # Pre-resolve relative workspace relative to the score file's parent
+        # directory, not the current process CWD (#109).  This is critical when
+        # the daemon loads a score whose path differs from the daemon's CWD.
+        if "workspace" in data:
+            ws = Path(str(data["workspace"]))
+            if not ws.is_absolute():
+                data["workspace"] = str((path.resolve().parent / ws).resolve())
         return cls.model_validate(data)
 
     @classmethod

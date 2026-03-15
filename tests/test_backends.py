@@ -707,10 +707,12 @@ class TestClaudeCliBackendPreamble:
         backend.set_preamble("<mozart-preamble>Dynamic</mozart-preamble>")
 
         cmd = backend._build_command("My original prompt")
-        prompt_arg = cmd[cmd.index("-p") + 1]
+        p_idx = cmd.index("-p")
 
-        assert "<mozart-preamble>" in prompt_arg
-        assert "My original prompt" in prompt_arg
+        # After #108 fix: preamble goes via stdin, not in the command arg
+        assert cmd[p_idx + 1] == "-"
+        assert "<mozart-preamble>" not in " ".join(cmd)
+        assert "My original prompt" not in " ".join(cmd)
 
 
 class TestClaudeCliBackendPromptExtensions:
@@ -755,14 +757,15 @@ class TestClaudeCliBackendPromptExtensions:
         result = backend._inject_preamble_and_extensions("My prompt")
         assert result.index("Context") < result.index("My prompt") < result.index("Custom directive")
 
-    def test_extensions_in_build_command(self, backend: ClaudeCliBackend) -> None:
-        """Extensions flow through _build_command to the CLI args."""
+    def test_extensions_not_in_build_command(self, backend: ClaudeCliBackend) -> None:
+        """After #108 fix, extensions go via stdin, not embedded in the command."""
         backend._claude_path = "/usr/bin/claude"
         backend.set_prompt_extensions(["Custom directive"])
         cmd = backend._build_command("My prompt")
-        prompt_arg = cmd[cmd.index("-p") + 1]
-        assert "Custom directive" in prompt_arg
-        assert "My prompt" in prompt_arg
+        p_idx = cmd.index("-p")
+        assert cmd[p_idx + 1] == "-"
+        assert "Custom directive" not in " ".join(cmd)
+        assert "My prompt" not in " ".join(cmd)
 
 
 class TestClaudeCliBackendHealthCheck:
@@ -1140,13 +1143,13 @@ class TestBuildCommand:
         return backend
 
     def test_basic_command_structure(self) -> None:
-        """Verify basic command: claude -p <prompt> --output-format text."""
+        """Verify basic command: claude -p - --output-format text (stdin sentinel)."""
         backend = self._make_backend()
         cmd = backend._build_command("hello world")
         assert cmd[0] == "/usr/local/bin/claude"
         assert "-p" in cmd
         p_idx = cmd.index("-p")
-        assert "hello world" in cmd[p_idx + 1]
+        assert cmd[p_idx + 1] == "-"  # stdin sentinel, never the prompt text (#108)
 
     def test_skip_permissions_flag(self) -> None:
         """Verify --dangerously-skip-permissions when skip_permissions=True."""
@@ -1216,15 +1219,15 @@ class TestBuildCommand:
         with pytest.raises(RuntimeError, match="claude CLI not found"):
             backend._build_command("test")
 
-    def test_preamble_injected(self) -> None:
-        """Verify the preamble is injected into the prompt."""
+    def test_preamble_not_in_command(self) -> None:
+        """Verify preamble is passed via stdin, not embedded in the command (#108)."""
         backend = self._make_backend()
         backend.set_preamble("<mozart-preamble>Test</mozart-preamble>")
         cmd = backend._build_command("user prompt")
         p_idx = cmd.index("-p")
-        full_prompt = cmd[p_idx + 1]
-        assert "<mozart-preamble>" in full_prompt
-        assert "user prompt" in full_prompt
+        assert cmd[p_idx + 1] == "-"
+        assert "mozart-preamble" not in " ".join(cmd)
+        assert "user prompt" not in " ".join(cmd)
 
 
 # ============================================================================
@@ -1267,6 +1270,10 @@ def _make_mock_process(
     # Stream readers for the streaming path (always used after Q013 fix)
     proc.stdout = _make_stream_reader(stdout)
     proc.stderr = _make_stream_reader(stderr)
+    # stdin mock for PIPE: write is sync, drain is async, close is sync (#108)
+    mock_stdin = MagicMock(spec=asyncio.StreamWriter)
+    mock_stdin.drain = AsyncMock()
+    proc.stdin = mock_stdin
     return proc
 
 
@@ -1506,3 +1513,84 @@ class TestClaudeCliBackendOverrides:
         backend.apply_overrides({})
         assert backend.cli_model == "claude-sonnet-4-5-20250929"
         assert not backend._has_overrides
+
+
+# ============================================================================
+# Regression test for #108: prompt must never appear as a CLI argument
+# ============================================================================
+
+
+class TestClaudeCliStdinPassthrough108:
+    """Regression tests for #108/#125: prompt via stdin, not CLI arg."""
+
+    def _make_backend(self, **kwargs: Any) -> ClaudeCliBackend:
+        backend = ClaudeCliBackend(**kwargs)
+        backend._claude_path = "/usr/local/bin/claude"
+        return backend
+
+    def test_build_command_excludes_prompt_arg(self) -> None:
+        """Prompt text must not appear anywhere in the command list."""
+        backend = self._make_backend()
+        cmd = backend._build_command("hello world")
+        assert "hello world" not in cmd
+        assert "-p" in cmd
+        p_idx = cmd.index("-p")
+        assert cmd[p_idx + 1] == "-"
+
+    def test_large_prompt_does_not_hit_argmax(self) -> None:
+        """128KB prompt must not inflate the command list size."""
+        backend = self._make_backend()
+        large_prompt = "x" * 131072
+        cmd = backend._build_command(large_prompt)
+        total_arg_bytes = sum(len(s) for s in cmd)
+        assert total_arg_bytes < 65536
+        assert large_prompt not in cmd
+
+    def test_empty_prompt_still_passes_stdin_sentinel(self) -> None:
+        """Empty prompt also uses stdin sentinel, not empty string in args."""
+        backend = self._make_backend()
+        cmd = backend._build_command("")
+        p_idx = cmd.index("-p")
+        assert cmd[p_idx + 1] == "-"
+
+    def test_command_list_length_invariant(self) -> None:
+        """Command length must not vary with prompt size."""
+        backend = self._make_backend()
+        cmd_empty = backend._build_command("")
+        cmd_small = backend._build_command("x" * 1000)
+        cmd_large = backend._build_command("x" * 131072)
+        assert len(cmd_empty) == len(cmd_small) == len(cmd_large)
+        assert len(cmd_empty) <= 20
+
+    @pytest.mark.asyncio
+    async def test_execute_passes_prompt_via_stdin(self) -> None:
+        """_execute_impl must write the prompt to process.stdin."""
+        backend = self._make_backend()
+        proc = _make_mock_process(returncode=0, stdout=b"ok", stderr=b"")
+
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
+            result = await backend._execute_impl("test prompt")
+
+        assert result.success is True
+        proc.stdin.write.assert_called_once()
+        written = proc.stdin.write.call_args[0][0]
+        assert b"test prompt" in written
+        proc.stdin.drain.assert_awaited_once()
+        proc.stdin.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_uses_pipe_not_devnull(self) -> None:
+        """_execute_impl must open stdin=PIPE, not DEVNULL."""
+        backend = self._make_backend()
+        proc = _make_mock_process(returncode=0, stdout=b"ok", stderr=b"")
+
+        captured_kwargs: dict[str, Any] = {}
+
+        async def fake_exec(*args: Any, **kwargs: Any) -> Any:
+            captured_kwargs.update(kwargs)
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", fake_exec):
+            await backend._execute_impl("prompt")
+
+        assert captured_kwargs.get("stdin") == asyncio.subprocess.PIPE

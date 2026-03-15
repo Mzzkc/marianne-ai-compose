@@ -14,6 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mozart.core.config import PromptConfig, ValidationRule
+from mozart.execution.validation.models import ValidationResult
 from mozart.prompts.templating import (
     CompletionContext,
     PromptBuilder,
@@ -315,7 +316,7 @@ class TestCompletionPrompt:
     def test_build_completion_prompt(self, builder: PromptBuilder) -> None:
         """build_completion_prompt should generate recovery prompt."""
         # Create mock ValidationResults
-        passed_result = MagicMock()
+        passed_result = MagicMock(spec=ValidationResult)
         passed_result.rule = ValidationRule(
             type="file_exists",
             path="/test/done.txt",
@@ -324,7 +325,7 @@ class TestCompletionPrompt:
         passed_result.expected_value = "/test/done.txt"
         passed_result.actual_value = "/test/done.txt"
 
-        failed_result = MagicMock()
+        failed_result = MagicMock(spec=ValidationResult)
         failed_result.rule = ValidationRule(
             type="file_exists",
             path="/test/missing.txt",
@@ -360,7 +361,7 @@ class TestCompletionPrompt:
 
     def test_completion_prompt_semantic_hints(self, builder: PromptBuilder) -> None:
         """build_completion_prompt should include semantic hints."""
-        failed_result = MagicMock()
+        failed_result = MagicMock(spec=ValidationResult)
         failed_result.rule = ValidationRule(
             type="file_exists",
             path="/test/output.txt",

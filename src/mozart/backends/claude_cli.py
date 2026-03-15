@@ -232,13 +232,13 @@ class ClaudeCliBackend(Backend):
         """Build the claude command with arguments.
 
         Returns a list of arguments for subprocess - NOT a shell string.
+        The prompt is passed via stdin (``-p -`` sentinel), not as a CLI arg,
+        to avoid ARG_MAX limits on large prompts (#108/#125).
         """
         if not self._claude_path:
             raise RuntimeError("claude CLI not found in PATH")
 
-        safe_prompt = self._inject_preamble_and_extensions(prompt)
-
-        cmd = [self._claude_path, "-p", safe_prompt]
+        cmd = [self._claude_path, "-p", "-"]
 
         if self.skip_permissions:
             cmd.append("--dangerously-skip-permissions")
@@ -510,6 +510,8 @@ class ClaudeCliBackend(Backend):
         """
         effective_timeout = timeout_seconds if timeout_seconds is not None else self.timeout_seconds
         cmd = self._build_command(prompt)
+        # Prepare the full prompt (with preamble/extensions injected) for stdin.
+        safe_prompt = self._inject_preamble_and_extensions(prompt)
         start_time = time.monotonic()
 
         _logger.debug(
@@ -551,12 +553,13 @@ class ClaudeCliBackend(Backend):
 
         try:
             # create_subprocess_exec is shell-injection safe.
-            # stdin=DEVNULL prevents blocking on interactive prompts.
+            # stdin=PIPE: prompt is written to stdin (-p - sentinel in cmd) to
+            # avoid ARG_MAX limits on large prompts (#108/#125).
             # start_new_session=True creates a new process group for clean cleanup
             # (workaround for Claude Code Issue #1935: MCP servers not cleaned up).
             process = await asyncio.create_subprocess_exec(
                 *cmd,
-                stdin=asyncio.subprocess.DEVNULL,
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self.working_directory,
@@ -566,6 +569,15 @@ class ClaudeCliBackend(Backend):
                 },
                 start_new_session=True,
             )
+
+            # Write prompt to subprocess stdin, then close to signal EOF.
+            # Must happen before _stream_with_progress: if the subprocess waits
+            # for stdin EOF before producing output, reading stdout first would
+            # deadlock (parent blocked reading stdout; subprocess blocked on stdin).
+            assert process.stdin is not None
+            process.stdin.write(safe_prompt.encode())
+            await process.stdin.drain()
+            process.stdin.close()
 
             if self.progress_callback:
                 self.progress_callback({

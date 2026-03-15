@@ -586,13 +586,13 @@ class TestConcurrencyStress:
                     state.last_completed_sheet = i % 10
                     await backend.save(state)
                 operations_completed["write"] += 1
-                await asyncio.sleep(0.005)
+                await asyncio.sleep(0)
 
         async def list_worker() -> None:
             for _ in range(5):
                 await backend.list_jobs()
                 operations_completed["list"] += 1
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(0)
 
         # Run 3 of each worker type concurrently
         workers = [

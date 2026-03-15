@@ -389,9 +389,14 @@ class SheetExecutionMixin:
         """
         # Build sheet context (with cross-sheet data if configured)
         sheet_context = self._build_sheet_context(sheet_num, state)
+        # Merge user-defined prompt.variables into validation context.
+        # YAML may produce integer keys — coerce all keys to str.
+        # Built-in variables take precedence: user vars are the base layer.
+        user_vars = {str(k): v for k, v in self.config.prompt.variables.items()}
+        validation_context = {**user_vars, **sheet_context.to_dict()}
         validation_engine = ValidationEngine(
             self.config.workspace,
-            sheet_context.to_dict(),
+            validation_context,
         )
 
         # Query learned patterns before building prompt (Learning Activation)

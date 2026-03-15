@@ -23,6 +23,7 @@ from mozart.validation.checks import (
     PreludeCadenzaFileCheck,
     RegexPatternCheck,
     SkillFilesExistCheck,
+    SkipWhenSheetRangeCheck,
     SystemPromptFileCheck,
     TemplateFileExistsCheck,
     TimeoutRangeCheck,
@@ -157,5 +158,6 @@ def create_default_checks() -> list[ValidationCheck]:
         FanOutWithoutParallelCheck(),
         VariableShadowingCheck(),
         MissingDisableMcpCheck(),
+        SkipWhenSheetRangeCheck(),
     ]
     return checks

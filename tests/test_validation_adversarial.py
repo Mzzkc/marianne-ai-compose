@@ -854,7 +854,8 @@ class TestValidationRunnerCheckAggregation:
         runner = ValidationRunner(checks=[_BrokenCheck()])
         # Need a minimal config to pass to validate
         from unittest.mock import MagicMock
-        config = MagicMock()
+        from mozart.core.config import JobConfig
+        config = MagicMock(spec=JobConfig)
         issues = runner.validate(config, Path("/tmp/fake.yaml"), "")
         assert len(issues) == 1
         assert "VBROK" in issues[0].check_id
@@ -878,7 +879,9 @@ class TestValidationRunnerCheckAggregation:
                 ]
 
         runner = ValidationRunner(checks=[_MultiCheck()])
-        config = MagicMock()
+        from unittest.mock import MagicMock
+        from mozart.core.config import JobConfig
+        config = MagicMock(spec=JobConfig)
         issues = runner.validate(config, Path("/tmp/f.yaml"), "")
         severities = [i.severity for i in issues]
         assert severities == [

@@ -761,7 +761,11 @@ class LifecycleMixin:
         Expression conditions are checked first. If a sheet is already skipped
         by expression, the command is not run.
 
-        For command conditions:
+        For expression conditions (skip_when):
+        - Truthy result -> skip the sheet
+        - Eval error -> run the sheet (fail-open)
+
+        For command conditions (skip_when_command):
         - Exit 0 -> skip the sheet (with description as reason)
         - Non-zero -> run the sheet
         - Timeout/error -> run the sheet (fail-open for safety)
@@ -801,10 +805,9 @@ class LifecycleMixin:
                     error=str(e),
                     exc_info=True,
                 )
-                return (
-                    f"[EVAL ERROR] Condition evaluation failed (fail-closed, sheet SKIPPED): "
-                    f"{condition} — error: {e}"
-                )
+                # Fail-open: return None so the sheet runs rather than being silently skipped.
+                # Matches skip_when_command behavior on error/timeout.
+                return None
 
         # --- Phase 2: Check command-based skip_when_command ---
         cmd_conditions = self.config.sheet.skip_when_command
@@ -812,7 +815,7 @@ class LifecycleMixin:
             return None
 
         skip_cmd = cmd_conditions[sheet_num]
-        command = skip_cmd.command.replace("{workspace}", str(self.config.workspace), 1)
+        command = skip_cmd.command.replace("{workspace}", str(self.config.workspace))
 
         proc = None
         try:

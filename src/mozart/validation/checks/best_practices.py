@@ -441,6 +441,77 @@ class VariableShadowingCheck:
         return issues
 
 
+class SkipWhenSheetRangeCheck:
+    """Check that skip_when and skip_when_command keys are in-range (V212).
+
+    Each key in skip_when/skip_when_command must satisfy 1 ≤ k ≤ total_sheets.
+    Out-of-range keys are silently ignored at runtime — they will never fire.
+    This is a WARNING (non-blocking) because the config is executable, just
+    suspicious.
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V212"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Checks skip_when and skip_when_command keys are within sheet range"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        """Warn when skip_when or skip_when_command keys are out of range."""
+        issues: list[ValidationIssue] = []
+        total = config.sheet.total_sheets
+
+        for k in config.sheet.skip_when:
+            if not (1 <= k <= total):
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=self.severity,
+                        message=(
+                            f"skip_when key {k} is out of range "
+                            f"(valid: 1\u2013{total}); this rule will never fire"
+                        ),
+                        suggestion=(
+                            f"Remove sheet {k} or adjust total_sheets / fan-out"
+                        ),
+                        metadata={"sheet_num": str(k), "source": "skip_when"},
+                    )
+                )
+
+        for k in config.sheet.skip_when_command:
+            if not (1 <= k <= total):
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=self.severity,
+                        message=(
+                            f"skip_when_command key {k} is out of range "
+                            f"(valid: 1\u2013{total}); this rule will never fire"
+                        ),
+                        suggestion=(
+                            f"Remove sheet {k} or adjust total_sheets / fan-out"
+                        ),
+                        metadata={
+                            "sheet_num": str(k),
+                            "source": "skip_when_command",
+                        },
+                    )
+                )
+
+        return issues
+
+
 class MissingDisableMcpCheck:
     """Check that disable_mcp is enabled for Claude CLI (V209).
 

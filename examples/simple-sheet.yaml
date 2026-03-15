@@ -9,7 +9,7 @@
 name: "simple-sheet"
 description: "Minimal example showing core Mozart features"
 
-workspace: "./workspaces/simple-workspace"
+workspace: "../workspaces/simple-workspace"
 
 backend:
   type: claude_cli

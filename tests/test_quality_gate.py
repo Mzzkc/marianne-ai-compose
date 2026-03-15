@@ -363,7 +363,6 @@ def _find_given_tested_models() -> set[str]:
     return tested
 
 
-@pytest.mark.xfail(reason="Module scores will add these")
 def test_property_based_tests_exist_for_pydantic_models() -> None:
     """Each Pydantic BaseModel should have a @given property-based test."""
     all_models = _find_pydantic_models()

@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from mozart.core.logging import MozartLogger
     from mozart.prompts.templating import PromptBuilder
 
+from mozart.core.checkpoint import SheetStatus
 from mozart.core.config.job import InjectionCategory, InjectionItem
 from mozart.prompts.templating import SheetContext
 
@@ -201,6 +202,19 @@ class ContextBuildingMixin:
                     if len(output) > max_chars:
                         output = output[:max_chars] + "\n... [truncated]"
                     context.previous_outputs[prev_num] = output
+
+            # Warn when upstream sheets were skipped — fan-in gets silent data gaps
+            skipped_nums = [
+                n for n in range(start_sheet, sheet_num)
+                if (s := state.sheets.get(n)) and s.status == SheetStatus.SKIPPED
+            ]
+            if skipped_nums:
+                self._logger.warning(
+                    "fan_in_upstream_skipped",
+                    fan_in_sheet=sheet_num,
+                    skipped_sheets=skipped_nums,
+                    received_inputs=len(context.previous_outputs),
+                )
 
         # Read configured file patterns
         if cross_sheet.capture_files:

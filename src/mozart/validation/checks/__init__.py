@@ -15,6 +15,7 @@ from mozart.validation.checks.best_practices import (
     MissingDisableMcpCheck,
     MissingSkipPermissionsCheck,
     NoValidationsCheck,
+    SkipWhenSheetRangeCheck,
     VariableShadowingCheck,
 )
 from mozart.validation.checks.config import (
@@ -64,4 +65,5 @@ __all__ = [
     "FanOutWithoutParallelCheck",
     "VariableShadowingCheck",
     "MissingDisableMcpCheck",
+    "SkipWhenSheetRangeCheck",
 ]
