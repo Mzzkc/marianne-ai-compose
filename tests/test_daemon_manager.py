@@ -2218,3 +2218,119 @@ class TestDaemonHookExecution:
             assert "next" in mgr._job_meta
         finally:
             await mgr._registry.close()
+
+
+# =============================================================================
+# Bug #131 — resume -c Does Not Force Config Reload in Running Conductor
+# =============================================================================
+
+
+class TestResumeConductorConfigReload131:
+    """Regression tests for Bug #131: resume_job must accept and apply config_path."""
+
+    @pytest.mark.asyncio
+    async def test_131_a_resume_job_updates_config_path(self, manager: JobManager) -> None:
+        """TEST-131-A: resume_job(config_path=...) updates meta.config_path before task."""
+        manager._job_meta["job-failed"] = JobMeta(
+            job_id="job-failed",
+            config_path=Path("/old/config.yaml"),
+            workspace=Path("/tmp/workspace"),
+            status=DaemonJobStatus.FAILED,
+        )
+        manager._service.resume_job = AsyncMock()
+
+        await manager.resume_job("job-failed", config_path=Path("/new/config.yaml"))
+
+        assert manager._job_meta["job-failed"].config_path == Path("/new/config.yaml")
+
+        # Cleanup
+        manager._jobs["job-failed"].cancel()
+        try:
+            await manager._jobs["job-failed"]
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    @pytest.mark.asyncio
+    async def test_131_b_resume_job_no_config_path_leaves_unchanged(
+        self, manager: JobManager
+    ) -> None:
+        """TEST-131-B: resume_job without config_path leaves meta.config_path unchanged."""
+        manager._job_meta["job-paused"] = JobMeta(
+            job_id="job-paused",
+            config_path=Path("/original/config.yaml"),
+            workspace=Path("/tmp/workspace"),
+            status=DaemonJobStatus.PAUSED,
+        )
+        manager._service.resume_job = AsyncMock()
+
+        await manager.resume_job("job-paused")
+
+        assert manager._job_meta["job-paused"].config_path == Path("/original/config.yaml")
+
+        # Cleanup
+        manager._jobs["job-paused"].cancel()
+        try:
+            await manager._jobs["job-paused"]
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    @pytest.mark.asyncio
+    async def test_131_c_config_path_updated_before_task_queued(
+        self, manager: JobManager
+    ) -> None:
+        """TEST-131-C: config_path is applied before asyncio.create_task is called."""
+        manager._job_meta["job-failed"] = JobMeta(
+            job_id="job-failed",
+            config_path=Path("/old/config.yaml"),
+            workspace=Path("/tmp/workspace"),
+            status=DaemonJobStatus.FAILED,
+        )
+        manager._service.resume_job = AsyncMock()
+        observed_config: list[Path] = []
+
+        original_create_task = asyncio.create_task
+
+        def capture_task(coro, **kwargs):
+            # meta.config_path must be updated before the task is created
+            observed_config.append(manager._job_meta["job-failed"].config_path)
+            return original_create_task(coro, **kwargs)
+
+        with patch("asyncio.create_task", side_effect=capture_task):
+            await manager.resume_job("job-failed", config_path=Path("/new/config.yaml"))
+
+        assert observed_config == [Path("/new/config.yaml")]
+
+        # Cleanup
+        manager._jobs["job-failed"].cancel()
+        try:
+            await manager._jobs["job-failed"]
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    @pytest.mark.asyncio
+    async def test_131_d_modify_job_no_regression_from_signature_change(
+        self, manager: JobManager
+    ) -> None:
+        """TEST-131-F: modify_job still works — config_path=None default is backward compat."""
+        manager._job_meta["job-paused"] = JobMeta(
+            job_id="job-paused",
+            config_path=Path("/original.yaml"),
+            workspace=Path("/tmp/workspace"),
+            status=DaemonJobStatus.PAUSED,
+        )
+        manager._service.resume_job = AsyncMock()
+
+        # modify_job sets meta.config_path THEN calls resume_job (no config_path arg)
+        # The None default must not overwrite what modify_job already set
+        response = await manager.modify_job(
+            "job-paused", config_path=Path("/modified.yaml")
+        )
+        assert response.status == "accepted"
+        assert manager._job_meta["job-paused"].config_path == Path("/modified.yaml")
+
+        # Cleanup
+        manager._jobs["job-paused"].cancel()
+        try:
+            await manager._jobs["job-paused"]
+        except (asyncio.CancelledError, Exception):
+            pass

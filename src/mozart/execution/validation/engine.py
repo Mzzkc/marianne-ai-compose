@@ -89,7 +89,13 @@ class ValidationEngine:
         context = dict(self.sheet_context)
         context["workspace"] = str(self.workspace)
 
-        expanded = path_template.format(**context)
+        try:
+            expanded = path_template.format(**context)
+        except IndexError as exc:
+            raise ValueError(
+                f"Invalid path template '{path_template}': {exc}. "
+                "Use named placeholders like {{workspace}}, not bare {{}}."
+            ) from exc
         return Path(expanded).resolve()
 
     def snapshot_mtime_files(self, rules: list[ValidationRule]) -> None:

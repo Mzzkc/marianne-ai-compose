@@ -313,6 +313,22 @@ class SheetConfig(BaseModel):
         self.total_items = expansion.total_sheets
         self.dependencies = expansion.expanded_dependencies
 
+        # Expand skip_when: stage-keyed → sheet-keyed
+        if self.skip_when:
+            expanded_skip_when: dict[int, str] = {}
+            for stage, expr in self.skip_when.items():
+                for sheet_num in expansion.stage_sheets.get(stage, [stage]):
+                    expanded_skip_when[sheet_num] = expr
+            self.skip_when = expanded_skip_when
+
+        # Expand skip_when_command: stage-keyed → sheet-keyed
+        if self.skip_when_command:
+            expanded_skip_when_command: dict[int, SkipWhenCommand] = {}
+            for stage, cmd in self.skip_when_command.items():
+                for sheet_num in expansion.stage_sheets.get(stage, [stage]):
+                    expanded_skip_when_command[sheet_num] = cmd
+            self.skip_when_command = expanded_skip_when_command
+
         # Store serializable metadata for resume
         self.fan_out_stage_map = {
             sheet_num: {

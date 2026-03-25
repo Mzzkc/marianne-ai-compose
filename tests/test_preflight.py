@@ -472,3 +472,24 @@ class TestCheckPathsOSError:
 
         # Should not crash — inaccessible paths should just be warnings
         assert result.can_proceed is True
+
+    def test_bare_braces_in_injected_content_no_crash(self, temp_workspace: Path):
+        """Bare {} from non-Python format strings (e.g., Rust) must not crash.
+
+        Regression test: when cadenza files inject Rust test code containing
+        format!("{}") or assert!("Graph has {} symbols"), the preflight
+        path checker extracts path-like strings containing bare {}. Calling
+        .format(**context) on these raises IndexError, not KeyError/ValueError.
+        """
+        checker = PreflightChecker(workspace=temp_workspace)
+
+        # Simulate prompt with Rust assert! containing {} inside a path-like string
+        prompt = (
+            'Read "src/tests.rs" for context.\n'
+            '"dep_graph edge {} has weight 0. '
+            'Expected path/to/mod.rs not {}/mod.rs"\n'
+        )
+        result = checker.check(prompt)
+
+        # Should not crash — unparseable templates are silently skipped
+        assert result.can_proceed is True

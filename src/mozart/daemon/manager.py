@@ -681,12 +681,23 @@ class JobManager:
         # Fallback: filesystem-based pause via JobService
         return await self._checked_service.pause_job(meta.job_id, meta.workspace)
 
-    async def resume_job(self, job_id: str, workspace: Path | None = None) -> JobResponse:
+    async def resume_job(
+        self,
+        job_id: str,
+        workspace: Path | None = None,
+        config_path: Path | None = None,
+    ) -> JobResponse:
         """Resume a paused or failed job by creating a new task.
 
         If an old task for this job is still running (e.g., not yet fully
         paused), it is cancelled before the new resume task is created to
         prevent detached/duplicate execution.
+
+        Args:
+            job_id: ID of the job to resume.
+            workspace: Optional workspace override.
+            config_path: Optional new config file path. When provided, updates
+                meta.config_path so the resume task loads the new config.
         """
         meta = self._job_meta.get(job_id)
         if meta is None:
@@ -703,6 +714,10 @@ class JobManager:
         if old_task is not None and not old_task.done():
             old_task.cancel(msg=f"stale task replaced by resume of {job_id}")
             _logger.info("job.resume_cancelled_stale_task", job_id=job_id)
+
+        # Apply new config path before creating the task (task reads meta.config_path)
+        if config_path is not None:
+            meta.config_path = config_path
 
         ws = workspace or meta.workspace
         meta.status = DaemonJobStatus.QUEUED

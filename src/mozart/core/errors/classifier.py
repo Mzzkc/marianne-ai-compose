@@ -366,7 +366,32 @@ class ErrorClassifier:
         if exit_code_result is not None:
             return exit_code_result
 
-        # 5. Unknown fallback
+        # 5. exit_code=None + exit_reason="error": transient subprocess race condition
+        # The process disappeared before returncode could be captured.
+        # Always retriable — this is never a deterministic user error.
+        if exit_code is None and exit_reason == "error":
+            result = ClassifiedError(
+                category=ErrorCategory.TRANSIENT,
+                message="Process exited without exit code (possible signal race — retrying)",
+                error_code=ErrorCode.UNKNOWN,
+                original_error=exception,
+                exit_code=exit_code,
+                exit_signal=None,
+                exit_reason=exit_reason,
+                retriable=True,
+                suggested_wait_seconds=30.0,
+            )
+            _logger.warning(
+                _EVT_ERROR_CLASSIFIED,
+                category=result.category.value,
+                error_code=result.error_code.value,
+                exit_code=exit_code,
+                retriable=result.retriable,
+                message=result.message,
+            )
+            return result
+
+        # 6. Unknown fallback
         result = ClassifiedError(
             category=ErrorCategory.FATAL,
             message=f"Unknown error (exit_code={exit_code})",

@@ -288,7 +288,11 @@ async def _resume_job(
 
     # Try conductor first (unless workspace override forces direct execution)
     ws_str = str(workspace) if workspace else None
-    params = {"job_id": job_id, "workspace": ws_str}
+    params = {
+        "job_id": job_id,
+        "workspace": ws_str,
+        "config_path": str(config_file) if config_file else None,
+    }
     try:
         routed, result = await try_daemon_route("job.resume", params)
     except Exception as exc:

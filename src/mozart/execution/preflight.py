@@ -311,8 +311,10 @@ class PreflightChecker:
                     context["workspace"] = str(self.workspace)
                     expanded = path_str.format(**context)
                     path = Path(expanded)
-                except (KeyError, ValueError):
+                except (KeyError, ValueError, IndexError):
                     # Can't expand template, skip
+                    # IndexError: bare {} from non-Python format strings
+                    # (e.g., Rust format!("{}") in injected content)
                     continue
             else:
                 path = Path(path_str)

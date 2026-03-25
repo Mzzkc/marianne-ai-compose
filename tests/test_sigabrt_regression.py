@@ -47,6 +47,7 @@ def _make_mock_process(
     stderr_reader.read = AsyncMock(return_value=b"")
     proc.stdout = stdout_reader
     proc.stderr = stderr_reader
+    proc.stdin = AsyncMock()
 
     return proc
 

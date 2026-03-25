@@ -430,8 +430,12 @@ class DaemonProcess:
         async def handle_resume(params: dict[str, Any], _w: Any) -> dict[str, Any]:
             from mozart.daemon.exceptions import JobSubmissionError
             try:
+                config_path_str = params.get("config_path")
+                config_path = Path(config_path_str) if config_path_str else None
                 response = await manager.resume_job(
-                    params["job_id"], _workspace_path(params.get("workspace")),
+                    params["job_id"],
+                    _workspace_path(params.get("workspace")),
+                    config_path=config_path,
                 )
                 return response.model_dump()
             except JobSubmissionError as e:

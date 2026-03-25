@@ -836,3 +836,87 @@ class TestEdgeCases:
         exc = ValueError("test error")
         result = classifier.classify(exit_code=1, exception=exc)
         assert result.original_error is exc
+
+
+# =============================================================================
+# Bug #126 — exit_code=None Classified as FATAL Instead of Retriable
+# =============================================================================
+
+
+class TestExitCodeNoneClassification126:
+    """Regression tests for Bug #126: exit_code=None with exit_reason='error'
+    must classify as TRANSIENT/retriable, not FATAL."""
+
+    def test_126_a_exit_code_none_is_not_fatal(self, classifier: ErrorClassifier) -> None:
+        """TEST-126-A: exit_code=None, exit_reason='error' must NOT be FATAL."""
+        result = classifier.classify(exit_code=None, exit_reason="error")
+        assert result.category != ErrorCategory.FATAL
+        assert result.retriable is True
+        assert result.exit_code is None
+
+    def test_126_b_exit_code_none_signal_still_uses_signal_path(
+        self, classifier: ErrorClassifier
+    ) -> None:
+        """TEST-126-B: exit_code=None + exit_signal=SIGTERM still handled by signal path."""
+        import signal as signal_mod
+        result = classifier.classify(
+            exit_code=None,
+            exit_signal=signal_mod.SIGTERM,
+            exit_reason="killed",
+        )
+        assert result.category == ErrorCategory.SIGNAL
+
+    def test_126_c_production_scenario_empty_output(self, classifier: ErrorClassifier) -> None:
+        """TEST-126-C: Exact production scenario — empty stdout/stderr, returncode=None."""
+        result = classifier.classify(
+            stdout="",
+            stderr="",
+            exit_code=None,
+            exit_signal=None,
+            exit_reason="error",
+            exception=None,
+        )
+        assert result.retriable is True
+        assert result.category != ErrorCategory.FATAL
+        assert result.suggested_wait_seconds is not None
+        assert result.suggested_wait_seconds > 0
+
+    @pytest.mark.parametrize(
+        "exit_code",
+        [127, 42],
+        ids=["exit-127-fatal", "exit-42-unknown-fatal"],
+    )
+    def test_126_d_real_exit_codes_remain_fatal(
+        self, classifier: ErrorClassifier, exit_code: int
+    ) -> None:
+        """TEST-126-D: Genuine FATAL exit codes remain FATAL — regression gate."""
+        result_before = classifier.classify(exit_code=exit_code, exit_reason="error")
+        # 127 = FATAL (backend not found), 42 = unknown fallback (FATAL)
+        assert result_before.category == ErrorCategory.FATAL
+
+    def test_126_e_suggested_wait_seconds_reasonable(
+        self, classifier: ErrorClassifier
+    ) -> None:
+        """TEST-126-E: suggested_wait_seconds in a reasonable range for transient race."""
+        result = classifier.classify(exit_code=None, exit_reason="error")
+        assert result.suggested_wait_seconds is not None
+        assert result.suggested_wait_seconds >= 5.0
+        assert result.suggested_wait_seconds <= 120.0
+
+    def test_126_f_exit_code_none_timeout_not_caught_by_fix(
+        self, classifier: ErrorClassifier
+    ) -> None:
+        """TEST-126-F: exit_code=None + exit_reason='timeout' still classifies as TIMEOUT."""
+        result = classifier.classify(exit_code=None, exit_reason="timeout")
+        assert result.category == ErrorCategory.TIMEOUT
+
+    def test_126_g_exit_code_none_no_reason_still_falls_through(
+        self, classifier: ErrorClassifier
+    ) -> None:
+        """TEST-126-G: exit_code=None with no exit_reason is unchanged (regression gate).
+
+        The existing test_exit_code_none_falls_through covers exit_reason=None,
+        which should still go to the unknown fallback (FATAL).
+        """
+        result = classifier.classify(exit_code=None, exit_reason=None)
+        assert result.category == ErrorCategory.FATAL

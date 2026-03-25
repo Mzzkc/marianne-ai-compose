@@ -59,16 +59,18 @@ def mock_config():
 
 
 @pytest.fixture
-def basic_error_context(mock_config):
+def basic_error_context(tmp_path):
     """Create a basic ErrorContext for testing."""
+    workspace = tmp_path / "test-workspace"
+    mock_config = _make_config_mock(workspace=workspace)
     return ErrorContext(
         error_code="E601",
-        error_message="Workspace directory does not exist: /tmp/test-workspace",
+        error_message=f"Workspace directory does not exist: {workspace}",
         error_category="preflight",
         config=mock_config,
-        workspace=Path("/tmp/test-workspace"),
+        workspace=workspace,
         sheet_number=1,
-        working_directory=Path("/tmp/test-workspace"),
+        working_directory=workspace,
     )
 
 
