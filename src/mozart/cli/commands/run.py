@@ -106,15 +106,27 @@ def run(
 
     # In quiet mode, skip the config panel
     if not is_quiet() and not json_output:
+        instrument_display = config.instrument or config.backend.type
         console.print(Panel(
             f"[bold]{config.name}[/bold]\n"
             f"{config.description or 'No description'}\n\n"
-            f"Backend: {config.backend.type}\n"
+            f"Instrument: {instrument_display}\n"
             f"Sheets: {config.sheet.total_sheets} "
             f"({config.sheet.size} items each)\n"
             f"Workspace: {config.workspace}",
             title="Score Configuration",
         ))
+
+    # Cost warning — alert users when cost tracking is disabled
+    if not is_quiet() and not json_output and not config.cost_limits.enabled:
+        console.print(
+            "\n[yellow]Note:[/yellow] Cost tracking is disabled for this score. "
+            "API calls will not be monitored or limited."
+        )
+        console.print(
+            "  [dim]To enable, add to your score:[/dim] "
+            "cost_limits: {enabled: true, max_cost_per_job: 10.00}"
+        )
 
     # Validate flag compatibility
     if escalation:

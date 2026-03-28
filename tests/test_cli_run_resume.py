@@ -164,6 +164,60 @@ class TestRunCommandExecution:
         data = json.loads(result.stdout)
         assert data["workspace"] == str(custom_ws.resolve())
 
+    def test_run_shows_cost_warning_when_disabled(
+        self, sample_yaml_config: Path,
+    ) -> None:
+        """When cost_limits.enabled is false, run shows a cost warning."""
+        result = runner.invoke(
+            app, ["run", str(sample_yaml_config), "--dry-run"]
+        )
+        assert result.exit_code == 0
+        assert "Cost tracking is disabled" in result.stdout
+
+    def test_run_no_cost_warning_when_enabled(self, tmp_path: Path) -> None:
+        """When cost_limits.enabled is true, no warning is shown."""
+        import yaml
+
+        config = {
+            "name": "cost-enabled-job",
+            "backend": {"type": "claude_cli", "skip_permissions": True},
+            "sheet": {"size": 10, "total_items": 10},
+            "prompt": {"template": "Test {{ sheet_num }}."},
+            "cost_limits": {
+                "enabled": True,
+                "max_cost_per_job": 10.0,
+            },
+        }
+        config_path = tmp_path / "cost-enabled.yaml"
+        with open(config_path, "w") as f:
+            yaml.dump(config, f)
+
+        result = runner.invoke(
+            app, ["run", str(config_path), "--dry-run"]
+        )
+        assert result.exit_code == 0
+        assert "Cost tracking is disabled" not in result.stdout
+
+    def test_run_no_cost_warning_in_json_mode(
+        self, sample_yaml_config: Path,
+    ) -> None:
+        """JSON output mode suppresses the cost warning."""
+        result = runner.invoke(
+            app, ["run", str(sample_yaml_config), "--dry-run", "--json"]
+        )
+        assert result.exit_code == 0
+        assert "Cost tracking is disabled" not in result.stdout
+
+    def test_run_config_panel_shows_instrument(
+        self, sample_yaml_config: Path,
+    ) -> None:
+        """Config panel shows instrument (not just 'Backend')."""
+        result = runner.invoke(
+            app, ["run", str(sample_yaml_config), "--dry-run"]
+        )
+        assert result.exit_code == 0
+        assert "Instrument:" in result.stdout
+
 
 class TestRunDaemonRequired:
     """Tests for daemon-required run command behavior."""
