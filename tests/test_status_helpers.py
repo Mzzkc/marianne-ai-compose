@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from typer.testing import CliRunner
 
 from mozart.cli import app
@@ -19,6 +20,7 @@ from mozart.cli.commands.status import (
     _format_daemon_timestamp,
     _infer_circuit_breaker_state,
     _infer_error_type,
+    _render_cost_summary,
 )
 from mozart.cli.helpers import get_last_activity_time
 from mozart.core.checkpoint import (
@@ -28,8 +30,6 @@ from mozart.core.checkpoint import (
     SheetState,
     SheetStatus,
 )
-
-import pytest
 
 runner = CliRunner()
 
@@ -767,3 +767,83 @@ class TestStatusRichRendering:
         assert result.exit_code == 0
         assert "Timing" in result.stdout
         assert "Duration" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# _render_cost_summary tests — always-visible cost tracking (roadmap step 15)
+# ---------------------------------------------------------------------------
+
+
+class TestCostSummaryAlwaysVisible:
+    """Verify cost summary is always shown, even with no cost data.
+
+    Before this change, _render_cost_summary was silent when there was
+    no cost data. Now it always shows cost info so users are aware of
+    API spend, and includes a tip when cost limits are disabled.
+    """
+
+    def test_zero_cost_still_shows_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Cost summary is rendered even when total cost is zero."""
+        job = _make_job(total_sheets=3)
+        _render_cost_summary(job)
+        captured = capsys.readouterr()
+        assert "Cost Summary" in captured.out
+        assert "$0.00" in captured.out
+
+    def test_no_cost_limits_shows_tip(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """When cost limits are not configured, a tip is shown."""
+        job = _make_job(total_sheets=1)
+        _render_cost_summary(job)
+        captured = capsys.readouterr()
+        assert "cost_limits.enabled" in captured.out
+
+    def test_cost_limits_enabled_no_tip(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """When cost limits are enabled, no tip is shown."""
+        job = _make_job(total_sheets=1)
+        job.config_snapshot = {
+            "cost_limits": {"enabled": True, "max_cost_per_job": 10.0}
+        }
+        _render_cost_summary(job)
+        captured = capsys.readouterr()
+        assert "Cost Summary" in captured.out
+        assert "cost_limits.enabled" not in captured.out
+        assert "limit: $10.00" in captured.out
+
+    def test_cost_limit_set_but_not_enabled(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """A cost limit exists but enabled=false shows 'not enforced'."""
+        job = _make_job(total_sheets=1)
+        job.config_snapshot = {
+            "cost_limits": {"enabled": False, "max_cost_per_job": 5.0}
+        }
+        _render_cost_summary(job)
+        captured = capsys.readouterr()
+        assert "not enforced" in captured.out
+
+    def test_actual_cost_displayed(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """When there is actual cost data, it is displayed."""
+        job = _make_job(total_sheets=1)
+        job.total_estimated_cost = 2.47
+        job.total_input_tokens = 15000
+        job.total_output_tokens = 8000
+        job.config_snapshot = {
+            "cost_limits": {"enabled": True, "max_cost_per_job": 10.0}
+        }
+        _render_cost_summary(job)
+        captured = capsys.readouterr()
+        assert "$2.47" in captured.out
+        assert "15,000" in captured.out
+        assert "8,000" in captured.out
+
+    def test_cost_limit_reached_shows_warning(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """When cost limit is reached, a red warning appears."""
+        job = _make_job(total_sheets=1)
+        job.total_estimated_cost = 10.01
+        job.cost_limit_reached = True
+        job.config_snapshot = {
+            "cost_limits": {"enabled": True, "max_cost_per_job": 10.0}
+        }
+        _render_cost_summary(job)
+        captured = capsys.readouterr()
+        assert "limit reached" in captured.out.lower() or "paused" in captured.out.lower()

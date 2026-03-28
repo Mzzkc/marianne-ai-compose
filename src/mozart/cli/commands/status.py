@@ -722,23 +722,33 @@ def _render_synthesis_results(job: CheckpointState) -> None:
 
 
 def _render_cost_summary(job: CheckpointState) -> None:
-    """Render cost tracking summary if any cost data is available."""
+    """Render cost tracking summary — always shown for visibility.
+
+    Cost information is displayed regardless of whether cost limits are
+    enabled, so users are always aware of API spend. When cost limits
+    are disabled, a warning is shown to encourage configuring them.
+    """
     has_job_cost = job.total_estimated_cost > 0
     has_sheet_cost = any(
         s.estimated_cost is not None and s.estimated_cost > 0
         for s in job.sheets.values()
     )
-    if not has_job_cost and not has_sheet_cost:
-        return
 
-    # Extract cost limit from config snapshot if available
+    # Extract cost limit and enabled status from config snapshot
     cost_limit: float | None = None
+    cost_limits_enabled = False
     if job.config_snapshot:
         cost_limits_cfg = job.config_snapshot.get("cost_limits", {})
         if isinstance(cost_limits_cfg, dict):
             cost_limit = cost_limits_cfg.get("max_cost_per_job")
+            cost_limits_enabled = bool(cost_limits_cfg.get("enabled", False))
 
-    limit_str = f"(limit: ${cost_limit:.2f})" if cost_limit else "(no limit)"
+    if cost_limit and cost_limits_enabled:
+        limit_str = f"(limit: ${cost_limit:.2f})"
+    elif cost_limit:
+        limit_str = f"(limit: ${cost_limit:.2f}, not enforced)"
+    else:
+        limit_str = "(no limit set)"
 
     console.print("\n[bold]Cost Summary[/bold]")
     if has_job_cost:
@@ -753,6 +763,14 @@ def _render_cost_summary(job: CheckpointState) -> None:
         # Sum from individual sheets if job-level totals aren't populated
         total = sum(s.estimated_cost for s in job.sheets.values() if s.estimated_cost)
         console.print(f"  Cost: [yellow]${total:.2f}[/yellow] {limit_str} (from sheets)")
+    else:
+        console.print(f"  Cost: $0.00 {limit_str}")
+
+    if not cost_limits_enabled:
+        console.print(
+            "  [dim]Tip: Set cost_limits.enabled: true in your score"
+            " to prevent unexpected charges[/dim]"
+        )
 
 
 def _render_hook_results(job: CheckpointState) -> None:
