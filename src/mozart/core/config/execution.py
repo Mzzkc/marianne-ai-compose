@@ -209,6 +209,25 @@ class CostLimitConfig(BaseModel):
         description="Emit warning when this percentage of limit is reached",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _auto_enable_when_limits_set(cls, data: object) -> object:
+        """Auto-enable cost tracking when any limit is set.
+
+        If a user sets max_cost_per_job or max_cost_per_sheet but forgets
+        enabled: true, silently enable it. Respects explicit enabled: false.
+        """
+        if not isinstance(data, dict):
+            return data
+        has_limits = (
+            data.get("max_cost_per_job") is not None
+            or data.get("max_cost_per_sheet") is not None
+        )
+        explicitly_set_enabled = "enabled" in data
+        if has_limits and not explicitly_set_enabled:
+            data["enabled"] = True
+        return data
+
     @model_validator(mode="after")
     def _require_limit_when_enabled(self) -> CostLimitConfig:
         """Require at least one cost limit when cost tracking is enabled."""
@@ -298,7 +317,7 @@ class ParallelConfig(BaseModel):
     max_concurrent: int = Field(
         default=3,
         ge=1,
-        le=10,
+        le=20,
         description="Maximum sheets to execute concurrently. "
         "Higher values use more API quota but complete faster.",
     )
