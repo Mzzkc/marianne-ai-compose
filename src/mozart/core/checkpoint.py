@@ -238,6 +238,28 @@ class SheetState(BaseModel):
     validation_passed: bool | None = None
     validation_details: list[ValidationDetailDict] | None = None
 
+    # Sheet-first architecture identity (movement 1: sheet entity model)
+    instrument_name: str | None = Field(
+        default=None,
+        description="Instrument used for this sheet, e.g. 'claude-code', 'gemini-cli'. "
+        "Populated at execution time from the resolved Sheet entity.",
+    )
+    instrument_model: str | None = Field(
+        default=None,
+        description="Model used by the instrument, e.g. 'gemini-2.5-pro'. "
+        "Populated at execution time from backend metadata.",
+    )
+    movement: int | None = Field(
+        default=None,
+        description="Movement number this sheet belongs to (was: stage). "
+        "Populated at execution time from the Sheet entity.",
+    )
+    voice: int | None = Field(
+        default=None,
+        description="Voice number within a harmonized movement (was: instance). "
+        "None for solo movements. Populated from Sheet entity.",
+    )
+
     # Exit signal differentiation (Task 3: Exit Signal Differentiation)
     exit_signal: int | None = Field(
         default=None,
@@ -601,6 +623,18 @@ class CheckpointState(BaseModel):
 
     # Sheet-level state
     sheets: dict[int, SheetState] = Field(default_factory=dict)
+
+    # Sheet-first architecture fields (movement 1)
+    instruments_used: list[str] = Field(
+        default_factory=list,
+        description="Distinct instrument names used across all sheets in this job. "
+        "Populated from Sheet entities at execution time.",
+    )
+    total_movements: int | None = Field(
+        default=None,
+        description="Total movement count for status display grouping. "
+        "None for legacy jobs that don't use movements.",
+    )
 
     # Execution metadata
     pid: int | None = Field(default=None, description="Process ID of running orchestrator")

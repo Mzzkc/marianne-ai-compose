@@ -28,6 +28,19 @@ from mozart.core.config.execution import (
     ValidationRule,
 )
 
+# Instrument plugin system configuration
+from mozart.core.config.instruments import (
+    CliCommand,
+    CliErrorConfig,
+    CliOutputConfig,
+    CliProfile,
+    CodeModeConfig,
+    CodeModeInterface,
+    HttpProfile,
+    InstrumentProfile,
+    ModelCapacity,
+)
+
 # Job and sheet configuration
 from mozart.core.config.job import (
     InjectionCategory,
@@ -84,6 +97,16 @@ __all__ = [
     "OllamaConfig",
     "RecursiveLightConfig",
     "SheetBackendOverride",
+    # Instruments
+    "CliCommand",
+    "CliErrorConfig",
+    "CliOutputConfig",
+    "CliProfile",
+    "CodeModeConfig",
+    "CodeModeInterface",
+    "HttpProfile",
+    "InstrumentProfile",
+    "ModelCapacity",
     # Execution
     "CircuitBreakerConfig",
     "CostLimitConfig",
