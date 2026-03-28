@@ -555,7 +555,12 @@ class GlobalSheetScheduler:
 
     @staticmethod
     def _detect_cycle(deps: dict[int, set[int]]) -> list[int] | None:
-        """Detect a cycle in the dependency graph using DFS.
+        """Detect a cycle in the dependency graph using iterative DFS.
+
+        Uses an explicit stack instead of recursion to handle large DAGs
+        (thousands of sheets) without hitting Python's recursion limit.
+        Follows the same pattern as ``SheetDAG._validate_no_cycles()``
+        in ``execution/dag.py``.
 
         Returns the cycle as a list of sheet numbers (e.g. [1, 2, 3, 1])
         if found, or None if the graph is acyclic.
@@ -565,44 +570,59 @@ class GlobalSheetScheduler:
         for dep_set in deps.values():
             all_nodes.update(dep_set)
 
-        WHITE, GRAY, BLACK = 0, 1, 2
-        color: dict[int, int] = dict.fromkeys(all_nodes, WHITE)
-        parent: dict[int, int | None] = dict.fromkeys(all_nodes)
-
-        def dfs(node: int) -> list[int] | None:
-            color[node] = GRAY
-            # Traverse forward adjacency: prerequisite → dependents.
-            # A cycle in this "must-come-before" graph means deadlock.
-            for successor in adjacency.get(node, []):
-                if color[successor] == GRAY:
-                    # Found cycle — reconstruct
-                    cycle = [successor, node]
-                    n = parent[node]
-                    while n is not None and n != successor:
-                        cycle.append(n)
-                        n = parent[n]
-                    cycle.reverse()
-                    cycle.append(successor)  # close the cycle
-                    return cycle
-                if color[successor] == WHITE:
-                    parent[successor] = node
-                    result = dfs(successor)
-                    if result is not None:
-                        return result
-            color[node] = BLACK
-            return None
-
         # Build forward adjacency: prerequisite → [dependents]
         adjacency: dict[int, list[int]] = {}
         for node, prerequisites in deps.items():
             for prereq in prerequisites:
                 adjacency.setdefault(prereq, []).append(node)
 
-        for node in all_nodes:
-            if color[node] == WHITE:
-                result = dfs(node)
-                if result is not None:
-                    return result
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color: dict[int, int] = dict.fromkeys(all_nodes, WHITE)
+
+        # Track path for cycle reconstruction
+        path: list[int] = []
+        path_set: set[int] = set()
+
+        for start in all_nodes:
+            if color[start] != WHITE:
+                continue
+
+            # Stack holds (node, successors_list, index_into_successors)
+            color[start] = GRAY
+            path.append(start)
+            path_set.add(start)
+            successors = adjacency.get(start, [])
+            stack: list[tuple[int, list[int], int]] = [
+                (start, successors, 0),
+            ]
+
+            while stack:
+                node, succs, idx = stack[-1]
+
+                if idx < len(succs):
+                    # Advance to next successor
+                    stack[-1] = (node, succs, idx + 1)
+                    child = succs[idx]
+
+                    if color[child] == GRAY:
+                        # Back edge — cycle found. Reconstruct from path.
+                        cycle_start = path.index(child)
+                        cycle = path[cycle_start:] + [child]
+                        return cycle
+
+                    if color[child] == WHITE:
+                        color[child] = GRAY
+                        path.append(child)
+                        path_set.add(child)
+                        child_succs = adjacency.get(child, [])
+                        stack.append((child, child_succs, 0))
+                else:
+                    # All successors visited — mark complete
+                    stack.pop()
+                    color[node] = BLACK
+                    path.pop()
+                    path_set.discard(node)
+
         return None
 
     def _enqueue_ready_dependents(self, job_id: str) -> None:

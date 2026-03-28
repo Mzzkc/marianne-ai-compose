@@ -27,6 +27,7 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
+import shlex
 import sqlite3
 import time
 from pathlib import Path
@@ -875,7 +876,9 @@ class LifecycleMixin:
             return None
 
         skip_cmd = cmd_conditions[sheet_num]
-        command = skip_cmd.command.replace("{workspace}", str(self.config.workspace))
+        command = skip_cmd.command.replace(
+            "{workspace}", shlex.quote(str(self.config.workspace))
+        )
 
         proc = None
         try:

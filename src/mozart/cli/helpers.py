@@ -21,7 +21,6 @@ import typer
 from rich.console import Console
 
 from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import JobConfig
 from mozart.core.logging import configure_logging, get_logger
 from mozart.state import JsonStateBackend, SQLiteStateBackend, StateBackend
 
@@ -56,10 +55,6 @@ class OutputLevel(str, Enum):
 # Global output level state
 _output_level: OutputLevel = OutputLevel.NORMAL
 
-
-def get_output_level() -> OutputLevel:
-    """Get current output level."""
-    return _output_level
 
 
 def set_output_level(level: OutputLevel) -> None:
@@ -100,11 +95,6 @@ class CliLoggingConfig:
 _log_config = CliLoggingConfig()
 
 
-def get_log_level() -> str:
-    """Get current log level."""
-    return _log_config.level
-
-
 def set_log_level(level: str) -> None:
     """Set the log level.
 
@@ -112,11 +102,6 @@ def set_log_level(level: str) -> None:
         level: Log level string (DEBUG, INFO, WARNING, ERROR).
     """
     _log_config.level = level  # type: ignore[assignment]
-
-
-def get_log_file() -> Path | None:
-    """Get current log file path."""
-    return _log_config.file
 
 
 def set_log_file(path: Path | None) -> None:
@@ -132,11 +117,6 @@ def set_log_file(path: Path | None) -> None:
     _log_config.file = path
     if path:
         _log_config.format = "console"
-
-
-def get_log_format() -> str:
-    """Get current log format."""
-    return _log_config.format
 
 
 def set_log_format(fmt: str) -> None:
@@ -178,45 +158,8 @@ def configure_global_logging(console: Console) -> None:
         raise typer.Exit(1) from None
 
 
-def reset_logging_state() -> None:
-    """Reset logging state (primarily for testing).
-
-    This resets the configured flag so logging can be
-    reconfigured in tests.
-    """
-    _log_config.configured = False
-
-
 # Default state directory when no config is available
 DEFAULT_STATE_DIR = Path.home() / ".mozart" / "state"
-
-
-def create_state_backend_from_config(config: JobConfig) -> StateBackend:
-    """Create appropriate state backend based on configuration.
-
-    Args:
-        config: Job configuration specifying backend type and path.
-
-    Returns:
-        StateBackend instance (SQLite or JSON based on config).
-    """
-    state_path = config.get_state_path()
-
-    if config.state_backend == "sqlite":
-        return SQLiteStateBackend(state_path)
-    else:
-        # JSON backend uses directory, not file path
-        return JsonStateBackend(state_path.parent if state_path.suffix else state_path)
-
-
-def get_default_state_backend() -> StateBackend:
-    """Get the default state backend for listing jobs without a config.
-
-    Returns:
-        SQLiteStateBackend pointing to the global Mozart state directory.
-    """
-    DEFAULT_STATE_DIR.mkdir(parents=True, exist_ok=True)
-    return SQLiteStateBackend(DEFAULT_STATE_DIR / "mozart.db")
 
 
 # Re-exported from notifications module for backwards compatibility.
@@ -502,24 +445,17 @@ __all__ = [
     "ErrorMessages",
     # Output level
     "OutputLevel",
-    "get_output_level",
     "set_output_level",
     "is_verbose",
     "is_quiet",
     # Logging
-    "get_log_level",
     "set_log_level",
-    "get_log_file",
     "set_log_file",
-    "get_log_format",
     "set_log_format",
     "configure_global_logging",
-    "reset_logging_state",
     # Paths
     "DEFAULT_STATE_DIR",
     # Backend creation
-    "create_state_backend_from_config",
-    "get_default_state_backend",
     "create_notifiers_from_config",
     # Conductor helpers
     "require_conductor",

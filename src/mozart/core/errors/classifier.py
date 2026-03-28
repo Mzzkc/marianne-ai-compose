@@ -990,6 +990,37 @@ class ErrorClassifier:
                 if not json_errors:
                     classification_method = "exit_code"
 
+        elif exit_code is None and json_errors:
+            # Process killed or disappeared without exit code, AND Phase 1
+            # found JSON errors from partial output. Add a process-killed
+            # error so select_root_cause can weigh it against JSON errors.
+            # Without this, exit_code=None context is lost when Phase 1
+            # finds errors (Phase 4 regex fallback is skipped).
+            # When no JSON errors exist, Phase 4 calls classify() which
+            # already handles exit_code=None correctly.
+            stderr_lower = stderr.lower() if stderr else ""
+            oom_indicators = ("killed", "out of memory", "oom", "cannot allocate")
+            is_oom = any(indicator in stderr_lower for indicator in oom_indicators)
+            wait_seconds = 60.0 if is_oom else 10.0
+            message = (
+                "Process killed (possible OOM — retrying with longer wait)"
+                if is_oom
+                else "Process exited without exit code "
+                "(possible signal race — retrying)"
+            )
+            process_killed_error = ClassifiedError(
+                category=ErrorCategory.TRANSIENT,
+                message=message,
+                error_code=ErrorCode.UNKNOWN,
+                original_error=exception,
+                exit_code=exit_code,
+                exit_signal=None,
+                exit_reason=exit_reason,
+                retriable=True,
+                suggested_wait_seconds=wait_seconds,
+            )
+            all_errors.append(process_killed_error)
+
         # === PHASE 3: Exception Analysis ===
         if exception is not None:
             exc_str = str(exception).lower()
