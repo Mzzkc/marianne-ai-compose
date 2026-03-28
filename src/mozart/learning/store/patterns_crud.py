@@ -304,25 +304,38 @@ class PatternCrudMixin:
                 )
                 return app_id
 
-            conn.execute(
-                """
-                INSERT INTO pattern_applications (
-                    id, pattern_id, execution_id, applied_at,
-                    pattern_led_to_success, retry_count_before, retry_count_after,
-                    grounding_confidence
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    app_id,
-                    pattern_id,
-                    execution_id,
-                    now_iso,
-                    pattern_led_to_success,
-                    retry_count_before,
-                    retry_count_after,
-                    grounding_confidence,
-                ),
-            )
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO pattern_applications (
+                        id, pattern_id, execution_id, applied_at,
+                        pattern_led_to_success, retry_count_before,
+                        retry_count_after, grounding_confidence
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        app_id,
+                        pattern_id,
+                        execution_id,
+                        now_iso,
+                        pattern_led_to_success,
+                        retry_count_before,
+                        retry_count_after,
+                        grounding_confidence,
+                    ),
+                )
+            except sqlite3.IntegrityError as e:
+                # Legacy databases may have FK constraints on
+                # pattern_applications that reference executions(id).
+                # The v15 migration removes these, but if it hasn't
+                # run yet, we catch and log instead of propagating.
+                _logger.warning(
+                    "pattern_application_insert_fk_error",
+                    pattern_id=pattern_id,
+                    execution_id=execution_id,
+                    error=str(e),
+                )
+                return app_id
 
             if pattern_led_to_success:
                 conn.execute(
