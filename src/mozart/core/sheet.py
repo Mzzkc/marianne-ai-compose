@@ -20,12 +20,15 @@ sheets complete. The baton renders at dispatch time.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
 from mozart.core.config.execution import ValidationRule
 from mozart.core.config.job import InjectionItem
+
+if TYPE_CHECKING:
+    from mozart.core.config.job import JobConfig
 
 
 class Sheet(BaseModel):
@@ -172,3 +175,89 @@ class Sheet(BaseModel):
         })
 
         return tvars
+
+
+def build_sheets(config: JobConfig) -> list[Sheet]:
+    """Construct Sheet entities from a JobConfig.
+
+    This bridges the old scattered-dict model (SheetConfig with separate
+    dicts for descriptions, cadenzas, prompt_extensions, etc.) to the new
+    first-class Sheet entity. Each concrete sheet in the job gets a fully
+    self-contained Sheet object.
+
+    The music metaphor: this is the librarian distributing parts to musicians
+    before the concert. Each musician gets their own sheet with everything
+    they need — they don't need to consult the full score.
+
+    Args:
+        config: Parsed and validated JobConfig from the score YAML.
+
+    Returns:
+        List of Sheet entities, one per concrete sheet, in sheet_num order.
+    """
+    sheets: list[Sheet] = []
+    total_sheets = config.sheet.total_sheets
+
+    for sheet_num in range(1, total_sheets + 1):
+        # --- Identity ---
+        fan_meta = config.sheet.get_fan_out_metadata(sheet_num)
+        movement = fan_meta.stage
+        voice: int | None = fan_meta.instance if fan_meta.fan_count > 1 else None
+        voice_count = fan_meta.fan_count
+
+        description = config.sheet.descriptions.get(sheet_num)
+
+        # --- Instrument ---
+        # For now: backend.type is the instrument name.
+        # When instrument: field lands (step 6), this will use the resolution chain.
+        instrument_name = config.backend.type
+
+        # --- Timeout ---
+        # Resolution: sheet_overrides.timeout_seconds > timeout_overrides > backend.timeout_seconds
+        timeout = config.backend.timeout_seconds
+        if sheet_num in config.backend.timeout_overrides:
+            timeout = config.backend.timeout_overrides[sheet_num]
+        if sheet_num in config.backend.sheet_overrides:
+            override = config.backend.sheet_overrides[sheet_num]
+            if override.timeout_seconds is not None:
+                timeout = override.timeout_seconds
+
+        # --- Prompt ---
+        prompt_template = config.prompt.template
+        template_file = config.prompt.template_file
+        variables = dict(config.prompt.variables)
+
+        # --- Context Injection ---
+        prelude = list(config.sheet.prelude)
+        cadenza = list(config.sheet.cadenzas.get(sheet_num, []))
+
+        # Prompt extensions: score-level + per-sheet
+        extensions = list(config.prompt.prompt_extensions)
+        per_sheet_ext = config.sheet.prompt_extensions.get(sheet_num, [])
+        extensions.extend(per_sheet_ext)
+
+        # --- Validations ---
+        # Score-level validations apply to all sheets
+        validations = list(config.validations)
+
+        sheets.append(
+            Sheet(
+                num=sheet_num,
+                movement=movement,
+                voice=voice,
+                voice_count=voice_count,
+                description=description,
+                workspace=config.workspace,
+                instrument_name=instrument_name,
+                prompt_template=prompt_template,
+                template_file=template_file,
+                variables=variables,
+                prelude=prelude,
+                cadenza=cadenza,
+                prompt_extensions=extensions,
+                validations=validations,
+                timeout_seconds=timeout,
+            )
+        )
+
+    return sheets
