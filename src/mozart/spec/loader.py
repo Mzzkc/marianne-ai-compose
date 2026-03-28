@@ -198,13 +198,13 @@ def _load_yaml_fragment(path: Path) -> SpecFragment:
 
     # Extract fields with defaults
     name = parsed.get("name")
-    if not name:
+    if name is None:
         raise ValueError(
             f"Missing required 'name' field in {path.name}"
         )
 
     content = parsed.get("content")
-    if not content:
+    if content is None:
         raise ValueError(
             f"Missing required 'content' field in {path.name}"
         )
