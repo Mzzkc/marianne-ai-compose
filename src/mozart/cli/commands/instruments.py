@@ -141,7 +141,11 @@ def _list_table(profiles: dict[str, InstrumentProfile]) -> None:
         parts.append(f"{ready_count} ready")
     if unchecked_count:
         parts.append(f"{unchecked_count} unchecked")
-    console.print(f"\n{' ('.join(parts)})" if len(parts) > 1 else f"\n{parts[0]}")
+    if len(parts) > 1:
+        summary = f"{parts[0]} ({', '.join(parts[1:])})"
+    else:
+        summary = parts[0]
+    console.print(f"\n{summary}")
 
 
 def _list_json(profiles: dict[str, InstrumentProfile]) -> None:
