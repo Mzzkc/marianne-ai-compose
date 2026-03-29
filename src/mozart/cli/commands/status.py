@@ -735,14 +735,25 @@ def _output_status_json(job: CheckpointState) -> None:
     output_json(output)
 
 
+_LARGE_SCORE_THRESHOLD = 50  # Switch to summary view above this sheet count
+
+
 def _render_sheet_details(job: CheckpointState) -> None:
     """Render the sheet details table for rich status output.
 
     Shows elapsed time for in-progress sheets and duration for completed ones.
     When the job config includes sheet descriptions (GH#75), a Description
     column is added between the sheet number and status columns.
+
+    For large scores (50+ sheets), shows a summary of counts-by-status
+    with only non-pending/non-completed sheets listed individually.
     """
     if not job.sheets:
+        return
+
+    # Large scores get a summary view to avoid 700+ row tables (F-038)
+    if len(job.sheets) >= _LARGE_SCORE_THRESHOLD:
+        _render_sheet_summary(job)
         return
 
     # Extract descriptions from config snapshot (GH#75)
@@ -808,6 +819,115 @@ def _render_sheet_details(job: CheckpointState) -> None:
                     console.print(f"  Sheet {sheet_num}: [red]{desc}[/red] — {detail}")
                 else:
                     console.print(f"  Sheet {sheet_num}: [red]{desc}[/red]")
+
+
+def _render_sheet_summary(job: CheckpointState) -> None:
+    """Render a compact summary for large scores (50+ sheets).
+
+    Instead of listing every sheet, shows counts-by-status and lists
+    only sheets that are actively interesting (running, failed, retrying).
+    Addresses F-038: status display unusable for large scores.
+    """
+    # Count sheets by status
+    status_counts: dict[str, int] = {}
+    interesting_sheets: list[tuple[int, Any]] = []  # (sheet_num, SheetState)
+
+    for sheet_num in sorted(job.sheets.keys()):
+        sheet = job.sheets[sheet_num]
+        label, _ = format_sheet_display_status(sheet.status, sheet.validation_passed)
+        status_counts[label] = status_counts.get(label, 0) + 1
+
+        # Collect "interesting" sheets: running, failed, in_progress
+        if sheet.status in (
+            SheetStatus.IN_PROGRESS,
+            SheetStatus.FAILED,
+        ) or (
+            sheet.status == SheetStatus.COMPLETED and sheet.validation_passed is False
+        ):
+            interesting_sheets.append((sheet_num, sheet))
+
+    console.print("\n[bold]Sheet Summary[/bold]")
+    total = len(job.sheets)
+
+    # Show counts as a compact line
+    # Use display labels from format_sheet_display_status for color
+    parts: list[str] = []
+    order = ["completed", "failed", "running", "in_progress", "pending", "skipped"]
+    for label in order:
+        count = status_counts.get(label, 0)
+        if count == 0:
+            continue
+        # Map label back to a color — use the color from format_sheet_display_status
+        color_map = {
+            "completed": "bright_green",
+            "failed": "red",
+            "running": "green",
+            "in_progress": "blue",
+            "pending": "dim",
+            "skipped": "dim",
+        }
+        color = color_map.get(label, "white")
+        parts.append(f"[{color}]{count} {label}[/{color}]")
+
+    # Add any status not in the predefined order
+    for label, count in status_counts.items():
+        if label not in order and count > 0:
+            parts.append(f"{count} {label}")
+
+    console.print(f"  {total} sheets: {', '.join(parts)}")
+
+    # Show interesting sheets individually
+    if interesting_sheets:
+        console.print("\n[bold]Active & Failed Sheets[/bold]")
+        for sheet_num, sheet in interesting_sheets[:20]:  # Cap at 20
+            display_label, sheet_color = format_sheet_display_status(
+                sheet.status, sheet.validation_passed,
+            )
+            status_str = f"[{sheet_color}]{display_label}[/{sheet_color}]"
+
+            if sheet.status == SheetStatus.IN_PROGRESS and sheet.started_at:
+                elapsed = datetime.now(UTC) - sheet.started_at
+                status_str += f" [dim]({format_duration(elapsed.total_seconds())})[/dim]"
+            elif sheet.execution_duration_seconds is not None:
+                status_str += f" [dim]({format_duration(sheet.execution_duration_seconds)})[/dim]"
+
+            error_str = ""
+            if sheet.error_message:
+                error_str = f" — {sheet.error_message[:40]}..."
+
+            console.print(f"  Sheet {sheet_num:>4d}: {status_str}{error_str}")
+
+        if len(interesting_sheets) > 20:
+            console.print(
+                f"  [dim]... and {len(interesting_sheets) - 20} more[/dim]"
+            )
+
+    # Validation failures for completed-but-failed-validation sheets
+    failures: list[tuple[int, list[ValidationDetailDict]]] = []
+    for sheet_num in sorted(job.sheets.keys()):
+        sheet = job.sheets[sheet_num]
+        if sheet.validation_passed is not False or not sheet.validation_details:
+            continue
+        failed = [v for v in sheet.validation_details if not v.get("passed")]
+        if failed:
+            failures.append((sheet_num, failed))
+
+    if failures:
+        shown = failures[:10]  # Cap validation details too
+        console.print("\n[bold]Validation Failures[/bold]")
+        for sheet_num, failed_validations in shown:
+            for v in failed_validations:
+                desc = v.get("description") or v.get("rule_type", "unknown")
+                detail = v.get("error_message") or ""
+                if detail:
+                    console.print(f"  Sheet {sheet_num}: [red]{desc}[/red] — {detail}")
+                else:
+                    console.print(f"  Sheet {sheet_num}: [red]{desc}[/red]")
+        if len(failures) > 10:
+            console.print(
+                f"\n  [dim]... and {len(failures) - 10} more validation failures. "
+                f"Run 'mozart errors {job.job_id} --verbose' for details.[/dim]"
+            )
 
 
 def _render_recent_errors(job: CheckpointState) -> None:

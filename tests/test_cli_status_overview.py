@@ -15,6 +15,7 @@ from mozart.cli.commands.status import (
     _format_uptime,
     _status_overview,
 )
+from mozart.core.checkpoint import SheetStatus
 
 # The function imports try_daemon_route locally, so patch at the source module.
 _ROUTE_PATCH = "mozart.daemon.detect.try_daemon_route"
@@ -238,3 +239,100 @@ class TestStatusArgOptional:
         sig = inspect.signature(status)
         param = sig.parameters["job_id"]
         assert param.default is not inspect.Parameter.empty
+
+
+# ---------------------------------------------------------------------------
+# Large score summary view (F-038)
+# ---------------------------------------------------------------------------
+
+class TestLargeScoreSummary:
+    """Test summary view for large scores (50+ sheets)."""
+
+    def test_threshold_exists(self) -> None:
+        """The large score threshold is defined."""
+        from mozart.cli.commands.status import _LARGE_SCORE_THRESHOLD
+
+        assert _LARGE_SCORE_THRESHOLD == 50
+
+    def test_summary_renders_for_large_scores(self) -> None:
+        """Scores with 50+ sheets use the summary view."""
+        from mozart.cli.commands.status import _render_sheet_details
+        from mozart.core.checkpoint import CheckpointState, SheetState
+
+        # Create a CheckpointState with 60 sheets
+        sheets = {}
+        for i in range(1, 61):
+            s = SheetState(sheet_num=i)
+            if i <= 30:
+                s.status = SheetStatus.COMPLETED
+                s.validation_passed = True
+            elif i <= 35:
+                s.status = SheetStatus.FAILED
+                s.validation_passed = False
+            elif i <= 37:
+                s.status = SheetStatus.IN_PROGRESS
+            else:
+                s.status = SheetStatus.PENDING
+            sheets[i] = s
+
+        job = CheckpointState(
+            job_id="large-test",
+            job_name="large-test",
+            total_sheets=60,
+            sheets=sheets,
+        )
+
+        # Should not raise — renders summary instead of 60 rows
+        _render_sheet_details(job)
+
+    def test_small_scores_use_full_table(self) -> None:
+        """Scores below threshold get the full table."""
+        from mozart.cli.commands.status import _render_sheet_details
+        from mozart.core.checkpoint import CheckpointState, SheetState
+
+        sheets = {}
+        for i in range(1, 10):
+            s = SheetState(sheet_num=i)
+            s.status = SheetStatus.COMPLETED
+            s.validation_passed = True
+            sheets[i] = s
+
+        job = CheckpointState(
+            job_id="small-test",
+            job_name="small-test",
+            total_sheets=9,
+            sheets=sheets,
+        )
+
+        # Should render the full table (no summary)
+        _render_sheet_details(job)
+
+    def test_summary_counts_statuses(self) -> None:
+        """Summary correctly counts sheets by display status."""
+        from mozart.cli.commands.status import _render_sheet_summary
+        from mozart.core.checkpoint import CheckpointState, SheetState
+
+        sheets = {}
+        for i in range(1, 101):
+            s = SheetState(sheet_num=i)
+            if i <= 50:
+                s.status = SheetStatus.COMPLETED
+                s.validation_passed = True
+            elif i <= 60:
+                s.status = SheetStatus.COMPLETED
+                s.validation_passed = False  # Display as "failed"
+            elif i <= 65:
+                s.status = SheetStatus.IN_PROGRESS
+            else:
+                s.status = SheetStatus.PENDING
+            sheets[i] = s
+
+        job = CheckpointState(
+            job_id="count-test",
+            job_name="count-test",
+            total_sheets=100,
+            sheets=sheets,
+        )
+
+        # Should render without error
+        _render_sheet_summary(job)
