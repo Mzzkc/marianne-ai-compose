@@ -501,12 +501,26 @@ class BatonCore:
             )
 
     def _handle_sheet_skipped(self, event: SheetSkipped) -> None:
-        """Mark a sheet as skipped."""
+        """Mark a sheet as skipped.
+
+        Terminal guard: completed, failed, skipped, or cancelled sheets
+        cannot be re-marked as skipped by a late event.
+        """
         job = self._jobs.get(event.job_id)
         if job is None:
             return
         sheet = job.sheets.get(event.sheet_num)
         if sheet is None:
+            return
+        if sheet.status in _TERMINAL_STATUSES:
+            _logger.debug(
+                "baton.sheet_skipped.terminal_noop",
+                extra={
+                    "job_id": event.job_id,
+                    "sheet_num": event.sheet_num,
+                    "status": sheet.status,
+                },
+            )
             return
         sheet.status = "skipped"
         self._state_dirty = True
