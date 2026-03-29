@@ -228,6 +228,37 @@ Validation checks: Jinja syntax (V001), workspace paths (V002), template files (
 - `docs/plans/2026-03-01-four-disciplines-phase2-prompt-craft.md` — 8-layer agent input structure
 - Phases 3-9 as above
 
+## Operational Gotchas
+
+- **Conductor config:** `~/.mozart/conductor.yaml` (not `daemon.yaml`). `_load_config()` in `process.py` auto-discovers this.
+- **Code changes:** Run `pip install -e ".[dev]"` after modifying Mozart source — the daemon loads from the installed package, not source tree.
+- **Workspace files are live:** Agents modify workspace files during execution. NEVER overwrite them with seeds/templates.
+- **Cadenza syntax:** `{{ workspace }}` (Jinja2) in cadenza file paths, `{workspace}` (Python format) in validation paths. Mixing them fails silently.
+- **Pipe exit codes:** `cmd | tail -5` always exits 0. Use `bash -c '...; exit ${PIPESTATUS[0]}'` in `command_succeeds` validations.
+- **Jinja2 dict methods:** `persona.values` resolves to the dict `.values()` method in Jinja2. Use `persona['values']` to access the key.
+- **Preflight token thresholds:** Configurable via `preflight:` in `~/.mozart/conductor.yaml`. Default 150K is too low for Opus 1M context. Currently set to 800K warning / 200K error on this system.
+
+## Flowspec Integration
+
+Flowspec is a structural code analyzer at `/home/emzi/Projects/flowspec/target/release/flowspec`. The project has `.flowspec/config.yaml` configured.
+
+- Always use **project root** as the path (auto-discovers `.flowspec/config.yaml` with entry points and excludes)
+- `flowspec trace --symbol "module.py::Class" --direction both --depth 5 . -f summary -q` — trace data flow
+- `flowspec analyze . -f summary -q` — structural overview (14K entities with config, 3K without)
+- `flowspec diagnose . --severity critical -f summary -q` — find structural issues
+- `flowspec diff old.yaml new.yaml -f summary -q` — compare manifests for structural regressions
+- Start traces from **consumers (backward)**, not producers (forward) — config models show 0 flows forward
+- Known limits: dynamic dispatch, Protocol implementations, default params not tracked
+- Known bug: exit code always 0 regardless of findings (flowspec#31)
+
+## Instrument System
+
+- Profiles: `src/mozart/instruments/builtins/` (6 built-in), `~/.mozart/instruments/` (user), `.mozart/instruments/` (project)
+- Loading: `InstrumentProfileLoader.load_directory(path)` → validates against `InstrumentProfile` schema
+- Registry: `InstrumentRegistry` — register/get/list_all. `register_native_instruments()` bridges existing 4 backends.
+- `SpecCorpusLoader.load(dir)` loads passages from ANY directory following the passage schema — not just `.mozart/spec/`
+- `PluginCliBackend` executes any CLI instrument from a profile YAML
+
 ---
 
-*Last restructured: 2026-03-03 — Directory organization codified*
+*Last restructured: 2026-03-29 — Operational gotchas, Flowspec, Instrument system added*

@@ -1,40 +1,47 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║       CONTINUOUS QUALITY: PHASE 3 HARDENING & WIRING                      ║
+# ║       CONTINUOUS QUALITY: DAEMON GENERAL REVIEW                            ║
 # ║                                                                            ║
-# ║  Targeted quality review of Phase 3 daemon components:                    ║
-# ║  - GlobalSheetScheduler: priority queue, fair-share, DAG deps             ║
-# ║  - RateLimitCoordinator: cross-job rate limit sharing                     ║
-# ║  - BackpressureController: memory-based load gating                       ║
+# ║  Comprehensive quality review of the entire daemon package:                ║
+# ║  - Architecture, component wiring, dependency flow                        ║
+# ║  - Real testing, coverage gaps, stress tests                              ║
+# ║  - Code quality, silent failures, error handling                          ║
+# ║  - Integration, backwards compatibility, IPC flow                         ║
 # ║                                                                            ║
-# ║  These components are fully built & tested (~840 LOC, ~71 tests)          ║
-# ║  but NOT wired into the execution path. This score:                       ║
-# ║    Iterations 1-3: HARDEN (edge cases, stress tests, protocol gaps)       ║
-# ║    Iterations 4+:  WIRE (connect to live execution path)                  ║
+# ║  Self-chaining iterative review with 3 batch fix rounds.                  ║
+# ║  Batch 3 is fanned out for parallel even/odd issue handling.              ║
 # ║                                                                            ║
 # ║  Branch protocol:                                                          ║
 # ║    Stage 1 checks out daemon-symphony; stages 1-11 STAY on it            ║
 # ║    Stage 2 (parallel) is READ-ONLY — no branch switching                  ║
 # ║    Stages 12-14 manage branch state independently                         ║
 # ║                                                                            ║
-# ║  Execution Flow (14 stages, 17 concrete sheets):                          ║
+# ║  Execution Flow (14 stages, 19 concrete sheets):                          ║
 # ║                                                                            ║
-# ║    Stage 1:  Phase 3 Deep Inventory                                       ║
+# ║    Stage 1:  Full Daemon Inventory                                        ║
 # ║         |                                                                  ║
 # ║         +------+-------+-------+                                          ║
 # ║         v      v       v       v                                          ║
-# ║    Stage 2 x4: Component Deep-Dives (PARALLEL)                           ║
-# ║      [Scheduler] [RateCoord] [Backpressure] [IntegrationGaps]            ║
+# ║    Stage 2 x4: Deep-Dives (PARALLEL)                                     ║
+# ║      [Architecture] [Testing] [CodeQuality] [Integration]                ║
 # ║         |      |       |       |                                          ║
 # ║         +------+-------+-------+                                          ║
 # ║                   v                                                        ║
-# ║    Stage 3:  Gap Analysis & Hardening Plan                                ║
-# ║    Stage 4:  Hardening Prioritization                                     ║
-# ║    Stage 5:  Batch 1 — Edge Cases & Protocol Compliance (70%+)           ║
+# ║    Stage 3:  Category Discovery & Issue Catalog                           ║
+# ║    Stage 4:  Fix Prioritization & Batching                                ║
+# ║    Stage 5:  Batch 1 — Quick Wins (70%+)                                 ║
 # ║    Stage 6:  Batch 1 — Completion Pass                                    ║
-# ║    Stage 7:  Batch 2 — Stress Tests & Concurrency (70%+)                 ║
+# ║    Stage 7:  Batch 2 — Medium Effort (70%+)                              ║
 # ║    Stage 8:  Batch 2 — Completion Pass                                    ║
-# ║    Stage 9:  Batch 3 — Wiring Prep / Live Integration (50%+)             ║
-# ║    Stage 10: Batch 3 — Completion Pass                                    ║
+# ║         +----------+                                                       ║
+# ║         v          v                                                       ║
+# ║    Stage 9 x2: Batch 3 — Significant (50%+, PARALLEL)                    ║
+# ║      [Even IDs]  [Odd IDs]                                                ║
+# ║         +----------+                                                       ║
+# ║         v          v                                                       ║
+# ║    Stage 10 x2: Batch 3 — Completion (PARALLEL)                          ║
+# ║      [Even IDs]  [Odd IDs]                                                ║
+# ║         +----------+                                                       ║
+# ║                   v                                                        ║
 # ║    Stage 11: Verification & Summary                                       ║
 # ║    Stage 12: Commit & Push (to daemon-symphony)                           ║
 # ║    Stage 13: Merge Conflict Resolution                                    ║
@@ -42,12 +49,13 @@
 # ║                                                                            ║
 # ║  Usage:                                                                    ║
 # ║    cd ~/Projects/mozart-ai-compose                                         ║
-# ║    setsid mozart run examples/quality-continuous-daemon.yaml \             ║
-# ║      > .quality-daemon-workspace/mozart.log 2>&1 &                        ║
+# ║    setsid env -u CLAUDECODE mozart run \                                   ║
+# ║      examples/quality-continuous-daemon.yaml \                             ║
+# ║      --fresh > .quality-daemon-workspace/mozart.log 2>&1 &                ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: "quality-continuous-daemon"
-description: "Phase 3 hardening & wiring — scheduler, rate coordinator, backpressure"
+description: "General daemon quality review — architecture, testing, code quality, integration"
 
 workspace: "./workspaces/quality-daemon-workspace-2"
 
@@ -75,6 +83,8 @@ sheet:
 
   fan_out:
     2: 4
+    9: 2
+    10: 2
 
   dependencies:
     2: [1]
@@ -104,230 +114,240 @@ prompt:
 
     {% if stage == 1 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗
-    ║  STAGE 1: PHASE 3 DEEP INVENTORY                                          ║
+    ║  STAGE 1: FULL DAEMON INVENTORY                                            ║
     ║  "Know exactly what exists before you touch anything"                      ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     {{ branch_checkout }}
 
-    **Step 1: Track iteration and determine mode**
+    **Step 1: Track iteration**
     ```bash
     mkdir -p {{ workspace }}
-    if [ -f {{ workspace }}/.p3-iteration ]; then
-      ITER=$(cat {{ workspace }}/.p3-iteration)
+    if [ -f {{ workspace }}/.iteration ]; then
+      ITER=$(cat {{ workspace }}/.iteration)
       ITER=$((ITER + 1))
     else
       ITER=1
     fi
-    echo $ITER > {{ workspace }}/.p3-iteration
-    if [ $ITER -le 3 ]; then
-      MODE="HARDEN"
-      echo "=== PHASE 3 QUALITY ITERATION $ITER (MODE: HARDEN) ==="
-      echo "Focus: edge cases, stress tests, protocol compliance, missing tests"
-    else
-      MODE="WIRE"
-      echo "=== PHASE 3 QUALITY ITERATION $ITER (MODE: WIRE) ==="
-      echo "Focus: connect scheduler/rate-coord/backpressure to live execution"
-    fi
-    echo "$MODE" > {{ workspace }}/.p3-mode
+    echo $ITER > {{ workspace }}/.iteration
+    echo "=== DAEMON QUALITY ITERATION $ITER ==="
     ```
 
-    **Step 2: Inventory Phase 3 components**
+    **Step 2: Inventory ALL daemon components**
     ```bash
-    echo "=== PHASE 3 COMPONENT FILES ==="
-    wc -l src/mozart/daemon/scheduler.py \
-          src/mozart/daemon/rate_coordinator.py \
-          src/mozart/daemon/backpressure.py
+    echo "=== DAEMON SOURCE FILES ==="
+    wc -l src/mozart/daemon/*.py src/mozart/daemon/ipc/*.py 2>/dev/null
 
-    echo "=== PHASE 3 TEST FILES ==="
-    wc -l tests/test_daemon_scheduler.py \
-          tests/test_daemon_rate_coordinator.py \
-          tests/test_daemon_backpressure.py
+    echo "=== DAEMON TEST FILES ==="
+    wc -l tests/test_daemon_*.py
 
-    echo "=== RELATED FILES (execution path) ==="
-    wc -l src/mozart/daemon/manager.py \
-          src/mozart/daemon/job_service.py
+    echo "=== COMPONENT DEPENDENCY MAP ==="
+    grep -rn "^from mozart.daemon\|^import mozart.daemon" src/mozart/daemon/ --include="*.py" | head -40
 
-    echo "=== WIRING STATUS: scheduler ==="
-    grep -n "scheduler\|GlobalSheetScheduler\|next_sheet\|register_job" \
-      src/mozart/daemon/manager.py src/mozart/daemon/job_service.py 2>/dev/null | head -20
-
-    echo "=== WIRING STATUS: rate_coordinator ==="
-    grep -n "rate_coordinator\|RateLimitCoordinator\|report_rate_limit\|is_rate_limited" \
-      src/mozart/daemon/manager.py src/mozart/daemon/job_service.py 2>/dev/null | head -20
-
-    echo "=== WIRING STATUS: backpressure ==="
-    grep -n "backpressure\|BackpressureController\|should_accept\|can_start_sheet" \
-      src/mozart/daemon/manager.py src/mozart/daemon/job_service.py 2>/dev/null | head -20
+    echo "=== CROSS-COMPONENT WIRING ==="
+    grep -rn "scheduler\|rate_coordinator\|backpressure\|learning_hub\|monitor\|job_service\|manager" \
+      src/mozart/daemon/process.py src/mozart/daemon/manager.py 2>/dev/null | head -30
     ```
 
-    **Step 3: Read each Phase 3 component in full**
+    **Step 3: Read each daemon module in full**
+    - `src/mozart/daemon/config.py` — DaemonConfig
+    - `src/mozart/daemon/types.py` — Type definitions
+    - `src/mozart/daemon/output.py` — OutputProtocol
+    - `src/mozart/daemon/job_service.py` — JobService (core execution)
+    - `src/mozart/daemon/process.py` — DaemonProcess entry point
+    - `src/mozart/daemon/manager.py` — JobManager lifecycle
+    - `src/mozart/daemon/monitor.py` — ResourceMonitor
+    - `src/mozart/daemon/pgroup.py` — ProcessGroups
+    - `src/mozart/daemon/health.py` — HealthChecks
     - `src/mozart/daemon/scheduler.py` — GlobalSheetScheduler
     - `src/mozart/daemon/rate_coordinator.py` — RateLimitCoordinator
     - `src/mozart/daemon/backpressure.py` — BackpressureController
-    - `src/mozart/daemon/manager.py` — JobManager (wiring target)
-    - `src/mozart/daemon/job_service.py` — JobService (execution entry)
+    - `src/mozart/daemon/learning_hub.py` — LearningHub
+    - `src/mozart/daemon/detect.py` — Daemon detection
+    - `src/mozart/daemon/ipc/server.py` — IPC server
+    - `src/mozart/daemon/ipc/client.py` — IPC client
+    - `src/mozart/daemon/ipc/protocol.py` — JSON-RPC protocol
+    - `src/mozart/daemon/ipc/handler.py` — IPC handler
 
-    **Step 4: Run Phase 3 tests to establish baseline**
+    **Step 4: Run ALL daemon tests to establish baseline**
     ```bash
-    echo "=== SCHEDULER TESTS ==="
-    pytest tests/test_daemon_scheduler.py -v --tb=short 2>&1 | tail -30
-    echo "=== RATE COORDINATOR TESTS ==="
-    pytest tests/test_daemon_rate_coordinator.py -v --tb=short 2>&1 | tail -30
-    echo "=== BACKPRESSURE TESTS ==="
-    pytest tests/test_daemon_backpressure.py -v --tb=short 2>&1 | tail -30
+    echo "=== ALL DAEMON TESTS ==="
+    pytest tests/test_daemon_*.py -v --tb=short 2>&1 | tail -50
     echo "=== FULL SUITE ==="
     pytest tests/ -x --timeout=120 -q --tb=line 2>&1 | tail -5
     ```
 
-    Save to {{ workspace }}/00-phase3-inventory.md with: Mode, Component Stats table,
-    Wiring Status table, API Surface Summary, Test Baseline, Key Concerns.
+    Save to {{ workspace }}/00-daemon-inventory.md with: Iteration number,
+    Component Stats table (file, LOC, test file, test count), Dependency Map,
+    Wiring Status, Test Baseline, Key Concerns.
 
-    **Output to:** {{ workspace }}/00-phase3-inventory.md
+    **Output to:** {{ workspace }}/00-daemon-inventory.md
 
     {% elif stage == 2 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗
-    ║  STAGE 2: COMPONENT DEEP-DIVE — {{ review_types[instance] | upper }}        ║
+    ║  STAGE 2: DEEP-DIVE — {{ review_types[instance] | upper }}                  ║
     ║  Instance {{ instance }} of {{ fan_count }} (running in PARALLEL)            ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     {{ branch_checkout }}
     {{ readonly_constraint }}
 
-    **Read:** {{ workspace }}/00-phase3-inventory.md and {{ workspace }}/.p3-mode
+    **Read:** {{ workspace }}/00-daemon-inventory.md
 
     {% if instance == 1 %}
-    {# ═══════════════ SCHEDULER DEEP-DIVE ═══════════════ #}
+    {# ═══════════════ ARCHITECTURE REVIEW ═══════════════ #}
 
-    You are the **Scheduler Deep-Dive Analyst**. Find every edge case,
-    protocol gap, and potential failure in GlobalSheetScheduler.
+    You are the **Architecture Review Analyst**. Examine the daemon's structural
+    design across ALL components.
 
-    **Read in full:** `src/mozart/daemon/scheduler.py` and `tests/test_daemon_scheduler.py`
+    **Read in full:** ALL files in `src/mozart/daemon/` and `src/mozart/daemon/ipc/`
 
-    **1. API Contract Verification**
-    For each public method (register_job, deregister_job, next_sheet,
-    mark_complete, get_stats): empty/None input? duplicate calls? wrong order?
+    **1. Component Responsibilities** — Is each module focused? Any god classes?
+    Overlapping responsibilities? Clear boundaries?
 
-    **2. Priority Calculation** — _calculate_priority math correct?
-    _fair_share prevents starvation? heapq min/max-heap correct?
-
-    **3. DAG Dependencies** — circular deps detected? nonexistent sheet deps?
-    mark_complete on already-completed? _enqueue_ready_dependents edge cases?
-
-    **4. Concurrency** — register_job vs next_sheet race? mark_complete vs
-    deregister_job race? 10 concurrent next_sheet? TOCTOU in rate_limiter check?
+    **2. Dependency Graph** — Who imports whom? Circular dependencies?
     ```bash
-    grep -n "self._lock\|async with" src/mozart/daemon/scheduler.py
+    grep -rn "^from mozart.daemon\|^import mozart.daemon" src/mozart/daemon/ --include="*.py" | sort
     ```
 
-    **5. Rate Limit & Backpressure Integration** — what if checkers raise?
-    set_rate_limiter mid-scheduling safe?
+    **3. Startup/Shutdown Flow** — DaemonProcess → components init order?
+    Graceful shutdown? Resource cleanup? Signal handling?
 
-    **6. Missing Tests** — list every untested scenario.
+    **4. Error Propagation** — How do errors flow between components?
+    IPC → Handler → Manager → JobService? Missing error paths?
 
-    **Output to:** {{ workspace }}/01-scheduler-deep-dive.md
+    **5. Configuration Consistency** — DaemonConfig fields used consistently?
+    Defaults sensible? Validation adequate?
+
+    **6. Concurrency Model** — Lock usage across components? Consistent patterns?
+    ```bash
+    grep -rn "self._lock\|asyncio.Lock\|async with" src/mozart/daemon/ --include="*.py" | head -30
+    ```
+
+    **7. Missing Architecture** — Dead code? Unused interfaces? Missing abstractions?
+
+    **Output to:** {{ workspace }}/01-architecture-review.md
 
     {% elif instance == 2 %}
-    {# ═══════════════ RATE COORDINATOR DEEP-DIVE ═══════════════ #}
+    {# ═══════════════ TESTING REVIEW ═══════════════ #}
 
-    You are the **Rate Coordinator Deep-Dive Analyst**. Find every edge case
-    in RateLimitCoordinator.
+    You are the **Testing Review Analyst**. Evaluate test quality and coverage
+    across ALL daemon test files.
 
-    **Read in full:** `src/mozart/daemon/rate_coordinator.py` and `tests/test_daemon_rate_coordinator.py`
+    **Read in full:** ALL `tests/test_daemon_*.py` files
 
-    **1. Report → Check Round-Trip** — backend isolation? concurrent reports?
-    time-based expiry? report A doesn't affect B?
-
-    **2. Concurrent Access** — 10 concurrent reports? is_rate_limited during
-    report? prune_stale during add? wait_if_limited multiple waiters?
+    **1. Real vs Mock Balance** — Are tests testing real behavior or just mocking?
+    Which components have integration-style tests? Which are pure unit?
     ```bash
-    grep -n "self._lock\|async with" src/mozart/daemon/rate_coordinator.py
+    grep -cn "Mock\|patch\|MagicMock\|AsyncMock" tests/test_daemon_*.py | sort -t: -k2 -rn
     ```
 
-    **3. Stale Events** — prune threshold correct? memory leak without pruning?
-    very large suggested_wait_seconds?
+    **2. Scenario Coverage** — Are realistic workflows tested?
+    Submit → run → complete? Rate limit → backoff → retry?
+    Startup → jobs → shutdown? Multi-job concurrent execution?
 
-    **4. is_limited_sync vs is_rate_limited** — why both? consistent? contradictory?
+    **3. Edge Cases** — Empty inputs? None values? Duplicate operations?
+    Concurrent access? Resource exhaustion?
 
-    **5. wait_if_limited** — blocks until expiry? new limit extends wait?
-    max wait time? shutdown while waiting?
+    **4. Stress Tests** — Any tests with 50+ sheets? 10+ concurrent jobs?
+    Rapid state changes? Memory pressure simulation?
 
-    **6. Missing Tests** — list every untested scenario.
+    **5. Error Path Testing** — Backend failures? IPC disconnection?
+    Config validation errors? Partial initialization?
 
-    **Output to:** {{ workspace }}/02-rate-coordinator-deep-dive.md
+    **6. Test Organization** — Consistent patterns? Shared fixtures?
+    Test isolation? Flaky test risk?
+
+    **7. Coverage Gaps** — List every untested public method/class.
+
+    **Output to:** {{ workspace }}/02-testing-review.md
 
     {% elif instance == 3 %}
-    {# ═══════════════ BACKPRESSURE DEEP-DIVE ═══════════════ #}
+    {# ═══════════════ CODE QUALITY REVIEW ═══════════════ #}
 
-    You are the **Backpressure Deep-Dive Analyst**. Find every edge case
-    in BackpressureController.
+    You are the **Code Quality Analyst**. Find silent failures, code debt,
+    and quality issues across ALL daemon modules.
 
-    **Read in full:** `src/mozart/daemon/backpressure.py` and `tests/test_daemon_backpressure.py`
+    **Read in full:** ALL files in `src/mozart/daemon/` and `src/mozart/daemon/ipc/`
 
-    **1. Pressure Levels** — trigger conditions? thresholds configurable/hardcoded?
-    exact boundary values? skip levels? decrease levels?
+    **1. Silent Failures** — Bare except? Swallowed exceptions? Errors logged
+    but not propagated? return None on error?
     ```bash
-    grep -n "PressureLevel\|_LEVEL_DELAYS\|threshold\|percent" src/mozart/daemon/backpressure.py
+    grep -rn "except:\|except Exception\|pass$\|return None" src/mozart/daemon/ --include="*.py" | head -30
     ```
 
-    **2. Monitor Dependency** — monitor raises? returns None? memory > 100%?
+    **2. Error Handling** — Consistent patterns? Appropriate error types?
+    Missing error handling? Overly broad catches?
 
-    **3. Rate Coordinator Integration** — how used? active limits raise pressure?
-    rate_coordinator is None? **Is this branch tested or dead code?**
+    **3. Type Safety** — Missing type hints? Inconsistent types? Any use
+    of `Any` that could be more specific?
     ```bash
-    grep -n "rate_coordinator\|_rate_coordinator" src/mozart/daemon/backpressure.py
+    grep -rn ": Any\|-> Any\|Optional\[Any\]" src/mozart/daemon/ --include="*.py" | head -20
     ```
 
-    **4. can_start_sheet Gating** — return at each level? delays? CRITICAL blocks?
+    **4. Logging Quality** — Structured logging used? Consistent levels?
+    Missing context in log messages? Log spam risk?
 
-    **5. should_accept_job** — rejection level? logging? permanent vs temporary?
+    **5. Dead Code** — Unused methods? Unreachable branches?
+    Commented-out code? Placeholder implementations?
 
-    **6. Rapid Oscillation** — boundary bouncing? hysteresis? performance?
+    **6. Code Duplication** — Repeated patterns that should be abstracted?
+    Copy-paste code across modules?
 
-    **7. Missing Tests** — list every untested scenario.
+    **7. Resource Management** — File handles closed? Async cleanup?
+    Memory leaks in long-running scenarios?
 
-    **Output to:** {{ workspace }}/03-backpressure-deep-dive.md
+    **Output to:** {{ workspace }}/03-code-quality-review.md
 
     {% elif instance == 4 %}
-    {# ═══════════════ INTEGRATION GAPS DEEP-DIVE ═══════════════ #}
+    {# ═══════════════ INTEGRATION REVIEW ═══════════════ #}
 
-    You are the **Integration Gaps Analyst**. Map what's needed to wire
-    Phase 3 components into the live execution path.
+    You are the **Integration Review Analyst**. Examine cross-component
+    wiring and backwards compatibility.
 
     **Read in full:**
-    - `src/mozart/daemon/manager.py` — JobManager
-    - `src/mozart/daemon/job_service.py` — JobService
-    - `src/mozart/daemon/process.py` — DaemonProcess startup
-    - `src/mozart/daemon/scheduler.py`, `rate_coordinator.py`, `backpressure.py`
+    - `src/mozart/daemon/process.py` — DaemonProcess (wires everything)
+    - `src/mozart/daemon/manager.py` — JobManager (orchestrates jobs)
+    - `src/mozart/daemon/job_service.py` — JobService (executes jobs)
+    - `src/mozart/daemon/ipc/server.py` — IPC server
+    - `src/mozart/daemon/ipc/handler.py` — IPC handler
+    - `src/mozart/daemon/detect.py` — Daemon detection
 
-    **1. Current Execution Flow** — trace submit → _run_job_task → sheets
+    **1. Component Wiring** — How does DaemonProcess connect components?
+    Are all components initialized? Proper dependency injection?
     ```bash
-    grep -n "async def.*run\|_run_job_task\|submit_job" src/mozart/daemon/manager.py | head -20
-    grep -n "async def.*run\|_execute\|_run_sheet" src/mozart/daemon/job_service.py | head -20
+    grep -n "self\.\|=.*(" src/mozart/daemon/process.py | head -40
     ```
 
-    **2. Scheduler Wiring** — where does sheet decomposition happen?
-    Where should register_job/next_sheet/mark_complete be called?
+    **2. IPC Flow** — Client → Server → Handler → Manager → JobService?
+    Are all JSON-RPC methods properly routed? Error responses correct?
 
-    **3. Rate Coordinator Wiring** — where are rate limits detected?
+    **3. Daemon Detection** — How does CLI detect running daemon?
+    Race conditions? Stale socket? Multiple daemons?
     ```bash
-    grep -rn "rate.limit\|429\|too.many\|RateLimit" src/mozart/ --include="*.py" | head -20
+    cat src/mozart/daemon/detect.py
     ```
 
-    **4. Backpressure Wiring** — where should should_accept_job gate?
-    Where should can_start_sheet gate?
+    **4. Backwards Compatibility** — Does non-daemon Mozart still work?
+    Are daemon-only imports guarded? Optional dependencies?
 
-    **5. Interface Compatibility** — do SheetInfo/RateLimitEvent/Protocols match?
+    **5. Scheduler/RateCoord/Backpressure Wiring** — Are these actually
+    connected to the execution path, or standalone?
+    ```bash
+    grep -rn "scheduler\|rate_coordinator\|backpressure" \
+      src/mozart/daemon/manager.py src/mozart/daemon/job_service.py src/mozart/daemon/process.py 2>/dev/null | head -30
+    ```
 
-    **6. Required Glue Code** — adapters, callbacks, new interfaces needed?
+    **6. Health Check Integration** — Are health checks actually wired?
+    What do they report? Are they tested end-to-end?
 
-    **Output to:** {{ workspace }}/04-integration-gaps.md
+    **Output to:** {{ workspace }}/04-integration-review.md
 
     {% endif %}
 
     {% elif stage == 3 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗
-    ║  STAGE 3: GAP ANALYSIS (up to 25 Work Items from Deep-Dives)               ║
+    ║  STAGE 3: CATEGORY DISCOVERY (up to 25 Work Items from Deep-Dives)         ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     {{ branch_checkout }}
@@ -340,55 +360,55 @@ prompt:
     {% endif %}
 
     **Read the COMPLETE files:**
-    - {{ workspace }}/00-phase3-inventory.md
-    - {{ workspace }}/01-scheduler-deep-dive.md
-    - {{ workspace }}/02-rate-coordinator-deep-dive.md
-    - {{ workspace }}/03-backpressure-deep-dive.md
-    - {{ workspace }}/04-integration-gaps.md
-    - {{ workspace }}/.p3-mode
+    - {{ workspace }}/00-daemon-inventory.md
+    - {{ workspace }}/01-architecture-review.md
+    - {{ workspace }}/02-testing-review.md
+    - {{ workspace }}/03-code-quality-review.md
+    - {{ workspace }}/04-integration-review.md
 
-    Select **up to 25 actionable work items**.
+    Select **up to 25 actionable work items** across the entire daemon package.
 
-    **HARDEN mode priorities:** EdgeCase, MissingTest, ProtocolGap, ConcurrencyBug, DeadCode
-    **WIRE mode priorities:** WiringPrereq, WiringPoint, IntegrationTest, BackwardsCompat
+    **Categories:** Safety, Integration, Testing, Architecture, CodeQuality,
+    Concurrency, Performance, ErrorHandling, DeadCode, Cleanup
 
-    **Categories:** EdgeCase, MissingTest, ProtocolGap, ConcurrencyBug,
-    DeadCode, WiringPrereq, WiringPoint, IntegrationTest, StressTest, Cleanup
-
-    **Output to:** {{ workspace }}/05-gap-analysis.yaml
-    Format: `issues: [{id: P001, source, category, file, line, severity, description, suggested_fix, fix_effort}]`
+    **Output to:** {{ workspace }}/05-category-discovery.yaml
+    Format: `issues: [{id: D001, source, category, file, line, severity, description, suggested_fix, fix_effort}]`
 
     {% elif stage == 4 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗
-    ║  STAGE 4: HARDENING PRIORITIZATION                                          ║
+    ║  STAGE 4: FIX PRIORITIZATION & BATCHING                                    ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     {{ branch_checkout }}
 
-    Read {{ workspace }}/05-gap-analysis.yaml and {{ workspace }}/.p3-mode.
+    Read {{ workspace }}/05-category-discovery.yaml.
 
-    **Score:** `severity × (1/effort)` + mode bonuses:
-    - HARDEN: +2 EdgeCase/ProtocolGap/ConcurrencyBug, +1 MissingTest/StressTest
-    - WIRE: +2 WiringPoint/WiringPrereq, +1 IntegrationTest
+    **Score:** `severity * (1/effort)` + category bonuses:
+    - +2: Safety, Concurrency, Integration
+    - +1: Testing, ErrorHandling, Architecture
 
     **Batch into 3 groups:**
-    - Batch 1: Quick wins (edge cases, simple tests)
-    - Batch 2: Medium (stress tests, concurrency fixes)
-    - Batch 3: Significant (wiring prep or actual wiring)
+    - Batch 1: Quick wins (simple fixes, edge cases, trivial tests)
+    - Batch 2: Medium (stress tests, concurrency fixes, error handling)
+    - Batch 3: Significant (integration wiring, architecture changes, cross-component)
 
-    **Output to:** {{ workspace }}/06-hardening-plan.md
+    **IMPORTANT:** Assign each issue a numeric ID (D001, D002, ...).
+    Batch 3 issues will be split: **even IDs** (D002, D004, ...) handled by
+    one parallel instance, **odd IDs** (D001, D003, ...) by another.
+
+    **Output to:** {{ workspace }}/06-fix-plan.md
 
     {% elif stage == 5 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗
-    ║  STAGE 5: BATCH 1 — EDGE CASES & PROTOCOL COMPLIANCE (70%+ REQUIRED)       ║
+    ║  STAGE 5: BATCH 1 — QUICK WINS (70%+ REQUIRED)                             ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     {{ branch_checkout }}
 
-    Read {{ workspace }}/06-hardening-plan.md and fix Batch 1 issues.
+    Read {{ workspace }}/06-fix-plan.md and fix Batch 1 issues.
     **MANDATORY: Complete at least 70% of Batch 1 issues.**
 
-    Scope: Only `src/mozart/daemon/` and `tests/test_daemon_*.py`.
+    Scope: Only `src/mozart/daemon/`, `src/mozart/daemon/ipc/`, and `tests/test_daemon_*.py`.
 
     {{ batch_rules }}
 
@@ -404,8 +424,7 @@ prompt:
 
     Read {{ workspace }}/07-batch1-fixes.md. Complete ALL deferred items.
     ```bash
-    pytest tests/test_daemon_scheduler.py tests/test_daemon_rate_coordinator.py \
-      tests/test_daemon_backpressure.py -v --tb=short 2>&1 | tail -20
+    pytest tests/test_daemon_*.py -v --tb=short 2>&1 | tail -40
     pytest tests/ -x --timeout=120 -q 2>&1 | tail -5
     ```
 
@@ -413,16 +432,16 @@ prompt:
 
     {% elif stage == 7 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗
-    ║  STAGE 7: BATCH 2 — STRESS TESTS & CONCURRENCY (70%+ REQUIRED)             ║
+    ║  STAGE 7: BATCH 2 — MEDIUM EFFORT (70%+ REQUIRED)                          ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     {{ branch_checkout }}
 
-    Read {{ workspace }}/06-hardening-plan.md. Fix Batch 2 issues.
+    Read {{ workspace }}/06-fix-plan.md. Fix Batch 2 issues.
     **MANDATORY: Complete at least 70%.**
 
-    Focus: stress tests (50+ sheets, 10+ jobs), concurrent report/check,
-    rapidly changing resource levels, deadlock detection with asyncio.wait_for.
+    Focus: stress tests, concurrency fixes, error handling improvements,
+    missing test coverage for real scenarios.
 
     {{ batch_rules }}
 
@@ -438,8 +457,7 @@ prompt:
 
     Read {{ workspace }}/09-batch2-fixes.md. Complete ALL deferred items.
     ```bash
-    pytest tests/test_daemon_scheduler.py tests/test_daemon_rate_coordinator.py \
-      tests/test_daemon_backpressure.py -v --tb=short 2>&1 | tail -20
+    pytest tests/test_daemon_*.py -v --tb=short 2>&1 | tail -40
     pytest tests/ -x --timeout=120 -q 2>&1 | tail -5
     ```
 
@@ -447,39 +465,62 @@ prompt:
 
     {% elif stage == 9 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗
-    ║  STAGE 9: BATCH 3 — WIRING PREP / LIVE INTEGRATION (50%+ REQUIRED)         ║
+    ║  STAGE 9: BATCH 3 — SIGNIFICANT FIXES (50%+ REQUIRED)                      ║
+    ║  Instance {{ instance }} of {{ fan_count }}:                                 ║
+    ║  {% if instance == 1 %}EVEN-numbered issues (D002, D004, ...){% elif instance == 2 %}ODD-numbered issues (D001, D003, ...){% endif %}              ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     {{ branch_checkout }}
 
-    Read {{ workspace }}/06-hardening-plan.md and {{ workspace }}/.p3-mode.
-    **MANDATORY: Complete at least 50%.**
+    Read {{ workspace }}/06-fix-plan.md.
+    **MANDATORY: Complete at least 50% of YOUR assigned issues.**
 
-    **HARDEN mode:** Create adapter interfaces, add integration tests for future
-    wiring, stabilize APIs, document wiring points.
-    **WIRE mode:** Connect scheduler→_run_job_task, rate_coord→backend errors,
-    backpressure→submission gate. Add integration tests. Keep non-daemon working.
+    {% if instance == 1 %}
+    **YOUR SCOPE: EVEN-numbered Batch 3 issues only.**
+    Handle issues whose numeric ID suffix is even: D002, D004, D006, D008, etc.
+    Skip any odd-numbered issues — the other instance handles those.
+    {% elif instance == 2 %}
+    **YOUR SCOPE: ODD-numbered Batch 3 issues only.**
+    Handle issues whose numeric ID suffix is odd: D001, D003, D005, D007, etc.
+    Skip any even-numbered issues — the other instance handles those.
+    {% endif %}
+
+    Focus: integration wiring, architecture changes, cross-component fixes.
 
     {{ batch_rules }}
 
-    **Output to:** {{ workspace }}/11-batch3-fixes.md
-    Format: `**Total:** N` / `**Fixed:** N` / `**Completion:** N%` + tables.
+    {% if instance == 1 %}
+    **Output to:** {{ workspace }}/11-batch3-even-fixes.md
+    {% elif instance == 2 %}
+    **Output to:** {{ workspace }}/11-batch3-odd-fixes.md
+    {% endif %}
+    Format: `**Total:** N` / `**Fixed:** N` / `**Completion:** N%` + Fixed/Deferred tables.
 
     {% elif stage == 10 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗
     ║  STAGE 10: BATCH 3 — COMPLETION PASS                                       ║
+    ║  Instance {{ instance }} of {{ fan_count }}:                                 ║
+    ║  {% if instance == 1 %}EVEN-numbered issues{% elif instance == 2 %}ODD-numbered issues{% endif %}                                              ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     {{ branch_checkout }}
 
-    Read {{ workspace }}/11-batch3-fixes.md. Complete ALL deferred items.
+    {% if instance == 1 %}
+    Read {{ workspace }}/11-batch3-even-fixes.md. Complete ALL deferred even-numbered items.
+    {% elif instance == 2 %}
+    Read {{ workspace }}/11-batch3-odd-fixes.md. Complete ALL deferred odd-numbered items.
+    {% endif %}
+
     ```bash
-    pytest tests/test_daemon_scheduler.py tests/test_daemon_rate_coordinator.py \
-      tests/test_daemon_backpressure.py -v --tb=short 2>&1 | tail -30
+    pytest tests/test_daemon_*.py -v --tb=short 2>&1 | tail -40
     pytest tests/ -x --timeout=120 -q 2>&1 | tail -5
     ```
 
-    **Output to:** {{ workspace }}/12-batch3-completion.md
+    {% if instance == 1 %}
+    **Output to:** {{ workspace }}/12-batch3-even-completion.md
+    {% elif instance == 2 %}
+    **Output to:** {{ workspace }}/12-batch3-odd-completion.md
+    {% endif %}
 
     {% elif stage == 11 %}
     ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -492,23 +533,27 @@ prompt:
     pytest --tb=short 2>&1 | tee {{ workspace }}/13-test-output.txt | tail -50
     ```
     ```bash
-    pytest tests/test_daemon_scheduler.py tests/test_daemon_rate_coordinator.py \
-      tests/test_daemon_backpressure.py -v --tb=short 2>&1 | tail -40
+    pytest tests/test_daemon_*.py -v --tb=short 2>&1 | tail -50
     ```
     ```bash
-    mypy src/mozart/daemon/scheduler.py src/mozart/daemon/rate_coordinator.py \
-      src/mozart/daemon/backpressure.py --ignore-missing-imports 2>&1 | tail -20
+    mypy src/mozart/daemon/ --ignore-missing-imports 2>&1 | tail -30
     ```
     ```bash
-    ruff check src/mozart/daemon/scheduler.py src/mozart/daemon/rate_coordinator.py \
-      src/mozart/daemon/backpressure.py 2>&1 | tail -20
+    ruff check src/mozart/daemon/ 2>&1 | tail -20
     ```
     ```bash
     python -c "
+    from mozart.daemon.config import DaemonConfig
+    from mozart.daemon.process import DaemonProcess
+    from mozart.daemon.manager import JobManager
+    from mozart.daemon.monitor import ResourceMonitor
     from mozart.daemon.scheduler import GlobalSheetScheduler
     from mozart.daemon.rate_coordinator import RateLimitCoordinator
     from mozart.daemon.backpressure import BackpressureController
-    print('Phase 3 imports OK')
+    from mozart.daemon.learning_hub import LearningHub
+    from mozart.daemon.ipc.server import IPCServer
+    from mozart.daemon.ipc.client import IPCClient
+    print('ALL DAEMON IMPORTS OK')
     "
     ```
     ```bash
@@ -516,8 +561,15 @@ prompt:
     test $? -le 1 && echo "CLI canary PASSED" || echo "CLI canary FAILED"
     ```
 
-    Create summary with: Phase 3 test counts (before→after), issues by category,
-    issues fixed per batch, wiring status update, production readiness, verdict.
+    Read BOTH batch 3 results:
+    - {{ workspace }}/11-batch3-even-fixes.md
+    - {{ workspace }}/11-batch3-odd-fixes.md
+    - {{ workspace }}/12-batch3-even-completion.md
+    - {{ workspace }}/12-batch3-odd-completion.md
+
+    Create summary with: Daemon test counts (before->after), issues by category,
+    issues fixed per batch (including batch 3 even/odd breakdown),
+    production readiness assessment, verdict.
 
     **Output to:** {{ workspace }}/13-summary.md
 
@@ -532,7 +584,8 @@ prompt:
     git status --short | grep -E "\.py$" | head -30
     ```
 
-    Read batch files (07 through 13) and build commit message listing every
+    Read batch files (07 through 13, including 11-batch3-even/odd and
+    12-batch3-even/odd) and build commit message listing every
     fixed issue by ID. Write to {{ workspace }}/14-commit-message.txt.
 
     Stage ONLY touched .py files explicitly. Sync with remote, commit, push.
@@ -552,8 +605,8 @@ prompt:
 
     {{ branch_checkout }}
 
-    Read {{ workspace }}/14-commit.md. If "committed" → pass-through.
-    If "conflicts_pending" → resolve, test, commit, push.
+    Read {{ workspace }}/14-commit.md. If "committed" -> pass-through.
+    If "conflicts_pending" -> resolve, test, commit, push.
 
     **Output to:** {{ workspace }}/15-merge-resolution.md
 
@@ -567,9 +620,7 @@ prompt:
     {{ branch_checkout }}
 
     ```bash
-    pytest tests/test_daemon_scheduler.py tests/test_daemon_rate_coordinator.py \
-      tests/test_daemon_backpressure.py -v --tb=short 2>&1 | tail -40
-    pytest tests/test_daemon_*.py -v --tb=short 2>&1 | tail -40
+    pytest tests/test_daemon_*.py -v --tb=short 2>&1 | tail -50
     pytest tests/ -x --timeout=120 -q 2>&1 | tail -10
     python -c "
     from mozart.daemon.config import DaemonConfig
@@ -586,12 +637,8 @@ prompt:
     " 2>&1
     mozart validate examples/sheet-review.yaml --json 2>/dev/null
     echo "Exit code: $?"
-    echo "Scheduler tests:"
-    pytest tests/test_daemon_scheduler.py -q --tb=no 2>&1 | tail -1
-    echo "Rate coordinator tests:"
-    pytest tests/test_daemon_rate_coordinator.py -q --tb=no 2>&1 | tail -1
-    echo "Backpressure tests:"
-    pytest tests/test_daemon_backpressure.py -q --tb=no 2>&1 | tail -1
+    echo "All daemon tests:"
+    pytest tests/test_daemon_*.py -q --tb=no 2>&1 | tail -1
     ```
 
     **Output to:** {{ workspace }}/16-final-verification.md
@@ -603,19 +650,27 @@ prompt:
   variables:
     preamble: |
       ╔══════════════════════════════════════════════════════════════════════════╗
-      ║       PHASE 3 HARDENING & WIRING                                      ║
-      ║  Scheduler · Rate Coordinator · Backpressure                          ║
-      ║  Built & tested, NOT wired. HARDEN then WIRE.                        ║
+      ║       DAEMON SYMPHONY: QUALITY REVIEW                                  ║
+      ║                                                                        ║
+      ║  Targeted review of the daemon-symphony branch                         ║
+      ║  Focus: integration, real testing, production readiness                ║
       ╚══════════════════════════════════════════════════════════════════════════╝
 
-      **Project:** /home/emzi/Projects/mozart-ai-compose
-      **Branch:** daemon-symphony (return to main at end)
+      **Project:** Mozart AI Compose at /home/emzi/Projects/mozart-ai-compose
+      **Branch:** daemon-symphony (all work happens here, return to main at end)
+
+      **The Daemon Quality Checklist:**
+      - Integration: Are components actually wired together?
+      - Testing: Are real scenarios tested, not just mocks?
+      - Failures: Does the daemon degrade gracefully?
+      - Resources: Are long-running resource leaks prevented?
+      - Compatibility: Does non-daemon Mozart still work?
 
     review_types:
-      1: "Scheduler"
-      2: "Rate Coordinator"
-      3: "Backpressure"
-      4: "Integration Gaps"
+      1: "Architecture"
+      2: "Testing"
+      3: "Code Quality"
+      4: "Integration"
 
     branch_checkout: |
       **Branch Protocol:**
@@ -624,7 +679,7 @@ prompt:
       git checkout daemon-symphony 2>/dev/null || true
       echo "Branch: $(git branch --show-current)"
       ```
-      NEVER commit to `main`. NEVER use `git add .` or `git add -A`.
+      NEVER commit to `main`. NEVER use `git add .` or `git add -A`. Only stage specific files.
 
     readonly_constraint: |
       **READ-ONLY stage (PARALLEL). Do NOT modify src/ or tests/.**
@@ -637,48 +692,59 @@ prompt:
 
     batch_rules: |
       **Rules:**
-      - Run Phase 3 tests after each change:
-        `pytest tests/test_daemon_scheduler.py tests/test_daemon_rate_coordinator.py tests/test_daemon_backpressure.py -x -q --tb=short`
+      - One logical change at a time
+      - Run daemon tests after each change: `pytest tests/test_daemon_*.py -x -q --tb=short`
       - Run full suite periodically: `pytest -x -q --tb=short`
-      - DO NOT SKIP unless genuinely blocked with evidence
-      - INVALID skips: "Risky", "Low benefit", "Extensive testing needed", "Better for future"
+      - DO NOT SKIP unless genuinely blocked
+      - "Already fixed" is acceptable ONLY if you verify it's actually fixed
+
+      **INVALID skip reasons (will fail validation):**
+      - "Risky" without specific test failure
+      - "Low benefit" — that's not your call
+      - "Extensive testing needed" — that IS the job
+      - "Better for future version" — do it now
 
 validations:
+  # Stage 1: Inventory
   - type: file_exists
-    path: "{workspace}/00-phase3-inventory.md"
-    description: "Phase 3 inventory must exist"
+    path: "{workspace}/00-daemon-inventory.md"
+    description: "Daemon inventory must exist"
     condition: "stage >= 1"
 
+  # Stage 2: Deep-dives (per-instance)
   - type: file_exists
-    path: "{workspace}/01-scheduler-deep-dive.md"
-    description: "Scheduler deep-dive must exist"
+    path: "{workspace}/01-architecture-review.md"
+    description: "Architecture review must exist"
     condition: "stage == 2 and instance == 1"
 
   - type: file_exists
-    path: "{workspace}/02-rate-coordinator-deep-dive.md"
-    description: "Rate coordinator deep-dive must exist"
+    path: "{workspace}/02-testing-review.md"
+    description: "Testing review must exist"
     condition: "stage == 2 and instance == 2"
 
   - type: file_exists
-    path: "{workspace}/03-backpressure-deep-dive.md"
-    description: "Backpressure deep-dive must exist"
+    path: "{workspace}/03-code-quality-review.md"
+    description: "Code quality review must exist"
     condition: "stage == 2 and instance == 3"
 
   - type: file_exists
-    path: "{workspace}/04-integration-gaps.md"
-    description: "Integration gaps must exist"
+    path: "{workspace}/04-integration-review.md"
+    description: "Integration review must exist"
     condition: "stage == 2 and instance == 4"
 
+  # Stage 3: Category discovery
   - type: file_exists
-    path: "{workspace}/05-gap-analysis.yaml"
-    description: "Gap analysis must exist"
+    path: "{workspace}/05-category-discovery.yaml"
+    description: "Category discovery must exist"
     condition: "stage >= 3"
 
+  # Stage 4: Fix plan
   - type: file_exists
-    path: "{workspace}/06-hardening-plan.md"
-    description: "Hardening plan must exist"
+    path: "{workspace}/06-fix-plan.md"
+    description: "Fix plan must exist"
     condition: "stage >= 4"
 
+  # Stage 5: Batch 1 fixes
   - type: file_exists
     path: "{workspace}/07-batch1-fixes.md"
     description: "Batch 1 results must exist"
@@ -700,11 +766,13 @@ validations:
     description: "Batch 1 >=70% completion"
     condition: "stage >= 5"
 
+  # Stage 6: Batch 1 completion
   - type: file_exists
     path: "{workspace}/08-batch1-completion.md"
     description: "Batch 1 completion must exist"
     condition: "stage >= 6"
 
+  # Stage 7: Batch 2 fixes
   - type: file_exists
     path: "{workspace}/09-batch2-fixes.md"
     description: "Batch 2 results must exist"
@@ -726,19 +794,26 @@ validations:
     description: "Batch 2 >=70% completion"
     condition: "stage >= 7"
 
+  # Stage 8: Batch 2 completion
   - type: file_exists
     path: "{workspace}/10-batch2-completion.md"
     description: "Batch 2 completion must exist"
     condition: "stage >= 8"
 
+  # Stage 9: Batch 3 fixes (fanned out — even/odd)
   - type: file_exists
-    path: "{workspace}/11-batch3-fixes.md"
-    description: "Batch 3 results must exist"
-    condition: "stage >= 9"
+    path: "{workspace}/11-batch3-even-fixes.md"
+    description: "Batch 3 even fixes must exist"
+    condition: "(stage == 9 and instance == 1) or stage >= 11"
+
+  - type: file_exists
+    path: "{workspace}/11-batch3-odd-fixes.md"
+    description: "Batch 3 odd fixes must exist"
+    condition: "(stage == 9 and instance == 2) or stage >= 11"
 
   - type: command_succeeds
     command: |
-      FILE="{workspace}/11-batch3-fixes.md"
+      FILE="{workspace}/11-batch3-even-fixes.md"
       if [ ! -f "$FILE" ]; then exit 1; fi
       COMPLETION=$(grep -oE 'Completion.*[0-9]+%' "$FILE" | grep -oE '[0-9]+' | head -1)
       if [ -z "$COMPLETION" ]; then
@@ -749,29 +824,55 @@ validations:
         fi
       fi
       [ -n "$COMPLETION" ] && [ "$COMPLETION" -ge 50 ]
-    description: "Batch 3 >=50% completion"
-    condition: "stage >= 9"
+    description: "Batch 3 even >=50% completion"
+    condition: "(stage == 9 and instance == 1) or stage >= 11"
+
+  - type: command_succeeds
+    command: |
+      FILE="{workspace}/11-batch3-odd-fixes.md"
+      if [ ! -f "$FILE" ]; then exit 1; fi
+      COMPLETION=$(grep -oE 'Completion.*[0-9]+%' "$FILE" | grep -oE '[0-9]+' | head -1)
+      if [ -z "$COMPLETION" ]; then
+        FIXED=$(grep -E '^\*\*Fixed:\*\*' "$FILE" | grep -oE '[0-9]+' | head -1)
+        TOTAL=$(grep -E '^\*\*Total:\*\*' "$FILE" | grep -oE '[0-9]+' | head -1)
+        if [ -n "$FIXED" ] && [ -n "$TOTAL" ] && [ "$TOTAL" -gt 0 ]; then
+          COMPLETION=$((FIXED * 100 / TOTAL))
+        fi
+      fi
+      [ -n "$COMPLETION" ] && [ "$COMPLETION" -ge 50 ]
+    description: "Batch 3 odd >=50% completion"
+    condition: "(stage == 9 and instance == 2) or stage >= 11"
+
+  # Stage 10: Batch 3 completion (fanned out — even/odd)
+  - type: file_exists
+    path: "{workspace}/12-batch3-even-completion.md"
+    description: "Batch 3 even completion must exist"
+    condition: "(stage == 10 and instance == 1) or stage >= 11"
 
   - type: file_exists
-    path: "{workspace}/12-batch3-completion.md"
-    description: "Batch 3 completion must exist"
-    condition: "stage >= 10"
+    path: "{workspace}/12-batch3-odd-completion.md"
+    description: "Batch 3 odd completion must exist"
+    condition: "(stage == 10 and instance == 2) or stage >= 11"
 
+  # Stage 11: Summary
   - type: file_exists
     path: "{workspace}/13-summary.md"
     description: "Summary must exist"
     condition: "stage >= 11"
 
+  # Stage 12: Commit
   - type: file_exists
     path: "{workspace}/14-commit.md"
     description: "Commit report must exist"
     condition: "stage >= 12"
 
+  # Stage 13: Merge resolution
   - type: file_exists
     path: "{workspace}/15-merge-resolution.md"
     description: "Merge resolution must exist"
     condition: "stage >= 13"
 
+  # Stage 14: Final verification
   - type: file_exists
     path: "{workspace}/16-final-verification.md"
     description: "Final verification must exist"
@@ -783,8 +884,8 @@ validations:
     condition: "stage == 14"
 
   - type: command_succeeds
-    command: "cd /home/emzi/Projects/mozart-ai-compose && git checkout daemon-symphony -q && .venv/bin/python -c 'from mozart.daemon.scheduler import GlobalSheetScheduler; from mozart.daemon.rate_coordinator import RateLimitCoordinator; from mozart.daemon.backpressure import BackpressureController; print(\"OK\")' ; _r=$?; git checkout main -q; exit $_r"
-    description: "Phase 3 imports succeed"
+    command: "cd /home/emzi/Projects/mozart-ai-compose && git checkout daemon-symphony -q && .venv/bin/python -c 'from mozart.daemon.config import DaemonConfig; from mozart.daemon.process import DaemonProcess; from mozart.daemon.manager import JobManager; from mozart.daemon.ipc.server import IPCServer; print(\"OK\")' ; _r=$?; git checkout main -q; exit $_r"
+    description: "Daemon imports succeed"
     condition: "stage >= 14"
 
   - type: command_succeeds
@@ -798,14 +899,14 @@ validations:
     condition: "stage >= 14"
 
   - type: command_succeeds
-    command: "cd /home/emzi/Projects/mozart-ai-compose && git checkout daemon-symphony -q && .venv/bin/pytest tests/test_daemon_scheduler.py tests/test_daemon_rate_coordinator.py tests/test_daemon_backpressure.py -q --tb=no --no-header 2>&1 | tail -1 | grep -qoE '[0-9]+ passed' ; _r=$?; git checkout main -q; exit $_r"
-    description: "Phase 3 component tests pass"
+    command: "cd /home/emzi/Projects/mozart-ai-compose && git checkout daemon-symphony -q && .venv/bin/pytest tests/test_daemon_*.py -q --tb=no --no-header 2>&1 | tail -1 | grep -qoE '[0-9]+ passed' ; _r=$?; git checkout main -q; exit $_r"
+    description: "All daemon tests pass"
     condition: "stage >= 14"
 
 on_success:
   - type: run_job
     job_path: "examples/quality-continuous-daemon.yaml"
-    description: "Chain to next Phase 3 iteration"
+    description: "Chain to next daemon quality iteration"
     detached: true
     fresh: true
     job_workspace: "workspaces/quality-daemon-workspace"
