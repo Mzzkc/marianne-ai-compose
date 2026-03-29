@@ -7,6 +7,7 @@ grounding engine, and summary display.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -410,3 +411,78 @@ async def handle_job_completion(
                 error_message=f"Score failed with status: {state.status.value}",
                 sheet_num=state.current_sheet,
             )
+
+
+# =============================================================================
+# Input validation utilities
+# =============================================================================
+
+# Pattern for valid job IDs: alphanumeric, hyphens, underscores, dots
+_JOB_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$")
+_JOB_ID_MAX_LENGTH = 100
+
+
+def validate_job_id(job_id: str) -> str:
+    """Validate a job ID from CLI input.
+
+    Job IDs must be alphanumeric with hyphens, underscores, and dots allowed.
+    Must start with an alphanumeric character. Maximum 100 characters.
+
+    Args:
+        job_id: The raw job ID string from CLI input.
+
+    Returns:
+        The validated job ID (unchanged if valid).
+
+    Raises:
+        typer.BadParameter: If the job ID is invalid.
+    """
+    import typer
+
+    if not job_id:
+        raise typer.BadParameter("Job ID cannot be empty")
+
+    if len(job_id) > _JOB_ID_MAX_LENGTH:
+        raise typer.BadParameter(
+            f"Job ID too long ({len(job_id)} chars, max {_JOB_ID_MAX_LENGTH})"
+        )
+
+    if not _JOB_ID_PATTERN.match(job_id):
+        raise typer.BadParameter(
+            f"Invalid job ID '{job_id}'. "
+            "Must start with a letter or digit and contain only "
+            "letters, digits, hyphens, underscores, and dots."
+        )
+
+    return job_id
+
+
+def validate_start_sheet(start_sheet: int | None, total_sheets: int | None = None) -> int | None:
+    """Validate --start-sheet value.
+
+    Args:
+        start_sheet: The raw start sheet value (None if not provided).
+        total_sheets: Total sheets in the score (for range check, optional).
+
+    Returns:
+        The validated start_sheet value (unchanged if valid, None if not provided).
+
+    Raises:
+        typer.BadParameter: If the start sheet value is invalid.
+    """
+    import typer
+
+    if start_sheet is None:
+        return None
+
+    if start_sheet < 1:
+        raise typer.BadParameter(
+            f"--start-sheet must be >= 1, got {start_sheet}"
+        )
+
+    if total_sheets is not None and start_sheet > total_sheets:
+        raise typer.BadParameter(
+            f"--start-sheet {start_sheet} exceeds total sheets ({total_sheets})"
+        )
+
+    return start_sheet

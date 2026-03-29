@@ -23,6 +23,7 @@ from mozart.core.logging import get_logger
 
 from ..helpers import await_early_failure, is_quiet
 from ..output import console
+from ._shared import validate_start_sheet
 
 _logger = get_logger("cli.run")
 
@@ -99,6 +100,9 @@ def run(
         else:
             console.print(f"[red]Error loading config:[/red] {e}")
         raise typer.Exit(1) from None
+
+    # Validate start_sheet (must be positive if provided)
+    start_sheet = validate_start_sheet(start_sheet)
 
     # Override workspace from CLI if provided
     if workspace is not None:
