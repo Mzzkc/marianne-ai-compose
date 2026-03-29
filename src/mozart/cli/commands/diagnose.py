@@ -56,6 +56,7 @@ from ..output import (
     format_duration,
     format_error_details,
     infer_error_type,
+    output_error,
 )
 
 # =============================================================================
@@ -459,10 +460,11 @@ async def _errors_job(
     try:
         routed, result = await try_daemon_route("job.errors", params)
     except JobSubmissionError as err:
-        if json_output:
-            console.print(json_module.dumps({"error": f"Score not found: {job_id}"}))
-        else:
-            console.print(f"[red]Score not found:[/red] {job_id}")
+        output_error(
+            f"Score not found: {job_id}",
+            hints=["Run 'mozart list' to see available scores."],
+            json_output=json_output,
+        )
         raise typer.Exit(1) from err
 
     found_job: CheckpointState | None = None
@@ -479,10 +481,11 @@ async def _errors_job(
         return
 
     if found_job is None:
-        if json_output:
-            console.print(json_module.dumps({"error": f"Score not found: {job_id}"}))
-        else:
-            console.print(f"[red]Score not found:[/red] {job_id}")
+        output_error(
+            f"Score not found: {job_id}",
+            hints=["Run 'mozart list' to see available scores."],
+            json_output=json_output,
+        )
         raise typer.Exit(1)
 
     # Collect all errors from sheet states
@@ -708,10 +711,12 @@ async def _diagnose_job(
         routed, result = await try_daemon_route("job.diagnose", params)
     except JobSubmissionError as err:
         # Conductor confirmed: job not found.
-        if json_output:
-            console.print(json_module.dumps({"error": f"Score not found: {job_id}"}))
-        else:
-            console.print(f"[red]Score not found:[/red] {job_id}")
+        output_error(
+            f"Score not found: {job_id}",
+            hints=["Run 'mozart list' to see available scores.",
+                   "Run 'mozart doctor' to check your environment."],
+            json_output=json_output,
+        )
         raise typer.Exit(1) from err
 
     found_job: CheckpointState | None = None
@@ -735,10 +740,12 @@ async def _diagnose_job(
         return
 
     if found_job is None:
-        if json_output:
-            console.print(json_module.dumps({"error": f"Score not found: {job_id}"}))
-        else:
-            console.print(f"[red]Score not found:[/red] {job_id}")
+        output_error(
+            f"Score not found: {job_id}",
+            hints=["Run 'mozart list' to see available scores.",
+                   "Run 'mozart doctor' to check your environment."],
+            json_output=json_output,
+        )
         raise typer.Exit(1)
 
     # Build diagnostic report
@@ -1459,10 +1466,11 @@ async def _history_job(
     try:
         routed, result = await try_daemon_route("job.history", params)
     except JobSubmissionError as err:
-        if json_output:
-            console.print(json_module.dumps({"error": f"Score not found: {job_id}"}))
-        else:
-            console.print(f"[red]Score not found:[/red] {job_id}")
+        output_error(
+            f"Score not found: {job_id}",
+            hints=["Run 'mozart list' to see available scores."],
+            json_output=json_output,
+        )
         raise typer.Exit(1) from err
 
     records: list[dict[str, Any]] = []

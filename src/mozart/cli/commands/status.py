@@ -63,6 +63,7 @@ from ..output import (
     format_duration,
     format_timestamp,
     format_validation_status,
+    output_error,
 )
 from ..output import (
     infer_error_type as _infer_error_type,
@@ -199,10 +200,11 @@ async def _status_job(
         routed, result = await try_daemon_route("job.status", params)
     except JobSubmissionError:
         # Conductor confirmed: job not found.
-        if json_output:
-            console.print(json.dumps({"error": f"Score not found: {job_id}"}, indent=2))
-        else:
-            console.print(f"[red]{ErrorMessages.JOB_NOT_FOUND}:[/red] {job_id}")
+        output_error(
+            f"Score not found: {job_id}",
+            hints=["Run 'mozart list' to see available scores."],
+            json_output=json_output,
+        )
         raise typer.Exit(1) from None
     except Exception as exc:
         # Conductor error (crash, resource exhaustion, etc.) — report truthfully.
@@ -226,10 +228,11 @@ async def _status_job(
     elif routed and not result:
         # Conductor returned None — shouldn't happen with current protocol,
         # but handle gracefully.
-        if json_output:
-            console.print(json.dumps({"error": f"Score not found: {job_id}"}, indent=2))
-        else:
-            console.print(f"[red]{ErrorMessages.JOB_NOT_FOUND}:[/red] {job_id}")
+        output_error(
+            f"Score not found: {job_id}",
+            hints=["Run 'mozart list' to see available scores."],
+            json_output=json_output,
+        )
         raise typer.Exit(1)
     else:
         # Conductor not available — require it unless workspace is given

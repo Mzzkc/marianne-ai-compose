@@ -652,6 +652,12 @@ class JobConfig(BaseModel):
         """Load job configuration from a YAML file."""
         with open(path) as f:
             data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            raise ValueError(
+                "The score file is empty or invalid. "
+                "A Mozart score requires at minimum: name, sheet, and prompt sections. "
+                "See 'mozart validate --help' or the score writing guide for examples."
+            )
         # Pre-resolve relative workspace relative to the score file's parent
         # directory, not the current process CWD (#109).  This is critical when
         # the daemon loads a score whose path differs from the daemon's CWD.
@@ -665,6 +671,11 @@ class JobConfig(BaseModel):
     def from_yaml_string(cls, yaml_str: str) -> JobConfig:
         """Load job configuration from a YAML string."""
         data = yaml.safe_load(yaml_str)
+        if not isinstance(data, dict):
+            raise ValueError(
+                "The score content is empty or invalid. "
+                "A Mozart score requires at minimum: name, sheet, and prompt sections."
+            )
         return cls.model_validate(data)
 
     def get_state_path(self) -> Path:

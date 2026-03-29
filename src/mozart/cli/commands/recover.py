@@ -31,7 +31,7 @@ from mozart.core.config import JobConfig
 from mozart.execution.validation import ValidationEngine
 
 from ..helpers import configure_global_logging, require_conductor
-from ..output import console
+from ..output import console, output_error
 
 
 def recover(
@@ -102,7 +102,10 @@ async def _recover_job(
     try:
         routed, result = await try_daemon_route("job.recover", params)
     except JobSubmissionError as err:
-        console.print(f"[red]Score not found:[/red] {job_id}")
+        output_error(
+            f"Score not found: {job_id}",
+            hints=["Run 'mozart list' to see available scores."],
+        )
         raise typer.Exit(1) from err
 
     state: CheckpointState | None = None
@@ -121,7 +124,10 @@ async def _recover_job(
         return
 
     if state is None:
-        console.print(f"[red]Score not found:[/red] {job_id}")
+        output_error(
+            f"Score not found: {job_id}",
+            hints=["Run 'mozart list' to see available scores."],
+        )
         raise typer.Exit(1)
 
     # Reconstruct config from snapshot

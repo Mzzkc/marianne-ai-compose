@@ -37,11 +37,13 @@ mozart --version
 
 ## Prerequisites
 
-Mozart uses Claude CLI as its default backend. Ensure you have:
+Mozart uses Claude CLI as its default instrument. Ensure you have:
 
 1. **Claude CLI installed**: Follow [Claude CLI installation guide](https://docs.anthropic.com/claude-code)
 2. **API access configured**: Claude CLI should be authenticated
 3. **Daemon support installed**: `pip install -e ".[daemon]"` or `./setup.sh --daemon`
+
+After installation, run `mozart doctor` to verify your environment is ready.
 
 ## How Sheets Work
 
@@ -108,11 +110,13 @@ Before running, validate the configuration:
 mozart validate my-first-job.yaml
 ```
 
-You should see:
+You should see validation checks running:
 ```
-Valid configuration: my-first-job
-  Sheets: 3 (10 items each)
-  Validations: 1
+Validating my-first-job.yaml...
+  ✓ YAML syntax valid
+  ✓ Schema validation passed
+  Running extended validation checks...
+  ✓ All checks passed
 ```
 
 ### Step 3: Dry Run
@@ -424,9 +428,9 @@ mozart dashboard --port 3000
 
 ### Job Won't Start
 
-1. Check config: `mozart validate config.yaml`
-2. Verify Claude CLI: `claude --version`
-3. Check workspace exists: `ls -la ./workspace`
+1. Run `mozart doctor` to check your environment
+2. Check config: `mozart validate config.yaml`
+3. Verify your instrument is available: `mozart instruments list`
 
 ### Validation Failing
 
