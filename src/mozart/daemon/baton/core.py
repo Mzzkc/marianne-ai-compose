@@ -104,6 +104,7 @@ class _JobRecord:
     sheets: dict[int, SheetExecutionState]
     dependencies: dict[int, list[int]]
     paused: bool = False
+    user_paused: bool = False  # Tracks user-initiated pause (PauseJob)
     created_at: float = field(default_factory=time.time)
 
 
@@ -392,6 +393,20 @@ class BatonCore:
             )
             return
 
+        # Terminal guard: once a sheet reaches a terminal state, no event
+        # can change it. Late-arriving results (e.g., from cancelled tasks)
+        # are safely ignored.
+        if sheet.status in _TERMINAL_STATUSES:
+            _logger.debug(
+                "baton.attempt_result.terminal_noop",
+                extra={
+                    "job_id": event.job_id,
+                    "sheet_num": event.sheet_num,
+                    "status": sheet.status,
+                },
+            )
+            return
+
         # Record the attempt
         sheet.attempt_results.append(event)
 
@@ -409,10 +424,19 @@ class BatonCore:
             )
             return
 
+        # F-018 guard: when execution succeeds with no validations,
+        # treat as 100% pass rate regardless of the default value.
+        # A musician that reports execution_success=True with
+        # validations_total=0 should not trigger unnecessary retries.
+        effective_pass_rate = event.validation_pass_rate
         if (
             event.execution_success
-            and event.validation_pass_rate >= 100.0
+            and event.validations_total == 0
+            and effective_pass_rate < 100.0
         ):
+            effective_pass_rate = 100.0
+
+        if event.execution_success and effective_pass_rate >= 100.0:
             # Perfect execution — mark complete
             sheet.status = "completed"
             self._state_dirty = True
@@ -427,7 +451,7 @@ class BatonCore:
             )
             return
 
-        if event.execution_success and event.validation_pass_rate > 0:
+        if event.execution_success and effective_pass_rate > 0:
             # Partial pass — could use completion mode in the future
             sheet.normal_attempts += 1
         elif not event.execution_success:
@@ -442,6 +466,7 @@ class BatonCore:
                         "sheet_num": event.sheet_num,
                     },
                 )
+                self._propagate_failure_to_dependents(event.job_id, event.sheet_num)
                 return
             sheet.normal_attempts += 1
         else:
@@ -460,6 +485,7 @@ class BatonCore:
                     "attempts": sheet.normal_attempts,
                 },
             )
+            self._propagate_failure_to_dependents(event.job_id, event.sheet_num)
         else:
             # Schedule retry
             sheet.status = "retry_scheduled"
@@ -494,13 +520,17 @@ class BatonCore:
         )
 
     def _handle_rate_limit_hit(self, event: RateLimitHit) -> None:
-        """Mark instrument as rate-limited. NOT a sheet failure."""
-        # The sheet that triggered this goes back to waiting
+        """Mark instrument as rate-limited. NOT a sheet failure.
+
+        Only transition sheets that are currently dispatched or running.
+        Pending/ready sheets haven't been sent to an instrument yet;
+        terminal sheets must never regress.
+        """
         job = self._jobs.get(event.job_id)
         if job is None:
             return
         sheet = job.sheets.get(event.sheet_num)
-        if sheet is not None:
+        if sheet is not None and sheet.status in ("dispatched", "running"):
             sheet.status = "waiting"
         self._state_dirty = True
 
@@ -551,13 +581,17 @@ class BatonCore:
         self._state_dirty = True
 
     def _handle_escalation_resolved(self, event: EscalationResolved) -> None:
-        """Composer made a decision on a fermata."""
+        """Composer made a decision on a fermata.
+
+        Only unpauses the job if the user didn't also pause it.
+        A user-initiated pause (PauseJob) is independent of escalation.
+        """
         job = self._jobs.get(event.job_id)
         if job is None:
             return
         sheet = job.sheets.get(event.sheet_num)
         if sheet is not None and sheet.status == "fermata":
-            # Apply decision — simplified for now
+            # Apply decision
             if event.decision == "retry":
                 sheet.status = "pending"
             elif event.decision == "skip":
@@ -566,32 +600,43 @@ class BatonCore:
                 sheet.status = "completed"
             else:
                 sheet.status = "failed"
-        job.paused = False
+                self._propagate_failure_to_dependents(event.job_id, event.sheet_num)
+        # Only unpause if the user hasn't independently paused the job
+        if not job.user_paused:
+            job.paused = False
         self._state_dirty = True
 
     def _handle_escalation_timeout(self, event: EscalationTimeout) -> None:
-        """No escalation response — default to safe action (fail sheet)."""
+        """No escalation response — default to safe action (fail sheet).
+
+        Only unpauses if the user didn't also pause the job.
+        """
         job = self._jobs.get(event.job_id)
         if job is None:
             return
         sheet = job.sheets.get(event.sheet_num)
         if sheet is not None and sheet.status == "fermata":
             sheet.status = "failed"
-        job.paused = False
+            self._propagate_failure_to_dependents(event.job_id, event.sheet_num)
+        # Only unpause if the user hasn't independently paused the job
+        if not job.user_paused:
+            job.paused = False
         self._state_dirty = True
 
     def _handle_pause_job(self, event: PauseJob) -> None:
-        """Pause dispatching for a job."""
+        """Pause dispatching for a job (user-initiated)."""
         job = self._jobs.get(event.job_id)
         if job is not None:
             job.paused = True
+            job.user_paused = True
             self._state_dirty = True
 
     def _handle_resume_job(self, event: ResumeJob) -> None:
-        """Resume dispatching for a paused job."""
+        """Resume dispatching for a paused job (user-initiated)."""
         job = self._jobs.get(event.job_id)
         if job is not None:
             job.paused = False
+            job.user_paused = False
             self._state_dirty = True
 
     def _handle_cancel_job(self, event: CancelJob) -> None:
@@ -631,8 +676,72 @@ class BatonCore:
             sheet.normal_attempts += 1
             if sheet.normal_attempts >= sheet.max_retries:
                 sheet.status = "failed"
+                self._propagate_failure_to_dependents(event.job_id, event.sheet_num)
             else:
                 sheet.status = "retry_scheduled"
+            self._state_dirty = True
+
+    # =========================================================================
+    # Dependency Failure Propagation
+    # =========================================================================
+
+    def _propagate_failure_to_dependents(
+        self, job_id: str, failed_sheet_num: int
+    ) -> None:
+        """Mark all transitive dependents of a failed sheet as failed.
+
+        When a sheet fails (retries exhausted, auth failure, etc.), its
+        dependent sheets can never be satisfied — they'd sit in pending
+        forever, creating zombie jobs. This method cascades the failure
+        to all downstream sheets using iterative BFS.
+
+        Only non-terminal sheets are affected. Completed, skipped, and
+        already-failed sheets are left unchanged.
+        """
+        job = self._jobs.get(job_id)
+        if job is None:
+            return
+
+        # Build a reverse dependency map: sheet_num → list of sheets that depend on it
+        dependents: dict[int, list[int]] = {}
+        for sheet_num, deps in job.dependencies.items():
+            for dep in deps:
+                if dep not in dependents:
+                    dependents[dep] = []
+                dependents[dep].append(sheet_num)
+
+        # BFS from the failed sheet to all transitive dependents
+        queue = list(dependents.get(failed_sheet_num, []))
+        visited: set[int] = set()
+
+        while queue:
+            current = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+
+            sheet = job.sheets.get(current)
+            if sheet is None:
+                continue
+
+            # Only fail non-terminal sheets
+            if sheet.status not in _TERMINAL_STATUSES:
+                sheet.status = "failed"
+                _logger.info(
+                    "baton.sheet.dependency_failed",
+                    extra={
+                        "job_id": job_id,
+                        "sheet_num": current,
+                        "failed_dependency": failed_sheet_num,
+                    },
+                )
+
+            # Continue propagation to this sheet's dependents
+            for downstream in dependents.get(current, []):
+                if downstream not in visited:
+                    queue.append(downstream)
+
+        if visited:
             self._state_dirty = True
 
     # =========================================================================

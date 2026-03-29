@@ -103,13 +103,15 @@ class TestF018ValidationPassRateContract:
 
         state = baton.get_sheet_state("j1", 1)
         assert state is not None
-        # This is the CURRENT behavior — retry, not complete.
-        # F-018 says this is wrong when validations_total=0.
-        # Documenting actual behavior so step 22 knows.
-        assert state.status != "completed", (
-            "Sheet should NOT complete with default pass_rate=0.0"
+        # F-018 FIXED (Axiom, Movement 1): The baton now treats
+        # execution_success=True with validations_total=0 as 100% pass
+        # rate, regardless of the default validation_pass_rate value.
+        # This prevents unnecessary retries when no validations exist.
+        assert state.status == "completed", (
+            "Sheet with no validations and execution_success=True should "
+            "complete (F-018 guard)"
         )
-        assert state.normal_attempts == 1
+        assert state.normal_attempts == 0
 
     @pytest.mark.adversarial
     async def test_explicit_100_with_no_validations_completes(self) -> None:
@@ -189,8 +191,13 @@ class TestF018ValidationPassRateContract:
         assert state.status == "completed"
 
     @pytest.mark.adversarial
-    async def test_f018_exhaustion_from_default_rate(self) -> None:
-        """F-018 worst case: no validations + default rate exhausts all retries."""
+    async def test_f018_no_validations_completes_on_first_attempt(self) -> None:
+        """F-018 FIXED: no validations + default rate completes immediately.
+
+        Previously this would exhaust all retries and fail. Now the baton
+        recognizes validations_total=0 with execution_success=True as
+        100% pass rate.
+        """
         baton = BatonCore()
         sheets = {
             1: SheetExecutionState(
@@ -201,25 +208,24 @@ class TestF018ValidationPassRateContract:
         }
         baton.register_job("j1", sheets, {})
 
-        # Two "successful" attempts with default pass_rate — both retry
-        for attempt in range(1, 3):
-            await baton.handle_event(
-                SheetAttemptResult(
-                    job_id="j1",
-                    sheet_num=1,
-                    instrument_name="claude-code",
-                    attempt=attempt,
-                    execution_success=True,
-                    validations_total=0,
-                    validation_pass_rate=0.0,  # Default — the landmine
-                )
+        # First attempt succeeds with no validations — should complete
+        await baton.handle_event(
+            SheetAttemptResult(
+                job_id="j1",
+                sheet_num=1,
+                instrument_name="claude-code",
+                attempt=1,
+                execution_success=True,
+                validations_total=0,
+                validation_pass_rate=0.0,  # Default — no longer a landmine
             )
+        )
 
         state = baton.get_sheet_state("j1", 1)
         assert state is not None
-        # Sheet fails despite EVERY execution succeeding
-        assert state.status == "failed"
-        assert state.normal_attempts == 2
+        # Sheet completes on first attempt (F-018 guard active)
+        assert state.status == "completed"
+        assert state.normal_attempts == 0
 
 
 # ===========================================================================
@@ -902,7 +908,11 @@ class TestMultiEventInterleaving:
         assert baton.get_sheet_state("j1", 3).status == "completed"
     @pytest.mark.adversarial
     async def test_rate_limit_then_expired_restores_sheets(self) -> None:
-        """Rate limit → waiting → expired → pending. Full cycle."""
+        """Rate limit → waiting → expired → pending. Full cycle.
+
+        Note: RateLimitHit only affects dispatched/running sheets (Axiom fix).
+        A pending sheet should not transition to waiting.
+        """
         baton = BatonCore()
         sheets = {
             1: SheetExecutionState(sheet_num=1, instrument_name="claude-code"),
@@ -910,6 +920,9 @@ class TestMultiEventInterleaving:
             3: SheetExecutionState(sheet_num=3, instrument_name="gemini-cli"),
         }
         baton.register_job("j1", sheets, {})
+
+        # Sheet 1 must be dispatched for rate limit to transition it
+        sheets[1].status = "dispatched"
 
         # Rate limit on claude-code
         await baton.handle_event(
