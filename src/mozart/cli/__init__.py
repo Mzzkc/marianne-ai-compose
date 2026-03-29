@@ -57,6 +57,8 @@ from .commands import (
     clear,
     # diagnose.py
     diagnose,
+    # doctor.py
+    doctor,
     errors,
     history,
     # status.py
@@ -83,6 +85,7 @@ from .commands.conductor import (
 )
 from .commands.config_cmd import config_app
 from .commands.dashboard import dashboard, mcp
+from .commands.instruments import instruments_app
 from .commands.learning import (
     entropy_status,
     learning_activity,
@@ -118,7 +121,7 @@ from .output import console
 
 app = typer.Typer(
     name="mozart",
-    help="Orchestration tool for Claude AI sessions",
+    help="Orchestration system for AI agent workflows",
     add_completion=False,
 )
 
@@ -223,7 +226,7 @@ def main(
         ),
     ] = None,
 ) -> None:
-    """Mozart AI Compose - Orchestration tool for Claude AI sessions."""
+    """Mozart AI Compose - Orchestration system for AI agent workflows."""
     # Configure logging based on CLI options (called once)
     configure_global_logging(console)
 
@@ -233,66 +236,66 @@ def main(
 # =============================================================================
 
 # Job execution commands
-app.command()(run)
-app.command()(resume)
-app.command()(pause)
-app.command()(modify)
-app.command()(cancel)
+app.command(rich_help_panel="Jobs")(run)
+app.command(rich_help_panel="Jobs")(resume)
+app.command(rich_help_panel="Jobs")(pause)
+app.command(rich_help_panel="Jobs")(modify)
+app.command(rich_help_panel="Jobs")(cancel)
+app.command(rich_help_panel="Jobs")(validate)
 
 # Job status commands
-app.command()(status)
-app.command(name="list")(list_jobs)
-app.command()(clear)
-
-# Validation and recovery
-app.command()(validate)
-app.command(hidden=True)(recover)  # Hidden - recovery is advanced operation
+app.command(rich_help_panel="Monitoring")(status)
+app.command(name="list", rich_help_panel="Monitoring")(list_jobs)
+app.command(rich_help_panel="Monitoring")(top)
+app.command(rich_help_panel="Monitoring")(clear)
 
 # Diagnostic commands
-app.command()(logs)
-app.command()(errors)
-app.command()(diagnose)
-app.command()(history)
+app.command(rich_help_panel="Diagnostics")(logs)
+app.command(rich_help_panel="Diagnostics")(errors)
+app.command(rich_help_panel="Diagnostics")(diagnose)
+app.command(rich_help_panel="Diagnostics")(history)
+app.command(rich_help_panel="Diagnostics")(doctor)
+app.command(hidden=True)(recover)  # Hidden - recovery is advanced operation
 
 # Server commands
-app.command()(dashboard)
-app.command()(mcp)
-
-# Monitor commands
-app.command()(top)
+app.command(rich_help_panel="Services")(dashboard)
+app.command(rich_help_panel="Services")(mcp)
 
 # Conductor lifecycle commands
-app.command()(start)
-app.command()(stop)
-app.command()(restart)
-app.command(name="conductor-status")(conductor_status)
+app.command(rich_help_panel="Conductor")(start)
+app.command(rich_help_panel="Conductor")(stop)
+app.command(rich_help_panel="Conductor")(restart)
+app.command(name="conductor-status", rich_help_panel="Conductor")(conductor_status)
 
 # Daemon configuration
 app.add_typer(config_app)
+
+# Instrument management
+app.add_typer(instruments_app)
 
 # =============================================================================
 # Learning system commands
 # =============================================================================
 
 # Pattern analysis commands
-app.command(name="patterns-list")(patterns_list)
-app.command(name="patterns-why")(patterns_why)
-app.command(name="patterns-entropy")(patterns_entropy)
-app.command(name="patterns-budget")(patterns_budget)
+app.command(name="patterns-list", rich_help_panel="Learning")(patterns_list)
+app.command(name="patterns-why", rich_help_panel="Learning")(patterns_why)
+app.command(name="patterns-entropy", rich_help_panel="Learning")(patterns_entropy)
+app.command(name="patterns-budget", rich_help_panel="Learning")(patterns_budget)
 
 # Learning statistics and insights
-app.command(name="learning-stats")(learning_stats)
-app.command(name="learning-insights")(learning_insights)
-app.command(name="learning-drift")(learning_drift)
-app.command(name="learning-epistemic-drift")(learning_epistemic_drift)
-app.command(name="learning-activity")(learning_activity)
+app.command(name="learning-stats", rich_help_panel="Learning")(learning_stats)
+app.command(name="learning-insights", rich_help_panel="Learning")(learning_insights)
+app.command(name="learning-drift", rich_help_panel="Learning")(learning_drift)
+app.command(name="learning-epistemic-drift", rich_help_panel="Learning")(learning_epistemic_drift)
+app.command(name="learning-activity", rich_help_panel="Learning")(learning_activity)
 
 # Learning data export
-app.command(name="learning-export")(learning_export)
-app.command(name="learning-record-evolution")(learning_record_evolution)
+app.command(name="learning-export", rich_help_panel="Learning")(learning_export)
+app.command(name="learning-record-evolution", rich_help_panel="Learning")(learning_record_evolution)
 
 # System health monitoring
-app.command(name="entropy-status")(entropy_status)
+app.command(name="entropy-status", rich_help_panel="Learning")(entropy_status)
 
 
 # =============================================================================
