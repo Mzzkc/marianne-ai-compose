@@ -26,6 +26,7 @@ Each error code provides specific retry behavior guidance.
     | E003 | EXECUTION_CRASHED | No | CRITICAL | N/A |
     | E004 | EXECUTION_INTERRUPTED | No | ERROR | N/A |
     | E005 | EXECUTION_OOM | No | CRITICAL | N/A |
+    | E006 | EXECUTION_STALE | Yes | WARNING | 120s |
     | E009 | EXECUTION_UNKNOWN | Yes | ERROR | 10s |
 
 **E1xx - Rate Limit / Capacity Errors**
@@ -261,6 +262,9 @@ class ErrorCode(str, Enum):
     EXECUTION_OOM = "E005"
     """Process was killed due to out of memory condition."""
 
+    EXECUTION_STALE = "E006"
+    """Execution killed by stale detection — no output for too long."""
+
     EXECUTION_UNKNOWN = "E009"
     """Unknown execution error with non-zero exit code."""
 
@@ -469,6 +473,7 @@ class ErrorCode(str, Enum):
         warning_codes = {
             ErrorCode.CAPACITY_EXCEEDED,
             ErrorCode.VALIDATION_TIMEOUT,
+            ErrorCode.EXECUTION_STALE,
         }
         if self in warning_codes:
             return Severity.WARNING
@@ -502,6 +507,10 @@ _RETRY_BEHAVIORS: dict[ErrorCode, RetryBehavior] = {
     ErrorCode.EXECUTION_OOM: RetryBehavior(
         delay_seconds=0.0, is_retriable=False,
         reason="Out of memory - will likely recur",
+    ),
+    ErrorCode.EXECUTION_STALE: RetryBehavior(
+        delay_seconds=120.0, is_retriable=True,
+        reason="Stale detection killed execution - agent may need more time",
     ),
     ErrorCode.EXECUTION_UNKNOWN: RetryBehavior(
         delay_seconds=10.0, is_retriable=True,

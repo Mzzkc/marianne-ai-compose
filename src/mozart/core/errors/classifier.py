@@ -134,6 +134,12 @@ _DEFAULT_ENOENT_PATTERNS: list[str] = [
     r"not found in PATH",
 ]
 
+_DEFAULT_STALE_PATTERNS: list[str] = [
+    r"[Ss]tale execution",
+    r"no output for \d+s",
+    r"idle.{0,10}timeout",
+]
+
 # Output substrings that indicate a non-transient (non-retriable) failure
 # for exit codes 1/2 in _classify_by_exit_code.
 _NON_TRANSIENT_INDICATORS: tuple[str, ...] = (
@@ -189,6 +195,7 @@ class ErrorClassifier:
         self.mcp_patterns = _compile_patterns(_DEFAULT_MCP_PATTERNS)
         self.cli_mode_patterns = _compile_patterns(_DEFAULT_CLI_MODE_PATTERNS)
         self.enoent_patterns = _compile_patterns(_DEFAULT_ENOENT_PATTERNS)
+        self.stale_patterns = _compile_patterns(_DEFAULT_STALE_PATTERNS)
 
         # Pre-computed combined regex patterns for _matches_any().
         # Each pattern list is merged into a single alternation regex so that
@@ -198,7 +205,7 @@ class ErrorClassifier:
             "rate_limit_patterns", "auth_patterns", "network_patterns",
             "dns_patterns", "ssl_patterns", "capacity_patterns",
             "quota_exhaustion_patterns", "mcp_patterns",
-            "cli_mode_patterns", "enoent_patterns",
+            "cli_mode_patterns", "enoent_patterns", "stale_patterns",
         ):
             patterns = getattr(self, attr_name)
             if patterns:
@@ -335,16 +342,29 @@ class ErrorClassifier:
             return result
 
         # 2. Timeout exit reason (even without signal)
+        #    Differentiate stale detection (E006) from backend timeout (E001).
+        #    Stale detection writes "Stale execution:" to stderr — F-097.
         if exit_reason == "timeout":
+            is_stale = "stale execution" in combined.lower()
+            error_code = (
+                ErrorCode.EXECUTION_STALE if is_stale
+                else ErrorCode.EXECUTION_TIMEOUT
+            )
+            message = (
+                "Stale execution detected — no output activity"
+                if is_stale
+                else "Command timed out"
+            )
+            wait_seconds = 120.0 if is_stale else 60.0
             result = ClassifiedError(
                 category=ErrorCategory.TIMEOUT,
-                message="Command timed out",
-                error_code=ErrorCode.EXECUTION_TIMEOUT,
+                message=message,
+                error_code=error_code,
                 exit_code=exit_code,
                 exit_signal=None,
                 exit_reason=exit_reason,
                 retriable=True,
-                suggested_wait_seconds=60.0,
+                suggested_wait_seconds=wait_seconds,
             )
             _logger.warning(
                 _EVT_ERROR_CLASSIFIED,
@@ -975,17 +995,31 @@ class ErrorClassifier:
                     classification_method = "exit_code"
 
         elif exit_reason == "timeout":
+            # Differentiate stale detection (E006) from backend timeout (E001).
+            # Stale detection writes "Stale execution:" to stderr — F-097.
+            combined_for_stale = f"{stdout}\n{stderr}".lower()
+            is_stale = "stale execution" in combined_for_stale
+            timeout_code = (
+                ErrorCode.EXECUTION_STALE if is_stale
+                else ErrorCode.EXECUTION_TIMEOUT
+            )
+            timeout_message = (
+                "Stale execution detected — no output activity"
+                if is_stale
+                else "Command timed out"
+            )
+            timeout_wait = 120.0 if is_stale else 60.0
             timeout_error = ClassifiedError(
                 category=ErrorCategory.TIMEOUT,
-                message="Command timed out",
-                error_code=ErrorCode.EXECUTION_TIMEOUT,
+                message=timeout_message,
+                error_code=timeout_code,
                 exit_code=exit_code,
                 exit_signal=None,
                 exit_reason=exit_reason,
                 retriable=True,
-                suggested_wait_seconds=60.0,
+                suggested_wait_seconds=timeout_wait,
             )
-            if not any(e.error_code == ErrorCode.EXECUTION_TIMEOUT for e in all_errors):
+            if not any(e.error_code == timeout_code for e in all_errors):
                 all_errors.append(timeout_error)
                 if not json_errors:
                     classification_method = "exit_code"
@@ -1075,6 +1109,63 @@ class ErrorClassifier:
                 output_format=output_format,
             )
             all_errors.append(fallback_error)
+
+        # === PHASE 4.5: Rate Limit Override (always runs) ===
+        # Rate limits in stdout/stderr must never be missed, even when Phase 1
+        # found structured JSON errors that masked them. F-098: Claude CLI rate
+        # limit messages appear in stdout but Phase 1 may produce generic errors
+        # that prevent Phase 4 from firing.
+        has_rate_limit_error = any(
+            e.category == ErrorCategory.RATE_LIMIT for e in all_errors
+        )
+        if not has_rate_limit_error:
+            combined_for_rate_limit = f"{stdout}\n{stderr}"
+            if self._matches_any(combined_for_rate_limit, self.rate_limit_patterns):
+                # Check for quota exhaustion (more specific) first
+                if self._matches_any(
+                    combined_for_rate_limit, self.quota_exhaustion_patterns
+                ):
+                    wait_seconds = (
+                        self.parse_reset_time(combined_for_rate_limit)
+                        or DEFAULT_QUOTA_WAIT_SECONDS
+                    )
+                    rate_limit_error = ClassifiedError(
+                        category=ErrorCategory.RATE_LIMIT,
+                        message="Token quota exhausted — detected in output",
+                        error_code=ErrorCode.QUOTA_EXHAUSTED,
+                        original_error=exception,
+                        exit_code=exit_code,
+                        exit_signal=None,
+                        exit_reason=exit_reason,
+                        retriable=True,
+                        suggested_wait_seconds=wait_seconds,
+                    )
+                else:
+                    error_code = (
+                        ErrorCode.CAPACITY_EXCEEDED
+                        if self._matches_any(
+                            combined_for_rate_limit, self.capacity_patterns
+                        )
+                        else ErrorCode.RATE_LIMIT_API
+                    )
+                    rate_limit_error = ClassifiedError(
+                        category=ErrorCategory.RATE_LIMIT,
+                        message="Rate limit detected in output",
+                        error_code=error_code,
+                        original_error=exception,
+                        exit_code=exit_code,
+                        exit_signal=None,
+                        exit_reason=exit_reason,
+                        retriable=True,
+                        suggested_wait_seconds=DEFAULT_RATE_LIMIT_WAIT_SECONDS,
+                    )
+                all_errors.append(rate_limit_error)
+                _logger.warning(
+                    "rate_limit_override",
+                    component="errors",
+                    error_code=rate_limit_error.error_code.value,
+                    message="Rate limit detected via Phase 4.5 override",
+                )
 
         # === PHASE 5: Root Cause Selection ===
         root_cause, symptoms, confidence = select_root_cause(all_errors)

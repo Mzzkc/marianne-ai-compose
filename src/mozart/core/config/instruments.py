@@ -229,6 +229,13 @@ class CliOutputConfig(BaseModel):
         default=None,
         description="JSON dot-path to output token count",
     )
+    aggregate_tokens: bool = Field(
+        default=False,
+        description="When True, sum all wildcard matches for token paths "
+        "instead of returning the first match. Required for instruments "
+        "with multi-model routing (e.g., gemini-cli uses flash-lite for "
+        "routing and flash/pro for execution — tokens span both models).",
+    )
 
 
 class CliErrorConfig(BaseModel):
@@ -249,6 +256,24 @@ class CliErrorConfig(BaseModel):
     auth_error_patterns: list[str] = Field(
         default_factory=list,
         description="Regex patterns indicating authentication failures",
+    )
+    capacity_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regex patterns indicating capacity/overload errors (retriable)",
+    )
+    timeout_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regex patterns indicating timeout errors",
+    )
+    crash_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regex patterns indicating process crash or fatal errors "
+        "(segfault, bus error, abort, etc.)",
+    )
+    stale_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regex patterns indicating stale execution "
+        "(no output activity for too long)",
     )
 
     # Structured rate limit detection for stream-json instruments
