@@ -44,8 +44,8 @@ the tool and authenticating:
 
 ### Config-Driven Profiles
 
-These are defined as YAML files in `src/mozart/instruments/builtins/` and loaded
-at conductor startup:
+These ship as YAML profiles bundled with Mozart and are loaded at conductor
+startup:
 
 | Name | Tool | Auth |
 |------|------|------|
@@ -127,7 +127,7 @@ drop it in a directory Mozart scans.
 
 Mozart loads instrument profiles from three directories, in order:
 
-1. **Built-in** — `src/mozart/instruments/builtins/` (shipped with Mozart, lowest precedence)
+1. **Built-in** — shipped with Mozart (lowest precedence)
 2. **Organization** — `~/.mozart/instruments/` (shared across all projects)
 3. **Venue** — `.mozart/instruments/` (project-specific, highest precedence)
 
@@ -282,7 +282,7 @@ budget uses a conservative default.
 At conductor startup:
 
 1. **Native instruments** are registered first (4 built-in Python backends)
-2. **Built-in YAML profiles** are loaded from `src/mozart/instruments/builtins/`
+2. **Built-in YAML profiles** are loaded from Mozart's bundled instruments directory
 3. **Organization profiles** from `~/.mozart/instruments/` override built-ins
 4. **Venue profiles** from `.mozart/instruments/` override everything
 

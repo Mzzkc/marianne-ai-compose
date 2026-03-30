@@ -155,11 +155,11 @@ mozart validate examples/[example].yaml
 # Run the example
 mozart run examples/[example].yaml
 
-# Check status
-mozart status [job-name] --workspace ./[workspace]
+# Check status (conductor tracks the workspace automatically)
+mozart status [job-name]
 
 # Resume if interrupted
-mozart resume [job-name] --workspace ./[workspace]
+mozart resume [job-name]
 ```
 
 ### Running Long Jobs
@@ -171,7 +171,7 @@ For jobs that take hours (literature reviews, book authoring), run detached:
 setsid mozart run examples/nonfiction-book.yaml > book-workspace/mozart.log 2>&1 &
 
 # Monitor progress
-mozart status nonfiction-book -w ./book-workspace --watch
+mozart status nonfiction-book --watch
 ```
 
 ### Pausing and Modifying Jobs
@@ -180,15 +180,15 @@ Jobs can be paused gracefully and resumed with updated configuration:
 
 ```bash
 # Pause a running job
-mozart pause nonfiction-book -w ./book-workspace
+mozart pause nonfiction-book
 
 # Modify the config and resume in one step
-mozart modify nonfiction-book -c examples/nonfiction-book-v2.yaml -r -w ./book-workspace
+mozart modify nonfiction-book -c examples/nonfiction-book-v2.yaml -r
 
 # Or use the two-step workflow for inspection
-mozart pause my-job -w ./workspace
+mozart pause my-job
 # Inspect state, make config changes...
-mozart resume my-job -w ./workspace --config updated.yaml
+mozart resume my-job --config updated.yaml
 ```
 
 **When to use pause/modify:**
@@ -209,15 +209,15 @@ Where outputs go. Each job needs its own workspace.
 workspace: "./workspaces/my-project-workspace"
 ```
 
-### 2. Backend Configuration
-Working directory, timeout, model selection.
+### 2. Instrument Configuration
+Which AI tool to use and how to configure it.
 
 ```yaml
-backend:
-  type: claude_cli
-  working_directory: /path/to/source/files  # Where to read from
+# Use any registered instrument (see `mozart instruments list`)
+instrument: claude-code
+instrument_config:
   timeout_seconds: 3600  # 60 min for complex tasks
-  disable_mcp: true  # Performance optimization
+  # model: claude-sonnet-4-20250514  # Optional model override
 ```
 
 ### 3. Variables
