@@ -127,6 +127,9 @@ This is the highest priority task. You are running inside a live conductor. You 
 - [x] [Compass] Fix "Score not found" dead-end errors (F-030 P2) — migrated to output_error() with hints in status/diagnose/recover (priority: P2) [source: F-030]
 - [x] [Compass] Fix empty config crash (F-028 P1) — guard in JobConfig.from_yaml + from_yaml_string (priority: P1) [source: F-028]
 - [x] [Blueprint] Write prompt assembly characterization tests (51 tests) — D-003 (priority: P1) [source: North directive D-003]
+- [x] [Circuit] Fix F-068: "Completed:" timestamp hidden for RUNNING/PAUSED jobs (priority: P2) [source: F-068] — terminal status guard at status.py:1487, 4 TDD tests
+- [x] [Circuit] Fix F-069/F-092: V101 false positive on Jinja2 {% set %}/{% for %} variables (priority: P2) [source: F-069, F-092] — AST walker in jinja.py:250 extracts template-declared vars, 5 TDD tests, hello.yaml now validates clean
+- [x] [Circuit] Fix F-048: cost tracking when cost limits disabled (priority: P2) [source: F-048] — _track_cost() now runs before cost_limits.enabled gate in sheet.py, 2 TDD tests
 
 ---
 

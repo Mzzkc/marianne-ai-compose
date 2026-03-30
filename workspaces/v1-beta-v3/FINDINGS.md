@@ -428,7 +428,8 @@ Each finding should include:
 ### F-048: Cost Shows $0.00 for All Completed Sheets in Live Concert
 - **Found by:** Ember, Movement 1 (renumbered from F-042 by Captain — collision with Axiom's F-042)
 - **Severity:** P2 (medium — cost visibility gap)
-- **Status:** Open
+- **Status:** Resolved (movement 3, Circuit)
+- **Resolution:** Root cause found: `_enforce_cost_limits()` at `sheet.py:2432` returned early when `cost_limits.enabled=False`, skipping `_track_cost()` entirely. Cost tracking and limit enforcement were bundled — disabling limits disabled all cost visibility. Fix: moved `await self._track_cost()` BEFORE the `cost_limits.enabled` check so costs are always recorded for observability. 2 TDD tests: structural (track before gate) + integration (state populated with limits off).
 - **Description:** `mozart status mozart-orchestra-v3` shows "Cost: $0.00 (no limit set)" despite 21 completed sheets, some taking 30+ minutes. Either the instrument (claude-code CLI) doesn't report token counts in a format Mozart can parse, or cost tracking isn't wired for this execution path. The cost warning on submission ("Cost tracking is disabled") is good, but seeing $0.00 after real execution teaches users that cost tracking doesn't work.
 - **Impact:** Users can't learn about actual costs from status. The cost warning on run loses credibility when the tracked cost is always $0.00.
 - **Action:** Investigate whether claude-code CLI backend is extracting tokens from the JSON output. If the data isn't available, show "Cost: unknown" instead of "$0.00" — honesty over false precision.
@@ -660,7 +661,8 @@ Each finding should include:
 ### F-068: `Completed:` Timestamp Shown for RUNNING Scores
 - **Found by:** Ember, Movement 2
 - **Severity:** P2 (medium — confusing timestamp)
-- **Status:** Open
+- **Status:** Resolved (movement 3, Circuit)
+- **Resolution:** Added terminal status guard at `status.py:1487`: `Completed:` only shows when `job.status in {COMPLETED, FAILED, CANCELLED}`. 4 TDD tests prove: RUNNING hides, COMPLETED shows, FAILED shows, PAUSED hides.
 - **Description:** `mozart status mozart-orchestra-v3` shows `Completed: 2026-03-29 18:28:10 UTC` while the score is RUNNING. Code at `status.py:1484-1485` unconditionally prints `Completed:` when `job.completed_at` is set. The `completed_at` field is set when any sheet completes, not when the job finishes. A user monitoring a running score sees "Completed" and momentarily thinks the score finished.
 - **Impact:** Cognitive dissonance between RUNNING status and "Completed:" timestamp. User must figure out internal data model to understand.
 - **Action:** Only show `Completed:` when `job.status` is terminal (COMPLETED, FAILED, CANCELLED). The `Updated:` timestamp already covers the info need for running jobs.
@@ -668,7 +670,8 @@ Each finding should include:
 ### F-069: `hello.yaml` Validate Warning for `char` Is a False Positive (V101)
 - **Found by:** Ember, Movement 2
 - **Severity:** P2 (medium — misleads about score correctness)
-- **Status:** Open
+- **Status:** Resolved (movement 3, Circuit)
+- **Resolution:** Added `_extract_template_declared_vars()` to `JinjaUndefinedVariableCheck` at `jinja.py:250`. Walks the Jinja2 AST for `Assign` and `For` nodes, extracts variable names (including tuple unpacking targets), and excludes them from the undeclared set. Root cause: `jinja2_meta.find_undeclared_variables` doesn't track variables declared in conditional branches (`{% if %}/{% elif %}`). 5 TDD tests: for-loop vars, set vars, conditional branches, truly-undefined still flagged, hello.yaml produces zero warnings.
 - **Description:** `mozart validate examples/hello.yaml` warns: `[V101] Undefined variable 'char' in prompt.template`. The variable `char` is defined within the template via `{% for id, char in characters.items() %}` (line 92) and `{% set char = characters[instance] %}` (line 114). The V101 validator checks for `{{ }}` references but doesn't recognize Jinja2 `{% for %}` and `{% set %}` as variable definitions.
 - **Impact:** The official example score produces a validation warning. Users either think the example is broken, or learn to ignore warnings. Both outcomes are bad.
 - **Action:** Either (a) enhance V101 to detect `{% set %}` and `{% for %}` assignments, or (b) lower to INFO with wording acknowledging Jinja2-local variables aren't detected.
@@ -742,7 +745,8 @@ Each finding should include:
 ### F-076: Validations Run Before Rate Limit Check — Spurious Failures Mask Root Cause
 - **Found by:** Composer, Movement 2
 - **Severity:** P1 (debuggability — violates goal #3, masks rate limit errors as validation failures)
-- **Status:** open
+- **Status:** Resolved (movement 3, Maverick — mateship pickup of unnamed musician's fix)
+- **Resolution:** Fix in `sheet.py:1607-1620`: rate limit check (`result.rate_limited`) now runs BEFORE validations. When rate limited, validations are skipped entirely, `_handle_rate_limit` is called directly, and the loop continues. Validations only run against output from non-rate-limited attempts. 1 test updated in `test_sheet_execution.py` (TestRateLimitHandling) to verify only 1 validation call occurs (not 2). Commit f58fc89.
 - **Description:** In the sheet execution loop (`src/mozart/execution/runner/sheet.py:1607-1687`), validations run **unconditionally** after every backend execution, before the rate limit check. When a rate-limited backend returns partial or empty output, validations fail against that garbage, and the failure is recorded in state. The rate limit is only checked after validations fail (line 1675). This creates three problems:
   1. **Spurious validation failures recorded in state** (line 1613): Every rate-limited iteration writes a validation failure to `sheet_state`, even though the real cause is rate limiting. The `error_message` is set to the validation failure description (line 1670-1671), not the rate limit.
   2. **Rate limit exhaustion is misreported as validation failure**: When `_handle_rate_limit` raises `RateLimitExhaustedError` after max waits, `sheet_state.error_message` already contains the validation error (e.g., `[MALFORMED] File doesn't match pattern`). `mozart errors` shows `type: permanent, code: validation` — the real cause (48 quota waits exhausted) is hidden.
@@ -922,7 +926,7 @@ Each finding should include:
 ### F-092: V101 False Positive on Jinja2 Loop Variables in hello.yaml
 - **Found by:** Newcomer, Movement 2
 - **Severity:** P3 (low — cosmetic warning on flagship example)
-- **Status:** Open
+- **Status:** Resolved (movement 3, Circuit — same fix as F-069)
 - **Description:** `mozart validate examples/hello.yaml` warns: `[V101] Undefined variable 'char' in prompt.template`. But `char` is a Jinja2 loop variable set via `{% for id, char in characters.items() %}` (hello.yaml:91) and `{% set char = characters[instance] %}` (hello.yaml:113). The V101 checker doesn't understand Jinja2 loop variables or `{% set %}` assignments — it only checks against top-level template variables.
 - **Impact:** The first command a newcomer runs on the flagship example produces a warning. Introduces doubt about whether the example is broken. A false positive on the best example is worse than no check at all.
 - **Action:** Either suppress V101 for variables that appear as Jinja2 loop/set targets, or document this as a known limitation of the validator.
@@ -962,7 +966,7 @@ Each finding should include:
 ### F-096: Uncommitted M4 Work Breaks mypy + Reconciliation Test
 - **Found by:** Foundation, Movement 3
 - **Severity:** P1 (high — blocks CI-clean main)
-- **Status:** Open
+- **Status:** Resolved (movement 3, Blueprint — committed as 75bebed)
 - **Description:** Uncommitted changes in `src/mozart/core/config/job.py`, `src/mozart/core/config/__init__.py`, and `src/mozart/core/sheet.py` add M4 features (`movements`, `instruments`, `per_sheet_instruments`, `instrument_map`). These changes introduce: (1) a mypy error at `sheet.py:229` where `config.movements[movement].instrument` is `str | None` but is assigned to `instrument_name: str`, and (2) a failing reconciliation test (`test_mapping_covers_all_config_sections`) because `movements` and `instruments` are new JobConfig fields without CONFIG_STATE_MAPPING entries. This is the 5th occurrence of uncommitted work in the orchestra.
 - **Impact:** Any musician who runs the full test suite sees failures. mypy is not clean. This blocks the quality gate for main.
 - **Fix:** The musician who added these fields needs to: (1) add a `None` guard at `sheet.py:229`, (2) add `movements` and `instruments` entries to `CONFIG_STATE_MAPPING` in `reconciliation.py`, and (3) commit the work.

@@ -52,7 +52,7 @@ Movement 3 — IN PROGRESS.
 | M0 Stabilization | COMPLETE | 18/18 tasks |
 | M1 Foundation | COMPLETE | 13/13 tasks |
 | M2 Baton | 94% | Step 28: BatonAdapter + manager wiring DONE (Foundation + Canyon M3, 775+ lines, 47 tests). Feature flag active. Prompt assembly + state sync + concert support remain. Step 29 remains. |
-| M3 UX & Polish | 94% | 15/16 tasks. Step 35 (error standardization) ~95% complete. |
+| M3 UX & Polish | COMPLETE | 19/19 tasks. Step 35 (error standardization) DONE (Maverick M3). Circuit M3: F-068/F-069/F-048 fixed (+11 TDD tests). |
 | --conductor-clone | 12% | Audit done. Implementation not started. |
 
 **Step 28 Progress (Foundation + Canyon, M3):**
@@ -73,6 +73,20 @@ Movement 3 — IN PROGRESS.
 - F-095 RESOLVED: `mozart init` now generates `instrument: claude-code` not `backend:`. Committed: 75bebed.
 - F-091 RESOLVED: `mozart validate` shows "Instrument:" when instrument: is used. Committed: 75bebed.
 - All M4 work committed on main (75bebed, 46 files, 855 insertions).
+
+**Observability Fixes (Circuit, M3):**
+- F-068 RESOLVED: "Completed:" timestamp only shown for terminal job statuses (COMPLETED/FAILED/CANCELLED). RUNNING/PAUSED jobs no longer show misleading completion time.
+- F-069/F-092 RESOLVED: V101 false positive on Jinja2 `{% set %}` and `{% for %}` variables. Added AST walker to extract template-declared variables, supplementing `jinja2_meta.find_undeclared_variables`. hello.yaml now validates clean.
+- F-048 RESOLVED: Cost tracking now runs even when cost limits disabled. Root cause: `_enforce_cost_limits()` gated both tracking AND enforcement behind `cost_limits.enabled`. Fix: `_track_cost()` runs first, enforcement gated separately.
+
+**Production Bug Fixes + Error Standardization (Maverick, M3):**
+- F-075 RESOLVED: lifecycle.py — preserve terminal status on resume. Committed: f58fc89.
+- F-076 RESOLVED: sheet.py — rate limit check moved before validations. Committed: f58fc89.
+- F-077 tests committed: 7 TDD tests (test_daemon_manager.py + test_production_bug_fixes.py). Committed: f58fc89.
+- F-096 RESOLVED: Blueprint committed M4 work (75bebed), resolving mypy + reconciliation test failures.
+- Step 35 (error standardization) COMPLETE: _entropy.py dominant pattern warning migrated to output_error(). M3 UX milestone DONE.
+- Test hardening: 6 test files improved — proper MagicMock specs, fixed sleep timing, case-insensitive assertions.
+- Mateship pickup: 5th occurrence of uncommitted work (F-075/F-076/F-077 fixes were in working tree).
 
 **Top risks:** (1) Uncommitted M4 work breaks mypy + reconciliation test (F-096), (2) F-075/F-076/F-077 production bugs from Rosetta Score, (3) F-009 learning store effectiveness inert, (4) --conductor-clone blocks safe daemon testing.
 

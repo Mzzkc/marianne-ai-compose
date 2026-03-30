@@ -1481,7 +1481,11 @@ def _output_status_rich(job: CheckpointState) -> None:
         console.print(f"  Started:  {format_timestamp(job.started_at)}")
     if job.updated_at:
         console.print(f"  Updated:  {format_timestamp(job.updated_at)}")
-    if job.completed_at:
+    # F-068: Only show "Completed:" for terminal statuses. Running/paused jobs
+    # may have completed_at set (from individual sheet completions) but showing
+    # it creates cognitive dissonance with the RUNNING status label.
+    _TERMINAL_JOB_STATUSES = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+    if job.completed_at and job.status in _TERMINAL_JOB_STATUSES:
         console.print(f"  Completed: {format_timestamp(job.completed_at)}")
 
     # Execution stats

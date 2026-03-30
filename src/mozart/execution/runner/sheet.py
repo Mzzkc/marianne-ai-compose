@@ -2417,6 +2417,10 @@ class SheetExecutionMixin:
     ) -> None:
         """Track execution cost and enforce cost limits.
 
+        Cost tracking always runs so that status display shows accurate
+        cost data (F-048). Cost limit enforcement only runs when
+        cost_limits.enabled is True.
+
         Raises GracefulShutdownError if cost limits are exceeded,
         pausing the job for later resumption.
 
@@ -2429,10 +2433,11 @@ class SheetExecutionMixin:
         Raises:
             GracefulShutdownError: If cost limit is exceeded.
         """
+        # F-048: Always track costs for observability, even when limits disabled
+        await self._track_cost(result, sheet_state, state)
+
         if not self.config.cost_limits.enabled:
             return
-
-        await self._track_cost(result, sheet_state, state)
 
         cost_exceeded, cost_reason = self._check_cost_limits(sheet_state, state)
         if cost_exceeded:

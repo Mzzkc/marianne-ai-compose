@@ -13,6 +13,7 @@ _logger = get_logger("validation.jinja")
 
 import jinja2
 from jinja2 import meta as jinja2_meta
+from jinja2 import nodes as jinja2_nodes
 
 from mozart.core.config import JobConfig
 from mozart.validation.base import ValidationIssue, ValidationSeverity
@@ -246,6 +247,33 @@ class JinjaUndefinedVariableCheck:
 
         return issues
 
+    @staticmethod
+    def _extract_template_declared_vars(
+        ast: jinja2_nodes.Template,
+    ) -> set[str]:
+        """Extract variables declared within the template via {% set %} and {% for %}.
+
+        jinja2_meta.find_undeclared_variables has a known limitation: it doesn't
+        properly track variables declared in conditional branches ({% if %}/{% elif %}).
+        A variable declared via {% set char = ... %} inside an {% elif %} block
+        may still be reported as undeclared. This method walks the AST to find
+        all template-local variable declarations, supplementing the meta module.
+        """
+        declared: set[str] = set()
+
+        def _extract_names(target: jinja2_nodes.Node) -> None:
+            if isinstance(target, jinja2_nodes.Name):
+                declared.add(target.name)
+            elif isinstance(target, jinja2_nodes.Tuple):
+                for item in target.items:
+                    _extract_names(item)
+
+        for node in ast.find_all((jinja2_nodes.Assign, jinja2_nodes.For)):
+            if isinstance(node, (jinja2_nodes.Assign, jinja2_nodes.For)):
+                _extract_names(node.target)
+
+        return declared
+
     def _check_undefined_vars(
         self,
         template_str: str,
@@ -260,8 +288,12 @@ class JinjaUndefinedVariableCheck:
             ast = env.parse(template_str)
             used_vars = jinja2_meta.find_undeclared_variables(ast)
 
+            # F-069: Supplement find_undeclared_variables with AST-based
+            # detection of template-local declarations ({% set %}, {% for %}).
+            template_declared = self._extract_template_declared_vars(ast)
+
             for var in used_vars:
-                if var not in defined_vars:
+                if var not in defined_vars and var not in template_declared:
                     suggestion = self._suggest_similar_var(var, defined_vars)
                     issues.append(
                         ValidationIssue(
