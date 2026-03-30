@@ -489,10 +489,15 @@ class LifecycleMixin:
             state.last_completed_sheet = start_sheet - 1
             # Mark sheets 1..start_sheet-1 as COMPLETED in state.sheets so
             # parallel mode's DAG sees their dependencies as satisfied (#42).
+            # F-075: Preserve existing terminal status — don't overwrite
+            # FAILED/SKIPPED sheets to COMPLETED on resume. Only mark
+            # non-terminal sheets as COMPLETED.
+            _terminal = (SheetStatus.COMPLETED, SheetStatus.FAILED, SheetStatus.SKIPPED)
             for skipped in range(1, start_sheet):
                 if skipped not in state.sheets:
                     state.sheets[skipped] = SheetState(sheet_num=skipped)
-                state.sheets[skipped].status = SheetStatus.COMPLETED
+                if state.sheets[skipped].status not in _terminal:
+                    state.sheets[skipped].status = SheetStatus.COMPLETED
 
         # Pre-populate all sheets so every sheet 1..total_sheets has a
         # record from the start.  Without this, sheets only get created

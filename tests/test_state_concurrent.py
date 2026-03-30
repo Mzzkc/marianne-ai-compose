@@ -261,8 +261,12 @@ class TestRaceConditions:
             return reads
 
         async def delete_after_delay() -> None:
-            """Delete state after a short delay."""
-            await asyncio.sleep(0.1)
+            """Delete state after reader has had a chance to start."""
+            # Yield control so reader starts, then delete.
+            # Using multiple zero-sleeps instead of a fixed delay
+            # to avoid timing-based test fragility.
+            for _ in range(10):
+                await asyncio.sleep(0)
             await backend.delete("delete-race")
             delete_done.set()
 

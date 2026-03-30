@@ -9,6 +9,7 @@ GH#71
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -43,7 +44,7 @@ def _make_runner(
 
     runner = MagicMock(spec=LifecycleMixin)
     runner.config = config
-    runner._logger = MagicMock()
+    runner._logger = MagicMock(spec=logging.Logger)
     return runner
 
 

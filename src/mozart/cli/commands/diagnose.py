@@ -55,6 +55,7 @@ from ..output import (
     create_timeline_table,
     format_duration,
     format_error_details,
+    format_sheet_display_status,
     infer_error_type,
     output_error,
     output_json,
@@ -1041,9 +1042,14 @@ def _build_diagnostic_report(
     timeline: list[dict[str, Any]] = []
     for sheet_num in sorted(job.sheets.keys()):
         sheet = job.sheets[sheet_num]
+        # F-065/Ember: Use format_sheet_display_status to show
+        # retry-exhausted sheets as "failed", not "completed".
+        display_label, _color = format_sheet_display_status(
+            sheet.status, sheet.validation_passed
+        )
         entry = {
             "sheet_num": sheet_num,
-            "status": sheet.status.value,
+            "status": display_label,
             "started_at": sheet.started_at.isoformat() if sheet.started_at else None,
             "completed_at": sheet.completed_at.isoformat() if sheet.completed_at else None,
             "duration_seconds": sheet.execution_duration_seconds,

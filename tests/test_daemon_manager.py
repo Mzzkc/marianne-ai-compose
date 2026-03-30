@@ -2334,3 +2334,109 @@ class TestResumeConductorConfigReload131:
             await manager._jobs["job-paused"]
         except (asyncio.CancelledError, Exception):
             pass
+
+
+# ─── F-077: Hook Config Restoration After Restart ────────────────────
+
+
+class TestHookConfigRestoration:
+    """Tests for F-077: hook_config must be restored from registry on restart.
+
+    When the conductor restarts, the restoration loop in start() constructs
+    JobMeta from registry records. Before the fix, hook_config was not loaded,
+    so on_success hooks never fired for jobs that survived a restart.
+    """
+
+    @pytest.fixture
+    def config_with_hooks(self, tmp_path: Path) -> Path:
+        """Create a config file with on_success hooks and concert config."""
+        config = tmp_path / "chain-job.yaml"
+        config.write_text(
+            "name: chain-job\n"
+            "sheet:\n"
+            "  size: 1\n"
+            "  total_items: 1\n"
+            "prompt:\n"
+            "  template: test prompt\n"
+            "on_success:\n"
+            "  - type: run_job\n"
+            "    job_path: next.yaml\n"
+            "    fresh: true\n"
+            "    description: Chain to next iteration\n"
+            "concert:\n"
+            "  enabled: true\n"
+            "  max_chain_depth: 5\n"
+            "  cooldown_between_jobs_seconds: 10\n"
+        )
+        return config
+
+    @pytest.mark.asyncio
+    async def test_hook_config_restored_after_restart(
+        self, daemon_config: DaemonConfig, config_with_hooks: Path, tmp_path: Path,
+    ):
+        """hook_config is loaded from registry when manager restarts."""
+        # Phase 1: Submit a job with hooks via a "first" manager
+        mgr1 = JobManager(daemon_config)
+        await mgr1._registry.open()
+        mgr1._service = MagicMock()
+        request = JobRequest(
+            config_path=config_with_hooks,
+            workspace=tmp_path / "ws",
+        )
+        response = await mgr1.submit_job(request)
+        assert response.status == "accepted"
+        job_id = response.job_id
+
+        # Verify hooks were stored in registry
+        stored = await mgr1._registry.get_hook_config(job_id)
+        assert stored is not None
+
+        # Close the first manager (simulates conductor shutdown)
+        await mgr1._registry.close()
+
+        # Phase 2: Create a "second" manager (simulates restart)
+        mgr2 = JobManager(daemon_config)
+        await mgr2.start()
+
+        # Verify hook_config was restored from registry
+        assert job_id in mgr2._job_meta
+        meta = mgr2._job_meta[job_id]
+        assert meta.hook_config is not None, (
+            "F-077: hook_config not restored from registry after restart"
+        )
+        assert len(meta.hook_config) == 1
+        assert meta.hook_config[0]["type"] == "run_job"
+        assert meta.hook_config[0]["fresh"] is True
+        assert meta.hook_config[0]["description"] == "Chain to next iteration"
+
+        await mgr2.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_hook_config_none_when_no_hooks_stored(
+        self, daemon_config: DaemonConfig, tmp_path: Path,
+    ):
+        """Jobs without hooks have hook_config=None after restart."""
+        # Submit a job WITHOUT hooks
+        config = tmp_path / "no-hooks.yaml"
+        config.write_text(
+            "name: no-hooks\n"
+            "sheet:\n"
+            "  size: 1\n"
+            "  total_items: 1\n"
+            "prompt:\n"
+            "  template: test prompt\n"
+        )
+        mgr1 = JobManager(daemon_config)
+        await mgr1._registry.open()
+        mgr1._service = MagicMock()
+        request = JobRequest(config_path=config, workspace=tmp_path / "ws")
+        response = await mgr1.submit_job(request)
+        assert response.status == "accepted"
+        await mgr1._registry.close()
+
+        # Restart
+        mgr2 = JobManager(daemon_config)
+        await mgr2.start()
+        meta = mgr2._job_meta[response.job_id]
+        assert meta.hook_config is None
+        await mgr2.shutdown()

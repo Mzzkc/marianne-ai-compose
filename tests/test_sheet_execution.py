@@ -1170,7 +1170,12 @@ class TestRateLimitHandling:
 
     @pytest.mark.asyncio
     async def test_rate_limit_on_execution_retries_automatically(self, mixin: _TestableSheetMixin):
-        """Rate limited result -> handle_rate_limit -> automatic retry."""
+        """Rate limited result -> skip validations -> handle_rate_limit -> retry.
+
+        F-076: Rate limit check now happens BEFORE validations. When
+        rate_limited=True, validations are skipped entirely (they'd run
+        against garbage output). Only the successful retry gets validated.
+        """
         state = _make_state()
 
         # First result is rate limited, second succeeds
@@ -1186,9 +1191,8 @@ class TestRateLimitHandling:
             side_effect=[rate_limited_result, success_result]
         )
 
-        fail_vr = _make_validation_result(
-            all_passed=False, pass_pct=0.0, confidence=0.5,
-        )
+        # F-076: Only one validation call happens — the rate-limited
+        # attempt skips validation entirely.
         pass_vr = _make_validation_result(all_passed=True)
 
         # Mock classify to return rate limit error
@@ -1203,7 +1207,7 @@ class TestRateLimitHandling:
         with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
-            ve_instance.run_validations = AsyncMock(side_effect=[fail_vr, pass_vr])
+            ve_instance.run_validations = AsyncMock(side_effect=[pass_vr])
             ve_instance.snapshot_mtime_files = MagicMock()
 
             await mixin._execute_sheet_with_recovery(state, sheet_num=1)

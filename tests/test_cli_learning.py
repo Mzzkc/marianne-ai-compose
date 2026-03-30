@@ -663,7 +663,7 @@ class TestPatternsEntropyCommand:
         result = runner.invoke(app, ["patterns-entropy", "--threshold", "0.5"])
 
         assert result.exit_code == 0
-        assert "LOW DIVERSITY" in result.stdout
+        assert "low diversity" in result.stdout.lower()
 
     @patch(_GS_PATCH)
     def test_entropy_dominant_pattern_warning(self, mock_get_store):

@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mozart.backends.claude_cli import ClaudeCliBackend
+from mozart.core.checkpoint import SheetState
 
 
 
@@ -36,8 +37,6 @@ def _make_mock_process(
     proc = MagicMock(spec=asyncio.subprocess.Process)
     proc.pid = pid
     proc.returncode = returncode
-    proc.kill = MagicMock()
-    proc.terminate = MagicMock()
     proc.wait = AsyncMock(return_value=-9)
 
     # Minimal stream readers that return EOF immediately
@@ -233,7 +232,7 @@ class TestKillOrphanedProcessAcceptsBaseException:
         """_kill_orphaned_process handles ProcessLookupError gracefully."""
         backend = _make_backend()
         proc = _make_mock_process(returncode=None)
-        proc.kill = MagicMock(side_effect=ProcessLookupError)
+        proc.kill.side_effect = ProcessLookupError
 
         with (
             patch("os.killpg", side_effect=ProcessLookupError),
@@ -256,9 +255,11 @@ class TestParallelCancellationNoCrash:
     @pytest.fixture
     def parallel_runner(self):
         """Create a mock runner for parallel execution testing."""
+        from mozart.state.base import StateBackend
+
         runner = MagicMock()
         runner._state_lock = asyncio.Lock()
-        runner.state_backend = MagicMock()
+        runner.state_backend = MagicMock(spec=StateBackend)
         runner.state_backend.save = AsyncMock()
         runner.state_backend.load = AsyncMock(return_value=None)
         return runner
@@ -283,7 +284,7 @@ class TestParallelCancellationNoCrash:
             if sheet_num == 2:
                 raise RuntimeError("Process killed by SIGABRT (signal 6)")
             await asyncio.sleep(0.01)
-            st.sheets[sheet_num] = MagicMock(status=SheetStatus.COMPLETED)
+            st.sheets[sheet_num] = MagicMock(spec=SheetState, status=SheetStatus.COMPLETED)
 
         parallel_runner._execute_sheet_with_recovery = AsyncMock(
             side_effect=mock_execute,
@@ -319,7 +320,7 @@ class TestParallelCancellationNoCrash:
             if sheet_num in (1, 3):
                 raise RuntimeError(f"Sheet {sheet_num} SIGABRT")
             await asyncio.sleep(0.01)
-            st.sheets[sheet_num] = MagicMock(status=SheetStatus.COMPLETED)
+            st.sheets[sheet_num] = MagicMock(spec=SheetState, status=SheetStatus.COMPLETED)
 
         parallel_runner._execute_sheet_with_recovery = AsyncMock(
             side_effect=mock_execute,

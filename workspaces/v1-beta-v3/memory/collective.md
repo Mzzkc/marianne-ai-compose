@@ -69,9 +69,10 @@ Movement 3 — IN PROGRESS.
 - 33 TDD tests + 2 property-based tests.
 
 **Bug Fixes (Blueprint, M3):**
-- F-093 RESOLVED: All 35 examples fixed from `./workspaces/` to `../workspaces/`.
-- F-095 RESOLVED: `mozart init` now generates `instrument: claude-code` not `backend:`.
-- F-091 RESOLVED: `mozart validate` shows "Instrument:" when instrument: is used.
+- F-093 RESOLVED: All 35 examples fixed from `./workspaces/` to `../workspaces/`. Committed: 75bebed.
+- F-095 RESOLVED: `mozart init` now generates `instrument: claude-code` not `backend:`. Committed: 75bebed.
+- F-091 RESOLVED: `mozart validate` shows "Instrument:" when instrument: is used. Committed: 75bebed.
+- All M4 work committed on main (75bebed, 46 files, 855 insertions).
 
 **Top risks:** (1) Uncommitted M4 work breaks mypy + reconciliation test (F-096), (2) F-075/F-076/F-077 production bugs from Rosetta Score, (3) F-009 learning store effectiveness inert, (4) --conductor-clone blocks safe daemon testing.
 

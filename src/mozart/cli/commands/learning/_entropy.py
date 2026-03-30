@@ -13,7 +13,7 @@ from typing import Any
 import typer
 from rich.table import Table
 
-from ...output import console
+from ...output import console, output_error
 
 
 def patterns_entropy(
@@ -185,15 +185,17 @@ def patterns_entropy(
     )
 
     if metrics.threshold_exceeded:
-        console.print("\n[red bold]⚠ LOW DIVERSITY ALERT[/red bold]")
-        console.print("[red]Pattern population shows low diversity - model collapse risk![/red]")
-        console.print(
-            "[dim]Consider reviewing dominant patterns "
-            "and encouraging exploration.[/dim]"
+        output_error(
+            "Pattern population shows low diversity - model collapse risk!",
+            severity="warning",
+            hints=["Consider reviewing dominant patterns and encouraging exploration."],
         )
     elif metrics.dominant_pattern_share > 0.5:
-        console.print("\n[yellow]⚠ Single pattern holds >50% of applications[/yellow]")
-        console.print("[dim]Monitor for further concentration.[/dim]")
+        output_error(
+            "Single pattern holds >50% of applications",
+            severity="warning",
+            hints=["Monitor for further concentration."],
+        )
     else:
         console.print("\n[green]✓ Healthy pattern diversity[/green]")
 

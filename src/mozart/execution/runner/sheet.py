@@ -1604,7 +1604,22 @@ class SheetExecutionMixin:
                 execution_history,
             )
 
-            # ===== VALIDATION-FIRST APPROACH =====
+            # ===== RATE LIMIT CHECK — before validations (F-076) =====
+            # If the backend returned a rate-limited response, validations
+            # against that garbage output are meaningless. Check first.
+            if result.rate_limited:
+                classification = self._classify_execution(result)
+                error = classification.primary
+                if error.is_rate_limit:
+                    error_history.clear()
+                    await self._handle_rate_limit(
+                        state,
+                        error_code=error.error_code.value,
+                        suggested_wait_seconds=error.suggested_wait_seconds,
+                    )
+                    continue
+
+            # ===== VALIDATION =====
             validation_start = time.monotonic()
             validation_result = await validation_engine.run_validations(self.config.validations)
             validation_duration = time.monotonic() - validation_start
@@ -1671,20 +1686,6 @@ class SheetExecutionMixin:
                 sheet_state.error_message = "; ".join(failed_descs[:3])
             else:
                 sheet_state.error_message = None
-
-            # ===== RATE LIMIT CHECK (before completion threshold) =====
-            if result.rate_limited:
-                classification = self._classify_execution(result)
-                error = classification.primary
-
-                if error.is_rate_limit:
-                    error_history.clear()
-                    await self._handle_rate_limit(
-                        state,
-                        error_code=error.error_code.value,
-                        suggested_wait_seconds=error.suggested_wait_seconds,
-                    )
-                    continue
 
             # Check if pass_pct is high enough for completion mode
             if pass_pct >= completion_threshold:
