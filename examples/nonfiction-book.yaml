@@ -31,13 +31,10 @@ description: "Non-fiction book authoring using Snowflake Method with word count 
 
 workspace: "./workspaces/book-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 3600    # 60 minutes per sheet - creative writing requires depth
-  disable_mcp: true        # Performance optimization
-
-  # Note: For consistent voice, use the same model throughout
+  # model: claude-sonnet-4-20250514  # Uncomment for consistent voice
   # Uncomment to specify: cli_model: claude-sonnet-4-20250514
 
 sheet:

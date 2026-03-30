@@ -17,9 +17,8 @@ workspace_lifecycle:
   archive_on_fresh: true
   max_archives: 10
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 3000  # 50 min per sheet — extra time for subagent invocations
 
 cross_sheet:

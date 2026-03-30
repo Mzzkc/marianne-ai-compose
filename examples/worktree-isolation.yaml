@@ -20,10 +20,9 @@ description: Code review with worktree isolation for parallel safety
 workspace: ./workspaces/review-workspace
 working_directory: /path/to/your/repo  # Must be a git repository
 
-backend:
-  type: claude_cli
+instrument: claude-code
+instrument_config:
   timeout_seconds: 300
-  # working_directory will be automatically overridden to worktree path
 
 # Worktree isolation configuration
 isolation:

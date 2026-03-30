@@ -19,9 +19,8 @@ description: "Feasibility test for Task tool invocations in Claude -p mode"
 
 workspace: "./workspaces/agent-spike-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 600  # 10 min — should be quick
 
 sheet:

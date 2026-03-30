@@ -8,8 +8,8 @@ description: "Demonstrates cross-sheet context passing"
 
 workspace: "./workspaces/cross-sheet-workspace"
 
-backend:
-  type: claude_cli
+instrument: claude-code
+instrument_config:
   timeout_seconds: 300
 
 sheet:

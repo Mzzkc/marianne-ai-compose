@@ -11,30 +11,14 @@ description: "Minimal example showing core Mozart features"
 
 workspace: "../workspaces/simple-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true     # Required for unattended execution
+# Instrument: which AI tool to use (default: claude-code)
+# See `mozart instruments list` for all available instruments.
+instrument: claude-code
+instrument_config:
   timeout_seconds: 600       # 10 minutes per sheet
 
-  # Performance optimization - disable MCP servers (default: true)
-  # Provides ~2x speedup and prevents resource contention
-  disable_mcp: true
-
-  # Output format for structured automation (default: json)
-  # Options: json, text, stream-json
-  output_format: json
-
   # Optional: Model selection (omit to use Claude Code's default)
-  # cli_model: claude-sonnet-4-20250514
-
-  # Optional: Restrict Claude to specific tools for security
-  # allowed_tools: [Read, Grep, Glob]  # Read-only execution
-
-  # Optional: Custom system prompt file
-  # system_prompt_file: ./prompts/custom.md
-
-  # Optional: Escape hatch for unsupported CLI flags
-  # cli_extra_args: ["--verbose"]
+  # model: claude-sonnet-4-20250514
 
 sheet:
   size: 5          # Items per sheet

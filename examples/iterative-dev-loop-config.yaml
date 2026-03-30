@@ -87,11 +87,8 @@ cycles: 20
 #     - file: "./project-context.md"
 #       as: context
 
-# Backend configuration
-backend:
-  type: claude_cli
-  skip_permissions: true
-  disable_mcp: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 3600
 
 # Custom validations — applied to specified roles each cycle

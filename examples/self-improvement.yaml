@@ -14,10 +14,8 @@ description: "Incremental codebase improvement with quality gates"
 
 workspace: "./workspaces/improvement-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
-  working_directory: /path/to/your/project  # CHANGE THIS
+instrument: claude-code
+instrument_config:
   timeout_seconds: 1800  # 30 minutes per task
 
 sheet:

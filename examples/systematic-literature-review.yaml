@@ -30,14 +30,10 @@ description: "PRISMA-compliant systematic literature review with quality gates a
 
 workspace: "./workspaces/slr-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 3600    # 60 minutes per sheet - literature reviews require deep analysis
-  disable_mcp: true        # Performance optimization
-
-  # Note: For best results, use a model with strong research capabilities
-  # Uncomment to specify: cli_model: claude-sonnet-4-20250514
+  # model: claude-sonnet-4-20250514  # Uncomment to specify model
 
 sheet:
   size: 1           # One phase per sheet (recommended for research workflows)

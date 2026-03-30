@@ -36,9 +36,8 @@ description: "Progressive skill-building curriculum generator"
 
 workspace: "./workspaces/skill-builder-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 1200
 
 sheet:

@@ -288,12 +288,9 @@ name: code-review-batch
 description: Review multiple pull requests with validation
 workspace: ./workspace/code-review
 
-backend:
-  type: claude_cli
-  skip_permissions: true
-  disable_mcp: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 1800
-  allowed_tools: [Read, Grep, Glob, Bash]
 
 sheet:
   size: 5

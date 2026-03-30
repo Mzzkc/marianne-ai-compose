@@ -88,9 +88,7 @@ Create a file called `my-first-job.yaml`:
 name: "my-first-job"
 description: "Process files in sheets of 10"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
 
 sheet:
   size: 10
@@ -225,9 +223,7 @@ Mozart continues from where it left off.
 name: "code-review"
 description: "Review PRs in sheets"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
 
 sheet:
   size: 5
@@ -255,9 +251,7 @@ validations:
 name: "generate-docs"
 description: "Generate API documentation"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
 
 sheet:
   size: 10
@@ -289,9 +283,7 @@ validations:
 name: "process-data"
 description: "Process data with robust error handling"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
 
 sheet:
   size: 20
@@ -324,9 +316,7 @@ validations:
 name: "parallel-reviews"
 description: "Fan-out pattern: multiple perspectives in parallel"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
 
 sheet:
   size: 1

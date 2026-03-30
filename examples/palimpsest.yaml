@@ -47,9 +47,8 @@ description: "Five translations of a single text, seeking the meaning that survi
 
 workspace: "./workspaces/palimpsest-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 1800
 
 sheet:

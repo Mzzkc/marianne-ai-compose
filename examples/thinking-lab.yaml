@@ -40,9 +40,8 @@ description: "Multi-perspective analysis of a hard question"
 
 workspace: "./workspaces/thinking-lab-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 1800
 
 sheet:

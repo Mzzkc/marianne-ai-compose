@@ -24,25 +24,16 @@
 # Usage:
 #   mozart validate examples/parallel-research-fanout.yaml
 #   mozart run examples/parallel-research-fanout.yaml
-#   mozart status fanout-research -w ./fanout-workspace
+#   mozart status fanout-research
 
 name: "fanout-research"
 description: "Multi-source research using fan-out for parallel search"
 
 workspace: "./workspaces/fanout-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 1800
-  disable_mcp: true
-  allowed_tools:
-    - Read
-    - Write
-    - Glob
-    - Grep
-    - WebSearch
-    - WebFetch
 
 sheet:
   size: 1
