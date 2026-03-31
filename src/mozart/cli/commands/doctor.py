@@ -28,32 +28,79 @@ from mozart.instruments.loader import load_all_profiles
 def _check_conductor_status() -> tuple[str, int | None]:
     """Check if the Mozart conductor is running.
 
+    Two-phase detection for reliability (F-090):
+    1. PID file check — fast, works offline
+    2. IPC socket probe — authoritative, catches missing PID file
+
+    When --conductor-clone is active, checks the clone's paths instead.
+
     Returns:
         Tuple of (status_string, pid_or_none).
         status_string is one of: "running", "not running".
     """
-    from mozart.daemon.config import DaemonConfig
+    import asyncio
 
-    defaults = DaemonConfig()
-    pid_file = defaults.pid_file
+    from mozart.daemon.detect import _resolve_socket_path
+
+    # Phase 1: PID file check
+    pid = _check_pid_file()
+
+    if pid is not None:
+        return ("running", pid)
+
+    # Phase 2: IPC socket probe — catches cases where PID file is
+    # missing but the conductor is running (F-090: doctor/status disagree)
+    socket_path = _resolve_socket_path(None)
+    if socket_path.exists():
+        try:
+            from mozart.daemon.ipc.client import DaemonClient
+
+            client = DaemonClient(socket_path)
+            alive = asyncio.run(client.is_daemon_running())
+            if alive:
+                return ("running", None)
+        except Exception:
+            pass
+
+    return ("not running", None)
+
+
+def _check_pid_file() -> int | None:
+    """Check PID file for a running conductor process.
+
+    When --conductor-clone is active, checks the clone's PID file.
+
+    Returns:
+        PID if found and alive, None otherwise.
+    """
+    from mozart.daemon.clone import get_clone_name, is_clone_active
+
+    if is_clone_active():
+        from mozart.daemon.clone import resolve_clone_paths
+
+        pid_file = resolve_clone_paths(get_clone_name()).pid_file
+    else:
+        from mozart.daemon.config import DaemonConfig
+
+        pid_file = DaemonConfig().pid_file
 
     if not pid_file.exists():
-        return ("not running", None)
+        return None
 
     try:
         pid_text = pid_file.read_text().strip()
         pid = int(pid_text)
     except (ValueError, OSError):
-        return ("not running", None)
+        return None
 
     try:
         os.kill(pid, 0)
-        return ("running", pid)
+        return pid
     except ProcessLookupError:
-        return ("not running", None)
+        return None
     except PermissionError:
         # Process exists but we can't signal it — still running
-        return ("running", pid)
+        return pid
 
 
 def _check_instrument_binary(profile: InstrumentProfile) -> tuple[bool, str | None]:

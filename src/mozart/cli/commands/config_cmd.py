@@ -125,14 +125,17 @@ def _try_live_config() -> dict[str, Any] | None:
 
     Returns the config dict on success, or None if the conductor is
     not running or the IPC call fails.
+
+    Respects ``--conductor-clone``: when a clone is active, queries
+    the clone conductor's socket instead of the production one.
     """
     import asyncio
 
-    from mozart.daemon.config import DaemonConfig
+    from mozart.daemon.detect import _resolve_socket_path
     from mozart.daemon.ipc.client import DaemonClient
 
-    defaults = DaemonConfig()
-    client = DaemonClient(defaults.socket.path)
+    socket = _resolve_socket_path(None)
+    client = DaemonClient(socket)
 
     async def _fetch() -> dict[str, Any] | None:
         try:

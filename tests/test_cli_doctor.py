@@ -195,3 +195,99 @@ class TestDoctorSummary:
             assert result.exit_code == 0
             # Should have some kind of summary
             assert "ready" in result.stdout.lower() or "warning" in result.stdout.lower()
+
+
+# ---------------------------------------------------------------------------
+# F-090: IPC socket fallback detection (Ghost, movement 1)
+# ---------------------------------------------------------------------------
+
+
+class TestDoctorSocketFallback:
+    """F-090: Doctor should detect conductor via IPC socket when PID file is missing."""
+
+    def test_socket_probe_detects_running_conductor(self) -> None:
+        """When PID file is missing but socket responds, report running."""
+        from unittest.mock import AsyncMock
+
+        with (
+            patch(
+                "mozart.cli.commands.doctor._check_pid_file",
+                return_value=None,
+            ),
+            patch(
+                "mozart.daemon.detect._resolve_socket_path",
+            ) as mock_resolve,
+            patch(
+                "mozart.daemon.ipc.client.DaemonClient",
+            ) as mock_client_cls,
+        ):
+            # Socket exists
+            mock_path = type("MockPath", (), {"exists": lambda self: True})()
+            mock_resolve.return_value = mock_path
+
+            # IPC probe returns alive
+            mock_instance = AsyncMock()
+            mock_instance.is_daemon_running = AsyncMock(return_value=True)
+            mock_client_cls.return_value = mock_instance
+
+            from mozart.cli.commands.doctor import _check_conductor_status
+
+            status, pid = _check_conductor_status()
+            assert status == "running"
+            # PID is None because we found it via socket, not PID file
+            assert pid is None
+
+    def test_no_pid_no_socket_reports_not_running(self) -> None:
+        """When both PID file and socket are missing, report not running."""
+        with (
+            patch(
+                "mozart.cli.commands.doctor._check_pid_file",
+                return_value=None,
+            ),
+            patch(
+                "mozart.daemon.detect._resolve_socket_path",
+            ) as mock_resolve,
+        ):
+            mock_path = type("MockPath", (), {"exists": lambda self: False})()
+            mock_resolve.return_value = mock_path
+
+            from mozart.cli.commands.doctor import _check_conductor_status
+
+            status, pid = _check_conductor_status()
+            assert status == "not running"
+            assert pid is None
+
+    def test_pid_found_skips_socket_probe(self) -> None:
+        """When PID file check succeeds, skip the socket probe."""
+        with patch(
+            "mozart.cli.commands.doctor._check_pid_file",
+            return_value=12345,
+        ):
+            from mozart.cli.commands.doctor import _check_conductor_status
+
+            status, pid = _check_conductor_status()
+            assert status == "running"
+            assert pid == 12345
+
+
+# ---------------------------------------------------------------------------
+# Doctor clone awareness (Ghost, movement 1)
+# ---------------------------------------------------------------------------
+
+
+class TestDoctorCloneAwareness:
+    """Doctor should check clone conductor when --conductor-clone is active."""
+
+    def test_pid_check_uses_clone_path(self) -> None:
+        """_check_pid_file should use clone PID file when clone is active."""
+        from mozart.daemon.clone import set_clone_name
+
+        set_clone_name("doctor-test")
+        try:
+            from mozart.cli.commands.doctor import _check_pid_file
+
+            # Clone PID file doesn't exist → returns None
+            pid = _check_pid_file()
+            assert pid is None
+        finally:
+            set_clone_name(None)
