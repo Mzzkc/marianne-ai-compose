@@ -86,7 +86,7 @@ Movement 4 — IN PROGRESS.
 | M1 Foundation | COMPLETE | 13/13 tasks |
 | M2 Baton | 96% | Step 28: BatonAdapter + prompt rendering DONE (Foundation + Canyon M3 + Forge current). Feature flag active. F-104 RESOLVED. State sync + concert support remain. Step 29 (restart recovery) remains. |
 | M3 UX & Polish | COMPLETE | 19/19 tasks. Step 35 (error standardization) DONE (Maverick M3). Circuit M3: F-068/F-069/F-048 fixed (+11 TDD tests). |
-| --conductor-clone | 85% | FULLY WIRED (Spark f7f9825 + Ghost 42d3d1a + Harper 3a89f65). Global CLI option, clone.py module, socket/PID/config isolation, named clones, doctor IPC fallback, all lifecycle commands. Remaining: pytest conversion, CLI docs. |
+| --conductor-clone | 95% | FULLY WIRED (Spark f7f9825 + Ghost 42d3d1a + Harper 3a89f65). Global CLI option, clone.py module, socket/PID/config isolation, named clones, doctor IPC fallback, all lifecycle commands. CLI docs done (Codex 282814f). Remaining: pytest conversion. |
 
 **Step 28 Progress (Foundation + Canyon, M3):**
 - BatonAdapter (`src/mozart/daemon/baton/adapter.py`) implements 7 of 8 integration surfaces from Canyon's wiring analysis. Foundation: adapter shell, dispatch callback, state mapping, EventBus bridge (abbbeac). Canyon: completion signaling (wait_for_completion, _check_completions), manager.py wiring (_run_job_task routing, start() initialization), F-077 fix (hooks lost on restart — mateship).
@@ -105,6 +105,14 @@ Movement 4 — IN PROGRESS.
 - Fixed `hint=` (singular) misuse in `run.py` — `output_error()` only accepts `hints=` (list). Hints were invisible in terminal mode.
 - F-073 VERIFIED RESOLVED: `resume.py` already distinguishes "not found" from "not resumable".
 - Commit 5ed495a on main. mypy clean, ruff clean, 232 CLI tests pass.
+
+**Litmus M1 (current cycle):** 15 new litmus tests (21→36 total) across 4 new categories: baton musician prompt rendering (5 tests proving F-104 effectiveness — assembled prompt >3x raw template), error taxonomy (4 tests proving E006/E001 distinction and F-098 Phase 4.5 override), Sheet entity variables (3 tests proving terminology coexistence), cross-system integration (3 tests proving error→decision mapping, credential redaction, F-018 contract). All tests pass, mypy clean, ruff clean.
+
+**Safety Hardening (Warden, current movement):**
+- F-025 RESOLVED: Credential env filtering for PluginCliBackend. Added `required_env` field to `CliCommand`. When set, only declared vars + system essentials (PATH, HOME, etc.) pass to subprocess. Updated gemini-cli, claude-code, codex-cli built-in profiles. Multi-provider instruments (aider, goose, cline) intentionally unfiltered. 19 TDD tests. M5 step 47 COMPLETE.
+- Safety audit confirmed: baton musician path properly redacts credentials (F-003), all 4 shell execution paths quoted (F-004/F-020), error classifier Phase 4.5 is safe, conductor-clone system has proper name sanitization.
+- P0 open bugs confirmed in old runner: F-111 (RateLimitExhaustedError lost in parallel) and F-113 (failed deps as "done") — both structurally fixed by the baton.
+- mypy clean, ruff clean, 76 safety-related tests pass.
 
 **Critical path (UPDATED by Bedrock, current movement):** F-104 RESOLVED. F-098 RESOLVED. --conductor-clone RESOLVED. Remaining: Surface 4 (state sync) → Surface 7 (concerts) → Step 29 (restart recovery) → Enable use_baton (test with --conductor-clone first) → Demo. Rate limit resilience (F-111/F-112/F-113) is the parallel blocker for production readiness.
 
@@ -133,13 +141,21 @@ Movement 4 — IN PROGRESS.
 - Test hardening: 6 test files improved — proper MagicMock specs, fixed sleep timing, case-insensitive assertions.
 - Mateship pickup: 5th occurrence of uncommitted work (F-075/F-076/F-077 fixes were in working tree).
 
-**Top risks (updated by Bedrock, current movement):**
+**Atlas M1C2 Strategic Assessment (2026-03-31):**
+- STATUS.md updated — was 6 weeks stale, now reflects v1 beta reality (9,424 tests, instruments, baton at 96%)
+- Codebase: 95,656 source lines, 9,424 test functions, 266 test files. All quality gates pass.
+- Working tree: 3 files only. Uncommitted work pattern appears resolved (down from 36+ in prior movements).
+- Three M2-identified blockers all RESOLVED: F-104 (Forge+Canyon+Foundation), #145 (Spark+Ghost+Harper), F-103 (verified on HEAD).
+- Minimal demo (hello.yaml on old runner) possible TODAY. No baton required for first impression.
+- Strategic concern: F-009 (learning store) unimplemented for 5 movements. Lovable demo + Wordware demos not started. The orchestra builds infrastructure, not product.
+
+**Top risks (updated by Atlas, current movement):**
 1. **Step 29 (P0):** Restart recovery not started. Primary blocker for production baton usage. Nobody has claimed it.
-2. **F-009 (P1):** Learning store effectiveness still inert after 4+ movements. Root cause known (Oracle M2: narrow tag matching). Nobody implementing. This undermines Mozart's identity as an intelligence layer.
-3. **F-111 (P0):** Parallel executor loses RateLimitExhaustedError type — jobs FAIL instead of PAUSE. Blocks reliable parallel execution.
-4. **F-113 (P0):** Failed sheets treated as "done" for dependencies — downstream runs on incomplete input. Dependency graph semantics violated.
-5. **F-112 (P1):** No auto-resume after rate limit pause. The conductor should schedule, not just record.
-6. **Uncommitted composer fixes:** F-103 (3 baton bugs) in working tree but not on HEAD. Harper's mateship may have picked these up (3a89f65) — needs verification.
+2. **F-009 (P1 → should be P0):** Learning store effectiveness still inert after 5+ movements. Root cause known (Oracle M2: narrow tag matching). Nobody implementing. This undermines Mozart's identity as an intelligence layer.
+3. **Demo work not started (P0):** Neither Lovable demo nor Wordware demos have been claimed. These are the tasks that make the product visible to the world.
+4. **F-111 (P0):** Parallel executor loses RateLimitExhaustedError type — jobs FAIL instead of PAUSE. Blocks reliable parallel execution.
+5. **F-113 (P0):** Failed sheets treated as "done" for dependencies — downstream runs on incomplete input. Dependency graph semantics violated.
+6. **F-103 VERIFIED RESOLVED:** Confirmed on HEAD (Forge 3deb436 + Harper 3a89f65). No longer a risk.
 
 **Composer production bugs (P0/P1):** F-075 RESOLVED (f58fc89). F-076 RESOLVED (f58fc89). F-077 RESOLVED (f58fc89). F-103 FIXED in working tree (not committed). All found by real usage, not tests.
 

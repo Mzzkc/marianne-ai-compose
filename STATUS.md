@@ -1,27 +1,36 @@
 # Mozart AI Compose - Status
 
-**Overall:** Daemon stabilized, scores running in production (2026-02-15)
-**Tests:** 3384+ passing (+ 249 observability tests)
-**Vision:** Mozart + Recursive Light = Federated AGI Architecture
+**Overall:** v1 Beta — Orchestra building, baton 96% complete (2026-03-31)
+**Tests:** 9,424 test functions across 266 files
+**Source:** 95,656 lines across the codebase
 **GitHub:** https://github.com/Mzzkc/mozart-ai-compose
 **Dashboard:** Production-grade web UI with job control
 **License:** Dual AGPL-3.0 / Commercial
 
 ---
 
-## Current: Daemon Bug Fixes + Autonomous Score Execution (2026-02-15)
+## Current: v1 Beta Orchestra — Movement 4 (2026-03-31)
 
-### 5 bugs fixed, 2 scores ran autonomously
+### 55 commits across 4 movements, 32 musicians, zero merge conflicts
 
-- **#74 FIXED** — Chained jobs now route through daemon IPC (`e89d58d`)
-- **#50 FIXED** — Conductor-first architecture for all CLI operations (`c7a90df`)
-- **#51 FIXED** — SIGHUP config reload, solved autonomously by issue-solver score (`1e3faad`)
-- **State tracking bug FIXED** — Sheet completions silently lost when learning ops threw (`908db66`)
-- **Registry status bug FIXED** — Failed jobs reported as "completed" in daemon (`77989b2`)
-- **Quality iterations 9-10** committed by quality-continuous score (`6b83b77`, `f9b00bc`)
-- **Self-chaining verified** — quality-continuous ran 4 autonomous iterations
+The v1 beta is being built by a 706-sheet self-evolution score (`mozart-orchestra-v3.yaml`) running 32 AI musicians in parallel. The flat orchestra model — no hierarchy, shared coordination through TASKS.md, FINDINGS.md, and collective memory — has proven effective.
 
-**Commits:** `77989b2`, `f9b00bc`, `6b83b77`, `1e3faad`, `908db66`, `3893287`, `c7a90df`, `e89d58d`
+**Key milestones completed:**
+- **M0: Stabilization** — 18/18 tasks. Learning store remediation, critical bugs, dead code removal.
+- **M1: Foundation** — 13/13 tasks. Instrument plugin system (6 built-in instruments), sheet-first architecture, safety baseline (credential scanning, cost tracking).
+- **M2: Baton** — 96% complete (14/16 steps). Event-driven execution engine with retry state machine, rate limit handling, failure propagation, cost enforcement. Feature-flagged via `use_baton: true`. Steps 28 (adapter wiring) done; step 29 (restart recovery) remains.
+- **M3: UX & Polish** — 19/19 tasks. Error standardization (98% adoption of `output_error()`), `mozart doctor`, `mozart init`, `mozart instruments`, movement-grouped status display, large-score summary view.
+- **M4: Multi-Instrument** — In progress. Per-sheet instrument assignment, score-level named instruments, movement definitions. Data models complete. Demo work not yet started.
+- **--conductor-clone** — Fully wired. Safe parallel daemon testing with isolated socket, PID, state DB, and logs.
+
+**Current blockers:**
+- Step 29 (restart recovery) — last technical blocker for production baton usage
+- F-009 (learning store effectiveness) — intelligence feedback loop disconnected for 5+ movements
+- Lovable demo score — not started
+
+**Quality gates:** mypy clean, ruff clean, all tests passing.
+
+**Specification corpus:** `.mozart/spec/` — 5 YAML files covering intent, architecture, conventions, constraints, quality.
 
 ---
 
