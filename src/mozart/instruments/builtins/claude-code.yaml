@@ -55,6 +55,20 @@ cli:
   command:
     executable: claude
     prompt_flag: "-p"
+    # Credential filtering: only pass Anthropic auth env vars to Claude subprocess.
+    # Prevents OPENAI_API_KEY, GOOGLE_API_KEY, etc. from leaking to Anthropic's CLI.
+    required_env:
+      - ANTHROPIC_API_KEY
+      - CLAUDE_CODE_USE_BEDROCK
+      - CLAUDE_CODE_USE_VERTEX
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN
+      - AWS_REGION
+      - AWS_DEFAULT_REGION
+      - GOOGLE_APPLICATION_CREDENTIALS
+      - GOOGLE_CLOUD_PROJECT
+      - CLOUD_ML_REGION
     model_flag: "--model"
     auto_approve_flag: "--dangerously-skip-permissions"
     output_format_flag: "--output-format"

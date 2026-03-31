@@ -51,6 +51,13 @@ cli:
   command:
     executable: gemini
     prompt_flag: "-p"
+    # Credential filtering: only pass Google auth env vars to gemini subprocess.
+    # Prevents ANTHROPIC_API_KEY, OPENAI_API_KEY, etc. from leaking to Google's CLI.
+    required_env:
+      - GOOGLE_API_KEY
+      - GOOGLE_APPLICATION_CREDENTIALS
+      - GOOGLE_CLOUD_PROJECT
+      - CLOUDSDK_CONFIG
     model_flag: "-m"
     auto_approve_flag: "--yolo"
     output_format_flag: "-o"

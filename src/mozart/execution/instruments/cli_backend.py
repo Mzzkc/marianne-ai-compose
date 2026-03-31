@@ -32,6 +32,29 @@ from mozart.utils.json_path import extract_json_path
 
 _logger = get_logger("backend.plugin_cli")
 
+# System env vars that are always passed through to instrument subprocesses,
+# regardless of required_env filtering. These are needed for basic process
+# operation — without PATH the binary can't be found, without HOME many
+# tools fail, without TERM terminal rendering breaks.
+SYSTEM_ENV_VARS: frozenset[str] = frozenset({
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TERM",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "XDG_RUNTIME_DIR",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+})
+
 
 class PluginCliBackend(Backend):
     """Generic CLI backend driven by an InstrumentProfile.
@@ -180,19 +203,57 @@ class PluginCliBackend(Backend):
     def _build_env(self) -> dict[str, str] | None:
         """Build subprocess environment from profile.
 
-        Merges profile env vars into the current environment. ${VAR}
-        references are expanded from os.environ.
+        When ``required_env`` is set on the CLI command, only the declared
+        env vars (plus system essentials like PATH, HOME) are passed to
+        the subprocess.  This prevents credentials for other services
+        (ANTHROPIC_API_KEY, OPENAI_API_KEY, AWS_SECRET_ACCESS_KEY, etc.)
+        from leaking to instrument subprocesses that don't need them.
+
+        When ``required_env`` is None (the default), the full parent
+        environment is inherited — backward compatible with existing
+        behavior.
+
+        Profile-declared env vars (``cli.command.env``) are always merged
+        in, with ``${VAR}`` expansion from ``os.environ``.
 
         Returns:
-            Environment dict, or None to inherit parent environment.
+            Environment dict, or None to inherit parent environment
+            (only when no filtering and no profile env vars).
         """
         profile_env = self._cli.command.env
-        if not profile_env:
+        required_env = self._cli.command.required_env
+
+        # No filtering requested and no profile env vars → inherit parent
+        if required_env is None and not profile_env:
             return None
 
-        env = dict(os.environ)
+        if required_env is not None:
+            # Filtered mode: start with system essentials only
+            env: dict[str, str] = {}
+            for key in SYSTEM_ENV_VARS:
+                if key in os.environ:
+                    env[key] = os.environ[key]
+
+            # Add declared required vars from parent environment
+            for key in required_env:
+                if key in os.environ:
+                    env[key] = os.environ[key]
+
+            _logger.debug(
+                "plugin_cli_env_filtered",
+                instrument=self._profile.name,
+                required_vars=len(required_env),
+                system_vars=len([k for k in SYSTEM_ENV_VARS if k in os.environ]),
+                total_env_vars=len(env),
+                filtered_out=len(os.environ) - len(env),
+            )
+        else:
+            # Unfiltered mode: full parent environment (backward compatible)
+            env = dict(os.environ)
+
+        # Merge profile-declared env vars (always applied)
         for key, value in profile_env.items():
-            # Expand ${VAR} references
+            # Expand ${VAR} references from os.environ (not the filtered env)
             expanded = os.path.expandvars(value)
             env[key] = expanded
 

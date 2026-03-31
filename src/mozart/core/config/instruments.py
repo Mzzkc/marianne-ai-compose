@@ -184,6 +184,16 @@ class CliCommand(BaseModel):
         "Values can reference os.environ via ${VAR} syntax.",
     )
 
+    # Credential filtering — declare which env vars the instrument needs
+    required_env: list[str] | None = Field(
+        default=None,
+        description="Env vars the instrument needs from the parent environment. "
+        "When set, only these vars (plus system essentials like PATH, HOME) "
+        "are passed to the subprocess. When None (default), the full parent "
+        "environment is inherited (backward compatible). Use this to prevent "
+        "credentials for other services from leaking to instrument subprocesses.",
+    )
+
 
 class CliOutputConfig(BaseModel):
     """How to parse CLI output into an ExecutionResult.

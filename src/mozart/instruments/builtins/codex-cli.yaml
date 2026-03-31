@@ -39,6 +39,10 @@ cli:
     executable: codex
     subcommand: "exec"
     prompt_flag: null  # positional argument
+    # Credential filtering: only pass OpenAI auth env vars to Codex subprocess.
+    required_env:
+      - OPENAI_API_KEY
+      - CODEX_API_KEY
     model_flag: "--model"
     auto_approve_flag: "--full-auto"
     output_format_flag: "--json"

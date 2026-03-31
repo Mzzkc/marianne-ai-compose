@@ -15,6 +15,13 @@ Test categories:
 4. Instrument state bridge — does rate limiting on one instrument leave
    others unaffected?
 5. Cost enforcement — does the baton actually stop spending?
+6. Exhaustion decision tree — healing → escalation → failure priority
+7. Preamble intelligence — does it help agents orient?
+8. Baton musician prompt rendering — does the baton build prompts that make
+   agents MORE effective than raw templates? (F-104)
+9. Error taxonomy intelligence — does E006 stale detection get different
+   treatment from E001 timeout? Does Phase 4.5 catch masked rate limits?
+10. Sheet entity template variables — do new and old terminology coexist?
 
 Every test in this file answers: "Is the system smarter WITH this than WITHOUT?"
 """
@@ -26,6 +33,7 @@ from pathlib import Path
 
 from mozart.core.config import PromptConfig, ValidationRule
 from mozart.core.config.spec import SpecFragment
+from mozart.core.sheet import Sheet
 from mozart.daemon.baton.core import BatonCore
 from mozart.daemon.baton.events import (
     RateLimitExpired,
@@ -35,12 +43,12 @@ from mozart.daemon.baton.events import (
     SheetSkipped,
 )
 from mozart.daemon.baton.state import (
+    AttemptMode,
     BatonSheetStatus,
     SheetExecutionState,
 )
 from mozart.prompts.preamble import build_preamble
 from mozart.prompts.templating import PromptBuilder, SheetContext
-
 
 # =============================================================================
 # 1. PROMPT ASSEMBLY EFFECTIVENESS
@@ -285,7 +293,7 @@ class TestSpecTagsSerializationRoundtrip:
             f"spec_tags.get(1) should return ['goals', 'safety'], "
             f"got {restored.spec_tags.get(1)}. "
             f"Keys are: {list(restored.spec_tags.keys())} "
-            f"(types: {[type(k) for k in restored.spec_tags.keys()]})"
+            f"(types: {[type(k) for k in restored.spec_tags]})"
         )
         assert restored.spec_tags.get(3) == ["code"]
 
@@ -312,7 +320,7 @@ class TestSpecTagsSerializationRoundtrip:
         assert restored.spec_tags.get(1) == ["goals"], (
             f"After JSON string roundtrip, spec_tags.get(1) returned "
             f"{restored.spec_tags.get(1)} instead of ['goals']. "
-            f"Key types: {[type(k) for k in restored.spec_tags.keys()]}"
+            f"Key types: {[type(k) for k in restored.spec_tags]}"
         )
 
     def test_dependencies_survive_json_roundtrip(self) -> None:
@@ -840,3 +848,514 @@ class TestPreambleIntelligence:
         assert "2" in retry or "retry" in retry.lower()
         # Retry preamble tells agent to study what went wrong
         assert "previous" in retry.lower() or "failed" in retry.lower()
+
+
+# =============================================================================
+# 8. BATON MUSICIAN PROMPT RENDERING (F-104 — the critical unblock)
+# =============================================================================
+
+
+class TestBatonMusicianPromptRendering:
+    """Does the baton musician's _build_prompt() make agents more effective?
+
+    F-104 was the blocker: the baton's musician rendered raw templates with no
+    preamble, no injections, no validation requirements. Now it has a full
+    5-layer pipeline. The litmus: is the assembled prompt richer and more
+    actionable than the raw template alone?
+    """
+
+    def test_build_prompt_is_richer_than_raw_template(self) -> None:
+        """The baton musician's _build_prompt() produces a prompt with MORE
+        actionable layers than just the template text.
+
+        This is THE litmus test for F-104. If the assembled prompt is just
+        the template, the intelligence pipeline isn't working.
+        """
+        from mozart.core.config.execution import ValidationRule as VR
+        from mozart.daemon.baton.musician import _build_prompt
+        from mozart.daemon.baton.state import AttemptContext
+
+        sheet = Sheet(
+            num=3, movement=2, voice=1, voice_count=3,
+            workspace=Path("/tmp/litmus-test"),
+            instrument_name="claude-code",
+            prompt_template="Implement the {{ module }} module in {{ workspace }}",
+            variables={"module": "authentication"},
+            validations=[
+                VR(type="file_exists", path="{workspace}/auth.py",
+                   description="Auth module file"),
+                VR(type="command_succeeds", command="cd {workspace} && python -m pytest",
+                   description="Tests pass"),
+            ],
+        )
+        ctx = AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL)
+
+        prompt = _build_prompt(sheet, ctx, total_sheets=9, total_movements=3)
+
+        # The raw template is just one line. The assembled prompt must be
+        # substantially richer.
+        raw = "Implement the authentication module in /tmp/litmus-test"
+        assert len(prompt) > len(raw) * 3, (
+            f"Assembled prompt ({len(prompt)} chars) should be >3x raw "
+            f"({len(raw)} chars). The intelligence layers aren't adding value."
+        )
+
+        # Layer 1: Preamble — agent knows its position
+        assert "sheet 3 of 9" in prompt, "Preamble must tell agent its position"
+        assert "/tmp/litmus-test" in prompt, "Preamble must include workspace"
+
+        # Layer 2: Rendered template — variables are expanded
+        assert "authentication" in prompt, "Template variables must be expanded"
+        assert "{{ module }}" not in prompt, "Raw Jinja2 must NOT appear"
+
+        # Layer 4: Validation requirements — agent knows success criteria
+        assert "Success Requirements" in prompt, "Validations must be formatted"
+        assert "Auth module file" in prompt, "Validation descriptions included"
+        assert "Tests pass" in prompt, "All validation descriptions included"
+
+    def test_build_prompt_includes_completion_suffix(self) -> None:
+        """In completion mode, the prompt tells the agent to finish remaining work.
+
+        This matters because completion mode means validations partially passed.
+        The agent should focus on what FAILED, not redo everything.
+        """
+        from mozart.daemon.baton.musician import _build_prompt
+        from mozart.daemon.baton.state import AttemptContext
+
+        sheet = Sheet(
+            num=1, movement=1, voice=None, voice_count=1,
+            workspace=Path("/tmp/ws"),
+            instrument_name="claude-code",
+            prompt_template="Build everything",
+        )
+        ctx = AttemptContext(
+            attempt_number=2,
+            mode=AttemptMode.COMPLETION,
+            completion_prompt_suffix="IMPORTANT: Focus on the FAILED validations only.",
+        )
+
+        prompt = _build_prompt(sheet, ctx, total_sheets=1, total_movements=1)
+
+        assert "FAILED validations" in prompt, (
+            "Completion suffix must appear in the prompt"
+        )
+        # The suffix should be at the END (last thing the agent reads)
+        suffix_pos = prompt.index("FAILED validations")
+        assert suffix_pos > len(prompt) * 0.7, (
+            "Completion suffix should be near the end of the prompt"
+        )
+
+    def test_build_prompt_template_file_takes_precedence(self) -> None:
+        """When template_file is set, it's used instead of prompt_template.
+
+        The v3 score and many real scores use template_file. If _build_prompt
+        silently ignores it and uses prompt_template instead, agents get
+        an empty or wrong prompt.
+        """
+        import tempfile
+
+        from mozart.daemon.baton.musician import _build_prompt
+        from mozart.daemon.baton.state import AttemptContext
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", delete=False
+        ) as f:
+            f.write("You are working on movement {{ movement }} of {{ total_movements }}.")
+            f.flush()
+            template_path = Path(f.name)
+
+        try:
+            sheet = Sheet(
+                num=1, movement=2, voice=None, voice_count=1,
+                workspace=Path("/tmp/ws"),
+                instrument_name="claude-code",
+                prompt_template="THIS SHOULD NOT APPEAR",
+                template_file=template_path,
+            )
+            ctx = AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL)
+            prompt = _build_prompt(sheet, ctx, total_sheets=5, total_movements=3)
+
+            assert "THIS SHOULD NOT APPEAR" not in prompt, (
+                "template_file must take precedence over prompt_template"
+            )
+            assert "movement 2 of 3" in prompt, (
+                "template_file content must be rendered with variables"
+            )
+        finally:
+            template_path.unlink(missing_ok=True)
+
+    def test_build_prompt_retry_preamble_differs(self) -> None:
+        """On retry, the preamble gives the agent DIFFERENT context.
+
+        If the retry preamble is identical to first run, the agent learns
+        nothing from the retry — it just repeats the same approach.
+        """
+        from mozart.daemon.baton.musician import _build_prompt
+        from mozart.daemon.baton.state import AttemptContext
+
+        sheet = Sheet(
+            num=1, movement=1, voice=None, voice_count=1,
+            workspace=Path("/tmp/ws"),
+            instrument_name="claude-code",
+            prompt_template="Do the work",
+        )
+
+        first_run = _build_prompt(
+            sheet, AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL),
+            total_sheets=1, total_movements=1,
+        )
+        retry = _build_prompt(
+            sheet, AttemptContext(attempt_number=3, mode=AttemptMode.NORMAL),
+            total_sheets=1, total_movements=1,
+        )
+
+        assert first_run != retry, "Retry prompt must differ from first run"
+        # Retry should mention previous attempts
+        assert "2" in retry or "retry" in retry.lower() or "previous" in retry.lower()
+
+    def test_validation_requirements_show_expanded_paths(self) -> None:
+        """Validation paths expand {workspace} to the actual path.
+
+        An agent seeing '{workspace}/auth.py' has to guess the path.
+        An agent seeing '/tmp/ws/auth.py' knows exactly what to create.
+        """
+        from mozart.daemon.baton.musician import _format_validation_requirements
+
+        rules = [
+            type("Rule", (), {
+                "type": "file_exists",
+                "path": "{workspace}/output.md",
+                "description": "Output file must exist",
+            })(),
+        ]
+        template_vars = {"workspace": "/home/user/project", "sheet_num": 1}
+
+        result = _format_validation_requirements(rules, template_vars)
+
+        assert "/home/user/project/output.md" in result, (
+            "Validation path should expand {workspace} to actual path"
+        )
+        assert "{workspace}" not in result, (
+            "Raw template variable should be replaced"
+        )
+
+
+# =============================================================================
+# 9. ERROR TAXONOMY INTELLIGENCE (E006 stale vs E001 timeout, F-098 Phase 4.5)
+# =============================================================================
+
+
+class TestErrorTaxonomyIntelligence:
+    """Does the error taxonomy make meaningful distinctions?
+
+    A classification system that maps everything to the same code is useless.
+    The litmus: do DIFFERENT error conditions get DIFFERENT treatment?
+    """
+
+    def test_stale_detection_classified_differently_from_timeout(self) -> None:
+        """E006 (stale) has different retry behavior than E001 (timeout).
+
+        Why this matters: stale detection means the agent went silent (no
+        output for N minutes). Timeout means the agent hit the wall clock.
+        The recovery strategy differs: stale → longer delay (agent may need
+        more think time), timeout → shorter delay (try again sooner).
+        """
+        from mozart.core.errors.codes import (
+            _RETRY_BEHAVIORS,
+            ErrorCode,
+        )
+
+        stale_behavior = _RETRY_BEHAVIORS[ErrorCode.EXECUTION_STALE]
+        timeout_behavior = _RETRY_BEHAVIORS[ErrorCode.EXECUTION_TIMEOUT]
+
+        # Both are retriable
+        assert stale_behavior.is_retriable
+        assert timeout_behavior.is_retriable
+
+        # But with DIFFERENT delays — stale gets MORE time
+        assert stale_behavior.delay_seconds > timeout_behavior.delay_seconds, (
+            f"Stale ({stale_behavior.delay_seconds}s) should have longer delay "
+            f"than timeout ({timeout_behavior.delay_seconds}s)"
+        )
+
+    def test_classifier_distinguishes_stale_from_timeout(self) -> None:
+        """The classifier produces E006 for stale and E001 for timeout.
+
+        The distinction is based on 'stale execution' in the combined output.
+        Without this, stale kills and backend timeouts are indistinguishable
+        in diagnostics — making F-097 undiagnosable.
+        """
+        from mozart.core.errors.classifier import ErrorClassifier
+        from mozart.core.errors.codes import ErrorCode
+
+        classifier = ErrorClassifier()
+
+        # Stale detection — stderr contains the marker
+        stale_result = classifier.classify(
+            stderr="Stale execution: no output for 1800s",
+            exit_reason="timeout",
+        )
+        assert stale_result.error_code == ErrorCode.EXECUTION_STALE, (
+            f"Stale detection should produce E006, got {stale_result.error_code}"
+        )
+
+        # Regular timeout — no stale marker
+        timeout_result = classifier.classify(
+            stderr="Command timed out after 10800s",
+            exit_reason="timeout",
+        )
+        assert timeout_result.error_code == ErrorCode.EXECUTION_TIMEOUT, (
+            f"Regular timeout should produce E001, got {timeout_result.error_code}"
+        )
+
+    def test_phase_4_5_catches_rate_limit_masked_by_json_errors(self) -> None:
+        """Phase 4.5 detects rate limits even when Phase 1 JSON errors mask them.
+
+        This is the F-098 regression test. The v3 production failure: Claude CLI
+        returns structured JSON errors AND rate limit text in stdout. Phase 1
+        finds the JSON errors, Phase 4 never fires (it only runs when no errors
+        found), and the rate limit is classified as E999 (permanent). The agent
+        retries 28 times without rate limit backoff.
+
+        Phase 4.5 ALWAYS runs, even after Phase 1, and scans stdout+stderr for
+        rate limit patterns.
+        """
+        from mozart.core.errors.classifier import ErrorClassifier
+        from mozart.core.errors.codes import ErrorCategory
+
+        classifier = ErrorClassifier()
+
+        # The exact production scenario: JSON errors in stdout WITH rate limit
+        result = classifier.classify_execution(
+            stdout=(
+                '{"type":"error","error":{"type":"overloaded",'
+                '"message":"service overloaded"}}\n'
+                "API Error: Rate limit reached"
+            ),
+            stderr="",
+            exit_code=1,
+        )
+
+        # The rate limit MUST be detected as the root cause
+        assert result.primary.category == ErrorCategory.RATE_LIMIT, (
+            f"Rate limit should be primary classification, got "
+            f"{result.primary.category}. Without Phase 4.5, this was E999."
+        )
+
+    def test_rate_limit_in_stdout_only_still_detected(self) -> None:
+        """Rate limits in stdout (not stderr) are caught.
+
+        Many CLI tools write error messages to stdout, not stderr.
+        The classifier must scan BOTH.
+        """
+        from mozart.core.errors.classifier import ErrorClassifier
+        from mozart.core.errors.codes import ErrorCategory
+
+        classifier = ErrorClassifier()
+
+        result = classifier.classify_execution(
+            stdout="You've hit your limit · resets 11pm",
+            stderr="",
+            exit_code=0,
+        )
+
+        has_rate_limit = any(
+            e.category == ErrorCategory.RATE_LIMIT
+            for e in result.all_errors
+        )
+        assert has_rate_limit, (
+            f"Rate limit in stdout should be detected. "
+            f"Got primary: {result.primary.category}"
+        )
+
+
+# =============================================================================
+# 10. SHEET ENTITY TEMPLATE VARIABLES — TERMINOLOGY COEXISTENCE
+# =============================================================================
+
+
+class TestSheetEntityIntelligence:
+    """Does the Sheet entity produce template variables that serve both
+    old and new terminology users?
+
+    A score author using {{ stage }} and one using {{ movement }} should
+    both get the correct value. If they diverge, migration is impossible.
+    """
+
+    def test_old_and_new_terminology_produce_identical_values(self) -> None:
+        """{{ stage }} == {{ movement }}, {{ instance }} == {{ voice }}, etc.
+
+        This is the backward compatibility litmus. Every old template MUST
+        produce the same output as its new-terminology equivalent.
+        """
+        sheet = Sheet(
+            num=5, movement=2, voice=3, voice_count=4,
+            workspace=Path("/tmp/ws"),
+            instrument_name="gemini-cli",
+        )
+
+        tvars = sheet.template_variables(total_sheets=12, total_movements=3)
+
+        # New and old produce identical values
+        assert tvars["movement"] == tvars["stage"], "movement != stage"
+        assert tvars["voice"] == tvars["instance"], "voice != instance"
+        assert tvars["voice_count"] == tvars["fan_count"], "voice_count != fan_count"
+        assert tvars["total_movements"] == tvars["total_stages"], (
+            "total_movements != total_stages"
+        )
+
+        # Values are correct
+        assert tvars["movement"] == 2
+        assert tvars["voice"] == 3
+        assert tvars["voice_count"] == 4
+        assert tvars["total_movements"] == 3
+        assert tvars["sheet_num"] == 5
+        assert tvars["total_sheets"] == 12
+        assert tvars["instrument_name"] == "gemini-cli"
+
+    def test_custom_variables_dont_override_builtins(self) -> None:
+        """Score-defined variables with builtin names don't clobber builtins.
+
+        If a score defines variables: {sheet_num: "wrong"}, the template
+        should still get the real sheet number, not the user's override.
+        """
+        sheet = Sheet(
+            num=7, movement=3, voice=None, voice_count=1,
+            workspace=Path("/tmp/ws"),
+            instrument_name="claude-code",
+            variables={"sheet_num": "WRONG", "workspace": "ALSO_WRONG", "custom": "ok"},
+        )
+
+        tvars = sheet.template_variables(total_sheets=10, total_movements=4)
+
+        # Builtins win
+        assert tvars["sheet_num"] == 7, "Builtin sheet_num overridden by custom"
+        assert tvars["workspace"] == "/tmp/ws", "Builtin workspace overridden"
+        # Custom variables still available
+        assert tvars["custom"] == "ok"
+
+    def test_solo_movement_voice_is_none(self) -> None:
+        """For non-fan-out movements, voice is None (not 0 or 1).
+
+        Score templates that check `{% if voice %}` need None for solo
+        movements to correctly skip voice-specific logic.
+        """
+        sheet = Sheet(
+            num=1, movement=1, voice=None, voice_count=1,
+            workspace=Path("/tmp/ws"),
+            instrument_name="claude-code",
+        )
+
+        tvars = sheet.template_variables(total_sheets=5, total_movements=3)
+        assert tvars["voice"] is None
+        assert tvars["instance"] is None  # Old alias also None
+
+
+# =============================================================================
+# 11. CROSS-SYSTEM INTEGRATION — DO THE PIECES COMPOSE?
+# =============================================================================
+
+
+class TestCrossSystemIntegration:
+    """Do the intelligence subsystems compose correctly?
+
+    Each subsystem works in isolation (proven by unit tests). The litmus:
+    do they produce correct behavior when chained together?
+    """
+
+    def test_musician_classify_error_maps_to_baton_decisions(self) -> None:
+        """The musician's error classification feeds the baton's decision tree.
+
+        The musician produces classifications like "AUTH_FAILURE", "TRANSIENT",
+        "EXECUTION_ERROR". The baton uses these to decide retry/fail/escalate.
+        If the mapping is wrong, good classifications lead to bad decisions.
+        """
+        from mozart.backends.base import ExecutionResult
+        from mozart.daemon.baton.musician import _classify_error
+
+        # AUTH_FAILURE → baton should fail immediately (no retry)
+        auth_result = ExecutionResult(
+            success=False,
+            stdout="",
+            stderr="Error: 401 unauthorized - invalid api key",
+            duration_seconds=1.0,
+            exit_code=1,
+        )
+        classification, _ = _classify_error(auth_result)
+        assert classification == "AUTH_FAILURE"
+
+        # TRANSIENT → baton should retry
+        killed_result = ExecutionResult(
+            success=False,
+            stdout="",
+            stderr="",
+            duration_seconds=30.0,
+            exit_code=None,
+        )
+        classification, _ = _classify_error(killed_result)
+        assert classification == "TRANSIENT"
+
+        # Success → no classification (not an error)
+        success_result = ExecutionResult(
+            success=True,
+            stdout="All done!",
+            stderr="",
+            duration_seconds=5.0,
+            exit_code=0,
+        )
+        classification, _ = _classify_error(success_result)
+        assert classification is None
+
+    def test_credential_redaction_in_capture_output(self) -> None:
+        """Output containing API keys is redacted before reaching the baton.
+
+        If credentials leak into SheetAttemptResult, they propagate to
+        6+ storage locations (F-003). The redaction happens in the musician's
+        _capture_output, which is the single bottleneck for all output.
+        """
+        from mozart.backends.base import ExecutionResult
+        from mozart.daemon.baton.musician import _capture_output
+
+        result = ExecutionResult(
+            success=True,
+            stdout="Using API key: sk-ant-api03-SECRET_KEY_HERE and done",
+            stderr="Warning: AKIA1234567890123456 detected in env",
+            duration_seconds=2.0,
+            exit_code=0,
+        )
+
+        stdout, stderr = _capture_output(result)
+
+        # API keys must be redacted
+        assert "sk-ant-api03-SECRET_KEY_HERE" not in stdout
+        assert "REDACTED" in stdout
+        assert "AKIA1234567890123456" not in stderr
+        assert "REDACTED" in stderr
+
+    async def test_f018_contract_no_validations_means_100_percent(self) -> None:
+        """F-018: execution succeeds with no validations → 100% pass rate.
+
+        The baton's decision tree treats 0% as "all validations failed"
+        and retries. Without this contract, every sheet without validations
+        would retry until exhaustion.
+        """
+        from mozart.backends.base import ExecutionResult
+        from mozart.daemon.baton.musician import _validate
+
+        sheet = Sheet(
+            num=1, movement=1, voice=None, voice_count=1,
+            workspace=Path("/tmp/ws"),
+            instrument_name="claude-code",
+            validations=[],  # No validations
+        )
+        exec_result = ExecutionResult(
+            success=True, stdout="Done", stderr="", duration_seconds=1.0,
+            exit_code=0,
+        )
+
+        _passed, total, rate, _ = await _validate(sheet, exec_result)
+
+        assert rate == 100.0, (
+            f"No validations + success should be 100% pass rate, got {rate}"
+        )
+        assert total == 0  # No rules means 0 total
