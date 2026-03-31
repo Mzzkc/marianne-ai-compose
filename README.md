@@ -139,13 +139,14 @@ While the score runs (or after), check status:
 mozart status hello-mozart
 ```
 
-### 6. Read the Output
+### 6. Open the Result
 
 ```bash
-cat workspaces/hello-mozart/03-finale.md
+open workspaces/hello-mozart/the-sky-library.html   # macOS
+# xdg-open workspaces/hello-mozart/the-sky-library.html  # Linux
 ```
 
-The workspace contains five files: a world setting, three character vignettes, and a finale that weaves them together.
+The workspace contains a beautifully designed HTML page that presents the complete story collection — world setting, three character vignettes, and a finale — as an immersive reading experience you can open in any browser.
 
 ### 7. Resume if Interrupted
 
