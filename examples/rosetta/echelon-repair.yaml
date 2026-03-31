@@ -1,0 +1,589 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║              ECHELON REPAIR — Codebase Security Audit                       ║
+# ║                                                                             ║
+# ║  Pattern: Echelon Repair (Rosetta Pattern Corpus)                           ║
+# ║  Category: Security — audit a codebase with instrument-matched tiers        ║
+# ║                                                                             ║
+# ║  WHY Echelon Repair is the RIGHT pattern for this problem:                  ║
+# ║                                                                             ║
+# ║  Security findings have wildly varying severity, and the optimal analysis   ║
+# ║  approach changes categorically with that severity. A hardcoded password    ║
+# ║  is found by grep in milliseconds (E1). A SQL injection vector requires    ║
+# ║  understanding data flow through function calls (E2). A trust boundary     ║
+# ║  violation requires reasoning about the architecture as a whole (E3).      ║
+# ║  Using the most expensive instrument on every finding is wasteful. Using   ║
+# ║  the cheapest on every finding misses architectural vulnerabilities.       ║
+# ║                                                                             ║
+# ║  This is NOT Immune Cascade (which narrows from broad to targeted). This   ║
+# ║  is intake classification — all findings are classified FIRST, then each   ║
+# ║  is routed to the appropriate repair echelon.                              ║
+# ║                                                                             ║
+# ║  This is NOT Fan-out + Synthesis (which runs N copies of the same task).   ║
+# ║  Stages 3-5 do fundamentally different work with different instruments     ║
+# ║  on different subsets of findings.                                         ║
+# ║                                                                             ║
+# ║  Execution Flow (6 stages):                                                ║
+# ║                                                                             ║
+# ║    Stage 1: Security Surface Inventory                                     ║
+# ║         |                                                                   ║
+# ║         v                                                                   ║
+# ║    Stage 2: Echelon Diagnosis (classify E1/E2/E3)                          ║
+# ║         |                                                                   ║
+# ║    +----+----+----+                                                         ║
+# ║    v         v    v                                                         ║
+# ║  Stage 3   Stage 4  Stage 5                                                ║
+# ║  E1 Field  E2 Sust  E3 Depot    (each tier works its classified findings) ║
+# ║    |         |    |                                                         ║
+# ║    +----+----+----+                                                         ║
+# ║         v                                                                   ║
+# ║    Stage 6: Consolidated Audit Report                                      ║
+# ║                                                                             ║
+# ║  Instruments:                                                               ║
+# ║    Stage 1-2: claude-code (inventory + diagnosis — fast classification)    ║
+# ║    Stage 3:   CLI validations (bandit, grep, dep check — no AI needed)     ║
+# ║    Stage 4:   claude-code (code-level analysis requires file access)       ║
+# ║    Stage 5:   claude-code (architectural reasoning requires full context)  ║
+# ║    Stage 6:   claude-code (report compilation from all echelons)           ║
+# ║                                                                             ║
+# ║  Production variant: Haiku for Stage 2, CLI-only for Stage 3, Sonnet for  ║
+# ║  Stage 4, Opus for Stage 5. The pattern supports per-tier instruments.    ║
+# ║                                                                             ║
+# ║  Usage:                                                                     ║
+# ║    cd /path/to/your/project                                                ║
+# ║    mozart start                                                             ║
+# ║    mozart run examples/echelon-security-audit.yaml                         ║
+# ║    mozart status security-audit                                            ║
+# ║                                                                             ║
+# ║  Output:                                                                    ║
+# ║    workspaces/security-audit/                                              ║
+# ║      security-surface.yaml     — Inventory of security-relevant files      ║
+# ║      work-orders.yaml          — All findings classified by echelon        ║
+# ║      field-results.md          — E1: Automated tool scan results           ║
+# ║      sustained-results.md      — E2: Code-level analysis with patches     ║
+# ║      depot-results.md          — E3: Architectural security assessment     ║
+# ║      audit-report.md           — Consolidated report with roadmap          ║
+# ║                                                                             ║
+# ║  Time: ~30 minutes  |  Cost: ~$5.00  |  Sheets: 6                         ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: security-audit
+description: "Echelon Repair security audit — classify findings by severity, route to instrument-matched tiers"
+
+workspace: ../workspaces/security-audit
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 1800  # 30 min per stage — E3 depot needs deep analysis time
+
+sheet:
+  size: 1
+  total_items: 6
+  dependencies:
+    2: [1]       # Diagnosis depends on inventory
+    3: [2]       # E1 field scan depends on diagnosis
+    4: [2]       # E2 sustained analysis depends on diagnosis
+    5: [2]       # E3 depot review depends on diagnosis
+    6: [3, 4, 5] # Report depends on all three echelons
+
+parallel:
+  enabled: true
+  max_concurrent: 3  # E1, E2, E3 can run in parallel after diagnosis
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 5000
+  lookback_sheets: 5
+  capture_files:
+    - "{{ workspace }}/*.yaml"
+    - "{{ workspace }}/*.md"
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+prompt:
+  template: |
+    {# ── Macros ─────────────────────────────────────────────────────────── #}
+
+    {% macro echelon_header(name, level, desc) %}
+    # {{ name }}
+
+    **Echelon:** {{ level }}
+    **Purpose:** {{ desc }}
+
+    Read `{{ workspace }}/work-orders.yaml` for the classified findings.
+    Read `{{ workspace }}/security-surface.yaml` for the file inventory.
+    {% endmacro %}
+
+    {% macro finding_format() %}
+    ## Finding Documentation Format
+
+    For each finding, document:
+
+    ### [ID]: [Category] in [file]:[line]
+    **Echelon:** E1|E2|E3
+    **Severity:** critical|high|medium|low
+    **Status:** CONFIRMED | FALSE POSITIVE | REMEDIATED
+    **Analysis:** [What the issue is and why it matters]
+    **Evidence:** [Specific code showing the vulnerability]
+    **Fix:** [Code patch or recommendation]
+    **Risk if Unfixed:** [Concrete consequence — data breach, RCE, etc.]
+    {% endmacro %}
+
+    {% macro target_codebase() %}
+    ## Target Codebase
+
+    Analyze the codebase at the current working directory (the project root).
+    Focus on source code — ignore test files, documentation, and generated code
+    unless they contain security-relevant configuration (e.g., test fixtures
+    with hardcoded credentials).
+    {% endmacro %}
+
+    {# ── Stage 1: Security Surface Inventory ────────────────────────────── #}
+
+    {% if stage == 1 %}
+    # Stage 1: Security Surface Inventory
+
+    Map the attack surface of this codebase. This inventory drives all
+    subsequent analysis — missing files here means missing findings later.
+
+    {{ target_codebase() }}
+
+    ## Produce security-surface.yaml
+
+    Walk the codebase and write `{{ workspace }}/security-surface.yaml` with:
+
+    ```yaml
+    project:
+      name: <project name from setup.py/pyproject.toml/package.json>
+      language: <primary language>
+      framework: <web framework if any>
+      entry_points: [<CLI scripts, API routes, main functions>]
+
+    files:
+      - path: <relative file path>
+        language: <py|js|ts|go|rs|etc>
+        loc: <lines of code, approximate>
+        handles:
+          - <categories from: auth, user_input, file_io, network,
+             database, crypto, secrets, serialization, process_exec,
+             config_parsing, logging>
+        entry_point: <true|false>
+        risk_notes: <brief note if anything stands out>
+
+    dependencies:
+      - name: <package name>
+        version: <version or constraint>
+        purpose: <what it does>
+        risk_note: <known concerns if any>
+
+    summary:
+      total_files: <count>
+      security_relevant_files: <count>
+      entry_points: <count>
+      high_risk_categories: [<categories with most exposure>]
+    ```
+
+    Be thorough. Every file that handles user input, network I/O, file
+    operations, authentication, or secrets management must appear.
+
+    {# ── Stage 2: Echelon Diagnosis ──────────────────────────────────────── #}
+
+    {% elif stage == 2 %}
+    # Stage 2: Echelon Diagnosis — Classify All Findings
+
+    Read `{{ workspace }}/security-surface.yaml`. For every security-relevant
+    file, identify potential issues and classify them into echelons.
+
+    ## Echelon Classification Rules
+
+    **E1 (Field — automated tool catches this):**
+    - Hardcoded secrets, API keys, passwords
+    - Use of deprecated or insecure functions (md5 for passwords, eval, exec)
+    - Missing input validation on obvious boundaries
+    - Import of known-vulnerable packages
+    - Insecure default configurations
+    - Missing security headers
+    - Debug mode enabled in production config
+    - Overly permissive file permissions
+
+    **E2 (Sustained — requires understanding code logic):**
+    - SQL injection vectors
+    - XSS vulnerabilities
+    - Path traversal / directory traversal
+    - Insecure deserialization
+    - Race conditions (TOCTOU, concurrent file access)
+    - Authentication bypass possibilities
+    - Authorization check gaps
+    - Information disclosure through error messages
+    - Session management weaknesses
+
+    **E3 (Depot — requires architectural reasoning):**
+    - Trust boundary violations
+    - Privilege escalation paths
+    - Cryptographic protocol misuse
+    - State management vulnerabilities
+    - Supply chain attack surface
+    - Insecure inter-service communication
+    - Data flow security across system boundaries
+    - Failure mode security (what happens when subsystems fail?)
+
+    ## Output
+
+    Write `{{ workspace }}/work-orders.yaml`:
+
+    ```yaml
+    diagnosis_summary:
+      total_findings: <count>
+      e1_count: <count>
+      e2_count: <count>
+      e3_count: <count>
+      critical_count: <count>
+      high_count: <count>
+
+    findings:
+      - id: "SEC-001"
+        file: <relative path>
+        line: <line number or range>
+        echelon: E1|E2|E3
+        category: <specific category>
+        severity: critical|high|medium|low
+        description: <what the potential issue is>
+        evidence: <code snippet or pattern observed>
+        reason: <why this echelon — what determines the classification>
+    ```
+
+    **Be aggressive with classification** — false positives are cheaper
+    than false negatives. If in doubt between E1 and E2, classify E2.
+    If in doubt between E2 and E3, classify E3. Downstream echelons
+    can downgrade; they cannot upgrade what they never received.
+
+    {# ── Stage 3: E1 Field Scan ──────────────────────────────────────────── #}
+
+    {% elif stage == 3 %}
+    {{ echelon_header("Stage 3: E1 Field-Level Automated Scan", "E1 (Field)", "Run automated security tools. No AI judgment needed — tools produce deterministic results.") }}
+
+    ## Automated Scans
+
+    Run the following scans and collect ALL output. For each tool:
+    - If the tool is installed, run it and capture output
+    - If not installed, note it as SKIPPED — never fail over a missing tool
+
+    ### Scans to Execute
+
+    1. **Secret patterns** — grep for hardcoded passwords, API keys, tokens
+       in all source files
+    2. **Dangerous imports** — grep for eval, exec, unsafe deserialization,
+       subprocess with shell=True
+    3. **Bandit** (if available) — `bandit -r . -f txt` for Python projects
+    4. **Dependency audit** — check for known vulnerable package versions
+    5. **Permission check** — files with overly permissive modes
+    6. **Debug artifacts** — .env files committed, TODO security notes,
+       commented-out auth checks
+
+    ### Cross-Reference with Work Orders
+
+    Read `{{ workspace }}/work-orders.yaml`. For each E1 finding:
+    - Mark CONFIRMED if tools found evidence
+    - Mark FALSE POSITIVE if tools show it is safe (explain why)
+    - Mark NEEDS UPGRADE if the finding is actually E2-level
+
+    ## Output
+
+    Write `{{ workspace }}/field-results.md`:
+
+    ```markdown
+    # E1 Field-Level Security Scan
+
+    ## Tool Inventory
+    | Tool | Status | Findings |
+    |------|--------|----------|
+
+    ## Findings by E1 Work Order
+    ### SEC-XXX: [Description]
+    **Tool:** [which tool found it]
+    **Status:** CONFIRMED / FALSE POSITIVE / NEEDS UPGRADE
+    **Evidence:** [tool output]
+    **Remediation:** [specific fix]
+
+    ## Additional Tool Findings
+    [Findings from tools not in original work orders]
+
+    ## Echelon Upgrades
+    [Any findings reclassified to E2 with justification]
+
+    ## Summary
+    - E1 confirmed: N
+    - E1 false positives: N
+    - Upgraded to E2: N
+    - New from tools: N
+    ```
+
+    {# ── Stage 4: E2 Sustained Analysis ──────────────────────────────────── #}
+
+    {% elif stage == 4 %}
+    {{ echelon_header("Stage 4: E2 Sustained-Level Vulnerability Analysis", "E2 (Sustained)", "Analyze code-level vulnerabilities requiring program logic understanding. Produce specific, applicable patches.") }}
+
+    {{ finding_format() }}
+
+    ## Your Task
+
+    For each E2 finding in work-orders.yaml:
+
+    1. **Read the source file.** Understand the context — what function,
+       what data flows through it, what calls it, what it calls.
+
+    2. **Trace the data flow.** For injection vulnerabilities: where does
+       input originate? Is it sanitized? Where does it reach a sink
+       (SQL query, HTML template, file path, shell command)?
+
+    3. **Determine if exploitable.**
+       - CONFIRMED: exploitable with a concrete attack vector
+       - FALSE POSITIVE: mitigated by context (framework escaping, types, etc.)
+       - NEEDS UPGRADE: architectural concern — escalate to E3
+
+    4. **For confirmed findings: write a concrete patch.**
+       ```diff
+       - vulnerable_line()
+       + fixed_line()
+       ```
+       The patch must be correct, minimal, and preserve functionality.
+
+    5. **For each confirmed finding: describe the attack vector.**
+       "An attacker could [action] by [method], resulting in [impact]."
+
+    ## Output
+
+    Write `{{ workspace }}/sustained-results.md` with full analysis for
+    every E2 item. Include patches, attack vectors, false positive
+    justifications, E3 upgrades, and summary statistics.
+
+    {# ── Stage 5: E3 Depot Analysis ──────────────────────────────────────── #}
+
+    {% elif stage == 5 %}
+    {{ echelon_header("Stage 5: E3 Depot-Level Architectural Security Assessment", "E3 (Depot)", "Assess architectural security — trust boundaries, privilege model, threat model. The hardest problems.") }}
+
+    Also read `{{ workspace }}/field-results.md` and
+    `{{ workspace }}/sustained-results.md` for lower-echelon context.
+    Their findings inform but do not constrain your analysis.
+
+    ## Architectural Analysis Framework
+
+    ### 1. Trust Boundary Analysis
+    Map where trusted code meets untrusted input. For each boundary:
+    - What crosses it? (user input, API responses, file contents, env vars)
+    - What validates at the boundary?
+    - What happens if validation fails?
+
+    ### 2. Privilege Model Review
+    - What can each component do?
+    - Are privileges minimized?
+    - Can a compromised component escalate?
+
+    ### 3. Data Flow Security
+    - Where is sensitive data created, processed, stored, transmitted?
+    - Is it encrypted appropriately at each stage?
+    - Where could it leak? (logs, errors, debug output, caches)
+
+    ### 4. Failure Mode Security
+    - Do error paths expose sensitive information?
+    - Can denial-of-service conditions be triggered?
+    - Are there resource exhaustion vectors?
+
+    ### 5. Threat Model Summary
+    For the top 3-5 threats:
+    - **Threat:** [what an attacker would try]
+    - **Attack path:** [step by step]
+    - **Current mitigation:** [what exists]
+    - **Gap:** [what is missing]
+    - **Recommendation:** [specific, actionable fix]
+
+    ## Output
+
+    Write `{{ workspace }}/depot-results.md` with the full architectural
+    assessment. Include ASCII diagrams for trust boundaries and data flows.
+    Every recommendation must be specific enough to implement without
+    further clarification. This is depot-level work — be thorough.
+
+    {# ── Stage 6: Consolidated Audit Report ──────────────────────────────── #}
+
+    {% elif stage == 6 %}
+    # Stage 6: Consolidated Security Audit Report
+
+    Read ALL workspace files:
+    - `{{ workspace }}/security-surface.yaml` — what was analyzed
+    - `{{ workspace }}/work-orders.yaml` — initial diagnosis
+    - `{{ workspace }}/field-results.md` — E1 automated findings
+    - `{{ workspace }}/sustained-results.md` — E2 code-level analysis
+    - `{{ workspace }}/depot-results.md` — E3 architectural assessment
+
+    ## Produce the Final Report
+
+    Write `{{ workspace }}/audit-report.md`:
+
+    ```markdown
+    # Security Audit Report
+
+    **Project:** [name]
+    **Date:** [today]
+    **Methodology:** Echelon Repair — tiered assessment with
+    instrument-matched analysis depth
+
+    ## Executive Summary
+    [2-3 paragraphs: scope, methodology, headline findings, risk level.
+    Written for the CTO who reads nothing else.]
+
+    ## Methodology
+    | Tier | Approach | Findings |
+    |------|----------|----------|
+    | E1 (Field) | Automated tools (bandit, grep, dep audit) | N |
+    | E2 (Sustained) | AI code-level analysis + patch generation | N |
+    | E3 (Depot) | AI architectural security assessment | N |
+
+    ## Findings Overview
+    | ID | Echelon | Severity | Category | File | Status |
+    [complete table of ALL findings with final status]
+
+    ## Critical and High Findings
+    [Detailed writeup of each critical/high confirmed finding]
+
+    ## Remediation Roadmap
+    | Priority | Finding | Effort | Action |
+    [ordered by risk x effort — highest risk, lowest effort first]
+
+    ### Immediate Actions (do today)
+    ### Short-Term Fixes (this sprint)
+    ### Medium-Term Improvements (this quarter)
+    ### Long-Term Hardening (roadmap)
+
+    ## Echelon Cost Analysis
+    | Echelon | Findings Handled | Estimated Cost | Cost per Finding |
+    [demonstrates how tiered approach distributed cost efficiently]
+
+    ## Appendix
+    See field-results.md, sustained-results.md, depot-results.md
+    for detailed per-echelon findings.
+    ```
+
+    The report must be actionable. A development team reading this knows
+    exactly what to fix, in what order, and how. No vague recommendations.
+
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS — staged fail-fast
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  # ── Stage 1: Inventory must be structured and complete ─────────────────
+  - type: file_exists
+    path: "{workspace}/security-surface.yaml"
+    condition: "stage == 1"
+    description: "Security surface inventory exists"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      import yaml
+      s = yaml.safe_load(open('{{ workspace }}/security-surface.yaml'))
+      assert 'files' in s, 'Missing files section'
+      assert 'summary' in s, 'Missing summary section'
+      assert len(s['files']) > 0, 'No files inventoried'
+      assert s['summary']['security_relevant_files'] > 0, 'No security-relevant files'
+      "
+    condition: "stage == 1"
+    description: "Inventory is structured YAML with files and summary"
+
+  # ── Stage 2: Diagnosis must classify into valid echelons ───────────────
+  - type: file_exists
+    path: "{workspace}/work-orders.yaml"
+    condition: "stage == 2"
+    description: "Work orders exist"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      import yaml
+      w = yaml.safe_load(open('{{ workspace }}/work-orders.yaml'))
+      assert 'findings' in w, 'Missing findings'
+      assert 'diagnosis_summary' in w, 'Missing summary'
+      findings = w['findings']
+      assert len(findings) > 0, 'No findings classified'
+      for f in findings:
+          assert f['echelon'] in ('E1', 'E2', 'E3'), f'Bad echelon: {f[\"echelon\"]}'
+          assert f['severity'] in ('critical', 'high', 'medium', 'low'), f'Bad severity'
+          assert 'id' in f and 'file' in f and 'description' in f, 'Missing fields'
+      "
+    condition: "stage == 2"
+    description: "All findings have valid echelon and severity classifications"
+
+  # ── Stage 3: E1 field scan produces structured results ────────────────
+  - type: file_exists
+    path: "{workspace}/field-results.md"
+    condition: "stage == 3"
+    description: "E1 field scan results exist"
+
+  - type: content_contains
+    path: "{workspace}/field-results.md"
+    pattern: "E1 Field-Level Security Scan"
+    condition: "stage == 3"
+    description: "Field results have expected header"
+
+  # ── Stage 4: E2 sustained analysis with vulnerability detail ──────────
+  - type: file_exists
+    path: "{workspace}/sustained-results.md"
+    condition: "stage == 4"
+    description: "E2 sustained analysis results exist"
+
+  - type: content_contains
+    path: "{workspace}/sustained-results.md"
+    pattern: "CONFIRMED"
+    condition: "stage == 4"
+    description: "Sustained results contain finding status classifications"
+
+  # ── Stage 5: E3 depot analysis covers architecture ─────────────────────
+  - type: file_exists
+    path: "{workspace}/depot-results.md"
+    condition: "stage == 5"
+    description: "E3 depot analysis exists"
+
+  - type: content_contains
+    path: "{workspace}/depot-results.md"
+    pattern: "Trust Boundary"
+    condition: "stage == 5"
+    description: "Depot analysis covers trust boundaries"
+
+  # ── Stage 6: Audit report is comprehensive and actionable ──────────────
+  - type: file_exists
+    path: "{workspace}/audit-report.md"
+    condition: "stage == 6"
+    description: "Consolidated audit report exists"
+
+  - type: content_contains
+    path: "{workspace}/audit-report.md"
+    pattern: "Security Audit Report"
+    condition: "stage == 6"
+    description: "Report has expected title"
+
+  - type: content_contains
+    path: "{workspace}/audit-report.md"
+    pattern: "Executive Summary"
+    condition: "stage == 6"
+    description: "Report has executive summary"
+
+  - type: content_contains
+    path: "{workspace}/audit-report.md"
+    pattern: "Remediation Roadmap"
+    condition: "stage == 6"
+    description: "Report has remediation roadmap"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      report = open('{{ workspace }}/audit-report.md').read()
+      words = len(report.split())
+      assert words > 500, f'Report too thin: {words} words (need 500+)'
+      assert 'E1' in report and 'E2' in report and 'E3' in report, 'Must reference all echelons'
+      "
+    condition: "stage == 6"
+    description: "Report is substantive and covers all three echelons"

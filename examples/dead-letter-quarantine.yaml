@@ -1,0 +1,733 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║       DEAD LETTER QUARANTINE — Batch Utility Script Generator              ║
+# ║                                                                             ║
+# ║  Pattern: Dead Letter Quarantine (Rosetta Pattern Corpus)                   ║
+# ║  Category: Product Engineering — batch-generate Python utilities,           ║
+# ║            quarantine failures, analyze patterns, reprocess                 ║
+# ║                                                                             ║
+# ║  WHY Dead Letter Quarantine is the RIGHT pattern:                           ║
+# ║                                                                             ║
+# ║  Batch code generation fails partially — always. Some scripts will have    ║
+# ║  syntax errors. Some will misunderstand specs. Some will have logic bugs.  ║
+# ║  Blind retry repeats the same failures. Dead Letter Quarantine transforms  ║
+# ║  batch failure into actionable intelligence: quarantine failed items,      ║
+# ║  identify PATTERNS across failures, and reprocess with an ADAPTED          ║
+# ║  strategy that addresses the root cause, not the symptom.                  ║
+# ║                                                                             ║
+# ║  "4 scripts failed because they imported non-stdlib modules" is            ║
+# ║  actionable. "4 scripts failed" is not. The quarantine analysis reveals    ║
+# ║  systematic issues invisible to single-item diagnosis.                     ║
+# ║                                                                             ║
+# ║  This is NOT Andon Cord (single-failure diagnosis). DLQ operates on        ║
+# ║  BATCHES — cross-failure pattern analysis is the structural move.          ║
+# ║                                                                             ║
+# ║  This is NOT simple retry. Reprocessing uses an ADAPTED strategy —         ║
+# ║  different prompt instructions informed by quarantine analysis.            ║
+# ║                                                                             ║
+# ║  Execution Flow (7 stages):                                                ║
+# ║                                                                             ║
+# ║    Stage 1: Write specifications for 10 utility scripts                    ║
+# ║         |                                                                   ║
+# ║         v                                                                   ║
+# ║    Stage 2: Generate scripts (fan-out × 10)                                ║
+# ║         |                                                                   ║
+# ║         v                                                                   ║
+# ║    Stage 3: Validate batch (syntax + import + tests)                       ║
+# ║         |                                                                   ║
+# ║    +----+----+                                                              ║
+# ║    v         v                                                              ║
+# ║  PASS     QUARANTINE                                                       ║
+# ║    |         |                                                              ║
+# ║    |    Stage 4: Collect failures → quarantine.yaml                        ║
+# ║    |         |                                                              ║
+# ║    |    Stage 5: Analyze failure patterns → adapted strategies             ║
+# ║    |         |                                                              ║
+# ║    |    Stage 6: Reprocess quarantined scripts with adapted strategy       ║
+# ║    |         |                                                              ║
+# ║    +----+----+                                                              ║
+# ║         v                                                                   ║
+# ║    Stage 7: Final verification — all scripts must work                     ║
+# ║                                                                             ║
+# ║  Instruments:                                                               ║
+# ║    Stages 1-2, 4-6: claude-code (generation + analysis)                    ║
+# ║    Stages 3, 7: claude-code executing CLI validation commands              ║
+# ║    Production variant: Haiku for S1, Sonnet for S2, Opus for S5,          ║
+# ║    CLI instrument for S3/S7 — match instrument to task difficulty.         ║
+# ║                                                                             ║
+# ║  Usage:                                                                     ║
+# ║    mozart start                                                             ║
+# ║    mozart run examples/dead-letter-quarantine.yaml                         ║
+# ║    mozart status utility-toolkit                                           ║
+# ║                                                                             ║
+# ║  Output:                                                                    ║
+# ║    workspaces/utility-toolkit/                                             ║
+# ║      specs.yaml              — 10 script specifications                    ║
+# ║      scripts/                — Generated Python utility scripts            ║
+# ║      tests/                  — pytest test files per script                ║
+# ║      validation-results/     — Per-script validation reports               ║
+# ║      quarantine.yaml         — Quarantine manifest                         ║
+# ║      quarantine-analysis.md  — Failure pattern analysis                    ║
+# ║      reprocess-plan.yaml     — Adapted reprocessing strategies             ║
+# ║      reprocess-results.yaml  — Reprocessing outcomes                       ║
+# ║      toolkit-report.md       — Final report with usage guide               ║
+# ║                                                                             ║
+# ║  Time: ~35 minutes  |  Cost: ~$6.00  |  Sheets: 16 (after fan-out)        ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: utility-toolkit
+description: "Dead Letter Quarantine — batch-generate 10 Python utilities, quarantine failures, analyze patterns, reprocess with adapted strategy"
+
+workspace: ../workspaces/utility-toolkit
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 900  # 15 min per stage
+
+sheet:
+  size: 1
+  total_items: 7
+  fan_out:
+    2: 10  # Stage 2 fans out to 10 parallel script generators
+  dependencies:
+    2: [1]       # Generate depends on specs
+    3: [2]       # Validate depends on all generation completing
+    4: [3]       # Quarantine collection depends on validation
+    5: [4]       # Analysis depends on quarantine
+    6: [5]       # Reprocessing depends on analysis
+    7: [6]       # Final verify depends on reprocessing
+
+parallel:
+  enabled: true
+  max_concurrent: 5  # Up to 5 generation instances in parallel
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 5000
+  lookback_sheets: 6
+  capture_files:
+    - "{{ workspace }}/*.yaml"
+    - "{{ workspace }}/*.md"
+    - "{{ workspace }}/scripts/*.py"
+    - "{{ workspace }}/tests/*.py"
+    - "{{ workspace }}/validation-results/*.yaml"
+
+retry:
+  max_retries: 1
+  base_delay_seconds: 20
+
+prompt:
+  template: |
+    {# ── Macros ─────────────────────────────────────────────────────────── #}
+
+    {% macro script_standards() %}
+    ## Script Standards
+
+    - Python 3.10+ syntax
+    - Standalone .py file with `if __name__ == '__main__':` block
+    - Include a `main()` function as the primary entry point
+    - Use `argparse` for CLI arguments (not raw `sys.argv` indexing)
+    - Include a module-level docstring explaining usage
+    - Handle common errors (FileNotFoundError, ValueError, KeyError) gracefully
+    - **No external dependencies — stdlib only** (json, csv, os, sys, re, pathlib, collections, itertools, etc.)
+    - Print results to stdout; errors to stderr via `print(..., file=sys.stderr)`
+    - Exit with code 0 on success, 1 on error
+    {% endmacro %}
+
+    {% macro quarantine_schema() %}
+    ## Quarantine Entry Schema
+
+    Each quarantined item in `quarantine.yaml` follows:
+    ```yaml
+    - script_id: N
+      script_file: scripts/script_N.py
+      test_file: tests/test_script_N.py
+      error_type: syntax|import|logic|test_failure|missing
+      error_detail: "specific error message from validation"
+      code_issue: "what is actually wrong in the source code"
+      attempted_strategy: "direct generation from spec"
+    ```
+    {% endmacro %}
+
+    {% macro workspace_layout() %}
+    ## Workspace Layout
+
+    ```
+    {{ workspace }}/
+      specs.yaml                  — Script specifications (10 entries)
+      scripts/
+        script_1.py ... script_10.py
+      tests/
+        test_script_1.py ... test_script_10.py
+      validation-results/
+        result_1.yaml ... result_10.yaml
+        summary.yaml
+      quarantine.yaml             — Failed scripts manifest
+      quarantine-analysis.md      — Failure pattern analysis
+      reprocess-plan.yaml         — Adapted reprocessing strategies
+      reprocess-results.yaml      — Reprocessing outcomes
+      toolkit-report.md           — Final report with usage guide
+    ```
+    {% endmacro %}
+
+    {# ── Stage 1: Write Specifications ──────────────────────────────────── #}
+
+    {% if stage == 1 %}
+    # Stage 1: Utility Script Specifications
+
+    Design specifications for 10 Python utility scripts — a toolkit of
+    everyday command-line tools that a developer would actually use.
+    Each must be self-contained, stdlib-only, and testable.
+
+    {{ script_standards() }}
+
+    ## Categories (include at least 2 from each)
+
+    - **Text processing:** string manipulation, format conversion, pattern extraction
+    - **Data processing:** CSV/JSON operations, sorting, filtering, deduplication
+    - **Developer tools:** code metrics, template expansion, config validation
+    - **System utilities:** file inventory, directory comparison, environment reporting
+
+    ## Difficulty Distribution
+
+    Design difficulty deliberately — this toolkit exercises Dead Letter
+    Quarantine, so some scripts SHOULD be challenging enough to risk
+    first-generation failure:
+
+    - Scripts 1-4: **Easy** — single core function, straightforward I/O, < 50 lines
+    - Scripts 5-7: **Medium** — multiple functions, data structures, parsing, 50-100 lines
+    - Scripts 8-10: **Hard** — complex algorithms, robust edge-case handling, > 100 lines
+      (e.g., expression evaluator, Markdown table parser, JSON path query engine)
+
+    ## Output
+
+    Create directories:
+    ```bash
+    mkdir -p {{ workspace }}/scripts {{ workspace }}/tests {{ workspace }}/validation-results
+    ```
+
+    Write `{{ workspace }}/specs.yaml`:
+    ```yaml
+    scripts:
+      - id: 1
+        name: lowercase_snake_case_name
+        description: "What it does in 1-2 sentences"
+        inputs: "What arguments it takes (files, strings, flags)"
+        outputs: "What it produces (stdout, files)"
+        difficulty: easy|medium|hard
+        test_case: "Specific scenario: given THIS input, expect THIS output"
+        edge_cases:
+          - "An edge case to handle"
+          - "Another edge case"
+    ```
+
+    Every script must be implementable with Python stdlib only.
+    No network access, no databases, no external tools.
+    Each `test_case` must be mechanically verifiable (concrete input → expected output).
+
+    {# ── Stage 2: Generate Scripts (Fan-out × 10) ────────────────────────── #}
+
+    {% elif stage == 2 %}
+    # Stage 2: Generate Script {{ instance }} of 10
+
+    Read `{{ workspace }}/specs.yaml`. Find the script specification with `id: {{ instance }}`.
+
+    {{ script_standards() }}
+
+    ## Generate Two Files
+
+    ### 1. Implementation: `{{ workspace }}/scripts/script_{{ instance }}.py`
+
+    Write a complete, working Python script implementing the specification.
+    The script must:
+    - Have a clear `main()` function that `argparse` drives
+    - Parse ALL inputs described in the spec via argparse
+    - Handle errors from the spec's `edge_cases` list
+    - Work correctly for the `test_case` AND all `edge_cases`
+    - Include type hints on all function signatures
+    - Include a module-level docstring with usage example
+
+    ### 2. Tests: `{{ workspace }}/tests/test_script_{{ instance }}.py`
+
+    Write pytest tests that validate the implementation:
+    ```python
+    import importlib.util
+    import sys
+
+    def _load_script():
+        spec = importlib.util.spec_from_file_location(
+            "script_{{ instance }}",
+            "{{ workspace }}/scripts/script_{{ instance }}.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    ```
+
+    - Import the script using `importlib` as shown above (NOT relative imports)
+    - Test the EXACT scenario from the spec's `test_case`
+    - Test each `edge_case` from the spec
+    - Include at least 1 error-handling test (bad input → graceful failure)
+    - All assertions must have descriptive messages
+
+    {# ── Stage 3: Validate Batch ─────────────────────────────────────────── #}
+
+    {% elif stage == 3 %}
+    # Stage 3: Batch Validation
+
+    Run validation checks on ALL 10 generated scripts. Do NOT stop at
+    the first failure — validate EVERY script and report results.
+
+    {{ workspace_layout() }}
+
+    ## Validation Procedure
+
+    For each script N (1 through 10):
+
+    1. **Syntax check:**
+       ```bash
+       python3 -c "import py_compile; py_compile.compile('{{ workspace }}/scripts/script_N.py', doraise=True)"
+       ```
+
+    2. **Import check:**
+       ```bash
+       python3 -c "
+       import importlib.util
+       spec = importlib.util.spec_from_file_location('m', '{{ workspace }}/scripts/script_N.py')
+       mod = importlib.util.module_from_spec(spec)
+       spec.loader.exec_module(mod)
+       "
+       ```
+
+    3. **Test execution:**
+       ```bash
+       cd {{ workspace }} && python3 -m pytest tests/test_script_N.py -v --tb=short 2>&1
+       ```
+
+    ## Output Per Script
+
+    Write `{{ workspace }}/validation-results/result_N.yaml` for each:
+    ```yaml
+    script_id: N
+    script_name: "name from specs.yaml"
+    syntax_check: pass|fail
+    syntax_error: ""
+    import_check: pass|fail
+    import_error: ""
+    test_result: pass|fail|error
+    test_output: "first 500 chars of pytest output"
+    overall: pass|fail
+    failure_summary: "one-line description if failed, empty if passed"
+    ```
+
+    ## Summary
+
+    Write `{{ workspace }}/validation-results/summary.yaml`:
+    ```yaml
+    total: 10
+    passed: N
+    failed: N
+    pass_rate: "N%"
+    failures:
+      - script_id: N
+        failure_type: syntax|import|test
+        error_summary: "brief description"
+    ```
+
+    Report ACCURATELY. Record REAL errors. Do not fabricate results.
+    Do not skip any script.
+
+    {# ── Stage 4: Collect Quarantine ─────────────────────────────────────── #}
+
+    {% elif stage == 4 %}
+    # Stage 4: Quarantine Collection
+
+    Read `{{ workspace }}/validation-results/summary.yaml` and each
+    `{{ workspace }}/validation-results/result_N.yaml` file.
+
+    {{ quarantine_schema() }}
+
+    ## Categorize Every Script
+
+    For each script, determine its status from the validation results:
+    - **Passed:** syntax OK, import OK, tests pass → `successful` list
+    - **Failed:** any validation failed → `quarantined` list
+
+    For quarantined scripts, READ THE SOURCE CODE to understand what
+    went wrong. The validation error tells you the symptom; the code
+    tells you the cause.
+
+    ## Write Quarantine Manifest
+
+    Create `{{ workspace }}/quarantine.yaml`:
+    ```yaml
+    quarantined:
+      - script_id: N
+        script_file: scripts/script_N.py
+        test_file: tests/test_script_N.py
+        error_type: syntax|import|logic|test_failure|missing
+        error_detail: "actual error from validation results"
+        code_issue: "what is wrong in the code (from reading the source)"
+        attempted_strategy: "direct generation from spec"
+    successful:
+      - script_id: N
+        script_file: scripts/script_N.py
+    ```
+
+    If ALL scripts passed, write an empty `quarantined` list.
+    The sum of quarantined + successful must equal 10.
+
+    {# ── Stage 5: Quarantine Analysis ────────────────────────────────────── #}
+
+    {% elif stage == 5 %}
+    # Stage 5: Quarantine Pattern Analysis
+
+    This is the core of Dead Letter Quarantine: finding PATTERNS across
+    failures, not diagnosing them individually.
+
+    {{ quarantine_schema() }}
+
+    ## Read Inputs
+
+    Read `{{ workspace }}/quarantine.yaml`. If the quarantine is empty
+    (all passed), write a brief analysis noting 100% first-run success,
+    create an empty reprocess plan, and you're done.
+
+    Otherwise, read EACH quarantined script's source code AND test file.
+    Read `{{ workspace }}/specs.yaml` for the original specifications.
+
+    ## Find Patterns
+
+    Group failures by ROOT CAUSE. Ask:
+    - Did multiple scripts fail for the SAME technical reason?
+    - Is there a common coding mistake across failures?
+    - Did hard-difficulty scripts fail more than easy ones?
+    - Are failures in the implementations, the tests, or both?
+    - Could a single prompt modification have prevented multiple failures?
+
+    ## Write Analysis
+
+    Create `{{ workspace }}/quarantine-analysis.md`:
+
+    ```markdown
+    # Quarantine Analysis
+
+    ## Summary
+    - Total quarantined: N of 10
+    - Failure patterns identified: N
+
+    ## Pattern 1: [Descriptive Name]
+    **Affected scripts:** [list IDs]
+    **Root cause:** [specific technical explanation]
+    **Evidence:**
+    ```python
+    # Code snippet showing the pattern
+    ```
+    **Adapted strategy:** [concrete rewriting instructions — NOT "try harder"]
+
+    ## Pattern 2: ...
+    ```
+
+    ## Write Reprocess Plan
+
+    Create `{{ workspace }}/reprocess-plan.yaml`:
+    ```yaml
+    patterns:
+      - pattern_name: "descriptive name"
+        affected_scripts: [1, 4, 7]
+        root_cause: "specific technical cause"
+        adapted_strategy: |
+          Concrete rewriting instructions:
+          - What to change in the implementation
+          - What to change in the tests
+          - What specifically to avoid
+    ```
+
+    BE SPECIFIC. "Write better code" is not an adapted strategy.
+    "Replace nested comprehensions with explicit for-loops using
+    intermediate variables; add type checking on all argparse inputs"
+    IS an adapted strategy.
+
+    {# ── Stage 6: Reprocess Quarantined Scripts ──────────────────────────── #}
+
+    {% elif stage == 6 %}
+    # Stage 6: Reprocess Quarantined Scripts
+
+    Read `{{ workspace }}/reprocess-plan.yaml`, `{{ workspace }}/quarantine.yaml`,
+    and `{{ workspace }}/specs.yaml`.
+
+    {{ script_standards() }}
+
+    ## Handle Empty Quarantine
+
+    If `quarantine.yaml` has an empty quarantined list, write an empty
+    `{{ workspace }}/reprocess-results.yaml` with `results: []` and stop.
+
+    ## Rewrite Each Quarantined Script
+
+    For EACH quarantined script:
+    1. Read the ORIGINAL script and its test
+    2. Read the adapted strategy for its failure pattern
+    3. REWRITE the script following the adapted strategy
+    4. REWRITE the test to match the fixed implementation
+
+    The adapted strategy addresses the PATTERN that caused failure.
+    Do not regenerate from scratch — read the original, understand
+    what failed, and apply the targeted fix.
+
+    ## Overwrite Files
+
+    - `{{ workspace }}/scripts/script_N.py` (fixed implementation)
+    - `{{ workspace }}/tests/test_script_N.py` (fixed tests)
+
+    ## Write Results
+
+    Create `{{ workspace }}/reprocess-results.yaml`:
+    ```yaml
+    results:
+      - script_id: N
+        outcome: reprocessed
+        pattern_applied: "pattern name from reprocess-plan"
+        changes_made: "what was changed and why"
+      - script_id: N
+        outcome: permanent_quarantine
+        reason: "why this cannot be fixed within current constraints"
+    ```
+
+    {# ── Stage 7: Final Verification and Report ─────────────────────────── #}
+
+    {% elif stage == 7 %}
+    # Stage 7: Final Verification and Toolkit Report
+
+    Verify ALL 10 scripts (both originally successful and reprocessed)
+    are working. Then write the toolkit report.
+
+    {{ workspace_layout() }}
+
+    ## Validation Sweep
+
+    For each script (1-10):
+    1. Syntax check: `python3 -c "import py_compile; py_compile.compile('{{ workspace }}/scripts/script_N.py', doraise=True)"`
+    2. Import check (importlib as in Stage 3)
+    3. Test execution: `cd {{ workspace }} && python3 -m pytest tests/test_script_N.py -v --tb=short`
+
+    Record which scripts pass and which still fail after reprocessing.
+
+    ## Write Final Report
+
+    Create `{{ workspace }}/toolkit-report.md`:
+
+    ```markdown
+    # Utility Toolkit — Dead Letter Quarantine Generation Report
+
+    ## Pipeline Results
+
+    | Metric | Value |
+    |--------|-------|
+    | Total scripts | 10 |
+    | Passed first run | N |
+    | Quarantined | N |
+    | Recovered via adapted strategy | N |
+    | Permanently quarantined | N |
+    | Final working | N/10 |
+
+    ## Script Inventory
+
+    | # | Name | Difficulty | First Run | Final | Description |
+    |---|------|------------|-----------|-------|-------------|
+    | 1 | name | easy | PASS/FAIL | PASS/FAIL | what it does |
+    | ... |
+
+    ## Quarantine Recovery
+
+    ### Failure Patterns Identified
+    1. **Pattern name** — N scripts, root cause, adapted strategy applied
+
+    ### What Changed
+    [How the adapted reprocessing differed from original generation]
+
+    ## Usage Guide
+
+    ### script_1.py — [Name]
+    ```bash
+    python3 {{ workspace }}/scripts/script_1.py [args]
+    ```
+    [Example with concrete inputs and expected output]
+
+    ### script_2.py — [Name]
+    ...
+    ```
+
+    The report must demonstrate that Dead Letter Quarantine provided value:
+    the quarantine analysis identified a systematic pattern that blind
+    retry would not have addressed. If all scripts passed first run,
+    note this and explain what the DLQ pipeline would have caught.
+
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS — staged fail-fast
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  # ── Stage 1: Specs are structured and complete ──────────────────────────
+  - type: file_exists
+    path: "{workspace}/specs.yaml"
+    condition: "stage == 1"
+    description: "Script specifications file exists"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      import yaml;
+      s = yaml.safe_load(open('{workspace}/specs.yaml'));
+      scripts = s.get('scripts', []);
+      assert len(scripts) == 10, f'Expected 10 specs, got {len(scripts)}';
+      required = ['id', 'name', 'description', 'inputs', 'outputs', 'difficulty', 'test_case'];
+      for sc in scripts:
+          missing = [f for f in required if f not in sc];
+          assert not missing, f'Script {sc.get(\"id\",\"?\")} missing: {missing}';
+      difficulties = [sc['difficulty'] for sc in scripts];
+      assert difficulties.count('easy') >= 3, f'Need 3+ easy, got {difficulties.count(\"easy\")}';
+      assert difficulties.count('hard') >= 2, f'Need 2+ hard, got {difficulties.count(\"hard\")}';
+      "
+    condition: "stage == 1"
+    description: "All 10 specs have required fields with difficulty distribution"
+
+  # ── Stage 2: Each fan-out instance produces script + test ──────────────
+  - type: file_exists
+    path: "{workspace}/scripts/script_{instance}.py"
+    condition: "stage == 2"
+    description: "Generated script exists for this instance"
+
+  - type: file_exists
+    path: "{workspace}/tests/test_script_{instance}.py"
+    condition: "stage == 2"
+    description: "Test file exists for this instance"
+
+  # ── Stage 3: Validation results are structured ─────────────────────────
+  - type: file_exists
+    path: "{workspace}/validation-results/summary.yaml"
+    condition: "stage == 3"
+    description: "Validation summary exists"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      import yaml, os;
+      s = yaml.safe_load(open('{workspace}/validation-results/summary.yaml'));
+      assert 'total' in s, 'Missing total';
+      assert 'passed' in s, 'Missing passed count';
+      assert 'failed' in s, 'Missing failed count';
+      assert s['total'] == 10, f'Expected 10 total, got {s[\"total\"]}';
+      assert s['passed'] + s['failed'] == 10, f'Pass + fail != 10';
+      result_files = [f for f in os.listdir('{workspace}/validation-results/') if f.startswith('result_')];
+      assert len(result_files) >= 8, f'Expected 8+ result files, got {len(result_files)}';
+      "
+    condition: "stage == 3"
+    description: "Validation summary is structured and covers all scripts"
+
+  # ── Stage 4: Quarantine manifest categorizes all scripts ───────────────
+  - type: file_exists
+    path: "{workspace}/quarantine.yaml"
+    condition: "stage == 4"
+    description: "Quarantine manifest exists"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      import yaml;
+      q = yaml.safe_load(open('{workspace}/quarantine.yaml'));
+      quarantined = q.get('quarantined', []);
+      successful = q.get('successful', []);
+      total = len(quarantined) + len(successful);
+      assert total == 10, f'Quarantine + successful = {total}, expected 10';
+      for item in quarantined:
+          assert 'script_id' in item, 'Missing script_id in quarantine entry';
+          assert 'error_type' in item, 'Missing error_type';
+          assert 'code_issue' in item, 'Missing code_issue';
+      "
+    condition: "stage == 4"
+    description: "Quarantine accounts for all 10 scripts with required fields"
+
+  # ── Stage 5: Analysis identifies patterns, not just individual failures ─
+  - type: file_exists
+    path: "{workspace}/quarantine-analysis.md"
+    condition: "stage == 5"
+    description: "Quarantine analysis exists"
+
+  - type: file_exists
+    path: "{workspace}/reprocess-plan.yaml"
+    condition: "stage == 5"
+    description: "Reprocess plan exists"
+
+  - type: content_contains
+    path: "{workspace}/quarantine-analysis.md"
+    pattern: "Root cause"
+    condition: "stage == 5"
+    description: "Analysis identifies root causes"
+
+  # ── Stage 6: Reprocessing produces results ─────────────────────────────
+  - type: file_exists
+    path: "{workspace}/reprocess-results.yaml"
+    condition: "stage == 6"
+    description: "Reprocess results exist"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      import yaml;
+      r = yaml.safe_load(open('{workspace}/reprocess-results.yaml'));
+      results = r.get('results', []) if r else [];
+      for item in results:
+          assert item.get('outcome') in ('reprocessed', 'permanent_quarantine'), f'Bad outcome: {item.get(\"outcome\")}';
+      "
+    condition: "stage == 6"
+    description: "Reprocess results have valid outcome values"
+
+  # ── Stage 7: Final report and working toolkit ──────────────────────────
+  - type: file_exists
+    path: "{workspace}/toolkit-report.md"
+    condition: "stage == 7"
+    description: "Final toolkit report exists"
+
+  - type: content_contains
+    path: "{workspace}/toolkit-report.md"
+    pattern: "Dead Letter Quarantine"
+    condition: "stage == 7"
+    description: "Report references the Dead Letter Quarantine pattern"
+
+  - type: content_contains
+    path: "{workspace}/toolkit-report.md"
+    pattern: "Usage Guide"
+    condition: "stage == 7"
+    description: "Report includes script usage guide"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      import os;
+      scripts_dir = '{workspace}/scripts';
+      scripts = [f for f in os.listdir(scripts_dir) if f.endswith('.py')];
+      assert len(scripts) >= 8, f'Expected 8+ scripts, got {len(scripts)}';
+      valid = 0;
+      for s in scripts:
+          try:
+              compile(open(os.path.join(scripts_dir, s)).read(), s, 'exec');
+              valid += 1;
+          except SyntaxError:
+              pass;
+      assert valid >= 7, f'Only {valid}/{len(scripts)} syntactically valid, need 7+';
+      "
+    condition: "stage == 7"
+    description: "At least 7 of 10 scripts are syntactically valid Python"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      report = open('{workspace}/toolkit-report.md').read();
+      words = len(report.split());
+      assert words > 300, f'Report too thin: {words} words (need 300+)';
+      assert 'Script Inventory' in report, 'Missing script inventory table';
+      "
+    condition: "stage == 7"
+    description: "Report is substantive with script inventory"

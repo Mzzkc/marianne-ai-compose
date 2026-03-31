@@ -1,0 +1,597 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║              PREFABRICATION — Bookmark Manager                              ║
+# ║                                                                             ║
+# ║  Pattern: Prefabrication (Rosetta Corpus)                                   ║
+# ║  Category: Product Engineering                                              ║
+# ║  Problem: Build a full-stack application with independently validated       ║
+# ║           parallel tracks coordinated by an interface contract              ║
+# ║                                                                             ║
+# ║  WHY Prefabrication is the RIGHT pattern for this problem:                  ║
+# ║                                                                             ║
+# ║  A full-stack app decomposes into backend + frontend. These CAN be built    ║
+# ║  in parallel, but ONLY if the interface contract is solid. Simple fan-out   ║
+# ║  won't work — the tracks aren't doing the same work with different inputs.  ║
+# ║  Simple sequential won't work — neither track depends on the other's code.  ║
+# ║  The contract IS the coordination mechanism. When the spec is right,        ║
+# ║  integration is mechanical.                                                 ║
+# ║                                                                             ║
+# ║  This is NOT Fan-out + Synthesis. Fan-out runs N copies of the same task    ║
+# ║  and merges perspectives. Prefabrication runs N DIFFERENT tasks against     ║
+# ║  a shared contract and assembles independently validated components.        ║
+# ║  The synthesis stage merges viewpoints; the integration stage clicks        ║
+# ║  pre-validated pieces together.                                             ║
+# ║                                                                             ║
+# ║  Execution Flow (5 stages, 6 concrete sheets):                             ║
+# ║                                                                             ║
+# ║    Stage 1: Define interface contract                                       ║
+# ║         |                                                                   ║
+# ║    +----+----+                                                              ║
+# ║    |         |                                                              ║
+# ║    v         v                                                              ║
+# ║  Stage 2a  Stage 2b                                                         ║
+# ║  Backend   CLI Client          (PARALLEL — different work, same contract)   ║
+# ║    |         |                                                              ║
+# ║    +----+----+                                                              ║
+# ║         |                                                                   ║
+# ║         v                                                                   ║
+# ║    Stage 3: Integration testing (validates assembly)                        ║
+# ║         |                                                                   ║
+# ║         v                                                                   ║
+# ║    Stage 4: Verification (smoke test the whole system)                      ║
+# ║         |                                                                   ║
+# ║         v                                                                   ║
+# ║    Stage 5: Documentation                                                   ║
+# ║                                                                             ║
+# ║  Instruments:                                                               ║
+# ║    All stages use claude-code (filesystem access needed for code + tests).  ║
+# ║    A production variant could use Gemini for contract design and Haiku      ║
+# ║    for documentation — the pattern supports mixed instruments per track.    ║
+# ║                                                                             ║
+# ║  Usage:                                                                     ║
+# ║    mozart start                                                             ║
+# ║    mozart run examples/prefabrication.yaml                                  ║
+# ║    mozart status bookmark-manager                                           ║
+# ║                                                                             ║
+# ║  Output:                                                                    ║
+# ║    workspaces/bookmark-manager/                                             ║
+# ║      contract.yaml            — Interface contract (the coordination hub)   ║
+# ║      api/                     — FastAPI backend                             ║
+# ║        __init__.py, app.py, models.py, database.py                         ║
+# ║      cli/                     — Click CLI client                            ║
+# ║        __init__.py, bookmark.py, client.py                                 ║
+# ║      tests/                   — Integration tests                           ║
+# ║        conftest.py, test_integration.py                                    ║
+# ║      README.md                — Usage documentation                         ║
+# ║                                                                             ║
+# ║  Time: ~20 minutes  |  Cost: ~$3.00  |  Sheets: 6 (after fan-out)          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: bookmark-manager
+description: "Contract-first full-stack app: parallel API + CLI tracks, integration, documentation"
+
+workspace: ../workspaces/bookmark-manager
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 1200  # 20 min per stage — code generation + validation
+
+sheet:
+  size: 1
+  total_items: 5
+  fan_out:
+    2: 2  # Stage 2 → instance 1 (backend) + instance 2 (CLI), in parallel
+  dependencies:
+    2: [1]  # Both tracks depend on the contract
+    3: [2]  # Integration depends on both tracks completing (fan-in)
+    4: [3]  # Verification depends on integration
+    5: [4]  # Docs depend on everything working
+
+parallel:
+  enabled: true
+  max_concurrent: 2
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 5000
+  lookback_sheets: 5
+  capture_files:
+    - "{{ workspace }}/*.yaml"
+    - "{{ workspace }}/*.md"
+    - "{{ workspace }}/api/*.py"
+    - "{{ workspace }}/cli/*.py"
+    - "{{ workspace }}/tests/*.py"
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+prompt:
+  template: |
+    {# ── Macros ─────────────────────────────────────────────────────────── #}
+
+    {% macro contract_preamble() %}
+    ## Interface Contract
+
+    Read `{{ workspace }}/contract.yaml` before writing any code.
+    The contract defines data models, API endpoints, error format, and
+    naming conventions. Your implementation MUST conform to the contract
+    exactly. Deviations are bugs — the integration stage will catch them.
+    {% endmacro %}
+
+    {% macro coding_standards() %}
+    ## Coding Standards
+
+    - Python 3.10+ syntax (type hints, match statements OK)
+    - All functions have type annotations
+    - Use stdlib where possible — minimize dependencies
+    - Error messages include the contract's error format
+    - No print statements in library code — raise exceptions or return errors
+    - Write docstrings for public functions
+    {% endmacro %}
+
+    {% macro track_completion(track_name) %}
+    ## Completion
+
+    When finished, create `{{ workspace }}/track-{{ instance }}.md` with:
+    - Track name: {{ track_name }}
+    - Files created (list every file path)
+    - Dependencies installed (list packages)
+    - How to verify: a single command that proves this track works
+    {% endmacro %}
+
+    {# ── Stage 1: Contract ──────────────────────────────────────────────── #}
+
+    {% if stage == 1 %}
+    # Stage 1: Interface Contract Definition
+
+    You are defining the interface contract for a bookmark management system.
+    This contract is the SOLE coordination artifact between the backend API
+    and the CLI client. Two independent agents will implement against it
+    without any communication. Ambiguity here becomes bugs in both tracks.
+
+    ## What to Build
+
+    A bookmark manager that lets users save, tag, search, and export web
+    bookmarks. Two components:
+    - A REST API backend (FastAPI + SQLite)
+    - A CLI client that talks to the API (Click + httpx)
+
+    ## Write the Contract
+
+    Create `{{ workspace }}/contract.yaml` with ALL of the following sections:
+
+    ### models
+    Define data models with field names, types, and constraints:
+    - **Bookmark**: id (int, auto-increment), url (str, required, must have
+      scheme+host), title (str, required, 1-200 chars), description (str,
+      optional), tags (list[str], default []), created_at (str, ISO 8601,
+      auto), updated_at (str, ISO 8601, auto)
+    - **BookmarkCreate**: url (str, required), title (str, required),
+      description (str, optional), tags (list[str], optional)
+    - **BookmarkUpdate**: title (str, optional), description (str, optional),
+      tags (list[str], optional) — all fields optional, partial update
+    - **BookmarkList**: items (list[Bookmark]), total (int), page (int),
+      per_page (int)
+
+    ### endpoints
+    Define every REST endpoint with: method, path, request body (if any),
+    response schema, and ALL status codes:
+    - POST /api/bookmarks — create (body: BookmarkCreate → 201 Bookmark,
+      400 validation error, 409 duplicate URL)
+    - GET /api/bookmarks — list with pagination: ?page=1&per_page=20,
+      optional ?tag=X filter (→ 200 BookmarkList)
+    - GET /api/bookmarks/{id} — get one (→ 200 Bookmark, 404)
+    - PUT /api/bookmarks/{id} — update (body: BookmarkUpdate → 200 Bookmark,
+      404, 400)
+    - DELETE /api/bookmarks/{id} — delete (→ 204, 404)
+    - GET /api/bookmarks/search?q={query} — full-text search across url,
+      title, description, tags (→ 200 BookmarkList)
+    - GET /api/bookmarks/export?format={json|csv|html} — export all (→ 200)
+    - GET /api/health — health check (→ 200 {"status": "ok"})
+
+    ### error_format
+    Standard error response for all non-2xx responses:
+    ```yaml
+    code: int       # HTTP status code
+    message: str    # Human-readable error message
+    detail: str     # Technical detail (optional, empty string if none)
+    ```
+
+    ### conventions
+    - Datetimes: ISO 8601 strings (e.g., "2025-01-15T10:30:00Z")
+    - IDs: auto-incrementing integers starting at 1
+    - Tags: lowercase, alphanumeric + hyphens only, max 50 chars each
+    - URLs: must have scheme (http/https) and host
+    - Pagination: page starts at 1, per_page defaults to 20, max 100
+    - Search: case-insensitive, matches partial strings in url+title+description+tags
+    - Export JSON: array of Bookmark objects
+    - Export CSV: header row + data rows, tags joined with semicolons
+    - Export HTML: complete HTML document with a styled table
+
+    ### file_structure
+    ```
+    api/
+      __init__.py    — empty (package marker)
+      app.py         — FastAPI application with all routes
+      models.py      — Pydantic v2 models matching contract
+      database.py    — SQLite operations (stdlib sqlite3)
+    cli/
+      __init__.py    — empty (package marker)
+      bookmark.py    — Click CLI application
+      client.py      — BookmarkClient HTTP wrapper (httpx)
+    tests/
+      conftest.py         — Test fixtures
+      test_integration.py — End-to-end tests via FastAPI TestClient
+    ```
+
+    Save to: `{{ workspace }}/contract.yaml`
+
+    {# ── Stage 2: Parallel Tracks ───────────────────────────────────────── #}
+
+    {% elif stage == 2 %}
+
+    {% if instance == 1 %}
+    # Stage 2a: Backend Track — REST API
+
+    You are building the backend API for a bookmark manager. You are one of
+    two parallel tracks. The other track is building the CLI client. You
+    CANNOT see the other track's code. You coordinate ONLY through the
+    interface contract.
+
+    {{ contract_preamble() }}
+    {{ coding_standards() }}
+
+    ## Your Deliverables
+
+    Create the following files in `{{ workspace }}/api/`:
+
+    ### api/__init__.py
+    Empty file — makes `api` a Python package.
+
+    ### api/models.py
+    Pydantic v2 models matching the contract's `models` section EXACTLY:
+    - Use `model_config = ConfigDict(from_attributes=True)`
+    - Add a `@field_validator` for URL format (must have scheme + host)
+    - Add a `@field_validator` for tags (lowercase, alphanumeric + hyphens)
+    - BookmarkCreate and BookmarkUpdate as separate input models
+    - BookmarkList as the paginated response model
+    - ErrorResponse model matching the contract's error_format
+
+    ### api/database.py
+    SQLite operations using stdlib `sqlite3`:
+    - `DB_PATH` configurable via environment variable `BOOKMARK_DB_PATH`,
+      defaulting to `bookmarks.db` in the current directory
+    - `init_db()` — create table if not exists:
+      `id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT UNIQUE NOT NULL,
+       title TEXT NOT NULL, description TEXT DEFAULT '',
+       tags TEXT DEFAULT '[]', created_at TEXT NOT NULL,
+       updated_at TEXT NOT NULL`
+    - `create_bookmark(data) → dict` — insert, return created row
+    - `get_bookmark(id) → dict | None`
+    - `list_bookmarks(page, per_page, tag) → (list[dict], total_count)`
+    - `update_bookmark(id, data) → dict | None`
+    - `delete_bookmark(id) → bool`
+    - `search_bookmarks(query, page, per_page) → (list[dict], total_count)`
+    - `export_bookmarks() → list[dict]`
+    - Tags stored as JSON string in the database, parsed on read
+    - Datetimes stored as ISO 8601 strings
+
+    ### api/app.py
+    FastAPI application:
+    - Import models from `api.models`, database from `api.database`
+    - `@app.on_event("startup")` calls `init_db()`
+    - Each endpoint maps 1:1 to the contract's `endpoints` section
+    - Return proper status codes (201 for create, 204 for delete, etc.)
+    - Error responses use the contract's error_format via ErrorResponse model
+    - Include CORS middleware (`allow_origins=["*"]`)
+    - Export endpoints: JSON returns list, CSV returns plain text,
+      HTML returns a complete styled HTML page
+
+    Install dependencies:
+    ```bash
+    pip install fastapi uvicorn
+    ```
+
+    {{ track_completion("Backend API") }}
+
+    {% elif instance == 2 %}
+    # Stage 2b: CLI Track — Command-Line Client
+
+    You are building the CLI client for a bookmark manager. You are one of
+    two parallel tracks. The other track is building the REST API backend.
+    You CANNOT see the other track's code. You coordinate ONLY through the
+    interface contract.
+
+    {{ contract_preamble() }}
+    {{ coding_standards() }}
+
+    ## Your Deliverables
+
+    Create the following files in `{{ workspace }}/cli/`:
+
+    ### cli/__init__.py
+    Empty file — makes `cli` a Python package.
+
+    ### cli/client.py
+    HTTP client wrapping all API calls:
+    - `class BookmarkAPIError(Exception)`: stores code, message, detail
+    - `class BookmarkClient`:
+      - `__init__(self, base_url: str = "http://localhost:8000")`
+      - Uses `httpx.Client` for HTTP calls (sync)
+      - Methods matching contract endpoints:
+        `create(url, title, description=None, tags=None) → dict`
+        `list(page=1, per_page=20, tag=None) → dict`
+        `get(bookmark_id) → dict`
+        `update(bookmark_id, **fields) → dict`
+        `delete(bookmark_id) → None`
+        `search(query, page=1, per_page=20) → dict`
+        `export(format="json") → str`
+        `health() → dict`
+      - On non-2xx responses: parse error body, raise BookmarkAPIError
+      - Properly close the httpx client (context manager or close method)
+
+    ### cli/bookmark.py
+    Click CLI application:
+    - `@click.group()` with `--server` option (default "http://localhost:8000")
+    - Commands:
+      - `add --url URL --title TITLE [--description TEXT] [--tags tag1,tag2]`
+        Creates a bookmark, prints the result
+      - `list [--page N] [--per-page N] [--tag TAG]`
+        Lists bookmarks in a formatted table
+      - `search QUERY [--page N] [--per-page N]`
+        Searches and displays results
+      - `get ID`
+        Shows full bookmark details
+      - `delete ID [--yes]`
+        Deletes with confirmation prompt (skip with --yes)
+      - `export [--format json|csv|html] [--output FILE]`
+        Exports bookmarks (to stdout or file)
+    - Formatted output: use simple aligned columns for tables
+    - Error handling: catch BookmarkAPIError, print message, exit with code 1
+    - Help text for every command and option
+
+    Install dependencies:
+    ```bash
+    pip install click httpx
+    ```
+
+    {{ track_completion("CLI Client") }}
+
+    {% endif %}
+
+    {# ── Stage 3: Integration ───────────────────────────────────────────── #}
+
+    {% elif stage == 3 %}
+    # Stage 3: Integration Testing
+
+    The backend API and CLI client were built in PARALLEL by independent
+    agents. Neither has seen the other's code. They coordinated only through
+    the interface contract. Your job: verify they click together.
+
+    {{ contract_preamble() }}
+
+    ## Read Both Implementations
+
+    Read ALL files in:
+    - `{{ workspace }}/api/` — the backend
+    - `{{ workspace }}/cli/` — the CLI client
+    - `{{ workspace }}/contract.yaml` — the source of truth
+
+    ## Your Deliverables
+
+    ### tests/conftest.py
+    Test fixtures using FastAPI's TestClient:
+    - `test_client` fixture: creates a FastAPI TestClient from `api.app:app`,
+      configures a temporary SQLite database (use `tmp_path`), initializes
+      the DB via `init_db()`. Override the DB path using monkeypatch on
+      `api.database.DB_PATH` or the env var `BOOKMARK_DB_PATH`.
+    - `sample_bookmark` fixture: returns a dict with valid bookmark data
+    - `populated_client` fixture: test_client with 5 pre-inserted bookmarks
+      covering different tags and URLs
+
+    ### tests/test_integration.py
+    Comprehensive end-to-end tests. Use the FastAPI TestClient (not httpx).
+    Test EVERY endpoint from the contract:
+
+    **CRUD tests:**
+    - test_create_bookmark — POST, verify 201 + returned fields
+    - test_create_duplicate_url — POST same URL twice, verify 409
+    - test_create_invalid_url — POST without scheme, verify 400
+    - test_get_bookmark — GET by ID, verify all fields present
+    - test_get_nonexistent — GET bad ID, verify 404
+    - test_update_bookmark — PUT with partial fields, verify 200
+    - test_update_nonexistent — PUT bad ID, verify 404
+    - test_delete_bookmark — DELETE, verify 204, then GET returns 404
+    - test_delete_nonexistent — DELETE bad ID, verify 404
+
+    **List & Search tests:**
+    - test_list_bookmarks — GET /api/bookmarks, verify pagination
+    - test_list_with_tag_filter — verify only matching tags returned
+    - test_list_pagination — verify page/per_page params work
+    - test_search — verify partial match on title
+    - test_search_no_results — verify empty result with total=0
+
+    **Export tests:**
+    - test_export_json — verify valid JSON array
+    - test_export_csv — verify header row present
+    - test_export_html — verify contains `<table>`
+
+    **Health test:**
+    - test_health — verify {"status": "ok"}
+
+    Install test dependencies:
+    ```bash
+    pip install pytest httpx
+    ```
+
+    ## Fix What's Broken
+
+    If tests fail because the API or CLI don't match the contract,
+    FIX THE IMPLEMENTATION CODE. The contract is the source of truth.
+    Document every fix in `{{ workspace }}/integration-fixes.md`:
+    - Which file you changed
+    - What was wrong (contract violation)
+    - What you changed
+
+    Run the tests:
+    ```bash
+    cd {{ workspace }} && python -m pytest tests/ -v --tb=short
+    ```
+
+    Make sure ALL tests pass before completing this stage.
+
+    {# ── Stage 4: Verification ──────────────────────────────────────────── #}
+
+    {% elif stage == 4 %}
+    # Stage 4: Verification — Smoke Test the System
+
+    Integration tests pass. Now verify the whole system works as a user
+    would experience it.
+
+    ## Smoke Test Sequence
+
+    1. Read `{{ workspace }}/contract.yaml` and all implementation files
+    2. Start the API server in the background:
+       ```bash
+       cd {{ workspace }} && BOOKMARK_DB_PATH={{ workspace }}/smoke-test.db \
+         python -m uvicorn api.app:app --port 8765 &
+       sleep 2
+       ```
+    3. Exercise the CLI against the running server:
+       ```bash
+       cd {{ workspace }} && python -m cli.bookmark --server http://localhost:8765 add \
+         --url "https://example.com" --title "Test Bookmark" --tags "test,smoke"
+       cd {{ workspace }} && python -m cli.bookmark --server http://localhost:8765 list
+       cd {{ workspace }} && python -m cli.bookmark --server http://localhost:8765 search "Test"
+       cd {{ workspace }} && python -m cli.bookmark --server http://localhost:8765 export --format json
+       ```
+    4. Kill the server and clean up:
+       ```bash
+       kill %1 2>/dev/null; rm -f {{ workspace }}/smoke-test.db
+       ```
+
+    Write `{{ workspace }}/verification-report.md` with:
+    - Each command executed and its output
+    - PASS/FAIL for each operation
+    - Any issues discovered and fixes applied
+    - Final verdict: VERIFIED or FAILED
+
+    If any smoke test fails, fix the code and re-run.
+
+    {# ── Stage 5: Documentation ─────────────────────────────────────────── #}
+
+    {% elif stage == 5 %}
+    # Stage 5: Documentation
+
+    The bookmark manager is built, tested, and verified. Write documentation
+    that makes it immediately usable.
+
+    ## Read Everything
+
+    Read:
+    - `{{ workspace }}/contract.yaml` — the interface contract
+    - `{{ workspace }}/api/` — backend implementation
+    - `{{ workspace }}/cli/` — CLI implementation
+    - `{{ workspace }}/tests/` — integration tests
+    - `{{ workspace }}/verification-report.md` — smoke test results
+
+    ## Your Deliverable
+
+    Create `{{ workspace }}/README.md` with:
+
+    1. **Bookmark Manager** — one-line description
+    2. **Quick Start** — install deps, start server, add first bookmark
+       (max 5 shell commands, copy-pasteable)
+    3. **CLI Commands** — every command with example usage and sample output
+    4. **API Reference** — every endpoint with curl examples
+    5. **Data Model** — the Bookmark schema with field descriptions
+    6. **Export Formats** — examples of JSON, CSV, and HTML output
+    7. **Configuration** — environment variables (BOOKMARK_DB_PATH, etc.)
+    8. **Architecture** — brief explanation of the contract-first design
+    9. **How It Was Built** — explain the Prefabrication pattern:
+       "This application was built using Mozart AI Compose with the
+       Prefabrication pattern from the Rosetta Corpus. Backend API and
+       CLI client were developed in parallel by independent AI agents,
+       coordinated only through an interface contract (contract.yaml).
+       Neither track could see the other's code during development.
+       Integration was mechanical because the contract was precise."
+
+    The README must include WORKING examples — commands someone can
+    copy-paste and run immediately after installing dependencies.
+
+    Save to: `{{ workspace }}/README.md`
+
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS — staged fail-fast
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  # ── Stage 1: Contract must be precise ──────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/contract.yaml"
+    condition: "stage == 1"
+    description: "Interface contract exists"
+
+  - type: command_succeeds
+    command: >
+      python3 -c "
+      import yaml
+      c = yaml.safe_load(open('{{ workspace }}/contract.yaml'))
+      required = ['models', 'endpoints', 'error_format', 'conventions']
+      missing = [s for s in required if s not in c]
+      assert not missing, f'Contract missing sections: {missing}'
+      assert len(c.get('endpoints', [])) >= 7, f'Contract has only {len(c.get(\"endpoints\", []))} endpoints, need 7+'
+      "
+    condition: "stage == 1"
+    description: "Contract has all required sections and endpoints"
+
+  # ── Stage 2: Each track delivers ──────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/track-{instance}.md"
+    condition: "stage == 2"
+    description: "Track completion report exists"
+
+  # ── Stage 3: Integration tests pass ───────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/tests/test_integration.py"
+    condition: "stage == 3"
+    description: "Integration test file exists"
+
+  - type: command_succeeds
+    command: >
+      bash -c 'cd {{ workspace }} && python3 -m pytest tests/ -v --tb=short 2>&1;
+      exit ${PIPESTATUS[0]}'
+    condition: "stage == 3"
+    description: "All integration tests pass"
+
+  # ── Stage 4: Smoke test verified ──────────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/verification-report.md"
+    condition: "stage == 4"
+    description: "Verification report exists"
+
+  - type: content_contains
+    path: "{workspace}/verification-report.md"
+    pattern: "VERIFIED"
+    condition: "stage == 4"
+    description: "Smoke test verdict is VERIFIED"
+
+  # ── Stage 5: Documentation complete ───────────────────────────────────
+  - type: file_exists
+    path: "{workspace}/README.md"
+    condition: "stage == 5"
+    description: "README documentation exists"
+
+  - type: content_contains
+    path: "{workspace}/README.md"
+    pattern: "Prefabrication"
+    condition: "stage == 5"
+    description: "README explains the Prefabrication pattern"
+
+  - type: content_contains
+    path: "{workspace}/README.md"
+    pattern: "Quick Start"
+    condition: "stage == 5"
+    description: "README has a Quick Start section"

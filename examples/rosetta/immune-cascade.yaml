@@ -1,0 +1,625 @@
+# rosetta-proof-immune-cascade.yaml
+#
+# Pattern: Immune Cascade (Graduated Multi-Tier Response)
+# Category: Security — Python project security hardening
+#
+# Problem:
+# Security auditing is expensive. Deep analysis of every file in a codebase
+# is wasteful — most code is benign, and critical vulnerabilities cluster
+# in specific areas. Security professionals know this: run cheap scanners
+# first, triage the results, then focus expensive human attention on the
+# critical areas the scanners flagged. Most automated tools skip the triage
+# step, producing either shallow broad reports or expensive deep reports.
+# The Immune Cascade pattern gives you both: cheap broad coverage that
+# FEEDS targeted expensive analysis.
+#
+# Why Immune Cascade is the RIGHT structure:
+# The pattern's three structural moves — graduated response, intelligence
+# forwarding, and learning persistence — ARE how security auditing works
+# when done well. The pattern isn't an analogy; it's the actual workflow
+# formalized into a repeatable, orchestrated pipeline.
+#
+# The economic gradient is load-bearing:
+#   Stage 2 (innate): 4 agents running grep/ruff — fast, cheap, broad
+#   Stage 4 (adaptive): 3 agents doing deep code analysis — slow, expensive, targeted
+#   Stage 3 (dendritic handoff) decides WHERE to spend the expensive time.
+#
+# Instruments: All stages use claude_cli. Stage 2 agents primarily execute
+# shell tools via Bash (cheap work). Stage 4 agents primarily reason about
+# code (expensive work). In a multi-instrument deployment, Stage 2 could
+# use Haiku (cheap/fast) while Stage 4 uses Opus (expensive/deep reasoning).
+#
+# Artifacts produced in workspace:
+#   recon-report.md          — Project map (structure, deps, entry points)
+#   sweep-1.md through 4     — Raw scanner outputs
+#   targeting-brief.md       — Prioritized vulnerability targeting
+#   investigation-1.md to 3  — Deep analysis with remediation code
+#   security-report.md       — Complete audit report
+#   remediation-summary.md   — All patches consolidated
+#   hardened-checklist.md     — Ongoing security practices
+#   learning-notes.md        — Methodology for future audits
+#
+# Execution Flow (6 stages, 11 sheets):
+#
+#   Stage 1: Reconnaissance (1 sheet)
+#        Map the attack surface before any scanning begins.
+#                    |
+#        +-----------+-----------+-----------+
+#        v           v           v           v
+#   Stage 2 x4: Innate Response (4 sheets, parallel)
+#        dependency-audit | static-analysis | secret-scan | config-audit
+#        Each runs cheap tools. Each writes a findings file.
+#        |           |           |           |
+#        +-----------+-----------+-----------+
+#                          v
+#   Stage 3: Dendritic Handoff (1 sheet)
+#        Triage all findings. Produce targeting-brief.md.
+#        This is the critical stage — intelligence forwarding.
+#                    |
+#           +--------+--------+
+#           v        v        v
+#   Stage 4 x3: Adaptive Response (3 sheets, parallel)
+#        Deep investigation of top 3 critical areas.
+#        Each produces remediation code, not just analysis.
+#           |        |        |
+#           +--------+--------+
+#                    v
+#   Stage 5: Remediation Synthesis (1 sheet)
+#        Assemble all findings into actionable artifacts.
+#                    v
+#   Stage 6: Immunological Memory (1 sheet)
+#        Document what was learned for future audits.
+
+name: "rosetta-proof-immune-cascade"
+description: "Immune Cascade: graduated security hardening — cheap sweeps narrow to expensive targeted investigation"
+
+workspace: "/home/emzi/Projects/claude-compositions/immune-cascade-workspace"
+
+backend:
+  type: claude_cli
+  skip_permissions: true
+  timeout_seconds: 1800
+  allowed_tools:
+    - Read
+    - Write
+    - Edit
+    - Glob
+    - Grep
+    - Bash
+
+sheet:
+  size: 1
+  total_items: 6
+  fan_out:
+    2: 4   # Innate response: 4 cheap parallel sweeps
+    4: 3   # Adaptive response: 3 targeted deep investigations
+  dependencies:
+    2: [1]   # Sweeps depend on recon
+    3: [2]   # Triage depends on all sweeps completing
+    4: [3]   # Investigations depend on triage
+    5: [4]   # Synthesis depends on all investigations
+    6: [5]   # Memory depends on synthesis
+
+parallel:
+  enabled: true
+  max_concurrent: 4
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 6000
+  lookback_sheets: 6
+  capture_files:
+    - "{{ workspace }}/*.md"
+
+retry:
+  max_retries: 1
+  base_delay_seconds: 30
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1200
+
+prompt:
+  variables:
+    # ─── TARGET ───
+    # Point this at any Python project directory to audit.
+    target_project: "/home/emzi/Projects/mozart-ai-compose"
+
+    # ─── SWEEP DEFINITIONS ───
+    # Each drives one Stage 2 fan-out instance. Cheap, fast, tool-heavy.
+    sweeps:
+      1:
+        name: "dependency-audit"
+        title: "Dependency Vulnerability Scan"
+        focus: |
+          Scan all dependency files (requirements.txt, pyproject.toml,
+          setup.py, Pipfile) for known vulnerabilities. Check installed
+          package versions against known CVE databases. Flag unpinned
+          or outdated dependencies.
+        tools: |
+          - `pip list --outdated 2>/dev/null | head -50`
+          - `grep -rn "==" requirements*.txt pyproject.toml 2>/dev/null`
+          - Check for missing version pins (unpinned dependencies)
+          - Look for dependencies with known security histories
+      2:
+        name: "static-analysis"
+        title: "Static Security Analysis"
+        focus: |
+          Find code-level security issues: SQL injection, command injection,
+          path traversal, unsafe deserialization, eval/exec usage, insecure
+          random number generation, XML external entity vulnerabilities.
+        tools: |
+          - `ruff check --select S . 2>/dev/null | head -80` (security-focused rules)
+          - `grep -rn "eval\|exec\|__import__\|compile(" --include="*.py" . | head -40`
+          - `grep -rn "os\.system\|subprocess\.call.*shell" --include="*.py" . | head -40`
+          - `grep -rn "yaml\.load\|marshal\.load" --include="*.py" . | head -20`
+          - `grep -rn "os\.path\.join.*input\|open(.*input" --include="*.py" . | head -20`
+      3:
+        name: "secret-scan"
+        title: "Secrets & Credentials Scan"
+        focus: |
+          Find hardcoded secrets, API keys, tokens, passwords, and
+          credentials in source code, configuration files, and version
+          control artifacts.
+        tools: |
+          - `grep -rn "password\|secret\|api_key\|token\|credential" --include="*.py" --include="*.yaml" --include="*.yml" --include="*.json" --include="*.toml" . | grep -iv "test\|example\|placeholder\|description\|docstring" | head -40`
+          - `grep -rn "Bearer \|Basic \|sk-\|pk_\|AKIA\|ghp_\|gho_" --include="*.py" . | head -20`
+          - Check for committed .env files: `find . -name ".env*" -not -path "./.git/*" 2>/dev/null`
+          - Check .gitignore coverage: `grep -i "env\|secret\|credential\|key" .gitignore 2>/dev/null`
+          - `grep -rn "BEGIN.*PRIVATE KEY\|BEGIN.*CERTIFICATE" . 2>/dev/null | head -10`
+      4:
+        name: "config-audit"
+        title: "Configuration Security Audit"
+        focus: |
+          Check for insecure configuration defaults: debug mode enabled,
+          overly permissive CORS, exposed admin endpoints, insecure
+          logging that might capture sensitive data, missing security
+          headers, unprotected health/status endpoints.
+        tools: |
+          - `grep -rn "DEBUG.*=.*True\|debug.*=.*true\|DEBUG.*=.*1" --include="*.py" --include="*.yaml" --include="*.cfg" . | head -20`
+          - `grep -rn "CORS\|cors\|Access-Control\|allow_origin" --include="*.py" . | head -20`
+          - `grep -rn "0\.0\.0\.0\|ALLOWED_HOSTS.*\*\|bind.*0\.0\.0\.0" --include="*.py" --include="*.yaml" . | head -20`
+          - `grep -rn "admin\|/admin\|/debug\|/status" --include="*.py" . | head -20`
+          - `grep -rn "logging.*password\|log.*secret\|log.*token" --include="*.py" . | head -20`
+
+  template: |
+    {# ── Macros ─────────────────────────────────────────────────── #}
+    {% macro output_spec(filename) %}
+
+    ---
+    **Output:** Save to `{{ workspace }}/{{ filename }}`
+    {% endmacro %}
+
+    {% macro finding_format() %}
+    ## Finding Format
+
+    For each finding, use this structure:
+
+    ### [SEVERITY: CRITICAL|HIGH|MEDIUM|LOW] — Short title
+
+    **Location:** file:line
+    **Issue:** What's wrong (one sentence)
+    **Evidence:** The actual code or config (quote it)
+    **Impact:** What an attacker could do
+    **Remediation:** Specific fix (show the corrected code if applicable)
+    {% endmacro %}
+
+    {% macro project_context() %}
+    ## Target Project
+    - **Path:** `{{ target_project }}`
+    - Read the project structure first: list directories, check pyproject.toml or setup.py
+    - Understand what the project does before scanning it
+    {% endmacro %}
+
+    {# ── Stage 1: Reconnaissance ───────────────────────────────── #}
+    {% if stage == 1 %}
+    # Reconnaissance — Map the Attack Surface
+
+    You are the first responder in a graduated security audit. Your job is
+    NOT to find vulnerabilities — it's to map the terrain so the scanners
+    know where to look.
+
+    {{ project_context() }}
+
+    ## Tasks
+
+    1. **Project structure**: Use Bash to run `find {{ target_project }}/src -name "*.py" -type f 2>/dev/null | head -100` and list the top-level directories. Map the directory tree. Count Python files per package. Identify the main packages and modules.
+
+    2. **Dependencies**: Read pyproject.toml, requirements.txt, setup.py, or Pipfile from `{{ target_project }}`. List all direct dependencies. Flag any that are security-sensitive (cryptography, requests, flask, django, sqlalchemy, subprocess usage).
+
+    3. **Entry points**: Identify CLI entry points, web endpoints, API routes, daemon processes, socket listeners. These are the external attack surface — where untrusted input enters.
+
+    4. **Framework detection**: What frameworks does this project use? (Flask, Django, FastAPI, Click, asyncio, Pydantic, etc.) Each framework has known vulnerability patterns the scanners should check.
+
+    5. **Sensitive file inventory**: Check for .env files, config files that might contain credentials, certificate files, key files, or anything that shouldn't be in version control.
+
+    Write a concise recon report. This is a MAP, not an audit. The scanners will use it.
+
+    {{ output_spec("recon-report.md") }}
+
+    {# ── Stage 2: Innate Response (Fan-out x4) ─────────────────── #}
+    {% elif stage == 2 %}
+    {% set sweep = sweeps[instance] %}
+    # Innate Response: {{ sweep.title }}
+
+    You are one of four parallel scanners in the CHEAP tier of a graduated
+    security audit. Your job: cast a wide net using automated tools.
+    Speed matters more than depth — the expensive investigators come later.
+    FALSE POSITIVES ARE ACCEPTABLE at this tier. The triage stage filters.
+
+    ## Target
+    Project at `{{ target_project }}`
+
+    Read the recon report: `{{ workspace }}/recon-report.md`
+
+    ## Your Focus
+    {{ sweep.focus }}
+
+    ## Tools to Run
+    Change directory to `{{ target_project }}` before running tools:
+    {{ sweep.tools }}
+
+    ## Instructions
+    - Run every tool listed above. Capture and include the raw output.
+    - For each finding, note: file path, line number, severity estimate, description.
+    - Do NOT deep-dive into any finding. Note it, classify it roughly, move on.
+    - If a tool is not installed, note that and use grep-based alternatives.
+    - Include the raw tool output so the triage stage can verify findings.
+    - Mark uncertain findings with [NEEDS VERIFICATION].
+
+    {{ finding_format() }}
+
+    {{ output_spec("sweep-" ~ instance ~ ".md") }}
+
+    {# ── Stage 3: Dendritic Handoff ────────────────────────────── #}
+    {% elif stage == 3 %}
+    # Dendritic Handoff — Triage and Target
+
+    You are the most important stage in this pipeline. Four cheap scanners
+    have finished. You read everything they found and decide WHERE the
+    expensive investigators should focus. Your targeting brief shapes all
+    subsequent work. Get this wrong and expensive compute is wasted on
+    false positives. Get this right and real vulnerabilities get found.
+
+    ## Sweep Reports
+    Read ALL four sweep reports from `{{ workspace }}/`:
+    - `{{ workspace }}/sweep-1.md` — Dependency vulnerabilities
+    - `{{ workspace }}/sweep-2.md` — Static security analysis
+    - `{{ workspace }}/sweep-3.md` — Secrets and credentials
+    - `{{ workspace }}/sweep-4.md` — Configuration issues
+
+    Also read: `{{ workspace }}/recon-report.md`
+
+    ## Your Tasks
+
+    1. **Deduplicate**: Multiple scanners may flag the same code from different
+       angles. Merge duplicate findings into single entries with combined evidence.
+
+    2. **Classify**: For each unique finding, assign severity:
+       - CRITICAL: Exploitable now with high impact (RCE, auth bypass, secret leak)
+       - HIGH: Exploitable with effort, significant impact
+       - MEDIUM: Requires specific conditions, moderate impact
+       - LOW: Theoretical risk, minimal real-world impact
+
+    3. **Prioritize**: Rank findings by severity times exploitability times blast radius.
+
+    4. **Target**: Select the TOP 3 investigation areas for the expensive tier.
+       Each target should be a coherent cluster of related findings, not a
+       single line of code. For each target, write:
+       - Which files to investigate (specific paths)
+       - The hypothesis (what we think is wrong and why)
+       - Evidence from sweeps (which findings point here, from which sweep)
+       - Investigation approach (what the deep agent should do)
+       - Expected remediation shape (what a fix might look like)
+
+    5. **Statistics**: Count total findings per sweep, per severity. Calculate
+       deduplication rate. Note which scanner was most productive.
+
+    ## Required Output Structure
+
+    Your output MUST follow this structure — the investigators parse it:
+
+    # Targeting Brief
+
+    ## Summary Statistics
+    [total findings, per-sweep counts, per-severity counts, dedup rate]
+
+    ## Target 1: [Name] — [Severity]
+    **Files:** [list of specific file paths]
+    **Hypothesis:** [what we think is wrong]
+    **Evidence from sweeps:** [which findings, which sweep numbers]
+    **Investigation approach:** [what the investigator should do]
+
+    ## Target 2: [Name] — [Severity]
+    [same structure]
+
+    ## Target 3: [Name] — [Severity]
+    [same structure]
+
+    ## Deferred Findings
+    [Lower-priority items not selected for investigation, with brief rationale]
+
+    {{ output_spec("targeting-brief.md") }}
+
+    {# ── Stage 4: Adaptive Response (Fan-out x3) ──────────────── #}
+    {% elif stage == 4 %}
+    # Adaptive Response: Deep Investigation {{ instance }} of 3
+
+    You are an expensive investigator. The cheap scanners swept broad. The
+    triage agent prioritized. You go DEEP on one specific target area.
+    Your analysis must be thorough enough to produce actionable remediation.
+
+    ## Your Assignment
+    Read `{{ workspace }}/targeting-brief.md` and find **Target {{ instance }}**.
+    That is your investigation area. Ignore the other targets — other
+    investigators handle those concurrently.
+
+    Also read for context:
+    - `{{ workspace }}/recon-report.md` — project structure and entry points
+    - The relevant sweep reports cited in your target's evidence
+
+    ## Investigation Protocol
+
+    1. **Read the source**: Open and read every file listed in your target.
+       Do not skim — read the actual code. Use the Read tool on each file.
+       Trace data flows from entry points through processing to output.
+
+    2. **Verify or dismiss**: For each flagged issue, determine:
+       - Is this a real vulnerability? (confirmed — explain the attack path)
+       - Is this a false positive? (dismissed — explain why it's safe)
+       - Is this uncertain? (needs more context — explain what's missing)
+       Cite specific line numbers and code for every determination.
+
+    3. **Exploitation scenario**: For each confirmed vulnerability, write a
+       concrete attack scenario. What input triggers it? What's the blast
+       radius? What data is exposed or what access is gained?
+
+    4. **Remediation code**: For each confirmed vulnerability, write the
+       ACTUAL FIX as before/after code. Not "consider using parameterized
+       queries" — show the exact code change. Include imports, context lines,
+       and any new helper functions needed.
+
+    5. **Collateral check**: Would your fixes break existing functionality?
+       Check for tests that reference the changed code, callers that depend
+       on current behavior, downstream effects.
+
+    ## Required Output Structure
+
+    # Investigation: [Target Name from Brief]
+
+    ## Confirmed Vulnerabilities
+    [for each: location, description, exploitation scenario, before/after code]
+
+    ## Dismissed Findings
+    [for each: location, why it's a false positive with specific reasoning]
+
+    ## Remediation Patches
+    [consolidated before/after code blocks for all fixes]
+
+    ## Risk Assessment
+    [overall risk, confidence level, remaining uncertainties]
+
+    {{ output_spec("investigation-" ~ instance ~ ".md") }}
+
+    {# ── Stage 5: Remediation Synthesis ────────────────────────── #}
+    {% elif stage == 5 %}
+    # Remediation Synthesis
+
+    Three investigators have completed deep analysis of the highest-priority
+    security findings. Assemble their work into a complete, actionable
+    security audit package that a development team can execute.
+
+    ## Source Materials
+    Read ALL workspace files:
+    - `{{ workspace }}/recon-report.md` — Project map
+    - `{{ workspace }}/targeting-brief.md` — Triage results and statistics
+    - `{{ workspace }}/investigation-1.md` — Deep investigation 1
+    - `{{ workspace }}/investigation-2.md` — Deep investigation 2
+    - `{{ workspace }}/investigation-3.md` — Deep investigation 3
+
+    ## Produce Three Artifacts
+
+    ### 1. Security Report
+    Save to `{{ workspace }}/security-report.md`
+
+    A complete audit report suitable for delivery to a security team:
+    - **Executive Summary**: 3-5 sentences for leadership — what was found, severity, recommended action timeline
+    - **Methodology**: What tools were used, scan coverage, investigation depth
+    - **Findings Table**: Severity | Status | Location | Description (one row per finding)
+    - **Detailed Findings**: Each with evidence, impact assessment, remediation steps
+    - **Risk Matrix**: Map findings to severity versus likelihood grid
+    - **Prioritized Recommendations**: Ordered by impact and implementation effort
+
+    ### 2. Remediation Summary
+    Save to `{{ workspace }}/remediation-summary.md`
+
+    All remediation patches consolidated from all three investigations:
+    - Ordered by priority (CRITICAL fixes first)
+    - Each patch with: file path, before code, after code, explanation of the change
+    - Note any dependencies between patches (if fix A requires fix B first)
+    - Estimated effort per patch: trivial (under 30 min), moderate (1-4 hours), significant (over 4 hours)
+
+    ### 3. Hardened Checklist
+    Save to `{{ workspace }}/hardened-checklist.md`
+
+    Ongoing security practices specific to THIS project:
+    - CI/CD additions: specific tool commands to add to the pipeline
+    - Pre-commit hook additions: checks to run before every commit
+    - Dependency update policy: how often to check, what tools to use
+    - Secret management: how to handle credentials going forward
+    - Configuration hardening: specific settings to change
+    - Regular audit schedule: what to check and when
+
+    {# ── Stage 6: Immunological Memory ─────────────────────────── #}
+    {% elif stage == 6 %}
+    # Immunological Memory
+
+    The audit is complete. Now persist what was LEARNED — not the findings
+    themselves (those live in the report), but the methodology and patterns
+    that would accelerate the next audit of this or a similar codebase.
+
+    ## Read
+    - `{{ workspace }}/security-report.md` — what was found
+    - `{{ workspace }}/targeting-brief.md` — how triage went
+    - `{{ workspace }}/sweep-1.md` through `{{ workspace }}/sweep-4.md` — raw sweep data
+
+    ## Write Learning Notes
+
+    Document with specifics (not generalities):
+
+    1. **Scanner effectiveness**: Which of the 4 sweeps found real issues versus
+       noise? Rank them by signal-to-noise ratio for this type of project.
+
+    2. **Triage accuracy**: Did the targeting brief correctly identify the 3
+       most critical areas? What did the investigations confirm vs. surprise?
+
+    3. **Cascade efficiency**: How many findings survived each stage?
+       Raw sweep findings to deduplicated to targeted to confirmed.
+       What was the false positive rate at each tier?
+
+    4. **Vulnerability signatures**: Recurring patterns in this codebase that
+       a future audit should check first — the project's specific weak spots.
+
+    5. **Tool recommendations**: For future audits of similar Python projects,
+       which tools to prioritize, which to skip, and any new tools to add.
+
+    6. **Process improvements**: What would make the next cascade audit faster
+       or more accurate? Missing sweep types? Better triage criteria?
+
+    {{ output_spec("learning-notes.md") }}
+    {% endif %}
+
+validations:
+  # ── Stage 1: Reconnaissance (existence before content) ──
+  - type: file_exists
+    path: "{workspace}/recon-report.md"
+    condition: "stage == 1"
+    stage: 1
+    description: "Recon report created"
+  - type: content_regex
+    path: "{workspace}/recon-report.md"
+    pattern: "(?i)entry.?point"
+    condition: "stage == 1"
+    stage: 2
+    description: "Recon identifies attack surface entry points"
+
+  # ── Stage 2: Innate Response (per-instance) ──
+  - type: file_exists
+    path: "{workspace}/sweep-{instance}.md"
+    condition: "stage == 2"
+    stage: 1
+    description: "Sweep report created"
+  - type: content_regex
+    path: "{workspace}/sweep-{instance}.md"
+    pattern: "(?i)(CRITICAL|HIGH|MEDIUM|LOW)"
+    condition: "stage == 2"
+    stage: 2
+    description: "Sweep classifies finding severity"
+
+  # ── Stage 3: Dendritic Handoff (the critical stage) ──
+  - type: file_exists
+    path: "{workspace}/targeting-brief.md"
+    condition: "stage == 3"
+    stage: 1
+    description: "Targeting brief created"
+  - type: content_contains
+    path: "{workspace}/targeting-brief.md"
+    pattern: "Target 1"
+    condition: "stage == 3"
+    stage: 2
+    description: "Brief identifies investigation Target 1"
+  - type: content_contains
+    path: "{workspace}/targeting-brief.md"
+    pattern: "Target 2"
+    condition: "stage == 3"
+    stage: 2
+    description: "Brief identifies investigation Target 2"
+  - type: content_contains
+    path: "{workspace}/targeting-brief.md"
+    pattern: "Target 3"
+    condition: "stage == 3"
+    stage: 2
+    description: "Brief identifies investigation Target 3"
+  - type: content_regex
+    path: "{workspace}/targeting-brief.md"
+    pattern: "(?i)hypothesis"
+    condition: "stage == 3"
+    stage: 2
+    description: "Targets include investigation hypotheses"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/targeting-brief.md") -ge 400'
+    condition: "stage == 3"
+    stage: 3
+    description: "Targeting brief is substantive"
+
+  # ── Stage 4: Adaptive Response (per-instance) ──
+  - type: file_exists
+    path: "{workspace}/investigation-{instance}.md"
+    condition: "stage == 4"
+    stage: 1
+    description: "Investigation report created"
+  - type: content_regex
+    path: "{workspace}/investigation-{instance}.md"
+    pattern: "(?i)(confirmed|dismissed|false positive)"
+    condition: "stage == 4"
+    stage: 2
+    description: "Investigation verifies or dismisses findings"
+  - type: content_regex
+    path: "{workspace}/investigation-{instance}.md"
+    pattern: "(?i)remediation"
+    condition: "stage == 4"
+    stage: 2
+    description: "Investigation includes remediation"
+
+  # ── Stage 5: Remediation Synthesis ──
+  - type: file_exists
+    path: "{workspace}/security-report.md"
+    condition: "stage == 5"
+    stage: 1
+    description: "Security report created"
+  - type: file_exists
+    path: "{workspace}/remediation-summary.md"
+    condition: "stage == 5"
+    stage: 1
+    description: "Remediation summary created"
+  - type: file_exists
+    path: "{workspace}/hardened-checklist.md"
+    condition: "stage == 5"
+    stage: 1
+    description: "Hardened checklist created"
+  - type: content_regex
+    path: "{workspace}/security-report.md"
+    pattern: "(?i)executive.?summary"
+    condition: "stage == 5"
+    stage: 2
+    description: "Report has executive summary"
+  - type: content_regex
+    path: "{workspace}/security-report.md"
+    pattern: "(?i)(critical|high|medium|low)"
+    condition: "stage == 5"
+    stage: 2
+    description: "Report includes severity ratings"
+  - type: content_regex
+    path: "{workspace}/remediation-summary.md"
+    pattern: "(?i)(before|after|patch|fix)"
+    condition: "stage == 5"
+    stage: 2
+    description: "Remediation includes concrete code changes"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/security-report.md") -ge 800'
+    condition: "stage == 5"
+    stage: 3
+    description: "Security report is substantive"
+
+  # ── Stage 6: Immunological Memory ──
+  - type: file_exists
+    path: "{workspace}/learning-notes.md"
+    condition: "stage == 6"
+    stage: 1
+    description: "Learning notes created"
+  - type: content_regex
+    path: "{workspace}/learning-notes.md"
+    pattern: "(?i)(cascade|efficiency|accuracy|signal)"
+    condition: "stage == 6"
+    stage: 2
+    description: "Learning notes assess cascade effectiveness"
