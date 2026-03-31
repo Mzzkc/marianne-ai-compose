@@ -2,24 +2,27 @@
 #
 # This score creates a short interactive fiction experience in three
 # movements. Movement 1 generates the world. Movement 2 writes three
-# parallel character vignettes. Movement 3 weaves them into a finale.
+# parallel character vignettes. Movement 3 weaves them into a finale
+# and presents it as a beautifully designed HTML page you can open
+# in your browser.
 #
-# The result is a folder of interconnected stories — a real creative
-# artifact, not a dry exercise. Run it, read the output, and see what
+# The result is a visual, immersive reading experience — not a folder
+# of text files. Open the-sky-library.html in any browser and see what
 # orchestrated AI can produce.
 #
 # Usage:
 #   mozart start                        # Start the conductor
 #   mozart run examples/hello.yaml      # Run the score
 #   mozart status hello-mozart           # Watch progress
+#   open workspaces/hello-mozart/the-sky-library.html  # Read the result
 #
 # Output:
 #   workspaces/hello-mozart/
-#     01-world.md         — The setting
-#     02-character-1.md   — First vignette
-#     02-character-2.md   — Second vignette
-#     02-character-3.md   — Third vignette
-#     03-finale.md        — Where all paths converge
+#     01-world.md              — The setting (raw material)
+#     02-character-1.md        — First vignette (raw material)
+#     02-character-2.md        — Second vignette (raw material)
+#     02-character-3.md        — Third vignette (raw material)
+#     the-sky-library.html     — The finished product: open in browser
 #
 # Time: ~5 minutes  |  Cost: ~$0.50  |  Sheets: 5
 
@@ -148,11 +151,11 @@ prompt:
     Save to: {{ workspace }}/02-character-{{ instance }}.md
 
     {% elif stage == 3 %}
-    # Movement 3: The Finale
+    # Movement 3: The Finale — A Visual Experience
 
-    You are a fiction writer. You're writing the closing chapter of an
-    interconnected story collection. Three characters' paths are about to
-    converge.
+    You are a fiction writer AND a web designer. You're creating the closing
+    chapter of an interconnected story collection AND presenting the entire
+    collection as a beautiful, self-contained HTML page.
 
     ## Read Everything First
     Read all files in {{ workspace }}/:
@@ -163,30 +166,63 @@ prompt:
 
     ## Your Task
 
-    Write the finale (800-1200 words) where all three paths converge.
+    Create a single self-contained HTML file: `{{ workspace }}/the-sky-library.html`
 
-    Requirements:
-    - Pick up where each character's vignette left off
-    - Bring all three characters to the same place at the same time
-    - Their individual secrets, when combined, reveal something larger
-      about the city — something none of them could have seen alone
-    - Don't resolve everything. End on an image, not an answer.
-      The best endings open doors rather than close them.
-    - Reference specific details from each vignette — show that you read them
+    This HTML file is a digital literary journal that presents ALL the stories
+    in one gorgeous, immersive reading experience. It must include:
 
-    Also create a colophon at the end:
+    ### Content Structure
+    1. **Opening** — The world setting (from 01-world.md), adapted for HTML
+    2. **Three character sections** — Each vignette (from 02-character-*.md)
+    3. **The Finale** (800-1200 words, NEW content you write now) where all
+       three paths converge:
+       - Pick up where each vignette left off
+       - Bring all three characters to the same place at the same time
+       - Their secrets, combined, reveal something larger about the city
+       - End on an image, not an answer — open doors rather than close them
+       - Reference specific details from each vignette
+    4. **Colophon** at the bottom explaining how this was made
 
-    ---
-    *This story was composed by Mozart AI Compose — an orchestration system
-    that coordinates AI agents through declarative YAML scores. The world
-    was written first. Three character vignettes were generated in parallel,
-    each reading the shared world but not each other. This finale read
-    everything and wove the threads together.*
+    ### Visual Design Requirements
+    - Self-contained: ALL CSS inline in a `<style>` tag. No external resources.
+    - Typography: Use system font stacks (serif for body text, sans-serif for
+      headers). Large, readable body text (18-20px). Generous line-height (1.7+).
+    - Color: A muted, atmospheric palette inspired by the solarpunk setting.
+      Think warm golds, soft greens, sky blues against a cream or warm-white
+      background. Dark text for readability.
+    - Layout: Centered content column (max 680px). Generous margins and padding.
+      Each section visually separated with decorative dividers (CSS, not images).
+    - Character sections: Each character's section should have a subtle visual
+      identity — a colored accent border or background tint that distinguishes
+      them from each other.
+    - The opening section should feel expansive — maybe a large title treatment
+      with the city name and a poetic subtitle.
+    - The finale section should feel like a convergence — perhaps the accent
+      colors from all three characters blending together.
+    - Responsive: Looks good on desktop (wide) and mobile (narrow).
+    - Include a small decorative element between sections — a CSS-only ornament
+      like centered dots, a thin gradient line, or a typographic flourish.
+    - The colophon at the bottom should be visually distinct (smaller, italicized)
+      and include this text:
 
-    *Score: `hello.yaml` | Movements: 3 | Voices: 5 | Time: ~5 minutes*
-    ---
+      "This story was composed by Mozart AI Compose — an orchestration system
+      that coordinates AI agents through declarative YAML scores. The world
+      was written first. Three character vignettes were generated in parallel,
+      each reading the shared world but not each other. This finale read
+      everything and wove the threads together.
+      Score: hello.yaml | Movements: 3 | Voices: 5"
 
-    Save to: {{ workspace }}/03-finale.md
+    ### Technical Requirements
+    - Valid HTML5. `<!DOCTYPE html>` at the top.
+    - `<html lang="en">` with proper `<head>` including meta charset and viewport.
+    - All content and styling in one file — no external dependencies.
+    - Must render correctly in Chrome, Firefox, Safari.
+    - Page title: "The Sky Library — A Mozart Composition"
+
+    Save ONLY the HTML file to: {{ workspace }}/the-sky-library.html
+
+    Also save the raw finale text to: {{ workspace }}/03-finale.md
+    (This is the finale prose only, without HTML, for cross-sheet context.)
     {% endif %}
 
 validations:
@@ -201,12 +237,18 @@ validations:
     description: "Character vignette exists"
 
   - type: file_exists
-    path: "{workspace}/03-finale.md"
+    path: "{workspace}/the-sky-library.html"
     condition: "stage == 3"
-    description: "Finale document exists"
+    description: "HTML presentation exists"
 
   - type: content_contains
-    path: "{workspace}/03-finale.md"
+    path: "{workspace}/the-sky-library.html"
+    pattern: "<!DOCTYPE html>"
+    condition: "stage == 3"
+    description: "Output is valid HTML5"
+
+  - type: content_contains
+    path: "{workspace}/the-sky-library.html"
     pattern: "Mozart AI Compose"
     condition: "stage == 3"
-    description: "Finale contains colophon"
+    description: "HTML contains colophon"

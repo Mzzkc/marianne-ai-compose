@@ -69,6 +69,9 @@ from ..output import (
     output_json,
 )
 from ..output import (
+    format_error_code_for_display as _format_error_code,
+)
+from ..output import (
     infer_error_type as _infer_error_type,
 )
 
@@ -650,7 +653,7 @@ def _output_status_json(job: CheckpointState) -> None:
             "sheet_num": sheet_num,
             "timestamp": error.timestamp.isoformat() if error.timestamp else None,
             "error_type": error.error_type,
-            "error_code": error.error_code,
+            "error_code": _format_error_code(error.error_code, None),
             "error_message": error.error_message,
         })
 
@@ -673,6 +676,7 @@ def _output_status_json(job: CheckpointState) -> None:
             "validation_passed": sheet.validation_passed,
             "error_message": sheet.error_message,
             "error_category": sheet.error_category,
+            "error_code": sheet.error_code,
         }
         if sheet.execution_duration_seconds is not None:
             sheet_data["execution_duration_seconds"] = sheet.execution_duration_seconds
@@ -1213,7 +1217,7 @@ def _render_recent_errors(job: CheckpointState) -> None:
         source_str = ", ".join(source_parts)
 
         console.print(
-            f"  [{type_style}]\u2022[/{type_style}] [{type_style}]{error.error_code}[/{type_style}]"
+            f"  [{type_style}]\u2022[/{type_style}] [{type_style}]{_format_error_code(error.error_code, None)}[/{type_style}]"
             f" [dim]({source_str})[/dim] - {message}"
         )
 
@@ -1560,8 +1564,8 @@ def _collect_recent_errors(
         # If no history but has error_message, create synthetic record
         if not sheet.error_history and sheet.error_message:
             synthetic = ErrorRecord(
-                error_type=_infer_error_type(sheet.error_category),
-                error_code=sheet.error_category or "E999",
+                error_type=_infer_error_type(sheet.error_code or sheet.error_category),
+                error_code=_format_error_code(sheet.error_code, sheet.error_category),
                 error_message=sheet.error_message,
                 attempt_number=max(sheet.attempt_count, 1),
                 stdout_tail=sheet.stdout_tail,

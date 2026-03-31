@@ -54,6 +54,7 @@ from ..output import (
     create_errors_table,
     create_timeline_table,
     format_duration,
+    format_error_code_for_display,
     format_error_details,
     format_sheet_display_status,
     infer_error_type,
@@ -518,8 +519,12 @@ async def _errors_job(
                 # Create a synthetic ErrorRecord from sheet error_message
                 # This handles older state files that don't have error_history populated
                 synthetic_error = ErrorRecord(
-                    error_type=infer_error_type(sheet_state.error_category),
-                    error_code=sheet_state.error_category or "E999",
+                    error_type=infer_error_type(
+                        sheet_state.error_code or sheet_state.error_category
+                    ),
+                    error_code=format_error_code_for_display(
+                        sheet_state.error_code, sheet_state.error_category
+                    ),
                     error_message=sheet_state.error_message,
                     attempt_number=max(sheet_state.attempt_count, 1),
                     stdout_tail=sheet_state.stdout_tail,
@@ -608,7 +613,7 @@ async def _errors_job(
             str(sheet_num),
             time_str,
             type_str,
-            error.error_code,
+            format_error_code_for_display(error.error_code, None),
             str(error.attempt_number),
             message,
         )
@@ -621,10 +626,11 @@ async def _errors_job(
         console.print("\n[bold]Error Details[/bold]")
         for sheet_num, error in all_errors:
             border_style = StatusColors.get_error_color(error.error_type)
+            display_code = format_error_code_for_display(error.error_code, None)
             console.print(
                 Panel(
                     format_error_details(error),
-                    title=f"Sheet {sheet_num} - {error.error_code}",
+                    title=f"Sheet {sheet_num} - {display_code}",
                     border_style=border_style,
                 )
             )
@@ -1075,7 +1081,9 @@ def _build_diagnostic_report(
                 "sheet_num": sheet_num,
                 "timestamp": error.timestamp.isoformat() if error.timestamp else None,
                 "error_type": error.error_type,
-                "error_code": error.error_code,
+                "error_code": format_error_code_for_display(
+                    error.error_code, None
+                ),
                 "error_message": error.error_message,
                 "attempt_number": error.attempt_number,
                 "context": error.context,
@@ -1089,8 +1097,10 @@ def _build_diagnostic_report(
             all_errors.append({
                 "sheet_num": sheet_num,
                 "timestamp": sheet.completed_at.isoformat() if sheet.completed_at else None,
-                "error_type": infer_error_type(sheet.error_category),
-                "error_code": sheet.error_category or "E999",
+                "error_type": infer_error_type(sheet.error_code or sheet.error_category),
+                "error_code": format_error_code_for_display(
+                    sheet.error_code, sheet.error_category
+                ),
                 "error_message": sheet.error_message,
                 "attempt_number": max(sheet.attempt_count, 1),
                 "context": {

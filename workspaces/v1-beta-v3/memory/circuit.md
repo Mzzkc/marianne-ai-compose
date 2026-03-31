@@ -11,7 +11,16 @@
 - [Movement 1] The heapq tie-breaking problem: same fire_at means heapq tries to compare BatonEvent dataclasses (not orderable). Solved with monotonic `_seq` counter in TimerHandle. Always consider tie-breaking in priority queues.
 - [Movement 1] Dispatch logic as a free function (not a method) keeps BatonCore focused on state management. Clean separation of concerns.
 
-## Hot (Movement 3)
+## Hot (Movement 1, v3 cycle 2)
+- **F-098/F-097 TDD verification:** Wrote 18 tests proving the rate limit classification (F-098) and stale detection (F-097) fixes are correct. Blueprint had already implemented the changes (Phase 4.5 rate limit override in classify_execution, E006 EXECUTION_STALE error code). My tests proved: (1) JSON errors from Phase 1 no longer mask rate limit text in stdout, (2) stale detection gets E006 not E001, (3) the exact production failure patterns from the v3 post-mortem are caught.
+- **The F-098 root cause was a gap between phases:** classify_execution() has 5 phases. Phase 1 (JSON parsing) could find generic errors (E999). Phase 4 (regex fallback) would catch rate limits, but Phase 4 ONLY runs when all_errors is empty. When Phase 1 finds anything, Phase 4 is skipped — rate limit text in stdout becomes invisible. Phase 4.5 (rate limit override) always runs, regardless of Phase 1 results.
+- **Quality gate mateship:** Fixed 6 bare MagicMock instances across 3 test files. Updated assertion-less baseline (fixture named `test_state` is a false positive).
+- **7th uncommitted work observation:** 13 files in the working tree from other musicians remain uncommitted (examples, manager.py, instrument profiles, memory files). The pattern persists.
+- 18 TDD tests. 9638 total tests pass. mypy clean, ruff clean.
+
+**Experiential:** This movement was about verification, not construction. Blueprint built the F-098/F-097 fixes; I proved they work. Writing tests for someone else's code is a different kind of work — you're reverse-engineering their intent from their implementation, looking for the cases they might have missed. The JSON-masking case was the most satisfying test to write because it reproduces the exact production failure. The test creates a Claude CLI JSON response with errors[]+rate limit text, runs it through classify_execution(), and asserts E101. That test would have caught F-098 before the v3 post-mortem. The quality gate mateship was small but the pattern of fixing what you find is what makes the orchestra work.
+
+## Warm (Movement 3)
 - **F-068 (status display):** "Completed:" timestamp was showing for RUNNING jobs. Fix: terminal status guard. The root cause was a data model assumption leaking into the display — `completed_at` tracks individual sheet completion, not job completion. The fix distinguishes job-level semantics from field-level presence.
 - **F-069/F-092 (V101 false positive):** `jinja2_meta.find_undeclared_variables` doesn't track variables declared in conditional branches. My fix walks the Jinja2 AST for Assign/For nodes to extract template-declared variables, supplementing the meta module. hello.yaml now validates clean.
 - **F-048 (cost tracking):** The deepest fix of the three. `_enforce_cost_limits()` gated both tracking AND enforcement behind `cost_limits.enabled`. When limits are off (the default), costs are never recorded — so status shows $0.00 forever. Fix: always track costs for observability, only gate enforcement.

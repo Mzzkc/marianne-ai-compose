@@ -244,14 +244,83 @@ def format_validation_status(passed: bool | None) -> str:
 # Error type inference
 # =============================================================================
 
+# Map error categories to their canonical error code prefix.
+# Used when error_code is None (older state files before E006 was added).
+# Categories map to the most common error code in that family.
+_CATEGORY_TO_ERROR_CODE: dict[str, str] = {
+    "timeout": "E001",
+    "signal": "E002",
+    "network": "E003",
+    "transient": "E004",
+    "rate_limit": "E101",
+    "validation": "E201",
+    "configuration": "E301",
+    "auth": "E502",  # BACKEND_AUTH, not E401 (STATE_CORRUPTION)
+    "preflight": "E601",
+    "escalation": "E999",
+    "fatal": "E999",
+}
+
+
+def format_error_code_for_display(
+    error_code: str | None,
+    error_category: str | None,
+) -> str:
+    """Format an error code for CLI display.
+
+    Prefers the structured error_code (e.g., "E006") when available.
+    Falls back to mapping the error_category to its canonical error code
+    prefix. Returns "E999" when neither is available.
+
+    This ensures the CLI never shows raw category strings like "timeout"
+    as error codes — it always shows a proper Exx code.
+
+    Args:
+        error_code: Structured error code from SheetState (e.g., "E006").
+        error_category: Error category string or ErrorCategory enum value.
+
+    Returns:
+        A proper error code string (e.g., "E006", "E001", "E999").
+    """
+    if error_code is not None:
+        # Proper E-codes start with 'E' followed by digits (e.g., "E006").
+        # Legacy error_history records may contain raw category strings
+        # like "timeout" or "rate_limit" — normalize those via the map.
+        if error_code.startswith("E") and error_code[1:].isdigit():
+            return error_code
+        # Raw category string in error_code field — treat as category
+        mapped = _CATEGORY_TO_ERROR_CODE.get(error_code.lower())
+        if mapped:
+            return mapped
+        # Unknown string — fall through to error_category
+
+    if error_category is None:
+        return "E999"
+
+    # Handle both ErrorCategory enum values and raw strings
+    category_str = (
+        error_category.value
+        if hasattr(error_category, "value")
+        else str(error_category)
+    )
+    return _CATEGORY_TO_ERROR_CODE.get(category_str.lower(), "E999")
+
 
 def infer_error_type(
     error_category: str | None,
 ) -> Literal["transient", "rate_limit", "permanent"]:
-    """Infer error type from error category string.
+    """Infer error type from error category string or error code.
+
+    Recognizes both human-readable category strings (e.g., "rate_limit",
+    "timeout") and structured error codes (e.g., "E101", "E006").
+
+    Error code ranges:
+        E0xx (execution): transient — timeouts, kills, crashes, stale
+        E1xx (rate/capacity): rate_limit — API limits, CLI limits, quota
+        E2xx+ (validation/auth/config/unknown): permanent
 
     Args:
-        error_category: Error category from sheet state.
+        error_category: Error category or error code from sheet state.
 
     Returns:
         Error type literal: transient, rate_limit, or permanent.
@@ -260,6 +329,21 @@ def infer_error_type(
         return "permanent"
 
     category_lower = error_category.lower()
+
+    # Structured error codes: E followed by 3 digits (e.g., E001, E101)
+    if (
+        len(category_lower) == 4
+        and category_lower.startswith("e")
+        and category_lower[1:].isdigit()
+    ):
+        code_class = int(category_lower[1])
+        if code_class == 0:
+            return "transient"  # E0xx: execution errors
+        if code_class == 1:
+            return "rate_limit"  # E1xx: rate limit / capacity
+        return "permanent"  # E2xx+: validation, auth, config, unknown
+
+    # Category string matching (backward compat)
     if "rate" in category_lower or "limit" in category_lower:
         return "rate_limit"
     if category_lower in ("transient", "timeout", "network", "signal"):
@@ -713,7 +797,7 @@ def format_error_details(error: CheckpointErrorRecord) -> str:
     lines = [
         f"[bold]Message:[/bold] {error.error_message or 'N/A'}",
         f"[bold]Type:[/bold] {error.error_type}",
-        f"[bold]Code:[/bold] {error.error_code}",
+        f"[bold]Code:[/bold] {format_error_code_for_display(error.error_code, None)}",
         f"[bold]Attempt:[/bold] {error.attempt_number}",
     ]
 
