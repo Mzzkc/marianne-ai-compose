@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import typer
+import yaml
 from rich.panel import Panel
 from rich.table import Table
 
@@ -93,13 +94,25 @@ def run(
 
     try:
         config = JobConfig.from_yaml(config_file)
+    except yaml.YAMLError as e:
+        if json_output:
+            output_json({"error": f"YAML syntax error: {e}"})
+        else:
+            output_error(
+                f"YAML syntax error: {e}",
+                hints=[
+                    "Check for indentation issues or invalid YAML characters.",
+                    f"Validate with: mozart validate {config_file}",
+                ],
+            )
+        raise typer.Exit(1) from None
     except Exception as e:
         if json_output:
             output_json({"error": str(e)})
         else:
             output_error(
                 str(e),
-                hint="Check your score YAML syntax with: mozart validate <file>",
+                hints=[f"Validate with: mozart validate {config_file}"],
             )
         raise typer.Exit(1) from None
 
@@ -228,8 +241,19 @@ async def _try_daemon_submit(
             if json_output:
                 output_json(result)
             else:
-                console.print(f"[yellow]Conductor rejected score:[/yellow] {msg}")
-            return False
+                rejection = (
+                    f"Conductor rejected score: {msg}"
+                    if msg
+                    else "Conductor rejected score."
+                )
+                output_error(
+                    rejection,
+                    hints=[
+                        "The conductor is running but declined this submission.",
+                        "Try again later, or check with: mozart conductor-status",
+                    ],
+                )
+            raise typer.Exit(1)
 
         # Poll briefly to catch early failures (e.g. template errors)
         early = await await_early_failure(job_id)
@@ -246,7 +270,7 @@ async def _try_daemon_submit(
                 err = early.get("error_message", "") if isinstance(early, dict) else ""
                 output_error(
                     f"Score failed: {job_id}",
-                    hint=f"Run: mozart diagnose {job_id}",
+                    hints=[f"Run: mozart diagnose {job_id}"],
                 )
                 if err:
                     console.print(f"  {err}")

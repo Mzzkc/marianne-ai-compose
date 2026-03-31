@@ -220,7 +220,7 @@ See FINDINGS.md F-097 through F-102 for full context.
 - [ ] Pending jobs start automatically when rate limit clears (priority: P1) [source: F-110]
 - [ ] Pending jobs can be cancelled via `mozart cancel` (priority: P1) [source: F-110]
 - [ ] `mozart run` / `mozart resume` shows time remaining when rate-limited: "Rate limit on claude-cli — clears in Xm Ys" (priority: P1) [source: F-110]
-- [ ] Fix misleading "Mozart conductor is not running" error on backpressure rejection (priority: P1) [source: F-110]
+- [x] [Lens] Fix misleading "Mozart conductor is not running" error on backpressure rejection (priority: P1) [source: F-110] — _try_daemon_submit now raises typer.Exit(1) on explicit rejection instead of returning False (which triggered misleading "not running" fallback). Rejection reason shown with hints. 3 TDD tests.
 
 ### Multi-Instrument Support (F-100, F-101, F-103, F-104, F-105)
 - [x] [Composer] Fix baton `config.backend.max_retries` → `config.retry.max_retries` (priority: P0) [source: F-103]

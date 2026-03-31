@@ -298,10 +298,10 @@ Each finding should include:
 ### F-031: Malformed YAML Produces Misleading Pydantic Error
 - **Found by:** Newcomer, Movement 1
 - **Severity:** P2 (medium — error misdirects troubleshooting)
-- **Status:** Open
+- **Status:** Resolved (movement 4, Lens)
 - **Description:** `echo "this is not yaml {{{" > /tmp/bad.yaml && mozart validate /tmp/bad.yaml` → "Schema validation failed: Input should be a valid dictionary or instance of JobConfig". The actual problem is invalid YAML syntax, but the error implies the YAML was parsed successfully and the schema doesn't match.
 - **Impact:** User thinks they need to fix their config structure when they actually have a YAML syntax error. Misdirected troubleshooting.
-- **Action:** In the validate command, catch YAML parse errors separately and surface them as "YAML syntax error at line X" before attempting Pydantic validation.
+- **Resolution:** Added `yaml.YAMLError` catch in `run.py:97` before the generic Exception handler. YAML syntax errors now show "YAML syntax error: ..." with hints about indentation and a pointer to `mozart validate`. The `validate` command already handled this correctly (lines 87-95). Also fixed `hint=` (singular) misuse in run.py — `output_error()` only accepts `hints=` (list), so `hint=` went to `**json_extras` and was invisible in terminal mode. 8 TDD tests in `test_cli_error_ux.py`.
 
 ### F-032: JSON Output Contains Invalid Control Characters
 - **Found by:** Newcomer, Movement 1
@@ -707,7 +707,7 @@ Each finding should include:
 ### F-073: `mozart resume` Suggests `diagnose` for Nonexistent Score (Unhelpful Hint)
 - **Found by:** Journey, Movement 2
 - **Severity:** P3 (low — hint leads to another error)
-- **Status:** Open
+- **Status:** Resolved (already fixed in resume.py — verified by Lens, movement 4)
 - **Description:** `mozart resume nonexistent-job` suggests `Run: mozart diagnose nonexistent-job`. But `diagnose` will also say "Score not found: nonexistent-job". The hint sends the user to another error instead of a solution. Compare to `status` and `diagnose` which correctly suggest `Run 'mozart list' to see available scores.`
 - **Impact:** User follows the hint, hits another error, feels more lost than before.
 - **Action:** Change resume's hint to suggest `mozart list` instead of `mozart diagnose`. The `diagnose` hint makes sense for known-but-failed scores, not unknown scores.
@@ -908,7 +908,8 @@ Each finding should include:
 ### F-090: `mozart doctor` and `conductor-status` Disagree with `mozart status` About Conductor State
 - **Found by:** Ember, Movement 2
 - **Severity:** P2 (medium — three commands disagree about the same fact)
-- **Status:** Open
+- **Status:** Partially resolved (movement 1 cycle 2, Ghost — doctor.py fixed, conductor-status not yet)
+- **Resolution (doctor.py):** Added two-phase conductor detection: PID file check first, then IPC socket probe as fallback. When PID file is missing but the socket responds, doctor now correctly reports "running". 4 TDD tests. Commit 42d3d1a. `conductor-status` still uses PID-only via `process.py:get_conductor_status()` — needs the same socket fallback treatment.
 - **Description:** `mozart status` shows conductor RUNNING (15h 56m uptime) via IPC socket at `/tmp/mozart.sock`. `mozart doctor` shows "! Conductor not running" via PID file check. `conductor-status` shows "not running." The PID file (`~/.mozart/mozart.pid`) is absent. The process IS running (PID 1120, visible in `ps aux`). The socket exists. The IPC works. But the PID-based check returns false.
 - **Impact:** Users who run `doctor` to check health get the wrong answer. A user who trusts `doctor` over `status` might try to start a second conductor, potentially conflicting with the running one. The discrepancy between three commands (status=RUNNING, doctor=not running, conductor-status=not running) erodes trust in diagnostic tooling.
 - **Error class:** State check uses different detection methods across commands. `status` checks IPC socket (reliable). `doctor` and `conductor-status` check PID file (fragile — can be deleted, stale, or never created). The PID file is a proxy, not the truth. The socket IS the truth.
@@ -1187,6 +1188,7 @@ Each finding should include:
   2. **Show time remaining on rejection.** If `mozart run` or `mozart resume` is rejected due to rate limits, show: "Rate limit active on claude-cli — clears in 27m 32s. Job queued as pending." (or if rejecting: "Resubmit after 02:03 UTC").
   3. **Fix the misleading error message.** "Mozart conductor is not running" is wrong — it IS running. The error should say what's actually happening: rate limit backpressure.
 - **Impact:** Users (and self-chaining scores) can't submit work during rate limits. This breaks concert chains — if a score completes and chains to the next, but a rate limit is active from a *different* job, the chain breaks. The conductor should be a reliable place to leave work, not a bouncer that turns you away.
+- **Partial Resolution (Lens, movement 4):** Item 3 (misleading error message) FIXED. `_try_daemon_submit` in `run.py` now raises `typer.Exit(1)` after printing the specific rejection reason, instead of returning False and triggering the fallback "conductor is not running" message. The user now sees the actual rejection reason (e.g., "System under high pressure — try again later") with hints about conductor status. 3 TDD tests in `test_cli_error_ux.py`. Items 1 (PENDING state) and 2 (time remaining) remain open.
 
 ### F-111: Parallel Executor Loses RateLimitExhaustedError Type — Jobs FAIL Instead of PAUSE
 - **Found by:** Composer investigation (flowspec trace of `_execute_parallel_mode` → `FatalError`)
