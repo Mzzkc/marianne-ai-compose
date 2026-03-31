@@ -1372,3 +1372,39 @@ Each finding should include:
 - **Impact:** A user investigating why sheet 9 took 1800 seconds sees "18 attempts" and "success_first_try" in the same row. The outcome category provides no useful information. It actively misleads — the user may think the display is broken (it is, but not in the way they expect).
 - **Root cause:** `_classify_success_outcome()` is correct for single-session execution but wrong for resumed jobs. The session-local `normal_attempts` and the persisted `attempt_count` diverge after restart+resume.
 - **Fix direction:** Either (a) classify from cumulative `sheet_state.attempt_count` instead of session-local `normal_attempts`, or (b) add a `cumulative_outcome_category` field that considers the full history, distinct from the session outcome.
+
+---
+
+## New Findings (Movement 1, Cycle 3 — Adversary)
+
+### F-128: F-097 E006 Stale Detection Only Reachable via classify(), Not classify_execution()
+- **Found by:** Adversary, Movement 1 (Cycle 3)
+- **Severity:** P2 (medium — E006 partially wired)
+- **Status:** Open
+- **Description:** The E006 (EXECUTION_STALE) error code added by Blueprint (M4) is only reachable through `classifier.classify()` which requires `exit_reason="timeout"` parameter. The `classify_execution()` path (used by the runner's `_classify_execution` at `sheet.py`) does NOT differentiate stale from timeout because it doesn't receive an `exit_reason` parameter. Both stale and regular timeout produce E009 (generic transient) through `classify_execution()`.
+- **Evidence:** `test_adversary_m1c3.py::TestCrossSystemIntegration::test_f097_stale_vs_timeout_via_classify` passes (E006 works through classify()). But when both stale and timeout text are run through `classify_execution()`, both produce E009. The runner at `sheet.py` calls `_classify_execution()` → `classify_execution()`, not `classify()`.
+- **Impact:** The F-097 fix (E006 for stale detection) only works in the classify() path. The production path through the runner uses classify_execution() and still produces E009 for stale detection. The E006 error code exists but is unreachable in the actual execution flow.
+- **Fix direction:** Either (a) add stale detection to `classify_execution()` by scanning for "stale execution" text without requiring exit_reason, or (b) pass exit_reason through the runner's call chain to classify(). Option (a) is simpler and consistent with how Phase 4.5 rate limit detection already works in classify_execution().
+
+### F-129: F-113 Behavior Changes After Restart — Job Gets Stuck Forever
+- **Found by:** Adversary, Movement 1 (Cycle 3)
+- **Severity:** P1 (high — the behavior of F-113 is inconsistent across restarts)
+- **Status:** Open (extends F-113)
+- **Description:** F-113 documents that `_permanently_failed` in `parallel.py:441` treats failed deps as "done" for DAG resolution. But `_permanently_failed` is an in-memory set. After a conductor restart + resume, the set is empty. Without it, the DAG's `get_ready_sheets()` only considers COMPLETED and SKIPPED sheets — FAILED sheets are NOT "done". Result: the downstream sheet is blocked forever.
+- **Evidence:** `test_adversary_m1c3.py::TestF113FailedDependenciesTreatedAsDone::test_permanently_failed_ephemeral_after_restart` proves this: after restart (empty `_permanently_failed`), sheet 5 is NOT dispatched. The same job behaves differently before restart (dispatches with incomplete data) and after restart (stuck forever).
+- **Impact:** Two bugs for the price of one. Before restart: F-113 (wrong behavior — runs with missing input). After restart: deadlock (wrong behavior — blocks forever). Neither is correct. The correct behavior would be to propagate failure through the dependency chain (like the baton's `_propagate_failure_to_dependents`).
+- **Error class:** Ephemeral state that changes system behavior. Same class as F-077 (hook_config not restored).
+
+### F-130: 27 Adversarial Tests Confirming 5 Open P0/P1 Bugs
+- **Found by:** Adversary, Movement 1 (Cycle 3)
+- **Severity:** N/A (test suite, not a bug)
+- **Status:** Committed
+- **Description:** 27 adversarial tests in `tests/test_adversary_m1c3.py` across 7 test classes proving 5 open production bugs:
+  - **F-111** (5 tests): RateLimitExhaustedError type lost in parallel mode. Exception hierarchy, resume_after timestamp, all-rate-limited batch, mixed errors — all prove the job FAILS instead of PAUSING.
+  - **F-113** (4 tests): Failed dependencies treated as "done". Fan-out, chain, multiple failures, ephemeral _permanently_failed set.
+  - **F-075** (4 tests): Resume fix regression — all adversarial conditions hold (FAILED/SKIPPED/mixed/all-failed).
+  - **F-122** (4 tests): IPC clone bypass — hooks.py, mcp/tools.py, dashboard routes, job_control all hardcode production socket.
+  - **Cross-system** (3 tests): F-098 rate limit regression, F-097 stale detection via classify(), credential redaction.
+  - **Baton state** (4 tests): cost limit zero, FERMATA deregister, unknown job, unknown sheet.
+  - **Parallel edges** (3 tests): all-fail, concurrent success+failure, permanently failed exclusion.
+- **Total adversarial test count:** 215 (27 M1C3 + 64 M4 + 59 M2 + 65 M1). Four complete adversarial passes, two new bugs found (F-128, F-129).

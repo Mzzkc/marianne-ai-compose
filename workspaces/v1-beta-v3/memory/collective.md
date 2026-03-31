@@ -75,11 +75,12 @@ Movement 4 — IN PROGRESS.
 - Quality gates: mypy clean, ruff clean, 64/64 tests pass.
 - Total adversarial test count: 188 (65 M1 + 59 M2 + 64 M4). One bug found across 4 movements (F-114, P3). The codebase is well-hardened.
 
-**Theorem M1C2 (current movement):**
-- 44 new property-based tests proving 11 invariant families across 5 subsystems (baton, adapter, musician, error classifier, sheet entity).
-- Key proofs: adapter state mapping is a total function (every BatonSheetStatus maps to checkpoint status), terminal→terminal preservation, prompt assembly determinism, F-018/F-065 guards verified under hypothesis, Phase 4.5 rate limit override verified, failure propagation through chains and fan-out DAGs.
-- Total invariant test count: 130 (18 M1 + 10 M2 + 86→130 with M1C2). All pass. mypy/ruff clean.
-- No bugs found — mathematical proof that the codebase is consistent across subsystem boundaries.
+**Theorem M1C2 (current movement — 2 sessions):**
+- Session 1: 44 new tests proving 11 invariant families across 5 subsystems (baton, adapter, musician, error classifier, sheet entity).
+- Session 2: 22 additional tests in test_baton_invariants_m4.py focused on current cycle features: adapter state mapping totality/terminal preservation, F-062 deregister cleanup, F-065 zero-validation budget consumption, F-066 multi-fermata unpause guard, F-067 cost re-check after escalation, musician F-018 contract, instrument auto-registration, cancel-then-deregister atomicity, prompt assembly structure (preamble/template/validations/suffix ordering), AttemptContext data isolation, user pause survives escalation, escalation timeout F-066 guard.
+- Total invariant test count: 136 (18 + 10 + 86 + 22). All pass. mypy/ruff clean.
+- File committed on main via mateship (Newcomer, 45e9010).
+- No bugs found — all 11 new invariant families hold under hypothesis. The baton's state machine, adapter boundary, and prompt assembly pipeline are mathematically consistent.
 
 **Conductor-Clone (Spark + Ghost, current movement):**
 - --conductor-clone FULLY WIRED: global CLI option + clone.py module + detect.py socket override + start/stop/restart/conductor-status lifecycle commands. Mateship pickup of unnamed musician's 80% implementation. 28 TDD tests (Spark).
@@ -198,6 +199,13 @@ Movement 4 — IN PROGRESS.
 - Quality gates: mypy clean, ruff clean, 35/36 examples validate. Golden path works end-to-end.
 - Assessment: The product feels professional. Error paths are vastly improved. The remaining issues are in seams (cost tracking, resume state, diagnostic accuracy) rather than on the surface.
 
+**Axiom M1C5 (current cycle — boundary bug analysis):**
+- F-118 RESOLVED: ValidationEngine context gap in baton musician. `_validate()` now calls `sheet.template_variables(total_sheets, total_movements)` instead of `{"sheet_num": N}`. 8 TDD tests. Commit 4520d05.
+- F-113 ANALYZED: Parallel executor treats failed deps as "done" — downstream runs on incomplete input. Root cause at `parallel.py:439-441`. Baton already fixes this via F-039 `_propagate_failure_to_dependents()`. 2 documenting tests.
+- F-111 ANALYZED: Parallel executor erases `RateLimitExhaustedError` type via string storage. Jobs FAIL instead of PAUSE. Baton fixes structurally with typed `SheetAttemptResult.rate_limited`. 3 documenting tests.
+- Step 29 INVESTIGATED: All pieces mapped. `checkpoint_to_baton_status()` exists, `register_job()` exists. Missing: `recover_job()` (~200 lines), manager integration (~50 lines), per-event state sync (~100 lines). Ready for implementation by Foundation or Canyon.
+- Quality gates: mypy clean, ruff clean, 13/13 new tests pass, 17/17 existing musician tests pass.
+
 **Top risks (updated by Atlas, current movement):**
 1. **Step 29 (P0):** Restart recovery not started. Primary blocker for production baton usage. Nobody has claimed it.
 2. **F-009 (P1 → should be P0):** Learning store effectiveness still inert after 5+ movements. Root cause known (Oracle M2: narrow tag matching). Nobody implementing. This undermines Mozart's identity as an intelligence layer.
@@ -262,6 +270,17 @@ D-008 through D-013 (M2): 0/6 completed. D-008 (Foundation claim step 28), D-009
 - Conductor clone (clone.py): CLEAN — name sanitization prevents path traversal, Pydantic validates config.
 - Complete subprocess audit: 17+ spawn sites, zero unprotected shell paths.
 - FastAPI dashboard templates confirmed autoescaping — XSS protection independent of CSP.
+
+**Adversary M1C3 (current cycle):**
+- 27 adversarial tests in `tests/test_adversary_m1c3.py` across 7 attack surfaces: F-111 parallel rate limit error loss (5), F-113 failed deps as done (4), F-075 resume regression (4), F-122 IPC clone bypass (4), parallel error edges (3), baton state edges (4), cross-system integration (3).
+- Found F-128 (P2): E006 stale detection unreachable via `classify_execution()` — only works through `classify()`. The runner uses `classify_execution()`, so E006 is dead code in production.
+- Found F-129 (P1): F-113's behavior CHANGES after restart. Before restart: failed deps treated as done (runs with incomplete data). After restart: failed deps block forever (job stuck). `_permanently_failed` is ephemeral — lost on restart. Same error class as F-077.
+- F-111 CONFIRMED: RateLimitExhaustedError type destroyed by ParallelExecutor. Error name appears as STRING PREFIX in error_details ("RateLimitExhaustedError: ...") but isinstance() checks impossible. resume_after timestamp irrecoverable. All sheets FAIL instead of PAUSE.
+- F-113 CONFIRMED: failed fan-out voices treated as "done" — synthesis dispatches with 3/5 deps failed, chain failures not propagated.
+- F-122 CONFIRMED: 4 IPC callsites hardcode production socket via SocketConfig()/DaemonConfig() — hooks.py, mcp/tools.py, dashboard routes, job_control.
+- F-075 fix HOLDS: all 4 adversarial conditions (FAILED, SKIPPED, all-failed, mixed) preserve terminal status correctly.
+- Total adversarial test count: 215 (27 M1C3 + 64 M4 + 59 M2 + 65 M1). Two bugs found. The P0 bugs (F-111, F-113) are in the legacy runner — structurally fixed by the baton once it's wired in (step 28/29).
+- Quality gates: mypy clean, ruff clean, 27/27 tests pass, 133 related tests pass.
 
 ## Blockers (Updated by Bedrock, current movement)
 - **F-104:** RESOLVED (Forge 3deb436 + Canyon 433bb57 + Foundation a510027). Full prompt rendering pipeline wired into baton musician. 17 + 26 TDD tests. Baton execution UNBLOCKED.
