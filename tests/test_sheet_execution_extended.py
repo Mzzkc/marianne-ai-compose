@@ -31,6 +31,7 @@ from mozart.backends.base import ExecutionResult
 from mozart.core.checkpoint import (
     CheckpointState,
     OutcomeCategory,
+    SheetState,
 )
 from mozart.core.config import JobConfig
 from mozart.execution.escalation import ConsoleEscalationHandler, EscalationResponse
@@ -480,7 +481,7 @@ class TestEnforceCostLimits:
     async def test_disabled_does_nothing(self, mixin: _TestableSheetMixin) -> None:
         mixin.config.cost_limits.enabled = False
         state = _make_state()
-        await mixin._enforce_cost_limits(self._ok_result(), MagicMock(), state, 1)
+        await mixin._enforce_cost_limits(self._ok_result(), MagicMock(spec=SheetState), state, 1)
         assert state.cost_limit_reached is False
 
     @pytest.mark.asyncio
@@ -491,7 +492,7 @@ class TestEnforceCostLimits:
         state.total_estimated_cost = 6.0
 
         with pytest.raises(GracefulShutdownError, match="Cost limit exceeded"):
-            await mixin._enforce_cost_limits(self._ok_result(), MagicMock(), state, 1)
+            await mixin._enforce_cost_limits(self._ok_result(), MagicMock(spec=SheetState), state, 1)
 
         assert state.cost_limit_reached is True
 
@@ -500,7 +501,7 @@ class TestEnforceCostLimits:
         mixin.config.cost_limits.enabled = True
         mixin._check_cost_limits = MagicMock(return_value=(False, None))
         state = _make_state()
-        await mixin._enforce_cost_limits(self._ok_result(), MagicMock(), state, 1)
+        await mixin._enforce_cost_limits(self._ok_result(), MagicMock(spec=SheetState), state, 1)
         assert state.cost_limit_reached is False
 
 

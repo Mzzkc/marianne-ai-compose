@@ -379,8 +379,8 @@ class TestF048CostTrackingWithoutLimits:
         mixin.config.cost_limits.cost_per_1k_output_tokens = 0.015
         mixin._circuit_breaker = None
         mixin._summary = None
-        mixin._logger = MagicMock()
-        mixin.console = MagicMock()
+        mixin._logger = MagicMock(spec=["warning", "info", "debug", "error"])
+        mixin.console = MagicMock(spec=["print", "log"])
         mixin._fire_event = AsyncMock()
 
         # Create a mock result with tokens

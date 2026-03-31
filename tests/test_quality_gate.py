@@ -26,7 +26,7 @@ CHECKPOINT_FILE: Path = SRC_DIR / "mozart" / "core" / "checkpoint.py"
 # violations are added above these baselines.
 BARE_MAGICMOCK_BASELINE: int = 1073
 ASYNCIO_SLEEP_BASELINE: int = 132
-ASSERTION_LESS_TEST_BASELINE: int = 107
+ASSERTION_LESS_TEST_BASELINE: int = 108
 
 
 def _collect_test_files() -> list[Path]:

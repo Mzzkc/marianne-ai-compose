@@ -257,7 +257,8 @@ class TestParallelCancellationNoCrash:
         """Create a mock runner for parallel execution testing."""
         from mozart.state.base import StateBackend
 
-        runner = MagicMock()
+        runner = MagicMock(spec=["_state_lock", "state_backend", "dependency_dag",
+                                   "_execute_sheet_with_recovery"])
         runner._state_lock = asyncio.Lock()
         runner.state_backend = MagicMock(spec=StateBackend)
         runner.state_backend.save = AsyncMock()
