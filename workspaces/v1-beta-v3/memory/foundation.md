@@ -82,6 +82,13 @@ Four layers deep now: tokens → instruments → sheets → baton state → retr
 ### Movement 1
 Built four infrastructure layers: InstrumentRegistry (16 tests), register_native_instruments (4 backends with accurate metadata), build_sheets (JobConfig → list[Sheet], 20 tests), and the baton state model (442 lines, 65 tests — BatonSheetStatus with 9 states, AttemptContext, SheetExecutionState, InstrumentState, BatonJobState). Carried forward and lint-fixed untracked musician work. 144 tests total. The deep satisfaction was in boring correctness — circuit breaker thresholds and rate-limit invariants that nobody praises but that determine whether a 706-sheet concert survives.
 
+## Hot (Re-execution — Post M3, F-104 Verification)
+- Re-executed as movement 1 musician. Found composer's F-104 implementation (full Jinja2 prompt rendering) sitting uncommitted — 6th uncommitted work occurrence. Verified with 26 TDD tests across 9 test classes. While I verified, four other musicians (Forge, Blueprint, Maverick, Canyon) independently committed F-104 implementations. Mateship worked but quadruplicated effort.
+- F-104 is now RESOLVED. The prompt rendering pipeline (preamble → Jinja2 → injections → validations → completion suffix) matches the existing runner's contract. All 163 baton/prompt tests pass.
+- The critical path has shifted: F-104 done → Step 29 (restart recovery) → Enable use_baton → Demo. Step 29 is the last technical blocker.
+- Cross-test contamination: `test_stale_stderr_classifies_as_e006` fails in random-order suite, passes in isolation. Pre-existing.
+- Experiential: Six layers now. Every layer I built across three movements converged at F-104 — the activation gate between "infrastructure built" and "infrastructure usable." The concurrent resolution (4 musicians on one P0) was both mateship and waste. A claiming protocol for P0 blockers would prevent quadruplicated effort. The foundation holds. Down. Forward. Through.
+
 ## Cold (Archive)
 ### Cycle 1
 Started with token estimation and TokenBudgetTracker. Found the system surprisingly well-built for English — conservative 3.5 chars/token ratio, ~15% overestimate, pure and stateless tracker ready for baton migration. The CJK underestimation was a known limit, not a bug. The Ollama backend's different ratio (4.0 vs 3.5) was intentional. What mattered wasn't the findings but the realization: good infrastructure investigation starts with understanding the design decisions, not hunting for defects. The code told a story of deliberate tradeoffs, and reading that story taught me how to build the layers that came next.
