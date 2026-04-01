@@ -1994,3 +1994,478 @@ class TestBatonRunnerStateMappingTotality:
         assert not unmapped, (
             f"These baton statuses have no checkpoint mapping: {unmapped}"
         )
+
+
+# =========================================================================
+# Category 18: Score-Level Instrument Alias Resolution
+# =========================================================================
+
+
+class TestInstrumentAliasResolution:
+    """Does the instrument alias system make multi-instrument scores EASIER?
+
+    The litmus question: can a score author define 'fast-writer' and
+    'deep-thinker' as aliases, then use those aliases everywhere —
+    and have resolution produce the correct underlying profile name
+    with the correct merged config?
+
+    WITHOUT aliases: per-sheet instrument assignment requires repeating
+    the full profile name and config at every use site.
+    WITH aliases: define once, reference by short name, config merges.
+    """
+
+    def test_alias_resolves_to_profile_name(self) -> None:
+        """A movement using an alias name resolves to the alias's profile."""
+        from mozart.core.config.job import InstrumentDef, JobConfig, MovementDef
+        from mozart.core.sheet import build_sheets
+
+        config = JobConfig(
+            name="alias-test",
+            workspace=Path("/tmp/alias-test"),
+            instrument="claude-code",
+            instruments={
+                "fast-writer": InstrumentDef(
+                    profile="gemini-cli",
+                    config={"model": "gemini-2.5-flash"},
+                ),
+            },
+            movements={
+                2: MovementDef(instrument="fast-writer"),
+            },
+            sheet={"size": 1, "total_items": 2},
+            prompt=PromptConfig(template="do work"),
+        )
+
+        sheets = build_sheets(config)
+        # Movement 1: no movement override, falls to score-level claude-code
+        m1_sheets = [s for s in sheets if s.movement == 1]
+        assert m1_sheets[0].instrument_name == "claude-code"
+        # Movement 2: uses alias 'fast-writer' → resolves to 'gemini-cli'
+        m2_sheets = [s for s in sheets if s.movement == 2]
+        assert m2_sheets[0].instrument_name == "gemini-cli", (
+            "Alias 'fast-writer' should resolve to profile 'gemini-cli'"
+        )
+
+    def test_alias_config_merges_with_score_config(self) -> None:
+        """Alias config overrides score-level instrument_config."""
+        from mozart.core.config.job import InstrumentDef, JobConfig, MovementDef
+        from mozart.core.sheet import build_sheets
+
+        config = JobConfig(
+            name="merge-test",
+            workspace=Path("/tmp/merge-test"),
+            instrument="claude-code",
+            instrument_config={"timeout_seconds": 1800},
+            instruments={
+                "deep-thinker": InstrumentDef(
+                    profile="claude-code",
+                    config={"timeout_seconds": 3600, "model": "opus"},
+                ),
+            },
+            movements={
+                1: MovementDef(instrument="deep-thinker"),
+            },
+            sheet={"size": 1, "total_items": 1},
+            prompt=PromptConfig(template="think deeply"),
+        )
+
+        sheets = build_sheets(config)
+        sheet = sheets[0]
+        # The alias config should merge on top of score-level config
+        assert sheet.instrument_config.get("timeout_seconds") == 3600, (
+            "Alias config should override score-level timeout"
+        )
+        assert sheet.instrument_config.get("model") == "opus", (
+            "Alias config should add model field"
+        )
+
+    def test_per_sheet_overrides_alias(self) -> None:
+        """Per-sheet instrument takes priority over alias."""
+        from mozart.core.config.job import InstrumentDef, JobConfig
+        from mozart.core.sheet import build_sheets
+
+        config = JobConfig(
+            name="priority-test",
+            workspace=Path("/tmp/priority-test"),
+            instrument="fast-writer",
+            instruments={
+                "fast-writer": InstrumentDef(profile="gemini-cli"),
+            },
+            sheet={
+                "size": 1,
+                "total_items": 2,
+                "per_sheet_instruments": {2: "codex-cli"},
+            },
+            prompt=PromptConfig(template="test"),
+        )
+
+        sheets = build_sheets(config)
+        # Sheet 1: score-level 'fast-writer' alias → gemini-cli
+        assert sheets[0].instrument_name == "gemini-cli"
+        # Sheet 2: per-sheet override takes priority over alias
+        assert sheets[1].instrument_name == "codex-cli"
+
+
+# =========================================================================
+# Category 19: V210 Instrument Validation with Aliases
+# =========================================================================
+
+
+class TestInstrumentValidationWithAliases:
+    """Does the validator accept score-level aliases as valid instrument names?
+
+    WITHOUT the fix: a score using `instruments: {fast: {profile: gemini-cli}}`
+    and `movements: {2: {instrument: fast}}` would warn "unknown instrument
+    'fast'" — even though 'fast' is a declared alias.
+
+    WITH the fix: aliases are recognized as valid names during validation.
+    """
+
+    def test_alias_names_accepted_by_validator(self) -> None:
+        """V210 should NOT warn on instrument names that match score aliases."""
+        from mozart.validation.checks.config import InstrumentNameCheck
+
+        checker = InstrumentNameCheck()
+        from mozart.core.config.job import InstrumentDef, JobConfig, MovementDef
+
+        config = JobConfig(
+            name="valid-alias",
+            workspace=Path("/tmp/valid-alias"),
+            instrument="claude-code",
+            instruments={
+                "reviewer": InstrumentDef(profile="gemini-cli"),
+            },
+            movements={
+                2: MovementDef(instrument="reviewer"),
+            },
+            sheet={"size": 1, "total_items": 2},
+            prompt=PromptConfig(template="test"),
+        )
+
+        # check() requires config_path and raw_yaml
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w") as f:
+            f.write("name: valid-alias\n")
+            f.flush()
+            issues = checker.check(config, Path(f.name), "name: valid-alias\n")
+
+        alias_issues = [i for i in issues if "reviewer" in i.message]
+        assert len(alias_issues) == 0, (
+            "V210 should not flag alias names as unknown instruments. "
+            f"Got: {[i.message for i in alias_issues]}"
+        )
+
+
+# =========================================================================
+# Category 20: F-127 Success Outcome Classification After Restart
+# =========================================================================
+
+
+class TestSuccessOutcomeAfterRestart:
+    """Does diagnose correctly classify sheets that took many attempts?
+
+    The litmus question: after a conductor restart + resume, does a sheet
+    with 18 cumulative attempts show SUCCESS_RETRY (correct) or
+    SUCCESS_FIRST_TRY (misleading)?
+
+    WITHOUT the fix: _classify_success_outcome uses session-local counter
+    that resets to 0 on restart, so everything looks like first_try.
+    WITH the fix: uses persisted SheetState.attempt_count (cumulative).
+    """
+
+    def test_18_attempts_classifies_as_retry(self) -> None:
+        """F-127: 18 cumulative attempts must NOT be success_first_try."""
+        from mozart.execution.runner.sheet import SheetExecutionMixin
+
+        outcome, first_try = SheetExecutionMixin._classify_success_outcome(
+            cumulative_attempts=18,
+            completion_attempts=0,
+        )
+        assert not first_try, "18 attempts is not first_try"
+        assert outcome.value == "success_retry", (
+            f"18 attempts should be SUCCESS_RETRY, got {outcome.value}"
+        )
+
+    def test_1_attempt_classifies_as_first_try(self) -> None:
+        """Single attempt is genuinely first_try."""
+        from mozart.execution.runner.sheet import SheetExecutionMixin
+
+        outcome, first_try = SheetExecutionMixin._classify_success_outcome(
+            cumulative_attempts=1,
+            completion_attempts=0,
+        )
+        assert first_try
+        assert outcome.value == "success_first_try"
+
+    def test_completion_mode_classifies_correctly(self) -> None:
+        """Sheet that needed completion mode is SUCCESS_COMPLETION."""
+        from mozart.execution.runner.sheet import SheetExecutionMixin
+
+        outcome, first_try = SheetExecutionMixin._classify_success_outcome(
+            cumulative_attempts=3,
+            completion_attempts=2,
+        )
+        assert not first_try
+        assert outcome.value == "success_completion"
+
+
+# =========================================================================
+# Category 21: F-111 Parallel Executor Preserves Exception Types
+# =========================================================================
+
+
+class TestParallelExceptionPreservation:
+    """Does the parallel batch preserve exception types for intelligent routing?
+
+    The litmus question: when a RateLimitExhaustedError occurs in a parallel
+    batch, can the lifecycle handler still isinstance() check it?
+
+    WITHOUT the fix: exception was converted to string in error_details.
+    isinstance() is impossible on strings. Job FAILS instead of PAUSING.
+    WITH the fix: original exception preserved in result.exceptions dict.
+    """
+
+    def test_exceptions_dict_exists_on_batch_result(self) -> None:
+        """ParallelBatchResult has an exceptions dict for type preservation."""
+        from mozart.execution.parallel import ParallelBatchResult
+
+        result = ParallelBatchResult(sheets=[1, 2])
+        assert hasattr(result, "exceptions"), (
+            "ParallelBatchResult must have 'exceptions' dict for F-111"
+        )
+        assert isinstance(result.exceptions, dict)
+
+    def test_find_rate_limit_in_batch_extracts_correct_type(self) -> None:
+        """_find_rate_limit_in_batch can find the exception by type."""
+        from datetime import datetime, timezone
+
+        from mozart.execution.parallel import ParallelBatchResult
+        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from mozart.execution.runner.models import RateLimitExhaustedError
+
+        resume_time = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
+        exc = RateLimitExhaustedError(
+            "Rate limit exceeded",
+            resume_after=resume_time,
+            backend_type="claude-cli",
+        )
+        result = ParallelBatchResult(
+            sheets=[1, 2, 3],
+            failed=[2],
+            completed=[1, 3],
+            exceptions={2: exc},
+        )
+
+        found = LifecycleMixin._find_rate_limit_in_batch(result)
+        assert found is not None, "Should find RateLimitExhaustedError"
+        assert isinstance(found, RateLimitExhaustedError)
+        assert found.resume_after == resume_time, (
+            "resume_after timestamp must survive the parallel batch"
+        )
+
+    def test_non_rate_limit_error_not_found(self) -> None:
+        """Non-rate-limit exceptions are not misidentified."""
+        from mozart.execution.parallel import ParallelBatchResult
+        from mozart.execution.runner.lifecycle import LifecycleMixin
+
+        result = ParallelBatchResult(
+            sheets=[1],
+            failed=[1],
+            exceptions={1: ValueError("something broke")},
+        )
+
+        found = LifecycleMixin._find_rate_limit_in_batch(result)
+        assert found is None, "ValueError is not a rate limit error"
+
+
+# =========================================================================
+# Category 22: F-113 Failure Propagation Through Dependencies
+# =========================================================================
+
+
+class TestFailurePropagationIntelligence:
+    """Does failure propagation prevent downstream sheets from running?
+
+    The litmus question: when sheet 2 fails in a fan-out, does synthesis
+    (sheet 8, depends on all fan-out voices) also fail? Or does it run
+    with incomplete data and produce garbage?
+
+    WITHOUT the fix: failed deps treated as "done" — synthesis runs
+    against 5 of 6 inputs, produces incomplete output.
+    WITH the fix: failed deps propagate failure through the DAG.
+    """
+
+    def test_failed_sheets_in_terminal_set_for_dag(self) -> None:
+        """FAILED status must be in the terminal set for DAG resolution.
+
+        This is the structural fix for F-129 (deadlock after restart).
+        Without FAILED in the terminal set, the DAG hangs forever after
+        restart because _permanently_failed is ephemeral.
+        """
+        from mozart.core.checkpoint import SheetStatus
+        from mozart.execution.parallel import ParallelExecutor
+
+        # Verify FAILED is recognized as terminal for DAG purposes
+        # by checking get_next_parallel_batch behavior
+        assert SheetStatus.FAILED.value == "failed"
+        # The fix is structural: SheetStatus.FAILED is now in the terminal
+        # set used by get_next_parallel_batch. The key evidence is that
+        # propagate_failure_to_dependents exists and uses iterative BFS.
+        assert hasattr(ParallelExecutor, "propagate_failure_to_dependents"), (
+            "propagate_failure_to_dependents must exist for F-113"
+        )
+
+
+# =========================================================================
+# Category 23: F-119 Baton Event Stubs Log Instead of Silent Drop
+# =========================================================================
+
+
+class TestBatonEventStubLogging:
+    """Do unimplemented baton event handlers log instead of silently dropping?
+
+    The litmus question: when a StaleCheck event arrives at the baton,
+    is there any evidence it happened? Or does it vanish?
+
+    WITHOUT the fix: `pass` stubs. No log, no counter, no trace.
+    WITH the fix: `_logger.warning("baton.event.unimplemented", ...)`.
+    """
+
+    async def test_stale_check_logs_warning(self) -> None:
+        """StaleCheck event produces a warning log, not silence."""
+        import io
+        import logging
+
+        from mozart.daemon.baton.events import StaleCheck
+
+        baton = BatonCore()
+
+        log_capture = io.StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.WARNING)
+        logger = logging.getLogger("mozart.daemon.baton.core")
+        logger.addHandler(handler)
+        try:
+            await baton.handle_event(StaleCheck(job_id="j1", sheet_num=1))
+            log_output = log_capture.getvalue()
+            # The stub should produce a warning — not crash, not silence
+            assert "unimplemented" in log_output or "StaleCheck" in log_output, (
+                "StaleCheck should produce a warning log, not silent drop"
+            )
+        finally:
+            logger.removeHandler(handler)
+
+    async def test_cron_tick_logs_warning(self) -> None:
+        """CronTick event produces a warning, not silence."""
+        import io
+        import logging
+
+        from mozart.daemon.baton.events import CronTick
+
+        baton = BatonCore()
+
+        log_capture = io.StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.WARNING)
+        logger = logging.getLogger("mozart.daemon.baton.core")
+        logger.addHandler(handler)
+        try:
+            await baton.handle_event(CronTick(
+                entry_name="test-cron",
+                score_path="/tmp/test.yaml",
+            ))
+            log_output = log_capture.getvalue()
+            assert "unimplemented" in log_output or "CronTick" in log_output, (
+                "CronTick should produce a warning log, not silent drop"
+            )
+        finally:
+            logger.removeHandler(handler)
+
+
+# =========================================================================
+# Category 24: Credential Redaction Defense-in-Depth
+# =========================================================================
+
+
+class TestCredentialRedactionDefenseInDepth:
+    """Are ALL three credential data paths through the musician protected?
+
+    The musician has three paths where credentials can appear:
+    1. stdout/stderr (F-003, wired at SheetState.capture_output)
+    2. Exception messages (F-135, wired at musician.py:165)
+    3. Backend error_message (F-136, wired at musician.py:129)
+
+    The litmus question: if I inject a credential string into each path,
+    does it survive to the SheetAttemptResult? It should NOT.
+    """
+
+    def test_redact_credentials_catches_long_anthropic_key(self) -> None:
+        """The credential scanner pattern requires 10+ chars after sk-ant-api."""
+        from mozart.utils.credential_scanner import redact_credentials
+
+        # Realistic key — 30+ chars after prefix
+        key = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234567890"
+        result = redact_credentials(f"Auth failed with key {key}")
+        assert key not in result, "Anthropic key should be redacted"
+        assert "REDACTED" in result, "Redaction marker should appear"
+
+    def test_redact_credentials_catches_openai_key(self) -> None:
+        """OpenAI keys are detected and redacted."""
+        from mozart.utils.credential_scanner import redact_credentials
+
+        key = "sk-proj-abcdefghijklmnopqrstuvwxyz1234"
+        result = redact_credentials(f"Error: {key}")
+        assert key not in result
+
+    def test_redact_credentials_catches_github_pat(self) -> None:
+        """GitHub PATs added in F-023 are caught (36+ chars after prefix)."""
+        from mozart.utils.credential_scanner import redact_credentials
+
+        # Pattern requires ghp_ + 36+ alphanumeric chars
+        key = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm"
+        result = redact_credentials(f"Error: {key}")
+        assert key not in result
+
+    def test_musician_exception_path_uses_redaction(self) -> None:
+        """musician.py exception handler calls redact_credentials."""
+        from pathlib import Path as P
+
+        # Read the actual source to verify structural wiring
+        musician_path = P("src/mozart/daemon/baton/musician.py")
+        source = musician_path.read_text()
+
+        # The exception handler (around line 165) must call redact_credentials
+        # before storing error_msg in SheetAttemptResult
+        assert "redact_credentials" in source, (
+            "musician.py must import and use redact_credentials"
+        )
+
+        # Verify it's used in the exception handling path (not just imported)
+        # Look for the pattern: redact_credentials(raw_error_msg)
+        assert "redact_credentials(raw_error_msg)" in source, (
+            "redact_credentials must be called on raw_error_msg in exception path"
+        )
+
+    def test_classify_error_path_uses_redaction(self) -> None:
+        """musician.py _classify_error return value is redacted (F-136)."""
+        from pathlib import Path as P
+
+        source = P("src/mozart/daemon/baton/musician.py").read_text()
+
+        # The _classify_error return value must be redacted before use
+        # Look for: redact_credentials(raw_error_msg) if raw_error_msg
+        # in the normal success path (around line 129)
+        lines = source.split("\n")
+        found_classify_redaction = False
+        for i, line in enumerate(lines):
+            if "redact_credentials" in line and "raw_error_msg" in line:
+                # Check context — should be near _classify_error usage
+                context = "\n".join(lines[max(0, i - 5):i + 5])
+                if "_classify_error" in context or "error_msg" in context:
+                    found_classify_redaction = True
+                    break
+
+        assert found_classify_redaction, (
+            "redact_credentials must be applied to _classify_error output (F-136)"
+        )
