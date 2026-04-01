@@ -69,7 +69,7 @@
 name: bookmark-manager
 description: "Contract-first full-stack app: parallel API + CLI tracks, integration, documentation"
 
-workspace: ../workspaces/bookmark-manager
+workspace: ../../workspaces/bookmark-manager
 
 instrument: claude-code
 instrument_config:

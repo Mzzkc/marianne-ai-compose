@@ -73,10 +73,10 @@
 name: "rosetta-proof-immune-cascade"
 description: "Immune Cascade: graduated security hardening — cheap sweeps narrow to expensive targeted investigation"
 
-workspace: "/home/emzi/Projects/claude-compositions/immune-cascade-workspace"
+workspace: ../../workspaces/immune-cascade-workspace
 
-backend:
-  type: claude_cli
+instrument: claude-code
+instrument_config:
   skip_permissions: true
   timeout_seconds: 1800
   allowed_tools:
@@ -123,7 +123,8 @@ prompt:
   variables:
     # ─── TARGET ───
     # Point this at any Python project directory to audit.
-    target_project: "/home/emzi/Projects/mozart-ai-compose"
+    # Change this path to your project's root directory.
+    target_project: "."
 
     # ─── SWEEP DEFINITIONS ───
     # Each drives one Stage 2 fan-out instance. Cheap, fast, tool-heavy.

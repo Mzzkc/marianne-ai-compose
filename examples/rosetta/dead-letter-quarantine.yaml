@@ -77,7 +77,7 @@
 name: utility-toolkit
 description: "Dead Letter Quarantine — batch-generate 10 Python utilities, quarantine failures, analyze patterns, reprocess with adapted strategy"
 
-workspace: ../workspaces/utility-toolkit
+workspace: ../../workspaces/utility-toolkit
 
 instrument: claude-code
 instrument_config:
