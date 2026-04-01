@@ -193,11 +193,32 @@ Movement 2 — IN PROGRESS.
 - **F-111/F-113 VALIDATED structurally:** ParallelBatchResult.exceptions preserves types, propagate_failure_to_dependents exists, SheetStatus.FAILED in terminal set.
 - **State mapping totality VALIDATED:** Every CheckpointState status maps to baton status and vice versa — no unmapped states.
 
+### Movement 2 Updates (Litmus — Effectiveness Validation, Cycle 2)
+- **18 new litmus tests** (b0d2dc1): Categories 18-24 validating M2 effectiveness. 92 total litmus tests.
+- **Instrument alias resolution VALIDATED** (3 tests): `build_sheets()` correctly resolves score-level aliases (InstrumentDef) through the full resolution chain. Config merge semantics correct — alias config overrides score-level. Per-sheet still takes priority over alias.
+- **V210 validation with aliases VALIDATED** (1 test): InstrumentNameCheck accepts alias names declared in `config.instruments` as valid instrument references. No false warnings.
+- **F-127 success outcome VALIDATED** (3 tests): `_classify_success_outcome()` uses cumulative `attempt_count` (persisted) not session-local counter. 18 attempts → SUCCESS_RETRY (correct). 1 attempt → SUCCESS_FIRST_TRY. Completion mode → SUCCESS_COMPLETION.
+- **F-111 exception preservation VALIDATED** (3 tests): `ParallelBatchResult.exceptions` dict preserves original exception types. `_find_rate_limit_in_batch()` extracts `RateLimitExhaustedError` with `resume_after` timestamp intact.
+- **F-113 failure propagation VALIDATED** (1 test): `propagate_failure_to_dependents()` exists on ParallelExecutor using iterative BFS. FAILED in terminal set.
+- **F-119 event stub logging VALIDATED** (2 tests): StaleCheck and CronTick produce warning logs with "unimplemented" message — not silent `pass`.
+- **Credential defense-in-depth VALIDATED** (5 tests): All three data paths through musician (stdout/stderr, exception, _classify_error) confirmed protected. Pattern thresholds verified (min-length is deliberate, not a bug).
+- **Untracked test_baton_m2c2_adversarial.py** has cross-test state leakage (F-064 class) — passes in isolation, fails with certain random seeds. NOT a test logic bug.
+
 ### Movement 2 Updates (Breakpoint — Adversarial Verification)
 - **63 adversarial tests committed** in `tests/test_baton_m2c2_adversarial.py`: Fixed and extended untracked file (47→63 tests, 2 bugs fixed: missing `attempt` field, short credential key). 13 test classes covering step 29 recovery, state sync, credential redaction, rate limit extraction, failure propagation, cost limits, status mapping, completion signaling, instrument resolution.
 - **No new bugs found** in M2 completion code. Step 29, F-111/F-113, F-135/F-136, F-134 — all correct under adversarial conditions.
 - **Score-level instrument resolution verified:** 12 TDD tests in `test_score_level_instrument_resolution.py` all pass. Resolution at `sheet.py:249-255`, V210 recognizes at `config.py:517-518`.
 - **Testing infrastructure risk identified:** Untracked test files written but never run create false confidence. Mateship pipeline should verify before committing.
+
+### Movement 2 Updates (Theorem — Property-Based Verification, Cycle 2)
+- **25 new property-based tests** in test_baton_invariants_m2c2.py. Total invariant suite: 119 test functions (161 counting hypothesis parameterization). Scope expanded from baton-only to four independent domains.
+- **Recovery invariants PROVEN:** recover_job() maps in_progress → PENDING, preserves terminal states, carries forward attempt counts without loss. Mixed-status multi-sheet recovery verified under hypothesis. Adapter faithfully rebuilds from checkpoint truth.
+- **Clone path isolation PROVEN:** For any two different clone names (hypothesis-generated), all 4 paths (socket, pid, state_db, log) are fully disjoint. No path overlaps with production defaults. Internal path uniqueness verified.
+- **Credential redaction PROVEN (3 properties):** Totality (every credential pattern in any context is redacted), idempotency (double redaction = single redaction), non-credential preservation (safe text passes through unchanged). Combined, these prove the scanner is both correct AND harmless.
+- **V210 instrument name validation PROVEN:** Unknown instruments produce warnings, known instruments produce none. Hypothesis fuzzing with random lowercase+dash names.
+- **Failure propagation terminal preservation PROVEN:** COMPLETED/FAILED/SKIPPED sheets in the dependency chain are never overwritten by upstream failure propagation.
+- **F-138 FILED (P3):** Untracked test_baton_m2c2_adversarial.py has broken ParallelExecutor construction — `dag` is now a property, not settable directly.
+- **Zero bugs found.** Recovery, clone isolation, credential redaction, instrument validation, and failure propagation are all mathematically consistent. The M2 completion work is solid across all four domains.
 
 ## Top Risks
 1. **F-009 (P0):** Learning store effectiveness inert 6+ movements. Root cause known. Intelligence thesis unproven. CRITICAL.

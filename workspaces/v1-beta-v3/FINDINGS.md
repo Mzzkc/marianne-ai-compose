@@ -1497,3 +1497,11 @@ Each finding should include:
 - **Description:** `pygments` 2.19.2 has CVE-2026-4539 (ReDoS in AdlLexer). Pygments is a transitive dependency of Mozart through `rich` (CLI output), `pytest` (test framework), and `mkdocs-material` (documentation). The fix version is 2.20.0. The CVE triggers only when highlighting ADL (Archetype Definition Language) syntax, which Mozart does not do — the risk is near zero.
 - **Impact:** Negligible for Mozart. The only theoretical path is if agent stdout contained ADL syntax and Rich tried to highlight it — which it wouldn't, since Mozart uses plain text output capture. However, the fix is available and trivial to apply.
 - **Action:** Add `"pygments>=2.20.0"` to the security minimum pins in `pyproject.toml` alongside the existing F-061 pins. Low priority but good hygiene.
+
+### F-138: Untracked test_baton_m2c2_adversarial.py Has Broken ParallelExecutor Construction
+- **Found by:** Theorem, Movement 2
+- **Severity:** P3 (low — test file only, not production code)
+- **Status:** Open
+- **Description:** `tests/test_baton_m2c2_adversarial.py` (untracked, from another musician) uses `ParallelExecutor.__new__(ParallelExecutor)` to bypass the constructor and then sets `executor.dag = dag` directly. However, `dag` is now a property that reads `self.runner.dependency_dag`, so direct assignment doesn't work. The `_logger` attribute is also missing. This causes `AttributeError: 'ParallelExecutor' object has no attribute 'runner'` at runtime.
+- **Impact:** Test file cannot execute. 6 tests in TestFailurePropagationAdversarial fail. No production impact.
+- **Action:** Fix the test to properly construct a ParallelExecutor with a mock runner, or set `executor._dag` (the backing field) instead of using the property. Also add `executor._logger`. Mateship pickup.
