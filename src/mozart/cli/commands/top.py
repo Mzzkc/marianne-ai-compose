@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 import typer
 from rich.console import Console
 
-from ..output import console
+from ..output import console, output_error
 
 if TYPE_CHECKING:
     from mozart.daemon.profiler.storage import MonitorStorage
@@ -121,10 +121,12 @@ def _tui_mode(*, filter_job: str | None, interval: float) -> None:
     try:
         from mozart.tui.app import MonitorApp
     except ImportError:
-        console.print(
-            "[red]TUI requires the 'textual' package.[/red]\n"
-            "[dim]Install it with: pip install textual[/dim]\n\n"
-            "[dim]Alternatively, use --json for NDJSON streaming output.[/dim]"
+        output_error(
+            "TUI requires the 'textual' package.",
+            hints=[
+                "Install it with: pip install textual",
+                "Alternatively, use --json for NDJSON streaming output.",
+            ],
         )
         raise typer.Exit(1) from None
 
@@ -186,10 +188,10 @@ async def _json_from_jsonl(*, filter_job: str | None, interval: float) -> None:
     jsonl_path = ProfilerConfig().jsonl_path.expanduser()
 
     if not jsonl_path.exists():
-        console.print(
-            "[yellow]No monitor data available.[/yellow]\n"
-            "[dim]Ensure the conductor is running with profiling enabled: "
-            "mozart start[/dim]"
+        output_error(
+            "No monitor data available.",
+            severity="warning",
+            hints=["Ensure the conductor is running with profiling enabled: mozart start"],
         )
         raise typer.Exit(1)
 
@@ -297,10 +299,12 @@ async def _history_tui(
     try:
         from mozart.tui.app import MonitorApp
     except ImportError:
-        console.print(
-            "[red]TUI requires the 'textual' package.[/red]\n"
-            "[dim]Install it with: pip install textual[/dim]\n\n"
-            "[dim]Use --json for JSON history output instead.[/dim]"
+        output_error(
+            "TUI requires the 'textual' package.",
+            hints=[
+                "Install it with: pip install textual",
+                "Use --json for JSON history output instead.",
+            ],
         )
         raise typer.Exit(1) from None
 
@@ -329,10 +333,13 @@ def _get_storage() -> MonitorStorage:
     db_path = config.storage_path.expanduser()
 
     if not db_path.exists():
-        console.print(
-            "[yellow]No monitor database found.[/yellow]\n"
-            f"[dim]Expected at: {db_path}[/dim]\n"
-            "[dim]Ensure the conductor has been running with profiling enabled.[/dim]"
+        output_error(
+            "No monitor database found.",
+            severity="warning",
+            hints=[
+                f"Expected at: {db_path}",
+                "Ensure the conductor has been running with profiling enabled.",
+            ],
         )
         raise typer.Exit(1)
 
@@ -353,9 +360,9 @@ async def _trace_mode(pid: int) -> None:
     from mozart.daemon.profiler.strace_manager import StraceManager
 
     if not StraceManager.is_available():
-        console.print(
-            "[red]strace is not available on this system.[/red]\n"
-            "[dim]Install strace to use the --trace option.[/dim]"
+        output_error(
+            "strace is not available on this system.",
+            hints=["Install strace to use the --trace option."],
         )
         raise typer.Exit(1)
 
@@ -369,10 +376,12 @@ async def _trace_mode(pid: int) -> None:
 
     success = await mgr.attach_full_trace(pid, trace_file)
     if not success:
-        console.print(
-            f"[red]Failed to attach strace to PID {pid}.[/red]\n"
-            "[dim]Possible causes: process not found, permission denied, "
-            "or strace not available.[/dim]"
+        output_error(
+            f"Failed to attach strace to PID {pid}.",
+            hints=[
+                "Possible causes: process not found, permission denied, "
+                "or strace not available.",
+            ],
         )
         raise typer.Exit(1)
 
