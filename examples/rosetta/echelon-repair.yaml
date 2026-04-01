@@ -51,7 +51,7 @@
 # ║  Usage:                                                                     ║
 # ║    cd /path/to/your/project                                                ║
 # ║    mozart start                                                             ║
-# ║    mozart run examples/echelon-security-audit.yaml                         ║
+# ║    mozart run examples/rosetta/echelon-repair.yaml                         ║
 # ║    mozart status security-audit                                            ║
 # ║                                                                             ║
 # ║  Output:                                                                    ║
@@ -69,7 +69,7 @@
 name: security-audit
 description: "Echelon Repair security audit — classify findings by severity, route to instrument-matched tiers"
 
-workspace: ../workspaces/security-audit
+workspace: ../../workspaces/security-audit
 
 instrument: claude-code
 instrument_config:
