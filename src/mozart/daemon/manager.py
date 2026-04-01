@@ -1751,8 +1751,8 @@ class JobManager:
         # Extract retry/cost settings from config
         max_retries = config.retry.max_retries
         max_cost: float | None = None
-        if config.cost_limits.enabled and config.cost_limits.max_cost_usd:
-            max_cost = config.cost_limits.max_cost_usd
+        if config.cost_limits.enabled and config.cost_limits.max_cost_per_job:
+            max_cost = config.cost_limits.max_cost_per_job
 
         # Publish job.started event
         await adapter.publish_job_event(job_id, "job.started", {

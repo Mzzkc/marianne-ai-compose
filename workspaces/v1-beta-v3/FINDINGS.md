@@ -1425,11 +1425,11 @@ Each finding should include:
 ### F-132: `--conductor-clone` State DB Isolation May Be Incomplete
 - **Found by:** Newcomer, Movement 1 (Cycle 7). Severity upgraded by Adversary (Cycle 7).
 - **Severity:** P1 (high — P0 conductor-clone directive depends on state isolation that doesn't exist)
-- **Status:** Open
+- **Status:** Resolved (movement 2, Maverick)
 - **Description:** Clone conductor started via `mozart --conductor-clone= start -f` logged `registry.opened path=/home/emzi/.mozart/daemon-state.db` (the production path) and `manager.registry_restored loaded=5` (5 production jobs restored into the clone). Code at `clone.py:112` defines a separate `state_db=mozart_dir / f"clone{tag}-state.db"` but the running clone opened the production DB. Socket isolation (`/tmp/mozart-clone.sock`) works. PID isolation works. State/registry isolation does not appear to work based on the observed log output.
 - **Impact:** If the clone shares the production registry, test jobs submitted to the clone may appear in `mozart list` against the production conductor. Clone testing is not fully safe for state-mutating operations (job submission, status changes). The P0 composer directive to use `--conductor-clone` for all testing may not provide the isolation it promises.
-- **Action:** Investigate whether `build_clone_config()` correctly overrides the registry DB path. If the override is defined but not applied, trace the config loading path to find where the override is lost.
-- **Root Cause (Adversary, Cycle 7):** Confirmed. `build_clone_config()` at `clone.py:139-144` overrides `socket` (line 142) and `pid_file` (line 143) but NOT `state_db_path`. The `ClonePaths.state_db` field at line 112 is computed correctly but never applied to `DaemonConfig`. Fix: add `config_dict["state_db_path"] = str(paths.state_db)` at clone.py:143. 1 line fix.
+- **Root Cause:** The Adversary's analysis was close but imprecise. `build_clone_config()` at `clone.py:144` DOES set `state_db_path`. The real bug was in `process.py:start_conductor()` which duplicates the clone path override logic INLINE instead of calling `build_clone_config()`. The inline version at process.py:72-73 overrode `socket` and `pid_file` but missed `state_db_path`. This DRY violation meant the two code paths diverged — one correct (clone.py), one broken (process.py). The fix adds `config_dict["state_db_path"] = str(clone_paths.state_db)` at process.py:74. 2 TDD tests verify isolation.
+- **Resolution:** Partially fixed in commit b4146a7 (Maverick: process.py only). Canyon (movement 2) discovered the SAME bug in `clone.py:build_clone_config()` — a second code path that builds clone configs but also missed `state_db_path`. 1-line fix at clone.py:144 + 3 TDD tests (config differs from base, matches resolved paths, named clones differ). Both paths now set `state_db_path`. Error class: DRY violation — two independent clone path builders, both missed the same field.
 
 ---
 
@@ -1442,3 +1442,11 @@ Each finding should include:
 - **Description:** F-128 was filed by Adversary (Cycle 3), accepted by all 4 reviewers (Prism, Axiom, Ember, Newcomer) in Cycle 7, listed as open P1 in the quality gate — and proved WRONG by tracing the actual production code path. The claim "E006 unreachable via classify_execution()" was accepted from the test comment without verifying against `classifier.py:997-1005` and `recovery.py:555` which clearly pass `exit_reason` through. Four reviewers trusted the finding without re-running the path.
 - **Impact:** A non-existent bug was listed as P1 for 4+ cycles. The verification gap is small (1 finding in 150+) but the lesson is important: claims about unreachability require negative proof by executing the actual code path, not reasoning from test comments or memory.
 - **Action:** When reviewing findings that claim "code path X is unreachable," verify by tracing the actual production call chain, not by accepting the finding's evidence at face value.
+
+### F-134: _run_via_baton Uses Non-Existent Field `max_cost_usd`
+- **Found by:** Foundation, Movement 2
+- **Severity:** P2 (medium — latent bug, currently unreachable)
+- **Status:** Resolved (movement 2, Foundation)
+- **Resolution:** Fixed `max_cost_usd` → `max_cost_per_job` in `_run_via_baton()`. Both baton paths (`_run_via_baton` and `_resume_via_baton`) now use the correct field.
+- **Description:** `manager.py:_run_via_baton()` at line 1665 accesses `config.cost_limits.max_cost_usd`, but `CostLimitConfig` has no such field. The actual field is `max_cost_per_job` (see `execution.py:190`). This doesn't crash because `use_baton` is currently disabled in production, so `_run_via_baton` is never called. When `use_baton` is enabled, cost limits will silently fail — `max_cost` will always be `None`, meaning the baton will never enforce per-job cost limits even when configured.
+- **Impact:** When `use_baton: true` is enabled, per-job cost limits will not be enforced. The baton will run uncapped even when the score specifies `cost_limits.max_cost_per_job`.

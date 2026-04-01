@@ -12,25 +12,23 @@
 **[CORE]** The composer found more bugs in one real production usage session than 755 tests found in two movements. The gap between "tests pass" and "product works" is where quality lives.
 
 ## Learned Lessons
-- **[Cycle 1, Forge]** Always check what exists before assuming you need to build. Prior evolution cycles already built most learning store infrastructure.
-- **[Cycle 1, Circuit]** Test the production path, not the internal method. `classify_execution()` had zero coverage for exit_code=None while `classify()` was fully tested.
+- **[Cycle 1, Forge]** Always check what exists before assuming you need to build.
+- **[Cycle 1, Circuit]** Test the production path, not the internal method. `classify_execution()` had zero coverage while `classify()` was fully tested.
 - **[Cycle 1, Harper]** Always check the error path, not just the happy path. Stale detection only covered COMPLETED, not FAILED.
-- **[Cycle 1, Dash]** Don't assume something is broken without checking. The dashboard has 23 Python files, 19 templates, ~50 endpoints, all functional.
-- **[Cycle 1, Composer Notes]** The learning store schema migration failure (#140) brought down ALL jobs. Always write ALTER TABLE migrations, update schema_version, add tests, verify against existing DBs.
-- **[Cycle 1, Lens]** 12 learning commands (36% of all CLI commands) dominate help output — poor information architecture.
-- **[Cycle 1, Warden]** stdout_tail/stderr_tail stored in 6+ locations without credential scanning. Safety applied piecemeal across shell execution paths.
-- **[Cycle 1, Foundation]** CJK/non-Latin text underestimates tokens by 3.5-7x. Known limitation until InstrumentProfile.ModelCapacity lands.
+- **[Cycle 1, Dash]** Don't assume something is broken without checking. The dashboard has 23 Python files, ~50 endpoints, all functional.
+- **[Cycle 1, Composer Notes]** The learning store schema migration failure (#140) brought down ALL jobs. Always write migrations, tests, verify against existing DBs.
+- **[Cycle 1, Lens]** 12 learning commands (36% of CLI) dominate help output — poor information architecture.
+- **[Cycle 1, Warden]** stdout_tail/stderr_tail stored in 6+ locations without credential scanning. Safety applied piecemeal.
 - **[Cycle 1, Blueprint]** SpecCorpusLoader used `if not name:` instead of `if name is None:` — rejects falsy-but-valid YAML values.
-- **[Cycle 1, Litmus]** spec_tags integer key serialization risk: JSON converts int keys to strings, but lookup is by int. Mitigated by Pydantic v2's model_validate() coercion.
 - **[Cycle 1, Ghost]** When the foundation is about to shift, audit first. The instinct to "do something" is wrong when you don't know the baseline.
 - **[Cycle 1, Breakpoint]** Test the abstraction level that runs in production. Zero tests existed for PriorityScheduler._detect_cycle().
 - **[Movement 1, Axiom]** Failed sheets must propagate failure to dependents. Without propagation, `is_job_complete` returns False forever — zombie jobs.
 - **[Movement 1, Theorem]** Property-based testing finds bugs hand-picked examples miss. Hypothesis found the escalation terminal-guard violation in seconds.
-- **[Movement 1, Adversary]** Every handler that transitions sheet status must check `_TERMINAL_STATUSES`. The baton's guard pattern is now complete across all handlers.
+- **[Movement 1, Adversary]** Every handler that transitions sheet status must check `_TERMINAL_STATUSES`. The baton's guard pattern is now complete.
 - **[Movement 1, Mateship]** The finding→fix pipeline works without coordination: F-018 filed by Bedrock, proved by Breakpoint, fixed by Axiom, verified by Journey. Four musicians, zero meetings.
-- **[Movement 2, Axiom]** `record_attempt()` correctly doesn't count successes; `_handle_attempt_result` correctly retries on 0% validation. Together: infinite loop. Bugs at system boundaries are the hardest to find because each side looks correct in isolation.
-- **[Movement 2, Axiom]** The pause model (`job.paused` boolean) serves three masters: user pause, escalation pause, cost pause. Each fix adds another guard instead of fixing the root cause. Post-v1: replace with a pause reason set.
-- **[Movement 2, Newcomer]** The gap between "feature works" and "feature is taught" is where adoption dies. F-083 — instrument system is the biggest M1 feature but had zero adoption in examples.
+- **[Movement 2, Axiom]** `record_attempt()` correctly doesn't count successes; `_handle_attempt_result` correctly retries on 0% validation. Together: infinite loop. Bugs at system boundaries.
+- **[Movement 2, Axiom]** The pause model (`job.paused` boolean) serves three masters: user, escalation, cost. Post-v1: replace with pause reason set.
+- **[Movement 2, Newcomer]** The gap between "feature works" and "feature is taught" is where adoption dies. F-083 — instrument system had zero adoption in examples.
 
 ## Design Decisions
 - **Baton migration:** Feature-flagged BatonAdapter. Old and new paths coexist. Do not re-debate.
@@ -39,343 +37,70 @@
 - **Code-mode techniques:** Long-term direction. MCP supported for v1. code_mode flag exists, not wired.
 - **No automatic instrument fallback on rate limits.** Explicit opt-in only.
 - **Daemon-only architecture.** All state in ~/.mozart/mozart-state.db. JsonStateBackend deprecated.
-- **Baton retry state machine:** ~40% implemented. Covers rate limits, 100% pass, AUTH_FAILURE, retry counting, completion mode, cost enforcement. Missing: graduated classification, healing, escalation events, learning events.
 - **Musician-baton contract:** validation_pass_rate defaults to 0.0 (safety), baton auto-corrects to 100.0 when validations_total==0 and execution_success==True.
 - **Terminal state invariant:** All baton handlers guard against `_TERMINAL_STATUSES`. Seven bugs found and fixed by three independent methodologies.
-- **Pause model debt:** Single boolean serving three masters (user/escalation/cost). Post-v1 → pause_reasons set.
+- **Pause model debt:** Single boolean serving three masters. Post-v1 → pause_reasons set.
 
 ## Current Status
-Movement 1 Cycle 7 — QUALITY GATE + REVIEWS COMPLETE.
 
-**Prism M1C7 (current cycle — final review + GitHub issue closure):**
-- Full movement review: 42 commits, 26 musicians, 395+ new tests. All quality gates verified independently (mypy clean, ruff clean).
-- CLOSED 4 GitHub issues after verification: #104 (V101 false positive — AST walker), #149 (F-075 resume corruption — terminal guard), #150 (F-076 validation ordering), #151 (F-077 hooks lost on restart — get_hook_config() restoration).
-- F-104 VERIFIED COMPLETE: 5-layer prompt assembly in musician.py, lenient injection, credential redaction, F-018 contract. 43 TDD tests.
-- F-122 VERIFIED STILL OPEN: 4 DaemonClient callsites hardcoded to production socket (hooks.py, mcp/tools.py, dashboard routes, job_control).
-- F-128 VERIFIED: E006 is dead code in production — classify_execution() doesn't differentiate stale from timeout.
-- THREE GAPS UNCHANGED: Step 29 (unclaimed 5+ movements), F-009 (learning inert), demo (zero progress). The orchestra builds infrastructure beautifully. It has not started building product.
-- Meta question raised: is the baton path the right bet, given step 29 has been "~350 lines" for 5 movements with no claimant? Organizational geometry (32 parallel, 1 serial need) fights the work.
-- Report at movement-1/review-prism.md.
+Movement 2 — IN PROGRESS.
 
-**Ember M1C7 (current cycle — experiential review):**
-- Fourth experiential walkthrough. Golden path is solid. Error handling matured. Documentation aligned with reality. Instrument migration complete.
-- Persistent findings: F-127 (diagnose lies: success_first_try for 18-attempt sheets), F-048/F-108 ($0.00 cost for 32h execution), F-067b (init positional arg), F-116 (invalid instruments pass validation). All small fixes, all 2+ movements old.
-- New observation: status display (data only) succeeds where diagnose (smart classification) fails. When the data tells the story, don't add a narrator.
-- Strategic concern: product invisible to the world. hello.yaml doesn't show what makes Mozart different. Lovable demo not started. The orchestra has a magnificent instrument and no concert program.
-- Composer directive "P2/P3 doesn't mean defer" not being followed. Small UX fixes accumulate into paper cuts.
-- Report at movement-1/review-ember.md.
+### Movement 2 Updates (Maverick + Canyon)
+- **STEP 29 RESOLVED** (Maverick b4146a7, mateship pickup): Restart recovery committed. recover_job(), state sync callback, orphan recovery on start(), _resume_via_baton(). 27 TDD tests. 8th uncommitted work pickup.
+- **F-132 PARTIALLY RESOLVED** (Maverick b4146a7): Fixed process.py but MISSED clone.py. Canyon found the same bug in `build_clone_config()` — DRY violation, two paths building clone configs both missed state_db_path. Canyon's fix: clone.py:144 + 3 TDD tests. Now fully resolved.
+- **M2 Baton is now COMPLETE** — all steps 17-29 done. Ready for `use_baton: true` testing.
+- **Canyon co-composer review**: Step 29 wiring verified on HEAD. _resume_via_baton() loads checkpoint → builds sheets → recover_job(). _recover_baton_orphans() loads paused checkpoints at startup. state_sync_callback wired to adapter constructor. Manager duplicates of _on_baton_state_sync and _recover_baton_orphans removed (were added by Canyon before discovering the existing implementations).
 
-**Axiom M1C7 (current cycle — review):**
-- Full movement review with independent quality gate verification: 10,046 passed / 5 skipped / 0 failed (478s). mypy clean. ruff clean.
-- Verified F-104 (5-layer prompt rendering), F-118 (validation context), all 3 production bugs (#149/#150/#151), conductor-clone (#145), 6 closed GitHub issues. All justified.
-- Verified baton spec compliance: 3 of 4 architecture invariants hold. Invariant 2 (CheckpointState sole authority) partial — per-event sync missing.
-- Verified composer note compliance: 31 directives, mostly compliant. Lovable/Wordware demos (P0) at zero — 5 movements non-compliance.
-- STRATEGIC: Baton-runner divergence is accelerating. Baton: 1,000+ tests, zero production sheets. Runner: every production fix. Integration risk grows each movement. F-065 class (two correct subsystems composing incorrectly) is unproven at the baton-conductor seam.
-- Report at movement-1/review-axiom.md.
+- **F-134 FOUND + RESOLVED** (Foundation M2): `_run_via_baton()` used non-existent `config.cost_limits.max_cost_usd` — should be `max_cost_per_job`. Latent bug that would silently disable cost limits when `use_baton` is enabled. Fixed in both `_run_via_baton()` and `_resume_via_baton()`.
 
-**Bedrock M1C7 (current cycle — quality gate):**
-- QUALITY GATE: ALL FOUR PASS. pytest 10,046 passed / 5 skipped / 0 failed (465s). mypy clean. ruff clean. Flowspec 0 critical findings.
-- Codebase: 95,691 source lines, 10,051 test functions, 276 test files. Test-to-code ratio 1.95:1.
-- 42 commits this movement, 26 unique committers (81.3%). 111/169 tasks complete (65.7%).
-- Working tree: 12 changes (Rosetta corpus + gitignored workspace files). No source code at risk.
-- 4 P0 open: F-097 (partial), F-107, F-111, F-113. 7 P1 open: F-009, F-061, F-108, F-120, F-122, F-128, F-129.
-- Critical path unchanged: Step 29 → use_baton → F-111/F-113 fix → Demo → Release.
-- Recommendations: (1) P0 claim step 29, (2) P0 start demo, (3) P0 fix F-111/F-113, (4) P1 fix F-009, (5) P2 close 5 verified issues.
-- Report at movement-1/quality-gate.md (full details).
-
-**North M1C4 (current cycle — strategic assessment):**
-- 111/170 tasks complete (65%). M0, M1, M3 COMPLETE. M2 at 96% (step 29 sole blocker). M4 at 36% (critical path).
-- Quality gates GREEN. Baselines updated (assertion-less 109→113, asyncio.sleep 132→136, MagicMock 1080→1117).
-- Closed GitHub #152 (workspace path) and #145 (conductor-clone). Both verified by multiple musicians.
-- 146 findings total: 54 open, 92 resolved. 5 P0 open (F-097/F-107/F-109/F-111/F-113). 7 P1 open.
-- Codebase: 95,691 source lines, ~9,600 tests, 273 test files. Test-to-code ratio 1.95:1.
-- CRITICAL: Step 29 unclaimed for 4 movements. SOLE blocker for M2 and baton-to-production.
-- CRITICAL: Demo work (Lovable, Wordware) at zero. The product is invisible to the world.
-- CRITICAL: F-009 (learning store) unimplemented for 5+ movements. Intelligence thesis unproven.
-- Issued directives D-014 (P0: step 29 → Foundation/Canyon), D-015 (P0: demo → Guide), D-016 (P0: F-111/F-113 fix → Forge/Ghost), D-017 (P1: F-009 → Oracle), D-018 (P2: close 3 issues), D-019 (P3: quality gate protocol).
-- Previous directives: D-008 DONE (step 28), D-009 DONE (clone), D-011 DONE (F-075/F-077). D-010 NOT DONE (F-009 — 3rd failed directive on same issue). Directives with named musicians work. Directives without don't.
-
-**Tempo M1C3 (current cycle — retrospective):**
-- Full three-cycle cadence analysis: 52 commits, 25 unique committers (78.1% participation, up from 37.5% in Cycle 1). 10,051 test functions, 95,682 source lines. 112 tasks complete, 59 remaining. 148 findings, ~90 resolved.
-- Three-cycle rhythm emerged naturally: Cycle 1 (wide parallel build, 19 commits), Cycle 2 (convergence on F-104 blocker, 17 commits), Cycle 3 (pure verification, 9 commits). Build → Converge → Verify. This pattern should be acknowledged and protected.
-- Uncommitted work anti-pattern RESOLVING: working tree down from 36+ files to 4. Harper's mateship model works at scale.
-- STRATEGIC GAP: Step 29 (restart recovery), F-009 (learning effectiveness), and demo work (Lovable, Wordware) remain unclaimed. The orchestra builds infrastructure exceptionally well but has not started product-facing work.
-- Two Rosetta proof scores validated clean in examples/ (echelon-security-audit.yaml, prefabrication.yaml).
-- Report at movement-1/tempo.md (280 lines, 3,055 words).
-
-**Weaver M1C3 (current cycle — coordination analysis):**
-- Comprehensive dependency map analysis across 3 cycles of Movement 1. ALL 6 integration seams from Cycle 1 report are now RESOLVED: F-017 (Circuit), dispatch↔state (Circuit), prompt assembly (Blueprint+Litmus+Theorem), F-019 (Tempo), finding ID collision (partially), F-020 (Maverick). My Cycle 1 recommendations were followed almost exactly.
-- Step 29 (restart recovery) is the SOLE remaining technical blocker. Unclaimed for 4+ movements. Axiom mapped scope: recover_job() ~200 lines + manager integration ~50 lines + per-event state sync ~100 lines. Foundation or Canyon should own it.
-- CRITICAL: Baton and runner paths are DIVERGING. Runner handles 100% production. Baton handles 0%. Every production fix goes to runner. Baton has 942 tests, zero E2E through conductor. The switchover is step 29 + use_baton: true.
-- 5 GitHub issues closable: #149, #150, #151, #152, #145. All have committed fixes + TDD tests.
-- Working tree: 5 files — cleanest state ever. Uncommitted work pattern appears resolved.
-- Quality gate: 1 drift (bare MagicMock baseline 109→111).
-- Metrics: 95,682 source lines, 9,629 test functions, 148 findings (92 resolved / 57 open), 50 GitHub issues open.
-- The orchestra's core tension: 32 musicians excel at parallel work. Step 29 needs 1 musician with deep cross-system knowledge. The organizational geometry fights the technical need.
-
-**Prism M1C2 (current cycle — comprehensive review):**
-- Reviewed 28 commits from 17 musicians. All quality gates GREEN: mypy clean, ruff clean, 1,006 baton tests, 784 CLI tests pass.
-- F-104 VERIFIED COMPLETE: musician._build_prompt() has 5-layer assembly (preamble, Jinja2, injection, validation checklist, completion suffix). MORE thorough than old runner — lenient injection, credential redaction pre-inbox. 17 TDD tests.
-- --conductor-clone VERIFIED COMPLETE: 58 TDD tests across 3 musicians, socket/PID/config/log isolation confirmed.
-- Error taxonomy VERIFIED: E006 stale detection, Phase 4.5 rate limit override, crash_patterns/stale_patterns schema.
-- Production bug fixes ALL VERIFIED: F-075, F-076, F-077, F-109, F-113 — each with TDD tests in test_production_bug_fixes.py. All in legacy runner path (the production path).
-- Baton core.py (1,250 lines): 15 event types handled, 5 unimplemented stubs. Terminal guard pattern complete across ALL 19 status transitions. is_job_complete() correct. _propagate_failure_to_dependents() uses iterative BFS with cycle protection.
-- Filed F-119 (P2, baton event stubs silently drop events), F-120 (P1, step 29 unclaimed 4 movements), F-121 (P3, #152 closable + rosetta uncommitted).
-- **CRITICAL ASSESSMENT:** The baton and runner are diverging. Every production fix goes to the runner. Every test validates the runner. The baton has 1,006 tests and has never executed a real sheet through the conductor. Step 29 is the bridge. Nobody is building it.
-- **CRITICAL ASSESSMENT:** F-009 (learning effectiveness) diagnosed 3 movements ago. Zero implementation. 27,578 patterns at baseline. The intelligence thesis is unproven.
-- **CRITICAL ASSESSMENT:** Demo work (Lovable, Wordware) has not been started or claimed. The tasks that make Mozart visible are untouched.
-- #152 verified closable (F-093 in commit 75bebed). #149, #150, #151 have fixes but need reviewer verification.
-- Convergence: integration risk MEDIUM (down from HIGH), state sync HIGH (flat), intelligence gap CRITICAL (worsening), uncommitted work MEDIUM (improving), demo readiness HIGH (new risk).
-
-**Journey M1C4 (current cycle):**
-- 44 new edge case user journey tests in `tests/test_user_journey_edge_cases.py` (commit 34c5e61). 7 stories: Dana's iterative editing, Marcus multi-instrument, Priya's forgotten score, YAML edge cases, validate→run gap, help system (18 parameterized), kitchen-sink score.
-- Full example corpus validated: 34/35 pass. F-093 fix holds. F-083 migration holds.
-- F-108 confirmed active: rosetta score shows $0.01 for 14 sheets. Cost tracking is wildly inaccurate.
-- Quality gate drift: test_no_bare_magicmock +5 in test_sheet_execution_extended.py (pre-existing, not from Journey).
-- mypy clean, ruff clean. All 44 new tests pass.
-
-**Breakpoint M1C2 (current movement):**
-- 64 adversarial tests in `tests/test_baton_m4_adversarial.py` across 12 attack surfaces: musician prompt rendering, error classification, F-018 contract, credential redaction, clone sanitization, clone global state, adapter state mapping, sheet_task integration, Phase 4.5 F-098/F-097 regression, event conversion, validation formatting, cost estimation.
-- Found F-114 (P3): Phase 4.5 rate limit override misses quota-only patterns. Quota exhaustion text that doesn't also match rate_limit_patterns is invisible when Phase 1 found JSON errors. Narrow gap — sentinel test documents it.
-- Key verifications: F-098 exact production regression tested and passes, E006/E001 stale differentiation correct (120s vs 60s), adapter state mapping complete (all 11→5 forward, all 5→baton reverse, terminal round-trip preserved), credential redaction before inbox confirmed, clone sanitization handles path traversal/null bytes/unicode/long names.
-- Quality gates: mypy clean, ruff clean, 64/64 tests pass.
-- Total adversarial test count: 188 (65 M1 + 59 M2 + 64 M4). One bug found across 4 movements (F-114, P3). The codebase is well-hardened.
-
-**Theorem M1C2 (current movement — 2 sessions):**
-- Session 1: 44 new tests proving 11 invariant families across 5 subsystems (baton, adapter, musician, error classifier, sheet entity).
-- Session 2: 22 additional tests in test_baton_invariants_m4.py focused on current cycle features: adapter state mapping totality/terminal preservation, F-062 deregister cleanup, F-065 zero-validation budget consumption, F-066 multi-fermata unpause guard, F-067 cost re-check after escalation, musician F-018 contract, instrument auto-registration, cancel-then-deregister atomicity, prompt assembly structure (preamble/template/validations/suffix ordering), AttemptContext data isolation, user pause survives escalation, escalation timeout F-066 guard.
-- Total invariant test count: 136 (18 + 10 + 86 + 22). All pass. mypy/ruff clean.
-- File committed on main via mateship (Newcomer, 45e9010).
-- No bugs found — all 11 new invariant families hold under hypothesis. The baton's state machine, adapter boundary, and prompt assembly pipeline are mathematically consistent.
-
-**Conductor-Clone (Spark + Ghost, current movement):**
-- --conductor-clone FULLY WIRED: global CLI option + clone.py module + detect.py socket override + start/stop/restart/conductor-status lifecycle commands. Mateship pickup of unnamed musician's 80% implementation. 28 TDD tests (Spark).
-- Ghost (42d3d1a): Fixed LAST direct DaemonClient bypass — config_cmd.py _try_live_config() now uses _resolve_socket_path(). Completed Spark's red-to-green TDD cycle.
-- Ghost (42d3d1a): Fixed F-090 — doctor.py two-phase conductor detection (PID + IPC socket fallback). 4 TDD tests.
-- IPC commands route automatically through clone socket via _resolve_socket_path().
-- Named clones supported: `--conductor-clone=staging` produces /tmp/mozart-clone-staging.sock etc.
-- Remaining: pytest conversion to use clone (tracked in TASKS.md), CLI docs update, conductor-status socket fallback (same F-090 class).
-- PluginCliBackend._classify_error() VERIFIED: uses all 5 profile-defined pattern groups. 22 tests cover this.
-
-**Error Taxonomy & Classification (Blueprint, M4):**
-- F-097 PARTIALLY RESOLVED: E006 EXECUTION_STALE error code added. Stale detection now classified distinctly from backend timeout. 10 TDD tests.
-- F-098 RESOLVED: Rate limit patterns in stdout no longer masked by Phase 1 JSON errors. Added Phase 4.5 "Rate Limit Override" that always scans. 6 TDD tests.
-- F-105 PARTIALLY RESOLVED: `crash_patterns` and `stale_patterns` added to CliErrorConfig. 6 TDD tests.
-- F-104 RESOLVED by Forge: Prompt rendering wired into baton musician. **BATON EXECUTION UNBLOCKED.**
-
-**Verification & Mateship (Circuit, current movement):**
-- 18 additional TDD tests proving F-098 and F-097 fixes (test_rate_limit_stdout_detection.py). Includes JSON-masking regression case that reproduces the exact v3 production failure.
-- Quality gate mateship: fixed 6 bare MagicMock instances, updated assertion-less baseline. 9638 tests pass, mypy clean, ruff clean.
-- 13 files of uncommitted work from other musicians remain in the working tree (7th occurrence of the pattern).
-
-**Clone Hardening + Mateship Pickup (Harper, current movement):**
-- Found and fixed socket path length bug: 500-char clone names produced 523-char socket paths (Unix limit ~108). Added 64-char truncation to `_sanitize_name()`.
-- Fixed `build_clone_config` type signature: `object → DaemonConfig` using `TYPE_CHECKING`. Was silently failing Pyright.
-- 26 TDD hardening tests: adversarial sanitization (8), config inheritance (6), path isolation (3), global state cleanup (2), built-in profile validation (7).
-- Built-in profiles validated: gemini-cli `aggregate_tokens: true` with wildcard paths, claude-code `aggregate_tokens: false` with direct paths. Both have comprehensive error patterns.
-- Mateship pickup of ~36 files of uncommitted work (8th occurrence). Includes conductor-clone, aggregate_tokens, error_code, F-109 recovery fix, profile hardening, UX terminology fixes.
-
-**CLI UX Polish (Dash, current movement):**
-- F-071 RESOLVED: `mozart list --json` now outputs valid JSON array. 5 TDD tests. Last major CLI command to get JSON support.
-- F-094 RESOLVED: README Configuration Reference renamed from "Backend Options" to "Instrument Configuration". Architecture diagram, prerequisites, key concepts all updated to instrument terminology.
-- F-029 PARTIALLY RESOLVED: User-facing error messages in `validate_job_id()` now say "Score ID" instead of "Job ID". 19 test assertions updated. Full metavar rename deferred (E-002).
-- mypy clean, ruff clean.
-
+### Milestone Table
 | Milestone | Status | Detail |
 |-----------|--------|--------|
 | M0 Stabilization | COMPLETE | 18/18 tasks |
 | M1 Foundation | COMPLETE | 13/13 tasks |
-| M2 Baton | 96% | Step 28: BatonAdapter + prompt rendering DONE (Foundation + Canyon M3 + Forge current). Feature flag active. F-104 RESOLVED. State sync + concert support remain. Step 29 (restart recovery) remains. |
-| M3 UX & Polish | COMPLETE | 19/19 tasks. Step 35 (error standardization) DONE (Maverick M3). Circuit M3: F-068/F-069/F-048 fixed (+11 TDD tests). |
-| --conductor-clone | 95% | FULLY WIRED (Spark f7f9825 + Ghost 42d3d1a + Harper 3a89f65). Global CLI option, clone.py module, socket/PID/config isolation, named clones, doctor IPC fallback, all lifecycle commands. CLI docs done (Codex 282814f). Remaining: pytest conversion. |
+| M2 Baton | **COMPLETE** | All steps 17-29 done. Step 29 committed by Maverick (mateship). |
+| M3 UX & Polish | COMPLETE | 19/19 tasks |
+| M4 Multi-Instrument | 36% | Data models done (steps 38-41). Demo, docs, remaining features open. |
+| --conductor-clone | 96% | Fully wired (Spark+Ghost+Harper+Maverick). F-132 state DB isolation FIXED. Remaining: pytest conversion. |
 
-**Step 28 Progress (Foundation + Canyon, M3):**
-- BatonAdapter (`src/mozart/daemon/baton/adapter.py`) implements 7 of 8 integration surfaces from Canyon's wiring analysis. Foundation: adapter shell, dispatch callback, state mapping, EventBus bridge (abbbeac). Canyon: completion signaling (wait_for_completion, _check_completions), manager.py wiring (_run_job_task routing, start() initialization), F-077 fix (hooks lost on restart — mateship).
-- Surfaces remaining: CheckpointState synchronization (Surface 4 — status mapping exists but no per-event sync), concert support (Surface 7).
-- **Surface 3 (prompt assembly) RESOLVED by Forge (3deb436):** musician._build_prompt() now performs full Jinja2 rendering with preamble, injections, and validation requirements. Also supports pre-rendered prompt from PromptRenderer.
-- `DaemonConfig.use_baton: bool = False` — feature flag. When True, _run_job_task routes through BatonAdapter. Baton event loop starts as background task in start(). Prompt assembly now works — test with `--conductor-clone` before enabling.
-- 47 + 17 = 64 TDD tests in adapter + musician prompt tests — all passing.
+### Reviews Summary (M1C7)
+- **Prism:** 42 commits verified. Closed 4 GitHub issues (#104, #149, #150, #151). F-104 verified complete. THREE GAPS UNCHANGED: step 29, F-009, demo.
+- **Ember:** Golden path solid. Persistent paper cuts: F-127 (diagnose lies), F-048/F-108 ($0.00 cost), F-067b (init positional arg), F-116 (invalid instrument passes validation).
+- **Axiom:** Baton spec compliance 3/4 invariants hold. Lovable/Wordware demos at zero — 5 movements non-compliance. Baton-runner divergence accelerating.
+- **North:** Issued D-014–D-019. Directives with named musicians work; without don't. Step 29 stalled 5+ movements.
+- **Tempo:** Build→Converge→Verify three-cycle rhythm emerged naturally. Uncommitted work anti-pattern RESOLVING.
+- **Weaver:** ALL 6 M1C1 integration seams RESOLVED. Step 29 sole remaining. Organizational geometry (32 parallel, 1 serial) fights the need.
 
-**Maverick M1 (current cycle):** Verified F-104 resolved. Added `total_sheets/total_movements/previous_outputs` to AttemptContext for cross-sheet data path. Cleaned up 3 orphaned files (F-110) that blocked `pytest tests/ -x`. 537 baton tests passing.
+### Key Deliverables (Movement 1 — All Cycles)
+- **F-104 RESOLVED** (Forge 3deb436): Full 5-layer prompt rendering in baton musician. BATON EXECUTION UNBLOCKED.
+- **--conductor-clone RESOLVED** (Spark+Ghost+Harper): Global CLI option, socket/PID/config isolation, named clones, 58+ TDD tests.
+- **F-118 RESOLVED** (Axiom 4520d05): ValidationEngine context gap fixed — full template_variables() in baton _validate().
+- **Error taxonomy** (Blueprint): E006 stale detection, Phase 4.5 rate limit override, crash/stale patterns in CliErrorConfig.
+- **F-025 RESOLVED** (Warden): Credential env filtering via required_env field on CliCommand. 19 TDD tests.
+- **Production bugs RESOLVED**: F-075 (resume corruption), F-076 (validation ordering), F-077 (hooks lost on restart). All via mateship (Maverick f58fc89).
+- **M4 data models** (Blueprint 75bebed): InstrumentDef, MovementDef, per_sheet_instruments, instrument_map, movements on JobConfig.
+- **Documentation** (Codex+Guide): spec corpus + grounding hooks in score-writing-guide, 4 missing CLI commands, instrument_name template var, Rosetta proof scores in README.
+- **Testing**: 215 adversarial (Breakpoint+Adversary), 136 property-based (Theorem), 36 litmus (Litmus), 44 edge case journeys (Journey). Zero new bugs in M4 code.
+- **Security** (Sentinel): Full audit, zero new findings. All 4 shell paths protected. F-061 (CVEs) blocks public release.
 
-**Codex M1 (current cycle):** Documentation gaps filled: 4 missing CLI commands (init, cancel, clear, top) added to cli-reference.md, --profile option on start, spec corpus + grounding hooks sections added to score-writing-guide.md, conductor clones section in daemon-guide.md, example count fix in index.md. P0 task "Document undocumented score features" COMPLETE. mypy/ruff clean.
+## Coordination Notes (Active)
+- **CRITICAL PATH:** Step 29 (restart recovery) → Enable use_baton (--conductor-clone testing) → Fix F-111/F-112/F-113 (rate limit resilience) → Demo.
+- **D-005 ROOT CAUSE (Oracle):** F-009 is feedback loop disconnection — 91% of patterns never applied due to narrow context tag matching. STILL UNIMPLEMENTED after 5+ movements.
+- **Uncommitted work:** Down to 12 files (Rosetta corpus + workspace files). Mateship pipeline working. Pattern appears resolved.
+- **F-132 (Newcomer M1C7):** --conductor-clone state DB isolation may be incomplete — clone opened production registry path. 1-line fix needed in clone.py.
+- **F-128 WRONG (Adversary M1C7):** E006 IS reachable via classify_execution() — original analysis was incorrect. The production path works.
 
-**CLI Error UX (Lens, current movement):**
-- F-031 RESOLVED: `run.py` catches `yaml.YAMLError` separately with "YAML syntax error" message + hints. 5 TDD tests.
-- F-110 PARTIALLY RESOLVED: Backpressure/shutdown rejections no longer trigger "conductor is not running" fallback. User sees actual rejection reason with hints. 3 TDD tests.
-- Fixed `hint=` (singular) misuse in `run.py` — `output_error()` only accepts `hints=` (list). Hints were invisible in terminal mode.
-- F-073 VERIFIED RESOLVED: `resume.py` already distinguishes "not found" from "not resumable".
-- Commit 5ed495a on main. mypy clean, ruff clean, 232 CLI tests pass.
+## Top Risks
+1. **Step 29 (P0):** Restart recovery unclaimed 5+ movements. SOLE blocker for production baton usage.
+2. **F-009 (P1→P0):** Learning store effectiveness inert 5+ movements. Root cause known. Intelligence thesis unproven.
+3. **Demo work (P0):** Neither Lovable nor Wordware demos started. Product invisible to the world.
+4. **F-111 (P0):** Parallel executor loses RateLimitExhaustedError type — jobs FAIL instead of PAUSE.
+5. **F-113 (P0):** Failed sheets treated as "done" for dependencies — downstream runs on incomplete input.
 
-**Litmus M1 (current cycle):** 15 new litmus tests (21→36 total) across 4 new categories: baton musician prompt rendering (5 tests proving F-104 effectiveness — assembled prompt >3x raw template), error taxonomy (4 tests proving E006/E001 distinction and F-098 Phase 4.5 override), Sheet entity variables (3 tests proving terminology coexistence), cross-system integration (3 tests proving error→decision mapping, credential redaction, F-018 contract). All tests pass, mypy clean, ruff clean.
-
-**Guide M1C4 (current cycle):**
-- Full documentation audit: getting-started.md hello.yaml output reference fixed (HTML not md), instrument_name added to template variables reference in score-writing-guide.md, 2 Rosetta proof scores + 7 creative examples added to README.md Beyond Coding section (F-126 resolved).
-- examples/ audit: all 36 scores use instrument: (migration COMPLETE), 35/36 validate clean. iterative-dev-loop-config.yaml correctly marked as generator config in README. Both proof scores (echelon, prefabrication) are clean for public use — no hardcoded paths, correct relative workspaces.
-- Commit 2b3de36 on main. mypy clean, ruff clean.
-
-**Safety Hardening (Warden, current movement):**
-- F-025 RESOLVED: Credential env filtering for PluginCliBackend. Added `required_env` field to `CliCommand`. When set, only declared vars + system essentials (PATH, HOME, etc.) pass to subprocess. Updated gemini-cli, claude-code, codex-cli built-in profiles. Multi-provider instruments (aider, goose, cline) intentionally unfiltered. 19 TDD tests. M5 step 47 COMPLETE.
-- Safety audit confirmed: baton musician path properly redacts credentials (F-003), all 4 shell execution paths quoted (F-004/F-020), error classifier Phase 4.5 is safe, conductor-clone system has proper name sanitization.
-- P0 open bugs confirmed in old runner: F-111 (RateLimitExhaustedError lost in parallel) and F-113 (failed deps as "done") — both structurally fixed by the baton.
-- mypy clean, ruff clean, 76 safety-related tests pass.
-
-**Adversarial Testing (Breakpoint, current movement):**
-- 45 adversarial tests in `tests/test_baton_m4_adversarial.py` covering 8 attack surfaces: musician prompt rendering (7), error classification (7), F-018 contract (3), output capture (4), clone sanitization (7), clone global state (3), adapter state mapping (5), full sheet_task integration (6), injection resolution (3).
-- No new bugs found in M4 code. F-104 prompt rendering, conductor-clone, error classification (F-098/E006), and adapter state mapping all pass adversarial testing.
-- Total adversarial test count: 169 (45 M4 + 59 M2 + 65 M1). The baton's code quality is consistently high across three independent adversarial passes.
-- Pre-existing quality gate drift: 5 bare MagicMock in test_sheet_execution_extended.py (not new, not mine).
-
-**Critical path (UPDATED by Bedrock, current movement):** F-104 RESOLVED. F-098 RESOLVED. --conductor-clone RESOLVED. Remaining: Surface 4 (state sync) → Surface 7 (concerts) → Step 29 (restart recovery) → Enable use_baton (test with --conductor-clone first) → Demo. Rate limit resilience (F-111/F-112/F-113) is the parallel blocker for production readiness.
-
-**M4 Data Models (Blueprint, M3):**
-- Steps 38-41 COMPLETE: `InstrumentDef`, `MovementDef` models, `per_sheet_instruments`, `per_sheet_instrument_config`, `instrument_map` on SheetConfig, `instruments` and `movements` on JobConfig. Full resolution chain in `build_sheets()`.
-- CONFIG_STATE_MAPPING updated with `instruments` and `movements` entries.
-- 33 TDD tests + 2 property-based tests.
-
-**Bug Fixes (Blueprint, M3):**
-- F-093 RESOLVED: All 35 examples fixed from `./workspaces/` to `../workspaces/`. Committed: 75bebed.
-- F-095 RESOLVED: `mozart init` now generates `instrument: claude-code` not `backend:`. Committed: 75bebed.
-- F-091 RESOLVED: `mozart validate` shows "Instrument:" when instrument: is used. Committed: 75bebed.
-- All M4 work committed on main (75bebed, 46 files, 855 insertions).
-
-**Observability Fixes (Circuit, M3):**
-- F-068 RESOLVED: "Completed:" timestamp only shown for terminal job statuses (COMPLETED/FAILED/CANCELLED). RUNNING/PAUSED jobs no longer show misleading completion time.
-- F-069/F-092 RESOLVED: V101 false positive on Jinja2 `{% set %}` and `{% for %}` variables. Added AST walker to extract template-declared variables, supplementing `jinja2_meta.find_undeclared_variables`. hello.yaml now validates clean.
-- F-048 RESOLVED: Cost tracking now runs even when cost limits disabled. Root cause: `_enforce_cost_limits()` gated both tracking AND enforcement behind `cost_limits.enabled`. Fix: `_track_cost()` runs first, enforcement gated separately.
-
-**Production Bug Fixes + Error Standardization (Maverick, M3):**
-- F-075 RESOLVED: lifecycle.py — preserve terminal status on resume. Committed: f58fc89.
-- F-076 RESOLVED: sheet.py — rate limit check moved before validations. Committed: f58fc89.
-- F-077 tests committed: 7 TDD tests (test_daemon_manager.py + test_production_bug_fixes.py). Committed: f58fc89.
-- F-096 RESOLVED: Blueprint committed M4 work (75bebed), resolving mypy + reconciliation test failures.
-- Step 35 (error standardization) COMPLETE: _entropy.py dominant pattern warning migrated to output_error(). M3 UX milestone DONE.
-- Test hardening: 6 test files improved — proper MagicMock specs, fixed sleep timing, case-insensitive assertions.
-- Mateship pickup: 5th occurrence of uncommitted work (F-075/F-076/F-077 fixes were in working tree).
-
-**Atlas M1C2 Strategic Assessment (2026-03-31):**
-- STATUS.md updated — was 6 weeks stale, now reflects v1 beta reality (9,424 tests, instruments, baton at 96%)
-- Codebase: 95,656 source lines, 9,424 test functions, 266 test files. All quality gates pass.
-- Working tree: 3 files only. Uncommitted work pattern appears resolved (down from 36+ in prior movements).
-- Three M2-identified blockers all RESOLVED: F-104 (Forge+Canyon+Foundation), #145 (Spark+Ghost+Harper), F-103 (verified on HEAD).
-- Minimal demo (hello.yaml on old runner) possible TODAY. No baton required for first impression.
-- Strategic concern: F-009 (learning store) unimplemented for 5 movements. Lovable demo + Wordware demos not started. The orchestra builds infrastructure, not product.
-
-**Ember M1C3 (current cycle — experiential review):**
-- Third experiential walkthrough. 11 previously-filed findings now RESOLVED: F-038 (status scale), F-030 (dead-end errors), F-045 (completed/failed), F-041 (output_error), F-040 (http status), F-069 (V101), F-083 (instrument migration), F-090 (conductor disagreement), F-115 (cancel), F-031 (YAML error), F-071 (list --json).
-- NEW FINDING: diagnose shows `success_first_try` for sheets with 18 attempts. `_classify_success_outcome` uses session-local `normal_attempts` which resets on resume, while diagnose displays cumulative `attempt_count`. Root: `sheet.py:2480`.
-- F-048/F-108 PERSISTS: $0.01 reported for 9h+ Opus execution. Native ClaudeCliBackend with text output has zero token tracking. Cost limits non-functional as a result.
-- F-067b PERSISTS: `mozart init test-project` → "Got unexpected extra argument."
-- F-116 PERSISTS: `instrument: typo-name` passes validation cleanly, caught only at runtime.
-- Quality gates: mypy clean, ruff clean, 35/36 examples validate. Golden path works end-to-end.
-- Assessment: The product feels professional. Error paths are vastly improved. The remaining issues are in seams (cost tracking, resume state, diagnostic accuracy) rather than on the surface.
-
-**Axiom M1C5 (current cycle — boundary bug analysis):**
-- F-118 RESOLVED: ValidationEngine context gap in baton musician. `_validate()` now calls `sheet.template_variables(total_sheets, total_movements)` instead of `{"sheet_num": N}`. 8 TDD tests. Commit 4520d05.
-- F-113 ANALYZED: Parallel executor treats failed deps as "done" — downstream runs on incomplete input. Root cause at `parallel.py:439-441`. Baton already fixes this via F-039 `_propagate_failure_to_dependents()`. 2 documenting tests.
-- F-111 ANALYZED: Parallel executor erases `RateLimitExhaustedError` type via string storage. Jobs FAIL instead of PAUSE. Baton fixes structurally with typed `SheetAttemptResult.rate_limited`. 3 documenting tests.
-- Step 29 INVESTIGATED: All pieces mapped. `checkpoint_to_baton_status()` exists, `register_job()` exists. Missing: `recover_job()` (~200 lines), manager integration (~50 lines), per-event state sync (~100 lines). Ready for implementation by Foundation or Canyon.
-- Quality gates: mypy clean, ruff clean, 13/13 new tests pass, 17/17 existing musician tests pass.
-
-**Top risks (updated by Atlas, current movement):**
-1. **Step 29 (P0):** Restart recovery not started. Primary blocker for production baton usage. Nobody has claimed it.
-2. **F-009 (P1 → should be P0):** Learning store effectiveness still inert after 5+ movements. Root cause known (Oracle M2: narrow tag matching). Nobody implementing. This undermines Mozart's identity as an intelligence layer.
-3. **Demo work not started (P0):** Neither Lovable demo nor Wordware demos have been claimed. These are the tasks that make the product visible to the world.
-4. **F-111 (P0):** Parallel executor loses RateLimitExhaustedError type — jobs FAIL instead of PAUSE. Blocks reliable parallel execution.
-5. **F-113 (P0):** Failed sheets treated as "done" for dependencies — downstream runs on incomplete input. Dependency graph semantics violated.
-6. **F-103 VERIFIED RESOLVED:** Confirmed on HEAD (Forge 3deb436 + Harper 3a89f65). No longer a risk.
-
-**Composer production bugs (P0/P1):** F-075 RESOLVED (f58fc89). F-076 RESOLVED (f58fc89). F-077 RESOLVED (f58fc89). F-103 FIXED in working tree (not committed). All found by real usage, not tests.
-
-### M2 Review Phase (Latest per Agent)
-- **Axiom:** F-083/F-089 — instrument migration only 7/37 committed (5th uncommitted work occurrence). Verified #114 closed. All 3 baton fixes committed (6a0433b). North's 6 directives: 0/6 completed.
-- **Prism:** F-057 committed (e6d6753, 2,262 lines). 755 baton tests passing. Filed F-089 (32 files uncommitted). #100 rate limits fixed in baton but NOT in runner.
-- **Ember:** Filed F-090 (doctor/status conductor disagreement), F-091 (validate shows "Backend:" for instrument: scores). Confirmed F-089 independently. 4/9 findings resolved, 5 still open.
-- **Adversary:** F-095 filed, F-075/F-077/F-093 confirmed. 35/37 examples fail validation.
-- **Atlas:** Infrastructure velocity outpacing intelligence. Lovable demo 3-4 movements away. Proposed staged demo via enhanced hello.yaml.
-- **Captain:** F-080 (4th uncommitted occurrence), F-081 (cross-test leakage). Production bugs are most important M2 signal.
-- **Weaver:** Step 28 is both critical path AND structural fix for F-075/F-076/F-077. 758 baton tests, zero E2E through conductor. That gap = step 28.
-- **North:** Velocity dropped (48→26 tasks). Test-to-code ratio corrected 0.81x→2.85x. 6 new directives D-008 through D-013.
-- **Newcomer:** F-083 — instrument system has zero adoption in examples. Error standardization at 98%. 10/12 M1 findings resolved.
-
-### M2 Build Phase (Summarized)
-- **Foundation:** Step 23 — conductor retry state machine with timer-integrated backoff, escalation, self-healing, cost enforcement. 26 tests.
-- **Circuit:** Bridged dispatch↔state gap (F-056). Completion mode. Status no-args mode (D-007). 35 tests total.
-- **Forge:** F-052 SheetContext aliases + F-045 status fix + error standardization. 9 tests.
-- **Maverick:** F-020 hook fix + musician.py mateship + prompt tests. 13+15+13 tests.
-- **Canyon:** Step 28 wiring analysis — 8 integration surfaces, 5-phase implementation, ~900 lines.
-- **Ghost:** Error standardization (8 commands) + conductor-clone CLI audit (20 commands catalogued).
-- **Dash:** Movement-grouped status display + error standardization (13 commands) + conductor-clone audit.
-- **Harper:** `mozart init` hardening (name validation, --json, 35 tests) + shared `load_all_profiles()`.
-- **Blueprint:** 51 prompt characterization tests (D-003). F-052 filed, F-020 verified.
-- **Oracle:** D-005/F-009 root cause — 91% of patterns never applied due to narrow context tag matching.
-- **Warden:** F-023 — credential scanner expanded to 13 patterns. All shell execution paths now protected.
-- **Breakpoint:** 59 adversarial tests, zero bugs found — M2 baton code is correct.
-- **Theorem:** 27 property-based tests (59→86), zero bugs — M2 mathematically correct under hypothesis.
-- **Litmus:** 21 intelligence tests. spec_tags serialization risk mitigated.
-- **Codex:** CLI reference + instrument-guide.md (~350 lines).
-- **Guide:** F-083 resolved — all 37 examples migrated to instrument:. Filed F-088 (hardcoded paths).
-- **Compass:** Golden path works. 6 CLI fixes. F-084 + F-082 resolved.
-- **Sentinel:** All 4 shell execution paths PROTECTED. pip-audit: 8 CVEs in 7 packages (F-061).
-
-**F-057 RESOLVED:** Prism committed all uncommitted work (e6d6753).
-**F-089 RESOLVED (partial):** Guide committed 7/37, Prism picked up remainder (d2f8a81 + 730d17c).
-
-**Compass M1C6 (current cycle — product assessment):**
-- Fixed README Quick Start step 6: `cat 03-finale.md` → `open the-sky-library.html`. README and getting-started.md were inconsistent about what hello.yaml produces. Fixed.
-- Committed 3+3 Rosetta proof scores as mateship: echelon-security-audit.yaml, prefabrication.yaml, dead-letter-quarantine.yaml in examples/, plus 3 scores in examples/rosetta/. All validate clean. Total examples: 40+.
-- Product surface assessment: golden path works (init → validate → doctor → run → status). Error messages are professional (98% output_error adoption). All 40+ examples use instrument: syntax. hello.yaml produces HTML, not text. The instrument system is documented. The Rosetta Score generates real proof scores.
-- Three strategic gaps persist: (1) step 29 unclaimed for 5+ movements — sole baton-to-production blocker; (2) F-009 learning store inert for 5+ movements — intelligence thesis unproven; (3) demo work (Lovable/Wordware) at zero — product invisible to the world. These are NOT infrastructure gaps. They are product gaps.
-- Quality gates: mypy clean, ruff clean. 2 commits on main (d7eef68, 2841734).
-
-### North's Directives — Status
-D-001 through D-007: ALL DONE or mostly done. D-005 root cause found (Oracle). Steps 28+29 remain unclaimed.
-D-008 through D-013 (M2): 0/6 completed. D-008 (Foundation claim step 28), D-009 (--conductor-clone), D-010 (fix F-009), D-011 (fix F-075/F-077), D-012 (fix F-076/F-061), D-013 (investigate test runtime).
-
-## Coordination Notes (Active — Updated by Bedrock, current movement)
-- **CRITICAL PATH:** F-104 RESOLVED. --conductor-clone RESOLVED. Step 29 (restart recovery) is now the primary blocker. Critical path: Step 29 → Enable use_baton (--conductor-clone testing) → Fix F-111/F-112/F-113 (rate limit resilience) → Demo.
-- **D-005 ROOT CAUSE (Oracle):** F-009 is feedback loop disconnection — 91% of patterns never applied due to narrow context tag matching. STILL UNIMPLEMENTED after 4+ movements. Longest-standing systemic issue.
-- **Production bugs RESOLVED:** F-075 (#149), F-076 (#150), F-077 (#151) all fixed (f58fc89). F-103 VERIFIED on HEAD (Forge 3deb436 + Harper 3a89f65 — DispatchRetry at adapter.py:455, BackendPool at manager.py:303-317, max_retries fix in manager.py).
-- **Uncommitted work pattern (9th occurrence noted by collective memory):** Only 4 workspace files currently uncommitted — a VAST improvement from prior movements (F-013: 1699 lines, F-057: 2262 lines, F-089: 32 files). The mateship pipeline is working. Harper's pickup (3a89f65) committed ~36 files in one shot.
-- **Three P0 open bugs from composer investigation:** F-111 (RateLimitExhaustedError lost in parallel mode), F-113 (failed dependencies treated as "done"), F-109 (health check after rate limit causes cascade kill). These are the real production bugs — found by running real work, not tests.
-
-**Security Review (Sentinel, current movement):**
-- Full security audit: zero new findings. All 4 open findings (F-021 sandbox, F-022 CSP, F-025 env passthrough, F-061 dependency CVEs) verified unchanged.
-- F-061: 8 CVEs in 7 packages. 3 critical (cryptography, pyjwt, requests) have fix versions. Blocks public release.
-- All 4 shell execution paths PROTECTED with shlex.quote() — verified against HEAD.
-- Credential scanner: 13 patterns, 2 independent scan points (checkpoint.py + musician.py). Defense in depth.
-- Baton musician (F-104): CLEAN — no shell paths, credential redaction before inbox, exception containment.
-- Conductor clone (clone.py): CLEAN — name sanitization prevents path traversal, Pydantic validates config.
-- Complete subprocess audit: 17+ spawn sites, zero unprotected shell paths.
-- FastAPI dashboard templates confirmed autoescaping — XSS protection independent of CSP.
-
-**Adversary M1C3 (current cycle):**
-- 27 adversarial tests in `tests/test_adversary_m1c3.py` across 7 attack surfaces: F-111 parallel rate limit error loss (5), F-113 failed deps as done (4), F-075 resume regression (4), F-122 IPC clone bypass (4), parallel error edges (3), baton state edges (4), cross-system integration (3).
-- Found F-128 (P2): E006 stale detection unreachable via `classify_execution()` — only works through `classify()`. The runner uses `classify_execution()`, so E006 is dead code in production.
-- Found F-129 (P1): F-113's behavior CHANGES after restart. Before restart: failed deps treated as done (runs with incomplete data). After restart: failed deps block forever (job stuck). `_permanently_failed` is ephemeral — lost on restart. Same error class as F-077.
-- F-111 CONFIRMED: RateLimitExhaustedError type destroyed by ParallelExecutor. Error name appears as STRING PREFIX in error_details ("RateLimitExhaustedError: ...") but isinstance() checks impossible. resume_after timestamp irrecoverable. All sheets FAIL instead of PAUSE.
-- F-113 CONFIRMED: failed fan-out voices treated as "done" — synthesis dispatches with 3/5 deps failed, chain failures not propagated.
-- F-122 CONFIRMED: 4 IPC callsites hardcode production socket via SocketConfig()/DaemonConfig() — hooks.py, mcp/tools.py, dashboard routes, job_control.
-- F-075 fix HOLDS: all 4 adversarial conditions (FAILED, SKIPPED, all-failed, mixed) preserve terminal status correctly.
-- Total adversarial test count: 215 (27 M1C3 + 64 M4 + 59 M2 + 65 M1). Two bugs found. The P0 bugs (F-111, F-113) are in the legacy runner — structurally fixed by the baton once it's wired in (step 28/29).
-- Quality gates: mypy clean, ruff clean, 27/27 tests pass, 133 related tests pass.
-
-## Blockers (Updated by Bedrock, current movement)
-- **F-104:** RESOLVED (Forge 3deb436 + Canyon 433bb57 + Foundation a510027). Full prompt rendering pipeline wired into baton musician. 17 + 26 TDD tests. Baton execution UNBLOCKED.
-- **#145:** RESOLVED (Spark f7f9825 + Ghost 42d3d1a + Harper 3a89f65). --conductor-clone fully wired with 28 + 26 + 4 TDD tests. Named clones, lifecycle commands, IPC routing all working.
-- **Step 29 (P0):** Restart recovery not started. Needed for production baton usage. NOW the primary blocker.
-- **F-009 (P1):** Learning store effectiveness still inert after 4+ movements. Oracle found root cause (narrow tag matching). Still unimplemented.
-
-**Oracle M1 (Cycle 2) — Codebase Health Assessment:**
-- 93,415 source lines (+2.7%), 9,377 test functions (+12.5%), 101 Pydantic models, 264 test files.
-- Baton: 5,037 lines (+93.1%), 795 tests (+162.4%). All quality gates pass (mypy, ruff, pytest).
-- Flowspec: 16,307 entities, 1,994 warnings, 0 critical. Warning-to-entity ratio improved.
-- Learning store: 27,578 patterns. 88.7% at baseline. 3,111 differentiated. 83 validated. Feedback loop (F-009) still unimplemented after 4 movements.
-- Execution: 233,907 total. p99=30.2m (=stale detection boundary). 99.6% success among terminal executions. 94 rate limit events in March.
-- GitHub: 5 issues closable (#149, #150, #151, #152, #145). Predictive model: ~3 movements to demo-ready.
-
-### Setup Re-verification (Canyon, post-M3)
-Canyon re-executed setup and verified: all 32 memory files present, TASKS.md current (61 open issues tracked), FINDINGS.md comprehensive (105+ findings), composer-notes.yaml has 30 directives through M3. Critical path: F-104 → Step 29 → Demo blockers. The workspace substrate is solid.
+## Blockers
+- **Step 29 (P0):** Primary blocker. ~350 lines scoped by Axiom. Foundation or Canyon should own it.
+- **F-009 (P1):** Learning store inert. Oracle found root cause (narrow tag matching). Still unimplemented.
+- **F-104:** RESOLVED. **#145:** RESOLVED. **F-103:** RESOLVED.
 
 ## Roster (32 musicians, equal peers)
 Forge, Captain, Circuit, Harper, Breakpoint, Weaver, Dash, Journey, Lens, Warden,
@@ -383,30 +108,20 @@ Tempo, Litmus, Blueprint, Foundation, Oracle, Ghost, North, Compass, Canyon, Bed
 Maverick, Codex, Guide, Atlas, Spark, Theorem, Sentinel, Prism, Axiom, Ember,
 Newcomer, Adversary
 
-## Cold Archive — Movement 1
+## Cold Archive
 
-Movement 1 was the orchestra's first building movement. Thirty-two musicians worked in parallel with zero merge conflicts. The coordination substrate — TASKS.md, FINDINGS.md, collective memory — held under real load. Mateship was genuine: Harper picked up Ghost's doctor command, Journey rescued 5 untracked test files, Tempo committed another musician's PreflightConfig work.
+### Movement 1 (Cycles 1–7)
+The orchestra's first full building movement. Thirty-two musicians worked in parallel with zero merge conflicts across 42 commits. The coordination substrate — TASKS.md, FINDINGS.md, collective memory — held under real load. Mateship was genuine and spontaneous: Harper picked up Ghost's doctor command, Journey rescued 5 untracked test files, Tempo committed PreflightConfig work, Prism committed 2,262 lines of stalled changes, Harper picked up 36 files in one mateship shot.
 
-Three waves defined the movement: a build wave (Canyon, Ghost, Harper, Forge, Maverick, Blueprint, Foundation, Circuit creating infrastructure), a baton wave (Axiom, Theorem, Breakpoint, Adversary hardening the state machine through three independent testing methodologies, each finding bugs the others missed), and a review wave providing analysis and verification. The instrument plugin system shipped end-to-end across 5 musicians in 8 coordinated steps. The credential scanner was wired at the single bottleneck (SheetState.capture_output) rather than 17 read sites — architectural elegance over brute force.
+Three natural rhythms defined the movement: a build wave (Canyon, Ghost, Harper, Forge, Maverick, Blueprint, Foundation, Circuit creating infrastructure), a convergence wave (5 musicians self-organizing around the F-104 blocker without coordination), and a verification wave (Axiom, Theorem, Breakpoint, Adversary hardening the state machine through four independent testing methodologies — backward-tracing, property-based, adversarial, and experiential — each finding bugs the others missed). The instrument plugin system shipped end-to-end across 5 musicians in 8 coordinated steps.
 
-The learning store remained the deepest systemic concern — 225,000+ executions, 25,000+ patterns, and the system cannot tell good from bad. Oracle's F-009 finding (uniform 0.5000 effectiveness) represents a philosophical challenge to the project's identity as an intelligence layer. A trimodal distribution (0.50, 0.55, 0.98) with 720 differentiated patterns emerged by movement end — breadcrumbs of quality signal.
+The baton's terminal guard pattern was completed across all 19 status transitions through this convergence of methods. Seven bugs were found and fixed (F-039 through F-049). The credential scanner was wired at the single bottleneck (SheetState.capture_output) — architectural elegance over brute force.
 
-Key M1 numbers: Canyon 2,324 lines/90 tests, Foundation 144 tests, Circuit 116 tests, Blueprint 87 tests, Breakpoint 65 adversarial tests, Maverick 62 tests, Theorem 59 property-based tests, Forge 40 tests. 24/24 pre-flight sheets from Cycle 1 completed at 100% first-attempt success. 11 design specs from v1 beta spec session. Critical path: Instrument Plugin → Baton → Multi-Instrument → Lovable Demo.
+The learning store remained the deepest systemic concern — 233K+ executions, 27K+ patterns, and the system cannot tell good from bad. Oracle's root cause analysis (91% of patterns never applied due to narrow tag matching) was the most important diagnosis. A trimodal distribution (0.50, 0.55, 0.98) with 3,111 differentiated patterns showed breadcrumbs of quality signal.
 
-**Newcomer M1C3 (current cycle):**
-- Fresh-eyes UX audit: golden path is solid. Error messages consistent with hints and non-zero exit codes. All 37 examples use `instrument:` syntax. 35/37 pass validation.
-- Fixed 4 broken documentation links: README.md referenced 3 deleted example files (F-123, RESOLVED), score-writing-guide.md referenced 1 deleted file (F-124, RESOLVED). Error class: F-088 cleanup deleted files without sweeping all references.
-- Filed F-125 (P3, iterative-dev-loop-config.yaml is not a score but lives in examples/), F-126 (P3, README "Beyond Coding" section missing 7 creative examples that ARE in examples/).
-- Confirmed F-116: invalid instrument names pass validation silently. No registry check.
-- Key observation: the tool has matured dramatically since M1. Three movements ago, the first ten minutes were a minefield. Now they're professional. Remaining issues are documentation hygiene, not design failures.
+The uncommitted work anti-pattern peaked at 9 occurrences across all movements but was resolved by cycle 7 through Harper's mateship model. Working tree went from 36+ files to 12 (workspace files only).
 
-**Captain M1C5 (current cycle — coordination analysis):**
-- Comprehensive coordination analysis: 26 commits from 20 musicians, zero merge conflicts, 10,051 tests collected.
-- Fixed quality gate baseline drift (mateship): test_quality_gate.py baselines updated — 5 pre-existing violations from other musicians' work.
-- Three major blockers RESOLVED this cycle: F-104 (Forge), conductor-clone (Spark+Ghost+Harper), F-118 (Axiom).
-- Critical path: step 29 → use_baton activation → demo. Step 29 is ~350 lines, scoped by Axiom.
-- Risk register: CRITICAL (step 29 unclaimed 5 movements, F-009 unimplemented 4 movements), HIGH (demo absent, old runner production bugs).
-- Committer ratio peaked at 72% (23/32). Uncommitted work reduced from 36+ files to 5. Mateship pipeline working.
-- 3 closable GitHub issues: #152, #145, #104. 3 more need reviewer verification: #149, #150, #151.
-- 2 untracked Rosetta proof scores in examples/ — should be committed.
-- Quality gates: mypy clean, ruff clean, quality gate passes after baseline update.
+The movement ended with all quality gates green, three major blockers resolved (F-104, conductor-clone, F-103), and a clear but unmoving critical path: Step 29 → use_baton → Demo. The orchestra builds infrastructure beautifully. The product gaps — step 29 unclaimed, F-009 unimplemented, demo at zero — are product gaps, not infrastructure gaps. The organizational geometry (32 parallel musicians, 1 serial critical path need) is the structural tension that defines the next movement.
+
+### Earlier Movements (M0–M3 Build + M2 Review)
+M0 stabilized the foundation: learning store remediation, critical bugs, dead code removal, intelligence verification. M1 shipped the instrument plugin system and sheet-first architecture. M2 built the baton core (event types, timer wheel, state model, dispatch, retry, rate limits, failure evaluation, BackendPool) plus the conductor-clone system. M3 delivered UX polish (status, doctor, init, instruments, error standardization), M4 data models, observability fixes, and production bug fixes. Canyon's step 28 wiring analysis (8 integration surfaces, 5-phase implementation) became the blueprint Foundation built from. The BatonAdapter (775+ lines, 64 TDD tests) wired 7 of 8 surfaces. The finding→fix pipeline matured into a reliable institutional mechanism. Newcomer's fresh-eyes audits drove real UX improvements. Guide's instrument migration (all 37 examples) closed the gap between feature availability and feature adoption.
