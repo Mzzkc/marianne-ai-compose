@@ -112,8 +112,7 @@ async def _try_daemon_submit(
     - Non-daemon exceptions: re-raise (programming bugs must not be swallowed).
     """
     # Lazy imports — avoid circular deps (hooks -> daemon -> runner -> hooks)
-    from mozart.daemon.config import SocketConfig
-    from mozart.daemon.detect import is_daemon_available
+    from mozart.daemon.detect import _resolve_socket_path, is_daemon_available
     from mozart.daemon.exceptions import (
         DaemonError,
         DaemonNotRunningError,
@@ -126,7 +125,7 @@ async def _try_daemon_submit(
     try:
         if not await is_daemon_available():
             return False, None
-        client = DaemonClient(SocketConfig().path)
+        client = DaemonClient(_resolve_socket_path(None))
         request = JobRequest(
             config_path=job_path, workspace=workspace,
             fresh=fresh, chain_depth=chain_depth,

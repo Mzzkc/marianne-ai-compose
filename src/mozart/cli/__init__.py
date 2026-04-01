@@ -182,8 +182,8 @@ def conductor_clone_callback(value: str | None) -> str | None:
 
     This enables safe testing without risking the production conductor.
 
-    Usage:
-        mozart --conductor-clone status          # Default clone
+    Usage (always use = syntax):
+        mozart --conductor-clone= status             # Default clone
         mozart --conductor-clone=staging run x.yaml  # Named clone
     """
     if value is not None:
@@ -226,8 +226,8 @@ def main(
             callback=conductor_clone_callback,
             is_eager=True,
             help="Route all daemon interactions to a clone conductor. "
-            "Pass without value for default clone, or with name "
-            "(e.g., --conductor-clone=staging) for a named clone. "
+            "Use --conductor-clone= (with equals sign) for default clone, "
+            "or --conductor-clone=NAME for a named clone. "
             "The clone has its own socket, PID file, state DB, and log.",
         ),
     ] = None,

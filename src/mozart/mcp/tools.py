@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..daemon.config import DaemonConfig
+from ..daemon.detect import _resolve_socket_path
 from ..daemon.exceptions import DaemonNotRunningError
 from ..daemon.ipc.client import DaemonClient
 from ..dashboard.services.job_control import JobControlService
@@ -49,7 +49,7 @@ class JobTools:
     def __init__(self, state_backend: JsonStateBackend, workspace_root: Path):
         self.state_backend = state_backend
         self.job_control = JobControlService(state_backend, workspace_root)
-        self._daemon_client = DaemonClient(DaemonConfig().socket.path)
+        self._daemon_client = DaemonClient(_resolve_socket_path(None))
 
     async def list_tools(self) -> list[dict[str, Any]]:
         """List all job management tools."""

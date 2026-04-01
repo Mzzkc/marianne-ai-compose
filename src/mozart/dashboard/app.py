@@ -57,19 +57,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def _create_daemon_client() -> Any:
     """Create a DaemonClient pointed at the daemon socket.
 
+    Uses ``_resolve_socket_path`` for clone-aware resolution — when
+    ``--conductor-clone`` is active, the client connects to the clone
+    conductor instead of production.
+
     Returns the client instance, or ``None`` if construction fails
     (e.g. daemon config unavailable).
     """
     try:
+        from mozart.daemon.detect import _resolve_socket_path
         from mozart.daemon.ipc.client import DaemonClient
 
-        try:
-            from mozart.daemon.config import DaemonConfig
-            socket_path = DaemonConfig().socket.path
-        except Exception:
-            socket_path = Path.home() / ".mozart" / "daemon.sock"
-
-        return DaemonClient(socket_path)
+        return DaemonClient(_resolve_socket_path(None))
     except Exception:
         return None
 

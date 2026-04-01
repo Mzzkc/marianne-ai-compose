@@ -14,6 +14,7 @@ from pathlib import Path
 from mozart.core.checkpoint import CheckpointState, JobStatus
 from mozart.core.config import JobConfig
 from mozart.core.logging import get_logger
+from mozart.daemon.detect import _resolve_socket_path
 from mozart.daemon.exceptions import DaemonNotRunningError
 from mozart.daemon.ipc.client import DaemonClient
 from mozart.daemon.types import JobRequest
@@ -71,13 +72,7 @@ class JobControlService:
         self._workspace_root = workspace_root or Path.cwd()
         self._running_processes: dict[str, asyncio.subprocess.Process] = {}
         self._process_start_times: dict[str, float] = {}  # Track when processes started
-        try:
-            from mozart.daemon.config import DaemonConfig
-            self._daemon_client = DaemonClient(DaemonConfig().socket.path)
-        except Exception:
-            from pathlib import Path as _Path
-            default_socket = _Path.home() / ".mozart" / "daemon.sock"
-            self._daemon_client = DaemonClient(default_socket)
+        self._daemon_client = DaemonClient(_resolve_socket_path(None))
 
     async def is_daemon_available(self) -> bool:
         """Check if the Mozart conductor is running and reachable."""
