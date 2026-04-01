@@ -141,10 +141,14 @@ def build_clone_config(
         config_dict = base_config.model_dump()
         config_dict["socket"] = {"path": str(paths.socket)}
         config_dict["pid_file"] = str(paths.pid_file)
+        config_dict["state_db_path"] = str(paths.state_db)
         return DaemonConfig.model_validate(config_dict)
 
-    # Build from defaults with clone paths
+    # Build from defaults with clone paths — all isolation fields must be set.
+    # Missing state_db_path here caused F-132 (clone opened production DB).
     return DaemonConfig(
         socket=SocketConfig(path=paths.socket),
         pid_file=paths.pid_file,
+        state_db_path=paths.state_db,
+        log_file=paths.log_file,
     )
