@@ -86,14 +86,14 @@ def top(
 ) -> None:
     """Real-time system monitor for Mozart — like htop for your conductor.
 
-    Shows job-centric process tree, resource metrics, event timeline,
+    Shows score-centric process tree, resource metrics, event timeline,
     anomaly detection, and learning insights.
 
     Examples:
         mozart top                    # Launch TUI monitor
         mozart top --json             # Stream NDJSON snapshots
         mozart top --history 1h       # Replay last hour
-        mozart top --job my-review    # Filter by job
+        mozart top --score my-review  # Filter by score
         mozart top --interval 5       # 5-second refresh
         mozart top --trace 12345      # Attach full strace to PID
     """
@@ -138,7 +138,7 @@ def _tui_mode(*, filter_job: str | None, interval: float) -> None:
     reader = MonitorReader(ipc_client=ipc_client)
     if filter_job:
         _stderr_console.print(
-            f"[dim]Note: --job filter ({filter_job}) is not yet supported "
+            f"[dim]Note: --score filter ({filter_job}) is not yet supported "
             f"in TUI mode. Use --json for filtered output.[/dim]"
         )
     app = MonitorApp(reader=reader, refresh_interval=interval)
@@ -315,7 +315,7 @@ async def _history_tui(
     app = MonitorApp(reader=reader, refresh_interval=duration_seconds)
     if filter_job:
         _stderr_console.print(
-            f"[dim]Note: --job filter ({filter_job}) is not yet supported "
+            f"[dim]Note: --score filter ({filter_job}) is not yet supported "
             f"in history TUI mode. Use --json for filtered output.[/dim]"
         )
     app.run()
