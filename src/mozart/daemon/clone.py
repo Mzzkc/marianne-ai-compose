@@ -66,17 +66,20 @@ def _sanitize_name(name: str | None) -> str:
     """
     if not name:
         return ""
-    # Replace spaces, slashes, and other unsafe chars with hyphens
-    sanitized = re.sub(r"[^a-zA-Z0-9-]", "-", name)
+    # Replace spaces, slashes, and other unsafe chars with hyphens.
+    # Underscores are filesystem-safe and kept to preserve name uniqueness.
+    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "-", name)
     # Collapse multiple hyphens
     sanitized = re.sub(r"-+", "-", sanitized)
-    # Strip leading/trailing hyphens
-    sanitized = sanitized.strip("-")
+    # Do NOT strip leading/trailing hyphens — stripping is cosmetic but
+    # makes the function lossy, causing path collisions between distinct
+    # names (e.g., '0' and '_0' both sanitize to '0'). Hyphens in the
+    # middle of path components like /tmp/mozart-clone--test.sock are safe.
     # Truncate to stay within Unix socket path limits (~108 chars).
     # /tmp/mozart-clone-{name}.sock = 21 + len(name) + 5 = 26 + len(name)
     # Cap at 64 chars to leave headroom.
     if len(sanitized) > 64:
-        sanitized = sanitized[:64].rstrip("-")
+        sanitized = sanitized[:64]
     return sanitized
 
 

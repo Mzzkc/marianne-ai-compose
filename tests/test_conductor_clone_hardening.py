@@ -87,12 +87,17 @@ class TestCloneNameSanitizationAdversarial:
         assert "---" not in result  # Should collapse
         assert result == "a-b-c"
 
-    def test_leading_trailing_hyphens_stripped(self) -> None:
-        """Leading and trailing hyphens are stripped."""
+    def test_leading_trailing_hyphens_preserved(self) -> None:
+        """Leading/trailing hyphens are preserved for uniqueness.
+
+        Stripping hyphens made _sanitize_name lossy — e.g., '0' and '_0'
+        would both sanitize to '0', causing clone path collisions. Hyphens
+        in path components like /tmp/mozart-clone--test.sock are safe.
+        """
         from mozart.daemon.clone import _sanitize_name
 
-        assert _sanitize_name("-test-") == "test"
-        assert _sanitize_name("---test---") == "test"
+        assert _sanitize_name("-test-") == "-test-"
+        assert _sanitize_name("---test---") == "-test-"  # hyphen collapse, not strip
 
 
 # =============================================================================

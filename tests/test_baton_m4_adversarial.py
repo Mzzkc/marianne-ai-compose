@@ -541,12 +541,16 @@ class TestCloneSanitizationAdversarial:
         assert _sanitize_name("") == ""
         assert _sanitize_name(None) == ""
 
-    def test_only_special_chars_produces_empty(self) -> None:
-        """A name made entirely of special characters sanitizes to empty."""
+    def test_only_special_chars_produces_hyphen(self) -> None:
+        """A name made entirely of special characters sanitizes to a single hyphen.
+
+        Hyphens are not stripped (preserves uniqueness between clone names).
+        The result is distinct from the default clone (empty string).
+        """
         from mozart.daemon.clone import _sanitize_name
 
         result = _sanitize_name("!@#$%^&*()")
-        assert result == ""
+        assert result == "-"
 
     def test_unicode_name_handled(self) -> None:
         """Unicode characters should be replaced, not crash."""

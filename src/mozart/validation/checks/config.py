@@ -520,12 +520,15 @@ class InstrumentNameCheck:
         issues: list[ValidationIssue] = []
 
         # 1. Top-level instrument: field
-        if config.instrument and config.instrument not in known:
+        # Must check against all_valid (profiles + score aliases), not just
+        # known (profiles only). A score can define instrument: my-alias and
+        # instruments: { my-alias: { profile: claude-code } } — that's valid.
+        if config.instrument and config.instrument not in all_valid:
             issues.append(self._make_issue(
                 config.instrument,
                 "score-level instrument",
                 find_line_in_yaml(raw_yaml, "instrument:"),
-                known,
+                all_valid,
             ))
 
         # 2. Per-sheet instruments
@@ -536,7 +539,7 @@ class InstrumentNameCheck:
                         instr_name,
                         f"sheet {sheet_num} instrument",
                         find_line_in_yaml(raw_yaml, f"{sheet_num}:"),
-                        known,
+                        all_valid,
                     ))
 
         # 3. Instrument map
@@ -547,7 +550,7 @@ class InstrumentNameCheck:
                         instr_name,
                         "instrument_map entry",
                         find_line_in_yaml(raw_yaml, f"{instr_name}:"),
-                        known,
+                        all_valid,
                     ))
 
         # 4. Movement-level instruments
@@ -558,7 +561,7 @@ class InstrumentNameCheck:
                         mov_def.instrument,
                         f"movement {mov_num} instrument",
                         find_line_in_yaml(raw_yaml, f"{mov_num}:"),
-                        known,
+                        all_valid,
                     ))
 
         return issues
