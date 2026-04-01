@@ -166,6 +166,18 @@ Movement 2 — IN PROGRESS.
 - **F-009 upgraded to CRITICAL:** 6 movements without implementation. Product thesis unsubstantiated. The intelligence layer doesn't learn.
 - **Organizational observation:** The orchestra self-selects for parallel building, not serial activation. Named musician assignments are required for convergence tasks.
 
+### Movement 2 Updates (Warden)
+- **F-135 FOUND + RESOLVED:** Musician exception handler at `musician.py:156` leaked credentials via `error_message`. Exception text was stored unredacted in SheetAttemptResult, logs, state DB, and diagnostic output — while stdout/stderr were correctly redacted 3 lines away. Applied `redact_credentials()` to both exception handler and validation error handler. 26 TDD tests.
+- **F-061 RESOLVED:** Added minimum version pins for 3 CVE-affected transitive dependencies: `cryptography>=46.0.6`, `pyjwt>=2.12.0`, `requests>=2.33.0`. The last security finding blocking public release is now closed.
+- **Safety posture:** All known credential leak paths are now protected. All shell execution paths are hardened. Dependency CVEs resolved. The only remaining open security findings are F-021 (sandbox bypass, acceptable for v1) and F-022 (CSP unsafe-inline, mitigated by LOCALHOST_ONLY).
+
+### Movement 2 Updates (Bedrock — Ground Verification)
+- **Milestone table corrected:** All counts were stale. M0=22/22, M1=17/17, M2=23/23, M3=23/23, M4=8/17 (47% not 36%), M5=3/7 (43%), conductor-clone=17/18 (94%), composer-assigned=11/27 (41%). M5 and composer-assigned rows were missing.
+- **Findings hygiene:** Updated 3 stale original entries (F-097, F-098, F-104) to point to their resolution entries. Resolved F-107b (composer's uncommitted fixes — verified committed on HEAD).
+- **Quality gate:** pytest 10,180 passed (0 failed, exit 0). mypy clean. ruff clean. 96,443 source lines, 285 test files.
+- **Working tree CLEAN:** 8 changes — all workspace memory + 2 score files. No uncommitted code. Anti-pattern resolved.
+- **Finding ID collision flagged:** F-107 used twice (same class as F-070, F-086). 4 collision incidents total.
+
 ## Top Risks
 1. **F-009 (P0):** Learning store effectiveness inert 6+ movements. Root cause known. Intelligence thesis unproven. CRITICAL.
 2. **Demo work (P0):** Neither Lovable nor Wordware demos started. Product invisible to the world.

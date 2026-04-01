@@ -981,7 +981,7 @@ Each finding should include:
 ### F-097: Stale Detection Kills Agents, Reported as Generic "timeout" — Not E001
 - **Found by:** Composer investigation
 - **Severity:** P0 (critical — caused job failure, misdiagnosed as backend timeout)
-- **Status:** open
+- **Status:** Partially resolved (E006 error code added by Blueprint; timeout value + error display still open) — see updated entry below
 - **Description:** The v3 job (mozart-orchestra-v3) failed at sheet 95 after running for ~42 hours. Sheets 66 (journey, M2) and 95 (forge, M3) were killed by stale detection at 30 minutes despite `backend.timeout_seconds: 10800` (3 hours). The stale detection `idle_timeout_seconds: 1800` fires when no stdout is produced for 30 minutes. For code-heavy work (running tests, reading large codebases, complex reasoning), agents routinely go silent for >30 minutes.
 - **Root cause:** `_idle_watchdog()` at `src/mozart/execution/runner/sheet.py:290-320` cancels the execution task after `idle_timeout_seconds` of no progress callbacks. The resulting `_StaleExecutionError` is converted to `ExecutionResult(exit_reason="timeout", error_type="stale")` at `sheet.py:367-377`. The error classifier at `classifier.py:338` maps `exit_reason="timeout"` to `ErrorCode.EXECUTION_TIMEOUT` (E001), but the error display shows `Code: timeout` rather than `E001` — the error code string is not being surfaced properly in the status/errors commands.
 - **Impact:** (1) Agents killed prematurely. (2) Error displayed as `Code: timeout` instead of `E001`, making diagnosis harder. (3) Stale detection is indistinguishable from backend timeout in error output.
@@ -991,7 +991,7 @@ Each finding should include:
 ### F-098: Rate Limit Errors Classified as E999 (Permanent) — Should Be E101/E102
 - **Found by:** Composer investigation
 - **Severity:** P1 (high — agents retried 16-28 times without rate limit wait logic)
-- **Status:** open
+- **Status:** Resolved (movement 4, Blueprint — Phase 4.5 rate limit override) — see updated entry below
 - **Description:** Sheets 11 (spark, M1), 13 (lens, M1), 20 (litmus, M1), 55 (spark, M2), 57 (lens, M2), 72 (adversary, M2) all failed with rate limit messages ("API Error: Rate limit reached", "You've hit your limit · resets 11pm") but were classified as `E999` (permanent/unknown) instead of `E101` or `E102` (rate limit). This means the rate limit wait/backoff logic never engaged — instead, sheets retried immediately up to 28 times, wasting execution budget.
 - **Root cause:** The Claude CLI error output for rate limits ("API Error: Rate limit reached" and "You've hit your limit · resets ...") is being captured in stdout but not matched by the error classifier's rate limit patterns. The classifier likely checks stderr or specific exit codes. When the CLI hits a rate limit, it may exit with code 0 or a non-standard code, causing the classifier to fall through to E999.
 - **Impact:** (1) Up to 28 wasted retries per sheet (litmus had 16, adversary had 17, spark M2 had 28). (2) No rate limit backoff — retries hit rate limit again immediately. (3) Multiple agents hitting rate limits simultaneously amplify the problem.
@@ -1043,7 +1043,7 @@ Each finding should include:
 ### F-104: Baton Musician Does Not Render Jinja2 Prompts
 - **Found by:** Composer investigation (live testing)
 - **Severity:** P0 (critical — blocks all baton-path execution for scores with template_file or Jinja2)
-- **Status:** open (baton disabled, blocks multi-instrument execution)
+- **Status:** Resolved (movement 1 current cycle, Forge — commit 3deb436) — see updated entry below
 - **Description:** The baton's `sheet_task()` at `daemon/baton/musician.py:171` uses `sheet.prompt_template or ""` directly. For scores that use `template_file` (like v3), `prompt_template` is None — the template is a file path, not inline text. Even for inline templates, no Jinja2 rendering occurs — variables, injections, cross-sheet context, prelude/cadenza are all ignored. The code comment at line 165 acknowledges this: "Full Jinja2 rendering with cross-sheet context will be added when the baton wires into the conductor."
 - **Impact:** The baton path cannot run any score that uses Jinja2 templates (which is most scores). This blocks the entire multi-instrument strategy since `instrument_map` / `per_sheet_instruments` only work through the baton.
 - **Fix:** Wire the prompt rendering pipeline (`PromptBuilder.build_sheet_prompt()` from the old runner) into the musician's `_build_prompt()`. This needs: template loading, Jinja2 rendering, injection resolution, cross-sheet context, and preamble assembly. Until then, `use_baton: false`.
@@ -1110,7 +1110,8 @@ Each finding should include:
 - **Error class:** Same as F-013, F-019, F-057, F-080, F-089. Sixth occurrence across 3 movements. The pattern is now structural, not disciplinary — even the composer follows it. The score architecture should enforce commit checkpoints.
 - **Impact:** 19 lines of P0 baton fixes exist only in the working tree. A `git clean` or accidental checkout would lose the F-103 fixes, requiring re-diagnosis. The F-088 cleanup (3 scores deleted) would need re-doing.
 - **Action:** Commit the composer's working tree changes. Consider adding a commit checkpoint to the score after every N sheets or at movement boundaries.
-- **Status:** open
+- **Status:** Resolved (movement 2 — fixes committed across b4146a7, 0ec7c7c, and 3deb436. BackendPool wiring verified at manager.py:303-318.)
+- **Note (Bedrock M2):** This finding shares ID with F-107 (Instrument Verification, line 1073). Finding ID collision — same class as F-070, F-086.
 
 ### F-108: GitHub Issue #152 May Be Resolved by F-093
 - **Movement:** 3 (discovered during post-M3 verification)
@@ -1455,3 +1456,23 @@ Each finding should include:
 - **Resolution:** Fixed `max_cost_usd` → `max_cost_per_job` in `_run_via_baton()`. Both baton paths (`_run_via_baton` and `_resume_via_baton`) now use the correct field.
 - **Description:** `manager.py:_run_via_baton()` at line 1665 accesses `config.cost_limits.max_cost_usd`, but `CostLimitConfig` has no such field. The actual field is `max_cost_per_job` (see `execution.py:190`). This doesn't crash because `use_baton` is currently disabled in production, so `_run_via_baton` is never called. When `use_baton` is enabled, cost limits will silently fail — `max_cost` will always be `None`, meaning the baton will never enforce per-job cost limits even when configured.
 - **Impact:** When `use_baton: true` is enabled, per-job cost limits will not be enforced. The baton will run uncapped even when the score specifies `cost_limits.max_cost_per_job`.
+
+---
+
+## New Findings (Movement 2 — Warden)
+
+### F-135: Musician Exception Handler Leaks Credentials via error_message
+- **Found by:** Warden, Movement 2
+- **Severity:** P1 (high — credentials propagate to 6+ storage locations)
+- **Status:** Resolved (movement 2, Warden)
+- **Description:** `src/mozart/daemon/baton/musician.py:156` constructed `error_msg = f"{type(exc).__name__}: {exc}"` from caught exceptions WITHOUT calling `redact_credentials()`. This error_msg was: (1) logged at ERROR level with `exc_info=True`, (2) stored in `SheetAttemptResult.error_message` (persists to state DB), (3) visible in `mozart diagnose` and `mozart errors` output, (4) indexed by the learning store for pattern matching. Meanwhile, the same function DID redact `stdout_tail` and `stderr_tail` at line 573. The gap: output was sanitized, but exception messages were not.
+- **Impact:** If a backend raised an exception containing an API key (e.g., `ConnectionError: Auth failed with key sk-ant-api03-...`), the credential would persist in logs, state DB, dashboard, diagnostic output, and learning store. The musician's `_capture_output()` correctly redacted credentials from stdout/stderr, but the exception handler's `error_msg` bypassed this protection entirely.
+- **Error class:** Same pattern as F-003/F-020 — safety applied to one data path but not an adjacent parallel path. The credential scanner existed, the import existed, but the call was missing at this specific location.
+- **Resolution:** Applied `redact_credentials()` to `error_msg` at musician.py:156 (exception handler) and to validation error text at musician.py:552 (validation engine exception). Both paths now sanitize exception messages before logging and storing. 26 TDD tests in `tests/test_musician_error_redaction.py` across 3 test classes: unit tests proving each credential type is redacted, integration tests exercising the actual `sheet_task()` function with credential-leaking mock backends, and adversarial edge cases (multi-pattern, unicode, JSON-embedded, traceback-embedded).
+
+### F-061: 3 Critical Dependency CVEs — RESOLVED
+- **Found by:** Sentinel, Movement 2 (original). Warden, Movement 2 (fix).
+- **Severity:** P1 (high — known vulnerabilities in auth/crypto paths)
+- **Status:** Resolved (movement 2, Warden)
+- **Description:** F-061 identified 3 security-critical dependencies with known CVEs: `cryptography` 46.0.5 (CVE-2026-34073), `pyjwt` 2.11.0 (CVE-2026-32597), `requests` 2.32.5 (CVE-2026-25645). These are transitive dependencies used by the dashboard auth system and webhook notifications.
+- **Resolution:** Added minimum version pins to `pyproject.toml` dependencies: `cryptography>=46.0.6`, `pyjwt>=2.12.0`, `requests>=2.33.0`. Verified install succeeds with upgraded versions (cryptography 46.0.6, PyJWT 2.12.1, requests 2.33.1). All quality gates pass. F-061 no longer blocks public release.
