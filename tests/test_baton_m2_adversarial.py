@@ -809,7 +809,9 @@ class TestConcurrentEventRaces:
     @pytest.mark.asyncio
     async def test_pause_during_cost_limit_pause(self) -> None:
         """User pauses during a cost-limit pause.
-        Resume should require user action, not just cost clearing."""
+        Resume clears user_paused, but cost enforcement re-pauses (F-140).
+        Cost limits are a safety mechanism — resume should not bypass them.
+        Consistent with F-067: escalation unpause also re-checks cost."""
         baton = BatonCore()
         sheets = _make_sheets(2)
         baton.register_job("j1", sheets, {})
@@ -824,10 +826,14 @@ class TestConcurrentEventRaces:
         # User also explicitly pauses
         await baton.handle_event(PauseJob(job_id="j1"))
 
-        # The job should be paused with user_paused=True
-        # A resume should clear BOTH pause reasons
+        # Resume clears user_paused, but cost enforcement re-pauses.
+        # F-140: User must increase cost limit to proceed, not just resume.
         await baton.handle_event(ResumeJob(job_id="j1"))
-        assert not baton.is_job_paused("j1")
+        job = baton._jobs["j1"]
+        assert job.user_paused is False, "User pause should be cleared"
+        assert baton.is_job_paused("j1"), (
+            "Cost enforcement should re-pause (F-140, same class as F-067)"
+        )
 
     @pytest.mark.asyncio
     async def test_skip_after_retry_scheduled(self) -> None:

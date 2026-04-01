@@ -1068,11 +1068,20 @@ class BatonCore:
             self._state_dirty = True
 
     def _handle_resume_job(self, event: ResumeJob) -> None:
-        """Resume dispatching for a paused job (user-initiated)."""
+        """Resume dispatching for a paused job (user-initiated).
+
+        After clearing the user pause, re-checks cost limits (F-140).
+        Without this, a cost-paused job would resume and dispatch sheets
+        before the next attempt result triggers a cost re-check. This is
+        the same pattern as F-067 (escalation unpause overrides cost pause).
+        """
         job = self._jobs.get(event.job_id)
         if job is not None:
             job.paused = False
             job.user_paused = False
+            # F-140: Re-check cost limits — may re-pause if cost exceeded.
+            # Without this, one dispatch cycle can bypass cost enforcement.
+            self._check_job_cost_limit(event.job_id)
             self._state_dirty = True
 
     def _handle_cancel_job(self, event: CancelJob) -> None:
