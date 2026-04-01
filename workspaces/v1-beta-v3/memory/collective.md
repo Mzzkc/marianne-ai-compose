@@ -53,15 +53,17 @@ Movement 2 — IN PROGRESS.
 
 - **F-134 FOUND + RESOLVED** (Foundation M2): `_run_via_baton()` used non-existent `config.cost_limits.max_cost_usd` — should be `max_cost_per_job`. Latent bug that would silently disable cost limits when `use_baton` is enabled. Fixed in both `_run_via_baton()` and `_resume_via_baton()`.
 
-### Milestone Table
+### Milestone Table (Verified by Bedrock, Movement 2)
 | Milestone | Status | Detail |
 |-----------|--------|--------|
-| M0 Stabilization | COMPLETE | 18/18 tasks |
-| M1 Foundation | COMPLETE | 13/13 tasks |
-| M2 Baton | **COMPLETE** | All steps 17-29 done. Step 29 committed by Maverick (mateship). |
-| M3 UX & Polish | COMPLETE | 19/19 tasks |
-| M4 Multi-Instrument | 36% | Data models done (steps 38-41). Demo, docs, remaining features open. |
-| --conductor-clone | 96% | Fully wired (Spark+Ghost+Harper+Maverick). F-132 state DB isolation FIXED. Remaining: pytest conversion. |
+| M0 Stabilization | COMPLETE | 22/22 tasks |
+| M1 Foundation | COMPLETE | 17/17 tasks |
+| M2 Baton | **COMPLETE** | 23/23 tasks. All steps 17-29 done. |
+| M3 UX & Polish | COMPLETE | 23/23 tasks |
+| M4 Multi-Instrument | 47% | 8/17 tasks. Data models + validation + docs done. Demo, skill update, examples audit open. |
+| M5 Hardening | 43% | 3/7 tasks. Workspace paths + injection + credential env done. Config, fan-out, resume open. |
+| --conductor-clone | 94% | 17/18 tasks. Fully wired. Remaining: pytest conversion. |
+| Composer-Assigned | 41% | 11/27 tasks. Timeout/rate-limit/baton fixes done. Backpressure UX, gemini assignment open. |
 
 ### Movement 2 Updates (Harper)
 - **F-122 RESOLVED** (Harper bd72395): All 5 DaemonClient callsites that bypassed --conductor-clone now use `_resolve_socket_path(None)`. Hooks (concert chaining), MCP tools, dashboard routes, job_control, and app factory. 14 TDD tests. Zero hardcoded socket bypasses remain in codebase.
@@ -132,6 +134,10 @@ Movement 2 — IN PROGRESS.
 - **Mateship pickup** (44b7f99): Committed 6 TDD tests for top.py error standardization (Spark d242046's implementation, test file left untracked).
 - **Error standardization CONFIRMED COMPLETE**: M3 step 35 fully done — zero raw console.print error calls remain. All remaining [red] usage is data coloring, not error output.
 
+### Movement 2 Updates (Lens)
+- **Hintless output_error() sweep** (089cc0c): Added hints to 5 output_error() calls that lacked constructive guidance. resume.py (3 paths: config load, config reload, fatal error), diagnose.py (2 paths: log read, log follow). 3 TDD tests in test_resume_error_hints.py. Core workflow error messages now all have actionable next steps.
+- **Prior work committed via mateship**: F-065b, F-067b, hint=/hints= fix, validation variables, top.py error standardization — all picked up by Spark (3269eb2) and Dash (44b7f99) before this session. 10th occurrence of the uncommitted work pattern.
+
 ## Coordination Notes (Active)
 - **CRITICAL PATH (UPDATED):** ~~Step 29~~ DONE → ~~F-111/F-113~~ DONE → Enable use_baton (--conductor-clone testing) → F-112 (auto-resume) → Demo.
 - **D-005 ROOT CAUSE (Oracle):** F-009 is feedback loop disconnection — 91% of patterns never applied due to narrow context tag matching. STILL UNIMPLEMENTED after 5+ movements.
@@ -141,11 +147,31 @@ Movement 2 — IN PROGRESS.
 - **GitHub issues closed (Ghost M2):** #95 (workspace path), #112 (health check quota), #99 (hooks restart). All verified.
 - **M5 Hardening verified (Ghost M2):** Steps 45 + 46 complete. All 4 shell execution paths hardened.
 
+### Movement 2 Updates (Oracle)
+- **Codebase metrics:** 96,435 source lines (+0.8%), 10,159 tests (+1.1%), 101 models. Lowest growth movement = hardening phase.
+- **Baton:** 5,265 lines (+4.5%), 969 tests (+21.9%). Step 29 committed. Highest test growth area.
+- **Learning store (F-009):** 28,772 patterns, 88.6% never applied, validated tier grew 40% (130→182). Instrument tags: 3 of 28,772. STILL UNIMPLEMENTED.
+- **V3 orchestra:** 58/706 complete (8.2%). M0+M1 done. M2 work started — 4 of 32 sheets dispatched.
+- **Rate limit surge (F-099):** M2 setup sheets 55-58 required 6-18 retries. 51 unnecessary API calls. Same pattern as M1.
+- **F-127 confirmed in production:** All 58 sheets show success_first_try despite 23 requiring 2-29 attempts.
+- **p99 duration:** 30.5 minutes (n=27,910) — exactly at stale detection ceiling. Confirmed across all executions.
+- **Flowspec:** 16,833 entities, 2,010 warnings, 0 critical. Warning-to-entity ratio improved to 11.9%.
+- **Quality gates:** mypy clean, ruff clean, flowspec clean.
+- **Uncommitted work:** 8 files — all workspace memory. No code. Anti-pattern resolving.
+- **Predictive model:** 3-4 movements to demo-ready. 42-55 wall-clock hours to M3 completion.
+
+### Movement 2 Updates (Atlas — Strategic Assessment)
+- **STATUS.md updated** to reflect: baton COMPLETE, conductor-clone COMPLETE, 10,100+ tests, 96,435 source lines. Critical blockers updated.
+- **Strategic assessment:** The baton is the most verified untested system in the project — 1,000+ tests, 4 independent methodologies, never run a real sheet. The critical path is now activation only: enable use_baton → test → fix → demo.
+- **F-009 upgraded to CRITICAL:** 6 movements without implementation. Product thesis unsubstantiated. The intelligence layer doesn't learn.
+- **Organizational observation:** The orchestra self-selects for parallel building, not serial activation. Named musician assignments are required for convergence tasks.
+
 ## Top Risks
-1. **F-009 (P1→P0):** Learning store effectiveness inert 5+ movements. Root cause known. Intelligence thesis unproven.
+1. **F-009 (P0):** Learning store effectiveness inert 6+ movements. Root cause known. Intelligence thesis unproven. CRITICAL.
 2. **Demo work (P0):** Neither Lovable nor Wordware demos started. Product invisible to the world.
 3. ~~**F-111 (P0):**~~ RESOLVED. ~~**F-113 (P0):**~~ RESOLVED.
-4. **F-112 (P1):** Auto-resume after rate limit PAUSE not yet implemented. Jobs pause correctly but need manual resume.
+4. **Baton activation (HIGH):** All code complete. Never run a real sheet. Needs --conductor-clone testing.
+5. **F-112 (P1):** Auto-resume after rate limit PAUSE not yet implemented. Jobs pause correctly but need manual resume.
 5. **Enable use_baton:** Step 29 resolved, F-111/F-113 resolved, but use_baton not yet activated. Needs --conductor-clone testing.
 
 ## Blockers
