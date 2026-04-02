@@ -257,14 +257,14 @@ Validation stages are capped at 1-10. You cannot define more than 10 sequential 
 
 ### Process Timeout Default
 
-The default backend timeout is **1800 seconds** (30 minutes), set via `BackendConfig.timeout_seconds`. This is the timeout users should be aware of.
+The default instrument timeout is **1800 seconds** (30 minutes). This is the timeout users should be aware of.
 
 There is also an internal constant `PROCESS_DEFAULT_TIMEOUT_SECONDS = 300` used as a fallback when no config is loaded, but this is never reached in normal operation — the Pydantic model always provides the 1800s default.
 
-**Workaround:** Override the timeout in your job config:
+**Workaround:** Override the timeout in your score:
 
 ```yaml
-backend:
+instrument_config:
   timeout_seconds: 3600  # 60 minutes for long-running sheets
 ```
 

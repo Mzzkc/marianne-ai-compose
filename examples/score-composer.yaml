@@ -42,7 +42,7 @@ sheet:
   prelude:
     - file: "{{ doc }}"
       as: context
-    - file: "skills/mozart-score-authoring.md"
+    - file: "../plugins/mozart/skills/score-authoring/SKILL.md"
       as: skill
   dependencies:
     2: [1]
@@ -75,8 +75,8 @@ prompt:
     # This becomes the workspace for the GENERATED score.
     target_workspace: "../workspaces/libretto-impl-workspace"
 
-    # What backend should the generated score use?
-    target_backend: "claude_cli"
+    # What instrument should the generated score use?
+    target_instrument: "claude-code"
 
     # How aggressive should decomposition be?
     # "fine" = many small sheets (2-5 min each, TDD-strict)
@@ -218,7 +218,7 @@ prompt:
 
     **Name:** {{ output_score }}
     **Workspace:** {{ target_workspace }}
-    **Backend:** {{ target_backend }}
+    **Instrument:** {{ target_instrument }}
 
     **Sheet mapping:**
     - Each task → one sheet (for coarse granularity)
@@ -274,7 +274,7 @@ prompt:
     ### 1. Syntax Validation
     Check the generated score against Mozart's requirements:
     - Valid YAML (no syntax errors)
-    - All required fields present (name, workspace, backend, sheet, prompt)
+    - All required fields present (name, workspace, instrument, sheet, prompt)
     - `sheet.total_items` matches stage count
     - `fan_out` keys reference valid stages
     - `dependencies` reference valid stages and don't create cycles
