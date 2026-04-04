@@ -21,7 +21,7 @@
 - All 4 shell execution paths unchanged and protected. Zero new shell execution paths in M4.
 - F-250 verified: `redact_credentials()` correctly applied to capture_files on both legacy runner (context.py:296) and baton adapter (adapter.py:780) BEFORE truncation.
 - F-251 verified: Baton now injects `[SKIPPED]` placeholder for skipped upstream sheets, matching legacy runner parity from #120.
-- F-137 (pygments CVE) STILL OPEN — 2.19.2 installed, 2.20.0 needed. Recommended fix this movement (trivial, single line).
+- F-137 (pygments CVE) RESOLVED — Added `pygments>=2.20.0` to pyproject.toml. Upgraded 2.19.2→2.20.0. Public release hygiene complete.
 - New M4 features reviewed: pending jobs (F-110), auto-fresh detection (#103), MethodNotFoundError (F-450), cost accuracy (D-024), pause-during-retry (#93), fan-in skipped (#120). All architecturally safe.
 - Subprocess audit: All M4 subprocess spawning uses `asyncio.create_subprocess_exec`. Zero shell injection risks.
 - Error message audit: MethodNotFoundError message includes method name (safe — IPC method, not user data). No internal state leakage.
