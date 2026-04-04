@@ -1208,6 +1208,8 @@ Available but rarely need changing:
 | `max_job_history` | `int` | `1000` | `>= 10` | Completed/failed/cancelled jobs to keep in memory |
 | `observer` | `ObserverConfig` | *(see sub-config)* | | Observer and event bus configuration |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
+| `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |
+| `use_baton` | `bool` | `false` | | Enable the baton execution engine. When `true`, job execution uses event-driven per-sheet dispatch instead of the monolithic runner. Test with `--conductor-clone` first. |
 | `config_file` | `Path \| None` | `None` | | Path to the YAML config file. Set automatically on startup; used by SIGHUP reload to re-read config from disk. |
 
 ### Daemon Operational Profiles
@@ -1278,4 +1280,22 @@ learning:
     timeout_seconds: 120
   analyze_on: [success, failure]
   max_concurrent_analyses: 3
+```
+
+### Preflight Sub-Config
+
+*Source: `src/mozart/core/config/execution.py` — `PreflightConfig`*
+
+Controls token count thresholds for pre-flight prompt analysis before sheet execution. Different instruments have different context windows — a 150K threshold that's correct for a 200K-context model is wrong for a 1M-context model. Set thresholds appropriate for the instruments in use.
+
+| Field | Type | Default | Constraints | Description |
+|-------|------|---------|-------------|-------------|
+| `token_warning_threshold` | `int` | `50000` | `>= 0` | Token count above which to warn during preflight. Set higher for large-context instruments. `0` to disable. |
+| `token_error_threshold` | `int` | `150000` | `>= 0` | Token count above which to error during preflight. `0` to disable. Warning threshold must be less than error threshold when both are set. |
+
+```yaml
+# Conductor config for large-context instruments (1M+ context)
+preflight:
+  token_warning_threshold: 200000
+  token_error_threshold: 800000
 ```

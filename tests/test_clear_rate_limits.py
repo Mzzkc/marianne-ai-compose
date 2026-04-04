@@ -113,6 +113,7 @@ class TestManagerClearRateLimits:
         mgr = MagicMock()
         mgr.rate_coordinator = coord
         mgr._baton_adapter = None
+        mgr._start_pending_jobs = AsyncMock()
 
         from mozart.daemon.manager import JobManager
 
@@ -138,6 +139,7 @@ class TestManagerClearRateLimits:
         mgr = MagicMock()
         mgr.rate_coordinator = coord
         mgr._baton_adapter = baton_adapter
+        mgr._start_pending_jobs = AsyncMock()
 
         from mozart.daemon.manager import JobManager
 
@@ -161,6 +163,7 @@ class TestManagerClearRateLimits:
         mgr = MagicMock()
         mgr.rate_coordinator = coord
         mgr._baton_adapter = None
+        mgr._start_pending_jobs = AsyncMock()
 
         from mozart.daemon.manager import JobManager
 

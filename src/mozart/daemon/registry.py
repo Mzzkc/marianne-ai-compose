@@ -45,6 +45,7 @@ class DaemonJobStatus(str, Enum):
     PAUSED = "paused"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    PENDING = "pending"
 
 
 @dataclass

@@ -157,6 +157,7 @@ class TestManagerClearRateLimitsAdversarial:
         mgr = MagicMock()
         mgr.rate_coordinator = coord
         mgr._baton_adapter = baton_adapter
+        mgr._start_pending_jobs = AsyncMock()
 
         # This should NOT propagate the baton exception
         # ... but it DOES currently. Let's verify what happens.
@@ -183,6 +184,7 @@ class TestManagerClearRateLimitsAdversarial:
         mgr = MagicMock()
         mgr.rate_coordinator = coord
         mgr._baton_adapter = baton_adapter
+        mgr._start_pending_jobs = AsyncMock()
 
         result = await JobManager.clear_rate_limits.__get__(mgr, JobManager)(
             instrument=None,
@@ -206,6 +208,7 @@ class TestManagerClearRateLimitsAdversarial:
         mgr = MagicMock()
         mgr.rate_coordinator = coord
         mgr._baton_adapter = baton_adapter
+        mgr._start_pending_jobs = AsyncMock()
 
         result = await JobManager.clear_rate_limits.__get__(mgr, JobManager)(
             instrument="claude-cli",
@@ -752,6 +755,7 @@ class TestDualPathClearConsistency:
         mgr = MagicMock()
         mgr.rate_coordinator = coord
         mgr._baton_adapter = baton_adapter
+        mgr._start_pending_jobs = AsyncMock()
 
         result = await JobManager.clear_rate_limits.__get__(mgr, JobManager)(
             instrument="claude-cli",
@@ -774,6 +778,7 @@ class TestDualPathClearConsistency:
         mgr = MagicMock()
         mgr.rate_coordinator = coord
         mgr._baton_adapter = baton_adapter
+        mgr._start_pending_jobs = AsyncMock()
 
         result = await JobManager.clear_rate_limits.__get__(mgr, JobManager)(
             instrument="claude-cli",
@@ -795,6 +800,7 @@ class TestDualPathClearConsistency:
         mgr = MagicMock()
         mgr.rate_coordinator = coord
         mgr._baton_adapter = baton_adapter
+        mgr._start_pending_jobs = AsyncMock()
 
         result = await JobManager.clear_rate_limits.__get__(mgr, JobManager)(
             instrument="claude-cli",
