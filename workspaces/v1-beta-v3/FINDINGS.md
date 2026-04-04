@@ -2034,3 +2034,23 @@ Each finding should include:
 - **Description:** p99 execution duration has been 30.2-30.5 minutes across M2, M3, and M4 (n=28,976 completed executions with duration > 0). This exactly matches `idle_timeout_seconds: 1800` stale detection threshold. The composer's F-097 directive to increase timeout from 1800 to 7200 remains unimplemented. Verified via percentile query on global-learning.db executions table.
 - **Impact:** Top 1% of executions are killed by stale detection regardless of actual progress. For the v3 orchestra's 706 sheets, ~7 sheets per movement are potentially killed mid-work.
 - **Action:** Implement the two unclaimed TASKS.md items: increase idle_timeout_seconds in generate-v3.py and regenerate the v3 score. This is a 10-minute config change that has been open since M1.
+
+### F-250: Cross-Sheet capture_files Content Not Credential-Redacted
+- **Found by:** Warden, Movement 4
+- **Severity:** P2 (medium — same class as F-003, F-135)
+- **Status:** Resolved (movement 4, Warden)
+- **Category:** credential-exposure
+- **Error Class:** Piecemeal credential redaction — safety applied to one data path but not adjacent parallel paths
+- **Description:** `capture_files` content in cross-sheet context was read from workspace files and injected into prompts without credential scanning. Both the legacy runner path (`context.py:_capture_cross_sheet_files`) and the baton adapter path (`adapter.py:_collect_cross_sheet_context`) read raw file content and stored it in `previous_files`. If an agent wrote a file containing an API key (e.g., `.env`, config file), and that file matched a `capture_files` glob pattern, the credential would flow to the next sheet's prompt. Stdout paths (`previous_outputs`) were already safe — credentials are redacted at capture time by both the musician (`musician.py:584`) and `CheckpointState.capture_output()` (`checkpoint.py:567`).
+- **Impact:** Credential exposure through the prompt pipeline when agents write files containing API keys. The credential would be sent to the backend in the next sheet's prompt. Low probability (requires agent to write credentials AND file to match capture pattern), but high severity when triggered.
+- **Resolution:** Added `redact_credentials()` call before truncation on both paths. Legacy runner at `context.py:295` (imported at module level). Baton adapter at `adapter.py:772` (lazy import inside the loop, matching existing import pattern). 8 TDD tests in `test_cross_sheet_safety.py` covering Anthropic, OpenAI, GitHub, AWS, and Bearer token patterns on both paths, plus truncation-after-redaction ordering.
+
+### F-251: Baton Cross-Sheet Context Missing [SKIPPED] Placeholder
+- **Found by:** Warden, Movement 4
+- **Severity:** P2 (medium — baton/legacy parity gap)
+- **Status:** Resolved (movement 4, Warden)
+- **Category:** data-integrity
+- **Error Class:** Baton/legacy-runner behavioral divergence
+- **Description:** The baton's `_collect_cross_sheet_context()` silently excluded skipped upstream sheets from `previous_outputs`, while the legacy runner's `_populate_cross_sheet_context()` correctly injected `[SKIPPED]` placeholders (fix from #120, Maverick M4). Fan-in prompts on the baton path received silent data gaps instead of explicit skip markers.
+- **Impact:** Fan-in templates using `{{ previous_outputs }}` on the baton path would see gaps without explanation. Matters once the baton becomes the default execution path (Phase 2 transition).
+- **Resolution:** Added `BatonSheetStatus.SKIPPED` check before the `COMPLETED` filter in `_collect_cross_sheet_context()` at `adapter.py:730`. Skipped sheets now inject `"[SKIPPED]"` into `previous_outputs`. Updated existing test assertion. 4 TDD tests in `test_cross_sheet_safety.py`.

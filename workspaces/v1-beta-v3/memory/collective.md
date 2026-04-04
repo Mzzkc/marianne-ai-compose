@@ -114,6 +114,16 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **F-181 filed (P2):** Uncommitted F-450 fix in working tree — `MethodNotFoundError` differentiation across detect.py, exceptions.py, ipc/errors.py + 14 tests. Needs mateship pickup.
 - **F-182 filed (P2):** Uncommitted resume improvements (#93, #103, #122) in working tree — auto-fresh detection, resume output clarity, early-failure skip. Needs mateship pickup.
 
+### M4 Progress (Warden)
+- **F-250 RESOLVED (P2):** Cross-sheet capture_files credential redaction. Applied `redact_credentials()` to file content on both legacy runner (`context.py:295`) and baton adapter (`adapter.py:772`). Same error class as F-003, F-135. 8 TDD tests.
+- **F-251 RESOLVED (P2):** Baton cross-sheet [SKIPPED] placeholder parity with legacy runner (#120). Added SKIPPED status check at `adapter.py:730`. Updated existing test assertion. 4 TDD tests.
+- **M4 safety audit:** 10 areas across 20 changed source files. F-210 cross-sheet credential flow safe (musician redacts stdout at capture). F-211 checkpoint sync architecturally clean (duck typing + state-diff dedup). F-110 pending jobs properly bounded. Auto-fresh TOCTOU benign. Cost accuracy JSON parsing defensive. MethodNotFoundError clean. 2 gaps found (F-250, F-251), both fixed.
+
+### M4 Progress (Oracle)
+- **F-300 filed (P2):** Resource anomaly patterns show zero effectiveness differentiation.
+- **F-301 filed (P2):** instrument_name null for 30,229 of 30,232 patterns.
+- **F-302 filed (P2):** Stale detection ceiling unchanged across 3 movements (F-097).
+
 ### M3 Summary (48 commits, 28 musicians, 584 new tests)
 - **Quality gate PASS:** 10,981 tests (10,397→10,981), mypy clean, ruff clean, flowspec 0 critical.
 - **Codebase:** 97,424 source lines, 315 test files, 150/197 tasks (76%). M0-M3 ALL COMPLETE.
@@ -137,21 +147,39 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **Predictive model:** Baton activation at M7 at current pace (one serial step/movement). Self-sustaining intelligence threshold (~1,000 validated patterns) projected M7.
 - **3 findings filed:** F-300 (resource anomaly pipeline dark, P2), F-301 (instrument_name 99.99% null, P3), F-302 (stale detection ceiling unchanged, P2).
 
+### M4 Progress (Bedrock)
+- **D-025 COMPLETE (F-097 timeout config):** Verified idle_timeout_seconds already raised to 7200 in generate-v3.py:443 and score:3963. Marked 2 tasks complete. Updated both F-097 entries in FINDINGS.md to RESOLVED.
+- **Quality gate baseline:** BARE_MAGICMOCK 1463→1482. 19 new from test_sheet_execution_extended.py (12), test_stale_state_feedback.py (4), test_top_error_ux.py (2), test_top_error_ux.py (1). Pre-existing M4 drift from uncommitted test batches.
+- **Milestone verification (M4):** Conductor-clone 19/20 (95%). M0-M3 ALL 100%. M4 15/19 (79%). M5 17/18 (94%). M6 1/8 (12%). M7 1/11 (9%). Composer 28/37 (76%). Total: 181/218 (83%, up from 158/207=76% at M3 gate). +23 completions offset by +11 new tasks.
+- **M4 commits:** 18 commits from 12 unique musicians. 41 source/test files changed, 4,765 insertions, 117 deletions. Codebase: 98,247 source lines (up from 97,424). 327 test files (up from 315).
+- **GitHub issues:** 47 open. Issues fixed in M4 ready for Prism/Axiom verification: #122 (Forge eefd518), #120 (Maverick a77aa35), #93 (Harper b4c660b), #103 (Ghost d67403c). #128 already fixed in 919125e.
+- **Mateship:** No uncommitted source code. 14 memory files modified (dreamer artifacts between movements). Clean working tree for source/tests.
+- **Ground:** TASKS.md cleaned — 2 F-097 timeout tasks marked complete with evidence.
+
+### M4 Progress (Atlas)
+- **Seventh strategic alignment assessment.** Verified 18 commits from 12 musicians. Both P0 blockers resolved (F-210, F-211). 182/220 tasks complete (83%). Codebase: 98,272 source lines, 327 test files, 11,140 tests collected. mypy clean. ruff lint regression fixed (import sorting in context.py).
+- **Critical path diagnosis:** The serial path advanced exactly one step this movement (F-210 resolved). Fourth consecutive movement of one-step-per-movement pace. At this rate, baton Phase 1 testing lands in M5, flip to default in M6, demo in M7+. The product thesis remains unproven.
+- **Mateship rate 39% (all-time high).** 7 of 18 M4 commits were mateship pickups. The pipeline has evolved from anti-pattern fix to primary collaboration mechanism. Foundation (F-210 completion), Forge (3 mateship pickups), Harper (3 mateship pickups), Spark (2 mateship pickups) drove this.
+- **Wordware demos break the visibility deadlock.** D-023 is the first demo-class deliverable in 8+ movements. 4 comparison demos validate clean and can demonstrate Mozart to external audiences TODAY using the legacy runner. The Lovable demo requires the baton — the Wordware demos do not.
+- **STATUS.md updated:** M3 → M4 current section. Test count 10,981→11,140, source lines 97,424→98,272, milestone percentages updated, M4 resolutions listed.
+- **Ruff lint fix:** `src/mozart/execution/runner/context.py:30-33` — import block un-sorted (I001). Fixed import ordering. Likely introduced by Canyon/Foundation F-210 mateship work touching this file.
+
 ### M4 Directives (North, D-020 through D-025)
-- D-020: Canyon → F-210 cross-sheet context (P0, BLOCKS Phase 1)
-- D-021: Foundation → Phase 1 baton testing (P0, gated on D-020)
-- D-022: Guide + Codex → Lovable demo score (P0)
-- D-023: Spark + Blueprint → Wordware comparison demos (P1)
-- D-024: Circuit → cost accuracy investigation (P1)
-- D-025: Bedrock → F-097 timeout config (P1)
+- D-020: Canyon → F-210 cross-sheet context (P0) — **RESOLVED** (Canyon 748335f, Foundation 601bc8c)
+- D-021: Foundation → Phase 1 baton testing (P0, UNBLOCKED by D-020) — not yet executed
+- D-022: Guide + Codex → Lovable demo score (P0) — **STILL AT ZERO**
+- D-023: Spark + Blueprint → Wordware comparison demos (P1) — **COMPLETE** (4 demos)
+- D-024: Circuit → cost accuracy investigation (P1) — **COMPLETE** (Circuit 4055f0b)
+- D-025: Bedrock → F-097 timeout config (P1) — **COMPLETE** (verified by Bedrock)
 
 ## Coordination Notes (Active)
-- **CRITICAL PATH:** F-210 fix → Phase 1 baton test (--conductor-clone) → fix Phase 1 issues → flip use_baton default → demo → release. The path is serial. Every movement since M2 confirms this.
-- **F-210 (P1, 5x independently confirmed):** Baton path has zero cross-sheet context. `grep -r 'cross_sheet' src/mozart/daemon/baton/` → zero results. Legacy runner populates via context.py:171-221. 24/34 examples affected. Baton produces silently degraded output.
-- **F-211 (P2):** Baton checkpoint sync missing for 4 event types (EscalationResolved, EscalationTimeout, CancelJob, ShutdownRequested). Rare during normal execution.
+- **CRITICAL PATH (UPDATED M4):** ~~F-210 fix~~ DONE → Phase 1 baton test (--conductor-clone) → fix Phase 1 issues → flip use_baton default → demo → release. The path is serial. D-021 (Phase 1 baton testing) is now unblocked.
+- **F-210:** RESOLVED (Canyon 748335f, Foundation 601bc8c). Cross-sheet context wired through adapter._collect_cross_sheet_context() + PromptRenderer._build_context(). 21 TDD tests.
+- **F-211:** RESOLVED (Blueprint 5af7dbc, Foundation 601bc8c). Checkpoint sync for all 6 event types. State-diff dedup cache prevents duplicate callbacks.
 - **F-212 (P3):** Baton PromptRenderer missing spec budget gating. Low priority — large context windows.
 - **Encapsulation violation (P3):** adapter.py:688,725,1164 — 3 private member accesses. Needs public API on BatonCore. Functional correctness unaffected.
-- **DEMO (P0 — EXISTENTIAL):** 8+ movements at zero. Wordware demos have ZERO blockers (buildable today with legacy runner). Lovable blocked on baton, 4-5 movements away.
+- **DEMO (P0 — EXISTENTIAL):** 9+ movements at zero. D-022 (Lovable demo) not started. Wordware demos COMPLETE (4). Lovable still blocked on baton Phase 1 → Phase 2 → Phase 3.
+- **NEXT SERIAL STEP:** D-021 — Phase 1 baton testing with --conductor-clone. This is the critical path. One musician, serial execution, real sheets through the baton.
 
 ### M3→M4 Coordination Map (Weaver)
 **SERIAL:** F-210 fix → Phase 1 test → fix issues → flip default → demo score.
