@@ -729,6 +729,11 @@ def _output_status_json(job: CheckpointState) -> None:
             "total_input_tokens": job.total_input_tokens,
             "total_output_tokens": job.total_output_tokens,
             "cost_limit_reached": job.cost_limit_reached,
+            "cost_confidence": min(
+                (s.cost_confidence for s in job.sheets.values()
+                 if s.estimated_cost is not None and s.estimated_cost > 0),
+                default=1.0,
+            ),
         },
         "circuit_breaker": cb_state,
         "hook_results_count": len(job.hook_results),
@@ -1320,19 +1325,46 @@ def _render_cost_summary(job: CheckpointState) -> None:
     else:
         limit_str = "(no limit set)"
 
+    # Compute aggregate cost confidence from sheets.
+    # If any sheet has low confidence (< 0.9), the overall cost is an estimate.
+    # D-024: Users must know when costs are character-estimated vs API-reported.
+    sheets_with_cost = [
+        s for s in job.sheets.values()
+        if s.estimated_cost is not None and s.estimated_cost > 0
+    ]
+    min_confidence = min(
+        (s.cost_confidence for s in sheets_with_cost),
+        default=1.0,
+    )
+    is_estimated = min_confidence < 0.9
+
     console.print("\n[bold]Cost Summary[/bold]")
     if has_job_cost:
+        cost_val = job.total_estimated_cost
+        if is_estimated:
+            cost_display = f"~${cost_val:.2f} (est.)"
+        else:
+            cost_display = f"${cost_val:.2f}"
         console.print(
-            f"  Cost: [yellow]${job.total_estimated_cost:.2f}[/yellow] {limit_str}"
+            f"  Cost: [yellow]{cost_display}[/yellow] {limit_str}"
         )
         console.print(f"  Input tokens:  {job.total_input_tokens:,}")
         console.print(f"  Output tokens: {job.total_output_tokens:,}")
+        if is_estimated:
+            console.print(
+                "  [dim]Cost is estimated from output size — actual cost may be"
+                " 10-100x higher. Use JSON output format for accurate tracking.[/dim]"
+            )
         if job.cost_limit_reached:
             console.print("  [red]Cost limit reached — score was paused[/red]")
     elif has_sheet_cost:
         # Sum from individual sheets if job-level totals aren't populated
         total = sum(s.estimated_cost for s in job.sheets.values() if s.estimated_cost)
-        console.print(f"  Cost: [yellow]${total:.2f}[/yellow] {limit_str} (from sheets)")
+        if is_estimated:
+            cost_display = f"~${total:.2f} (est.)"
+        else:
+            cost_display = f"${total:.2f}"
+        console.print(f"  Cost: [yellow]{cost_display}[/yellow] {limit_str} (from sheets)")
     else:
         console.print(f"  Cost: $0.00 {limit_str}")
 

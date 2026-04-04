@@ -14,6 +14,7 @@ the CLI to show "Still running... 5.2KB received, 3m elapsed" during long execut
 """
 
 import asyncio
+import json
 import os
 import shutil
 import signal
@@ -427,8 +428,9 @@ class ClaudeCliBackend(Backend):
     ) -> ExecutionResult:
         """Build ExecutionResult for a completed (non-timeout) execution.
 
-        Checks for rate limiting, determines success, logs appropriately,
-        and returns the final result.
+        Checks for rate limiting, determines success, extracts token usage
+        from JSON output when available, logs appropriately, and returns
+        the final result.
         """
         rate_limited = self._detect_rate_limit(stdout, stderr, exit_code)
         success = exit_code == 0
@@ -464,6 +466,13 @@ class ClaudeCliBackend(Backend):
                 stderr_tail=stderr_tail,
             )
 
+        # Extract token usage from JSON output (D-024: cost accuracy fix).
+        # When output_format is "json", Claude Code returns
+        # {"result": "...", "usage": {"input_tokens": N, "output_tokens": N}}.
+        # Without this, CostMixin falls back to character-based estimation
+        # which underestimates by 10-100x.
+        input_tokens, output_tokens = self._extract_tokens_from_json(stdout)
+
         return ExecutionResult(
             success=success,
             exit_code=exit_code,
@@ -474,7 +483,57 @@ class ClaudeCliBackend(Backend):
             duration_seconds=duration,
             rate_limited=rate_limited,
             error_type="rate_limit" if rate_limited else None,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
+
+    def _extract_tokens_from_json(
+        self, stdout: str,
+    ) -> tuple[int | None, int | None]:
+        """Extract token counts from JSON output when available.
+
+        When output_format is "json", Claude Code returns structured output
+        with a "usage" field containing input_tokens and output_tokens. This
+        provides accurate cost tracking instead of the 10-100x underestimate
+        from character-based heuristics.
+
+        Args:
+            stdout: Raw stdout from the CLI process.
+
+        Returns:
+            Tuple of (input_tokens, output_tokens). Either or both may be
+            None if the data isn't available or parseable.
+        """
+        if self.output_format != "json":
+            return None, None
+
+        if not stdout.strip():
+            return None, None
+
+        try:
+            data = json.loads(stdout)
+        except (json.JSONDecodeError, ValueError):
+            return None, None
+
+        if not isinstance(data, dict):
+            return None, None
+
+        usage = data.get("usage")
+        if not isinstance(usage, dict):
+            return None, None
+
+        input_tokens: int | None = None
+        output_tokens: int | None = None
+
+        raw_input = usage.get("input_tokens")
+        if isinstance(raw_input, int):
+            input_tokens = raw_input
+
+        raw_output = usage.get("output_tokens")
+        if isinstance(raw_output, int):
+            output_tokens = raw_output
+
+        return input_tokens, output_tokens
 
     async def _kill_orphaned_process(
         self, process: asyncio.subprocess.Process, error: BaseException,
