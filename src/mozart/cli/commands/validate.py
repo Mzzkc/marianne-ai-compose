@@ -112,12 +112,10 @@ def validate(
     try:
         config = JobConfig.from_yaml(config_file)
     except Exception as e:
+        hints = _schema_error_hints(str(e))
         output_error(
             f"Schema validation failed: {e}",
-            hints=[
-                "Ensure your score has at minimum: name, sheet, and prompt sections.",
-                "See: docs/score-writing-guide.md",
-            ],
+            hints=hints,
             json_output=json_output,
         )
         raise typer.Exit(2) from None
@@ -160,10 +158,8 @@ def validate(
             console.print()
             console.print("[dim]Configuration summary:[/dim]")
             console.print(f"  Sheets: {config.sheet.total_sheets}")
-            if config.instrument:
-                console.print(f"  Instrument: {config.instrument}")
-            else:
-                console.print(f"  Backend: {config.backend.type}")
+            instrument_display = config.instrument or config.backend.type
+            console.print(f"  Instrument: {instrument_display}")
             console.print(f"  Validations: {len(config.validations)}")
             console.print(f"  Notifications: {len(config.notifications)}")
 
@@ -272,6 +268,38 @@ def _show_dag_visualization(config: JobConfig, verbose: bool) -> None:  # noqa: 
     else:
         console.print()
         console.print("  [dim]Sequential execution (no parallelization)[/dim]")
+
+
+def _schema_error_hints(error_msg: str) -> list[str]:
+    """Return context-specific hints based on the Pydantic validation error.
+
+    Parses the error message to provide actionable guidance instead of
+    generic "check your score" messages.
+    """
+    msg_lower = error_msg.lower()
+
+    if "promptconfig" in msg_lower and "prompt" in msg_lower:
+        return [
+            "The 'prompt' field must be a mapping, not a string.",
+            "Use:  prompt:  /  template: \"your prompt text here\"",
+            "See: docs/score-writing-guide.md",
+        ]
+
+    if "field required" in msg_lower:
+        # Extract which fields are missing from the error
+        hints = ["Ensure your score has at minimum: name, sheet, and prompt sections."]
+        if "sheet" in msg_lower:
+            hints.append("Add a 'sheet' section with total_sheets, total_items, and size.")
+        if "prompt" in msg_lower:
+            hints.append("Add a 'prompt' section with a 'template' or 'template_file'.")
+        hints.append("See: docs/score-writing-guide.md")
+        return hints
+
+    # Fallback: generic but still helpful
+    return [
+        "Ensure your score has at minimum: name, sheet, and prompt sections.",
+        "See: docs/score-writing-guide.md",
+    ]
 
 
 # =============================================================================
