@@ -1758,3 +1758,13 @@ Each finding should include:
 - **Impact:** A `git clean` would destroy the work. This is the 7th occurrence of the uncommitted work anti-pattern (F-013, F-019, F-057, F-080, F-089, F-096, F-350).
 - **Error class:** Uncommitted work. Structural anti-pattern documented since M1.
 - **Action:** Mateship pickup — verify tests pass, commit on main with attribution.
+
+### F-200: clear_instrument_rate_limit Clears ALL Instruments on Unknown Name
+- **Found by:** Breakpoint, Movement 3
+- **Severity:** P2 (medium — operational correctness)
+- **Status:** Resolved (movement 3, Breakpoint)
+- **Category:** bug
+- **Description:** `BatonCore.clear_instrument_rate_limit()` at `core.py:271-275` used the conditional `[self._instruments[instrument]] if instrument and instrument in self._instruments else list(self._instruments.values())`. When `instrument` is a truthy string NOT in `self._instruments` (e.g., `"nonexistent"`), the condition evaluates False, falling through to the else branch which clears ALL instruments. A user running `mozart clear-rate-limits -i typo-in-name` would silently clear rate limits on every instrument instead of doing nothing.
+- **Impact:** Operational: a typo in the instrument name silently clears all rate limits instead of reporting "not found." Could cause rate limit storms if limits were legitimately in place.
+- **Resolution:** Replaced ternary with explicit if/else using `self._instruments.get(instrument)`. Non-existent instrument now returns empty target list → 0 cleared. Regression test in `test_m3_adversarial_breakpoint.py::TestClearRateLimits::test_clear_nonexistent_instrument_returns_zero`.
+- **Error class:** Fallthrough-to-default on failed lookup. Same pattern as "if X and X in dict" where the "else" branch has unintended side effects.

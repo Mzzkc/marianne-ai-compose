@@ -268,11 +268,15 @@ class BatonCore:
             Number of instruments whose rate limit was cleared.
         """
         cleared = 0
-        targets = (
-            [self._instruments[instrument]]
-            if instrument and instrument in self._instruments
-            else list(self._instruments.values())
-        )
+        if instrument:
+            # Specific instrument — look it up. If not found, targets is
+            # empty (return 0). Previously, missing instruments fell through
+            # to clear-all — F-200 bug found by Breakpoint M3.
+            inst = self._instruments.get(instrument)
+            targets = [inst] if inst is not None else []
+        else:
+            # None or empty → clear all instruments
+            targets = list(self._instruments.values())
         for inst in targets:
             if inst.rate_limited:
                 inst.rate_limited = False
