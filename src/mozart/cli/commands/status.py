@@ -1537,6 +1537,9 @@ def _output_status_rich(job: CheckpointState) -> None:
         console.print(f"  Rate limit waits: {job.rate_limit_waits}")
         if quota_waits > 0:
             console.print(f"  Quota exhaustion waits: {quota_waits}")
+        # Show active rate limit time remaining when the job has rate limit waits
+        if job.rate_limit_waits > 0 and job.status == JobStatus.RUNNING:
+            _show_active_rate_limits_sync()
 
     # Cost summary
     _render_cost_summary(job)
@@ -1571,6 +1574,48 @@ def _output_status_rich(job: CheckpointState) -> None:
         console.print(
             f"\n[yellow]Run 'mozart diagnose {job.job_id}' for a full diagnostic report.[/yellow]"
         )
+
+
+def _show_active_rate_limits_sync() -> None:
+    """Query and display active rate limits (sync wrapper).
+
+    Used by the status display to show time-remaining info when the job
+    has rate limit waits. Runs the async query in a new event loop since
+    the status renderer is synchronous.
+
+    Fail-open: never raises. If the query fails, nothing is shown.
+    """
+    import asyncio
+
+    from ..output import format_rate_limit_info
+
+    async def _query() -> list[str]:
+        from ..helpers import query_rate_limits
+
+        backends = await query_rate_limits()
+        if not backends:
+            return []
+        return format_rate_limit_info(backends)
+
+    try:
+        # The status command may already be inside an event loop.
+        # Use a fresh loop if needed.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            # Already in an async context — can't use asyncio.run.
+            # Fall back to creating a task (won't block, but won't show info).
+            return
+        lines = asyncio.run(_query())
+        if lines:
+            console.print("  [bold]Active limits:[/bold]")
+            for line in lines:
+                console.print(f"    [yellow]{line}[/yellow]")
+    except Exception:
+        pass  # Fail-open
 
 
 # =============================================================================

@@ -248,11 +248,10 @@ async def _try_daemon_submit(
                 )
                 output_error(
                     rejection,
-                    hints=[
-                        "The conductor is running but declined this submission.",
-                        "Try again later, or check with: mozart conductor-status",
-                    ],
+                    hints=_rejection_hints(msg, fresh=fresh),
                 )
+                # Show active rate limits when rejection is pressure-related
+                await _show_rate_limits_on_rejection(msg)
             raise typer.Exit(1)
 
         # Poll briefly to catch early failures (e.g. template errors)
@@ -268,12 +267,13 @@ async def _try_daemon_submit(
         else:
             if early_failed:
                 err = early.get("error_message", "") if isinstance(early, dict) else ""
+                hints = [f"Run: mozart diagnose {job_id}"]
+                if err:
+                    hints.insert(0, err)
                 output_error(
                     f"Score failed: {job_id}",
-                    hints=[f"Run: mozart diagnose {job_id}"],
+                    hints=hints,
                 )
-                if err:
-                    console.print(f"  {err}")
                 raise typer.Exit(1)
             console.print(f"[green]Score submitted to conductor:[/green] {job_id}")
             if msg:
@@ -286,6 +286,101 @@ async def _try_daemon_submit(
     except (OSError, ConnectionError, TimeoutError) as exc:
         _logger.warning("daemon_submit_failed", error=str(exc), exc_info=True)
         return False
+
+
+def _rejection_hints(msg: str, *, fresh: bool = False) -> list[str]:
+    """Return context-aware hints based on the conductor's rejection reason.
+
+    Args:
+        msg: The rejection message from the conductor.
+        fresh: Whether the --fresh flag was used (adjusts "already running" hints).
+    """
+    msg_lower = msg.lower()
+
+    if "shutting down" in msg_lower:
+        return [
+            "The conductor is shutting down.",
+            "Wait for shutdown to complete, then restart: mozart start",
+        ]
+
+    if "pressure" in msg_lower:
+        return [
+            "The system is under heavy load.",
+            "Check active rate limits: mozart clear-rate-limits (to view/clear)",
+            "Wait for running jobs to complete or reduce concurrent work.",
+        ]
+
+    if "already" in msg_lower and (
+        "running" in msg_lower or "queued" in msg_lower
+    ):
+        hints = [
+            "A score with this name is already active.",
+            "Pause or cancel it first: mozart pause <id> / mozart cancel <id>",
+        ]
+        if fresh:
+            hints.append(
+                "Clear the stale entry: mozart clear --score <id>"
+            )
+        else:
+            hints.append("Or wait for it to finish.")
+        return hints
+
+    if "parse" in msg_lower or "failed to parse" in msg_lower:
+        return [
+            "The score file has errors.",
+            "Validate it with: mozart validate <file>",
+        ]
+
+    if "workspace" in msg_lower and (
+        "not exist" in msg_lower or "not writable" in msg_lower
+    ):
+        return [
+            "The workspace path is invalid.",
+            "Create the directory or use --workspace to override.",
+        ]
+
+    if "not found" in msg_lower and "config" in msg_lower:
+        return [
+            "The score file could not be found.",
+            "Check the file path and try again.",
+        ]
+
+    # Fallback: generic but still actionable
+    return [
+        "The conductor is running but declined this submission.",
+        "Check with: mozart conductor-status",
+    ]
+
+
+async def _show_rate_limits_on_rejection(msg: str) -> None:
+    """Query and display active rate limits after a rejection.
+
+    Called after a submission is rejected. When the rejection is
+    pressure-related, queries the conductor for active rate limits
+    and displays them with time-remaining info.
+
+    Fail-open: never raises. If the query fails, nothing is shown.
+    """
+    msg_lower = msg.lower()
+    if "pressure" not in msg_lower:
+        return
+
+    try:
+        from ..helpers import query_rate_limits
+        from ..output import format_rate_limit_info
+
+        backends = await query_rate_limits()
+        if not backends:
+            return
+
+        lines = format_rate_limit_info(backends)
+        if lines:
+            console.print()
+            console.print("[bold]Active rate limits:[/bold]")
+            for line in lines:
+                console.print(f"  [yellow]{line}[/yellow]")
+    except Exception:
+        pass  # Fail-open — extra info, not critical
 
 
 def _show_dry_run(config: JobConfig, config_path: Path) -> None:

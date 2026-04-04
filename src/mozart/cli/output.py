@@ -923,6 +923,60 @@ def print_timing_section(
 # Public API
 # =============================================================================
 
+def format_rate_limit_info(
+    backends: dict[str, dict[str, float]],
+) -> list[str]:
+    """Format active rate limit data into user-friendly display lines.
+
+    Takes the ``backends`` dict from the ``daemon.rate_limits`` IPC response
+    and produces one line per active limit, e.g.:
+
+        "Rate limit on claude-cli — clears in 2m 30s"
+
+    Expired or zero-remaining limits are silently dropped.
+
+    Args:
+        backends: Mapping of instrument name to ``{"seconds_remaining": float}``.
+
+    Returns:
+        List of formatted strings, one per active rate limit. Empty if none active.
+    """
+    lines: list[str] = []
+    for instrument, info in sorted(backends.items()):
+        remaining = info.get("seconds_remaining", 0.0)
+        if remaining <= 0:
+            continue
+        lines.append(
+            f"Rate limit on {instrument} — clears in {_format_compact_duration(remaining)}"
+        )
+    return lines
+
+
+def _format_compact_duration(seconds: float) -> str:
+    """Format seconds into a compact human-readable duration.
+
+    Unlike ``format_duration``, this uses whole seconds and omits zero
+    components: "2m 30s", "45s", "1h 5m".
+    """
+    total = int(seconds)
+    if total <= 0:
+        return "0s"
+
+    hours = total // 3600
+    minutes = (total % 3600) // 60
+    secs = total % 60
+
+    parts: list[str] = []
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
+    if secs > 0 and hours == 0:
+        # Only show seconds when under 1 hour
+        parts.append(f"{secs}s")
+    return " ".join(parts) if parts else "0s"
+
+
 __all__ = [
     # Console
     "console",
@@ -930,6 +984,7 @@ __all__ = [
     "StatusColors",
     # Formatters
     "format_duration",
+    "format_rate_limit_info",
     "format_bytes",
     "format_timestamp",
     "format_validation_status",

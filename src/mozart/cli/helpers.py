@@ -420,6 +420,53 @@ async def await_early_failure(
         return None
 
 
+async def query_rate_limits() -> dict[str, dict[str, float]] | None:
+    """Query the conductor for active rate limit information.
+
+    Returns the ``backends`` dict from the ``daemon.rate_limits`` IPC
+    response, e.g. ``{"claude-cli": {"seconds_remaining": 120.0}}``.
+
+    Returns ``None`` if the conductor is unreachable or an error occurs.
+    Fail-open: this never raises — callers can safely display extra info
+    when available and skip it when not.
+    """
+    try:
+        from mozart.daemon.detect import try_daemon_route
+
+        routed, result = await try_daemon_route("daemon.rate_limits", {})
+        if not routed or not isinstance(result, dict):
+            return None
+        backends = result.get("backends")
+        if isinstance(backends, dict):
+            return backends
+        return None
+    except Exception:
+        return None
+
+
+def check_pid_alive(pid: int) -> bool:
+    """Check if a process with the given PID is running.
+
+    Uses ``os.kill(pid, 0)`` — signal 0 checks existence without sending
+    a signal.
+
+    Returns:
+        ``True`` if the process exists (even if owned by another user).
+        ``False`` if the process does not exist.
+    """
+    import os
+
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        # Process exists but owned by another user
+        return True
+    except OSError:
+        # Process does not exist
+        return False
+
+
 def get_last_activity_time(job: CheckpointState) -> datetime | None:
     """Get the most recent activity timestamp from the job.
 
