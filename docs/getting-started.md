@@ -82,11 +82,11 @@ Each sheet gets its own `{{ sheet_num }}`, `{{ start_item }}`, and `{{ end_item 
 
 ### Step 1: Create a Configuration File
 
-Create a file called `my-first-job.yaml`:
+Create a file called `my-first-score.yaml`:
 
 ```yaml
-# my-first-job.yaml
-name: "my-first-job"
+# my-first-score.yaml
+name: "my-first-score"
 description: "Process files in sheets of 10"
 
 instrument: claude-code
@@ -126,24 +126,33 @@ validations:
 Before running, validate the configuration:
 
 ```bash
-mozart validate my-first-job.yaml
+mozart validate my-first-score.yaml
 ```
 
-You should see validation checks running:
+You should see:
 ```
-Validating my-first-job.yaml...
-  ✓ YAML syntax valid
-  ✓ Schema validation passed
-  Running extended validation checks...
-  ✓ All checks passed
+Validating my-first-score...
+
+✓ YAML syntax valid
+✓ Schema validation passed (Pydantic)
+
+Running extended validation checks...
+
+INFO (consider reviewing):
+  i [V205] All validations are file_exists — stale files from previous runs will pass
+         Suggestion: Consider adding file_modified or content checks
+
+Validation: PASSED (with warnings)
 ```
+
+The `V205` note is just advice — your score is valid. It's pointing out that `file_exists` validations can be fooled by leftover files from a previous run. Adding `file_modified` or `content_contains` checks makes validations more robust.
 
 ### Step 3: Dry Run
 
 Preview what Mozart will do without executing:
 
 ```bash
-mozart run my-first-job.yaml --dry-run
+mozart run my-first-score.yaml --dry-run
 ```
 
 This shows:
@@ -172,7 +181,7 @@ mozart conductor-status   # Verify it's running
 Execute the score:
 
 ```bash
-mozart run my-first-job.yaml
+mozart run my-first-score.yaml
 ```
 
 You'll see:
@@ -186,7 +195,7 @@ While running (or after), check score status:
 
 ```bash
 # Show specific score details
-mozart status my-first-job
+mozart status my-first-score
 
 # List all active scores
 mozart list
@@ -203,7 +212,7 @@ Ctrl+C received. Finishing current sheet and saving state...
 
 State saved. Score paused at sheet 2/3.
 
-To resume: mozart resume my-first-job
+To resume: mozart resume my-first-score
 ```
 
 ### Resuming Scores
@@ -211,7 +220,7 @@ To resume: mozart resume my-first-job
 Resume a paused or failed score:
 
 ```bash
-mozart resume my-first-job
+mozart resume my-first-score
 ```
 
 Mozart continues from where it left off.
@@ -430,7 +439,7 @@ mozart dashboard --port 3000
 - [Configuration Reference](configuration-reference.md) — Every config field documented
 
 **Explore examples:**
-- [Examples](../examples/) — 35+ working configurations across software, research, writing, and planning
+- [Examples](../examples/) — 38 working configurations across software, research, writing, and planning
 - [Mozart Score Playspace](https://github.com/Mzzkc/mozart-score-playspace) — Creative showcase with real output: philosophy, worldbuilding, education, and more
 
 **Go deeper:**
@@ -440,7 +449,7 @@ mozart dashboard --port 3000
 
 ## Troubleshooting
 
-### Job Won't Start
+### Score Won't Start
 
 1. Run `mozart doctor` to check your environment
 2. Check config: `mozart validate config.yaml`
@@ -450,7 +459,7 @@ mozart dashboard --port 3000
 
 1. Check validation paths use `{single_braces}`, not `{{ double_braces }}`
 2. Ensure validation paths start with `{workspace}/` so files are found inside the workspace
-3. Verify the prompt tells Claude to save files into `{{ workspace }}/` (not relative paths)
+3. Verify the prompt tells the instrument to save files into `{{ workspace }}/` (not relative paths)
 4. Use `--dry-run` to see the generated prompt and check that paths look correct
 
 ### Rate Limits
@@ -461,6 +470,13 @@ Mozart detects rate limits and waits automatically. Configure wait times:
 rate_limit:
   wait_minutes: 60
   max_waits: 24
+```
+
+If a score is stuck waiting on a rate limit that has already expired, clear it manually:
+
+```bash
+mozart clear-rate-limits                    # Clear all stale rate limits
+mozart clear-rate-limits --instrument NAME  # Clear for a specific instrument
 ```
 
 ### Resume Not Working

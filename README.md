@@ -176,38 +176,61 @@ mozart resume hello-mozart
 | Self-healing | Automatic diagnosis and remediation when retries exhausted (`--self-healing`) |
 | Learning system | Outcome recording, pattern detection, cross-workspace learning |
 | Parallel execution | DAG-based sheet dependencies for concurrent execution |
-| Web dashboard | Real-time monitoring with job control and log streaming |
-| Score chaining | Chain scores via on_success hooks (hooks fire; concert depth tracking is a known TODO) |
+| Web dashboard | Real-time monitoring with score control and log streaming |
+| Score chaining | Chain scores via on_success hooks for multi-score pipelines |
 | Worktree isolation | Git worktree isolation for parallel-safe execution |
-| Cost tracking | Per-sheet and per-score cost limits |
-| Circuit breaker | Cross-workspace coordination, rate limit sharing |
-| Human-in-the-loop | Escalation for low-confidence decisions (`--escalation`) — not currently supported in daemon mode |
+| Cost tracking | Per-sheet and per-score cost limits with real-time visibility |
+| Rate limit coordination | Cross-score instrument rate limit sharing with auto-resume |
+| Conductor clones | Isolated test conductors via `--conductor-clone` for safe experimentation |
 
 ## CLI Reference
 
-### Core Commands
+### Getting Started
+
+| Command | Purpose |
+|---------|---------|
+| `mozart init [path]` | Scaffold a new Mozart project with a starter score |
+| `mozart doctor` | Check environment health (Python, conductor, instruments) |
+| `mozart validate <config>` | Validate a score configuration file |
+
+### Jobs
 
 | Command | Purpose |
 |---------|---------|
 | `mozart run <config>` | Execute a score from YAML configuration |
 | `mozart resume <score-id>` | Resume a paused or failed score |
 | `mozart pause <score-id>` | Pause a running score gracefully |
+| `mozart cancel <score-id>` | Cancel a running score immediately |
 | `mozart modify <score-id>` | Modify config and optionally resume a paused score |
-| `mozart status [score-id]` | Show score status and progress |
-| `mozart validate <config>` | Validate configuration file |
-| `mozart list` | List active scores (requires conductor; use `--all` for all scores) |
-| `mozart history <score-id>` | Show execution history from SQLite |
-| `mozart config <subcommand>` | Manage Mozart configuration (`show`, `set`, `path`, `init`, `check`) |
 
-### Diagnostic Commands
+### Monitoring
 
 | Command | Purpose |
 |---------|---------|
-| `mozart doctor` | Check environment health (Python, conductor, instruments) |
+| `mozart status [score-id]` | Show score status and progress (no args = overview of all scores) |
+| `mozart list` | List scores from the conductor (`--all` for all scores) |
+| `mozart top` | Real-time system monitor — like htop for your conductor |
+| `mozart clear` | Clear completed, failed, and cancelled scores from the registry |
+| `mozart history <score-id>` | Show execution history from SQLite |
+
+### Diagnostics
+
+| Command | Purpose |
+|---------|---------|
 | `mozart logs <score-id>` | View or tail log files |
 | `mozart errors <score-id>` | List score errors with color-coded output |
 | `mozart diagnose <score-id>` | Comprehensive diagnostic report |
-| `mozart recover <score-id>` | Re-validate without re-execution |
+| `mozart recover <score-id>` | Re-validate without re-execution (advanced) |
+
+### Conductor
+
+| Command | Purpose |
+|---------|---------|
+| `mozart start` | Start the conductor |
+| `mozart stop` | Stop the conductor (warns if scores are running) |
+| `mozart restart` | Restart the conductor (stop + start) |
+| `mozart conductor-status` | Check conductor health and uptime |
+| `mozart clear-rate-limits` | Clear stale rate limits on instruments |
 
 ### Instruments
 
@@ -216,49 +239,36 @@ mozart resume hello-mozart
 | `mozart instruments list` | Show all available instruments and their readiness |
 | `mozart instruments check <name>` | Deep diagnostic on a specific instrument |
 
-### Dashboard & MCP
+### Services
 
 | Command | Purpose |
 |---------|---------|
 | `mozart dashboard` | Start web dashboard for monitoring and control |
 | `mozart mcp` | Start MCP server for tool integration |
 
-### Learning Commands
+### Configuration & Learning
 
 | Command | Purpose |
 |---------|---------|
+| `mozart config <subcommand>` | Manage conductor configuration (`show`, `set`, `path`, `init`, `check`) |
 | `mozart patterns-list` | List learned patterns |
-| `mozart patterns-why` | Metacognitive analysis of pattern success factors |
-| `mozart patterns-entropy` | Entropy monitoring for pattern diversity |
-| `mozart patterns-budget` | Exploration budget status |
 | `mozart learning-stats` | Learning system statistics |
 | `mozart learning-insights` | Actionable insights from patterns |
-| `mozart learning-drift` | Detect pattern effectiveness drift |
-| `mozart learning-epistemic-drift` | Epistemic drift analysis |
-| `mozart learning-activity` | Learning activity summary |
-| `mozart entropy-status` | Entropy response status |
-
-### Dashboard
-
-```bash
-mozart dashboard --port 8000
-```
-
-Starts the web dashboard for visual monitoring and control.
 
 ### Common Options
 
 | Option | Applies To | Description |
 |--------|-----------|-------------|
+| `--conductor-clone[=NAME]` | all daemon commands | Route to a clone conductor (isolated socket, PID, state DB) |
 | `--workspace, -w <path>` | `run`, `resume` | Workspace directory override |
 | `--dry-run, -n` | `run` | Validate and show execution plan without running |
 | `--self-healing, -H` | `run`, `resume` | Enable automatic diagnosis and remediation |
 | `--yes, -y` | `run`, `resume` | Auto-confirm suggested self-healing fixes |
-| `--escalation, -e` | `run` | Enable human-in-the-loop for low-confidence decisions (not currently supported — blocked in daemon mode) |
 | `--fresh` | `run` | Delete existing state before starting (clean run) |
 | `--start-sheet, -s` | `run` | Override starting sheet number |
-| `--json, -j` | `status`, `validate` | Output in JSON format |
+| `--json, -j` | `status`, `validate`, `list`, `doctor` | Output in JSON format |
 | `-v, --verbose` | various | Detailed output |
+| `-q, --quiet` | various | Minimal output (errors only) |
 
 ### Conductor Mode
 
@@ -272,7 +282,13 @@ mozart start --foreground # Foreground (development)
 # Check conductor status
 mozart conductor-status
 
-# Stop the conductor
+# Restart the conductor
+mozart restart
+
+# Clear stale rate limits on instruments
+mozart clear-rate-limits
+
+# Stop the conductor (warns if scores are running)
 mozart stop
 ```
 
@@ -383,14 +399,15 @@ Mozart includes examples demonstrating various use cases:
 | [api-backend.yaml](examples/api-backend.yaml) | Using Anthropic API directly |
 | [self-improvement.yaml](examples/self-improvement.yaml) | Incremental codebase improvement with test gates |
 | [sheet-review.yaml](examples/sheet-review.yaml) | Multi-agent coordinated code review |
+| [design-review.yaml](examples/design-review.yaml) | Multi-perspective design review with parallel expert agents |
 | [worktree-isolation.yaml](examples/worktree-isolation.yaml) | Parallel-safe execution using git worktrees |
-| [observability-demo.yaml](examples/observability-demo.yaml) | Demonstration of Mozart's observability features |
+| [iterative-dev-loop.yaml](examples/iterative-dev-loop.yaml) | Multi-cycle investigation, implementation, and testing loop |
 | [issue-fixer.yaml](examples/issue-fixer.yaml) | GitHub issue fixing |
 | [issue-solver.yaml](examples/issue-solver.yaml) | Roadmap-driven, dependency-aware issue solver |
+| [score-composer.yaml](examples/score-composer.yaml) | AI-assisted Mozart score authoring |
 | [cross-sheet-test.yaml](examples/cross-sheet-test.yaml) | Demonstrates cross-sheet context passing |
-| [agent-spike.yaml](examples/agent-spike.yaml) | Agent experimentation |
-| [docs-generator.yaml](examples/docs-generator.yaml) | Documentation generation orchestration |
-| [phase3-wiring.yaml](examples/phase3-wiring.yaml) | Wires GlobalSheetScheduler into execution path |
+| [prelude-cadenza-example.yaml](examples/prelude-cadenza-example.yaml) | Prelude and cadenza context injection |
+
 ### Rosetta Pattern Proof Scores
 
 Scores generated by the [Rosetta Score](scores/the-rosetta-score.yaml) — Mozart's pattern discovery engine. Each demonstrates a named orchestration pattern with a real-world use case.
