@@ -77,10 +77,22 @@ def start_conductor(
         config.log_file = clone_paths.log_file
 
     pid = _read_pid(config.pid_file)
-    if pid is not None and _pid_alive(pid):
-        label = "clone conductor" if clone_name is not None else "Mozart conductor"
-        typer.echo(f"{label} is already running (PID {pid})")
-        raise typer.Exit(1)
+    if pid is not None:
+        if _pid_alive(pid):
+            label = (
+                "clone conductor"
+                if clone_name is not None
+                else "Mozart conductor"
+            )
+            typer.echo(f"{label} is already running (PID {pid})")
+            raise typer.Exit(1)
+        else:
+            # Stale PID file — process is dead, clean up before starting
+            typer.echo(
+                f"Cleaned up stale PID file "
+                f"(PID {pid} is no longer running)"
+            )
+            config.pid_file.unlink(missing_ok=True)
 
     # Detect concurrent start race via advisory lock
     if config.pid_file.exists() and not config.pid_file.is_symlink():

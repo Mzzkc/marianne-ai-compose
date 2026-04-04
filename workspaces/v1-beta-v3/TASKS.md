@@ -221,7 +221,7 @@ This is the highest priority task. You are running inside a live conductor. You 
 - [ ] JobConfig.to_yaml() (#110) (priority: P3) [source: issue #110]
 - [ ] Job registry ID mismatch (#124) (priority: P2) [source: issue #124]
 - [ ] Fan-out integration tests (#121) (priority: P2) [source: issue #121]
-- [ ] [Dash] CLI stale state feedback (#139) (priority: P2) [source: issue #139] — Partial: check_pid_alive() helper in helpers.py (3 TDD tests), --fresh rejection hints now suggest `mozart clear` for stale registry entries. Remaining: stale PID detection in `mozart start`, --fresh state clear feedback, contradictory error message fix.
+- [x] [Dash] CLI stale state feedback (#139) (priority: P2) [source: issue #139] — Full completion across 3 sessions: (1) check_pid_alive() helper + fresh-aware rejection hints (8bb3a10), (2) stale PID detection in `mozart start` — cleans up dead PID files with user notification, (3) `--fresh` early failure suppression — skips `await_early_failure` when --fresh to prevent false reports from old state (#139 root cause 1), (4) contradictory error regression verified fixed (Lens 4b83dae). 10 TDD tests in test_stale_state_feedback.py covering all 3 root causes from the issue.
 
 ---
 

@@ -254,9 +254,15 @@ async def _try_daemon_submit(
                 await _show_rate_limits_on_rejection(msg)
             raise typer.Exit(1)
 
-        # Poll briefly to catch early failures (e.g. template errors)
-        early = await await_early_failure(job_id)
-        early_status = early.get("status", "") if isinstance(early, dict) else ""
+        # Poll briefly to catch early failures (e.g. template errors).
+        # Skip when --fresh: old state may still be transitioning and
+        # would produce false failure reports from the previous run (#139).
+        early: dict[str, Any] | None = None
+        if not fresh:
+            early = await await_early_failure(job_id)
+        early_status = (
+            early.get("status", "") if isinstance(early, dict) else ""
+        )
         early_failed = early_status in ("failed", "cancelled")
 
         if json_output:

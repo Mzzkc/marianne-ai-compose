@@ -57,7 +57,7 @@ Movement 3 — IN PROGRESS (2026-04-04).
 
 ### Movement 3 Progress (Dash)
 - **F-110 rate limit time-remaining UX (P1):** format_rate_limit_info() in output.py, query_rate_limits() in helpers.py, _show_rate_limits_on_rejection() in run.py, _show_active_rate_limits_sync() in status.py. Users now see "Rate limit on claude-cli — clears in 2m 30s" when submission rejected due to backpressure. Status display shows active limits in execution stats. 18 TDD tests. Commit 8bb3a10.
-- **#139 stale state feedback (P2, partial):** check_pid_alive() helper, fresh-aware rejection hints (suggests `mozart clear --score` for stale registry). Remaining: wire into `mozart start`, --fresh feedback, contradictory error fix.
+- **#139 stale state feedback COMPLETE (P2):** Three root causes from issue #139 all fixed: (1) Stale PID detection — `start_conductor()` now cleans up dead PID files with user notification at process.py:89-95. (2) `--fresh` early failure suppression — `await_early_failure()` skipped when `--fresh` flag used, preventing false failure reports from old state during cleanup transition at run.py:260-262. (3) Contradictory error regression verified fixed by Lens (4b83dae). 10 TDD tests in test_stale_state_feedback.py + 7 by Lens in test_rejection_hints_ux.py.
 - **Pressure hints updated:** "Check load with: mozart conductor-status" → "Check active rate limits: mozart clear-rate-limits (to view/clear)". More actionable.
 
 ### Movement 3 Progress (Canyon, second pass)
