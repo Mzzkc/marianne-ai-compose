@@ -991,7 +991,7 @@ Each finding should include:
 ### F-097: Stale Detection Kills Agents, Reported as Generic "timeout" — Not E001
 - **Found by:** Composer investigation
 - **Severity:** P0 (critical — caused job failure, misdiagnosed as backend timeout)
-- **Status:** Partially resolved (E006 error code added by Blueprint; timeout value + error display still open) — see updated entry below
+- **Status:** Resolved (movement 4, Bedrock verification). E006 error code (Blueprint M4), error display fix (Spark M1), idle_timeout raised to 7200 (composer, verified by Bedrock M4). All sub-tasks complete.
 - **Description:** The v3 job (mozart-orchestra-v3) failed at sheet 95 after running for ~42 hours. Sheets 66 (journey, M2) and 95 (forge, M3) were killed by stale detection at 30 minutes despite `backend.timeout_seconds: 10800` (3 hours). The stale detection `idle_timeout_seconds: 1800` fires when no stdout is produced for 30 minutes. For code-heavy work (running tests, reading large codebases, complex reasoning), agents routinely go silent for >30 minutes.
 - **Root cause:** `_idle_watchdog()` at `src/mozart/execution/runner/sheet.py:290-320` cancels the execution task after `idle_timeout_seconds` of no progress callbacks. The resulting `_StaleExecutionError` is converted to `ExecutionResult(exit_reason="timeout", error_type="stale")` at `sheet.py:367-377`. The error classifier at `classifier.py:338` maps `exit_reason="timeout"` to `ErrorCode.EXECUTION_TIMEOUT` (E001), but the error display shows `Code: timeout` rather than `E001` — the error code string is not being surfaced properly in the status/errors commands.
 - **Impact:** (1) Agents killed prematurely. (2) Error displayed as `Code: timeout` instead of `E001`, making diagnosis harder. (3) Stale detection is indistinguishable from backend timeout in error output.
@@ -1135,12 +1135,13 @@ Each finding should include:
 
 ## New Findings (Movement 4 — Blueprint)
 
-### F-097: Stale Detection Error Code — PARTIALLY RESOLVED
-- **Found by:** Composer investigation (original), Blueprint (fix, Movement 4)
-- **Severity:** P0 → P1 (E006 error code added; timeout value changes still open)
-- **Status:** Partially resolved (movement 4, Blueprint)
+### F-097: Stale Detection Error Code — RESOLVED
+- **Found by:** Composer investigation (original), Blueprint (E006 fix), Spark (error display fix), Composer (timeout increase), Bedrock (M4 verification)
+- **Severity:** P0 → Resolved
+- **Status:** Resolved (movement 4, Bedrock verification)
 - **Resolution (E006):** Added `EXECUTION_STALE` (E006) to `ErrorCode` enum in `src/mozart/core/errors/codes.py`. Classifier (`classify()` at line 338 and `classify_execution()` at line 990) now differentiates stale detection from backend timeout by checking for "stale execution" in combined stdout+stderr. Stale → E006 (WARNING, 120s retry delay). Regular timeout → E001 (ERROR, 60s delay). 10 TDD tests in `test_error_taxonomy_extensions.py`.
-- **Remaining:** `idle_timeout_seconds` increase (P0) and error display fix (P1) are still open.
+- **Resolution (timeout):** `idle_timeout_seconds` raised from 1800 to 7200 in `generate-v3.py:443`. Score regenerated — `mozart-orchestra-v3.yaml:3963` confirms 7200. Done by composer, verified by Bedrock M4.
+- **Resolution (error display):** Spark M1 added `error_code` field to SheetState, wired through `mark_sheet_failed()`. `format_error_code_for_display()` in output.py. 26 TDD tests.
 
 ### F-098: Rate Limit Classification — RESOLVED
 - **Found by:** Composer investigation (original), Blueprint (fix, Movement 4)
@@ -2006,3 +2007,30 @@ Each finding should include:
 - **Description:** Of ~15 CLI commands that call `try_daemon_route()`, only `cancel`, `pause`, `rate_limits`, and now `run` catch `DaemonError`. Others (`status`, `diagnose`, `recover`) catch only `JobSubmissionError`. If a stale conductor returns METHOD_NOT_FOUND for one of these commands, the user would see a raw `MethodNotFoundError` traceback instead of a friendly error message. Note: `status.py` has a generic `except Exception` catch that handles this, so only `diagnose.py` and `recover.py` are truly exposed.
 - **Impact:** Poor UX on version mismatch. Low likelihood in practice — requires running a stale conductor after code changes.
 - **Action:** Add `MethodNotFoundError` or `DaemonError` to remaining command catch patterns in `diagnose.py` and `recover.py`. Low priority.
+
+### F-300: Resource Anomaly Patterns Show Zero Effectiveness Differentiation
+- **Found by:** Oracle, Movement 4
+- **Severity:** P2 (medium)
+- **Status:** Open
+- **Category:** architecture
+- **Description:** Of 30,232 patterns in global-learning.db, 5,315 are `resource_anomaly` type with average effectiveness exactly 0.5000. The F-009/F-144 fix (semantic context tag namespace) only addressed `semantic_insight` patterns (avg 0.511, differentiating). Resource anomaly patterns remain uniformly cold — generated but never matched to executions for effectiveness updates. Verified via `SELECT pattern_type, COUNT(*), AVG(effectiveness_score) FROM patterns GROUP BY pattern_type` — semantic_insight shows 0.511, resource_anomaly shows 0.500.
+- **Impact:** 17.6% of the pattern corpus contributes zero intelligence signal. Resource patterns track execution duration anomalies, cost outliers, rate limit events — all valuable operational signals being ignored.
+- **Action:** Investigate the resource pattern application pipeline in `_query_relevant_patterns()`. The selection gate fix (F-009) may have only addressed semantic tag matching. Resource patterns may need a parallel tag namespace fix or a separate application mechanism.
+
+### F-301: Instrument Name Column Is 99.99% Null
+- **Found by:** Oracle, Movement 4
+- **Severity:** P3 (low — expected at this stage)
+- **Status:** Open
+- **Category:** pattern
+- **Description:** Only 3 of 30,232 patterns have non-null `instrument_name`. Field added in F-009/F-144 fix (M3). Production execution path (legacy runner) doesn't populate instrument_name during pattern storage. Verified via `SELECT instrument_name, COUNT(*) FROM patterns GROUP BY instrument_name` — null: 30,229, claude_cli: 3.
+- **Impact:** Learning store cannot differentiate pattern effectiveness by instrument. Blocks baton's planned instrument-scoped learning queries.
+- **Action:** Verify baton path populates instrument_name during pattern storage. Low priority — baton isn't default yet. Column will populate naturally once baton is default.
+
+### F-302: Stale Detection Ceiling Unchanged Across 3 Movements
+- **Found by:** Oracle, Movement 4
+- **Severity:** P2 (medium)
+- **Status:** Open — cross-references F-097
+- **Category:** risk
+- **Description:** p99 execution duration has been 30.2-30.5 minutes across M2, M3, and M4 (n=28,976 completed executions with duration > 0). This exactly matches `idle_timeout_seconds: 1800` stale detection threshold. The composer's F-097 directive to increase timeout from 1800 to 7200 remains unimplemented. Verified via percentile query on global-learning.db executions table.
+- **Impact:** Top 1% of executions are killed by stale detection regardless of actual progress. For the v3 orchestra's 706 sheets, ~7 sheets per movement are potentially killed mid-work.
+- **Action:** Implement the two unclaimed TASKS.md items: increase idle_timeout_seconds in generate-v3.py and regenerate the v3 score. This is a 10-minute config change that has been open since M1.

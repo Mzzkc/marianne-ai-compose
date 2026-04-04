@@ -129,6 +129,14 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **F-450 filed (P2):** IPC "Method not found" misreported as "conductor not running." New IPC methods on stale conductor get wrong error class.
 - **Cost fiction:** Now $0.17 for 125 sheets — plausible but wrong by 100-1000x. More dangerous than the obviously-wrong $0.00 (Ember, Newcomer).
 
+### M4 Progress (Oracle)
+- **Comprehensive M4 metrics analysis:** Codebase 98,247 source lines (+0.8%), 327 test files, mypy/ruff clean. 18 commits from 12 musicians. 39% mateship rate (all-time high).
+- **Learning store deep analysis:** 30,232 patterns. Warm tier exploded: ~182 (M3) → 3,185 (M4). Avg effectiveness 0.5091. Validated: 278 (+17%). Resource anomaly patterns (5,315) remain uniformly cold at 0.5000 — F-300 filed.
+- **Execution performance:** 239,585 total, 31,188 completed (99.6% success rate among terminal). p99 still 30.5min (stale detection ceiling). 466 M4 executions.
+- **Instrument usage:** 97.6% claude-sonnet-4-5-20250929. Only 3 of 30,232 patterns have instrument_name set (F-301).
+- **Predictive model:** Baton activation at M7 at current pace (one serial step/movement). Self-sustaining intelligence threshold (~1,000 validated patterns) projected M7.
+- **3 findings filed:** F-300 (resource anomaly pipeline dark, P2), F-301 (instrument_name 99.99% null, P3), F-302 (stale detection ceiling unchanged, P2).
+
 ### M4 Directives (North, D-020 through D-025)
 - D-020: Canyon → F-210 cross-sheet context (P0, BLOCKS Phase 1)
 - D-021: Foundation → Phase 1 baton testing (P0, gated on D-020)
@@ -150,14 +158,15 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 **PARALLEL:** Docs, examples modernization, fan-out edge cases (#120, #119, #128), resume improvements (#93, #103, #122), Wordware demos, Rosetta update, skill rename, Gemini CLI assignment.
 
 ## Top Risks
-1. **Demo at zero (CRITICAL — EXISTENTIAL).** 8+ movements, no progress. Product invisible.
-2. **F-210 blocks baton Phase 1 (CRITICAL).** Must be fixed first or results are misleading.
-3. **Baton untested live (CRITICAL — BLOCKED by F-210).** 1,500+ tests, never run a real sheet.
-4. **Cost fiction (P2).** $0.17 shown for work costing ~$100+. Now in "plausible" range — more dangerous.
-5. **F-107 (P0).** No standardized instrument profile verification against live APIs.
+1. **Phase 1 baton testing NOT STARTED (CRITICAL).** F-210 resolved. Path unblocked. No one has started. Fourth consecutive movement of one-step-per-movement pace on the serial critical path.
+2. **Demo partially broken (HIGH — improving).** Wordware demos (4) exist and validate — first progress in 8+ movements. Lovable demo still at zero, blocked on baton Phase 2.
+3. **Baton untested live (CRITICAL — NOW UNBLOCKED).** 1,500+ tests, never run a real sheet. F-210 and F-211 resolved. Nothing prevents Phase 1 testing except someone dedicating time to it.
+4. **Resource anomaly pipeline dark (P2).** 5,315 patterns at 0.5000. Only semantic patterns differentiating. 17.6% of pattern corpus contributes zero intelligence signal. F-300.
+5. **Cost fiction (P2).** Now shows confidence indicators (D-024). Still 10-100x underestimate for real work.
+6. **Stale detection ceiling (P2).** p99 at 30.5min across 3 movements. F-097 timeout increase unclaimed since M1. 10-minute fix.
 
 ## Blockers (Active Only)
-- **F-210:** Cross-sheet context missing from baton. Blocks Phase 1 testing.
+- **Phase 1 baton testing:** Unblocked (F-210 resolved). Needs one musician to dedicate a full session. Foundation recommended (deepest baton context).
 
 ## Roster (32 musicians, equal peers)
 Forge, Captain, Circuit, Harper, Breakpoint, Weaver, Dash, Journey, Lens, Warden,
