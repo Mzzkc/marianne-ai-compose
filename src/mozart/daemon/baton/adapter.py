@@ -47,9 +47,13 @@ from mozart.core.sheet import Sheet
 from mozart.daemon.baton.core import BatonCore
 from mozart.daemon.baton.events import (
     BatonEvent,
+    CancelJob,
     DispatchRetry,
+    JobTimeout,
+    RateLimitExpired,
     SheetAttemptResult,
     SheetSkipped,
+    ShutdownRequested,
 )
 from mozart.daemon.baton.musician import sheet_task
 from mozart.daemon.baton.state import (
@@ -62,6 +66,7 @@ from mozart.daemon.baton.state import (
 if TYPE_CHECKING:
     from mozart.core.checkpoint import CheckpointState
     from mozart.core.config.job import PromptConfig
+    from mozart.core.config.workspace import CrossSheetConfig
     from mozart.daemon.baton.backend_pool import BackendPool
     from mozart.daemon.baton.prompt import PromptRenderer
     from mozart.daemon.event_bus import EventBus
@@ -333,6 +338,11 @@ class BatonAdapter:
         self._max_concurrent_sheets = max_concurrent_sheets
         self._state_sync_callback = state_sync_callback
 
+        # F-211: State-diff sync cache — last-synced checkpoint status per sheet.
+        # After each event, compare current baton status against this cache
+        # and sync only sheets whose checkpoint-mapped status changed.
+        self._synced_status: dict[tuple[str, int], str] = {}
+
         # Job → Sheet mapping for prompt rendering
         self._job_sheets: dict[str, dict[int, Sheet]] = {}
 
@@ -344,6 +354,9 @@ class BatonAdapter:
 
         # Per-job PromptRenderer — created when prompt_config is provided
         self._job_renderers: dict[str, PromptRenderer] = {}
+
+        # Per-job CrossSheetConfig — enables cross-sheet context (F-210)
+        self._job_cross_sheet: dict[str, CrossSheetConfig] = {}
 
         # Per-job completion events — set when all sheets reach terminal state
         self._completion_events: dict[str, asyncio.Event] = {}
@@ -392,6 +405,7 @@ class BatonAdapter:
         self_healing_enabled: bool = False,
         prompt_config: PromptConfig | None = None,
         parallel_enabled: bool = False,
+        cross_sheet: CrossSheetConfig | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -412,9 +426,16 @@ class BatonAdapter:
                 handles the complete 9-layer prompt assembly pipeline.
             parallel_enabled: Whether parallel execution is enabled
                 (for preamble concurrency warning).
+            cross_sheet: Optional CrossSheetConfig for cross-sheet context
+                (F-210). When provided, the adapter collects previous sheet
+                outputs and workspace files at dispatch time.
         """
         # Store sheets for prompt rendering at dispatch time
         self._job_sheets[job_id] = {s.num: s for s in sheets}
+
+        # Store cross-sheet config (F-210)
+        if cross_sheet is not None:
+            self._job_cross_sheet[job_id] = cross_sheet
 
         # Create PromptRenderer if config is available (F-104)
         if prompt_config is not None:
@@ -487,9 +508,10 @@ class BatonAdapter:
         # Remove from baton
         self._baton.deregister_job(job_id)
 
-        # Remove sheet mapping, renderer, and completion tracking
+        # Remove sheet mapping, renderer, cross-sheet config, and completion tracking
         self._job_sheets.pop(job_id, None)
         self._job_renderers.pop(job_id, None)
+        self._job_cross_sheet.pop(job_id, None)
         self._completion_events.pop(job_id, None)
         self._completion_results.pop(job_id, None)
 
@@ -513,6 +535,7 @@ class BatonAdapter:
         self_healing_enabled: bool = False,
         prompt_config: PromptConfig | None = None,
         parallel_enabled: bool = False,
+        cross_sheet: CrossSheetConfig | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -538,9 +561,14 @@ class BatonAdapter:
             self_healing_enabled: Try self-healing on exhaustion.
             prompt_config: Optional PromptConfig for prompt rendering.
             parallel_enabled: Whether parallel execution is enabled.
+            cross_sheet: Optional CrossSheetConfig for cross-sheet context (F-210).
         """
         # Store sheets for prompt rendering
         self._job_sheets[job_id] = {s.num: s for s in sheets}
+
+        # Store cross-sheet config (F-210)
+        if cross_sheet is not None:
+            self._job_cross_sheet[job_id] = cross_sheet
 
         # Create PromptRenderer if config is available
         if prompt_config is not None:
@@ -644,6 +672,137 @@ class BatonAdapter:
         if job_sheets is None:
             return None
         return job_sheets.get(sheet_num)
+
+    # =========================================================================
+    # Cross-Sheet Context — F-210
+    # =========================================================================
+
+    def _collect_cross_sheet_context(
+        self,
+        job_id: str,
+        current_sheet_num: int,
+    ) -> tuple[dict[int, str], dict[str, str]]:
+        """Collect cross-sheet context for a sheet about to be dispatched.
+
+        Reads completed sheets' stdout from baton state and workspace files
+        matching capture_files patterns. This replicates the legacy runner's
+        ContextBuildingMixin._populate_cross_sheet_context() for the baton path.
+
+        Args:
+            job_id: The job this sheet belongs to.
+            current_sheet_num: The sheet about to be dispatched.
+
+        Returns:
+            Tuple of (previous_outputs, previous_files).
+            previous_outputs: {sheet_num: stdout_tail} from completed sheets.
+            previous_files: {file_path: content} from captured workspace files.
+        """
+        import glob as glob_module
+        from pathlib import Path
+
+        previous_outputs: dict[int, str] = {}
+        previous_files: dict[str, str] = {}
+
+        cross_sheet = self._job_cross_sheet.get(job_id)
+        if cross_sheet is None:
+            return previous_outputs, previous_files
+
+        # --- Auto-capture stdout from completed sheets ---
+        if cross_sheet.auto_capture_stdout:
+            job_state = self._baton._jobs.get(job_id)
+            if job_state is not None:
+                # Determine lookback window
+                if cross_sheet.lookback_sheets > 0:
+                    start_sheet = max(
+                        1, current_sheet_num - cross_sheet.lookback_sheets
+                    )
+                else:
+                    start_sheet = 1
+
+                max_chars = cross_sheet.max_output_chars
+
+                for prev_num in range(start_sheet, current_sheet_num):
+                    prev_state = job_state.sheets.get(prev_num)
+                    if prev_state is None:
+                        continue
+                    # Only collect from completed sheets with stdout
+                    if prev_state.status != BatonSheetStatus.COMPLETED:
+                        continue
+                    # Get stdout from the last successful attempt
+                    stdout = self._get_completed_stdout(prev_state)
+                    if stdout:
+                        if len(stdout) > max_chars:
+                            stdout = stdout[:max_chars] + "\n... [truncated]"
+                        previous_outputs[prev_num] = stdout
+
+        # --- Capture files from workspace ---
+        if cross_sheet.capture_files:
+            job_sheets = self._job_sheets.get(job_id, {})
+            # Use the current sheet's workspace for pattern expansion
+            current_sheet = job_sheets.get(current_sheet_num)
+            workspace = current_sheet.workspace if current_sheet else None
+            if workspace is not None:
+                max_chars = cross_sheet.max_output_chars
+                template_vars = {
+                    "workspace": str(workspace),
+                    "sheet_num": current_sheet_num,
+                }
+                for pattern in cross_sheet.capture_files:
+                    try:
+                        expanded = pattern
+                        for var, val in template_vars.items():
+                            expanded = expanded.replace(
+                                f"{{{{ {var} }}}}", str(val)
+                            )
+                            expanded = expanded.replace(
+                                f"{{{{{var}}}}}", str(val)
+                            )
+                        if not Path(expanded).is_absolute():
+                            expanded = str(workspace / expanded)
+                        for file_path in glob_module.glob(expanded):
+                            path = Path(file_path)
+                            if path.is_file():
+                                try:
+                                    content = path.read_text(encoding="utf-8")
+                                    if len(content) > max_chars:
+                                        content = (
+                                            content[:max_chars]
+                                            + "\n... [truncated]"
+                                        )
+                                    previous_files[str(path)] = content
+                                except (OSError, UnicodeDecodeError) as e:
+                                    _logger.warning(
+                                        "adapter.cross_sheet.file_read_error",
+                                        extra={
+                                            "path": str(path),
+                                            "error": str(e),
+                                        },
+                                    )
+                    except Exception as e:
+                        _logger.warning(
+                            "adapter.cross_sheet.pattern_error",
+                            extra={"pattern": pattern, "error": str(e)},
+                        )
+
+        return previous_outputs, previous_files
+
+    @staticmethod
+    def _get_completed_stdout(state: SheetExecutionState) -> str:
+        """Extract stdout_tail from the last successful attempt of a sheet.
+
+        Walks attempt_results in reverse to find the most recent successful
+        attempt and returns its stdout_tail.
+
+        Args:
+            state: The sheet's execution state.
+
+        Returns:
+            The stdout_tail from the last successful attempt, or empty string.
+        """
+        for result in reversed(state.attempt_results):
+            if result.execution_success and result.stdout_tail:
+                return result.stdout_tail
+        return ""
 
     # =========================================================================
     # Completion Signaling
@@ -886,10 +1045,20 @@ class BatonAdapter:
         elif state.healing_attempts > 0:
             mode = AttemptMode.HEALING
 
+        # F-210: Collect cross-sheet context before building AttemptContext.
+        # This populates previous_outputs and previous_files from completed
+        # sheets' stdout and workspace file patterns, matching the legacy
+        # runner's ContextBuildingMixin._populate_cross_sheet_context().
+        prev_outputs, prev_files = self._collect_cross_sheet_context(
+            job_id, sheet_num
+        )
+
         context = AttemptContext(
             attempt_number=attempt_number,
             mode=mode,
             completion_prompt_suffix=completion_suffix,
+            previous_outputs=prev_outputs,
+            previous_files=prev_files,
         )
 
         # Spawn musician task
@@ -1106,37 +1275,164 @@ class BatonAdapter:
     # Main Loop
     # =========================================================================
 
+    def _capture_pre_event_state(
+        self,
+        event: BatonEvent,
+    ) -> dict[str, list[int]] | None:
+        """Capture non-terminal sheet nums before events that deregister jobs.
+
+        CancelJob calls deregister_job(), removing the job from the baton's
+        internal state. Without capturing BEFORE handle_event, we cannot
+        sync the cancelled sheets afterward.
+
+        Returns:
+            Mapping of job_id to non-terminal sheet nums, or None if
+            the event doesn't need pre-capture.
+        """
+        from mozart.daemon.baton.state import _TERMINAL_BATON_STATUSES
+
+        if isinstance(event, CancelJob):
+            job = self._baton._jobs.get(event.job_id)
+            if job is None:
+                return None
+            non_terminal = [
+                num
+                for num, s in job.sheets.items()
+                if s.status not in _TERMINAL_BATON_STATUSES
+            ]
+            return {event.job_id: non_terminal} if non_terminal else None
+        return None
+
     def _sync_sheet_status(
         self,
         event: BatonEvent,
+        pre_capture: dict[str, list[int]] | None = None,
     ) -> None:
         """Sync baton sheet status changes to the checkpoint callback.
 
-        Called after each event is handled. Determines which sheet was
-        affected by the event and invokes the state_sync_callback with
-        the current baton status mapped to checkpoint status.
+        Called after each event is handled. Determines which sheet(s)
+        were affected by the event and invokes the state_sync_callback
+        with the current baton status mapped to checkpoint status.
+
+        F-211: Extended from SheetAttemptResult/SheetSkipped to also handle
+        EscalationResolved, EscalationTimeout, CancelJob, ShutdownRequested.
 
         Args:
             event: The event that was just processed.
+            pre_capture: Pre-event sheet nums for events that deregister
+                jobs (e.g., CancelJob). Captured by _capture_pre_event_state
+                before handle_event runs.
         """
         if self._state_sync_callback is None:
             return
 
-        # Extract job_id and sheet_num from events that affect sheet status
-        if isinstance(event, (SheetAttemptResult, SheetSkipped)):
-            job_id = event.job_id
-            sheet_num = event.sheet_num
-        else:
+        # Single-sheet events: any event with job_id + sheet_num attributes
+        # gets its affected sheet synced. This covers SheetAttemptResult,
+        # SheetSkipped, EscalationResolved, EscalationTimeout, RateLimitHit,
+        # RateLimitExpired, RetryDue, StaleCheck, JobTimeout,
+        # EscalationNeeded, ProcessExited — all events that target one sheet.
+        # Using duck typing so new event types are automatically handled.
+        if hasattr(event, "job_id") and hasattr(event, "sheet_num"):
+            self._sync_single_sheet(event.job_id, event.sheet_num)  # duck-typed
             return
 
-        # Look up current baton status and map to checkpoint status
+        # JobTimeout: has job_id but no sheet_num. The handler cancels
+        # all non-terminal sheets. Sync each affected sheet.
+        if isinstance(event, JobTimeout):
+            self._sync_all_sheets_for_job(event.job_id)
+            return
+
+        # RateLimitExpired: has instrument but no job_id/sheet_num.
+        # The handler transitions WAITING sheets back to PENDING. Sync
+        # all sheets across all jobs for this instrument.
+        if isinstance(event, RateLimitExpired):
+            self._sync_all_sheets_for_instrument(event.instrument)
+            return
+
+        # CancelJob: the handler deregistered the job, so we use the
+        # pre-captured sheet nums and sync them as "failed" (CANCELLED
+        # maps to "failed" in the checkpoint status model).
+        if isinstance(event, CancelJob):
+            if pre_capture is not None:
+                cancelled_status = baton_to_checkpoint_status(
+                    BatonSheetStatus.CANCELLED
+                )
+                for sheet_num in pre_capture.get(event.job_id, []):
+                    key = (event.job_id, sheet_num)
+                    if self._synced_status.get(key) != cancelled_status:
+                        self._synced_status[key] = cancelled_status
+                        self._invoke_sync_callback(
+                            event.job_id, sheet_num, cancelled_status
+                        )
+            return
+
+        # ShutdownRequested (non-graceful): cancels all non-terminal
+        # sheets across ALL jobs. Jobs remain in _jobs (no deregister),
+        # so we can read state directly.
+        if isinstance(event, ShutdownRequested) and not event.graceful:
+            for job_id in list(self._baton._jobs.keys()):
+                self._sync_cancelled_sheets_from_state(job_id)
+
+    def _sync_single_sheet(self, job_id: str, sheet_num: int) -> None:
+        """Sync a single sheet's status to the checkpoint callback.
+
+        F-211: Uses state-diff dedup — only invokes the callback when the
+        mapped checkpoint status actually changes from the last-synced value.
+        """
         state = self._baton.get_sheet_state(job_id, sheet_num)
         if state is None:
             return
 
         checkpoint_status = baton_to_checkpoint_status(state.status)
+        key = (job_id, sheet_num)
+        if self._synced_status.get(key) == checkpoint_status:
+            return  # No change — skip duplicate sync
+        self._synced_status[key] = checkpoint_status
+        self._invoke_sync_callback(job_id, sheet_num, checkpoint_status)
+
+    def _sync_all_sheets_for_job(self, job_id: str) -> None:
+        """Sync all sheets of a job using state-diff dedup.
+
+        Used by JobTimeout where all non-terminal sheets are cancelled.
+        Each sheet's current baton status is mapped to checkpoint status
+        and synced only if it differs from the last-synced value.
+        """
+        job = self._baton._jobs.get(job_id)
+        if job is None:
+            return
+        for sheet_num in job.sheets:
+            self._sync_single_sheet(job_id, sheet_num)
+
+    def _sync_all_sheets_for_instrument(self, instrument: str) -> None:
+        """Sync all sheets across all jobs for a given instrument.
+
+        Used by RateLimitExpired where WAITING sheets for the instrument
+        transition back to PENDING. Uses state-diff dedup via _sync_single_sheet.
+        """
+        for job_id, job in self._baton._jobs.items():
+            for sheet_num, sheet_state in job.sheets.items():
+                if sheet_state.instrument_name == instrument:
+                    self._sync_single_sheet(job_id, sheet_num)
+
+    def _sync_cancelled_sheets_from_state(self, job_id: str) -> None:
+        """Sync all CANCELLED sheets of a job from current baton state.
+
+        Used by ShutdownRequested (non-graceful) where jobs remain in
+        the baton's internal state after the handler runs.
+        """
+        job = self._baton._jobs.get(job_id)
+        if job is None:
+            return
+
+        for sheet_num in job.sheets:
+            self._sync_single_sheet(job_id, sheet_num)
+
+    def _invoke_sync_callback(
+        self, job_id: str, sheet_num: int, checkpoint_status: str
+    ) -> None:
+        """Invoke the state sync callback with error handling."""
         try:
-            self._state_sync_callback(job_id, sheet_num, checkpoint_status)
+            self._state_sync_callback(job_id, sheet_num, checkpoint_status)  # type: ignore[misc]
         except Exception:
             _logger.warning(
                 "adapter.state_sync_failed",
@@ -1163,10 +1459,15 @@ class BatonAdapter:
         try:
             while not self._baton._shutting_down:
                 event = await self._baton.inbox.get()
+
+                # F-211: Capture pre-event state for events that
+                # deregister jobs (CancelJob removes state)
+                pre_capture = self._capture_pre_event_state(event)
+
                 await self._baton.handle_event(event)
 
-                # Step 29: Sync state changes to checkpoint
-                self._sync_sheet_status(event)
+                # Step 29 + F-211: Sync state changes to checkpoint
+                self._sync_sheet_status(event, pre_capture=pre_capture)
 
                 # Dispatch ready sheets after every event
                 config = self._baton.build_dispatch_config(

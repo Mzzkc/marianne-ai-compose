@@ -1816,7 +1816,8 @@ Each finding should include:
 ### F-211: Baton Checkpoint Sync Missing for 4 Event Types
 - **Found by:** Weaver, Movement 3
 - **Severity:** P2 (medium — escalation and cancel scenarios, not core execution path)
-- **Status:** Open
+- **Status:** Resolved (movement 4, Blueprint)
+- **Resolution:** Extended `_sync_sheet_status()` with duck typing for all single-sheet events, pre-event capture for CancelJob (job deregistered before sync), and direct state scan for non-graceful ShutdownRequested. 18 TDD tests in `test_f211_checkpoint_sync_gaps.py`.
 - **Category:** architecture
 - **Description:** `_sync_sheet_status()` in `src/mozart/daemon/baton/adapter.py:1109-1148` only syncs checkpoint for `SheetAttemptResult` and `SheetSkipped` events. Axiom identified (F-440 notes) and Weaver confirmed: EscalationResolved (core.py:1081-1090, 4 terminal paths), EscalationTimeout (core.py:1104-1132, FAILED + propagation), CancelJob (core.py:1159-1170, all sheets → CANCELLED), and ShutdownRequested (core.py:1172-1184, all → CANCELLED) are NOT synced. On restart after any of these events, checkpoint shows stale state and sheets are resurrected.
 - **Impact:** Escalation decisions lost on restart (sheet re-escalates). Cancel commands reversed on restart (sheets resume). Shutdown cancellations reversed (work re-executed). F-440's register_job re-propagation covers the failure cascade gap but not these 4 event types.

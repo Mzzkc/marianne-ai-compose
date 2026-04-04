@@ -1,0 +1,317 @@
+# marketing-content.yaml — Multi-Channel Marketing Content
+#
+# A Mozart score that generates coordinated marketing content across
+# multiple channels from a single creative brief.
+#
+#   Movement 1: Analyze the brief and create a content strategy
+#   Movement 2: Generate channel-specific content in parallel (4 voices)
+#               - Voice 1: Long-form blog post
+#               - Voice 2: Social media posts (LinkedIn, Twitter/X)
+#               - Voice 3: Email campaign (3-email nurture sequence)
+#               - Voice 4: Landing page copy
+#   Movement 3: Brand consistency audit and final content package
+#
+# This is a Wordware comparison demo — where other tools would
+# require separate prompts for each channel, Mozart generates
+# coordinated content in parallel and then audits for consistency.
+#
+# Usage:
+#   mozart start
+#   mozart run examples/marketing-content.yaml
+#   mozart status marketing-content
+#   ls workspaces/marketing-content/
+#
+# Output:
+#   workspaces/marketing-content/
+#     01-strategy.md             — Content strategy from brief
+#     02-blog-post.md            — Long-form blog article
+#     02-social-media.md         — Social posts for all platforms
+#     02-email-sequence.md       — 3-email nurture campaign
+#     02-landing-page.md         — Landing page copy
+#     03-content-package.md      — Audit results + final package
+#
+# Time: ~4 minutes  |  Sheets: 6
+
+name: marketing-content
+description: "Generate coordinated multi-channel marketing content from a single brief"
+
+workspace: ../workspaces/marketing-content
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 600
+
+movements:
+  1:
+    name: "Strategy"
+  2:
+    name: "Content Generation"
+  3:
+    name: "Brand Audit"
+
+sheet:
+  size: 1
+  total_items: 3
+  fan_out:
+    2: 4
+  dependencies:
+    2: [1]
+    3: [2]
+
+parallel:
+  enabled: true
+  max_concurrent: 4
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 5000
+  lookback_sheets: 5
+
+retry:
+  max_retries: 1
+
+prompt:
+  variables:
+    company:
+      name: "Terraform Labs"
+      industry: "Developer tools"
+      tagline: "Ship faster without breaking things"
+      voice: "Technical but approachable. We're engineers talking to engineers. No buzzwords, no hype — just tools that work."
+      brand_colors: "Deep blue (#1a365d), Electric green (#48bb78)"
+    product:
+      name: "Terraform Deploy"
+      category: "CI/CD and deployment automation"
+      description: "Zero-config deployment pipelines that learn from your codebase. Push to main, and Deploy figures out the rest — build steps, test strategy, infrastructure provisioning, rollback triggers."
+      key_features:
+        - "Automatic build detection — no YAML config files needed"
+        - "AI-powered test selection — runs only the tests that matter"
+        - "Infrastructure-as-inference — provisions resources from code analysis"
+        - "Rollback triggers — detects anomalies and reverts before users notice"
+      pricing: "Free for open source. $49/seat/month for teams."
+    campaign:
+      goal: "Product launch — drive developer signups for private beta"
+      audience: "Senior developers and DevOps engineers at mid-size companies (50-500 employees) who are frustrated with complex CI/CD configuration"
+      cta: "Join the private beta"
+      landing_url: "https://terraform-labs.dev/deploy-beta"
+      differentiator: "Every other CI/CD tool makes you write config. Deploy reads your code instead."
+
+  template: |
+    {% if stage == 1 %}
+    # Movement 1: Content Strategy
+
+    You are a senior content strategist at a developer marketing agency.
+    Analyze the creative brief and produce a content strategy document.
+
+    ## Creative Brief
+
+    **Company:** {{ company.name }} — {{ company.tagline }}
+    **Industry:** {{ company.industry }}
+    **Brand voice:** {{ company.voice }}
+
+    **Product:** {{ product.name }} ({{ product.category }})
+    {{ product.description }}
+
+    **Key Features:**
+    {% for feature in product.key_features %}
+    - {{ feature }}
+    {% endfor %}
+
+    **Pricing:** {{ product.pricing }}
+
+    **Campaign:**
+    - Goal: {{ campaign.goal }}
+    - Audience: {{ campaign.audience }}
+    - CTA: {{ campaign.cta }}
+    - Landing: {{ campaign.landing_url }}
+    - Key differentiator: {{ campaign.differentiator }}
+
+    ## Your Task
+
+    Create a content strategy document that includes:
+
+    1. **Audience Pain Points** — 3-5 specific frustrations your audience
+       has with existing CI/CD tools (be concrete, not abstract)
+    2. **Key Messages** — 3 primary messages, ranked by impact.
+       Each should connect a pain point to a product feature.
+    3. **Tone Guide** — Specific dos and don'ts for this campaign,
+       derived from the brand voice. Include 3 example phrases to use
+       and 3 phrases to avoid.
+    4. **Channel Strategy** — For each channel (blog, social, email,
+       landing page): the specific angle, length, and format.
+    5. **Content Hooks** — 5 headline/hook options ranked by likely
+       click-through rate. Explain your reasoning.
+
+    This strategy document guides four parallel content creators.
+    Be specific enough that they can write without asking questions.
+
+    Save to: {{ workspace }}/01-strategy.md
+    Print a summary to stdout.
+
+    {% elif stage == 2 %}
+    # Movement 2, Voice {{ voice }}: Content Generation
+
+    You are a content creator specializing in developer marketing.
+
+    ## Read the Strategy
+    Read {{ workspace }}/01-strategy.md — follow its tone guide, key
+    messages, and channel-specific direction exactly.
+
+    {% if voice == 1 %}
+    ## Your Channel: Blog Post
+
+    Write a long-form blog post (1200-1800 words) for the
+    {{ company.name }} engineering blog.
+
+    Requirements:
+    - Lead with a relatable developer frustration (from the strategy)
+    - Show, don't tell — use a real-world scenario to demonstrate value
+    - Include a code-like example showing before/after (traditional
+      CI/CD config vs. Deploy's zero-config approach)
+    - Technical depth: explain HOW auto-detection works at a high level
+    - End with a clear CTA to {{ campaign.landing_url }}
+    - SEO-friendly title and meta description
+
+    Format: Markdown with headers, code blocks, callout boxes.
+
+    Save to: {{ workspace }}/02-blog-post.md
+
+    {% elif voice == 2 %}
+    ## Your Channel: Social Media
+
+    Create a social media package with posts for LinkedIn and Twitter/X.
+
+    Requirements:
+    - **LinkedIn:** 3 posts (launch announcement, feature deep-dive,
+      founder perspective). 150-300 words each. Professional but not stiff.
+    - **Twitter/X:** 5 tweets forming a thread. First tweet must stand
+      alone. 280 chars max each. Include the landing URL in tweet 5.
+    - Each post should work independently but link thematically
+    - Use specific numbers/claims from the product features
+    - No generic "excited to announce" language — lead with value
+
+    Format: Markdown with clear section headers per platform/post.
+
+    Save to: {{ workspace }}/02-social-media.md
+
+    {% elif voice == 3 %}
+    ## Your Channel: Email Nurture Sequence
+
+    Write a 3-email nurture sequence for developers who showed interest
+    but haven't signed up yet.
+
+    Requirements:
+    - **Email 1** (Day 0): Hook — the pain point. Subject line that
+      gets opened. Show you understand their world. Soft CTA.
+    - **Email 2** (Day 3): Proof — how Deploy solves it. Include one
+      concrete example or metric. Stronger CTA.
+    - **Email 3** (Day 7): Urgency — beta closing soon. Social proof
+      (even if hypothetical: "X engineers are already using...").
+      Direct CTA with {{ campaign.landing_url }}.
+
+    For each email:
+    - Subject line (and one A/B alternative)
+    - Preview text
+    - Body (200-400 words)
+    - CTA button text
+
+    Format: Markdown with clear headers per email.
+
+    Save to: {{ workspace }}/02-email-sequence.md
+
+    {% elif voice == 4 %}
+    ## Your Channel: Landing Page
+
+    Write the copy for the beta signup landing page at
+    {{ campaign.landing_url }}.
+
+    Requirements:
+    - **Hero:** Headline (8 words max) + subheadline (20 words max) +
+      CTA button
+    - **Problem:** 3 pain-point cards (icon placeholder + title + 1 sentence)
+    - **Solution:** How Deploy works in 3 steps (visual-friendly copy)
+    - **Features:** 4 feature blocks matching product.key_features
+      (title + 2-sentence description each)
+    - **Social Proof:** Placeholder section for testimonials
+    - **Pricing:** Clear, simple pricing presentation
+    - **FAQ:** 5 questions a senior developer would ask
+    - **Final CTA:** Closing statement + button
+
+    Write in a format that a designer can directly implement.
+    Include placeholder notes for visuals: [SCREENSHOT: ...], [ICON: ...].
+
+    Save to: {{ workspace }}/02-landing-page.md
+    {% endif %}
+
+    ## Voice Standards
+    - {{ company.voice }}
+    - Key differentiator to weave in: {{ campaign.differentiator }}
+    - Always reference the beta signup: {{ campaign.landing_url }}
+
+    Print a brief summary to stdout.
+
+    {% elif stage == 3 %}
+    # Movement 3: Brand Consistency Audit
+
+    You are a brand manager reviewing a multi-channel content package
+    for consistency before launch.
+
+    ## Read All Content
+    Read every file in {{ workspace }}/:
+    - 01-strategy.md — The content strategy
+    - 02-blog-post.md — Blog article
+    - 02-social-media.md — Social posts
+    - 02-email-sequence.md — Email sequence
+    - 02-landing-page.md — Landing page copy
+
+    ## Your Task
+
+    ### 1. Consistency Audit
+    Check across ALL content pieces:
+    - **Brand voice:** Does every piece match "{{ company.voice }}"?
+      Flag any that feel off-brand.
+    - **Key messages:** Are the 3 key messages from the strategy
+      present in each channel? Score each channel 0-3.
+    - **CTA consistency:** Is {{ campaign.landing_url }} correctly
+      referenced? Is the CTA language consistent?
+    - **Terminology:** Are product features described consistently?
+      No channel should contradict another.
+    - **Tone:** Any channels that feel noticeably different from others?
+
+    ### 2. Content Quality Scores
+    Rate each piece (1-10) on:
+    - Audience fit (would a senior developer find this valuable?)
+    - Clarity (is the message immediately clear?)
+    - Persuasiveness (does it make you want to sign up?)
+    - Brand alignment (does it sound like {{ company.name }}?)
+
+    ### 3. Recommended Edits
+    For each content piece, list specific line-level suggestions.
+    Quote the original and provide the revised version.
+
+    ### 4. Launch Readiness
+    **GO / NO-GO** recommendation with reasoning.
+
+    Save to: {{ workspace }}/03-content-package.md
+    Print the GO/NO-GO decision and overall scores to stdout.
+
+    {% endif %}
+
+validations:
+  - type: file_exists
+    path: "{workspace}/01-strategy.md"
+    sheet: 1
+  - type: file_exists
+    path: "{workspace}/02-blog-post.md"
+    sheet: 2
+  - type: file_exists
+    path: "{workspace}/02-social-media.md"
+    sheet: 3
+  - type: file_exists
+    path: "{workspace}/02-email-sequence.md"
+    sheet: 4
+  - type: file_exists
+    path: "{workspace}/02-landing-page.md"
+    sheet: 5
+  - type: file_exists
+    path: "{workspace}/03-content-package.md"
+    sheet: 6

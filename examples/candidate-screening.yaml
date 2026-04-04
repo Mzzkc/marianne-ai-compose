@@ -1,0 +1,290 @@
+# candidate-screening.yaml — AI Candidate Screening Pipeline
+#
+# A Mozart score that screens job candidates against requirements.
+# Demonstrates structured analysis with parallel evaluation and synthesis:
+#
+#   Movement 1: Parse the job requirements into weighted criteria
+#   Movement 2: Evaluate each candidate in parallel (3 voices)
+#               Each voice analyzes one candidate against all criteria
+#   Movement 3: Comparative ranking with recommendations
+#
+# This is a Wordware comparison demo — showing how Mozart handles
+# structured data extraction and multi-candidate parallel evaluation
+# that would require complex prompt chaining in other tools.
+#
+# Usage:
+#   mozart start
+#   mozart run examples/candidate-screening.yaml
+#   mozart status candidate-screen
+#   cat workspaces/candidate-screen/03-ranking.md
+#
+# Output:
+#   workspaces/candidate-screen/
+#     01-criteria.json           — Weighted evaluation criteria
+#     02-eval-candidate-1.json   — Structured evaluation: Alex Chen
+#     02-eval-candidate-2.json   — Structured evaluation: Priya Sharma
+#     02-eval-candidate-3.json   — Structured evaluation: Marcus Johnson
+#     03-ranking.md              — Comparative ranking + recommendations
+#
+# Time: ~3 minutes  |  Sheets: 5
+
+name: candidate-screen
+description: "Screen candidates against job requirements — parallel evaluation with structured scoring"
+
+workspace: ../workspaces/candidate-screen
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 600
+
+movements:
+  1:
+    name: "Criteria Extraction"
+  2:
+    name: "Candidate Evaluation"
+  3:
+    name: "Comparative Ranking"
+
+sheet:
+  size: 1
+  total_items: 3
+  fan_out:
+    2: 3
+  dependencies:
+    2: [1]
+    3: [2]
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 6000
+  lookback_sheets: 4
+
+retry:
+  max_retries: 1
+
+prompt:
+  variables:
+    role:
+      title: "Senior Backend Engineer"
+      team: "Platform Infrastructure"
+      level: "Senior (L5)"
+      location: "Remote (US timezone overlap required)"
+    requirements:
+      must_have:
+        - "5+ years backend development (Go, Rust, or Python)"
+        - "Experience with distributed systems at scale (>1M requests/day)"
+        - "Strong understanding of database internals (PostgreSQL or similar)"
+        - "Production experience with Kubernetes and cloud infrastructure"
+        - "Track record of mentoring junior engineers"
+      nice_to_have:
+        - "Contributions to open source projects"
+        - "Experience with event-driven architectures"
+        - "Background in observability (tracing, metrics, logging)"
+        - "Previous startup experience"
+    candidates:
+      1:
+        name: "Alex Chen"
+        resume: |
+          Senior Software Engineer at DataFlow Inc. (3 years)
+          - Led migration from monolith to microservices serving 2.5M req/day
+          - Built real-time event processing pipeline using Go and Kafka
+          - Mentored 4 junior engineers, 2 promoted to mid-level
+          - Open source: maintainer of go-circuit-breaker (850 stars)
+          Previous: Backend Engineer at TechStart (2 years, startup, Python/Django)
+          Education: BS Computer Science, Stanford University
+          Skills: Go, Python, PostgreSQL, Kubernetes, AWS, Kafka, gRPC
+      2:
+        name: "Priya Sharma"
+        resume: |
+          Staff Engineer at CloudScale Systems (4 years)
+          - Architected multi-region database cluster handling 5M req/day
+          - Deep PostgreSQL expertise: wrote custom extensions for time-series
+          - Designed observability platform (OpenTelemetry, Grafana, custom dashboards)
+          - Regular conference speaker on distributed systems
+          Previous: Senior Engineer at MegaCorp (3 years, Python/Java)
+          Education: MS Computer Science, MIT
+          Skills: Python, Rust, PostgreSQL, Kubernetes, GCP, OpenTelemetry
+      3:
+        name: "Marcus Johnson"
+        resume: |
+          Lead Engineer at HealthTech Solutions (2 years)
+          - Built HIPAA-compliant API platform from scratch using Rust
+          - Managed team of 6 engineers across 3 time zones
+          - Implemented zero-downtime deployment pipeline on Kubernetes
+          Previous: Backend Engineer at GameStudio (4 years, C++/Go)
+          Freelance: 2 years, various Python/Go projects
+          Education: BS Computer Engineering, Georgia Tech
+          Skills: Rust, Go, C++, Python, PostgreSQL, Kubernetes, Azure
+
+  template: |
+    {% if stage == 1 %}
+    # Movement 1: Criteria Extraction
+
+    You are an engineering hiring manager. Analyze the job requirements and
+    produce a structured evaluation rubric.
+
+    ## Role
+    **{{ role.title }}** — {{ role.team }} ({{ role.level }})
+    Location: {{ role.location }}
+
+    ## Requirements
+    **Must Have:**
+    {% for req in requirements.must_have %}
+    - {{ req }}
+    {% endfor %}
+
+    **Nice to Have:**
+    {% for req in requirements.nice_to_have %}
+    - {{ req }}
+    {% endfor %}
+
+    ## Your Task
+
+    Create a weighted evaluation rubric as JSON:
+
+    ```json
+    {
+      "criteria": [
+        {
+          "id": "C1",
+          "name": "short name",
+          "description": "what we're evaluating",
+          "category": "must_have" or "nice_to_have",
+          "weight": 1-10,
+          "scoring_guide": {
+            "1": "does not meet",
+            "3": "partially meets",
+            "5": "fully meets",
+            "7": "exceeds",
+            "10": "exceptional"
+          }
+        }
+      ],
+      "total_weight": "sum of all weights",
+      "must_have_threshold": "minimum weighted score to pass must-haves",
+      "notes": "any evaluation guidance"
+    }
+    ```
+
+    Every must-have requirement gets weight 7-10. Nice-to-haves get 3-6.
+    The scoring guide should be specific to each criterion, not generic.
+
+    Save to: {{ workspace }}/01-criteria.json
+
+    Print the JSON to stdout so evaluation sheets can reference it.
+
+    {% elif stage == 2 %}
+    {% set candidate = candidates[voice] %}
+    # Movement 2, Voice {{ voice }}: Evaluate {{ candidate.name }}
+
+    You are an engineering hiring evaluator. Score one candidate against
+    the structured rubric.
+
+    ## Read the Rubric
+    Read {{ workspace }}/01-criteria.json — this is your evaluation rubric.
+    Score against EVERY criterion listed.
+
+    ## Candidate: {{ candidate.name }}
+
+    {{ candidate.resume }}
+
+    ## Your Task
+
+    Evaluate {{ candidate.name }} against every criterion in the rubric.
+    Produce a structured JSON evaluation:
+
+    ```json
+    {
+      "candidate": "{{ candidate.name }}",
+      "scores": [
+        {
+          "criterion_id": "C1",
+          "score": 1-10,
+          "evidence": "specific resume evidence supporting this score",
+          "concerns": "any gaps or risks (empty string if none)"
+        }
+      ],
+      "weighted_total": "calculated weighted score",
+      "must_have_pass": true/false,
+      "strengths": ["top 3 strengths"],
+      "risks": ["top concerns"],
+      "interview_focus": ["areas to probe in interview"]
+    }
+    ```
+
+    Rules:
+    - Score ONLY based on evidence in the resume. Do not infer or assume.
+    - If a requirement isn't mentioned, score it 1-2 with a note.
+    - Be specific in evidence citations — quote the resume.
+    - Calculate weighted_total as sum(score * weight) / sum(weights) * 10.
+
+    Save to: {{ workspace }}/02-eval-candidate-{{ voice }}.json
+
+    Print a summary to stdout: name, weighted score, pass/fail, top strength, top risk.
+
+    {% elif stage == 3 %}
+    # Movement 3: Comparative Ranking
+
+    You are the hiring committee producing a final recommendation.
+
+    ## Read All Evaluations
+    Read every file in {{ workspace }}/:
+    - 01-criteria.json — The evaluation rubric
+    - 02-eval-candidate-1.json — Alex Chen's evaluation
+    - 02-eval-candidate-2.json — Priya Sharma's evaluation
+    - 02-eval-candidate-3.json — Marcus Johnson's evaluation
+
+    ## Your Task
+
+    Produce a comparative ranking document:
+
+    ### 1. Score Comparison Table
+    Create a markdown table with all candidates and all criteria.
+    Show each score and the weighted contribution.
+
+    ### 2. Candidate Rankings
+    Rank candidates by weighted total. For each candidate:
+    - Overall score and percentile
+    - Whether they pass the must-have threshold
+    - Top 3 differentiators (what sets them apart)
+    - Key risks that need interview validation
+
+    ### 3. Recommendation
+    - **Advance to interview:** which candidates and why
+    - **Pass:** which candidates and why
+    - **Interview focus areas** for each advancing candidate
+
+    ### 4. Scoring Calibration Notes
+    - Were any criteria consistently scored high/low across all candidates?
+    - Does the rubric need adjustment for future screenings?
+    - Any gaps in the candidate pool relative to requirements?
+
+    Be direct. If a candidate doesn't meet the bar, say so clearly.
+    If the decision is close, explain what tips the balance.
+
+    Save to: {{ workspace }}/03-ranking.md
+
+    Print the final ranking summary to stdout.
+
+    {% endif %}
+
+validations:
+  - type: file_exists
+    path: "{workspace}/01-criteria.json"
+    sheet: 1
+  - type: file_exists
+    path: "{workspace}/02-eval-candidate-1.json"
+    sheet: 2
+  - type: file_exists
+    path: "{workspace}/02-eval-candidate-2.json"
+    sheet: 3
+  - type: file_exists
+    path: "{workspace}/02-eval-candidate-3.json"
+    sheet: 4
+  - type: file_exists
+    path: "{workspace}/03-ranking.md"
+    sheet: 5
