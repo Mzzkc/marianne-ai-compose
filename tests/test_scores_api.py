@@ -24,16 +24,13 @@ sheet:
   total_items: 30
 backend:
   type: claude_cli
-  model: sonnet
 prompt:
-  system_prompt_file: examples/system-prompt.md
-  user_prompt_template: |
-    Complete task {{ sheet_num }} of {{ total_sheets }}
+  template: |
+    Complete task {{ sheet_num }} of {{ total_items }}
 validations:
   - type: file_exists
-    path: "result.txt"
+    path: "{workspace}/result.txt"
     description: "Result file exists"
-notifications: []
 """
 
 
@@ -60,12 +57,12 @@ def invalid_schema_config():
     return """
 name: test-job
 sheet:
-  size: "not_a_number"  # Should be integer
+  size: "not_a_number"
   total_items: 30
 backend:
-  type: invalid_backend_type  # Should be valid backend type
+  type: invalid_backend_type
 prompt:
-  system_prompt_file: examples/system-prompt.md
+  template: "test"
 """
 
 
@@ -79,16 +76,14 @@ sheet:
   total_items: 2
 backend:
   type: claude_cli
-  model: sonnet
 prompt:
-  template_file: nonexistent-template.md  # Missing template file - should error
-  user_prompt_template: |
-    Task {{ undefined_var }} of {{ total_sheets }}  # Undefined variable - should warn
+  template_file: nonexistent-template.md
+  template: |
+    Task {{ undefined_var }} of {{ total_items }}
 validations:
   - type: content_regex
-    pattern: "[invalid regex"  # Invalid regex - should error
+    pattern: "[invalid regex"
     path: "test.txt"
-notifications: []
 """
 
 
@@ -284,7 +279,7 @@ sheet:
 backend:
   type: claude_cli
 prompt:
-  user_prompt_template: "Simple task"
+  template: "Simple task"
 """
 
         response = client.post(
@@ -338,38 +333,21 @@ sheet:
 
 backend:
   type: claude_cli
-  model: opus
 
 prompt:
-  system_prompt_file: examples/complex-system.md
-  user_prompt_template: |
-    Sheet {{ sheet_num }} of {{ total_sheets }}
-    Previous context: {{ prev_sheet_output }}
+  template: |
+    Sheet {{ sheet_num }} of {{ total_items }}
 
 validations:
   - type: file_exists
-    path: "output-{{ sheet_num }}.txt"
-    description: "Sheet {{ sheet_num }} output file"
-
-notifications:
-  - type: email
-    to: ["admin@test.com"]
-    on_success: true
-    on_failure: true
+    path: "{workspace}/output.txt"
+    description: "Output file"
 
 learning:
   enabled: true
 
-grounding:
-  enabled: true
-  hooks:
-    - type: file_checksum
-      name: artifact_check
-      expected_checksums:
-        output.txt: "placeholder"
-
 cost_limits:
-  max_cost_usd: 50.0
+  max_cost_per_job: 50.0
 
 isolation:
   enabled: true
@@ -396,7 +374,7 @@ isolation:
         assert summary["name"] == "complex-job"
         assert summary["total_sheets"] == 10  # Computed from size/total_items
         assert summary["validation_count"] == 1
-        assert summary["notification_count"] == 1
+        assert summary["notification_count"] == 0  # No notifications in this config
         assert summary["has_dependencies"] is True
 
         # May have warnings about missing files, but should be structurally valid
@@ -566,7 +544,7 @@ class TestTemplateAnalysis:
         content = """
 name: test-job
 sheet:
-  total_sheets: 1
+  total_items: 1
 """
         result = analyze_template("simple-task", content)
 
@@ -609,7 +587,7 @@ notifications:
 name: "{{ job_name }}"
 workspace: "{{ workspace_path | default('./workspace') }}"
 sheet:
-  total_sheets: 1
+  total_items: 1
 """
         result = analyze_template("simple-task", content)
 

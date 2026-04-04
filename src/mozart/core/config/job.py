@@ -70,7 +70,7 @@ class InjectionItem(BaseModel):
     file content into prompts at category-appropriate locations.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     file: str = Field(
         description="Path to the file to inject. Supports Jinja templating "
@@ -105,6 +105,8 @@ class InstrumentDef(BaseModel):
               timeout_seconds: 3600
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     profile: str = Field(
         min_length=1,
         description="Name of the registered instrument profile, e.g. 'gemini-cli'",
@@ -136,6 +138,8 @@ class MovementDef(BaseModel):
           3:
             name: Review
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(
         default=None,
@@ -172,6 +176,8 @@ class SheetConfig(BaseModel):
     ``total_items`` and ``dependencies`` reflect expanded values, and ``fan_out``
     is cleared to ``{}`` to prevent re-expansion on resume.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     size: int = Field(ge=1, description="Number of items per sheet")
     total_items: int = Field(ge=1, description="Total number of items to process")
@@ -313,6 +319,19 @@ class SheetConfig(BaseModel):
             "Example: {'gemini-cli': [1, 2, 3], 'claude-code': [4, 5, 6]}"
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def strip_computed_fields(cls, data: Any) -> Any:
+        """Strip computed properties that users may include in YAML.
+
+        total_sheets is computed from size/total_items, not configurable.
+        Accept it silently for backward compatibility — rejecting it would
+        break existing scores that include it.
+        """
+        if isinstance(data, dict) and "total_sheets" in data:
+            data.pop("total_sheets")
+        return data
 
     @field_validator("per_sheet_instruments")
     @classmethod
@@ -537,6 +556,8 @@ class SheetConfig(BaseModel):
 class PromptConfig(BaseModel):
     """Configuration for prompt templating."""
 
+    model_config = ConfigDict(extra="forbid")
+
     template: str | None = Field(
         default=None,
         description="Inline Jinja2 template",
@@ -605,6 +626,8 @@ def _prepare_for_yaml(obj: Any) -> Any:
 
 class JobConfig(BaseModel):
     """Complete configuration for an orchestration job."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(description="Unique job name")
     description: str | None = Field(default=None, description="Human-readable description")
