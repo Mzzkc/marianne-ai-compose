@@ -41,6 +41,35 @@ from mozart.daemon.types import JobRequest, JobResponse, ObserverEvent
 
 _logger = get_logger("daemon.manager")
 
+# Filesystem timestamp tolerance for stale detection (#103).
+# Avoids false positives from filesystem granularity differences.
+_MTIME_TOLERANCE_SECONDS = 1.0
+
+
+def _should_auto_fresh(config_path: Path, completed_at: float | None) -> bool:
+    """Check if a score file was modified after a completed run.
+
+    Used by submit_job to auto-detect changed score files and start fresh
+    instead of reusing stale completed state (#103).
+
+    Args:
+        config_path: Path to the score YAML file.
+        completed_at: Epoch timestamp when the previous run completed.
+            None if unknown (never ran or no timestamp stored).
+
+    Returns:
+        True if the score file was modified after the job completed
+        (indicating the user wants a fresh run), False otherwise.
+    """
+    if completed_at is None:
+        return False
+    try:
+        mtime = config_path.stat().st_mtime
+    except OSError:
+        return False
+    # Score was modified more than tolerance seconds after completion
+    return mtime > completed_at + _MTIME_TOLERANCE_SECONDS
+
 
 @dataclass
 class JobMeta:
@@ -665,6 +694,24 @@ class JobManager:
                         "Use 'mozart pause' or 'mozart cancel' first, or wait for it to finish."
                     ),
                 )
+
+            # Auto-detect changed score file on re-run (#103).
+            # When a COMPLETED job exists and --fresh wasn't set, check
+            # if the score file was modified after the last run completed.
+            if not request.fresh:
+                record = await self._registry.get_job(job_id)
+                if (
+                    record is not None
+                    and record.status == DaemonJobStatus.COMPLETED
+                    and _should_auto_fresh(request.config_path, record.completed_at)
+                ):
+                    request = request.model_copy(update={"fresh": True})
+                    _logger.info(
+                        "auto_fresh.score_changed",
+                        job_id=job_id,
+                        config_path=str(request.config_path),
+                        message="Score file modified since last completed run — starting fresh",
+                    )
 
             meta = JobMeta(
                 job_id=job_id,

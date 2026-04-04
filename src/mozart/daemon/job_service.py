@@ -353,6 +353,8 @@ class JobService:
             "resume_sheet": resume_sheet,
             "total_sheets": found_state.total_sheets,
             "previous_status": found_state.status.value,
+            "previous_error": found_state.error_message,
+            "config_reloaded": was_reloaded,
         })
 
         # Wrap backend early so the initial state save publishes to the

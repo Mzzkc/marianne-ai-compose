@@ -78,6 +78,11 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **Mateship pickup:** Committed Harper's uncommitted #93 (pause-during-retry), F-450 (MethodNotFoundError), and D-024 (cost accuracy) work. All three had code + tests ready in the working tree.
 - **#122 FIXED:** Resume gives unclear output when reloading config. Root cause: `await_early_failure()` races with conductor's async status transition, catching stale FAILED status. Fix: removed the poll from conductor-routed resumes entirely. Enhanced direct resume Panel to show previous state as context. 7 TDD tests in test_resume_output_clarity.py. Updated test_cli_run_resume.py (stale await_early_failure mock).
 
+### M4 Progress (Ghost)
+- **#103 FIXED:** Auto-detect changed score file on re-run. Added `_should_auto_fresh()` to manager.py — compares score file mtime against registry `completed_at` with 1-second filesystem tolerance. Wired into `submit_job()` — auto-sets `fresh=True` when COMPLETED job's score was modified since last run. 7 TDD tests in test_stale_completed_detection.py. Enhanced job_service.py resume event with `previous_error`/`config_reloaded` context.
+- **Resume improvements complete:** #93, #103, #122 all resolved. Roadmap step 50 is done.
+- **Test fixes:** Fixed broken test_resume_no_reload_ipc.py and test_conductor_first_routing.py — both patched `await_early_failure` on resume module after Forge's #122 fix removed it.
+
 ### M4 Progress (Maverick)
 - **#120 RESOLVED:** Fan-in [SKIPPED] placeholder + `skipped_upstream` template variable. Skipped upstream sheets now inject `[SKIPPED]` in `previous_outputs` instead of silent omission. 7 TDD tests, 3 existing tests updated. `context.py`, `templating.py`.
 - **F-211 contribution:** Added `_synced_status` cache field (state-diff dedup) to BatonAdapter.__init__. Canyon/Foundation's sync handlers depend on this field for idempotent syncing. 16 TDD tests.
