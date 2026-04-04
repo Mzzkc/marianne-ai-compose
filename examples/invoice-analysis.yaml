@@ -1,0 +1,437 @@
+# invoice-analysis.yaml — Invoice Analysis Pipeline
+#
+# A Mozart score that analyzes invoices for accuracy, compliance, and anomalies.
+# Demonstrates structured data extraction with parallel multi-perspective
+# analysis and consolidated reporting:
+#
+#   Movement 1: Parse the invoice and extract structured line items
+#   Movement 2: Analyze from three perspectives in parallel (3 voices)
+#               - Voice 1: Financial accuracy (math, totals, tax calculations)
+#               - Voice 2: Compliance (terms, regulatory requirements, contract match)
+#               - Voice 3: Anomaly detection (unusual patterns, duplicate charges, outliers)
+#   Movement 3: Produce a consolidated analysis report with action items
+#
+# This is a Wordware comparison demo — showing how Mozart splits complex
+# analysis into parallel expert perspectives that would require sequential
+# prompt chaining in other tools.
+#
+# Usage:
+#   mozart start
+#   mozart run examples/invoice-analysis.yaml
+#   mozart status invoice-analysis
+#   cat workspaces/invoice-analysis/03-report.md
+#
+# Output:
+#   workspaces/invoice-analysis/
+#     01-parsed-invoice.json     — Structured invoice data extraction
+#     02-financial-review.md     — Accuracy and calculation verification
+#     02-compliance-review.md    — Terms and regulatory compliance check
+#     02-anomaly-review.md       — Pattern analysis and anomaly flagging
+#     03-report.md               — Consolidated analysis with action items
+#
+# Time: ~3 minutes  |  Sheets: 5
+
+name: invoice-analysis
+description: "Analyze an invoice from three expert perspectives — accuracy, compliance, and anomaly detection"
+
+workspace: ../workspaces/invoice-analysis
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 600
+
+movements:
+  1:
+    name: "Data Extraction"
+  2:
+    name: "Expert Analysis"
+  3:
+    name: "Consolidated Report"
+
+sheet:
+  size: 1
+  total_items: 3
+  fan_out:
+    2: 3
+  dependencies:
+    2: [1]
+    3: [2]
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 6000
+  lookback_sheets: 4
+
+retry:
+  max_retries: 1
+
+prompt:
+  variables:
+    invoice:
+      number: "INV-2026-04817"
+      date: "2026-03-15"
+      due_date: "2026-04-14"
+      vendor:
+        name: "Stratos Cloud Infrastructure, Inc."
+        address: "2200 Mission Street, Suite 400, San Francisco, CA 94110"
+        tax_id: "84-2917503"
+      client:
+        name: "Helix Biotech Partners, LLC"
+        address: "One Kendall Square, Suite 300, Cambridge, MA 02139"
+        po_number: "PO-HBP-2026-0193"
+      currency: "USD"
+    line_items:
+      - description: "Enterprise Cloud Compute — 480 vCPU-hours @ $0.085/hr"
+        quantity: 480
+        unit_price: 0.085
+        amount: 40.80
+        category: "compute"
+      - description: "GPU Instances (A100 80GB) — 120 GPU-hours @ $3.20/hr"
+        quantity: 120
+        unit_price: 3.20
+        amount: 384.00
+        category: "compute"
+      - description: "Object Storage — 12.4 TB-months @ $0.023/GB-month"
+        quantity: 12700
+        unit_price: 0.023
+        amount: 292.10
+        category: "storage"
+      - description: "Data Transfer — Egress 2.8 TB @ $0.09/GB"
+        quantity: 2867
+        unit_price: 0.09
+        amount: 258.03
+        category: "network"
+      - description: "Managed Kubernetes — 3 clusters x 30 days @ $2.40/day"
+        quantity: 90
+        unit_price: 2.40
+        amount: 216.00
+        category: "platform"
+      - description: "Premium Support — Monthly flat rate"
+        quantity: 1
+        unit_price: 450.00
+        amount: 450.00
+        category: "support"
+      - description: "Security Compliance Scanning — 847 scans @ $0.15/scan"
+        quantity: 847
+        unit_price: 0.15
+        amount: 127.05
+        category: "security"
+      - description: "Data Transfer — Egress 2.1 TB @ $0.09/GB"
+        quantity: 2150
+        unit_price: 0.09
+        amount: 193.50
+        category: "network"
+    subtotal: 1961.48
+    tax_rate: 0.0875
+    tax_amount: 171.63
+    total: 2133.11
+    contract_terms:
+      monthly_commit: 1500.00
+      overage_rate: "standard pricing applies above commit"
+      payment_terms: "Net 30"
+      discount: "15% on compute over $500/month"
+      sla: "99.95% uptime, $50 credit per hour below SLA"
+
+  template: |
+    {% if stage == 1 %}
+    # Movement 1: Invoice Data Extraction
+
+    You are a financial analyst. Parse this invoice into a structured JSON
+    document that downstream analysis teams will use as their primary reference.
+
+    ## Invoice Details
+
+    **Invoice:** {{ invoice.number }} ({{ invoice.date }})
+    **Due:** {{ invoice.due_date }}
+    **Vendor:** {{ invoice.vendor.name }}
+    **Client:** {{ invoice.client.name }}
+    **PO:** {{ invoice.client.po_number }}
+
+    ## Line Items
+    {% for item in line_items %}
+    {{ loop.index }}. {{ item.description }}
+       Qty: {{ item.quantity }} x ${{ item.unit_price }} = ${{ item.amount }} [{{ item.category }}]
+    {% endfor %}
+
+    **Subtotal:** ${{ subtotal }}
+    **Tax ({{ tax_rate * 100 }}%):** ${{ tax_amount }}
+    **Total:** ${{ total }}
+
+    ## Contract Terms
+    - Monthly commit: ${{ contract_terms.monthly_commit }}
+    - Overage: {{ contract_terms.overage_rate }}
+    - Payment: {{ contract_terms.payment_terms }}
+    - Discount: {{ contract_terms.discount }}
+    - SLA: {{ contract_terms.sla }}
+
+    ## Your Task
+
+    Produce a JSON document with this structure:
+
+    ```json
+    {
+      "invoice_meta": {
+        "number": "...",
+        "date": "...",
+        "due_date": "...",
+        "vendor": "...",
+        "client": "...",
+        "po_number": "..."
+      },
+      "line_items": [
+        {
+          "index": 1,
+          "description": "...",
+          "category": "...",
+          "quantity": 0,
+          "unit_price": 0.00,
+          "stated_amount": 0.00,
+          "calculated_amount": 0.00,
+          "discrepancy": true/false,
+          "notes": "..."
+        }
+      ],
+      "totals": {
+        "stated_subtotal": 0.00,
+        "calculated_subtotal": 0.00,
+        "tax_rate": 0.00,
+        "stated_tax": 0.00,
+        "calculated_tax": 0.00,
+        "stated_total": 0.00,
+        "calculated_total": 0.00,
+        "discrepancies": ["list of any calculation mismatches"]
+      },
+      "contract_reference": {
+        "monthly_commit": 0.00,
+        "discount_applicable": true/false,
+        "discount_details": "...",
+        "payment_terms": "..."
+      },
+      "preliminary_flags": ["anything unusual noticed during parsing"]
+    }
+    ```
+
+    Be precise. Recalculate every line item (quantity * unit_price) and every
+    total. Flag ANY discrepancy between stated and calculated amounts, no matter
+    how small. Downstream analysis depends on your accuracy.
+
+    Save to: {{ workspace }}/01-parsed-invoice.json
+
+    Print the JSON to stdout so downstream sheets can reference it.
+
+    {% elif stage == 2 %}
+    # Movement 2: Expert Analysis
+
+    Read {{ workspace }}/01-parsed-invoice.json first — this is your
+    structured reference for all analysis.
+
+    {% if voice == 1 %}
+    ## Voice 1: Financial Accuracy Review
+
+    You are a financial auditor. Your job is to verify every number on
+    this invoice.
+
+    ### Verification Checklist
+
+    1. **Line item math** — Does quantity * unit_price = stated amount for
+       every line? List each item with the calculation.
+    2. **Unit pricing** — Are the unit prices consistent with the contract
+       terms? Flag any that seem outside normal cloud pricing ranges.
+    3. **Subtotal** — Does the sum of all line items equal the stated subtotal?
+    4. **Tax calculation** — Does subtotal * tax_rate = stated tax? Is the
+       tax rate correct for the vendor/client jurisdictions?
+    5. **Grand total** — Does subtotal + tax = stated total?
+    6. **Discount application** — The contract specifies a 15% discount on
+       compute over $500/month. Is it applied? Should it be?
+    7. **Rounding** — Are there rounding inconsistencies? Check to the cent.
+
+    ### Output Format
+
+    For each check, show:
+    - The calculation you performed
+    - The expected result
+    - The stated result
+    - PASS / FAIL / WARNING
+
+    End with a summary: total discrepancy amount and whether the invoice
+    should be paid as-is, adjusted, or disputed.
+
+    Save to: {{ workspace }}/02-financial-review.md
+
+    Print a one-paragraph summary of your findings to stdout.
+
+    {% elif voice == 2 %}
+    ## Voice 2: Compliance Review
+
+    You are a procurement compliance analyst. Your job is to verify this
+    invoice meets contractual and regulatory requirements.
+
+    ### Compliance Checklist
+
+    1. **PO match** — Does the invoice reference a valid PO number?
+    2. **Contract terms** — Is the monthly commit met? Are overage charges
+       correctly applied above the commit threshold?
+    3. **Payment terms** — Is Net 30 correctly calculated from invoice date?
+    4. **SLA compliance** — Are there any SLA credit indicators? If uptime
+       was below 99.95%, credits should appear.
+    5. **Tax ID verification** — Is the vendor tax ID in the correct format
+       for their jurisdiction (EIN for US entities)?
+    6. **Category alignment** — Do the line item categories match what the
+       contract covers? Are there charges outside the contract scope?
+    7. **Billing period** — Is the billing period clear and consistent
+       across all line items?
+    8. **Duplicate detection** — Are there line items that appear to charge
+       for the same service twice?
+
+    ### Output Format
+
+    For each check:
+    - What you checked
+    - What you found
+    - COMPLIANT / NON-COMPLIANT / NEEDS REVIEW
+    - Recommended action (if any)
+
+    End with a compliance score (percentage of checks passed) and a list
+    of items requiring attention before payment approval.
+
+    Save to: {{ workspace }}/02-compliance-review.md
+
+    Print a one-paragraph summary to stdout.
+
+    {% elif voice == 3 %}
+    ## Voice 3: Anomaly Detection
+
+    You are a forensic accountant specializing in vendor invoice analysis.
+    Your job is to find patterns that don't look right — things a standard
+    audit might miss.
+
+    ### Anomaly Checklist
+
+    1. **Duplicate charges** — Are any line items suspiciously similar?
+       Compare descriptions, quantities, and amounts. Partial duplicates
+       (same service, different quantity) are worth flagging too.
+    2. **Usage spikes** — Do any quantities seem disproportionate relative
+       to others? What usage pattern do the numbers suggest?
+    3. **Pricing outliers** — Are any unit prices significantly different
+       from typical cloud infrastructure pricing? Compare to public
+       pricing for similar services.
+    4. **Category concentration** — Is spend heavily concentrated in one
+       category? What does the category breakdown look like?
+    5. **Round numbers** — Are there suspiciously round quantities or
+       amounts that might indicate estimates rather than actual usage?
+    6. **Missing services** — Given the services listed, are there
+       expected companion services that are absent? (e.g., compute without
+       monitoring, storage without backup)
+    7. **Timing patterns** — Does the billing period align with the
+       invoice date and due date?
+
+    ### Output Format
+
+    For each potential anomaly:
+    - What you found
+    - Why it's unusual
+    - Risk level: HIGH / MEDIUM / LOW
+    - Recommended investigation step
+
+    End with a risk summary: overall risk score, top 3 concerns, and
+    whether this invoice warrants additional review before payment.
+
+    Save to: {{ workspace }}/02-anomaly-review.md
+
+    Print a one-paragraph summary to stdout.
+    {% endif %}
+
+    {% elif stage == 3 %}
+    # Movement 3: Consolidated Analysis Report
+
+    You are the accounts payable manager producing the final invoice
+    analysis before authorizing payment.
+
+    ## Read All Reviews
+    Read every file in {{ workspace }}/:
+    - 01-parsed-invoice.json — The structured invoice data
+    - 02-financial-review.md — Financial accuracy findings
+    - 02-compliance-review.md — Compliance check results
+    - 02-anomaly-review.md — Anomaly detection findings
+
+    ## Your Task
+
+    Produce a consolidated analysis report with these sections:
+
+    ### Executive Summary
+    One paragraph: should this invoice be paid, adjusted, or held?
+    State the total amount, any adjustments needed, and the overall risk level.
+
+    ### Invoice Overview
+    Quick reference table with invoice number, vendor, client, amount,
+    due date, and PO.
+
+    ### Findings by Severity
+
+    #### Critical (Block Payment)
+    Issues that must be resolved before any payment is made.
+
+    #### High (Adjust Before Payment)
+    Calculation errors or overcharges that should be corrected.
+
+    #### Medium (Flag for Follow-Up)
+    Compliance gaps or anomalies to investigate but that don't block payment.
+
+    #### Low (Note for Record)
+    Minor observations for future reference.
+
+    ### Financial Reconciliation
+    - Stated total vs. calculated total
+    - Adjustments recommended (itemized)
+    - Recommended payment amount
+
+    ### Action Items
+    Numbered list of specific next steps, each with:
+    - What needs to happen
+    - Who should do it (AP, procurement, vendor)
+    - Priority (immediate, before payment, within 30 days)
+
+    ### Recommendation
+    Final recommendation with confidence level.
+
+    Save to: {{ workspace }}/03-report.md
+
+    Print the executive summary and recommendation to stdout.
+
+    {% endif %}
+
+validations:
+  - type: file_exists
+    path: "{workspace}/01-parsed-invoice.json"
+    sheet: 1
+    description: "Parsed invoice data exists"
+  - type: content_contains
+    path: "{workspace}/01-parsed-invoice.json"
+    pattern: "line_items"
+    sheet: 1
+    description: "Parsed invoice contains line items"
+  - type: file_exists
+    path: "{workspace}/02-financial-review.md"
+    sheet: 2
+    description: "Financial accuracy review exists"
+  - type: file_exists
+    path: "{workspace}/02-compliance-review.md"
+    sheet: 3
+    description: "Compliance review exists"
+  - type: file_exists
+    path: "{workspace}/02-anomaly-review.md"
+    sheet: 4
+    description: "Anomaly detection review exists"
+  - type: file_exists
+    path: "{workspace}/03-report.md"
+    sheet: 5
+    description: "Consolidated report exists"
+  - type: content_contains
+    path: "{workspace}/03-report.md"
+    pattern: "Recommendation"
+    sheet: 5
+    description: "Report contains final recommendation"

@@ -509,8 +509,9 @@ Available when `cross_sheet` is configured:
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `previous_outputs` | dict[int, str] | Stdout from previous sheets. Keys are sheet numbers. |
+| `previous_outputs` | dict[int, str] | Stdout from previous sheets. Keys are sheet numbers. Skipped upstream sheets appear as `[SKIPPED]` instead of being silently omitted. |
 | `previous_files` | dict[str, str] | File contents captured between sheets. Keys are file paths. |
+| `skipped_upstream` | list[int] | Sheet numbers of upstream sheets that were skipped (via `skip_when` or `skip_when_command`). Use this to handle incomplete fan-in data explicitly in your template. |
 
 **Example usage:**
 
@@ -1608,6 +1609,20 @@ cross_sheet:
 ## {{ path }}
 {{ content }}
 {% endfor %}
+{% endif %}
+```
+
+**Handling skipped upstream sheets:**
+
+When upstream sheets are skipped (via `skip_when` or `skip_when_command`),
+their entry in `previous_outputs` contains `[SKIPPED]` instead of being
+silently omitted. The `skipped_upstream` variable lists which sheet numbers
+were skipped, so your template can handle incomplete fan-in data:
+
+```jinja2
+{% if skipped_upstream %}
+Note: Sheets {{ skipped_upstream | join(', ') }} were skipped.
+Synthesize from the {{ previous_outputs | length - skipped_upstream | length }} available outputs.
 {% endif %}
 ```
 

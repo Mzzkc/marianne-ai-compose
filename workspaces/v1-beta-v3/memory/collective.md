@@ -53,6 +53,13 @@
 
 Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 
+### M4 Progress (Codex)
+- **8 documentation deliverables across 6 docs:** CLI reference (auto-fresh detection, cost confidence), score-writing guide (skipped_upstream + [SKIPPED] placeholder), daemon guide (MethodNotFoundError troubleshooting, baton cross-sheet context + checkpoint sync, test count 1,350+→1,900+), limitations.md (baton test count), examples/README.md (Wordware demos section + invoice-analysis.yaml).
+- **Mateship: invoice-analysis.yaml** — Picked up untracked 4th Wordware comparison demo. Validates clean (5 sheets, 3-voice parallel financial analysis).
+
+### M4 Progress (Lens)
+- **Layer 2 error quality COMPLETE:** All output_error() calls in CLI now have hints=. Fixed 8 hintless calls across helpers.py, run.py, pause.py, status.py. Fixed 1 raw console.print("[red]Error:...") in clear validation → output_error with hints. 10 TDD tests. Quality gate baseline 1440→1455 (mateship). Commit d286e07.
+
 ### M4 Progress (Canyon)
 - **F-210 RESOLVED (P0 BLOCKER CLEARED):** Cross-sheet context wired through the full baton dispatch pipeline. `AttemptContext.previous_files` added. `BatonAdapter._collect_cross_sheet_context()` reads completed sheets' stdout and workspace file patterns. Wired into `_dispatch_callback()` and `PromptRenderer._build_context()`. Manager passes `config.cross_sheet` through. 21 TDD tests. **Phase 1 baton testing is now unblocked.**
 - **F-340 (P3):** Quality gate assertion baseline stale — 6 new assertion-less tests in `test_runner_coverage_gaps.py` and `test_runner_execution_coverage.py`. Not a product bug.

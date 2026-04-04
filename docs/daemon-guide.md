@@ -374,7 +374,7 @@ See the [CLI Reference](cli-reference.md#conductor-clones) for full details.
 
 The baton (`daemon/baton/`) is Mozart's next-generation execution engine, replacing
 the monolithic sequential runner with event-driven per-sheet dispatch. It is fully
-built and tested (1,350+ tests) but not yet activated as the default execution path.
+built and tested (1,900+ tests) but not yet activated as the default execution path.
 
 Key capabilities:
 - **Event-driven dispatch** — sheets dispatch when their dependencies are met and their
@@ -389,6 +389,11 @@ Key capabilities:
 - **Cost enforcement** — per-sheet and per-job cost limits enforced after every attempt
 - **Full prompt assembly** — the baton renders prompts through the complete pipeline
   (preamble, template variables, prelude/cadenza injection, validation requirements)
+- **Cross-sheet context** — `previous_outputs` and `previous_files` are populated from
+  completed sheets' stdout and workspace files, matching the legacy runner's behavior
+- **Checkpoint sync** — sheet status changes from all event types (escalation, cancellation,
+  timeout, rate limit expiry, shutdown) are synchronized back to CheckpointState with
+  deduplication to prevent redundant callbacks
 
 **Activation:** Set `use_baton: true` in `~/.mozart/conductor.yaml`. Use `--conductor-clone`
 for testing — do not activate against a production conductor without validating first.
@@ -476,6 +481,18 @@ mozart start
 ### Permission Errors on Socket
 
 The socket is created with `0o660` permissions by default (owner + group read/write). If another user needs access, adjust `socket.permissions` in the conductor config. The conductor also rejects symlinked socket paths as a security measure.
+
+### "Conductor does not support '...'. Restart the conductor"
+
+The CLI is newer than the running conductor. This happens when you update
+Mozart code but don't restart the conductor — the running daemon still has
+the old code loaded and doesn't recognize new IPC methods.
+
+```bash
+# Pick up code changes
+pip install -e ".[dev]"
+mozart restart
+```
 
 ### "--escalation incompatible with conductor"
 

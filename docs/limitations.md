@@ -70,7 +70,7 @@ Execution is batch-oriented. stdout and stderr are captured after each sheet com
 
 ### Baton Execution Engine Not Yet Default
 
-The baton (`src/mozart/daemon/baton/`) is an event-driven execution engine that replaces the monolithic sequential runner with per-sheet dispatch, per-instrument concurrency, timer-based retry, rate limit auto-resume, and restart recovery. It is fully built and tested (1,350+ tests) but not yet the default execution path.
+The baton (`src/mozart/daemon/baton/`) is an event-driven execution engine that replaces the monolithic sequential runner with per-sheet dispatch, per-instrument concurrency, timer-based retry, rate limit auto-resume, and restart recovery. It is fully built and tested (1,900+ tests) but not yet the default execution path.
 
 **What this means:** Jobs currently run via `JobService.start_job()` using the legacy sequential runner. The baton can be activated with `use_baton: true` in `~/.mozart/conductor.yaml` but should only be tested with `--conductor-clone` first.
 

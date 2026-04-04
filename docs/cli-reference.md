@@ -85,6 +85,17 @@ Usage: mozart run [OPTIONS] CONFIG_FILE
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
 | `--fresh` | | false | Delete existing state before running, ensuring a fresh start. Use for self-chaining scores or re-running completed scores from scratch |
 
+#### Auto-Fresh Detection
+
+When you re-run a completed score after editing the YAML file, Mozart
+automatically detects the change and starts fresh — no `--fresh` flag needed.
+The conductor compares the score file's modification time against the
+previous run's completion time. If the score is newer, it starts a fresh
+run automatically.
+
+This only applies to **completed** scores. Failed or paused scores are
+always resumed from their checkpoint, regardless of file changes.
+
 #### Examples
 
 ```bash
@@ -304,7 +315,7 @@ When given a score ID, shows detailed status for that score:
 - Score name, status, and timing
 - Progress bar with sheet counts
 - Per-sheet details with validation results
-- Cost tracking (if available)
+- Cost tracking with confidence indicators (see below)
 - Error summaries with `mozart diagnose` suggestion on failure
 
 For large scores (50+ sheets), a compact summary is shown instead of the full sheet table: counts by status, then only interesting sheets (running, failed, validation-failed) capped at 20 entries. Small scores retain the full detail table.
@@ -333,6 +344,7 @@ Standard per-score output includes:
 - Error messages (if any)
 - Sheet details table (or compact summary for 50+ sheets)
 - **Instrument column** — when any sheet has an assigned instrument name, the table includes an Instrument column showing which instrument each sheet uses. For large scores (50+ sheets), the summary view shows an instrument breakdown with counts.
+- **Cost summary** — always shown, including total cost, token counts, and cost limit status. When an instrument returns structured token data (JSON output), costs are precise. When tokens are estimated from output character count, the display shows `~$X.XX (est.)` with a warning that actual costs may be 10-100x higher. Use JSON output format on your instrument for accurate cost tracking.
 - Suggestion to run `mozart diagnose` on failure
 
 JSON output structure:
