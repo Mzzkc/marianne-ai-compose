@@ -63,6 +63,16 @@ VALIDATION_OUTPUT_TRUNCATE_CHARS = 500
 RESET_TIME_MINIMUM_WAIT_SECONDS = 300.0
 """Minimum wait time for reset-based rate limit delays (5 minutes)."""
 
+RESET_TIME_MAXIMUM_WAIT_SECONDS = 86400.0
+"""Maximum wait time for parsed rate limit delays (24 hours).
+
+Safety cap: without this, adversarial or malformed API responses like
+'resets in 999999 hours' would schedule timers for years, effectively
+blocking the instrument forever with no auto-recovery. 24 hours is the
+longest any real API provider rate limit should last. If it's longer,
+the operator can re-trigger via `mozart clear-rate-limits`.
+"""
+
 DEFAULT_QUOTA_WAIT_SECONDS = 3600.0
 """Default wait time when quota exhaustion is detected but no reset time parsed."""
 

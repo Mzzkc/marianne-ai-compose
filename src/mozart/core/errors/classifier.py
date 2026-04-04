@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from mozart.core.constants import (
     DEFAULT_QUOTA_WAIT_SECONDS,
     DEFAULT_RATE_LIMIT_WAIT_SECONDS,
+    RESET_TIME_MAXIMUM_WAIT_SECONDS,
     RESET_TIME_MINIMUM_WAIT_SECONDS,
 )
 from mozart.core.logging import get_logger
@@ -247,7 +248,7 @@ class ErrorClassifier:
                 amount = int(groups[0])
                 unit = groups[1].lower()
                 seconds: float = amount * 3600 if unit in ("hour", "hr") else amount * 60
-                return max(seconds, RESET_TIME_MINIMUM_WAIT_SECONDS)  # At least 5 minutes
+                return self._clamp_wait(seconds)
 
             # Pattern: "resets at X:XX" (24-hour time)
             if len(groups) == 2 and groups[1] and groups[1].isdigit():
@@ -258,7 +259,7 @@ class ErrorClassifier:
                 if reset_time <= now:
                     reset_time += timedelta(days=1)  # Next day
                 seconds = (reset_time - now).total_seconds()
-                return max(seconds, RESET_TIME_MINIMUM_WAIT_SECONDS)
+                return self._clamp_wait(seconds)
 
             # Pattern: "resets at Xpm/Xam"
             if len(groups) == 2 and groups[1] and groups[1].lower() in ("am", "pm"):
@@ -273,10 +274,23 @@ class ErrorClassifier:
                 if reset_time <= now:
                     reset_time += timedelta(days=1)  # Next day
                 seconds = (reset_time - now).total_seconds()
-                return max(seconds, RESET_TIME_MINIMUM_WAIT_SECONDS)
+                return self._clamp_wait(seconds)
 
         # No pattern matched, return default wait
         return None
+
+    @staticmethod
+    def _clamp_wait(seconds: float) -> float:
+        """Clamp wait time to [MINIMUM, MAXIMUM] range.
+
+        Prevents absurdly long waits from malformed or adversarial API
+        responses (e.g., 'resets in 999999 hours') while maintaining the
+        existing floor for very short waits.
+        """
+        return min(
+            max(seconds, RESET_TIME_MINIMUM_WAIT_SECONDS),
+            RESET_TIME_MAXIMUM_WAIT_SECONDS,
+        )
 
     def classify(
         self,

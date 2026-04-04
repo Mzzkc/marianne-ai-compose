@@ -109,6 +109,17 @@ Movement 3 — IN PROGRESS (2026-04-04).
 - **Quality gate baselines updated:** BARE_MAGICMOCK 1199→1214, ASYNCIO_SLEEP 136→137 for pre-existing violations.
 - **Quality checks:** mypy clean, ruff clean, 43 new tests pass.
 
+### Movement 3 Progress (Bedrock)
+- **D-018 COMPLETE:** Finding ID collision prevention. Range-based allocation in `FINDING_RANGES.md` — 10 IDs per musician per movement. Helper script `scripts/next-finding-id.sh`. FINDINGS.md header updated with protocol. F-148 RESOLVED. 12 historical collisions catalogued.
+- **Mateship pickup:** Uncommitted rate limit wait cap — `RESET_TIME_MAXIMUM_WAIT_SECONDS` (24h), `_clamp_wait()`, quality gate baseline bump, 10 TDD tests. Filed as F-350 (7th uncommitted work occurrence).
+- **Quality gate (M3):** mypy clean, ruff clean, quality gate test passes in isolation. Full-suite ordering-dependent failure is pre-existing.
+- **Milestone table verified (M3):**
+  - M0: 23/23 | M1: 17/17 | M2: 27/27 | M3: 24/24 — all complete
+  - M4: 12/19 (63%) | M5: 7/10 (70%) | M6: 1/8 (12.5%)
+  - Clone: 19/20 (95%) | Composer: 16/30 (53%)
+- **M3 stats:** 18 commits, 10 unique musicians (Canyon, Circuit, Codex, Dash, Forge, Foundation, Ghost, Harper, Lens, Spark). 6333 insertions across 58 files.
+- **Critical risks resolved this movement:** F-152 (Canyon), F-009/F-144 (Maverick/Foundation), F-145 (Canyon), F-158 (Canyon), F-112 (Circuit), F-150 (Foundation/Blueprint), F-151 (Circuit).
+
 Previous movement status preserved below.
 
 Movement 2 — COMPLETE (verified 2026-04-04).

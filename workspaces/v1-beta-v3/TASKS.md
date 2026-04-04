@@ -262,6 +262,12 @@ See FINDINGS.md F-097 through F-102 for full context.
 - [x] [Spark] Verify `PluginCliBackend._classify_error()` uses profile-defined error patterns (priority: P1) [source: F-101] — Verified: _check_rate_limit() uses rate_limit_patterns, _classify_output_errors() uses auth_error_patterns/crash_patterns/stale_patterns/timeout_patterns/capacity_patterns. All from profile. 22 existing tests in test_plugin_cli_backend.py cover this.
 - [ ] Add gemini-cli rate limit test: submit a sheet, mock rate limit response, verify E101/E102 classification (priority: P2) [source: F-101]
 
+### Finding ID System (D-018)
+- [x] [Bedrock] Design and implement finding ID collision prevention (priority: P2) [source: D-018, F-148] — Range-based allocation: `FINDING_RANGES.md` pre-allocates 10 IDs per musician per movement (M4: F-160 through F-479). Helper script `scripts/next-finding-id.sh` as fallback. FINDINGS.md header updated with protocol. Historical collision table documents 12 ambiguous IDs. F-148 RESOLVED.
+
+### Rate Limit Wait Cap (F-350)
+- [x] [Bedrock] Mateship pickup: commit uncommitted rate limit wait cap safety fix (priority: P2) [source: F-350, uncommitted work] — `RESET_TIME_MAXIMUM_WAIT_SECONDS = 86400.0` in constants.py, `_clamp_wait()` in classifier.py, quality gate baseline 1230→1234, 10 TDD tests in test_rate_limit_wait_cap.py. Prevents adversarial API responses from blocking instruments forever.
+
 ### Skill Rename: mozart:usage → mozart:operations (or similar)
 - [ ] Rename `mozart:usage` skill to `mozart:command` — collides with built-in `/usage` (Claude token usage). Every user who types `/usage` gets Mozart debugging help instead of their token count. (priority: P1) [source: composer directive]
 - [ ] Update all references across project: CLAUDE.md, skill files, memory-bank, docs, score comments, session protocols (priority: P1)
