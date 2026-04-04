@@ -155,26 +155,45 @@ prompt:
     # Everything the expeditions can translate patterns INTO.
     primitives: |
       **Execution units:** sheet (one task, one agent), stage (group of
-      sheets), movement (major phase), score (complete job), concert
-      (multi-score orchestration)
+      sheets), movement (named major phase — movements: YAML key gives
+      each movement a name visible in `mozart status`), score (complete
+      job), concert (multi-score orchestration)
 
-      **Coordination:** fan-out (N parallel instances), fan-in (convergence),
-      dependencies (DAG ordering), shared workspace artifacts
+      **Coordination:** fan-out (N parallel instances, stagger_delay_ms
+      staggers launches to reduce rate-limit surges), fan-in (convergence
+      with skipped_upstream variable for graceful degradation),
+      dependencies (DAG ordering), skip_when (conditional sheet skipping
+      based on file/command checks), shared workspace artifacts
 
       **Communication:** previous_outputs (stdout forwarding), capture_files
-      (file content forwarding), workspace files (persistent shared state),
-      cadenza injection (conductor adds context mid-run), prelude injection
-      (task-specific context before the work)
+      (file content forwarding), cross_sheet config (auto_capture_stdout,
+      max_output_chars, lookback_sheets — fine-grained context control),
+      workspace files (persistent shared state), cadenza injection
+      (conductor adds context mid-run), prelude injection (task-specific
+      context before the work)
 
       **Quality:** validations (file_exists, content_contains, content_regex,
       file_modified, command_succeeds), quality gates (verification-only
       stages), adversarial review stages, staged fail-fast (coarse before
-      fine), conditional validations
+      fine), conditional validations (per-sheet or per-stage conditions),
+      grounding hooks (verify agent output against source material)
 
       **Lifecycle:** on_success chains (score→score), self-chaining (score
       loops to itself with fresh state), workspace archival (history
       preserved), max_chain_depth (safety), learning inheritance (patterns
       flow across iterations), concert mode
+
+      **Instrument assignment:** per-sheet instrument override (each sheet
+      can use a different AI backend), instrument_map (batch-assign
+      instruments to sheet ranges), movement-level instrument defaults,
+      instrument_config.model (override the model within an instrument),
+      mixed-instrument scores where cheap instruments handle simple work
+      and expensive instruments handle complex reasoning
+
+      **Specification corpus:** spec_dir points to a directory of YAML
+      specification files that get injected into agent context. spec_tags
+      per-sheet filter which specs are relevant. Agents receive structured
+      domain knowledge, not just prompts.
 
       **Agent tools:** Read, Write, Edit, Grep, Glob, Bash, WebSearch,
       Agent (subagent dispatch). These are the hands and eyes.
@@ -216,6 +235,21 @@ prompt:
       pipeline, fan-out+synthesis, concert chain, self-chain loop,
       complex investigation (dual-phase, double fan-out)
 
+      **The corpus has 56 named patterns** across 10 generative forces,
+      11 generators, and 12 cross-domain convergences. 6 proof scores
+      exist in examples/rosetta/. Patterns range from beginner (Fan-out
+      + Synthesis, Shipyard Sequence, The Tool Chain) to advanced (CEGAR
+      Loop, Saga Compensation Chain, Lines of Effort).
+
+      **New capabilities since last iteration that patterns should USE:**
+      - Per-sheet instrument assignment (mixed-instrument scores)
+      - Specification corpus injection (spec_dir + spec_tags)
+      - Grounding hooks (verify output against source material)
+      - skip_when (conditional sheet execution)
+      - stagger_delay_ms (fan-out launch staggering)
+      - cross_sheet fine-grained context control
+      - Named movements (movements: YAML key)
+
       **Practiced patterns from real scores:**
       - Verification loop (style-ghost: 23 sheets, triple fan-out)
       - Swarm (v3 orchestra: 706 sheets, 32 equal peers)
@@ -223,10 +257,14 @@ prompt:
       - Company-in-a-box (backyard-capitalism-9000: persona agents)
       - Production pipeline (viral-clip-extractor: parallel modules)
       - Archaeological dig (workspace-archaeology: 28 sheets, dual-LLM)
+      - Wordware demos (4): contract-gen, candidate-screening, marketing-content, invoice-analysis
+      - Rosetta proofs (6): immune-cascade, dead-letter-quarantine, echelon-repair, prefabrication, source-triangulation, shipyard-sequence
 
       **Check the permanent corpus** at the path given in Stage 1.
       If previous iterations have already discovered patterns, DON'T
       rediscover them. Go deeper. Go sideways. Find what's missing.
+      Focus on patterns that USE the new capabilities — especially
+      mixed-instrument, spec corpus, and grounding hooks.
 
     # ─── CROSS-DOMAIN SEED ───
     # Starting translations. The expeditions go DEEPER than this.

@@ -1,0 +1,318 @@
+# shipyard-sequence.yaml — Build with Validation Gate
+#
+# Pattern: Shipyard Sequence (Rosetta Pattern Corpus)
+# Category: Engineering — generate a Python library with validation gates
+#
+# Problem:
+# AI code generation is cheap per attempt but expensive at scale. When you
+# fan out to generate 4 modules, each builds on a shared foundation (types,
+# interfaces, config). If the foundation is broken, all 4 modules fail —
+# and you've paid for 4 failures instead of catching it early. The Shipyard
+# Sequence validates the foundation with REAL tools (not LLM judgment)
+# before investing in expensive downstream work.
+#
+# The economic argument:
+#   - Movement 1: Generate foundation (1 sheet, cheap)
+#   - Movement 2: Validate with real tools — syntax check, import check,
+#     type check (1 sheet, deterministic, catches structural defects)
+#   - Movement 3: Fan out modules ONLY if foundation passes (4 sheets)
+#   - Movement 4: Integration test all modules together (1 sheet)
+#
+# Without the gate, a broken foundation wastes 4x the cost. With it,
+# you fail fast and retry only the cheap foundation step.
+#
+# This is NOT simple sequential execution. The validation gate uses
+# command_succeeds — real tool execution, not LLM judgment. The gate
+# is deterministic; the generation is probabilistic. Mixing them is
+# the structural move.
+#
+# Execution Flow (4 movements, 7 sheets):
+#
+#   Movement 1: Generate foundation (1 sheet)
+#        |
+#   Movement 2: Validation gate (1 sheet)
+#        Uses command_succeeds to check syntax + imports
+#        |
+#        +-----+-----+-----+
+#        v     v     v     v
+#   Movement 3: Generate modules (4 sheets, parallel)
+#        Each builds on validated foundation
+#        |     |     |     |
+#        +-----+-----+-----+
+#              v
+#   Movement 4: Integration (1 sheet)
+#        Verify all modules work together
+#
+# Usage:
+#   mozart start
+#   mozart run examples/rosetta/shipyard-sequence.yaml
+#   mozart status lib-builder
+#   ls workspaces/lib-builder/src/
+#
+# Output:
+#   workspaces/lib-builder/
+#     src/
+#       __init__.py              — Package init
+#       types.py                 — Foundation: shared types
+#       config.py                — Foundation: configuration
+#       parser.py                — Module: input parser
+#       validator.py             — Module: data validator
+#       transformer.py           — Module: data transformer
+#       reporter.py              — Module: output reporter
+#     tests/
+#       test_integration.py      — Integration test suite
+#     validation-report.md       — Gate results
+#     integration-report.md      — Final integration results
+#
+# Time: ~4 minutes  |  Sheets: 7
+
+name: lib-builder
+description: "Generate a Python library with validation gates — fail fast before expensive fan-out"
+
+workspace: ../../workspaces/lib-builder
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 600
+
+movements:
+  1:
+    name: "Foundation"
+  2:
+    name: "Validation Gate"
+  3:
+    name: "Module Generation"
+  4:
+    name: "Integration"
+
+sheet:
+  size: 1
+  total_items: 4
+  fan_out:
+    3: 4
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+
+parallel:
+  enabled: true
+  max_concurrent: 4
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 5000
+  lookback_sheets: 6
+
+retry:
+  max_retries: 2
+
+prompt:
+  variables:
+    library_name: "dataweave"
+    purpose: "A CSV data processing pipeline library"
+    python_version: "3.10+"
+    foundation_modules:
+      - name: "types.py"
+        description: "Shared type definitions — dataclasses for Row, Column, Schema, ValidationResult, TransformRule, Report"
+      - name: "config.py"
+        description: "Configuration — ProcessingConfig dataclass with input_path, output_path, schema, transforms list, validation_rules, report_format"
+    downstream_modules:
+      1:
+        name: "parser.py"
+        description: "CSV parser — read CSV files into Row objects using the Schema definition. Handle encoding detection, header mapping, type coercion."
+        imports: "from .types import Row, Column, Schema"
+      2:
+        name: "validator.py"
+        description: "Data validator — validate Row objects against rules. Check required fields, type constraints, range bounds, regex patterns. Return ValidationResult per row."
+        imports: "from .types import Row, ValidationResult, Schema"
+      3:
+        name: "transformer.py"
+        description: "Data transformer — apply TransformRule objects to Row data. Support rename, cast, compute (derived columns), filter, and normalize operations."
+        imports: "from .types import Row, TransformRule"
+      4:
+        name: "reporter.py"
+        description: "Report generator — produce processing reports in markdown and JSON. Summarize rows processed, validation failures, transforms applied, timing."
+        imports: "from .types import Report, ValidationResult"
+
+  template: |
+    {% if stage == 1 %}
+    # Movement 1: Foundation Generation
+
+    You are a Python library architect. Generate the foundation modules
+    that all downstream modules will depend on.
+
+    ## Library: {{ library_name }}
+    {{ purpose }}
+
+    Target Python: {{ python_version }}
+
+    ## Foundation Modules to Generate
+
+    {% for mod in foundation_modules %}
+    ### {{ mod.name }}
+    {{ mod.description }}
+    {% endfor %}
+
+    ## Downstream Dependencies
+
+    These modules will be built AFTER your foundation is validated.
+    Design your types and config to support ALL of them:
+
+    {% for id, mod in downstream_modules.items() %}
+    - **{{ mod.name }}**: {{ mod.description }}
+      Imports: `{{ mod.imports }}`
+    {% endfor %}
+
+    ## Requirements
+
+    1. Use dataclasses (not Pydantic — keep dependencies minimal)
+    2. Every class must have type hints on all fields
+    3. Include `__all__` in each module for explicit exports
+    4. Add docstrings to every class and every non-trivial method
+    5. types.py must define ALL types referenced in downstream imports
+    6. config.py must import from types.py (not redefine types)
+    7. Include an `__init__.py` that re-exports the public API
+
+    ## File Structure
+
+    Create these files:
+    - `{{ workspace }}/src/__init__.py`
+    - `{{ workspace }}/src/types.py`
+    - `{{ workspace }}/src/config.py`
+
+    Print the module contents to stdout for context forwarding.
+
+    {% elif stage == 2 %}
+    # Movement 2: Validation Gate
+
+    You are a build engineer. Validate the foundation modules using real
+    Python tooling. Do NOT judge the code by reading it — RUN the tools.
+
+    ## Validation Steps
+
+    Run each check and record the result:
+
+    1. **Syntax check** — `python -c "import ast; ast.parse(open('{{ workspace }}/src/types.py').read()); print('types.py: syntax OK')"`
+    2. **Syntax check** — `python -c "import ast; ast.parse(open('{{ workspace }}/src/config.py').read()); print('config.py: syntax OK')"`
+    3. **Import check** — `cd {{ workspace }}/src && python -c "from types import *; print('types.py: imports OK')"`
+       (Note: if this fails due to module naming conflicts, use `import importlib; spec = importlib.util.spec_from_file_location('types', '{{ workspace }}/src/types.py'); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); print('types.py: imports OK')`)
+    4. **Import check** — Similar for config.py, verifying it can import from types.py
+    5. **Export check** — Verify `__all__` exists in both modules
+    6. **Type presence** — Verify that Row, Column, Schema, ValidationResult,
+       TransformRule, Report, and ProcessingConfig all exist as classes
+
+    ## Output
+
+    Write a validation report to `{{ workspace }}/validation-report.md` with:
+    - Each check: command run, output, PASS/FAIL
+    - Overall verdict: PASS (all checks passed) or FAIL (any check failed)
+    - If FAIL: specific issues that need fixing
+
+    Print the overall verdict to stdout.
+
+    {% elif stage == 3 %}
+    {% set mod = downstream_modules[voice] %}
+    # Movement 3, Voice {{ voice }}: {{ mod.name }}
+
+    You are a Python developer. Generate one module of the {{ library_name }}
+    library, building on the validated foundation.
+
+    ## Read the Foundation First
+    Read the foundation files:
+    - `{{ workspace }}/src/types.py` — the shared type definitions
+    - `{{ workspace }}/src/config.py` — the configuration model
+    - `{{ workspace }}/validation-report.md` — confirms the foundation is valid
+
+    ## Your Module: {{ mod.name }}
+    {{ mod.description }}
+
+    Import line: `{{ mod.imports }}`
+
+    ## Requirements
+
+    1. Import ONLY from the foundation modules — `{{ mod.imports }}`
+    2. Do not redefine types that exist in types.py
+    3. Include `__all__` for explicit exports
+    4. Add docstrings to every class and function
+    5. Type hints on all function signatures and return types
+    6. Handle errors gracefully — raise descriptive exceptions, don't crash
+    7. Write clean, idiomatic Python {{ python_version }} code
+
+    Save to: `{{ workspace }}/src/{{ mod.name }}`
+
+    Print a summary of the public API you created (class names, key methods).
+
+    {% elif stage == 4 %}
+    # Movement 4: Integration Verification
+
+    You are a QA engineer. Verify that all generated modules work together
+    as a cohesive library.
+
+    ## Read All Source Files
+    Read every .py file in `{{ workspace }}/src/`
+
+    ## Integration Checks
+
+    1. **Import chain** — Can you import everything from `__init__.py`?
+    2. **Cross-module imports** — Does each module successfully import
+       from the foundation?
+    3. **Type consistency** — Are the same types used across modules?
+       (e.g., parser produces Row objects that validator accepts)
+    4. **API coherence** — Do the modules compose into a sensible pipeline?
+       parser → validator → transformer → reporter
+    5. **Write an integration test** — Create a test that exercises the
+       full pipeline: parse a small CSV, validate rows, transform data,
+       generate a report.
+
+    ## Output
+
+    Create:
+    - `{{ workspace }}/tests/test_integration.py` — the integration test
+    - `{{ workspace }}/integration-report.md` — findings with:
+      - Each check: what was tested, result, issues found
+      - Pipeline diagram showing data flow between modules
+      - Overall quality assessment
+      - Any issues that would block using this library
+
+    Print the integration summary to stdout.
+    {% endif %}
+
+validations:
+  - type: file_exists
+    path: "{workspace}/src/types.py"
+    sheet: 1
+    description: "Foundation types module exists"
+  - type: file_exists
+    path: "{workspace}/src/config.py"
+    sheet: 1
+    description: "Foundation config module exists"
+  - type: file_exists
+    path: "{workspace}/validation-report.md"
+    sheet: 2
+    description: "Validation gate report exists"
+  - type: file_exists
+    path: "{workspace}/src/parser.py"
+    sheet: 3
+    description: "Parser module exists"
+  - type: file_exists
+    path: "{workspace}/src/validator.py"
+    sheet: 4
+    description: "Validator module exists"
+  - type: file_exists
+    path: "{workspace}/src/transformer.py"
+    sheet: 5
+    description: "Transformer module exists"
+  - type: file_exists
+    path: "{workspace}/src/reporter.py"
+    sheet: 6
+    description: "Reporter module exists"
+  - type: file_exists
+    path: "{workspace}/integration-report.md"
+    sheet: 7
+    description: "Integration report exists"
+  - type: content_contains
+    path: "{workspace}/integration-report.md"
+    pattern: "pipeline"
+    sheet: 7
+    description: "Integration report describes the pipeline"
