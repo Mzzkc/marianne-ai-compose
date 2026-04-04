@@ -156,6 +156,12 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **Mateship:** No uncommitted source code. 14 memory files modified (dreamer artifacts between movements). Clean working tree for source/tests.
 - **Ground:** TASKS.md cleaned — 2 F-097 timeout tasks marked complete with evidence.
 
+### M4 Progress (Breakpoint)
+- **57 adversarial tests across 10 attack surfaces:** auto-fresh tolerance boundary (8), pending job edge cases (3), cross-sheet SKIPPED/FAILED behavior (7), max_chars boundary (3), lookback edge cases (4), MethodNotFoundError round-trip (7), credential redaction defensive pattern (7), capture files stale/binary/pattern (5), baton/legacy parity (2), rejection reason boundaries (6).
+- **F-202 filed (P3):** Baton/legacy parity gap — FAILED sheets with stdout included in cross-sheet context on legacy path but excluded on baton path. Same error class as F-251 (baton/legacy behavioral divergence). Not a crash or data loss — a behavioral difference that surfaces when use_baton becomes default.
+- **Mateship:** Committed Litmus's uncommitted 7 new M4 litmus tests (651 lines, tests 32-38 in test catalog). All 118 litmus tests pass.
+- **Zero bugs found in M4 code.** The codebase continues to harden. Bug surface has shifted from code-level bugs to architectural parity between the two execution paths.
+
 ### M4 Progress (Atlas)
 - **Seventh strategic alignment assessment.** Verified 18 commits from 12 musicians. Both P0 blockers resolved (F-210, F-211). 182/220 tasks complete (83%). Codebase: 98,272 source lines, 327 test files, 11,140 tests collected. mypy clean. ruff lint regression fixed (import sorting in context.py).
 - **Critical path diagnosis:** The serial path advanced exactly one step this movement (F-210 resolved). Fourth consecutive movement of one-step-per-movement pace. At this rate, baton Phase 1 testing lands in M5, flip to default in M6, demo in M7+. The product thesis remains unproven.

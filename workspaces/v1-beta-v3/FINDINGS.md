@@ -2054,3 +2054,13 @@ Each finding should include:
 - **Description:** The baton's `_collect_cross_sheet_context()` silently excluded skipped upstream sheets from `previous_outputs`, while the legacy runner's `_populate_cross_sheet_context()` correctly injected `[SKIPPED]` placeholders (fix from #120, Maverick M4). Fan-in prompts on the baton path received silent data gaps instead of explicit skip markers.
 - **Impact:** Fan-in templates using `{{ previous_outputs }}` on the baton path would see gaps without explanation. Matters once the baton becomes the default execution path (Phase 2 transition).
 - **Resolution:** Added `BatonSheetStatus.SKIPPED` check before the `COMPLETED` filter in `_collect_cross_sheet_context()` at `adapter.py:730`. Skipped sheets now inject `"[SKIPPED]"` into `previous_outputs`. Updated existing test assertion. 4 TDD tests in `test_cross_sheet_safety.py`.
+
+### F-202: Baton/Legacy Parity Gap — FAILED Sheet Stdout in Cross-Sheet Context
+- **Found by:** Breakpoint, Movement 4
+- **Severity:** P3 (low — baton is stricter, arguably more correct)
+- **Status:** Open
+- **Category:** architecture
+- **Error Class:** Baton/legacy-runner behavioral divergence (same class as F-251)
+- **Description:** The legacy runner `_populate_cross_sheet_context()` at `context.py:206-214` includes stdout from ANY non-SKIPPED sheet with stdout_tail — including FAILED and IN_PROGRESS sheets. The baton adapter at `adapter.py:738` explicitly filters `if prev_state.status != BatonSheetStatus.COMPLETED: continue`, excluding all non-COMPLETED, non-SKIPPED sheets. This means FAILED sheets with stdout are included in cross-sheet context on the legacy path but excluded on the baton path.
+- **Impact:** When the baton becomes default (Phase 2), scores that rely on seeing failed sheet output in downstream prompts will get different behavior. The baton's stricter filtering may actually be preferable (failed output could be misleading), but the behavioral difference should be a conscious design decision, not an accident.
+- **Action:** Decide: is the baton's stricter behavior intentional? If yes, document the difference. If no, align the baton with the legacy runner by including FAILED sheets with stdout. Test `test_m4_adversarial_breakpoint.py::TestBatonLegacySkippedParity::test_both_paths_skip_non_completed_non_skipped` documents the gap.

@@ -50,6 +50,21 @@ Test categories:
     when baton sheets complete new work?
 31. Rate limit wait cap — F-160: does the system cap astronomical wait
     durations instead of honoring adversarial 114-year timers?
+32. Cross-sheet context in baton prompts — F-210: does the baton's
+    PromptRenderer actually populate previous_outputs/previous_files from
+    AttemptContext into templates? (WITH cross-sheet vs WITHOUT)
+33. Skipped upstream visibility — #120: does [SKIPPED] placeholder in
+    previous_outputs give downstream sheets explicit gap awareness?
+34. Auto-fresh detection — #103: does _should_auto_fresh correctly detect
+    score modifications after completion, preventing stale reruns?
+35. Backpressure rejection intelligence — F-110: does rejection_reason()
+    distinguish rate-limit (queueable) from resource (dangerous)?
+36. Cross-sheet credential redaction — F-250: do credentials in workspace
+    files get redacted BEFORE entering cross-sheet prompts?
+37. MethodNotFoundError differentiation — F-450: does the error hierarchy
+    tell users "restart conductor" vs "conductor not running"?
+38. Cost JSON extraction vs char estimation — D-024: does JSON token
+    extraction produce better cost data than char heuristics?
 
 Every test in this file answers: "Is the system smarter WITH this than WITHOUT?"
 """
@@ -3185,4 +3200,655 @@ class TestRateLimitWaitCapEffectiveness:
         result = classifier._clamp_wait(600.0)
         assert result == 600.0, (
             f"Reasonable wait (600s, within range) should not be modified, got {result}"
+        )
+
+
+# =============================================================================
+# 32. CROSS-SHEET CONTEXT IN BATON PROMPTS (F-210)
+# =============================================================================
+
+
+class TestCrossSheetContextInBatonPrompts:
+    """F-210 litmus: does the baton's PromptRenderer actually deliver
+    cross-sheet context (previous_outputs, previous_files) to templates?
+
+    The WITH vs WITHOUT comparison:
+    - WITHOUT F-210: AttemptContext.previous_outputs/previous_files exist
+      but PromptRenderer._build_context ignores them → templates get empty dicts
+    - WITH F-210: PromptRenderer._build_context copies them into SheetContext
+      → templates can reference {{ previous_outputs }} and {{ previous_files }}
+
+    If this bridge is broken, agents downstream of fan-out never see upstream
+    results — even though the adapter collected them.
+    """
+
+    def test_prompt_renderer_populates_previous_outputs(self) -> None:
+        """AttemptContext.previous_outputs flows through to SheetContext."""
+        from mozart.daemon.baton.prompt import PromptRenderer
+        from mozart.daemon.baton.state import AttemptContext, AttemptMode
+
+        template = "Previous: {{ previous_outputs }}"
+        renderer = PromptRenderer(
+            prompt_config=PromptConfig(template=template, variables={}),
+            total_sheets=3,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        sheet = Sheet(
+            num=2, movement=1, voice_count=1, instrument_name="claude-code",
+            workspace=Path("/tmp/ws"), prompt_template=template,
+        )
+        ctx = AttemptContext(
+            attempt_number=1,
+            mode=AttemptMode.NORMAL,
+            previous_outputs={1: "Sheet 1 produced output X"},
+        )
+
+        result = renderer.render(sheet, ctx)
+
+        # The litmus: previous_outputs appears in the rendered prompt
+        assert "Sheet 1 produced output X" in result.prompt, (
+            "F-210: previous_outputs from AttemptContext MUST flow through "
+            "PromptRenderer into the rendered template. Without this, "
+            "downstream sheets can't see upstream results."
+        )
+
+    def test_prompt_renderer_populates_previous_files(self) -> None:
+        """AttemptContext.previous_files flows through to SheetContext."""
+        from mozart.daemon.baton.prompt import PromptRenderer
+        from mozart.daemon.baton.state import AttemptContext, AttemptMode
+
+        template = "Files: {{ previous_files }}"
+        renderer = PromptRenderer(
+            prompt_config=PromptConfig(template=template, variables={}),
+            total_sheets=3,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        sheet = Sheet(
+            num=2, movement=1, voice_count=1, instrument_name="claude-code",
+            workspace=Path("/tmp/ws"), prompt_template=template,
+        )
+        ctx = AttemptContext(
+            attempt_number=1,
+            mode=AttemptMode.NORMAL,
+            previous_files={"/tmp/ws/report.md": "# Analysis\nFindings here"},
+        )
+
+        result = renderer.render(sheet, ctx)
+
+        assert "Findings here" in result.prompt, (
+            "F-210: previous_files from AttemptContext MUST flow through "
+            "to rendered templates. Workspace file contents are how sheets "
+            "share structured data."
+        )
+
+    def test_without_attempt_context_no_cross_sheet_data(self) -> None:
+        """Without cross-sheet data in AttemptContext, templates get empty dicts.
+
+        This is the WITHOUT side of the WITH/WITHOUT comparison.
+        """
+        from mozart.daemon.baton.prompt import PromptRenderer
+        from mozart.daemon.baton.state import AttemptContext, AttemptMode
+
+        template = "{{ previous_outputs }}"
+        renderer = PromptRenderer(
+            prompt_config=PromptConfig(template=template, variables={}),
+            total_sheets=3,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        sheet = Sheet(
+            num=2, movement=1, voice_count=1, instrument_name="claude-code",
+            workspace=Path("/tmp/ws"), prompt_template=template,
+        )
+        # Empty cross-sheet context
+        ctx = AttemptContext(
+            attempt_number=1,
+            mode=AttemptMode.NORMAL,
+        )
+
+        result = renderer.render(sheet, ctx)
+
+        # The rendered template shows an empty dict — no cross-sheet data
+        assert "Sheet 1 produced" not in result.prompt, (
+            "Without cross-sheet data in AttemptContext, the template should "
+            "have no previous outputs."
+        )
+
+
+# =============================================================================
+# 33. SKIPPED UPSTREAM VISIBILITY (#120)
+# =============================================================================
+
+
+class TestSkippedUpstreamVisibility:
+    """#120 litmus: does the [SKIPPED] placeholder give downstream sheets
+    explicit visibility into which upstream sheets were skipped?
+
+    WITHOUT #120: skipped upstream sheets are silently omitted from
+    previous_outputs → downstream sheet has no idea data is missing.
+    WITH #120: skipped sheets inject "[SKIPPED]" → downstream sheet knows
+    to compensate for missing input.
+
+    The litmus: a downstream template can distinguish "no data" from
+    "upstream was skipped". This prevents silent data loss in fan-in patterns.
+    """
+
+    def test_skipped_upstream_available_in_template_context(self) -> None:
+        """skipped_upstream list is available in template rendering."""
+        config = PromptConfig(
+            template="Skipped: {{ skipped_upstream }}",
+            variables={},
+        )
+        builder = PromptBuilder(config)
+        ctx = SheetContext(
+            sheet_num=4,
+            total_sheets=4,
+            start_item=4,
+            end_item=4,
+            workspace=Path("/tmp/ws"),
+            skipped_upstream=[2, 3],
+        )
+
+        prompt = builder.build_sheet_prompt(ctx)
+
+        assert "2" in prompt and "3" in prompt, (
+            "#120: skipped_upstream sheet numbers MUST be available in "
+            "templates so fan-in sheets know which inputs are missing."
+        )
+
+    def test_skipped_placeholder_vs_silent_omission(self) -> None:
+        """WITH [SKIPPED] placeholder is better than WITHOUT (silent omission).
+
+        An agent seeing '[SKIPPED]' knows to adjust. An agent seeing nothing
+        might assume the data doesn't exist or wasn't relevant — a dangerous
+        misreading of fan-in completeness.
+        """
+        # WITH #120: skipped sheets have explicit placeholder
+        ctx_with = SheetContext(
+            sheet_num=3,
+            total_sheets=3,
+            start_item=3,
+            end_item=3,
+            workspace=Path("/tmp/ws"),
+            previous_outputs={1: "Result from sheet 1", 2: "[SKIPPED]"},
+            skipped_upstream=[2],
+        )
+
+        # WITHOUT #120: skipped sheets are silently absent
+        ctx_without = SheetContext(
+            sheet_num=3,
+            total_sheets=3,
+            start_item=3,
+            end_item=3,
+            workspace=Path("/tmp/ws"),
+            previous_outputs={1: "Result from sheet 1"},
+            skipped_upstream=[],
+        )
+
+        # Template that tries to render all upstream
+        config = PromptConfig(
+            template="Upstream data: {{ previous_outputs }}",
+            variables={},
+        )
+        builder = PromptBuilder(config)
+
+        prompt_with = builder.build_sheet_prompt(ctx_with)
+        prompt_without = builder.build_sheet_prompt(ctx_without)
+
+        # WITH version explicitly shows the gap
+        assert "[SKIPPED]" in prompt_with, (
+            "#120: The [SKIPPED] placeholder MUST appear in rendered prompts "
+            "so agents know data is intentionally absent."
+        )
+        # WITHOUT version has no indication of the gap
+        assert "[SKIPPED]" not in prompt_without, (
+            "Without #120, skipped sheets are silently omitted — this is "
+            "the problem the fix addresses."
+        )
+
+    def test_skipped_upstream_list_matches_skipped_outputs(self) -> None:
+        """skipped_upstream list and previous_outputs [SKIPPED] are consistent.
+
+        If sheet 2 is in skipped_upstream, previous_outputs[2] should be
+        [SKIPPED]. Inconsistency between these two signals would confuse
+        template logic that checks either one.
+        """
+        ctx = SheetContext(
+            sheet_num=4,
+            total_sheets=4,
+            start_item=4,
+            end_item=4,
+            workspace=Path("/tmp/ws"),
+            previous_outputs={
+                1: "Real output",
+                2: "[SKIPPED]",
+                3: "[SKIPPED]",
+            },
+            skipped_upstream=[2, 3],
+        )
+
+        template_vars = ctx.to_dict()
+
+        # Both signals agree: sheets 2 and 3 are skipped
+        for skipped_num in template_vars["skipped_upstream"]:
+            assert template_vars["previous_outputs"].get(skipped_num) == "[SKIPPED]", (
+                f"Sheet {skipped_num} is in skipped_upstream but its "
+                f"previous_outputs entry is "
+                f"{template_vars['previous_outputs'].get(skipped_num)!r}, "
+                f"not '[SKIPPED]'. Inconsistent signals confuse agents."
+            )
+
+
+# =============================================================================
+# 34. AUTO-FRESH DETECTION (#103)
+# =============================================================================
+
+
+class TestAutoFreshDetection:
+    """#103 litmus: does _should_auto_fresh prevent stale reruns when
+    the score file has been modified?
+
+    WITHOUT #103: user edits score, runs `mozart run` again, gets the old
+    cached result because the job is COMPLETED → confusion.
+    WITH #103: manager detects mtime > completed_at → auto-sets fresh=True
+    → user gets a new run with their changes.
+
+    The litmus: does the system behave DIFFERENTLY (and correctly) when
+    the score is modified vs when it isn't?
+    """
+
+    def test_modified_score_detected_as_needing_fresh_run(self, tmp_path: Path) -> None:
+        """A score modified after completion triggers auto-fresh."""
+        from mozart.daemon.manager import _should_auto_fresh
+
+        score_file = tmp_path / "test.yaml"
+        score_file.write_text("version: 1")
+
+        # Simulate: job completed 10 seconds ago
+        import time
+
+        completed_at = time.time() - 10
+
+        # Touch the file to update mtime to NOW
+        score_file.write_text("version: 2")
+
+        assert _should_auto_fresh(score_file, completed_at) is True, (
+            "#103: Score modified AFTER completion must trigger auto-fresh. "
+            "Without this, users re-run edited scores and get stale results."
+        )
+
+    def test_unmodified_score_does_not_trigger_fresh(self, tmp_path: Path) -> None:
+        """A score NOT modified after completion does NOT trigger auto-fresh."""
+        from mozart.daemon.manager import _should_auto_fresh
+
+        score_file = tmp_path / "test.yaml"
+        score_file.write_text("version: 1")
+
+        import time
+
+        # Simulate: file written before completion (completion is in the future)
+        completed_at = time.time() + 100
+
+        assert _should_auto_fresh(score_file, completed_at) is False, (
+            "#103: Unmodified score must NOT trigger auto-fresh. "
+            "False positives waste resources re-running unchanged scores."
+        )
+
+    def test_missing_score_file_does_not_crash(self) -> None:
+        """Missing score file returns False gracefully, not an exception."""
+        from mozart.daemon.manager import _should_auto_fresh
+
+        result = _should_auto_fresh(Path("/nonexistent/score.yaml"), 100.0)
+        assert result is False, (
+            "#103: Missing score file must return False, not crash. "
+            "Race condition between file deletion and check must be handled."
+        )
+
+    def test_none_completed_at_returns_false(self, tmp_path: Path) -> None:
+        """No completion timestamp means we can't compare → no auto-fresh."""
+        from mozart.daemon.manager import _should_auto_fresh
+
+        score_file = tmp_path / "test.yaml"
+        score_file.write_text("version: 1")
+
+        assert _should_auto_fresh(score_file, None) is False, (
+            "#103: None completed_at (never ran) must return False. "
+            "Can't detect modification without a baseline timestamp."
+        )
+
+
+# =============================================================================
+# 35. BACKPRESSURE REJECTION INTELLIGENCE (F-110)
+# =============================================================================
+
+
+class TestBackpressureRejectionIntelligence:
+    """F-110 litmus: does rejection_reason() distinguish rate-limit pressure
+    from resource pressure?
+
+    WITHOUT F-110: any rejection looks the same → CLI says "conductor not
+    running" (misleading) or "rejected" (uninformative).
+    WITH F-110: rate_limit → queue as PENDING (recoverable). resource →
+    reject outright (dangerous to accept more work).
+
+    The litmus: does the system give the CLI enough information to take
+    DIFFERENT actions for different rejection types?
+    """
+
+    def test_rate_limit_only_returns_rate_limit_reason(self) -> None:
+        """When only rate limits are active (memory fine), reason is 'rate_limit'."""
+        from unittest.mock import MagicMock
+
+        from mozart.daemon.backpressure import BackpressureController
+
+        controller = BackpressureController.__new__(BackpressureController)
+        controller._monitor = MagicMock()
+        controller._monitor.current_memory_mb.return_value = 100  # Low
+        controller._monitor.max_memory_mb = 1000
+        controller._monitor.is_degraded = False
+        controller._monitor.is_accepting_work.return_value = True
+        controller._rate_coordinator = MagicMock()
+        controller._rate_coordinator.active_limits = {"claude-cli": 60}
+
+        reason = controller.rejection_reason()
+
+        assert reason == "rate_limit", (
+            "F-110: Rate limits with healthy memory MUST return 'rate_limit', "
+            "not 'resource'. This distinction lets the CLI queue jobs as "
+            "PENDING instead of rejecting them outright."
+        )
+
+    def test_high_memory_returns_resource_reason(self) -> None:
+        """When memory is high (>85%), reason is 'resource' regardless of rate limits."""
+        from unittest.mock import MagicMock
+
+        from mozart.daemon.backpressure import BackpressureController
+
+        controller = BackpressureController.__new__(BackpressureController)
+        controller._monitor = MagicMock()
+        controller._monitor.current_memory_mb.return_value = 900  # 90% of 1000
+        controller._monitor.max_memory_mb = 1000
+        controller._monitor.is_degraded = False
+        controller._monitor.is_accepting_work.return_value = True
+        controller._rate_coordinator = MagicMock()
+        controller._rate_coordinator.active_limits = {"claude-cli": 60}
+
+        reason = controller.rejection_reason()
+
+        assert reason == "resource", (
+            "F-110: High memory pressure MUST return 'resource', even when "
+            "rate limits are also active. Accepting more work in this state "
+            "risks OOM crashes."
+        )
+
+    def test_no_pressure_returns_none(self) -> None:
+        """When nothing is pressured, reason is None (accept the job)."""
+        from unittest.mock import MagicMock
+
+        from mozart.daemon.backpressure import BackpressureController
+
+        controller = BackpressureController.__new__(BackpressureController)
+        controller._monitor = MagicMock()
+        controller._monitor.current_memory_mb.return_value = 100
+        controller._monitor.max_memory_mb = 1000
+        controller._monitor.is_degraded = False
+        controller._monitor.is_accepting_work.return_value = True
+        controller._rate_coordinator = MagicMock()
+        controller._rate_coordinator.active_limits = {}
+
+        reason = controller.rejection_reason()
+
+        assert reason is None, (
+            "F-110: No pressure MUST return None (accept). "
+            "False rejections prevent users from submitting work."
+        )
+
+
+# =============================================================================
+# 36. CROSS-SHEET CREDENTIAL REDACTION (F-250)
+# =============================================================================
+
+
+class TestCrossSheetCredentialRedaction:
+    """F-250 litmus: are credentials redacted BEFORE entering cross-sheet
+    context (both legacy runner and baton adapter paths)?
+
+    WITHOUT F-250: agent writes an API key to a workspace file → cross-sheet
+    capture reads it → key appears in the next sheet's prompt → leaked.
+    WITH F-250: redact_credentials() runs on file content → [REDACTED_*]
+    appears instead.
+
+    The litmus: credential material from workspace files MUST be redacted
+    before it can appear in any prompt.
+    """
+
+    def test_anthropic_key_redacted_in_file_content(self) -> None:
+        """Anthropic API keys in captured files are redacted."""
+        from mozart.utils.credential_scanner import redact_credentials
+
+        file_content = (
+            "# Config\n"
+            "api_key = sk-ant-api03-abcdefghij1234567890ABCDEFGHIJ_KLMNOPQRST\n"
+            "region = us-east-1\n"
+        )
+
+        redacted = redact_credentials(file_content)
+
+        assert "sk-ant-" not in redacted, (
+            "F-250: Anthropic API key MUST be redacted from captured file content. "
+            "Without this, cross-sheet context leaks secrets into prompts."
+        )
+        assert "[REDACTED" in redacted, (
+            "F-250: Redacted content must contain [REDACTED] marker so agents "
+            "know something was removed."
+        )
+
+    def test_multiple_credential_types_all_redacted(self) -> None:
+        """All credential patterns (Anthropic, OpenAI, AWS, etc.) are caught."""
+        from mozart.utils.credential_scanner import redact_credentials
+
+        file_content = (
+            "ANTHROPIC_KEY=sk-ant-api03-longkeyvalue1234567890abcdefgh\n"
+            "OPENAI_KEY=sk-proj-longkeyvalue1234567890abcdefghijklmn\n"
+            "AWS_KEY=AKIAIOSFODNN7EXAMPLE\n"
+        )
+
+        redacted = redact_credentials(file_content)
+
+        assert "sk-ant-" not in redacted, "Anthropic key must be redacted"
+        assert "sk-proj-" not in redacted, "OpenAI key must be redacted"
+        assert "AKIA" not in redacted, "AWS key must be redacted"
+
+    def test_clean_content_passes_through_unchanged(self) -> None:
+        """Content without credentials passes through unmodified."""
+        from mozart.utils.credential_scanner import redact_credentials
+
+        file_content = "# Analysis Report\nThe system uses async I/O.\n"
+
+        result = redact_credentials(file_content)
+
+        # Should return the original content (or a truthy equivalent)
+        assert result is None or result == file_content, (
+            "F-250: Content without credentials must pass through unchanged. "
+            "False positive redaction corrupts legitimate data."
+        )
+
+
+# =============================================================================
+# 37. METHODNOT FOUNDERROR DIFFERENTIATION (F-450)
+# =============================================================================
+
+
+class TestMethodNotFoundErrorDifferentiation:
+    """F-450 litmus: does the error hierarchy distinguish "unknown method"
+    from "conductor not running"?
+
+    WITHOUT F-450: CLI sends IPC request → conductor doesn't know the method
+    → returns JSON-RPC error → CLI says "conductor not running" → user
+    stops/restarts conductor unnecessarily.
+    WITH F-450: MethodNotFoundError is mapped from -32601 code → CLI says
+    "restart conductor to pick up changes" → user does the right thing.
+
+    The litmus: different error conditions produce different user guidance.
+    """
+
+    def test_method_not_found_is_distinct_from_daemon_error(self) -> None:
+        """MethodNotFoundError is a DaemonError subclass with distinct identity."""
+        from mozart.daemon.exceptions import DaemonError, MethodNotFoundError
+
+        err = MethodNotFoundError("daemon.unknown_method not recognized")
+
+        assert isinstance(err, DaemonError), (
+            "F-450: MethodNotFoundError MUST inherit from DaemonError "
+            "so existing DaemonError catch blocks still work."
+        )
+        assert isinstance(err, MethodNotFoundError), (
+            "F-450: MethodNotFoundError MUST be catchable separately "
+            "so CLI can give different guidance for different errors."
+        )
+
+    def test_error_message_guides_toward_restart(self) -> None:
+        """The error type's docstring should help the user fix the problem."""
+        from mozart.daemon.exceptions import MethodNotFoundError
+
+        doc = MethodNotFoundError.__doc__ or ""
+
+        # The error type's docstring should mention restart
+        assert "restart" in doc.lower(), (
+            "F-450: MethodNotFoundError's docstring MUST mention restarting "
+            "the conductor — that's the fix. Without this guidance, users "
+            "are left guessing why their command failed."
+        )
+
+    def test_method_not_found_code_mapping(self) -> None:
+        """JSON-RPC error code -32601 maps to MethodNotFoundError."""
+        from mozart.daemon.exceptions import MethodNotFoundError
+        from mozart.daemon.ipc.errors import (
+            METHOD_NOT_FOUND,
+            _CODE_EXCEPTION_MAP,
+        )
+
+        assert METHOD_NOT_FOUND in _CODE_EXCEPTION_MAP, (
+            "F-450: METHOD_NOT_FOUND (-32601) MUST be mapped "
+            "in _CODE_EXCEPTION_MAP. Without this mapping, the error is "
+            "caught as a generic DaemonError and users get wrong guidance."
+        )
+        assert _CODE_EXCEPTION_MAP[METHOD_NOT_FOUND] is MethodNotFoundError, (
+            "F-450: METHOD_NOT_FOUND must map to MethodNotFoundError, "
+            f"not {_CODE_EXCEPTION_MAP[METHOD_NOT_FOUND].__name__}."
+        )
+
+
+# =============================================================================
+# 38. COST JSON EXTRACTION VS CHAR ESTIMATION (D-024)
+# =============================================================================
+
+
+class TestCostJsonExtractionEffectiveness:
+    """D-024 litmus: does JSON token extraction produce BETTER cost data
+    than character-based estimation?
+
+    WITHOUT D-024: ClaudeCliBackend returns zero tokens → CostMixin falls
+    back to char estimation → 10-100x underestimate → cost fiction.
+    WITH D-024: _extract_tokens_from_json parses actual usage data →
+    accurate tokens → accurate costs.
+
+    The litmus: the same stdout produces dramatically different (and more
+    correct) token counts through JSON extraction vs char estimation.
+    """
+
+    def test_json_extraction_finds_tokens(self) -> None:
+        """JSON output with usage field yields actual token counts."""
+        from mozart.backends.claude_cli import ClaudeCliBackend
+
+        backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
+        backend.output_format = "json"
+
+        stdout = json.dumps({
+            "result": "some output",
+            "usage": {
+                "input_tokens": 15000,
+                "output_tokens": 3000,
+            },
+        })
+
+        input_tokens, output_tokens = backend._extract_tokens_from_json(stdout)
+
+        assert input_tokens == 15000, (
+            "D-024: JSON extraction MUST find input_tokens from usage field. "
+            f"Got {input_tokens} instead of 15000."
+        )
+        assert output_tokens == 3000, (
+            "D-024: JSON extraction MUST find output_tokens from usage field. "
+            f"Got {output_tokens} instead of 3000."
+        )
+
+    def test_non_json_format_returns_none(self) -> None:
+        """When output_format is not 'json', extraction returns None."""
+        from mozart.backends.claude_cli import ClaudeCliBackend
+
+        backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
+        backend.output_format = "text"
+
+        stdout = json.dumps({"usage": {"input_tokens": 100, "output_tokens": 50}})
+
+        input_tokens, output_tokens = backend._extract_tokens_from_json(stdout)
+
+        assert input_tokens is None and output_tokens is None, (
+            "D-024: Non-JSON output format must return None tokens. "
+            "This prevents false positives from text that happens to be JSON."
+        )
+
+    def test_malformed_json_returns_none_gracefully(self) -> None:
+        """Broken JSON doesn't crash — returns None."""
+        from mozart.backends.claude_cli import ClaudeCliBackend
+
+        backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
+        backend.output_format = "json"
+
+        input_tokens, output_tokens = backend._extract_tokens_from_json(
+            "not valid json {{"
+        )
+
+        assert input_tokens is None and output_tokens is None, (
+            "D-024: Malformed JSON must return None, not crash. "
+            "Real stdout can contain mixed JSON and text."
+        )
+
+    def test_json_extraction_is_better_than_char_estimation(self) -> None:
+        """JSON tokens are dramatically more accurate than char estimation.
+
+        The litmus: a 15K input_token cost through JSON extraction would
+        be estimated as ~143 tokens by char estimation (500 chars / 3.5).
+        The JSON path is 100x more accurate for this case.
+        """
+        from mozart.backends.claude_cli import ClaudeCliBackend
+
+        backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
+        backend.output_format = "json"
+
+        stdout = json.dumps({
+            "result": "x" * 500,  # 500 chars of output
+            "usage": {
+                "input_tokens": 15000,
+                "output_tokens": 3000,
+            },
+        })
+
+        input_tokens, _ = backend._extract_tokens_from_json(stdout)
+
+        # Char-based estimation: ~500 chars / 3.5 chars_per_token ≈ 143 tokens
+        char_estimate = len(stdout) / 3.5
+
+        assert input_tokens is not None, "JSON extraction should succeed"
+        assert input_tokens > char_estimate * 10, (
+            f"D-024: JSON extraction ({input_tokens} tokens) must be "
+            f"dramatically more accurate than char estimation "
+            f"({char_estimate:.0f} tokens). The whole point of D-024 is "
+            f"that char estimation underestimates by 10-100x."
         )
