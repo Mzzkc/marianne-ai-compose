@@ -240,3 +240,9 @@ The first building movement. 32 musicians, 42 commits, zero merge conflicts. Ins
 
 ### Movement 0 (Stabilization)
 Foundation laid: learning store fixes, critical bug resolution, dead code removal. Quality gates established.
+
+### M4 Progress (Journey)
+- **Exploratory verification of M4 UX features:** Validated 44/44 example scores (0 failures). Verified 7 user-facing features from real-user perspective: auto-fresh detection, resume output clarity, pending jobs UX, cost confidence display, fan-in skipped upstream, cross-sheet safety, MethodNotFoundError. All behave as users would expect. Zero findings.
+- **Wordware demos:** 4/4 PASSED (invoice-analysis, contract-generator, candidate-screening, marketing-content). Ready for external audiences. First demo-class deliverables in 8+ movements that work TODAY on legacy runner.
+- **Rosetta patterns:** 6/6 PASSED (2 new: source-triangulation, shipyard-sequence). Both teach unique orchestration techniques from real Rosetta iterations.
+
