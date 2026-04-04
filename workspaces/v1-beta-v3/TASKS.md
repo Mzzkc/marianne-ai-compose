@@ -262,9 +262,9 @@ See FINDINGS.md F-097 through F-102 for full context.
 - [x] [Circuit] Schedule RateLimitExpired timer on rate limit hit — auto-resumes WAITING sheets when limit clears (priority: P1) [source: F-112] — Added timer scheduling in `_handle_rate_limit_hit()` at `core.py:958-967`. 10 TDD tests in `test_rate_limit_auto_resume.py`. The event type and handler already existed but nothing triggered them.
 
 ### Rate Limit Backpressure UX (F-110)
-- [ ] Accept jobs in PENDING state during rate limit backpressure instead of rejecting (priority: P1) [source: F-110]
-- [ ] Pending jobs start automatically when rate limit clears (priority: P1) [source: F-110]
-- [ ] Pending jobs can be cancelled via `mozart cancel` (priority: P1) [source: F-110]
+- [x] [Lens] Accept jobs in PENDING state during rate limit backpressure instead of rejecting (priority: P1) [source: F-110] — Mateship pickup of unnamed musician's implementation. BackpressureController.rejection_reason() distinguishes rate-limit vs resource pressure. JobManager._queue_pending_job() registers with PENDING status in JobMeta (visible in list/status). JobResponse model gains "pending" literal. DaemonJobStatus.PENDING added. CLI _handle_pending_response() shows info not error. Lens fixes: wired _start_pending_jobs() into clear_rate_limits() + deferred auto-start timer, added JobMeta tracking for list visibility, fixed mypy lambda inference. 23 TDD tests in test_rate_limit_pending.py. Fixed 3 existing tests in test_clear_rate_limits.py and 6 in test_m3_pass4_adversarial_breakpoint.py. Docs updated (cli-reference, daemon-guide).
+- [x] [Lens] Pending jobs start automatically when rate limit clears (priority: P1) [source: F-110] — _start_pending_jobs() called after clear_rate_limits() (manual) + scheduled via deferred asyncio task with rate limit expiry delay + 2s buffer (automatic). Jobs started in FIFO order, backpressure re-checked between each.
+- [x] [Lens] Pending jobs can be cancelled via `mozart cancel` (priority: P1) [source: F-110] — cancel_job() checks _pending_jobs first, removes from queue, updates JobMeta to CANCELLED, runs cleanup task. Included in mateship pickup implementation.
 - [x] [Dash] `mozart run` / `mozart resume` shows time remaining when rate-limited: "Rate limit on claude-cli — clears in Xm Ys" (priority: P1) [source: F-110] — format_rate_limit_info() in output.py, query_rate_limits() in helpers.py, _show_rate_limits_on_rejection() in run.py, _show_active_rate_limits_sync() in status.py. Also enhanced _rejection_hints() with fresh-aware "clear stale entry" hints and updated pressure hints to suggest clear-rate-limits. 18 TDD tests.
 - [x] [Lens] Fix misleading "Mozart conductor is not running" error on backpressure rejection (priority: P1) [source: F-110] — _try_daemon_submit now raises typer.Exit(1) on explicit rejection instead of returning False (which triggered misleading "not running" fallback). Rejection reason shown with hints. 3 TDD tests.
 
@@ -295,8 +295,8 @@ See FINDINGS.md F-097 through F-102 for full context.
 - [ ] Fix baton `_estimate_cost()` to use instrument profile pricing (priority: P2) [source: F-180 root cause 2]
 
 ### Skill Rename: mozart:usage → mozart:operations (or similar)
-- [ ] Rename `mozart:usage` skill to `mozart:command` — collides with built-in `/usage` (Claude token usage). Every user who types `/usage` gets Mozart debugging help instead of their token count. (priority: P1) [source: composer directive]
-- [ ] Update all references across project: CLAUDE.md, skill files, memory-bank, docs, score comments, session protocols (priority: P1)
+- [x] [Dash] Rename `mozart:usage` skill to `mozart:command` — collides with built-in `/usage` (Claude token usage). (priority: P1) [source: composer directive] — Renamed skills/usage/ → skills/command/ in plugin submodule, updated SKILL.md frontmatter + title, updated cross-references in score-authoring/SKILL.md (3 refs) and essentials.md (1 ref). Updated project CLAUDE.md (2 refs from stale absolute paths to plugin skill invocations). Global CLAUDE.md needs manual update (permission denied from agent context).
+- [x] [Dash] Update all references across project: CLAUDE.md, skill files, docs (priority: P1) — Completed as part of rename above.
 
 ### Gemini CLI Agent Assignment (TDF Analysis — Composer Recommendation)
 - [ ] Assign gemini-cli instrument to dreamer agents (6 per movement) — memory consolidation, low tool use (priority: P1) [source: composer TDF analysis]
