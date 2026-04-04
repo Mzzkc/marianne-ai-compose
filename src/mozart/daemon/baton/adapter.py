@@ -671,6 +671,28 @@ class BatonAdapter:
         await event.wait()
         return self._completion_results.get(job_id, False)
 
+    def has_completed_sheets(self, job_id: str) -> bool:
+        """Check if any sheet in the job reached COMPLETED status.
+
+        F-145: Used by the manager to set completed_new_work after baton
+        execution. The zero-work guard for concert chaining needs to know
+        whether any sheet completed new work — not just whether all
+        sheets succeeded.
+
+        Args:
+            job_id: The job to check.
+
+        Returns:
+            True if at least one sheet completed, False otherwise.
+        """
+        job = self._baton._jobs.get(job_id)
+        if job is None:
+            return False
+        return any(
+            s.status == BatonSheetStatus.COMPLETED
+            for s in job.sheets.values()
+        )
+
     def _check_completions(self) -> None:
         """Check all registered jobs for completion and signal waiters.
 
@@ -704,6 +726,54 @@ class BatonAdapter:
     # Dispatch Callback — Surface 2
     # =========================================================================
 
+    def _send_dispatch_failure(
+        self,
+        job_id: str,
+        sheet_num: int,
+        instrument_name: str,
+        error_msg: str,
+        state: SheetExecutionState | None = None,
+    ) -> None:
+        """Send a SheetAttemptResult failure event when dispatch cannot proceed.
+
+        F-152: Without this, backend acquisition failures cause either:
+        - Infinite dispatch loops (sheet stays READY, re-dispatched every cycle)
+        - Silent deadlocks (sheet set to DISPATCHED but no musician spawned)
+
+        The failure event enters the baton's normal state machine, which handles
+        retry decisions, dependent sheet propagation, and terminal state transition.
+
+        Args:
+            job_id: The job this sheet belongs to.
+            sheet_num: The sheet that failed to dispatch.
+            instrument_name: The instrument that was requested.
+            error_msg: Description of why dispatch failed.
+            state: Optional execution state for accurate attempt number.
+        """
+        attempt = 1
+        if state is not None:
+            attempt = state.normal_attempts + state.completion_attempts + 1
+
+        failure = SheetAttemptResult(
+            job_id=job_id,
+            sheet_num=sheet_num,
+            instrument_name=instrument_name,
+            attempt=attempt,
+            execution_success=False,
+            error_classification="E505",
+            error_message=error_msg,
+        )
+        self._baton.inbox.put_nowait(failure)
+        _logger.warning(
+            "adapter.dispatch.failure_event_sent",
+            extra={
+                "job_id": job_id,
+                "sheet_num": sheet_num,
+                "instrument": instrument_name,
+                "error": error_msg,
+            },
+        )
+
     async def _dispatch_callback(
         self,
         job_id: str,
@@ -716,6 +786,11 @@ class BatonAdapter:
         Acquires a backend, creates an AttemptContext, and spawns a
         musician task.
 
+        F-152: All early-return paths now send a SheetAttemptResult failure
+        event to the baton inbox. This ensures the baton state machine
+        handles the failure (retry, propagation, terminal transition)
+        instead of leaving the sheet in READY or DISPATCHED forever.
+
         Args:
             job_id: The job this sheet belongs to.
             sheet_num: The sheet to dispatch.
@@ -727,6 +802,12 @@ class BatonAdapter:
                 "adapter.dispatch.sheet_not_found",
                 extra={"job_id": job_id, "sheet_num": sheet_num},
             )
+            self._send_dispatch_failure(
+                job_id, sheet_num,
+                state.instrument_name,
+                f"Sheet {sheet_num} not found in adapter registry",
+                state=state,
+            )
             return
 
         if self._backend_pool is None:
@@ -734,15 +815,28 @@ class BatonAdapter:
                 "adapter.dispatch.no_backend_pool",
                 extra={"job_id": job_id, "sheet_num": sheet_num},
             )
+            self._send_dispatch_failure(
+                job_id, sheet_num,
+                sheet.instrument_name,
+                "No backend pool available — adapter not fully initialized",
+                state=state,
+            )
             return
 
         try:
-            # Acquire backend from pool
+            # Acquire backend from pool, passing model from instrument_config
+            # if the score author specified one. F-150: this was missing —
+            # instrument_config.model was silently ignored at dispatch time.
+            model_override = sheet.instrument_config.get("model")
             backend = await self._backend_pool.acquire(
                 sheet.instrument_name,
+                model=str(model_override) if model_override is not None else None,
                 working_directory=sheet.workspace,
             )
-        except (ValueError, RuntimeError) as exc:
+        except Exception as exc:
+            # F-152: Catch ALL exceptions, not just ValueError/RuntimeError.
+            # NotImplementedError (unsupported instrument kind) previously
+            # escaped and caused infinite dispatch loops.
             _logger.error(
                 "adapter.dispatch.backend_acquire_failed",
                 extra={
@@ -751,6 +845,13 @@ class BatonAdapter:
                     "instrument": sheet.instrument_name,
                     "error": str(exc),
                 },
+            )
+            self._send_dispatch_failure(
+                job_id, sheet_num,
+                sheet.instrument_name,
+                f"Backend acquisition failed for instrument "
+                f"'{sheet.instrument_name}': {exc}",
+                state=state,
             )
             return
 

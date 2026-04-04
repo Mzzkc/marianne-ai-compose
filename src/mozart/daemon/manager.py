@@ -1761,6 +1761,10 @@ class JobManager:
         })
 
         # Register job with the baton
+        # F-158: Pass prompt_config and parallel_enabled so the adapter
+        # creates a PromptRenderer for the full 9-layer prompt assembly.
+        # Without this, baton musicians get raw templates instead of
+        # rendered prompts with preamble, injections, and validations.
         adapter.register_job(
             job_id,
             sheets,
@@ -1769,11 +1773,20 @@ class JobManager:
             max_retries=max_retries,
             escalation_enabled=request.self_healing,
             self_healing_enabled=request.self_healing,
+            prompt_config=config.prompt,
+            parallel_enabled=config.parallel.enabled,
         )
 
         try:
             # Wait for the baton to complete all sheets
             all_success = await adapter.wait_for_completion(job_id)
+
+            # F-145: Set completed_new_work flag for concert chaining.
+            # The monolithic path sets this when summary.completed_sheets > 0.
+            # The baton path mirrors this by checking if any sheet completed.
+            meta = self._job_meta.get(job_id)
+            if meta and adapter.has_completed_sheets(job_id):
+                meta.completed_new_work = True
 
             # Publish completion event
             await adapter.publish_job_event(
@@ -1867,6 +1880,7 @@ class JobManager:
         )
 
         # Recover job with checkpoint state
+        # F-158: Pass prompt_config and parallel_enabled (same as _run_via_baton)
         self._baton_adapter.recover_job(
             job_id,
             sheets,
@@ -1874,11 +1888,17 @@ class JobManager:
             checkpoint,
             max_cost_usd=max_cost,
             max_retries=max_retries,
+            prompt_config=config.prompt,
+            parallel_enabled=config.parallel.enabled,
         )
 
         try:
             # Wait for the baton to complete all sheets
             all_success = await self._baton_adapter.wait_for_completion(job_id)
+
+            # F-145: Set completed_new_work flag for concert chaining.
+            if meta and self._baton_adapter.has_completed_sheets(job_id):
+                meta.completed_new_work = True
 
             await self._baton_adapter.publish_job_event(
                 job_id,
