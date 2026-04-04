@@ -48,10 +48,13 @@
 Movement 3 — IN PROGRESS (2026-04-04).
 
 ### Movement 3 Progress (Breakpoint)
-- **M3 adversarial tests (62 tests):** 12 test classes in `tests/test_m3_adversarial_breakpoint.py` targeting all major M3 fixes: F-152 dispatch guard (6), F-112 rate limit auto-resume (6), F-150 model override (8), F-145 completed_new_work (5), F-009/F-144 semantic tags (6), F-158 PromptRenderer (4), clear-rate-limits (7), stagger delay (5), terminal invariants (3), dispatch callback integration (4), F-160 wait cap (3), record_attempt (4).
-- **F-200 FOUND AND FIXED (P2):** `BatonCore.clear_instrument_rate_limit()` at `core.py:271-275` cleared ALL instruments when given a non-existent instrument name. Root cause: ternary `if instrument and instrument in self._instruments else clear_all` falls through when instrument is truthy but absent. Fixed with explicit `.get()` lookup. Regression test proves the fix.
-- **Bug class documented:** Fallthrough-to-default on failed lookup. Pattern: `if X and X in dict ... else default_behavior` where the else has unintended side effects.
-- **Quality: mypy clean (pre-existing validate.py issue only), ruff clean, 62 tests pass, 124 existing baton tests pass, 18 existing clear-rate-limits tests pass.**
+- **M3 adversarial tests — THREE PASSES (210 tests total):**
+  - Pass 1 (62 tests, commit bd325bc): 12 test classes in `tests/test_m3_adversarial_breakpoint.py` targeting baton/core M3 fixes.
+  - Pass 2 (58 tests, commit 0028fa1): 9 test classes in `tests/test_m3_cli_adversarial_breakpoint.py` targeting CLI/UX code.
+  - Pass 3 (90 tests): 16 test classes in `tests/test_baton_adapter_adversarial_breakpoint.py` targeting the BatonAdapter (1206 lines, step 28 wiring): state mapping totality, recovery edge cases, dispatch callback modes, state sync filtering, completion detection, observer event boundaries, deregistration cleanup, dependency extraction, musician wrapper exception handling, EventBus resilience, shutdown, get_sheet. Zero bugs found.
+- **F-200 FOUND AND FIXED (P2):** `BatonCore.clear_instrument_rate_limit()` at `core.py:271-275` cleared ALL instruments when given a non-existent instrument name. Fixed with explicit `.get()` lookup.
+- **Mateship pickup (commit 0028fa1):** Committed uncommitted validate.py changes + 22 untracked tests + quality gate baseline update.
+- **Quality: mypy clean, ruff clean, 257 tests pass across all 6 related files, quality gate passes (1296→1327 BARE_MAGICMOCK).**
 
 ### Movement 3 Progress (Spark)
 - **D-019 Examples polish (P2):** Modernized 7 fan-out example scores with movements: key, movement/voice terminology, and parallel config fixes. Files: worldbuilder.yaml, thinking-lab.yaml, dinner-party.yaml, design-review.yaml, skill-builder.yaml, palimpsest.yaml, score-composer.yaml. Fixed V207 warnings in worldbuilder and palimpsest (fan-out without parallel). Total: 9/18 fan-out examples now have movements: declarations (2 from M2 + 7 from M3). All validate clean. mypy clean. ruff clean.
