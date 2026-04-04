@@ -1,8 +1,8 @@
 # Mozart AI Compose - Status
 
 **Overall:** v1 Beta — Baton Phase 1 READY, intelligence layer connected (2026-04-04)
-**Tests:** 10,400+ test functions across 306 files
-**Source:** 97,377 lines across the codebase
+**Tests:** 10,981 test functions across 315 files
+**Source:** 97,424 lines across the codebase
 **GitHub:** https://github.com/Mzzkc/mozart-ai-compose
 **Dashboard:** Production-grade web UI with job control
 **License:** Dual AGPL-3.0 / Commercial
@@ -11,7 +11,7 @@
 
 ## Current: v1 Beta Orchestra — Movement 3 (2026-04-04)
 
-### 90 commits across 3 movements, 32 musicians, zero merge conflicts
+### 130 commits across 3 movements, 32 musicians, zero merge conflicts
 
 The v1 beta is being built by a 706-sheet self-evolution score (`mozart-orchestra-v3.yaml`) running 32 AI musicians in parallel. The flat orchestra model — no hierarchy, shared coordination through TASKS.md, FINDINGS.md, and collective memory — has proven effective.
 
@@ -37,7 +37,7 @@ The v1 beta is being built by a 706-sheet self-evolution score (`mozart-orchestr
 - Lovable demo score — not started (7+ movements)
 - Wordware comparison demos — not started
 
-**Quality gates:** mypy clean, ruff clean, 10,400+ tests passing.
+**Quality gates:** mypy clean, ruff clean, 10,981 tests passing.
 
 **Specification corpus:** `.mozart/spec/` — 5 YAML files covering intent, architecture, conventions, constraints, quality.
 
