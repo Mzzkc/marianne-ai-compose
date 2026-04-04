@@ -199,6 +199,12 @@ class BackendPool:
             instrument_name: The instrument name used in ``acquire()``.
             backend: The Backend instance to release.
         """
+        # Clear any per-sheet overrides (model, etc.) before returning
+        # the backend to the free list. Without this, a model override from
+        # sheet N would silently carry over to sheet N+1 that reuses the
+        # same backend instance. This was F-150's secondary bug.
+        backend.clear_overrides()
+
         async with self._lock:
             count = self._in_flight.get(instrument_name, 0)
             self._in_flight[instrument_name] = max(0, count - 1)

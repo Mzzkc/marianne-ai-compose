@@ -227,17 +227,23 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
             # Batch assignment via instrument_map
             resolved_instrument = instrument_map_lookup[sheet_num]
         else:
-            # Check movement-level instrument
+            # Check movement-level instrument and config
             if movement in config.movements:
                 movement_def = config.movements[movement]
                 if movement_def.instrument is not None:
                     resolved_instrument = movement_def.instrument
-                    # Movement-level config merges with score-level
-                    if movement_def.instrument_config:
-                        instrument_config = {
-                            **instrument_config,
-                            **movement_def.instrument_config,
-                        }
+                # Movement-level instrument_config merges with score-level
+                # regardless of whether the movement also overrides the
+                # instrument name. A score author should be able to say
+                # "same instrument, different model" without repeating
+                # the instrument name. F-150: this was gated behind
+                # instrument is not None, silently dropping config-only
+                # movement overrides.
+                if movement_def.instrument_config:
+                    instrument_config = {
+                        **instrument_config,
+                        **movement_def.instrument_config,
+                    }
             # Fall through to score-level or backend default
             if resolved_instrument is None:
                 if config.instrument is not None:

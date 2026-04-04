@@ -95,6 +95,12 @@ class PluginCliBackend(Backend):
         self._output_log_path: Path | None = None
         self._model: str | None = profile.default_model
 
+        # Override tracking — mirrors the pattern in ClaudeCliBackend.
+        # _saved_model stores the pre-override value so clear_overrides()
+        # can restore it. _has_overrides guards against double-clear.
+        self._saved_model: str | None = None
+        self._has_overrides: bool = False
+
         _logger.debug(
             "plugin_cli_backend_initialized",
             instrument=profile.name,
@@ -106,6 +112,31 @@ class PluginCliBackend(Backend):
     def name(self) -> str:
         """Human-readable backend name."""
         return self._profile.display_name
+
+    def apply_overrides(self, overrides: dict[str, object]) -> None:
+        """Apply per-sheet parameter overrides for the next execution.
+
+        Supports:
+        - ``model``: Override the default_model from the instrument profile.
+
+        Must be paired with clear_overrides() after execution. Callers
+        MUST hold override_lock for the entire apply → execute → clear
+        window when parallel execution is possible.
+        """
+        if not overrides:
+            return
+        self._saved_model = self._model
+        self._has_overrides = True
+        if "model" in overrides:
+            self._model = str(overrides["model"])
+
+    def clear_overrides(self) -> None:
+        """Restore original backend parameters after per-sheet execution."""
+        if not self._has_overrides:
+            return
+        self._model = self._saved_model
+        self._saved_model = None
+        self._has_overrides = False
 
     def set_preamble(self, preamble: str | None) -> None:
         """Set preamble to prepend to the next prompt."""
