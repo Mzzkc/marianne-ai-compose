@@ -194,6 +194,14 @@ class _MockMixin:
     def _check_cost_limits(self, sheet_state, state) -> tuple[bool, str | None]:
         return False, None
 
+    def _check_pause_signal(self, state: "CheckpointState") -> bool:
+        return False
+
+    async def _handle_pause_request(
+        self, state: "CheckpointState", current_sheet: int,
+    ) -> None:
+        pass
+
 
 # Dynamically compose the mixin for testing
 from mozart.execution.runner.context import ContextBuildingMixin

@@ -182,6 +182,10 @@ class SheetExecutionMixin:
         _escalation_update_failures: int
 
         # Methods from JobRunnerBase
+        def _check_pause_signal(self, state: CheckpointState) -> bool: ...
+        async def _handle_pause_request(
+            self, state: CheckpointState, current_sheet: int
+        ) -> None: ...
         async def _interruptible_sleep(self, seconds: float) -> None: ...
         async def _fire_event(
             self,
@@ -1558,6 +1562,13 @@ class SheetExecutionMixin:
         consecutive_guard_waits = 0
 
         while True:
+            # Check for pause signal between retry attempts (#93).
+            # Without this, a sheet stuck in a validation-failure retry
+            # loop never reaches a sheet boundary and the pause signal
+            # is never consumed.
+            if self._check_pause_signal(state):
+                await self._handle_pause_request(state, sheet_num)
+
             # Mark sheet started
             state.mark_sheet_started(sheet_num)
             sheet_state = state.sheets[sheet_num]
