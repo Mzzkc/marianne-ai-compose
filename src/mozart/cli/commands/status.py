@@ -1038,8 +1038,16 @@ def _render_sheet_details(job: CheckpointState) -> None:
 
     has_descriptions = bool(descriptions)
 
+    # Detect whether any sheet has instrument metadata (F-151)
+    has_instruments = any(
+        s.instrument_name for s in job.sheets.values()
+    )
+
     console.print("\n[bold]Sheet Details[/bold]")
-    sheet_table = create_sheet_details_table(has_descriptions=has_descriptions)
+    sheet_table = create_sheet_details_table(
+        has_descriptions=has_descriptions,
+        has_instruments=has_instruments,
+    )
 
     for sheet_num in sorted(job.sheets.keys()):
         sheet = job.sheets[sheet_num]
@@ -1065,6 +1073,8 @@ def _render_sheet_details(job: CheckpointState) -> None:
         row: list[str] = [str(sheet_num)]
         if has_descriptions:
             row.append(descriptions.get(sheet_num, ""))
+        if has_instruments:
+            row.append(sheet.instrument_name or "")
         row.extend([status_str, str(sheet.attempt_count), val_str, error_str])
 
         sheet_table.add_row(*row)
@@ -1147,6 +1157,20 @@ def _render_sheet_summary(job: CheckpointState) -> None:
             parts.append(f"{count} {label}")
 
     console.print(f"  {total} sheets: {', '.join(parts)}")
+
+    # Show instrument breakdown when instruments are assigned (F-151)
+    instrument_counts: dict[str, int] = {}
+    for sheet in job.sheets.values():
+        if sheet.instrument_name:
+            instrument_counts[sheet.instrument_name] = (
+                instrument_counts.get(sheet.instrument_name, 0) + 1
+            )
+    if instrument_counts:
+        instr_parts = [
+            f"[dim]{name}[/dim] ({count})"
+            for name, count in sorted(instrument_counts.items())
+        ]
+        console.print(f"  Instruments: {', '.join(instr_parts)}")
 
     # Show interesting sheets individually
     if interesting_sheets:

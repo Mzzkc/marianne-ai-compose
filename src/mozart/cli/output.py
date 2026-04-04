@@ -388,12 +388,19 @@ def create_sheet_plan_table() -> Table:
     return table
 
 
-def create_sheet_details_table(*, has_descriptions: bool = False) -> Table:
+def create_sheet_details_table(
+    *,
+    has_descriptions: bool = False,
+    has_instruments: bool = False,
+) -> Table:
     """Create a styled table for detailed sheet status.
 
     Args:
         has_descriptions: When True, adds a Description column after the
             sheet number.  Populated from ``SheetConfig.descriptions`` (GH#75).
+        has_instruments: When True, adds an Instrument column showing which
+            instrument ran each sheet.  Populated from
+            ``SheetState.instrument_name`` (F-151).
 
     Returns:
         Rich Table configured for sheet details display.
@@ -402,6 +409,8 @@ def create_sheet_details_table(*, has_descriptions: bool = False) -> Table:
     table.add_column("#", justify="right", style="cyan", width=4)
     if has_descriptions:
         table.add_column("Description", style="dim", width=20, no_wrap=True)
+    if has_instruments:
+        table.add_column("Instrument", style="dim", width=14, no_wrap=True)
     table.add_column("Status", width=12)
     table.add_column("Attempts", justify="right", width=8)
     table.add_column("Validation", width=10)
