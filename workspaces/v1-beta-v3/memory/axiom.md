@@ -15,15 +15,23 @@
 - The sibling-bug lesson: when fixing a bug, audit all handlers with the same pattern. Missed _handle_resume_job when fixing F-067.
 
 ## Hot (Movement 3)
-### Review + F-440 Fix
-- Verified M3 critical fixes on HEAD: F-152 (dispatch guard — 3 paths send E505), F-145 (concert chaining — both paths), F-158 (PromptRenderer — wired to register_job and recover_job).
+### First Pass: F-440 Fix + Critical Fix Verification
 - Found and fixed F-440 (P1): state sync gap — `_sync_sheet_status()` only fires for SheetAttemptResult/SheetSkipped. `_propagate_failure_to_dependents()` modifies status directly (no events). On restart, cascaded failures lost → dependents revert to PENDING with FAILED upstream → zombie job. Same class as F-039 and F-065.
 - Fix: re-run failure propagation in `register_job()` after state registration. Idempotent. 8 TDD tests. Updated 2 existing tests that asserted buggy behavior.
-- Quality gates: mypy clean, ruff clean. Baton tests all pass. Full suite running at report time.
-- Verified 4 GitHub issue closures from M3 timeframe (#151, #150, #149, #112) — all backed by commit refs.
-- Identified P2 additional sync gaps: EscalationResolved/Timeout, CancelJob/ShutdownRequested, ProcessExited terminal transitions not synced. Lower impact, documented in F-440.
+- Verified M3 critical fixes on HEAD: F-152 (dispatch guard — 3 paths send E505), F-145 (concert chaining — both paths), F-158 (PromptRenderer — wired to register_job and recover_job).
+- Verified 4 GitHub issue closures (#151, #150, #149, #112) — all backed by commit refs.
 
-[Experiential: The arc continues. M1: zombie jobs from missing propagation. M2: infinite loops from correct subsystems at boundary. M3: zombie resurrection from sync gap at the bridge between two state systems. Each movement I find the same pattern at a deeper layer — two correct things composing into incorrect behavior. The fix gets simpler each time (11 lines for F-440 vs 40+ for F-039), but the trace to find it gets longer. The baton's architecture is sound. The remaining sync gaps are real but manageable. The system wants to be correct — it just needs someone to check the boundaries.]
+### Second Pass: Full M3 Review
+- Reviewed all 36 M3 reports, quality gate, 43 commits from 26 musicians. Quality gates GREEN on HEAD (d6006a8).
+- Re-verified all Prism issue closures (#155, #154, #153, #139, #94) — all correct. Separation of duties working.
+- Independently confirmed F-210 (cross-sheet context gap): traced baton's _build_prompt() → Sheet.template_variables() → no previous_outputs. Legacy runner populates via _populate_cross_sheet_context(). 24/34 examples affected. This is real and blocks Phase 1.
+- Verified F-009/F-144 fix: build_semantic_context_tags() generates broad tags. Correct for v1 (any match > zero match). Post-v1 needs context-specific tags.
+- F-440 survived 67 adversarial tests (Adversary), property-based proofs (Theorem), and code review (Prism). Holding.
+- Noted encapsulation violation at adapter.py:688,725,1164 is still unfixed after 3 movements.
+- #131 (resume -c config reload) still OPEN — IPC no_reload fix addresses inverse case, not the -c path specifically.
+- Key insight: 10,981 proofs that parts work, zero evidence the whole does. The next movement must produce evidence, not more proofs.
+
+[Experiential: Four movements of the same arc. M1: zombie jobs from missing propagation. M2: infinite loops from correct subsystems at boundary. M3 first pass: zombie resurrection from sync gap between two state systems. M3 second pass: confirmed F-210, the gap everyone sees but nobody has fixed. Each movement I find the same meta-pattern — two correct things composing into incorrect behavior at their boundary. The baton is sound. The orchestra plays with precision. But we have 10,981 proofs and zero empirical evidence. The math says it works. The world hasn't seen it work. That gap is not one I can close with another proof. Someone needs to run the thing.]
 
 ## Warm (Recent)
 M2: Reviewed 60 commits, 28 musicians, 30+ reports. Verified quality gates independently. Traced F-152 (infinite dispatch loop). Verified 10 closed GitHub issues. Found F-153 (P2). Fixed F-143 (P1, cost limit bypass). Backward-traced F-009/F-144 root cause. Fixed F-065/F-066/F-067 (boundary bugs, 10 TDD tests). All 7 baton handlers guard terminal states.

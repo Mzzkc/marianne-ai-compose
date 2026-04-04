@@ -206,6 +206,15 @@ Movement 3 — IN PROGRESS (2026-04-04).
 - **GitHub issues verified:** #151, #150, #149, #112 — all closures backed by commit refs and verification reports.
 - **Quality: mypy clean, ruff clean, baton tests pass, recovery tests pass.**
 
+### Movement 3 Progress (Axiom — Second Pass Review)
+- **Full M3 review COMPLETE:** 36 reports, 43 commits, quality gate, all M3 fixes re-verified on HEAD (d6006a8). 10,981 tests, mypy clean, ruff clean.
+- **5 Prism issue closures re-verified:** #155, #154, #153, #139, #94 — all correct. Separation of duties confirmed.
+- **F-210 independently confirmed:** Traced baton's _build_prompt() → Sheet.template_variables() → no previous_outputs. Legacy runner populates via _populate_cross_sheet_context() at context.py:171-221. SheetExecutionState.previous_outputs at state.py:161 is never populated. 24/34 examples affected. CONFIRMED as Phase 1 blocker.
+- **F-009/F-144 analysis:** Semantic tags are broad (same tags for all queries). Correct v1 trade-off. Post-v1 needs context-specific tags.
+- **#131 (resume -c) NOT closable:** IPC no_reload fix addresses inverse case. The -c (force reload) path needs separate verification.
+- **Encapsulation violation persistent:** adapter.py:688,725,1164 — 3 private member accesses across 3 movements unfixed. P3 but accumulating.
+- **Verdict:** Movement 3 complete. All fixes correct. F-210 is the sole engineering blocker. Demo has zero engineering blockers. 10,981 proofs of parts; zero evidence of the whole.
+
 ### Movement 3 Progress (Newcomer)
 - **F-153/F-460 FIXED (P2):** "job" → "score" terminology across CLI + docs. ~35 fixes in 6 files: run.py, validate.py, recover.py docstrings/help; README.md (12); getting-started.md (10); cli-reference.md (11). Music metaphor now consistent across all newcomer touchpoints.
 - **Fresh-eyes audit M3:** 37/38 examples validate. Error handling excellent (no regressions). Init → validate pipeline clean. hello.yaml shows claude-code (F-154 resolved). Doctor/conductor-status/status agree.
@@ -410,6 +419,15 @@ The mateship model matured — Harper's mass pickups resolved the uncommitted wo
 - **4 missing README examples added:** docs-generator.yaml, agent-spike.yaml, observability-demo.yaml, phase3-wiring.yaml added to Software Development table.
 - **All 37 scores validate clean.** Zero regressions from M2.
 - **Quality:** mypy clean, ruff clean.
+
+### Movement 3 Quality Gate — PASS (Bedrock)
+- **ALL FOUR CHECKS PASS:** pytest 10,981 passed / 5 skipped (498s), mypy clean, ruff clean, flowspec 0 critical.
+- 43 commits, 26 unique musicians. 584 new tests (10,397 → 10,981). 97,424 source lines, 315 test files.
+- Tasks: 158/207 (76%). M3 milestone: 100%. M4: 67%. M5: 73%.
+- Working tree clean (2 untracked Rosetta files from M2).
+- **Critical blocker for M4:** F-210 (cross-sheet context in baton) — must be first task.
+- **Demo at zero** — seven movements, no progress on the Lovable demo.
+- Full report: `movement-3/quality-gate.md`
 
 ### Earlier Movements (M0-M3)
 M0 stabilized foundations (learning store, critical bugs, dead code). M1 shipped instrument plugin system and sheet-first architecture. M2 built baton core (events, timer wheel, state, dispatch, retry, rate limits, BackendPool) plus conductor-clone. M3 delivered UX polish, M4 data models, observability, production bug fixes. Canyon's step 28 analysis became Foundation's blueprint. The BatonAdapter (775+ lines, 64 TDD tests) wired 7 of 8 surfaces.

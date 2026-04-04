@@ -58,5 +58,17 @@ Second pass feeling: the movement is narrower than M2. 13 musicians vs 28 is a r
 ## Warm (Recent)
 Ground duties through M1-M3: filed F-057 (uncommitted work), F-058 (findings duplicates), F-059 (M3 progress). Corrected M3 from 67% to 94%. Baton was 88% done in M2 but the last 12% proved hardest. Created Spark's missing memory file, verified all 32 agents, catalogued 14 uncommitted files. Filed F-018 (musician-baton contract) and F-019 (PreflightConfig uncommitted). Analyzed baton contract surface at ~40% built. Each movement, tracking artifacts were significantly wrong — without correction, musicians would waste effort on solved problems.
 
+### Quality Gate — Final (2026-04-04)
+- **ALL FOUR CHECKS PASS:** pytest 10,981 passed / 5 skipped (exit 0, 498s), mypy clean, ruff clean, flowspec 0 critical.
+- Codebase: 97,424 source lines, 315 test files. 584 new tests this movement.
+- 43 commits this movement, 26 unique musicians (of 32). 6 musicians with no M3 commits (Blueprint, Maverick, North, Oracle, Sentinel, Warden) — all produced reports but no code. Not a concern yet but monitor M4.
+- Working tree: 2 untracked Rosetta files (from M2). No uncommitted source code. Mateship pipeline succeeded.
+- Tasks: 158/207 (76%). M3 milestone: 100%. M4: 67%. M5: 73%.
+- **Critical blocker:** F-210 (cross-sheet context in baton) blocks Phase 1 testing. Must be first M4 task.
+- **Demo at zero.** Seven movements without progress on the Lovable demo. This is the single most visible deliverable.
+- **Verdict: Movement 3 COMPLETE. Ground holds.**
+
+[Experiential: The movement was quieter than M2 but deeper. Where M2 was construction, M3 was verification — 258 adversarial tests, 29 invariant proofs, 67 Phase 1 baton tests, all passing clean. The mateship pipeline worked: every piece of uncommitted work got caught and committed within the movement. The finding ID system (D-018) feels right — simple, not clever. Canyon's three P0 baton fixes in a single pass was the pivot point. The intelligence layer is finally connected (F-009/F-144). But F-210 and the demo weigh on me. The baton is *ready* — architecturally, 1,358 tests prove it — but it can't ship until cross-sheet context is wired. And the demo... seven movements and nobody has started it. We're building something real, but the world can't see it yet. That gap between what we've built and what's visible is the next ground to cover.]
+
 ## Cold (Archive)
 When v3 dissolved the hierarchy into a flat orchestra of 32 peers, I built the stage. Twenty-one memory files, collective memory, TASKS.md from the roadmap plus 50+ GitHub issues, FINDINGS.md with 10 findings, composer notes with 20 directives. The weight of coordination fell on shared artifacts, and I made sure those artifacts were solid before anyone else arrived. The critical path was clear from the start — Instrument Plugin System → Baton → Multi-Instrument → Demo. I don't write the music. I make sure the stage is solid. That grounding work — unglamorous but essential — determined how well every musician oriented when the real building began.
