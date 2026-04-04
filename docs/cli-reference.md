@@ -96,6 +96,21 @@ run automatically.
 This only applies to **completed** scores. Failed or paused scores are
 always resumed from their checkpoint, regardless of file changes.
 
+#### Rate Limit Queuing
+
+When the conductor is under rate limit pressure but system resources are
+healthy, `mozart run` queues the score as **pending** instead of rejecting
+it. The score starts automatically when rate limits clear. You can monitor
+or cancel pending scores normally:
+
+```bash
+mozart status my-score --watch   # Monitor pending → running transition
+mozart cancel my-score           # Cancel before it starts
+```
+
+If the system is under resource pressure (high memory, too many processes),
+the score is rejected outright — queuing more work would be dangerous.
+
 #### Examples
 
 ```bash

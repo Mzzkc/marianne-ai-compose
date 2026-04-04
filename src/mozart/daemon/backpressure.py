@@ -175,6 +175,42 @@ class BackpressureController:
             return False
         return True
 
+    def rejection_reason(self) -> str | None:
+        """Why would a job be rejected right now?
+
+        Returns:
+            ``None`` if the system would accept the job.
+            ``"rate_limit"`` if the only pressure source is active rate limits
+            (memory and processes are healthy).
+            ``"resource"`` if memory or process pressure is the cause.
+
+        This lets callers distinguish between rate-limit rejections
+        (where the job can be queued as PENDING) and resource rejections
+        (where accepting more work would be dangerous).
+        """
+        current_mem = self._monitor.current_memory_mb()
+        if current_mem is None or self._monitor.is_degraded:
+            return "resource"
+
+        max_mem = max(self._monitor.max_memory_mb, 1)
+        memory_pct = current_mem / max_mem
+        accepting_work = self._monitor.is_accepting_work()
+
+        # Critical resource pressure — always resource
+        if memory_pct > 0.95 or not accepting_work:
+            return "resource"
+
+        # High memory (>85%) — resource pressure regardless of rate limits
+        if memory_pct > 0.85:
+            return "resource"
+
+        # Rate limits active but memory is fine — rate limit only
+        if self._rate_coordinator.active_limits:
+            return "rate_limit"
+
+        # No pressure
+        return None
+
     # ─── Resource-aware scheduling hints ──────────────────────────
 
     async def estimate_job_resource_needs(

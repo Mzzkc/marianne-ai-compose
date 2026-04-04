@@ -151,6 +151,9 @@ class JobManager:
         # state.job_id doesn't match any _job_meta key — O(1) lookup
         # instead of the fragile linear scan it replaces.
         self._config_name_to_conductor_id: dict[str, str] = {}
+        # Jobs queued as PENDING during rate limit backpressure.
+        # Keyed by conductor job_id.  Auto-started when limits clear.
+        self._pending_jobs: dict[str, JobRequest] = {}
         self._concurrency_semaphore = asyncio.Semaphore(
             config.max_concurrent_jobs,
         )
@@ -590,6 +593,12 @@ class JobManager:
             )
 
         if not self._backpressure.should_accept_job():
+            # Distinguish rate-limit-only pressure from resource pressure.
+            # Rate limits: queue as PENDING (job starts when limits clear).
+            # Resource pressure: reject outright (system can't handle more).
+            reason = self._backpressure.rejection_reason()
+            if reason == "rate_limit":
+                return await self._queue_pending_job(request)
             return JobResponse(
                 job_id="",
                 status="rejected",
@@ -759,6 +768,144 @@ class JobManager:
             status="accepted",
             message=f"Job queued (concurrency limit: {self._config.max_concurrent_jobs})",
         )
+
+    async def _queue_pending_job(self, request: JobRequest) -> JobResponse:
+        """Accept a job as PENDING during rate-limit backpressure.
+
+        Registers the job in the persistent registry and in-memory metadata,
+        but does NOT create an execution task.  The job starts automatically
+        when rate limits clear (via ``_start_pending_jobs``).
+
+        Returns a ``pending`` JobResponse with rate limit timing info.
+        """
+        job_id = self._get_job_id(request.config_path.stem)
+
+        # Minimal validation: config must exist
+        if not request.config_path.exists():
+            return JobResponse(
+                job_id=job_id,
+                status="rejected",
+                message=f"Config file not found: {request.config_path}",
+            )
+
+        # Gather rate limit info for the response message
+        active = self._rate_coordinator.active_limits
+        limit_parts: list[str] = []
+        for instrument, secs in active.items():
+            if secs > 0:
+                mins, s = divmod(int(secs), 60)
+                time_str = f"{mins}m {s}s" if mins else f"{s}s"
+                limit_parts.append(f"{instrument} clears in {time_str}")
+
+        # Register in persistent storage + in-memory metadata so
+        # the job is visible via `mozart list` and `mozart status`.
+        workspace = request.workspace or self._resolve_workspace_from_config(
+            request.config_path, job_id,
+        )
+        if workspace is not None:
+            await self._registry.register_job(job_id, request.config_path, workspace)
+            self._job_meta[job_id] = JobMeta(
+                job_id=job_id,
+                config_path=request.config_path,
+                workspace=workspace,
+                status=DaemonJobStatus.PENDING,
+            )
+
+        # Store for auto-start
+        self._pending_jobs[job_id] = request
+
+        limit_msg = "; ".join(limit_parts) if limit_parts else "active rate limits"
+        _logger.info(
+            "job.queued_pending",
+            job_id=job_id,
+            reason="rate_limit",
+            config_path=str(request.config_path),
+        )
+
+        # Schedule a deferred auto-start check when the longest rate limit
+        # is expected to clear.  Adds a small buffer (2s) for timing slop.
+        max_wait = max(active.values(), default=0.0)
+        if max_wait > 0:
+            delay = max_wait + 2.0
+
+            async def _deferred_start() -> None:
+                await asyncio.sleep(delay)
+                await self._start_pending_jobs()
+
+            task = asyncio.create_task(
+                _deferred_start(),
+                name=f"pending-autostart-{job_id}",
+            )
+            # Fire-and-forget — just prevent "task was destroyed" warnings
+            task.add_done_callback(lambda t: None)
+
+        return JobResponse(
+            job_id=job_id,
+            status="pending",
+            message=f"Rate limit active ({limit_msg}). Score queued — starts when limits clear.",
+        )
+
+    def _resolve_workspace_from_config(
+        self, config_path: Path, job_id: str,
+    ) -> Path | None:
+        """Best-effort workspace resolution from a config file."""
+        try:
+            from mozart.core.config import JobConfig
+            parsed = JobConfig.from_yaml(config_path)
+            return parsed.workspace
+        except Exception:
+            _logger.debug(
+                "pending.workspace_resolve_failed",
+                job_id=job_id,
+                config_path=str(config_path),
+            )
+            return None
+
+    async def _start_pending_jobs(self) -> None:
+        """Start any pending jobs if backpressure has cleared.
+
+        Called when rate limits expire or are cleared manually.
+        Jobs are started in insertion order (FIFO).
+        """
+        if not self._pending_jobs:
+            return
+
+        if not self._backpressure.should_accept_job():
+            return
+
+        # Copy keys to avoid mutation during iteration
+        for job_id in list(self._pending_jobs.keys()):
+            if not self._backpressure.should_accept_job():
+                break  # Pressure returned — stop starting jobs
+
+            request = self._pending_jobs.pop(job_id)
+            # Transition status from PENDING → QUEUED in metadata
+            meta = self._job_meta.get(job_id)
+            if meta is not None:
+                meta.status = DaemonJobStatus.QUEUED
+            _logger.info(
+                "job.pending_started",
+                job_id=job_id,
+                config_path=str(request.config_path),
+            )
+            try:
+                task = asyncio.create_task(
+                    self._run_job_task(job_id, request),
+                    name=f"job-{job_id}",
+                )
+                self._jobs[job_id] = task
+                def _on_pending_done(
+                    t: asyncio.Task[Any], *, _jid: str = job_id,
+                ) -> None:
+                    self._on_task_done(_jid, t)
+
+                task.add_done_callback(_on_pending_done)
+            except RuntimeError:
+                _logger.error(
+                    "pending.task_creation_failed",
+                    job_id=job_id,
+                    exc_info=True,
+                )
 
     async def get_job_status(self, job_id: str, workspace: Path | None = None) -> dict[str, Any]:
         """Get full status of a specific job.
@@ -985,12 +1132,31 @@ class JobManager:
             _logger.error("modify.deferred_resume_failed", job_id=job_id, exc_info=True)
 
     async def cancel_job(self, job_id: str) -> bool:
-        """Cancel a running job task.
+        """Cancel a running or pending job.
 
-        Sends the cancel signal and updates in-memory status immediately,
-        then defers heavyweight I/O (registry write, scheduler cleanup)
-        to a background task so the IPC response is never delayed.
+        For running jobs: sends the cancel signal and updates in-memory
+        status immediately, then defers heavyweight I/O to a background task.
+
+        For pending jobs (queued during rate limit backpressure): removes
+        from the pending queue and updates the registry.
         """
+        # Check pending jobs first (not yet started)
+        if job_id in self._pending_jobs:
+            del self._pending_jobs[job_id]
+            meta = self._job_meta.get(job_id)
+            if meta:
+                meta.status = DaemonJobStatus.CANCELLED
+            # Update registry
+            cleanup = asyncio.create_task(
+                self._cancel_cleanup(job_id),
+                name=f"cancel-cleanup-{job_id}",
+            )
+            cleanup.add_done_callback(
+                lambda t: log_task_exception(t, _logger, "cancel_cleanup.failed"),
+            )
+            _logger.info("job.pending_cancelled", job_id=job_id)
+            return True
+
         task = self._jobs.get(job_id)
         if task is None:
             return False
@@ -1076,7 +1242,7 @@ class JobManager:
             Dict with "deleted" count.
         """
         safe_statuses = set(statuses or ["completed", "failed", "cancelled"])
-        safe_statuses -= {"queued", "running"}  # Never clear active jobs
+        safe_statuses -= {"queued", "running", "pending"}  # Never clear active jobs
 
         to_remove: list[str] = []
         now = time.time()
@@ -1138,6 +1304,8 @@ class JobManager:
             coordinator_cleared=cleared,
             baton_cleared=baton_cleared,
         )
+        # Start any pending jobs now that limits are cleared
+        await self._start_pending_jobs()
         return {
             "cleared": cleared + baton_cleared,
             "instrument": instrument,

@@ -126,6 +126,7 @@ Registered RPC methods:
 | `daemon.shutdown` | Initiate conductor shutdown |
 | `daemon.health` | Liveness probe |
 | `daemon.ready` | Readiness probe |
+| `daemon.clear_rate_limits` | Clear cached rate limits (all or by instrument) |
 
 ### Backpressure
 
@@ -139,7 +140,12 @@ The `BackpressureController` assesses system pressure based on memory usage (as 
 | HIGH | > 85% or active rate limit | New job submissions rejected |
 | CRITICAL | > 95% memory, > 80% process count, or monitor degraded | Emergency: oldest job (by submission time) may be cancelled |
 
-When `should_accept_job()` returns `False` (HIGH or CRITICAL pressure), the JobManager rejects new submissions with "System under high pressure — try again later."
+When `should_accept_job()` returns `False` (HIGH or CRITICAL pressure), the JobManager distinguishes between rate-limit-only pressure and resource pressure:
+
+- **Rate limit only** (memory healthy, rate limits active): The score is accepted as **pending** and starts automatically when rate limits clear. The user sees the score in `mozart list` with status `pending`.
+- **Resource pressure** (high memory or process count): The score is rejected outright with "System under high pressure — try again later."
+
+Pending scores can be cancelled with `mozart cancel` before they start.
 
 ## Configuration
 
@@ -200,6 +206,8 @@ Controls the SemanticAnalyzer — LLM-based analysis of sheet completions that p
 | `state_db_path` | `Path` | `~/.mozart/daemon-state.db` | Job registry database path. Overridden by `--conductor-clone` for clone isolation. |
 | `max_concurrent_sheets` | `int` | `10` | Max concurrent sheets across all jobs (used by the baton when `use_baton: true`) |
 | `use_baton` | `bool` | `false` | Enable the baton execution engine. Test with `--conductor-clone` first. |
+| `preflight.token_warning_threshold` | `int` | `50000` | Token count above which to warn during preflight checks. Set higher for large-context instruments. `0` to disable. |
+| `preflight.token_error_threshold` | `int` | `150000` | Token count above which to error during preflight checks. Set higher for large-context instruments (e.g., `800000` for 1M-context models). `0` to disable. |
 
 ### Example Config File
 
@@ -397,6 +405,36 @@ Key capabilities:
 
 **Activation:** Set `use_baton: true` in `~/.mozart/conductor.yaml`. Use `--conductor-clone`
 for testing — do not activate against a production conductor without validating first.
+
+### Transition Plan
+
+The baton is the mandatory path to multi-instrument execution. Without it, the conductor
+delegates to the legacy monolithic runner, which silently ignores per-sheet instrument
+assignments and runs everything through a single backend. Scores that configure
+multi-instrument will appear to validate and run correctly while actually using one
+instrument for everything.
+
+The transition has three phases:
+
+**Phase 1: Prove the baton works** (current priority)
+- Use `--conductor-clone` to run baton-enabled clones alongside the production conductor
+- Run scores through the baton clone and verify per-sheet instrument assignment works
+- Run adversarial tests: rate limits, timeouts, instrument failures, concurrent jobs
+- Fix all issues found
+
+**Phase 2: Baton as default**
+- Flip `use_baton` default to `true` in `DaemonConfig`
+- Legacy runner remains as fallback for scores that explicitly opt out
+- All new features target the baton path only
+
+**Phase 3: Remove the toggle**
+- Delete the legacy runner execution path
+- Remove `use_baton` from `DaemonConfig`
+- The baton is how the conductor runs — no toggle, no fallback
+
+> **Important:** Do not rely on per-sheet `instrument:` assignments producing different
+> behavior until the baton is active. The legacy runner silently uses a single backend
+> regardless of per-sheet configuration.
 
 ### Legacy Components
 

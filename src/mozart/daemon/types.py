@@ -106,9 +106,10 @@ class JobResponse(BaseModel):
     job_id: str = Field(
         description="Unique identifier for the submitted job",
     )
-    status: Literal["accepted", "rejected", "error"] = Field(
-        description="Submission result: accepted (queued), "
-        "rejected (validation failed), or error (daemon fault)",
+    status: Literal["accepted", "rejected", "pending", "error"] = Field(
+        description="Submission result: accepted (queued), pending (queued "
+        "but waiting for rate limits to clear), rejected (validation "
+        "failed), or error (daemon fault)",
     )
     message: str | None = Field(
         default=None,

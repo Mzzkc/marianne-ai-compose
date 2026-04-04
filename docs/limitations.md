@@ -78,7 +78,7 @@ The baton (`src/mozart/daemon/baton/`) is an event-driven execution engine that 
 
 **Impact:** Without the baton, per-sheet instrument assignment doesn't take effect at runtime (the config models accept it, but the legacy runner uses a single backend). Rate limit handling in parallel mode has known issues (F-111, now fixed) that the baton avoids structurally.
 
-**Status:** Built, tested, feature-flagged. Activation planned after production validation.
+**Status:** Built, tested, feature-flagged. A three-phase transition plan (prove → default → remove toggle) is documented in the [Daemon Guide](daemon-guide.md#transition-plan).
 
 ---
 

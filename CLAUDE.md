@@ -159,7 +159,7 @@ mozart diagnose <job-id> -w <dir>   # 2. Full diagnostic report
 mozart errors <job-id> --verbose    # 3. Error history
 ```
 
-Then investigate code if needed. See `/home/emzi/.claude/skills/mozart-usage.md` for comprehensive guidance.
+Then investigate code if needed. Invoke `/mozart:command` for comprehensive guidance.
 
 ## Testing
 
@@ -216,8 +216,8 @@ Validation checks: Jinja syntax (V001), workspace paths (V002), template files (
 **Docs:** `docs/daemon-guide.md`, `docs/score-writing-guide.md`, `docs/configuration-reference.md`, `docs/limitations.md`, `docs/cli-reference.md`
 
 **Skills:**
-- `/home/emzi/.claude/skills/mozart-score-authoring.md` — Score/config writing guide
-- `/home/emzi/.claude/skills/mozart-usage.md` — Debugging and usage guide
+- `/mozart:score-authoring` — Score/config writing guide (plugin skill)
+- `/mozart:command` — Debugging and usage guide (plugin skill)
 - `/home/emzi/.claude/skills/session-startup-protocol.md`
 - `/home/emzi/.claude/skills/session-shutdown-protocol.md`
 - `/home/emzi/.claude/skills/wolf-prevention-patterns.md`
