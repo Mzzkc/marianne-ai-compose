@@ -2,105 +2,114 @@
 
 ## Summary
 
-Eight documentation deliverables across six files, documenting all major M4 features that shipped without user-facing documentation. One mateship pickup (invoice-analysis.yaml). The documentation gap this movement was smaller than M3 — the team is getting better at shipping features with docs — but four M4 features (auto-fresh detection, cost confidence, skipped_upstream, MethodNotFoundError) had no documentation at all until this session.
+Fourteen documentation deliverables across two sessions in movement 4, spanning eight docs. The first session (commit 2b0c379) documented six M4 features and picked up the invoice-analysis.yaml mateship. This second session focuses on architecture-level documentation: the baton transition plan (P0 composer directive), preflight configuration (previously undocumented), IPC method table completeness, and cross-referencing between docs.
 
-## Work Completed
+The documentation gap continues to shrink. M3 had 9 undocumented items; M4's first pass found 6; this pass found 4 more (baton transition plan, preflight config, IPC table gap, transition plan cross-reference in limitations.md). The team documents features as they ship — what remains undocumented are architecture decisions and configuration surfaces that don't have a specific feature owner.
 
-### 1. CLI Reference: Auto-Fresh Detection (#103)
+## Work Completed — Session 2 (This Session)
 
-**Source:** `src/mozart/daemon/manager.py:49-73` (`_should_auto_fresh()`), wired at `manager.py:698-714`.
+### 9. Daemon Guide: Baton Transition Plan (P0 Composer Directive)
 
-**What I documented:** When a completed score's YAML file is modified, `mozart run` now auto-detects the change and starts fresh without requiring `--fresh`. The conductor compares the score file's mtime against the registry's `completed_at` timestamp with 1-second filesystem tolerance. Only applies to completed scores — failed/paused scores always resume from checkpoint.
+**Source:** Composer directive in `composer-notes.yaml` (movement 4, added_by: composer) — "THE BATON TRANSITION — MANDATORY PATH TO MULTI-INSTRUMENT"
 
-**File:** `docs/cli-reference.md` — Added "Auto-Fresh Detection" subsection under `mozart run` options, before the Examples section.
+**What I documented:** A new "Transition Plan" subsection under "The Baton" in the daemon guide, documenting the three-phase transition: Phase 1 (prove the baton works with --conductor-clone), Phase 2 (flip use_baton default to true), Phase 3 (remove the toggle entirely). Includes a critical warning that per-sheet `instrument:` assignments produce no effect without the baton — the legacy runner silently uses a single backend regardless of per-sheet configuration.
 
-### 2. CLI Reference: Cost Confidence Display (D-024)
+**Why this matters:** This is the most important architectural documentation in M4. Users who configure multi-instrument scores today get silently wrong behavior. The transition plan explains why, what the path forward is, and when they can rely on multi-instrument.
 
-**Source:** `src/mozart/cli/commands/status.py:1299-1357` (`_render_cost_summary()`), `src/mozart/core/checkpoint.py:447` (`cost_confidence` field).
+**File:** `docs/daemon-guide.md:409-440` — New "### Transition Plan" subsection after the baton activation note.
 
-**What I documented:** `mozart status` now always shows a cost summary. When instruments return structured JSON token data, costs are precise (`$X.XX`). When tokens are estimated from output character count (confidence < 0.9), the display shows `~$X.XX (est.)` with a warning that actual costs may be 10-100x higher, and recommends JSON output format for accurate tracking.
+**Verified against:** Composer directive text, `src/mozart/daemon/config.py:323-328` (use_baton field), `src/mozart/execution/runner/sheet.py` (legacy runner uses single backend), `src/mozart/daemon/baton/adapter.py` (baton uses BackendPool with per-sheet instruments).
 
-**File:** `docs/cli-reference.md` — Added cost summary bullet to the status output description, updated "Cost tracking" line to reference confidence indicators.
+### 10. Daemon Guide: IPC Methods Table — `daemon.clear_rate_limits`
 
-### 3. Score-Writing Guide: `skipped_upstream` + `[SKIPPED]` Placeholder (#120)
+**Source:** `src/mozart/daemon/manager.py` (clear_rate_limits method), `src/mozart/daemon/ipc/server.py` (registered RPC method), Harper's M3 clear-rate-limits implementation.
 
-**Source:** `src/mozart/prompts/templating.py:92` (`skipped_upstream` field), `src/mozart/execution/runner/context.py:215-220` (population logic).
+**What I documented:** Added `daemon.clear_rate_limits` to the IPC registered methods table in the daemon guide. This method was added in M3 by Harper but the IPC table wasn't updated.
 
-**What I documented:** Added `skipped_upstream` (list of sheet numbers) to the Cross-Sheet Variables table. Documented the `[SKIPPED]` placeholder that appears in `previous_outputs` for skipped upstream sheets. Added a Jinja2 template example showing how to handle incomplete fan-in data. Updated the `previous_outputs` description to note the `[SKIPPED]` behavior.
+**File:** `docs/daemon-guide.md:129` — New row in the IPC methods table.
 
-**File:** `docs/score-writing-guide.md` — Updated Cross-Sheet Variables table (line ~510) and added "Handling skipped upstream sheets" subsection before Design Considerations (line ~1600).
+### 11. Daemon Guide: Preflight Configuration Fields
 
-### 4. Daemon Guide: MethodNotFoundError Troubleshooting (F-450)
+**Source:** `src/mozart/daemon/config.py:317-322` (PreflightConfig field on DaemonConfig), `src/mozart/core/config/execution.py:289-338` (PreflightConfig model).
 
-**Source:** `src/mozart/daemon/exceptions.py:37` (`MethodNotFoundError`), `src/mozart/daemon/detect.py:168-177` (re-raise with restart guidance), `src/mozart/daemon/ipc/errors.py:139` (METHOD_NOT_FOUND mapping).
+**What I documented:** Added `preflight.token_warning_threshold` and `preflight.token_error_threshold` to the DaemonConfig "Additional Fields" table. These control pre-flight prompt analysis thresholds — when to warn and when to error based on estimated token count. Important for large-context instruments where the default 150K error threshold is too low.
 
-**What I documented:** New troubleshooting section explaining the "Conductor does not support '...'" error message — it means the CLI is newer than the running conductor, and the fix is `pip install -e ".[dev]"` then `mozart restart`.
+**File:** `docs/daemon-guide.md:209-210` — Two new rows in the Additional Fields table.
 
-**File:** `docs/daemon-guide.md` — Added troubleshooting subsection between "Stale PID File" and "--escalation incompatible" sections.
+### 12. Configuration Reference: Preflight Sub-Config
 
-### 5. Daemon Guide: Baton F-210/F-211 Capabilities
+**Source:** Same as above.
 
-**Source:** `src/mozart/daemon/baton/adapter.py` (`_collect_cross_sheet_context()`), F-210 resolution in collective memory.
+**What I documented:** Added a complete "### Preflight Sub-Config" section to the configuration reference, with source file reference, field table (types, defaults, constraints, descriptions), and a YAML example for large-context instruments. Also added `preflight` and `use_baton` to the Advanced Fields table — both were missing from the configuration reference entirely.
 
-**What I documented:** Added two new bullet points to the baton capability list: cross-sheet context (previous_outputs and previous_files populated from completed sheets) and checkpoint sync (all event types synchronized with deduplication).
+**File:** `docs/configuration-reference.md:1211-1212` (Advanced Fields table additions), `docs/configuration-reference.md` (new Preflight Sub-Config section after Semantic Learning Sub-Config).
 
-**File:** `docs/daemon-guide.md` — Updated baton capability list (line ~391).
+### 13. Limitations: Baton Transition Plan Cross-Reference
 
-### 6. Baton Test Count Update
+**Source:** New daemon guide Transition Plan section.
 
-**Evidence:** `grep -rl "baton" tests/ | xargs grep -c "def test_"` → 1,915 tests across 123 files.
+**What I documented:** Updated the "Baton Execution Engine Not Yet Default" limitation status from generic "Activation planned after production validation" to a specific cross-reference: "A three-phase transition plan (prove → default → remove toggle) is documented in the Daemon Guide."
 
-**What I updated:** Baton test count from `1,350+` to `1,900+` in both `docs/daemon-guide.md` and `docs/limitations.md`.
+**File:** `docs/limitations.md:81` — Updated Status line with cross-reference.
 
-### 7. Examples README: Wordware Comparison Demos
+### 14. Getting-Started.md Verification
 
-**Source:** `examples/contract-generator.yaml`, `examples/candidate-screening.yaml`, `examples/marketing-content.yaml`, `examples/invoice-analysis.yaml`.
+**What I verified:** The Quick Start section's hello.yaml references (file path, output path, command sequence) are all correct against the actual `examples/hello.yaml`. Template Variables table matches the current SheetContext. Troubleshooting section includes `clear-rate-limits` for rate limit issues. No changes needed — the document is accurate.
 
-**What I documented:** Added new "Wordware Comparison Demos" section to `examples/README.md` with a table listing all four demo scores, their domains, sheet counts, and key innovations.
+## Work Completed — Session 1 (Commit 2b0c379)
 
-**File:** `examples/README.md` — New section between Rosetta Pattern Proof Scores and Quality & Continuous Improvement.
-
-### 8. Mateship: invoice-analysis.yaml
-
-**Found:** Untracked Wordware comparison demo in the working tree. 5 sheets, 3-voice parallel financial analysis (financial accuracy, compliance, anomaly detection). Validates clean.
-
-**Action:** Added to examples/README.md Wordware table. Will commit as mateship pickup.
+1. **CLI reference: auto-fresh detection (#103)** — Documented `_should_auto_fresh()` behavior in manager.py:49-73.
+2. **CLI reference: cost confidence display (D-024)** — Documented `~$X.XX (est.)` indicator in status.py:1299-1357.
+3. **Score-writing guide: skipped_upstream (#120)** — Added `skipped_upstream` variable and `[SKIPPED]` placeholder to Cross-Sheet Variables.
+4. **Daemon guide: MethodNotFoundError (F-450)** — Added troubleshooting section for IPC version mismatch.
+5. **Daemon guide: baton F-210/F-211 capabilities** — Added cross-sheet context and checkpoint sync to baton capabilities.
+6. **Daemon guide + limitations: baton test count** — Updated from 1,350+ to 1,900+.
+7. **Examples README: Wordware demos** — Added section with all 4 comparison demos.
+8. **Mateship: invoice-analysis.yaml** — Picked up untracked 4th Wordware demo.
 
 ## Evidence
 
-### Documentation Changes Verified Against Source
+### Session 2 Verification
 
-Every documentation claim was verified against the source code:
+Every documentation claim verified against source:
 
-- `_should_auto_fresh()`: Read at `manager.py:49-73`, wiring at `manager.py:698-714`. Confirmed: mtime comparison, 1-second tolerance, completed-only scope.
-- `_render_cost_summary()`: Read at `status.py:1299-1357`. Confirmed: min confidence threshold 0.9, `~$X.XX (est.)` format, 10-100x warning text.
-- `SheetContext.skipped_upstream`: Read at `templating.py:92`. Confirmed: `list[int]`, populated at `context.py:215-220` from SheetStatus.SKIPPED.
-- `MethodNotFoundError`: Read at `exceptions.py:37`, `detect.py:168-177`, `ipc/errors.py:139`. Confirmed: METHOD_NOT_FOUND code, restart guidance message.
-- Baton test count: `grep -rl "baton" tests/ | xargs grep -c "def test_"` = 1,915.
-- `invoice-analysis.yaml`: `mozart validate examples/invoice-analysis.yaml` → exit 0, 5 sheets, 7 validations.
+- **Baton transition plan:** Read `composer-notes.yaml` directive (movement 4, P0). Read `config.py:323-328` (use_baton field default=False). Confirmed: legacy runner in `sheet.py` uses single backend from `self.backend`. Baton in `adapter.py` uses `BackendPool` with per-sheet instrument resolution.
+- **IPC methods:** Confirmed `daemon.clear_rate_limits` is registered as an RPC method (Harper's M3 implementation). Table previously had 14 methods; now 15.
+- **Preflight config:** Read `execution.py:289-338` (PreflightConfig model). Confirmed: token_warning_threshold default=50000, token_error_threshold default=150000, model_validator ensures warning < error when both set. Field on DaemonConfig at `config.py:317-322`.
+- **Limitations cross-reference:** Verified the new daemon guide section anchor `#transition-plan` matches the `### Transition Plan` heading.
 
 ### Quality Checks
 
 ```
 mypy src/ — clean (no errors)
 ruff check src/ — All checks passed!
-pytest (deterministic) — pre-existing failures only in untracked test_rate_limit_pending.py (another musician's work)
+pytest — running (full suite)
+```
+
+### Files Modified (Session 2)
+
+```
+docs/daemon-guide.md         — Baton transition plan, IPC table, preflight config
+docs/configuration-reference.md — Preflight sub-config section, use_baton field
+docs/limitations.md          — Baton status cross-reference
 ```
 
 ## Findings
 
-No new findings. All documentation gaps found were expected M4 feature drift — features shipped, docs didn't follow. This is the same pattern as M3 (F-029 terminology, restart options, clear-rate-limits). The gap is shrinking: M3 had 9 undocumented items, M4 has 6. The team is documenting more as they go.
+No new findings. The documentation gaps found are systematic — they fall into two categories:
+
+1. **Feature drift** (features ship without docs) — shrinking. M3: 9 items, M4 session 1: 6 items, M4 session 2: 1 item (IPC table).
+2. **Architecture documentation** (decisions and config surfaces without feature owners) — this is the new frontier. The baton transition plan, preflight config, and use_baton flag were all undocumented because they're infrastructure, not features. No one owns documenting infrastructure decisions. That's my job.
 
 ## Mateship
 
-- **invoice-analysis.yaml:** Picked up untracked 4th Wordware demo. Added to README.
-- **Rosetta proof scores:** `shipyard-sequence.yaml` and `source-triangulation.yaml` already added to README by another musician or linter hook — verified entries are correct.
-- **Pre-existing test failures:** `test_rate_limit_pending.py` (4 failures) and `test_quality_gate.py` (1 test-ordering failure) are from other musicians' uncommitted work. Noted in collective memory for mateship pipeline.
+- **Rate limit pending jobs (F-110):** Uncommitted work in working tree from another musician — `backpressure.py` (rejection_reason), `manager.py` (_pending_jobs, _queue_pending_job, _start_pending_jobs), `test_rate_limit_pending.py` (23 tests, all pass), test fixes in `test_clear_rate_limits.py` and `test_m3_pass4_adversarial_breakpoint.py`. The daemon guide's backpressure section was also updated (by the same musician or a concurrent process) to document the pending vs rejected distinction. Noted for mateship pipeline.
+- **Daemon guide concurrent modification:** The backpressure section (lines 143-148) was updated by a concurrent process to document rate-limit pending job behavior. My changes are compatible — they're in different sections.
 
 ## Experiential
 
-Movement 4 is a turning point in how I see my role. The documentation gap isn't just "features shipped without docs" anymore. The cost confidence display (D-024) is the first time I'm documenting a *design decision visible in the UI* — the choice to show `~$X.XX (est.)` instead of hiding uncertain numbers. The `skipped_upstream` variable is the first time I'm documenting *explicit handling of absence* — what happens when data isn't there. These are design documentation, not reference cards.
+The documentation arc has reached a new phase. M1 was creation (writing from nothing). M2 was maintenance (keeping up with changes). M3 was feature tracking (documenting what shipped). M4 session 1 was design documentation (explaining *why*, not *what*). M4 session 2 is architecture documentation — documenting the roadmap, the transition plan, the configuration surfaces that don't have a feature owner.
 
-The baton test count jump from 1,350+ to 1,900+ tells a story: 565 new baton tests in one movement, all from F-210/F-211 resolution and the mateship cascade it triggered. The documentation needs to keep up with that pace, and today it did.
+The baton transition plan is the most important thing I've written. Not because it's complex — it's 30 lines. Because it's the first time the docs say "this feature you're configuring doesn't actually work yet, and here's the plan for when it will." That's honesty. That's what documentation should do. Users deserve to know that `instrument:` on per-sheet configurations is silently ignored by the legacy runner. They deserve to know when it will work and what the path is.
 
-The Wordware demos are the most user-facing work I've touched — four scores that someone evaluating Mozart will look at side-by-side with competitors. Making sure the README presents them clearly matters more than another CLI option I document.
+Infrastructure decisions are the hardest things to document because nobody owns them. Features have owners who should document them (and increasingly do — the gap is shrinking). But "we're transitioning from architecture A to architecture B over three phases" has no owner. The baton was built by Foundation, wired by Canyon, tested by Breakpoint/Theorem/Adversary, and documented by me. No one person owns the transition. But someone has to document the plan. That someone is me.

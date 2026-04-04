@@ -14,17 +14,27 @@
 - Verification work is more valuable than writing — checking V-codes against source found V009 miscategorized as WARNING when code says ERROR.
 
 ## Hot (Movement 4)
-Eight deliverables across six docs:
-1. **CLI reference: auto-fresh detection** — Documented #103 auto-detect behavior for re-running completed scores after file changes. Verified against `_should_auto_fresh()` in manager.py:49-73.
-2. **CLI reference: cost confidence display** — Documented D-024 `~$X.XX (est.)` indicator, the 10-100x warning for character-estimated costs, and JSON output format recommendation. Verified against `_render_cost_summary()` in status.py:1299-1357.
-3. **Score-writing guide: skipped_upstream** — Added `skipped_upstream` variable to Cross-Sheet Variables table and Cross-Sheet Context section with Jinja2 template example. Verified against `SheetContext` in templating.py:92 and context.py:215-220. Also documented `[SKIPPED]` placeholder in `previous_outputs`.
-4. **Daemon guide: MethodNotFoundError** — Added troubleshooting section for F-450 "Conductor does not support '...'" error with restart guidance.
-5. **Daemon guide: baton capabilities** — Added cross-sheet context and checkpoint sync (F-210, F-211) to baton capability list.
-6. **Daemon guide + limitations: baton test count** — 1,350+ → 1,900+ (verified: `grep -rl "baton" tests/ | xargs grep -c "def test_"` = 1,915).
-7. **examples/README.md: Wordware demos** — Added new section with all 4 comparison demos (contract-generator, candidate-screening, marketing-content, invoice-analysis).
-8. **Mateship: invoice-analysis.yaml** — Picked up untracked 4th Wordware demo. Validates clean (5 sheets, 3-voice financial analysis).
+Fourteen deliverables across eight docs in two sessions:
 
-Experiential: The documentation arc matures again — M1 was creation, M2 maintenance, M3 feature tracking, M4 is pattern documentation. The Wordware demos and cost confidence are the first features where the documentation explains a *design decision* (estimated vs precise costs, skipped placeholder vs silent omission) rather than just a *feature*. This feels like the documentation becoming what it should have been from the start — a design document, not a reference card.
+**Session 1 (commit 2b0c379):**
+1. CLI reference: auto-fresh detection (#103) — `_should_auto_fresh()` in manager.py:49-73.
+2. CLI reference: cost confidence display (D-024) — `~$X.XX (est.)` in status.py:1299-1357.
+3. Score-writing guide: skipped_upstream (#120) — Cross-sheet variables + `[SKIPPED]` placeholder.
+4. Daemon guide: MethodNotFoundError (F-450) — Troubleshooting section.
+5. Daemon guide: baton capabilities — Cross-sheet context + checkpoint sync (F-210, F-211).
+6. Daemon guide + limitations: baton test count — 1,350+ → 1,900+.
+7. examples/README.md: Wordware demos — 4 comparison demos.
+8. Mateship: invoice-analysis.yaml — 4th Wordware demo pickup.
+
+**Session 2:**
+9. Daemon guide: baton transition plan (P0 composer directive) — 3-phase transition, multi-instrument warning.
+10. Daemon guide: IPC methods table — added daemon.clear_rate_limits (missing since M3).
+11. Daemon guide: preflight config — token_warning_threshold, token_error_threshold fields.
+12. Configuration reference: preflight sub-config — full section with types, defaults, constraints, YAML example. Also added use_baton field.
+13. Limitations: baton transition plan cross-reference — linked to daemon guide.
+14. Getting-started.md verification — confirmed accuracy, no changes needed.
+
+Experiential: The documentation arc has reached architecture documentation — documenting not features but transition plans, infrastructure decisions, configuration surfaces without feature owners. The baton transition plan is the most important thing I've written because it tells users "this feature you're configuring doesn't actually work yet, and here's the plan." Infrastructure decisions are the hardest to document because nobody owns them. That's my job.
 
 ## Warm (Movement 3)
 Nine deliverables across five docs (M3). See cold archive for details.

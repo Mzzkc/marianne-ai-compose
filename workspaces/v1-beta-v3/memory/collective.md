@@ -53,12 +53,25 @@
 
 Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 
+### M4 Progress (Dash)
+- **Skill rename: mozart:usage → mozart:command** — Plugin submodule renamed (skills/usage/ → skills/command/), all cross-refs updated in score-authoring (3), essentials (1), project CLAUDE.md (2 stale refs fixed). Global CLAUDE.md needs manual composer update. Commit 7f5c8a1.
+- **F-110 core architecture (mateship-picked):** Designed and TDD-implemented BackpressureController.rejection_reason(), _queue_pending_job(), _start_pending_jobs(), cancel_pending, CLI _handle_pending_response(). All committed by mateship (Spark 5b9d12e+539d12c, Lens d286e07) before Dash could commit. Pipeline efficiency record.
+- **Quality gate baseline:** BARE_MAGICMOCK 1455→1463, ASSERTION_LESS_TEST 122→129. Pre-existing drift.
+
+### M4 Progress (Spark)
+- **D-023 COMPLETE:** Created `examples/invoice-analysis.yaml` — 4th Wordware demo (3-voice parallel: financial accuracy, compliance, anomaly detection). 5 sheets, 7 validations. Blueprint did 3, Spark did 1. All 4 Wordware demos validate clean.
+- **2 new Rosetta pattern examples:** `examples/rosetta/source-triangulation.yaml` (Source Triangulation — claim verification from code/docs/tests, 5 sheets) and `examples/rosetta/shipyard-sequence.yaml` (Shipyard Sequence — build with validation gate, 7 sheets). Total Rosetta examples: 6 (was 4). README updated.
+- **Rosetta Score primitives updated:** `scores/the-rosetta-score.yaml` now includes all M1-M4 capabilities in primitives. Existing vocabulary updated with 56 patterns and 10 practiced patterns.
+- **Mateship: F-110 pending jobs:** Committed Dash's implementation — `backpressure.py` rejection_reason(), `manager.py` pending job queue/auto-start/cancel, 23 tests. Quality gate baseline updated.
+- **Mateship: M4 doc updates:** Committed uncommitted docs — CLI auto-fresh, cost confidence, baton updates, CLAUDE.md skill refs.
+
 ### M4 Progress (Codex)
-- **8 documentation deliverables across 6 docs:** CLI reference (auto-fresh detection, cost confidence), score-writing guide (skipped_upstream + [SKIPPED] placeholder), daemon guide (MethodNotFoundError troubleshooting, baton cross-sheet context + checkpoint sync, test count 1,350+→1,900+), limitations.md (baton test count), examples/README.md (Wordware demos section + invoice-analysis.yaml).
+- **14 documentation deliverables across 8 docs (2 sessions):** Session 1 (commit 2b0c379): CLI reference (auto-fresh, cost confidence), score-writing guide (skipped_upstream), daemon guide (MethodNotFoundError, baton capabilities, test count 1,900+), limitations.md (baton test count), examples/README.md (Wordware demos), mateship invoice-analysis.yaml. Session 2: daemon guide (baton transition plan — P0 composer directive, IPC table + daemon.clear_rate_limits, preflight config), configuration-reference (preflight sub-config + use_baton field), limitations.md (transition plan cross-reference), getting-started.md verified accurate.
 - **Mateship: invoice-analysis.yaml** — Picked up untracked 4th Wordware comparison demo. Validates clean (5 sheets, 3-voice parallel financial analysis).
 
 ### M4 Progress (Lens)
 - **Layer 2 error quality COMPLETE:** All output_error() calls in CLI now have hints=. Fixed 8 hintless calls across helpers.py, run.py, pause.py, status.py. Fixed 1 raw console.print("[red]Error:...") in clear validation → output_error with hints. 10 TDD tests. Quality gate baseline 1440→1455 (mateship). Commit d286e07.
+- **F-110 COMPLETE (pending state UX):** Mateship pickup of unnamed musician's rate-limit pending implementation + critical fixes. (1) Wired `_start_pending_jobs()` — was defined but never called. Now triggers on manual `clear_rate_limits()` + deferred timer on queue. (2) Added `DaemonJobStatus.PENDING` + `JobMeta` creation so pending jobs appear in `mozart list`. (3) Fixed mypy lambda inference in `_start_pending_jobs`. (4) Updated 9 test files (3 in test_clear_rate_limits.py, 6 in test_m3_pass4_adversarial_breakpoint.py). (5) Documented pending state in cli-reference.md + daemon-guide.md. 23 TDD tests in test_rate_limit_pending.py.
 
 ### M4 Progress (Canyon)
 - **F-210 RESOLVED (P0 BLOCKER CLEARED):** Cross-sheet context wired through the full baton dispatch pipeline. `AttemptContext.previous_files` added. `BatonAdapter._collect_cross_sheet_context()` reads completed sheets' stdout and workspace file patterns. Wired into `_dispatch_callback()` and `PromptRenderer._build_context()`. Manager passes `config.cross_sheet` through. 21 TDD tests. **Phase 1 baton testing is now unblocked.**
