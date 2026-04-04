@@ -1780,6 +1780,18 @@ Each finding should include:
 - **Error class:** Truthiness-vs-identity guard. Same root cause as F-200 — using `if X:` when `if X is not None:` is needed to distinguish "no argument" from "bad argument."
 
 
+### F-440: State Sync Gap — Failure Propagation Not Synced to Checkpoint (Zombie Resurrection)
+- **Found by:** Axiom, Movement 3
+- **Severity:** P1 (high — resurrects F-039 zombie job pattern on restart)
+- **Status:** Resolved (movement 3, Axiom)
+- **Category:** bug
+- **Description:** `_sync_sheet_status()` at `adapter.py:1126` only fires for `SheetAttemptResult` and `SheetSkipped` events. When `_propagate_failure_to_dependents()` at `core.py:1218` cascades FAILED status to downstream sheets, those status changes are NOT synced to the checkpoint. On restart recovery, the cascaded failures are lost — dependent sheets revert to PENDING. With their upstream dependency FAILED (correctly synced for the primary event), the PENDING dependents can never be dispatched (`_is_dependency_satisfied()` returns False for FAILED deps) and are never terminal → `is_job_complete()` returns False forever → zombie job.
+- **Impact:** Any job with dependency chains where a sheet failure is followed by a conductor restart recreates the zombie job pattern that F-039 was designed to fix. In the 706-sheet concert with extensive dependency chains, the probability of this sequence is non-negligible.
+- **Root cause:** `_propagate_failure_to_dependents()` directly modifies sheet status (core.py:1260) without generating events. The state sync callback (adapter.py:1126-1130) only fires for events in the inbox, not for direct state mutations.
+- **Fix:** Added failure re-propagation in `BatonCore.register_job()` (core.py:546-556). After registering states, iterates over all FAILED sheets and calls `_propagate_failure_to_dependents()` for each. This is idempotent (only affects non-terminal dependents) and fixes the sync gap for both fresh registration and recovery. 8 TDD tests in `test_recovery_failure_propagation.py`. Updated 2 tests in `test_baton_m2c2_adversarial.py` that were asserting the buggy behavior.
+- **Error class:** Sync gap — two subsystems (baton in-memory state vs checkpoint) diverge because only the event path is bridged, not the direct-mutation path. Same architectural pattern as F-065 (two correct subsystems composing into incorrect behavior).
+- **Additional gaps (P2, not fixed):** `_sync_sheet_status` also doesn't fire for `EscalationResolved/EscalationTimeout` (terminal transitions), `CancelJob/ShutdownRequested` (CANCELLED transitions), or `ProcessExited` (failure transitions). These are lower impact because escalation+restart is rare, cancel/shutdown are at the baton's lifetime boundary, and ProcessExited recovers naturally (crashed sheets become PENDING on restart). The failure propagation gap was the critical one because it creates permanent zombies.
+
 ### F-450: IPC "Method Not Found" Misreported as "Conductor Not Running"
 - **Found by:** Ember, Movement 3
 - **Severity:** P2 (medium — misleading error for every new IPC method added to a stale conductor)

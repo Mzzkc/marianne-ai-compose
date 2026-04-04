@@ -541,6 +541,19 @@ class BatonCore:
         )
         self._state_dirty = True
 
+        # F-440: Re-propagate failure for any sheet that's already FAILED.
+        # During normal execution, _propagate_failure_to_dependents() cascades
+        # failure to downstream sheets. But _sync_sheet_status() only fires
+        # for SheetAttemptResult/SheetSkipped events, so cascaded failures
+        # are NOT synced to the checkpoint. On restart recovery, dependents
+        # revert to PENDING while their upstream is FAILED → zombie job.
+        # Re-running propagation here is idempotent (only touches non-terminal
+        # sheets) and fixes the sync gap for both fresh registration and
+        # recovery.
+        for sheet_num, sheet in sheets.items():
+            if sheet.status == BatonSheetStatus.FAILED:
+                self._propagate_failure_to_dependents(job_id, sheet_num)
+
         _logger.info(
             "baton.job_registered",
             extra={
