@@ -2165,3 +2165,24 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 - **Verified by:** Empirical reproduction on HEAD (2026-04-04), Python REPL test, config model file enumeration.
 - **Action:** Fix all 37 models + add regression tests before v1 public release.
 - **Related findings:** F-002 (falsy YAML values rejected by overly strict guards — inverse problem, same validation layer)
+
+### F-270: Stale test_extra_fields_ignored_by_default after extra='forbid' added
+- **Found by:** Litmus, Movement 4
+- **Severity:** P3 (low — test maintenance, not a product bug)
+- **Status:** Open
+- **Category:** pattern
+- **Finding:** `tests/test_instrument_models.py::TestInstrumentModelsAdversarial::test_extra_fields_ignored_by_default` (line 684) expects `ModelCapacity.model_validate()` to silently ignore unknown fields. Since `extra='forbid'` was added to all instrument config models (per composer directive M5), the test fails with `ValidationError: Extra inputs are not permitted`. The model behavior is CORRECT now (forbid unknown fields). The test is STALE (expects the old permissive behavior).
+- **Impact:** Quality gate false failure. Pre-existing — not caused by litmus changes.
+- **Action:** Update the test to expect `ValidationError` on unknown fields, or remove it if the extra='forbid' behavior is already tested elsewhere.
+- **Related:** F-462 (composer directive on extra='forbid'), Axiom M4 audit of 37 config models
+
+### F-271: PluginCliBackend ignores mcp_config_flag — MCP process explosion
+- **Found by:** Litmus, Movement 4 (litmus test 39, validating F-255.3)
+- **Severity:** P1 (high — production impact: 80 child processes instead of 8)
+- **Status:** Open
+- **Category:** bug
+- **Finding:** `PluginCliBackend._build_command()` at `src/mozart/execution/instruments/cli_backend.py:169-232` does NOT reference `mcp_config_flag` from the instrument profile. The field EXISTS on `CliCommand` (`instruments.py:161-164`), is SET in the claude-code profile (`builtins/claude-code.yaml:78`), but is NEVER USED in command construction. The legacy `ClaudeCliBackend` has `disable_mcp=True` which adds `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`. The baton uses `PluginCliBackend`, so baton-managed sheets spawn MCP servers (docker containers, child processes) that the legacy runner prevents. F-255.3 documented this in production: 80 child processes instead of 8.
+- **Impact:** Production MCP process explosion. Potential deadlocks per legacy backend comments. Affects ALL baton-managed sheets using claude-code instrument.
+- **Action:** Add MCP disabling to `_build_command()`: when `mcp_config_flag` is set and no MCP servers are requested, add `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`. Litmus test 39 documents the gap — when fixed, the test assertion should be inverted.
+- **Evidence:** Litmus test `TestPluginCliBackendMcpGap::test_build_command_ignores_mcp_config_flag` proves the gap exists. Legacy backend inspection via `TestPluginCliBackendMcpGap::test_legacy_backend_disables_mcp_by_default` confirms the protection exists in the old path but not the new.
+- **Related:** F-255.3 (production discovery), F-105 (instrument schema expansion)

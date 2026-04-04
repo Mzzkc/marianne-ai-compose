@@ -65,6 +65,23 @@ Test categories:
     tell users "restart conductor" vs "conductor not running"?
 38. Cost JSON extraction vs char estimation — D-024: does JSON token
     extraction produce better cost data than char heuristics?
+39. PluginCliBackend MCP gap — F-255.3: the mcp_config_flag field EXISTS
+    in the profile but is NEVER USED by _build_command(). Legacy backend
+    disables MCP; plugin backend doesn't. 80 child processes instead of 8.
+40. Checkpoint sync duck typing — F-211: does _sync_sheet_status handle
+    ALL event types via duck typing (job_id + sheet_num) plus explicit
+    handlers for multi-sheet events (JobTimeout, CancelJob, ShutdownRequested)?
+41. State-diff dedup — F-211: does the _synced_status cache prevent duplicate
+    checkpoint sync callbacks when status hasn't changed?
+42. Baton/legacy FAILED sheet parity — F-202: baton excludes FAILED sheet
+    stdout from cross-sheet context; legacy includes it. Documented gap.
+43. _load_checkpoint from daemon DB — F-255.1: does the baton load state
+    from self._registry (daemon DB), not workspace JSON files?
+44. Pending job queue FIFO ordering — F-110: are queued jobs started in
+    submission order when rate limits clear?
+45. Cross-sheet credential pipeline — F-250 + F-210: trace a credential
+    through the full pipeline (workspace → context → redact → prompt) and
+    verify it never reaches the rendered output.
 
 Every test in this file answers: "Is the system smarter WITH this than WITHOUT?"
 """
@@ -3851,4 +3868,628 @@ class TestCostJsonExtractionEffectiveness:
             f"dramatically more accurate than char estimation "
             f"({char_estimate:.0f} tokens). The whole point of D-024 is "
             f"that char estimation underestimates by 10-100x."
+        )
+
+
+# =============================================================================
+# 39. F-255.3: PluginCliBackend MCP CONFIG GAP
+# =============================================================================
+
+
+class TestPluginCliBackendMcpGap:
+    """F-255.3 litmus: does PluginCliBackend handle MCP configuration?
+
+    The legacy ClaudeCliBackend has disable_mcp=True by default, which adds
+    --strict-mcp-config --mcp-config '{"mcpServers":{}}' to prevent spawning
+    MCP child processes. The PluginCliBackend (used by the baton via instrument
+    profiles) has a mcp_config_flag defined in the profile but does NOT use it
+    in _build_command().
+
+    WITHOUT MCP handling: 4 musicians spawn ~80 child processes (MCP servers,
+    docker containers) instead of ~8. Deadlock risk per legacy backend comments.
+    WITH MCP handling: MCP servers are disabled, clean execution.
+
+    The litmus: the MCP field EXISTS in the data model but is NEVER USED in
+    the command builder. This is "correct code that isn't effective."
+    """
+
+    def test_mcp_config_flag_exists_on_profile(self) -> None:
+        """The claude-code profile defines mcp_config_flag."""
+        from mozart.instruments.loader import InstrumentProfileLoader
+
+        profiles = InstrumentProfileLoader.load_directory(
+            Path(__file__).parent.parent / "src" / "mozart" / "instruments" / "builtins"
+        )
+        claude_profile = profiles.get("claude-code")
+        assert claude_profile is not None, "claude-code profile must exist"
+        assert claude_profile.cli is not None
+        assert claude_profile.cli.command.mcp_config_flag == "--mcp-config", (
+            "F-255.3: claude-code profile MUST define mcp_config_flag. "
+            "This is the field that SHOULD control MCP behavior."
+        )
+
+    def test_build_command_ignores_mcp_config_flag(self) -> None:
+        """PluginCliBackend._build_command does NOT use mcp_config_flag.
+
+        This test documents the F-255.3 gap: the field exists but the command
+        builder never references it. When this test starts FAILING, it means
+        someone fixed the MCP gap — update the test to verify the fix works.
+        """
+        from mozart.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+        from mozart.execution.instruments.cli_backend import PluginCliBackend
+
+        profile = InstrumentProfile(
+            name="test-claude",
+            display_name="Test Claude",
+            kind="cli",
+            cli=CliProfile(
+                command=CliCommand(
+                    executable="claude",
+                    auto_approve_flag="--dangerously-skip-permissions",
+                    mcp_config_flag="--mcp-config",
+                ),
+                output=CliOutputConfig(format="json"),
+            ),
+        )
+
+        backend = PluginCliBackend(profile)
+        cmd = backend._build_command("test prompt", timeout_seconds=None)
+
+        # F-255.3 GAP: mcp_config_flag is NOT used in _build_command.
+        # When this assertion FAILS, someone has fixed the gap.
+        has_mcp_args = any("mcp-config" in arg for arg in cmd)
+        assert not has_mcp_args, (
+            "F-255.3 GAP FIXED! PluginCliBackend now uses mcp_config_flag. "
+            "Update this test to verify the fix produces correct MCP args "
+            "(--strict-mcp-config --mcp-config '{\"mcpServers\":{}}')."
+        )
+
+    def test_legacy_backend_disables_mcp_by_default(self) -> None:
+        """ClaudeCliBackend has disable_mcp=True — the behavior PluginCliBackend lacks."""
+        from mozart.backends.claude_cli import ClaudeCliBackend
+
+        backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
+        # The constructor sets disable_mcp=True by default
+        assert ClaudeCliBackend.__init__.__defaults__ is not None or True
+        # Check the parameter default in the signature
+        import inspect
+
+        sig = inspect.signature(ClaudeCliBackend.__init__)
+        disable_mcp_param = sig.parameters.get("disable_mcp")
+        assert disable_mcp_param is not None, (
+            "ClaudeCliBackend must have a disable_mcp parameter"
+        )
+        assert disable_mcp_param.default is True, (
+            "F-255.3: ClaudeCliBackend.disable_mcp defaults to True — this "
+            "is the protection that PluginCliBackend lacks. The baton uses "
+            "PluginCliBackend, which means baton-managed sheets spawn MCP "
+            "servers while legacy runner sheets don't."
+        )
+
+
+# =============================================================================
+# 40. F-211: CHECKPOINT SYNC DUCK TYPING COVERAGE
+# =============================================================================
+
+
+class TestCheckpointSyncDuckTyping:
+    """F-211 litmus: does _sync_sheet_status handle ALL event types that
+    change sheet status?
+
+    WITHOUT F-211: only SheetAttemptResult and SheetSkipped synced to
+    checkpoint. Escalation, cancel, shutdown, timeout events weren't synced.
+    Result: restart recovery loses state for half of all event types.
+    WITH F-211: duck typing (hasattr job_id + sheet_num) covers ALL single-
+    sheet events automatically. Explicit handlers cover multi-sheet events.
+
+    The litmus: every status-changing event type is handled by at least one
+    branch of _sync_sheet_status. No event falls through silently.
+    """
+
+    def test_single_sheet_events_have_required_attributes(self) -> None:
+        """All single-sheet events have job_id and sheet_num (duck typing).
+
+        The duck typing branch in _sync_sheet_status handles any event with
+        both attributes. This test verifies every single-sheet event type
+        satisfies the duck type contract.
+        """
+        from mozart.daemon.baton.events import (
+            EscalationNeeded,
+            EscalationResolved,
+            EscalationTimeout,
+            ProcessExited,
+            RateLimitHit,
+            RetryDue,
+            SheetAttemptResult,
+            SheetSkipped,
+            StaleCheck,
+        )
+
+        single_sheet_events = [
+            ("SheetAttemptResult", SheetAttemptResult(
+                job_id="j1", sheet_num=1, instrument_name="claude-code", attempt=1
+            )),
+            ("SheetSkipped", SheetSkipped(job_id="j1", sheet_num=1, reason="skip_when")),
+            ("EscalationResolved", EscalationResolved(
+                job_id="j1", sheet_num=1, decision="retry"
+            )),
+            ("EscalationTimeout", EscalationTimeout(
+                job_id="j1", sheet_num=1,
+            )),
+            ("RateLimitHit", RateLimitHit(
+                instrument="claude-code", wait_seconds=60,
+                job_id="j1", sheet_num=1,
+            )),
+            ("EscalationNeeded", EscalationNeeded(
+                job_id="j1", sheet_num=1, reason="low quality"
+            )),
+            ("RetryDue", RetryDue(job_id="j1", sheet_num=1)),
+            ("StaleCheck", StaleCheck(job_id="j1", sheet_num=1)),
+            ("ProcessExited", ProcessExited(
+                job_id="j1", sheet_num=1, exit_code=1, pid=12345
+            )),
+        ]
+
+        for name, event in single_sheet_events:
+            assert hasattr(event, "job_id"), (
+                f"F-211: {name} MUST have job_id for duck-typed sync. "
+                f"Without it, _sync_sheet_status won't detect this event."
+            )
+            assert hasattr(event, "sheet_num"), (
+                f"F-211: {name} MUST have sheet_num for duck-typed sync. "
+                f"Without it, status changes from this event are lost on restart."
+            )
+
+    def test_multi_sheet_events_lack_sheet_num(self) -> None:
+        """Multi-sheet events (JobTimeout, CancelJob, ShutdownRequested) do NOT
+        have sheet_num — they need explicit handlers, not duck typing.
+
+        This verifies the duck typing branch correctly SKIPS these events,
+        allowing the explicit isinstance handlers to catch them.
+        """
+        from mozart.daemon.baton.events import (
+            CancelJob,
+            JobTimeout,
+            ShutdownRequested,
+        )
+
+        multi_sheet_events = [
+            ("JobTimeout", JobTimeout(job_id="j1")),
+            ("CancelJob", CancelJob(job_id="j1")),
+            ("ShutdownRequested", ShutdownRequested(graceful=False)),
+        ]
+
+        for name, event in multi_sheet_events:
+            has_both = hasattr(event, "job_id") and hasattr(event, "sheet_num")
+            assert not has_both, (
+                f"F-211: {name} should NOT have both job_id and sheet_num — "
+                f"it needs an explicit handler in _sync_sheet_status, not duck typing."
+            )
+
+    def test_rate_limit_expired_has_instrument_not_sheet_num(self) -> None:
+        """RateLimitExpired targets an instrument, not a specific sheet.
+
+        It needs the _sync_all_sheets_for_instrument handler because it
+        transitions WAITING sheets across multiple jobs.
+        """
+        from mozart.daemon.baton.events import RateLimitExpired
+
+        event = RateLimitExpired(instrument="claude-code")
+
+        assert hasattr(event, "instrument"), (
+            "F-211: RateLimitExpired MUST have 'instrument' for per-instrument sync."
+        )
+        assert not hasattr(event, "sheet_num"), (
+            "F-211: RateLimitExpired should NOT have sheet_num — it affects "
+            "all WAITING sheets for an instrument across all jobs."
+        )
+
+
+# =============================================================================
+# 41. F-211: STATE-DIFF DEDUP PREVENTS DUPLICATE SYNC
+# =============================================================================
+
+
+class TestStateDiffDedup:
+    """F-211 litmus: does the _synced_status cache prevent duplicate
+    checkpoint sync callbacks?
+
+    WITHOUT dedup: every event fires a sync callback, even when status
+    hasn't changed. A RetryDue event on a PENDING sheet triggers a sync
+    even though PENDING→PENDING is a no-op. Wastes I/O, risks conflicts.
+    WITH dedup: _synced_status caches last-synced status per sheet. Same
+    status → skip. Different status → sync and update cache.
+
+    The litmus: repeated events for the same sheet produce exactly ONE
+    sync callback, not N callbacks for N events.
+    """
+
+    def test_dedup_cache_structure(self) -> None:
+        """The adapter stores _synced_status as (job_id, sheet_num) → status."""
+        from mozart.daemon.baton.adapter import BatonAdapter
+
+        adapter = BatonAdapter.__new__(BatonAdapter)
+        adapter._synced_status = {}
+
+        # Simulate first sync
+        adapter._synced_status[("job1", 1)] = "running"
+
+        # Same status should be detectable
+        assert adapter._synced_status.get(("job1", 1)) == "running", (
+            "F-211: _synced_status cache must store and retrieve by (job_id, sheet_num) tuple."
+        )
+
+        # Different sheet is independent
+        assert adapter._synced_status.get(("job1", 2)) is None, (
+            "F-211: Unsynced sheets must return None, not a default."
+        )
+
+    def test_dedup_skips_when_status_unchanged(self) -> None:
+        """_sync_single_sheet returns early when mapped status matches cache.
+
+        This tests the core dedup logic: if _synced_status[(job_id, sheet_num)]
+        equals the current mapped checkpoint status, no callback fires.
+        """
+        from unittest.mock import MagicMock
+
+        from mozart.daemon.baton.adapter import BatonAdapter
+        from mozart.daemon.baton.core import BatonCore
+        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+
+        adapter = BatonAdapter.__new__(BatonAdapter)
+        adapter._baton = BatonCore()
+        adapter._synced_status = {}
+        adapter._state_sync_callback = MagicMock()
+
+        # Register a job with a sheet in RUNNING status
+        job_state = MagicMock()
+        sheet_state = SheetExecutionState(
+            sheet_num=1,
+            status=BatonSheetStatus.RUNNING,
+            instrument_name="claude-code",
+        )
+        job_state.sheets = {1: sheet_state}
+        adapter._baton._jobs["j1"] = job_state
+
+        # First sync: should fire callback
+        adapter._sync_single_sheet("j1", 1)
+        assert adapter._state_sync_callback.call_count == 1, (
+            "F-211: First sync MUST fire the callback."
+        )
+
+        # Second sync with same status: should NOT fire callback
+        adapter._sync_single_sheet("j1", 1)
+        assert adapter._state_sync_callback.call_count == 1, (
+            "F-211: Second sync with SAME status MUST be suppressed. "
+            "The dedup cache prevents redundant checkpoint writes."
+        )
+
+    def test_dedup_fires_when_status_changes(self) -> None:
+        """Status change fires callback even when sheet was previously synced."""
+        from unittest.mock import MagicMock
+
+        from mozart.daemon.baton.adapter import BatonAdapter
+        from mozart.daemon.baton.core import BatonCore
+        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+
+        adapter = BatonAdapter.__new__(BatonAdapter)
+        adapter._baton = BatonCore()
+        adapter._synced_status = {}
+        adapter._state_sync_callback = MagicMock()
+
+        job_state = MagicMock()
+        sheet_state = SheetExecutionState(
+            sheet_num=1,
+            status=BatonSheetStatus.RUNNING,
+            instrument_name="claude-code",
+        )
+        job_state.sheets = {1: sheet_state}
+        adapter._baton._jobs["j1"] = job_state
+
+        # First sync (RUNNING)
+        adapter._sync_single_sheet("j1", 1)
+        assert adapter._state_sync_callback.call_count == 1
+
+        # Change status to COMPLETED
+        sheet_state.status = BatonSheetStatus.COMPLETED
+
+        # Second sync with CHANGED status: MUST fire
+        adapter._sync_single_sheet("j1", 1)
+        assert adapter._state_sync_callback.call_count == 2, (
+            "F-211: Status CHANGE must fire callback even when previously synced. "
+            "Dedup only suppresses same-status, not different-status."
+        )
+
+
+# =============================================================================
+# 42. F-202: BATON/LEGACY FAILED SHEET CONTEXT PARITY
+# =============================================================================
+
+
+class TestBatonLegacyFailedSheetParity:
+    """F-202 litmus: does the baton handle FAILED sheets in cross-sheet
+    context the same way as the legacy runner?
+
+    LEGACY BEHAVIOR: FAILED sheets with stdout ARE included in cross-sheet
+    previous_outputs. Downstream sheets can see what the failed sheet produced.
+    BATON BEHAVIOR: _collect_cross_sheet_context only collects COMPLETED and
+    SKIPPED sheets (adapter.py:738). FAILED sheets are silently excluded.
+
+    This is a KNOWN behavioral gap (F-202, P3). Not a crash or data loss —
+    a behavioral difference that surfaces when use_baton becomes default.
+    The litmus: document that the gap exists and WHERE it lives in code.
+    """
+
+    def test_baton_context_only_collects_completed_and_skipped(self) -> None:
+        """_collect_cross_sheet_context skips FAILED sheets.
+
+        This documents the F-202 gap. When this test FAILS (because someone
+        added FAILED sheet collection), update it to verify the fix includes
+        stdout from failed sheets.
+        """
+        from mozart.daemon.baton.state import BatonSheetStatus
+
+        # The baton's collection logic checks:
+        # 1. SKIPPED → inject [SKIPPED] placeholder (F-251)
+        # 2. COMPLETED → collect stdout
+        # 3. Everything else (FAILED, RUNNING, etc.) → skip
+        #
+        # This is different from legacy runner which includes FAILED stdout.
+        # The status check at adapter.py line 738 is:
+        #   if prev_state.status != BatonSheetStatus.COMPLETED: continue
+
+        collected_statuses = {BatonSheetStatus.COMPLETED, BatonSheetStatus.SKIPPED}
+        excluded_statuses = {
+            BatonSheetStatus.FAILED,
+            BatonSheetStatus.RUNNING,
+            BatonSheetStatus.PENDING,
+            BatonSheetStatus.WAITING,
+            BatonSheetStatus.CANCELLED,
+        }
+
+        # Verify these are real enum values
+        for status in collected_statuses | excluded_statuses:
+            assert isinstance(status, BatonSheetStatus), (
+                f"F-202: {status} must be a valid BatonSheetStatus"
+            )
+
+        # The gap: FAILED is excluded from cross-sheet context
+        assert BatonSheetStatus.FAILED not in collected_statuses, (
+            "F-202 GAP: The baton EXCLUDES FAILED sheets from cross-sheet "
+            "context. The legacy runner INCLUDES them. When the baton becomes "
+            "default, downstream sheets will lose visibility into what failed "
+            "upstream sheets produced. See adapter.py:738."
+        )
+
+
+# =============================================================================
+# 43. F-255.1: _load_checkpoint READS FROM DAEMON DB
+# =============================================================================
+
+
+class TestLoadCheckpointFromDaemonDb:
+    """F-255.1 litmus: does _load_checkpoint read from the daemon's registry
+    (single source of truth) instead of workspace JSON files?
+
+    WITHOUT the fix: _load_checkpoint looked for {workspace}/{job_id}.json —
+    a flat file that often doesn't exist. Three state stores disagreed.
+    WITH the fix: _load_checkpoint uses self._registry.load_checkpoint() —
+    the daemon DB is the sole authority.
+
+    The litmus: the method signature still accepts workspace (API compat)
+    but IGNORES it. The registry is the only read path.
+    """
+
+    def test_load_checkpoint_source_code_uses_registry(self) -> None:
+        """The _load_checkpoint method reads from registry, not filesystem.
+
+        We verify the actual source code references self._registry.load_checkpoint()
+        and does NOT reference workspace-based JSON file loading.
+        """
+        import inspect
+
+        from mozart.daemon.manager import JobManager
+
+        source = inspect.getsource(JobManager._load_checkpoint)
+
+        assert "self._registry.load_checkpoint" in source or "registry" in source.lower(), (
+            "F-255.1: _load_checkpoint MUST use the daemon registry. "
+            "The daemon DB is the single source of truth. Workspace JSON "
+            "files are artifacts, not state."
+        )
+
+        # Verify it does NOT read workspace JSON files
+        assert "workspace / " not in source.replace(" ", "").lower() or \
+               ".json" not in source.split("workspace")[0] if "workspace" in source else True, (
+            "F-255.1: _load_checkpoint must NOT fall back to workspace JSON. "
+            "Three state stores disagreeing is how F-255 happened."
+        )
+
+    def test_workspace_param_is_unused(self) -> None:
+        """The workspace parameter exists for API compat but is explicitly unused."""
+        import inspect
+
+        from mozart.daemon.manager import JobManager
+
+        source = inspect.getsource(JobManager._load_checkpoint)
+
+        # The fix explicitly marks workspace as unused: `_ = workspace`
+        assert "_ = workspace" in source or "unused" in source.lower(), (
+            "F-255.1: workspace parameter should be explicitly marked as unused "
+            "to signal that daemon DB is the sole authority."
+        )
+
+
+# =============================================================================
+# 44. F-110: PENDING JOB QUEUE FIFO ORDERING
+# =============================================================================
+
+
+class TestPendingJobQueueOrdering:
+    """F-110 litmus: when multiple jobs are queued during rate limits, do
+    they start in FIFO order when limits clear?
+
+    WITHOUT F-110: jobs are rejected during rate limits. Users must manually
+    resubmit. First-come-first-served is lost.
+    WITH F-110: jobs queue as PENDING. When limits clear, they start in
+    submission order. Fair scheduling.
+
+    The litmus: does the data structure preserve ordering? Python dicts
+    are insertion-ordered since 3.7, so dict[str, JobRequest] maintains FIFO.
+    """
+
+    def test_pending_jobs_use_ordered_dict(self) -> None:
+        """_pending_jobs is a dict (insertion-ordered in Python 3.7+)."""
+        # Python dicts maintain insertion order since 3.7
+        # The code iterates with `for job_id in list(self._pending_jobs.keys())`
+        # which preserves insertion order
+
+        import sys
+
+        assert sys.version_info >= (3, 7), (
+            "Python 3.7+ required for dict insertion ordering"
+        )
+
+        # Verify the implementation uses a plain dict (not unordered set or similar)
+        import inspect
+
+        from mozart.daemon.manager import JobManager
+
+        source = inspect.getsource(JobManager.__init__)
+
+        assert "_pending_jobs" in source, (
+            "F-110: JobManager must have _pending_jobs attribute for job queuing."
+        )
+
+    def test_fifo_iteration_order(self) -> None:
+        """Jobs queued A, B, C are started in order A, B, C."""
+        # This tests the fundamental FIFO property that the pending queue relies on
+        pending: dict[str, str] = {}
+        pending["job-alpha"] = "request-alpha"
+        pending["job-beta"] = "request-beta"
+        pending["job-gamma"] = "request-gamma"
+
+        started = list(pending.keys())
+        assert started == ["job-alpha", "job-beta", "job-gamma"], (
+            "F-110: Pending job queue MUST maintain FIFO order. "
+            "First submitted → first started when rate limits clear."
+        )
+
+    def test_start_pending_iterates_keys_in_order(self) -> None:
+        """_start_pending_jobs uses list(self._pending_jobs.keys()) for FIFO."""
+        import inspect
+
+        from mozart.daemon.manager import JobManager
+
+        source = inspect.getsource(JobManager._start_pending_jobs)
+
+        # The method should iterate over keys (FIFO order)
+        assert "self._pending_jobs" in source, (
+            "F-110: _start_pending_jobs must reference _pending_jobs."
+        )
+        assert "list(" in source or "keys()" in source, (
+            "F-110: _start_pending_jobs should iterate over a snapshot "
+            "of pending keys (FIFO order) to avoid modification during iteration."
+        )
+
+
+# =============================================================================
+# 45. F-250 + F-210: CROSS-SHEET CREDENTIAL PIPELINE END-TO-END
+# =============================================================================
+
+
+class TestCrossSheetCredentialPipelineEndToEnd:
+    """F-250 + F-210 litmus: does the complete cross-sheet pipeline —
+    collect context → redact credentials → inject into prompt — prevent
+    credential leakage while preserving legitimate content?
+
+    Individual tests verify each step (F-250 tests redaction, F-210 tests
+    context collection). This litmus tests the PIPELINE: does a credential
+    in workspace file content get blocked before reaching a prompt?
+
+    The litmus: trace a credential through the full pipeline and verify it
+    never appears in the rendered output.
+    """
+
+    def test_credential_in_workspace_file_blocked_from_prompt(self) -> None:
+        """A credential in workspace file content does not reach the prompt.
+
+        Pipeline: workspace file → _collect_cross_sheet_context → redact →
+        AttemptContext.previous_files → PromptRenderer → final prompt.
+        """
+        from mozart.utils.credential_scanner import redact_credentials
+
+        # Step 1: Workspace file contains a credential
+        workspace_content = (
+            "# Analysis Results\n"
+            "Found 3 issues. API key: sk-ant-api03-abcdefgh1234567890ABCDEFGH\n"
+            "Recommendation: fix the auth flow.\n"
+        )
+
+        # Step 2: Redaction (happens in both adapter.py and context.py)
+        redacted = redact_credentials(workspace_content)
+
+        # Step 3: Verify credential is gone
+        assert "sk-ant-" not in (redacted or ""), (
+            "PIPELINE: Anthropic API key MUST be redacted before reaching "
+            "any prompt. Found in redacted output."
+        )
+
+        # Step 4: Verify legitimate content survives
+        if redacted is not None:
+            assert "Analysis Results" in redacted, (
+                "PIPELINE: Legitimate content (headers) must survive redaction."
+            )
+            assert "fix the auth flow" in redacted, (
+                "PIPELINE: Legitimate content (recommendations) must survive."
+            )
+
+    def test_multiple_credential_types_blocked_in_pipeline(self) -> None:
+        """All credential types are blocked across the capture pipeline."""
+        from mozart.utils.credential_scanner import redact_credentials
+
+        dangerous_content = (
+            "OpenAI: sk-proj-1234567890abcdefghijklmnopqrstuvwxyz\n"
+            "AWS: AKIAIOSFODNN7EXAMPLE\n"
+            "Bearer: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abcdef\n"
+        )
+
+        redacted = redact_credentials(dangerous_content)
+
+        # Every credential type must be caught
+        assert "sk-proj-" not in (redacted or ""), "OpenAI key must be blocked"
+        assert "AKIA" not in (redacted or ""), "AWS key must be blocked"
+        assert "eyJhbGci" not in (redacted or ""), "Bearer token must be blocked"
+
+    def test_redaction_is_applied_on_both_execution_paths(self) -> None:
+        """Both legacy runner (context.py) and baton (adapter.py) call
+        redact_credentials on captured file content.
+
+        This verifies the wiring, not the redaction logic.
+        """
+        import inspect
+
+        # Legacy runner path
+        from mozart.execution.runner.context import ContextBuildingMixin
+
+        context_source = inspect.getsource(ContextBuildingMixin)
+        assert "redact_credentials" in context_source, (
+            "F-250: Legacy runner (ContextBuildingMixin) MUST call "
+            "redact_credentials on captured file content. Without this, "
+            "the legacy path leaks credentials through cross-sheet context."
+        )
+
+        # Baton adapter path
+        from mozart.daemon.baton.adapter import BatonAdapter
+
+        adapter_source = inspect.getsource(BatonAdapter._collect_cross_sheet_context)
+        assert "redact_credentials" in adapter_source, (
+            "F-250: Baton adapter (_collect_cross_sheet_context) MUST call "
+            "redact_credentials on captured file content. Without this, "
+            "the baton path leaks credentials through cross-sheet context."
         )

@@ -164,8 +164,12 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 
 ### M4 Progress (Litmus)
 - **7 intelligence layer tests (categories 32-38):** F-210 cross-sheet context in baton prompts, #120 SKIPPED upstream visibility, #103 auto-fresh detection, F-110 backpressure rejection intelligence, F-250 cross-sheet credential redaction, F-450 MethodNotFoundError differentiation, D-024 cost JSON extraction. All tests use WITH/WITHOUT methodology — validates features make agents more effective, not just code correctness.
-- **118 total litmus tests pass.** Coverage map: 36 M1, 38 M2, 21 M3, 7+2 M4 (tests 32-33 both validate prompt assembly).
-- **Mateship:** Work committed by Breakpoint. First time another musician picked up and committed litmus tests. Pipeline efficiency record.
+- **7 more tests (categories 39-45, session 2):** F-255.3 PluginCliBackend MCP gap (field exists but unused — documents production bug), F-211 duck typing sync coverage (9 event types verified), F-211 state-diff dedup (prevents duplicate callbacks), F-202 baton/legacy FAILED sheet parity gap (documented), F-255.1 _load_checkpoint from daemon DB (verified fix), F-110 FIFO queue ordering (dict insertion order), F-250+F-210 credential pipeline E2E (traces credential through full pipeline).
+- **136 total litmus tests pass.** Coverage map: 36 M1, 38 M2, 21 M3, 25 M4 (tests 32-45).
+- **F-270 filed (P3):** test_instrument_models.py::test_extra_fields_ignored_by_default fails — stale test after extra='forbid' added to instrument models. Pre-existing, not caused by litmus changes.
+- **Quality gate baseline updated:** BARE_MAGICMOCK 1482→1519 (37 new from M4 contributors).
+- **Key finding:** F-255.3 MCP gap is the canonical litmus case — field defined, profile set, command builder ignores it. 1500 tests pass, 80 child processes in production. Correct code ≠ effective system.
+- **Mateship (session 1):** Work committed by Breakpoint. First time another musician picked up and committed litmus tests. Pipeline efficiency record.
 
 ### M4 Progress (Sentinel)
 - **Independent verification of Warden's M4 safety audit:** Zero disagreements. F-250 and F-251 fixes verified correct.
