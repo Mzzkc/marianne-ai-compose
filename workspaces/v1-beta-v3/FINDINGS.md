@@ -1505,10 +1505,10 @@ Each finding should include:
 ### F-137: Pygments CVE-2026-4539 (ReDoS) — Transitive Dependency
 - **Found by:** Sentinel, Movement 2
 - **Severity:** P3 (low — ReDoS in unused ADL lexer, but fix available)
-- **Status:** Open
+- **Status:** Resolved (movement 4, Sentinel)
+- **Resolution:** Added `"pygments>=2.20.0"` to security minimum versions in `pyproject.toml:49`. Upgraded from 2.19.2 to 2.20.0. Verified with `python -c "import pygments; print(pygments.__version__)"` → 2.20.0. Public release hygiene — `pip-audit` on fresh Mozart install now shows zero known CVEs in transitive dependencies.
 - **Description:** `pygments` 2.19.2 has CVE-2026-4539 (ReDoS in AdlLexer). Pygments is a transitive dependency of Mozart through `rich` (CLI output), `pytest` (test framework), and `mkdocs-material` (documentation). The fix version is 2.20.0. The CVE triggers only when highlighting ADL (Archetype Definition Language) syntax, which Mozart does not do — the risk is near zero.
 - **Impact:** Negligible for Mozart. The only theoretical path is if agent stdout contained ADL syntax and Rich tried to highlight it — which it wouldn't, since Mozart uses plain text output capture. However, the fix is available and trivial to apply.
-- **Action:** Add `"pygments>=2.20.0"` to the security minimum pins in `pyproject.toml` alongside the existing F-061 pins. Low priority but good hygiene.
 
 ### F-138: Untracked test_baton_m2c2_adversarial.py Has Broken ParallelExecutor Construction
 - **Found by:** Theorem, Movement 2
@@ -2064,3 +2064,25 @@ Each finding should include:
 - **Description:** The legacy runner `_populate_cross_sheet_context()` at `context.py:206-214` includes stdout from ANY non-SKIPPED sheet with stdout_tail — including FAILED and IN_PROGRESS sheets. The baton adapter at `adapter.py:738` explicitly filters `if prev_state.status != BatonSheetStatus.COMPLETED: continue`, excluding all non-COMPLETED, non-SKIPPED sheets. This means FAILED sheets with stdout are included in cross-sheet context on the legacy path but excluded on the baton path.
 - **Impact:** When the baton becomes default (Phase 2), scores that rely on seeing failed sheet output in downstream prompts will get different behavior. The baton's stricter filtering may actually be preferable (failed output could be misleading), but the behavioral difference should be a conscious design decision, not an accident.
 - **Action:** Decide: is the baton's stricter behavior intentional? If yes, document the difference. If no, align the baton with the legacy runner by including FAILED sheets with stdout. Test `test_m4_adversarial_breakpoint.py::TestBatonLegacySkippedParity::test_both_paths_skip_non_completed_non_skipped` documents the gap.
+
+### F-254: Enabling use_baton Kills All In-Progress Legacy Jobs — baton.resume.no_checkpoint
+- **Found by:** Composer + automated monitor, 2026-04-04
+- **Severity:** P0 (critical — data loss, silently destroys hours of in-progress work)
+- **Status:** Open
+- **Category:** architecture / baton transition
+- **Description:** When the conductor starts with `use_baton: true`, it attempts to resume all registered jobs through the baton path. The baton's resume logic looks for its own checkpoint format but the jobs were created by the legacy runner using `CheckpointState` in `.mozart-state.db`. The baton emits `"baton.resume.no_checkpoint"` error and immediately marks the job as `"job.completed"` (stored as FAILED in the registry). This happened to ALL 5 registered jobs on conductor startup — including `mozart-orchestra-v3` at 150/706 sheets (21% complete, ~2 days of work). The workspace's `.mozart-state.db` still contains the full CheckpointState showing 150 completed sheets, but the conductor considers the job finished.
+- **Evidence:** Conductor log shows the sequence for every job: `job.resuming` → `baton.resume.no_checkpoint` (error) → `snapshot.captured` → `job.completed` — all within 100ms. No sheets were dispatched.
+- **Dual state disagreement:** `mozart list` (registry) says FAILED. `mozart status <job>` (workspace state) says RUNNING with 4 in_progress sheets. Conductor memory says 0 running jobs. Three sources, three answers.
+- **Impact:** (1) Flipping `use_baton: true` silently destroys all in-progress legacy work. (2) The "no checkpoint" error doesn't distinguish "never started" from "150 sheets completed via legacy runner." (3) The baton transition (composer directive, Phase 2) cannot safely flip the default without solving this. (4) `mozart status` shows stale RUNNING state that will never progress — the job is dead but looks alive.
+- **Related:** Issue #111 (conductor state desync). F-139 (misleading resume error). Composer directive: baton transition Phase 1 must solve this before Phase 2.
+- **Architectural principle:** The daemon is the ONLY source of truth for job state. Workspace files are artifacts, not state. The legacy runner's pattern of writing CheckpointState to `.mozart-state.db` in the workspace creates a dual-state problem — two sources of truth that can disagree. The baton should NOT learn to read legacy workspace state. That's perpetuating the wrong architecture.
+- **Fix:** (1) The baton's state lives in the daemon's own DB (daemon-state.db / registry.db), not in workspace files. On restart, the daemon recovers from its own persisted state. (2) If the daemon has no record of a job, the job doesn't exist — period. No falling back to workspace files. (3) Legacy workspace state files (.mozart-state.db) should be treated as read-only artifacts for debugging, not as authoritative state. (4) The transition path: migrate any essential state from legacy workspace DBs into the daemon's DB as a one-time migration, then stop writing workspace state entirely.
+
+### F-253: Cost Tracking Tip Says "Use JSON Output" But Doesn't Say How — And JSON Should Be Default
+- **Found by:** Composer, 2026-04-04
+- **Severity:** P2 (medium — UX gap, accurate cost tracking is a core feature)
+- **Status:** Open
+- **Category:** UX
+- **Description:** `mozart status` displays a tip: "Set cost_limits.enabled: true in your score to prevent unexpected charges" and cost tracking shows near-zero values ($0.00-$0.03) for scores that have run hundreds of sheets. Accurate token/cost tracking requires the instrument to output in JSON format (so Mozart can parse `input_tokens_path` / `output_tokens_path` from structured output), but there is no guidance in the status output, score-writing guide, or CLI help on how to configure this. The instrument profiles define `output_format_flag` and `output_format_value` (e.g., `-o json` for claude-code), but whether this is applied depends on the profile config, not explicit user action. If JSON output is required for accurate cost tracking, it should be the default output format for all instruments — not something the user has to discover and configure.
+- **Impact:** (1) Composers see $0.00 costs and assume the score is free or cost tracking is broken. (2) No actionable path from the tip to accurate tracking. (3) Cost limits (`max_cost_per_job`) can't function if costs aren't tracked. (4) The v3 orchestra has run 150+ sheets with reported cost of $0.03 — clearly wrong.
+- **Action:** (1) Make JSON output format the default for all CLI instruments (instrument profiles should set it, not require user config). (2) If an instrument is running in text mode, warn that cost tracking is degraded. (3) The status tip should explain HOW to enable accurate tracking, not just that it exists.

@@ -162,6 +162,19 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **Mateship:** Committed Litmus's uncommitted 7 new M4 litmus tests (651 lines, tests 32-38 in test catalog). All 118 litmus tests pass.
 - **Zero bugs found in M4 code.** The codebase continues to harden. Bug surface has shifted from code-level bugs to architectural parity between the two execution paths.
 
+### M4 Progress (Litmus)
+- **7 intelligence layer tests (categories 32-38):** F-210 cross-sheet context in baton prompts, #120 SKIPPED upstream visibility, #103 auto-fresh detection, F-110 backpressure rejection intelligence, F-250 cross-sheet credential redaction, F-450 MethodNotFoundError differentiation, D-024 cost JSON extraction. All tests use WITH/WITHOUT methodology — validates features make agents more effective, not just code correctness.
+- **118 total litmus tests pass.** Coverage map: 36 M1, 38 M2, 21 M3, 7+2 M4 (tests 32-33 both validate prompt assembly).
+- **Mateship:** Work committed by Breakpoint. First time another musician picked up and committed litmus tests. Pipeline efficiency record.
+
+### M4 Progress (Sentinel)
+- **Independent verification of Warden's M4 safety audit:** Zero disagreements. F-250 and F-251 fixes verified correct.
+- **Full M4 security audit:** 18 commits from 12 musicians. Zero new critical findings. Zero new attack surfaces.
+- **All 9 credential redaction points verified:** 7 historical + 2 new from F-250. Pattern is now institutional.
+- **All 4 shell execution paths verified unchanged and protected.** Zero new shell execution paths in M4.
+- **F-137 (pygments CVE) STILL OPEN:** 2.19.2 installed, 2.20.0 needed. Recommended fix this movement (trivial, single line in pyproject.toml).
+- **Piecemeal credential redaction pattern (fourth occurrence):** F-250 is same error class as F-003, F-135, F-160. Pattern caught in routine audit before production.
+
 ### M4 Progress (Atlas)
 - **Seventh strategic alignment assessment.** Verified 18 commits from 12 musicians. Both P0 blockers resolved (F-210, F-211). 182/220 tasks complete (83%). Codebase: 98,272 source lines, 327 test files, 11,140 tests collected. mypy clean. ruff lint regression fixed (import sorting in context.py).
 - **Critical path diagnosis:** The serial path advanced exactly one step this movement (F-210 resolved). Fourth consecutive movement of one-step-per-movement pace. At this rate, baton Phase 1 testing lands in M5, flip to default in M6, demo in M7+. The product thesis remains unproven.
