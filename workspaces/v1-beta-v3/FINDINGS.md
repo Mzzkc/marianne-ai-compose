@@ -2121,3 +2121,47 @@ Each finding should include:
 - **Evidence:** Working tree diff shows 25-line change at `manager.py:2213-2247`. HEAD version reads from workspace file. Working tree version reads from daemon registry (`registry.py:316-329` provides `load_checkpoint()` method). No corresponding test file changes in working tree.
 - **Impact:** The change aligns with the right architecture (daemon as single source of truth) but doesn't solve the transition problem. Legacy jobs will fail to resume because they have no registry checkpoint. This makes F-254 (enabling use_baton kills jobs) worse, not better. Uncommitted code creates drift between what's tested and what exists.
 - **Action:** (1) Commit this work WITH migration logic: on registry miss, try workspace file, migrate to registry, delete workspace file. (2) Add TDD tests for: registry hit, workspace migration fallback, both miss (error path). (3) Document as part of F-254 resolution strategy. (4) Consider: is this change a response to F-254? If so, coordinate with whoever made this change to understand the full plan.
+
+### F-441: Pydantic Silently Accepts Unknown YAML Fields — All 37 Config Models Lack extra='forbid' (P0)
+- **Found by:** Axiom, Movement 4
+- **Severity:** P0 (critical — composer directive M5, blocks public release)
+- **Status:** Open
+- **Category:** bug / configuration validation
+- **Error class:** Configuration validation gap (same class as F-002 falsy YAML values)
+- **Description:** All 37 config models in `src/mozart/core/config/` lack `model_config = ConfigDict(extra='forbid')`. Pydantic v2 defaults to `extra='ignore'` (silently drop unknown fields). Unknown YAML fields in score configs are accepted without error, then silently dropped. `mozart validate` reports "✓ Configuration valid" for configs with typos, non-existent features, or future unimplemented features.
+- **Impact:** (1) Score authors think features work when Mozart drops them on the floor. Example: `instrument_fallbacks: [gemini-cli]` validates successfully but is ignored (field doesn't exist). (2) Typos in field names produce zero feedback (`instument:` accepted, feature ignored). (3) Future features appear to work before implementation (`loops:`, `conditionals:` accepted, ignored). (4) Debugging is impossible — user reports "feature doesn't work" when the actual problem is "I mistyped the field name."
+- **Reproducer:**
+```python
+from mozart.core.config import JobConfig
+import yaml
+data = yaml.safe_load("""
+name: test
+workspace: /tmp
+instrument: claude-code
+instrument_fallbacks: [gemini-cli]  # doesn't exist
+this_is_fake: true                   # doesn't exist
+sheet: { size: 1, total_items: 1, bogus: 123 }  # bogus field
+prompt: { template: "test" }
+""")
+config = JobConfig(**data)  # SUCCEEDS
+print(hasattr(config, 'instrument_fallbacks'))  # False — field dropped
+print(hasattr(config, 'this_is_fake'))          # False — field dropped
+```
+- **Affected models:** All 37 — JobConfig, SheetConfig, PromptConfig, BackendConfig, InstrumentConfig, ExecutionConfig, LearningConfig, OrchestrationConfig, WorkspaceConfig, SpecCorpusConfig, etc. (full list: `grep "^class.*Config.*BaseModel" src/mozart/core/config/*.py`)
+- **Root cause:** Mozart migrated from Pydantic v1 (default `extra='forbid'`) to v2 (default `extra='ignore'`) without adding explicit `extra='forbid'` to preserve strict validation.
+- **Fix:** Add to ALL 37 config models:
+```python
+from pydantic import BaseModel, ConfigDict
+
+class JobConfig(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    # ... fields ...
+```
+Add V212 validation check with "did you mean X?" suggestions for common typos (`instument` → `instrument`, `dependancies` → `dependencies`, etc.).
+- **Breaking change scope:** YES — any score with typos or non-existent fields will start failing validation. This is GOOD (fail-fast instead of silent corruption), but requires CHANGELOG notice and migration guidance.
+- **Composer directive (M5, P0):** "Set extra='forbid' on JobConfig, SheetConfig, and all nested config models. Unknown fields must be ERROR severity, not warnings. If this breaks legitimate edge cases (e.g., YAML anchors, user-defined metadata), add an explicit metadata: field for arbitrary user data rather than making the whole model permissive."
+- **GitHub issue:** #156 (already filed, recommend elevate to P0 milestone)
+- **Evidence:** Report at `movement-4/axiom.md`, lines 387-535. Full reproduction, impact analysis, 37-model enumeration, fix requirements.
+- **Verified by:** Empirical reproduction on HEAD (2026-04-04), Python REPL test, config model file enumeration.
+- **Action:** Fix all 37 models + add regression tests before v1 public release.
+- **Related findings:** F-002 (falsy YAML values rejected by overly strict guards — inverse problem, same validation layer)

@@ -257,3 +257,8 @@ Foundation laid: learning store fixes, critical bug resolution, dead code remova
 - **Geometry problem persists:** Critical path advanced one step (F-210). Fourth consecutive movement at this pace. Baton ready for Phase 1, nobody starting. Not an engineering problem anymore — it's a governance problem.
 - **F-254 diagnosis:** The hidden bomb. Enabling `use_baton: true` kills ALL in-progress legacy jobs. Dual-state architecture (workspace `.mozart-state.db` vs daemon registry) creates the gap. Architectural principle clear (daemon is truth), migration path unclear. Requires composer/co-composer governance decision.
 - **Mateship at 39% (all-time high):** Pipeline is primary collaboration mechanism now. Foundation/Forge/Harper/Spark/Breakpoint all picked up others' work.
+
+### M4 Progress (Axiom)
+- **M4 fix verification COMPLETE:** Verified 5 fixes (#122, #120, #93, #103, #128) through invariant analysis. All correct. 23 edge cases analyzed. F-202 (baton/legacy FAILED sheet parity) already filed by Breakpoint, documented in verification.
+- **F-441 filed (P0):** Pydantic silently accepts unknown YAML fields — all 37 config models lack `extra='forbid'`. Composer directive M5. Issue #156 confirmed. Full reproducer + impact analysis in movement-4/axiom.md.
+- **GitHub issue verification ready:** #122, #120, #93, #103, #128 all verified correct with evidence. Ready for closure.
