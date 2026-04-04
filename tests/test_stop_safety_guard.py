@@ -33,7 +33,7 @@ class TestCheckRunningJobs:
         """Returns running_jobs count from readiness probe."""
         from mozart.daemon.process import _check_running_jobs
 
-        mock_client = MagicMock()
+        mock_client = MagicMock(spec=["readiness"])
         mock_client.readiness = AsyncMock(
             return_value={"running_jobs": 3, "job_ids": ["a", "b", "c"]},
         )
@@ -75,7 +75,7 @@ class TestCheckRunningJobs:
         """Returns running_jobs=0 when conductor has no running jobs."""
         from mozart.daemon.process import _check_running_jobs
 
-        mock_client = MagicMock()
+        mock_client = MagicMock(spec=["readiness"])
         mock_client.readiness = AsyncMock(
             return_value={"running_jobs": 0, "job_ids": []},
         )
