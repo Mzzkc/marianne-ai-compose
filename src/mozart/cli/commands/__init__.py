@@ -7,6 +7,7 @@ from .diagnose import diagnose, errors, history, logs
 from .doctor import doctor
 from .init_cmd import init
 from .pause import modify, pause
+from .rate_limits import clear_rate_limits
 from .recover import recover
 from .resume import resume
 from .run import run
@@ -28,6 +29,8 @@ __all__ = [
     # pause.py
     "pause",
     "modify",
+    # rate_limits.py
+    "clear_rate_limits",
     # recover.py
     "recover",
     # resume.py

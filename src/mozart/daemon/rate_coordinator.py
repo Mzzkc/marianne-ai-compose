@@ -195,6 +195,45 @@ class RateLimitCoordinator:
             reverse=True,
         )
 
+    # ─── Clearing ──────────────────────────────────────────────────
+
+    async def clear_limits(
+        self,
+        instrument: str | None = None,
+    ) -> int:
+        """Clear active rate limits, optionally for a specific instrument.
+
+        Removes the active limit entry so ``is_rate_limited()`` will
+        return ``False`` immediately.  Event history is preserved for
+        diagnostics — only the active limit is removed.
+
+        Args:
+            instrument: If provided, clear only this instrument's limit.
+                If ``None``, clear all active limits.
+
+        Returns:
+            Number of limits cleared.
+        """
+        async with self._lock:
+            if instrument is not None:
+                if instrument in self._active_limits:
+                    del self._active_limits[instrument]
+                    _logger.info(
+                        "rate_limit.cleared",
+                        instrument=instrument,
+                    )
+                    return 1
+                return 0
+            else:
+                count = len(self._active_limits)
+                self._active_limits.clear()
+                if count > 0:
+                    _logger.info(
+                        "rate_limit.cleared_all",
+                        count=count,
+                    )
+                return count
+
     # ─── Maintenance ──────────────────────────────────────────────
 
     async def prune_stale(self) -> int:

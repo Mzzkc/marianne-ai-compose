@@ -693,6 +693,23 @@ class BatonAdapter:
             for s in job.sheets.values()
         )
 
+    def clear_instrument_rate_limit(
+        self,
+        instrument: str | None = None,
+    ) -> int:
+        """Clear instrument rate limit state in the baton core.
+
+        Delegates to ``BatonCore.clear_instrument_rate_limit()``.  Also
+        moves WAITING sheets back to PENDING so they can be re-dispatched.
+
+        Args:
+            instrument: Instrument name to clear, or ``None`` for all.
+
+        Returns:
+            Number of instruments whose rate limit was cleared.
+        """
+        return self._baton.clear_instrument_rate_limit(instrument)
+
     def _check_completions(self) -> None:
         """Check all registered jobs for completion and signal waiters.
 

@@ -1060,6 +1060,42 @@ class JobManager:
         )
         return {"deleted": deleted}
 
+    async def clear_rate_limits(
+        self,
+        instrument: str | None = None,
+    ) -> dict[str, Any]:
+        """Clear active rate limits from the coordinator and baton.
+
+        Removes the active rate limit so new sheets can be dispatched
+        immediately.  Clears both the ``RateLimitCoordinator`` (used by
+        the legacy runner and scheduler) and the baton's per-instrument
+        ``InstrumentState`` (used by the baton dispatch loop).
+
+        Args:
+            instrument: Instrument name to clear, or ``None`` for all.
+
+        Returns:
+            Dict with ``cleared`` count and ``instrument`` filter.
+        """
+        cleared = await self.rate_coordinator.clear_limits(
+            instrument=instrument,
+        )
+        baton_cleared = 0
+        if self._baton_adapter is not None:
+            baton_cleared = self._baton_adapter.clear_instrument_rate_limit(
+                instrument,
+            )
+        _logger.info(
+            "manager.clear_rate_limits",
+            instrument=instrument,
+            coordinator_cleared=cleared,
+            baton_cleared=baton_cleared,
+        )
+        return {
+            "cleared": cleared + baton_cleared,
+            "instrument": instrument,
+        }
+
     async def _resolve_job_workspace(
         self, job_id: str, workspace: Path | None = None,
     ) -> Path:

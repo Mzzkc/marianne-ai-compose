@@ -688,7 +688,14 @@ class DaemonProcess:
                 ],
             }
 
+        async def handle_clear_rate_limits(
+            params: dict[str, Any], _w: Any,
+        ) -> dict[str, Any]:
+            instrument = params.get("instrument")
+            return await manager.clear_rate_limits(instrument=instrument)
+
         handler.register("daemon.rate_limits", handle_rate_limits)
+        handler.register("daemon.clear_rate_limits", handle_clear_rate_limits)
         handler.register("daemon.learning.patterns", handle_learning_patterns)
 
     def _track_signal_task(self, task: asyncio.Task[Any]) -> None:

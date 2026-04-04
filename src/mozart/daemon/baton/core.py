@@ -251,6 +251,45 @@ class BatonCore:
             if inst.rate_limited
         }
 
+    def clear_instrument_rate_limit(
+        self,
+        instrument: str | None = None,
+    ) -> int:
+        """Clear rate limit state on one or all instruments.
+
+        Resets ``rate_limited`` to ``False`` and ``rate_limit_expires_at``
+        to ``None``.  Also moves any WAITING sheets on the cleared
+        instrument(s) back to PENDING so they can be re-dispatched.
+
+        Args:
+            instrument: Instrument name to clear, or ``None`` for all.
+
+        Returns:
+            Number of instruments whose rate limit was cleared.
+        """
+        cleared = 0
+        targets = (
+            [self._instruments[instrument]]
+            if instrument and instrument in self._instruments
+            else list(self._instruments.values())
+        )
+        for inst in targets:
+            if inst.rate_limited:
+                inst.rate_limited = False
+                inst.rate_limit_expires_at = None
+                cleared += 1
+                # Move WAITING sheets on this instrument back to PENDING
+                for job in self._jobs.values():
+                    for sheet in job.sheets.values():
+                        if (
+                            sheet.status == BatonSheetStatus.WAITING
+                            and sheet.instrument_name == inst.name
+                        ):
+                            sheet.status = BatonSheetStatus.PENDING
+        if cleared > 0:
+            self._state_dirty = True
+        return cleared
+
     def get_open_circuit_breakers(self) -> set[str]:
         """Get the set of instruments with open circuit breakers.
 

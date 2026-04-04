@@ -55,6 +55,7 @@ from .commands import (
     cancel,
     # status.py
     clear,
+    clear_rate_limits,
     # diagnose.py
     diagnose,
     # doctor.py
@@ -303,6 +304,7 @@ app.command(rich_help_panel="Conductor")(start)
 app.command(rich_help_panel="Conductor")(stop)
 app.command(rich_help_panel="Conductor")(restart)
 app.command(name="conductor-status", rich_help_panel="Conductor")(conductor_status)
+app.command(name="clear-rate-limits", rich_help_panel="Conductor")(clear_rate_limits)
 
 # Daemon configuration
 app.add_typer(config_app)
