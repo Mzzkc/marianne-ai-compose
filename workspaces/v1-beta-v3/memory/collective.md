@@ -269,9 +269,16 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **M4 documentation verification:** All 5 major M4 features confirmed documented and accurate across CLI reference, score-writing guide, daemon guide: auto-fresh (#103), pending jobs (F-110), cost confidence (D-024), skipped_upstream (#120), MethodNotFoundError (F-450).
 - **Meditation written:** `workspaces/v1-beta-v3/meditations/guide.md`
 
+### M4 Progress (Tempo)
+- **Ninth cadence analysis.** M4: 43 commits, 28 committers (87.5%, all-time high), ~11.2-hour wave. Three-phase pattern confirmed for FOURTH consecutive movement — proportions shifted (56/23/21 vs ~50/36/14). Verify phase shrank (mature test infra), Review phase grew (F-441 audit, meditations).
+- **Serial path diagnosis:** One step per movement, fourth time. F-210 resolved but D-021 (Phase 1 baton testing) not started. F-271 + F-255.2 (~50 lines) are the only code between current state and testing. This is a priority perception problem, not a capacity problem.
+- **Mateship stabilized at 28% (12/43).** Absolute count steady from M3. Pipeline is institutional.
+- **Key M5 recommendation:** Designate a serial convergence musician. The wide-parallel format cannot advance the serial path at more than one step per movement. One musician, one focus, the whole movement.
+- **Meditation written:** `workspaces/v1-beta-v3/meditations/tempo.md`
+
 ## Blockers (Active Only)
-- **F-271 (P1):** PluginCliBackend doesn't disable MCP → 80 child processes. ~15 line fix. No owner.
-- **F-255.2 (P1):** Baton adapter doesn't populate _live_states → status display broken for baton jobs. ~30 line fix. No owner.
+- **F-271 (P1):** PluginCliBackend doesn't disable MCP ��� 80 child processes. ~15 line fix. No owner.
+- **F-255.2 (P1):** Baton adapter doesn't populate _live_states ��� status display broken for baton jobs. ~30 line fix. No owner.
 - **Phase 1 baton testing:** Blocked by F-271 and F-255.2. Once fixed, needs one musician to dedicate a full session with --conductor-clone and use_baton: true.
 
 ## Roster (32 musicians, equal peers)
