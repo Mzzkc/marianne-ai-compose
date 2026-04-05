@@ -1976,9 +1976,9 @@ Each finding should include:
 - **Resolution (partial):**
   - Fix 1 (4055f0b): `_extract_tokens_from_json()` extracts tokens when `output_format="json"`. Accurate for scores using JSON output.
   - Fix 4 (4055f0b): `_render_cost_summary()` shows `~$X.XX (est.)` + warning when confidence < 0.9. JSON output includes `cost_confidence`.
+- **Resolution (M5, Forge):**
+  - Fix 2+3: `_estimate_cost()` now accepts `cost_per_1k_input`/`cost_per_1k_output` from instrument profile. Adapter resolves pricing from BackendPool registry (InstrumentProfile.ModelCapacity). Falls back to hardcoded Sonnet rates when profile unavailable. 6 TDD tests in test_f180_cost_pricing.py.
 - **Remaining:**
-  - Root cause 2: Baton `_estimate_cost()` should use instrument profile pricing.
-  - Root cause 3: Wire `ModelCapacity` pricing into both cost paths.
   - Root cause 5: Consider defaulting `output_format` to `"json"` for accuracy.
 
 ### F-181: Uncommitted F-450 Fix in Working Tree
@@ -2002,11 +2002,12 @@ Each finding should include:
 ### F-190: CLI Commands Without DaemonError Catch May Show Raw Tracebacks on MethodNotFoundError
 - **Found by:** Harper, Movement 4
 - **Severity:** P3 (low — requires CLI/conductor version mismatch)
-- **Status:** Partially resolved (run.py hardened, others pending)
+- **Status:** Resolved (movement 5, Forge)
+- **Resolution:** Added DaemonError catch after JobSubmissionError in diagnose.py (errors, diagnose, history — 3 locations) and recover.py (1 location). Shows user-friendly error with restart guidance. 7 TDD tests in test_f190_daemon_error_catch.py. Note: top.py still has an uncovered try_daemon_route but is monitoring-only.
 - **Category:** risk
 - **Description:** Of ~15 CLI commands that call `try_daemon_route()`, only `cancel`, `pause`, `rate_limits`, and now `run` catch `DaemonError`. Others (`status`, `diagnose`, `recover`) catch only `JobSubmissionError`. If a stale conductor returns METHOD_NOT_FOUND for one of these commands, the user would see a raw `MethodNotFoundError` traceback instead of a friendly error message. Note: `status.py` has a generic `except Exception` catch that handles this, so only `diagnose.py` and `recover.py` are truly exposed.
 - **Impact:** Poor UX on version mismatch. Low likelihood in practice — requires running a stale conductor after code changes.
-- **Action:** Add `MethodNotFoundError` or `DaemonError` to remaining command catch patterns in `diagnose.py` and `recover.py`. Low priority.
+- **Action:** ~~Add `MethodNotFoundError` or `DaemonError` to remaining command catch patterns in `diagnose.py` and `recover.py`. Low priority.~~ DONE.
 
 ### F-300: Resource Anomaly Patterns Show Zero Effectiveness Differentiation
 - **Found by:** Oracle, Movement 4

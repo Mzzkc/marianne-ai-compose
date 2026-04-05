@@ -108,9 +108,13 @@ class TestBatonLiveStatesPopulation:
             mock_adapter.register_job = register_and_check
 
             # Run the baton path
-            result = asyncio.get_event_loop().run_until_complete(
-                manager._run_via_baton(job_id, config, request)
-            )
+            loop = asyncio.new_event_loop()
+            try:
+                result = loop.run_until_complete(
+                    manager._run_via_baton(job_id, config, request)
+                )
+            finally:
+                loop.close()
 
         # After execution, _live_states should have been populated
         assert job_id in manager._live_states, (
@@ -170,9 +174,13 @@ class TestBatonLiveStatesPopulation:
 
         with patch("mozart.core.sheet.build_sheets", return_value=mock_sheets), \
              patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={}):
-            asyncio.get_event_loop().run_until_complete(
-                manager._run_via_baton("job-abc", config, request)
-            )
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(
+                    manager._run_via_baton("job-abc", config, request)
+                )
+            finally:
+                loop.close()
 
         state = manager._live_states["job-abc"]
         assert len(state.sheets) == 5, (

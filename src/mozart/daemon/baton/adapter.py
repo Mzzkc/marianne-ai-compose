@@ -1153,6 +1153,35 @@ class BatonAdapter:
                 pre_rendered = rendered.prompt
                 pre_preamble = rendered.preamble
 
+            # Resolve profile pricing from instrument registry (F-180)
+            cost_input: float | None = None
+            cost_output: float | None = None
+            if self._backend_pool is not None:
+                try:
+                    registry = getattr(self._backend_pool, "_registry", None)
+                    if registry is not None:
+                        profile = registry.get(sheet.instrument_name)
+                        if (
+                            profile is not None
+                            and hasattr(profile, "models")
+                            and profile.models
+                        ):
+                            # Use default model pricing, or first model
+                            model_cap = None
+                            if profile.default_model:
+                                model_cap = next(
+                                    (m for m in profile.models
+                                     if m.name == profile.default_model),
+                                    None,
+                                )
+                            if model_cap is None:
+                                model_cap = profile.models[0]
+                            cost_input = model_cap.cost_per_1k_input
+                            cost_output = model_cap.cost_per_1k_output
+                except Exception:
+                    # Profile pricing is best-effort — fall back to hardcoded
+                    pass
+
             await sheet_task(
                 job_id=job_id,
                 sheet=sheet,
@@ -1163,6 +1192,8 @@ class BatonAdapter:
                 total_movements=total_movements,
                 rendered_prompt=pre_rendered,
                 preamble=pre_preamble,
+                cost_per_1k_input=cost_input,
+                cost_per_1k_output=cost_output,
             )
         finally:
             # Always release the backend

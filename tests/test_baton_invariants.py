@@ -88,18 +88,22 @@ def _fail_sheet(baton: BatonCore, job_id: str, sheet_num: int) -> None:
     sheet.status = BatonSheetStatus.DISPATCHED  # Must be dispatched first
     # Exhaust retries
     for attempt in range(sheet.max_retries):
-        asyncio.get_event_loop().run_until_complete(
-            baton.handle_event(
-                SheetAttemptResult(
-                    job_id=job_id,
-                    sheet_num=sheet_num,
-                    instrument_name=sheet.instrument_name,
-                    attempt=attempt + 1,
-                    execution_success=False,
-                    error_classification="TRANSIENT",
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(
+                baton.handle_event(
+                    SheetAttemptResult(
+                        job_id=job_id,
+                        sheet_num=sheet_num,
+                        instrument_name=sheet.instrument_name,
+                        attempt=attempt + 1,
+                        execution_success=False,
+                        error_classification="TRANSIENT",
+                    )
                 )
             )
-        )
+        finally:
+            loop.close()
 
 
 async def _dispatch_noop(

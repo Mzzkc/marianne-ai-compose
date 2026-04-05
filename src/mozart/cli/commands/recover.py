@@ -92,7 +92,7 @@ async def _recover_job(
 
     # Route through conductor
     from mozart.daemon.detect import try_daemon_route
-    from mozart.daemon.exceptions import JobSubmissionError
+    from mozart.daemon.exceptions import DaemonError, JobSubmissionError
 
     ws_str = str(workspace) if workspace else None
     params = {
@@ -107,6 +107,12 @@ async def _recover_job(
             hints=["Run 'mozart list' to see available scores."],
         )
         raise typer.Exit(1) from err
+    except DaemonError as err:
+        output_error(
+            str(err),
+            hints=["Restart the conductor: mozart restart"],
+        )
+        raise typer.Exit(1) from None
 
     state: CheckpointState | None = None
     state_backend = None

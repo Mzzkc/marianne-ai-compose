@@ -462,7 +462,7 @@ async def _errors_job(
 
     # Route through conductor
     from mozart.daemon.detect import try_daemon_route
-    from mozart.daemon.exceptions import JobSubmissionError
+    from mozart.daemon.exceptions import DaemonError, JobSubmissionError
 
     ws_str = str(workspace) if workspace else None
     params = {"job_id": job_id, "workspace": ws_str}
@@ -475,6 +475,13 @@ async def _errors_job(
             json_output=json_output,
         )
         raise typer.Exit(1) from err
+    except DaemonError as err:
+        output_error(
+            str(err),
+            hints=["Restart the conductor: mozart restart"],
+            json_output=json_output,
+        )
+        raise typer.Exit(1) from None
 
     found_job: CheckpointState | None = None
     if routed and result:
@@ -653,8 +660,7 @@ def diagnose(
         None,
         "--workspace",
         "-w",
-        help="Workspace directory to search for score state (debug override)",
-        hidden=True,
+        help="Workspace directory (for scores not in conductor registry)",
     ),
     json_output: bool = typer.Option(
         False,
@@ -717,41 +723,66 @@ async def _diagnose_job(
 
     # Route through conductor
     from mozart.daemon.detect import try_daemon_route
-    from mozart.daemon.exceptions import JobSubmissionError
+    from mozart.daemon.exceptions import DaemonError, JobSubmissionError
+
+    found_job: CheckpointState | None = None
+    found_backend = None
 
     ws_str = str(workspace) if workspace else None
     params = {"job_id": job_id, "workspace": ws_str}
     try:
         routed, result = await try_daemon_route("job.diagnose", params)
-    except JobSubmissionError as err:
-        # Conductor confirmed: job not found.
+    except JobSubmissionError:
+        # Conductor confirmed: job not found in registry.
+        # F-451: Fall back to workspace filesystem if -w was provided.
+        if workspace is not None:
+            from ..helpers import _find_job_state_direct
+            found_job, found_backend = await _find_job_state_direct(
+                job_id, workspace, json_output=json_output,
+            )
+            routed = False
+            result = None
+        else:
+            output_error(
+                f"Score not found: {job_id}",
+                hints=["Run 'mozart list' to see available scores.",
+                       "Use -w to specify the workspace directory.",
+                       "Run 'mozart doctor' to check your environment."],
+                json_output=json_output,
+            )
+            raise typer.Exit(1) from None
+    except DaemonError as err:
         output_error(
-            f"Score not found: {job_id}",
-            hints=["Run 'mozart list' to see available scores.",
-                   "Run 'mozart doctor' to check your environment."],
+            str(err),
+            hints=["Restart the conductor: mozart restart"],
             json_output=json_output,
         )
-        raise typer.Exit(1) from err
+        raise typer.Exit(1) from None
 
-    found_job: CheckpointState | None = None
-    found_backend = None
-    effective_workspace = workspace
+    # found_job may have been set in the JobSubmissionError handler
+    # (F-451 workspace fallback). Only proceed with conductor result
+    # if the fallback didn't already find the job.
+    if found_job is None:
+        found_backend = None
+        effective_workspace = workspace
 
-    if routed and result:
-        state_data = result.get("state")
-        if state_data:
-            found_job = CheckpointState.model_validate(state_data)
-        if result.get("workspace"):
-            effective_workspace = Path(result["workspace"])
-    elif not routed and workspace is not None:
-        # Fallback to filesystem with workspace override
-        from ..helpers import _find_job_state_direct
-        found_job, found_backend = await _find_job_state_direct(
-            job_id, workspace, json_output=json_output,
-        )
+        if routed and result:
+            state_data = result.get("state")
+            if state_data:
+                found_job = CheckpointState.model_validate(state_data)
+            if result.get("workspace"):
+                effective_workspace = Path(result["workspace"])
+        elif not routed and workspace is not None:
+            # Fallback to filesystem with workspace override
+            from ..helpers import _find_job_state_direct
+            found_job, found_backend = await _find_job_state_direct(
+                job_id, workspace, json_output=json_output,
+            )
+        else:
+            require_conductor(routed, json_output=json_output)
+            return
     else:
-        require_conductor(routed, json_output=json_output)
-        return
+        effective_workspace = workspace
 
     if found_job is None:
         output_error(
@@ -1485,7 +1516,7 @@ async def _history_job(
 
     # Route through conductor
     from mozart.daemon.detect import try_daemon_route
-    from mozart.daemon.exceptions import JobSubmissionError
+    from mozart.daemon.exceptions import DaemonError, JobSubmissionError
 
     ws_str = str(workspace) if workspace else None
     params = {
@@ -1501,6 +1532,13 @@ async def _history_job(
             json_output=json_output,
         )
         raise typer.Exit(1) from err
+    except DaemonError as err:
+        output_error(
+            str(err),
+            hints=["Restart the conductor: mozart restart"],
+            json_output=json_output,
+        )
+        raise typer.Exit(1) from None
 
     records: list[dict[str, Any]] = []
     has_history = True

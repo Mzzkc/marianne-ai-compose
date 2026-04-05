@@ -65,6 +65,8 @@ async def sheet_task(
     total_movements: int = 1,
     rendered_prompt: str | None = None,
     preamble: str | None = None,
+    cost_per_1k_input: float | None = None,
+    cost_per_1k_output: float | None = None,
 ) -> None:
     """Execute a single sheet attempt and report the result.
 
@@ -87,6 +89,10 @@ async def sheet_task(
         preamble: Optional pre-built preamble. Set on the backend via
             set_preamble() before execution. Only used when rendered_prompt
             is also provided (the PromptRenderer separates them).
+        cost_per_1k_input: Cost per 1000 input tokens (USD) from the
+            instrument profile's ModelCapacity. None uses hardcoded fallback.
+        cost_per_1k_output: Cost per 1000 output tokens (USD) from the
+            instrument profile's ModelCapacity. None uses hardcoded fallback.
 
     Never raises — all exceptions are caught and reported via the inbox.
     """
@@ -145,7 +151,11 @@ async def sheet_task(
             error_classification=error_class,
             error_message=error_msg,
             rate_limited=exec_result.rate_limited,
-            cost_usd=_estimate_cost(exec_result),
+            cost_usd=_estimate_cost(
+                exec_result,
+                cost_per_1k_input=cost_per_1k_input,
+                cost_per_1k_output=cost_per_1k_output,
+            ),
             input_tokens=exec_result.input_tokens or 0,
             output_tokens=exec_result.output_tokens or 0,
             model_used=exec_result.model,
@@ -631,16 +641,35 @@ def _classify_error(
     )
 
 
-def _estimate_cost(exec_result: ExecutionResult) -> float:
-    """Estimate cost from token counts.
+def _estimate_cost(
+    exec_result: ExecutionResult,
+    cost_per_1k_input: float | None = None,
+    cost_per_1k_output: float | None = None,
+) -> float:
+    """Estimate cost from token counts and instrument pricing.
 
-    Uses conservative estimates for common models. Real cost tracking
-    will come from InstrumentProfile.ModelCapacity in a future iteration.
+    When profile pricing is provided (from InstrumentProfile.ModelCapacity),
+    uses that for accurate per-instrument cost tracking. Falls back to
+    conservative Claude Sonnet estimates when no pricing is available.
+
+    Args:
+        exec_result: The execution result with token counts.
+        cost_per_1k_input: Cost per 1000 input tokens (USD) from instrument
+            profile. None falls back to hardcoded estimate.
+        cost_per_1k_output: Cost per 1000 output tokens (USD) from instrument
+            profile. None falls back to hardcoded estimate.
     """
     input_tokens = exec_result.input_tokens or 0
     output_tokens = exec_result.output_tokens or 0
 
-    # Conservative estimate: $3/1M input, $15/1M output (Claude Sonnet pricing)
-    # This is a placeholder — real pricing comes from InstrumentProfile
-    cost = (input_tokens * 3.0 / 1_000_000) + (output_tokens * 15.0 / 1_000_000)
+    if cost_per_1k_input is not None and cost_per_1k_output is not None:
+        # Profile pricing: cost_per_1k means USD per 1000 tokens
+        cost = (input_tokens * cost_per_1k_input / 1_000) + (
+            output_tokens * cost_per_1k_output / 1_000
+        )
+    else:
+        # Fallback: conservative Claude Sonnet pricing ($3/1M input, $15/1M output)
+        cost = (input_tokens * 3.0 / 1_000_000) + (
+            output_tokens * 15.0 / 1_000_000
+        )
     return cost

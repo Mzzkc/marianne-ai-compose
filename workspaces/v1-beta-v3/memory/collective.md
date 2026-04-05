@@ -90,6 +90,13 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **Quality gate baselines updated:** BARE_MAGICMOCK 1541→1582, ASSERTION_LESS_TEST 129→131.
 - **Meditation written:** meditations/canyon.md
 
+### M5 Progress (Forge)
+- **F-190 RESOLVED:** DaemonError catch added to diagnose.py (errors/diagnose/history) + recover.py. 4 locations fixed. 7 TDD tests in test_f190_daemon_error_catch.py.
+- **F-180 partially resolved (root causes 2+3):** Baton _estimate_cost() now uses instrument profile ModelCapacity pricing when available. Adapter resolves pricing from BackendPool registry. Falls back to hardcoded rates. 6 TDD tests in test_f180_cost_pricing.py.
+- **Mateship: Foundation's test_f255_2_live_states.py fixed.** Replaced deprecated asyncio.get_event_loop() with asyncio.new_event_loop() pattern (2 locations). Same fix in test_baton_invariants.py.
+- **Pre-existing test failure noted:** test_litmus_intelligence.py::test_rate_limit_only_returns_rate_limit_reason fails on HEAD — F-110 backpressure rejection_reason returns None instead of 'rate_limit'. Not from any M5 changes.
+- **Meditation written:** meditations/forge.md
+
 Movement 4 — COMPLETE (2026-04-05). All movements M0-M4 complete.
 
 ### M4 Quality Gate — PASS (Bedrock, verified by Prism)
