@@ -286,20 +286,20 @@ prompt:
         assert "totally_undefined" in flagged_vars, "Truly undefined vars should be flagged"
 
     def test_hello_yaml_no_false_positives(self) -> None:
-        """The flagship hello.yaml example should produce zero V101 warnings."""
+        """The flagship hello-mozart.yaml example should produce zero V101 warnings."""
         from mozart.core.config.job import JobConfig
         from mozart.validation.checks.jinja import JinjaUndefinedVariableCheck
 
-        config_path = Path("examples/hello.yaml")
+        config_path = Path("examples/hello-mozart.yaml")
         if not config_path.exists():
-            pytest.skip("hello.yaml not found")
+            pytest.skip("hello-mozart.yaml not found")
 
         raw_yaml = config_path.read_text()
         config = JobConfig.from_yaml(config_path)
         checker = JinjaUndefinedVariableCheck()
         issues = checker.check(config, config_path, raw_yaml)
         assert len(issues) == 0, (
-            f"hello.yaml should produce zero V101 warnings. "
+            f"hello-mozart.yaml should produce zero V101 warnings. "
             f"Got: {[i.message for i in issues]}"
         )
 

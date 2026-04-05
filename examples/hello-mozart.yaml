@@ -1,4 +1,4 @@
-# hello.yaml — Your First Mozart Score
+# hello-mozart.yaml — Your First Mozart Score
 #
 # This score creates a short interactive fiction experience in three
 # movements. Movement 1 generates the world. Movement 2 writes three
@@ -12,7 +12,7 @@
 #
 # Usage:
 #   mozart start                        # Start the conductor
-#   mozart run examples/hello.yaml      # Run the score
+#   mozart run examples/hello-mozart.yaml  # Run the score
 #   mozart status hello-mozart           # Watch progress
 #   open workspaces/hello-mozart/the-sky-library.html  # Read the result
 #
@@ -219,7 +219,7 @@ prompt:
       was written first. Three character vignettes were generated in parallel,
       each reading the shared world but not each other. This finale read
       everything and wove the threads together.
-      Score: hello.yaml | Movements: 3 | Voices: 5"
+      Score: hello-mozart.yaml | Movements: 3 | Voices: 5"
 
     ### Technical Requirements
     - Valid HTML5. `<!DOCTYPE html>` at the top.

@@ -386,7 +386,7 @@ class TestCostVisibility:
     @pytest.mark.adversarial
     def test_dry_run_shows_cost_warning_when_limits_disabled(self) -> None:
         """Dry-run warns when cost tracking is disabled."""
-        result = runner.invoke(app, ["run", "--dry-run", "examples/hello.yaml"])
+        result = runner.invoke(app, ["run", "--dry-run", "examples/hello-mozart.yaml"])
         assert result.exit_code == 0
         output = result.output.lower()
         assert "cost" in output, (
