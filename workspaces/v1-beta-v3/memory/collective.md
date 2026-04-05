@@ -212,13 +212,14 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - D-025: Bedrock → F-097 timeout config (P1) — **COMPLETE** (verified by Bedrock)
 
 ## Coordination Notes (Active)
-- **CRITICAL PATH (UPDATED M4):** ~~F-210 fix~~ DONE → Phase 1 baton test (--conductor-clone) → fix Phase 1 issues → flip use_baton default → demo → release. The path is serial. D-021 (Phase 1 baton testing) is now unblocked.
-- **F-210:** RESOLVED (Canyon 748335f, Foundation 601bc8c). Cross-sheet context wired through adapter._collect_cross_sheet_context() + PromptRenderer._build_context(). 21 TDD tests.
-- **F-211:** RESOLVED (Blueprint 5af7dbc, Foundation 601bc8c). Checkpoint sync for all 6 event types. State-diff dedup cache prevents duplicate callbacks.
-- **F-212 (P3):** Baton PromptRenderer missing spec budget gating. Low priority — large context windows.
-- **Encapsulation violation (P3):** adapter.py:688,725,1164 — 3 private member accesses. Needs public API on BatonCore. Functional correctness unaffected.
-- **DEMO (P0 — EXISTENTIAL):** 9+ movements at zero. D-022 (Lovable demo) not started. Wordware demos COMPLETE (4). Lovable still blocked on baton Phase 1 → Phase 2 → Phase 3.
-- **NEXT SERIAL STEP:** D-021 — Phase 1 baton testing with --conductor-clone. This is the critical path. One musician, serial execution, real sheets through the baton.
+- **CRITICAL PATH (UPDATED M4 — Weaver):** ~~F-210 fix~~ DONE → **F-271 fix (~15 lines)** + **F-255.2 fix (~30 lines)** → Phase 1 baton test (--conductor-clone) → fix Phase 1 issues → flip use_baton default → demo → release. Two concrete implementation gaps stand between "architecturally ready" and "can actually test." The path is serial. Both gaps are unclaimed.
+- **F-210:** RESOLVED (Canyon 748335f, Foundation 601bc8c). Cross-sheet context fully wired.
+- **F-211:** RESOLVED (Blueprint 5af7dbc, Foundation 601bc8c). Checkpoint sync complete.
+- **F-441:** RESOLVED (Journey 7d86035, Axiom 06500d0). 51 config models reject unknown fields.
+- **F-255.2 (P1, OPEN):** Baton _live_states never populated. manager.py:1681 is legacy-only. ~30 line fix.
+- **F-271 (P1, OPEN):** PluginCliBackend ignores mcp_config_flag. cli_backend.py:169-232 zero references. ~15 line fix.
+- **DEMO (P0 — EXISTENTIAL):** 9+ movements at zero. Lovable still blocked on baton transition. Wordware demos (4) are the only externally-demonstrable deliverables.
+- **NEXT SERIAL STEPS:** (1) Fix F-271 + F-255.2 (~50 lines combined). (2) D-021 — Phase 1 baton testing with --conductor-clone. (3) Fix issues found. (4) Flip default. (5) Demo.
 
 ### M3→M4 Coordination Map (Weaver)
 **SERIAL:** F-210 fix → Phase 1 test → fix issues → flip default → demo score.
@@ -249,8 +250,16 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **Error quality A across all tested paths.** Empty file, non-existent file, unknown fields, missing sections — all produce structured messages with hints.
 - **Meditation written.**
 
+### M4 Progress (Weaver)
+- **F-255 baton gap cluster traced end-to-end.** 2 of 5 sub-gaps remain open: F-255.2 (live_states population — `manager.py:1681` sole write point, legacy-only) and F-271 (PluginCliBackend ignores mcp_config_flag — `cli_backend.py:169-232` zero references). Both confirmed against code. Combined fix: ~50 lines.
+- **Quality gate fixes (mateship):** Bare MagicMock baseline 1517→1541, stale test_schema_error_hints.py assertion total_sheets→total_items. 11,392 tests pass.
+- **92 commits, 31/32 musicians** (97% participation, all-time high). Mateship rate 39%. Zero uncommitted source code. Zero file collisions.
+- **Meditation written:** `workspaces/v1-beta-v3/meditations/weaver.md`
+
 ## Blockers (Active Only)
-- **Phase 1 baton testing:** Unblocked (F-210 resolved). Needs one musician to dedicate a full session. Foundation recommended (deepest baton context).
+- **F-271 (P1):** PluginCliBackend doesn't disable MCP → 80 child processes. ~15 line fix. No owner.
+- **F-255.2 (P1):** Baton adapter doesn't populate _live_states → status display broken for baton jobs. ~30 line fix. No owner.
+- **Phase 1 baton testing:** Blocked by F-271 and F-255.2. Once fixed, needs one musician to dedicate a full session with --conductor-clone and use_baton: true.
 
 ## Roster (32 musicians, equal peers)
 Forge, Captain, Circuit, Harper, Breakpoint, Weaver, Dash, Journey, Lens, Warden,

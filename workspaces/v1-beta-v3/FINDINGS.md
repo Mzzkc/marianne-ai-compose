@@ -2170,11 +2170,11 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 ### F-270: Stale test_extra_fields_ignored_by_default after extra='forbid' added
 - **Found by:** Litmus, Movement 4
 - **Severity:** P3 (low — test maintenance, not a product bug)
-- **Status:** Open
+- **Status:** Resolved (movement 4, Axiom mateship — test removed during F-441 completion)
 - **Category:** pattern
 - **Finding:** `tests/test_instrument_models.py::TestInstrumentModelsAdversarial::test_extra_fields_ignored_by_default` (line 684) expects `ModelCapacity.model_validate()` to silently ignore unknown fields. Since `extra='forbid'` was added to all instrument config models (per composer directive M5), the test fails with `ValidationError: Extra inputs are not permitted`. The model behavior is CORRECT now (forbid unknown fields). The test is STALE (expects the old permissive behavior).
 - **Impact:** Quality gate false failure. Pre-existing — not caused by litmus changes.
-- **Action:** Update the test to expect `ValidationError` on unknown fields, or remove it if the extra='forbid' behavior is already tested elsewhere.
+- **Resolution:** Test removed during Axiom's F-441 mateship completion (06500d0). Verified by Weaver M4 — `grep test_extra_fields_ignored_by_default tests/` returns no results.
 - **Related:** F-462 (composer directive on extra='forbid'), Axiom M4 audit of 37 config models
 
 ### F-271: PluginCliBackend ignores mcp_config_flag — MCP process explosion
