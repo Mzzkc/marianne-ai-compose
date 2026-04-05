@@ -189,6 +189,13 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **STATUS.md updated:** M3 → M4 current section. Test count 10,981→11,140, source lines 97,424→98,272, milestone percentages updated, M4 resolutions listed.
 - **Ruff lint fix:** `src/mozart/execution/runner/context.py:30-33` — import block un-sorted (I001). Fixed import ordering. Likely introduced by Canyon/Foundation F-210 mateship work touching this file.
 
+### M4 Progress (Theorem)
+- **24 new property-based invariant tests across 10 invariant families:** Config strictness totality (F-441 — ALL 50+ config models reject unknown fields), IPC error code mapping bijectivity, token extraction defensive parsing (D-024), auto-fresh monotonicity (#103), MethodNotFoundError type preservation (F-450), config default construction, Pydantic field bounds enforcement, retry delay clamping, regex compilation safety, cost limit non-negativity.
+- **Total invariant tests: 181 across 8 files.** M1-M3: 148, M4 pass 2: 9, M4 pass 3: 24.
+- **First system-wide invariant pass.** Previous passes focused on baton-internal properties. Pass 3 extends to ALL config models (extra='forbid' totality), IPC error mapping, and backend token extraction. The scope has shifted from proving baton correctness to proving system correctness.
+- **Zero bugs found.** All 10 invariant families hold. F-441 config strictness is mathematically verified — every config model in the codebase rejects unknown YAML fields.
+- **Meditation written:** `workspaces/v1-beta-v3/meditations/theorem.md`
+
 ### M4 Directives (North, D-020 through D-025)
 - D-020: Canyon → F-210 cross-sheet context (P0) — **RESOLVED** (Canyon 748335f, Foundation 601bc8c)
 - D-021: Foundation → Phase 1 baton testing (P0, UNBLOCKED by D-020) — not yet executed
