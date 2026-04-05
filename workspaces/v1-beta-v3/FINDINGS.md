@@ -1926,7 +1926,7 @@ Each finding should include:
 ### F-464: `history` Command Placement Inconsistency (README vs CLI)
 - **Found by:** Newcomer, Movement 3 (reviewer pass)
 - **Severity:** P3 (low — minor doc inconsistency)
-- **Status:** Open
+- **Status:** Resolved (movement 4, Guide)
 - **Category:** risk
 - **Description:** README.md lists `mozart history` under the "Monitoring" section (line ~216). The actual CLI (`mozart --help`) lists `history` under "Diagnostics." A newcomer reading the README builds a mental model where history is a monitoring tool, then finds it categorized differently in the CLI. Minor inconsistency but breaks the otherwise-clean mapping between README and CLI.
 - **Impact:** Low — most users won't notice. But the README was carefully restructured this movement (Compass, F-330) to match CLI groups exactly. This one slipped through.
@@ -1935,12 +1935,12 @@ Each finding should include:
 ### F-465: README and Getting-Started Quick Start Broken — Score Name vs ID Mismatch
 **Found by:** Newcomer, Movement 3 (second reviewer pass)
 **Severity:** P1 (high — every newcomer hits this on the main path)
-**Status:** Open
+**Status:** Resolved (movement 4, Guide)
 **Category:** bug
-**Description:** README.md (line 141) says `mozart status hello-mozart`. Getting-started.md (line 60) says the same. **Additionally, `examples/hello.yaml:16` — the example file's own header comment — says `#   mozart status hello-mozart`. And README.md:158 says `mozart resume hello-mozart`.** Four locations, not two, all teaching the wrong command. The hello score's `name:` field is `hello-mozart`. But the conductor registers the score under the ID `hello` (derived from the filename, not the name field). Running `mozart status hello-mozart` produces: "Error: Score not found: hello-mozart / Hints: Run 'mozart list' to see available scores." The hint saves the user but the docs broke them. This is the quick start — the first 5 minutes of every newcomer's experience — and it produces an error. NOTE: `mozart init` sidesteps this by generating scores where name == filename stem, so its next-step guidance is correct. The bug only appears in the README/getting-started path — the exact path that showcases what Mozart can do.
-**Impact:** Every single newcomer who follows the README or getting-started guide will hit this error at the monitoring step. The hint is helpful but the damage is done — the user's confidence drops at the exact moment the product should be building it. Related to open issue #124 (job registry name matching) but the docs actively guide users into the error.
+**Description:** README.md (line 141) says `mozart status hello-mozart`. Getting-started.md (line 60) says the same. **Additionally, `examples/hello.yaml:16` — the example file's own header comment — says `#   mozart status hello-mozart`. And README.md:158 says `mozart resume hello-mozart`.** Four locations, not two, all teaching the wrong command. The hello score's `name:` field is `hello-mozart`. But the conductor registers the score under the ID `hello` (derived from the filename, not the name field). Running `mozart status hello-mozart` produces: "Error: Score not found: hello-mozart / Hints: Run 'mozart list' to see available scores." The hint saves the user but the docs broke them.
+**Impact:** Every single newcomer who follows the README or getting-started guide will hit this error at the monitoring step.
 **Error class:** Same class as F-026, F-095 — setup paths that produce broken first experiences.
-**Action:** Either (a) change README line 141 and getting-started.md line 60 to `mozart status hello`, or (b) fix #124 so the conductor accepts both name and ID lookups. Option (a) is a 2-line fix. Option (b) is the correct long-term solution.
+**Resolution:** Renamed `examples/hello.yaml` → `examples/hello-mozart.yaml` so filename stem matches the `name:` field. Now the conductor-derived ID (`hello-mozart`) matches what all docs teach. Updated 8 files: README.md (4 refs), getting-started.md (3 refs), examples/hello-mozart.yaml (3 refs: header, usage comment, colophon), examples/README.md (2 refs), tests/test_cli_user_journeys.py (1 ref), tests/test_status_display_bugs.py (1 ref). Also fixed F-464 (history command moved from Monitoring to Diagnostics in README).
 
 ### F-466: JOB_ID Persists in Every CLI Usage Line Despite F-460 Terminology Fix
 **Found by:** Newcomer, Movement 3 (second reviewer pass)
@@ -2237,11 +2237,11 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 ### F-432: examples/iterative-dev-loop-config.yaml Breaks With extra='forbid'
 - **Found by:** Prism, Movement 4
 - **Severity:** P2 (medium — user-facing example file fails validation)
-- **Status:** Open
+- **Status:** Resolved (movement 4, Compass)
 - **Category:** UX
 - **Description:** `examples/iterative-dev-loop-config.yaml` is a generator config (consumed by `scripts/generate-iterative-dev-loop.py`), NOT a score. It has custom fields (`spec_dir`, `cycles`) that fail `extra="forbid"` on `JobConfig`. With the F-441 fix, any automated validation of `examples/*.yaml` will report this file as broken.
 - **Impact:** Automated example validation (Journey M4 ran `find examples/ -name "*.yaml" -exec mozart validate {} \;`) will flag this file. New users exploring examples/ will find a broken file. The file header explains it's a generator config, but the filename pattern matches score expectations.
-- **Action:** Move to `scripts/templates/iterative-dev-loop-config.yaml` or `examples/generators/` to separate it from score examples. Add a README note.
+- **Resolution:** Moved to `scripts/iterative-dev-loop-config.yaml` (next to its generator script). Updated usage comments. Removed from both tables in `examples/README.md`. All 38 remaining examples validate clean.
 
 ### F-470: BatonAdapter._synced_status Memory Leak on Job Deregister
 - **Found by:** Adversary, Movement 4

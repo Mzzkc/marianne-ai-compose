@@ -338,3 +338,104 @@ instrument: claude-code
         assert "timeout" in error_msg
         assert "retries" in error_msg
         assert "backend_type" in error_msg
+
+
+class TestAlexInstrumentTypos:
+    """Alex just installed Mozart and is writing their first score from memory
+    after reading the README. 'instrument' has two common transposition typos."""
+
+    def test_insturment_instead_of_instrument(self) -> None:
+        """Alex transposes 'str' → 'stur' — common fast-typing error."""
+        score = {
+            "name": "alex-typo",
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {"template": "Hello"},
+            "insturment": "claude-code",
+        }
+        with pytest.raises(Exception) as exc_info:
+            JobConfig(**score)
+
+        error_msg = str(exc_info.value)
+        assert "insturment" in error_msg
+        assert "extra_forbidden" in error_msg
+
+        hints = _schema_error_hints(error_msg)
+        assert any("instrument" in h and "did you mean" in h.lower() for h in hints), (
+            f"Should suggest 'instrument' for typo 'insturment', got: {hints}"
+        )
+
+    def test_insturment_config_instead_of_instrument_config(self) -> None:
+        """Alex makes the same transposition in the config key."""
+        score = {
+            "name": "alex-config-typo",
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {"template": "Hello"},
+            "insturment_config": {"timeout_seconds": 100},
+        }
+        with pytest.raises(Exception) as exc_info:
+            JobConfig(**score)
+
+        error_msg = str(exc_info.value)
+        assert "insturment_config" in error_msg
+
+        hints = _schema_error_hints(error_msg)
+        assert any("instrument_config" in h and "did you mean" in h.lower() for h in hints), (
+            f"Should suggest 'instrument_config' for 'insturment_config', got: {hints}"
+        )
+
+    def test_instrumnet_instead_of_instrument(self) -> None:
+        """Alex transposes 'ment' → 'mnet' — another common fast-typing error."""
+        score = {
+            "name": "alex-typo-2",
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {"template": "Hello"},
+            "instrumnet": "claude-code",
+        }
+        with pytest.raises(Exception) as exc_info:
+            JobConfig(**score)
+
+        error_msg = str(exc_info.value)
+        assert "instrumnet" in error_msg
+
+        hints = _schema_error_hints(error_msg)
+        assert any("instrument" in h and "did you mean" in h.lower() for h in hints), (
+            f"Should suggest 'instrument' for typo 'instrumnet', got: {hints}"
+        )
+
+    def test_validation_instead_of_validations(self) -> None:
+        """Alex writes singular 'validation' — natural English intuition."""
+        score = {
+            "name": "alex-singular",
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {"template": "Hello"},
+            "validation": [{"type": "file_exists", "path": "{workspace}/out.md"}],
+        }
+        with pytest.raises(Exception) as exc_info:
+            JobConfig(**score)
+
+        error_msg = str(exc_info.value)
+        assert "validation" in error_msg
+
+        hints = _schema_error_hints(error_msg)
+        assert any("validations" in h and "did you mean" in h.lower() for h in hints), (
+            f"Should suggest 'validations' for 'validation', got: {hints}"
+        )
+
+    def test_notification_instead_of_notifications(self) -> None:
+        """Alex writes singular 'notification' — same pattern."""
+        score = {
+            "name": "alex-singular-2",
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {"template": "Hello"},
+            "notification": [{"type": "desktop"}],
+        }
+        with pytest.raises(Exception) as exc_info:
+            JobConfig(**score)
+
+        error_msg = str(exc_info.value)
+        assert "notification" in error_msg
+
+        hints = _schema_error_hints(error_msg)
+        assert any("notifications" in h and "did you mean" in h.lower() for h in hints), (
+            f"Should suggest 'notifications' for 'notification', got: {hints}"
+        )

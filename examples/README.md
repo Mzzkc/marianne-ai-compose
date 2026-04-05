@@ -6,7 +6,7 @@ This directory contains example Mozart configurations for various use cases. Moz
 
 | Example | Purpose | Complexity |
 |---------|---------|------------|
-| [hello.yaml](hello.yaml) | Your first Mozart score — interconnected fiction in 3 movements with parallel voices | Simple |
+| [hello-mozart.yaml](hello-mozart.yaml) | Your first Mozart score — interconnected fiction in 3 movements with parallel voices | Simple |
 | [simple-sheet.yaml](simple-sheet.yaml) | Minimal Mozart configuration to get started | Simple |
 | [api-backend.yaml](api-backend.yaml) | Using Anthropic API directly instead of CLI | Simple |
 | [prelude-cadenza-example.yaml](prelude-cadenza-example.yaml) | Demonstrates prelude and cadenza context injection | Simple |
@@ -26,7 +26,6 @@ This directory contains example Mozart configurations for various use cases. Moz
 | [agent-spike.yaml](agent-spike.yaml) | Agent experimentation and exploration | Medium |
 | [docs-generator.yaml](docs-generator.yaml) | Documentation generation orchestration | Medium |
 | [iterative-dev-loop.yaml](iterative-dev-loop.yaml) | Multi-cycle investigation → implementation → testing loop | High |
-| [iterative-dev-loop-config.yaml](iterative-dev-loop-config.yaml) | Generator config for iterative-dev-loop (not a runnable score — used by `scripts/generate-iterative-dev-loop.py`) | Config |
 | [design-review.yaml](design-review.yaml) | Multi-perspective design review with parallel expert agents | High |
 | [score-composer.yaml](score-composer.yaml) | AI-assisted Mozart score authoring | High |
 | [issue-solver.yaml](issue-solver.yaml) | Roadmap-driven 17-stage issue solver with fan-out reviewers and self-chaining | High |
@@ -296,7 +295,7 @@ All examples pass `mozart validate`:
 
 | Example | Status | Description |
 |---------|--------|-------------|
-| hello.yaml | ✓ | First Mozart score — interconnected fiction |
+| hello-mozart.yaml | ✓ | First Mozart score — interconnected fiction |
 | simple-sheet.yaml | ✓ | Minimal configuration |
 | api-backend.yaml | ✓ | Anthropic API instrument |
 | cross-sheet-test.yaml | ✓ | Cross-sheet context sharing |
@@ -312,7 +311,6 @@ All examples pass `mozart validate`:
 | docs-generator.yaml | ✓ | Documentation generation |
 | design-review.yaml | ✓ | Multi-perspective design review |
 | iterative-dev-loop.yaml | ✓ | Multi-cycle development loop |
-| iterative-dev-loop-config.yaml | — | Generator config (not a runnable score) |
 | score-composer.yaml | ✓ | AI-assisted score authoring |
 | quality-continuous.yaml | ✓ | Python quality improvement (fan-out) |
 | quality-continuous-generic.yaml | ✓ | Language-agnostic quality (fan-out) |

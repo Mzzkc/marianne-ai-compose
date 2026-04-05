@@ -318,6 +318,12 @@ _KNOWN_TYPOS: dict[str, str] = {
     "task": "prompt.template",
     "stager_delay_ms": "parallel.stagger_delay_ms",
     "stagger_delay": "parallel.stagger_delay_ms",
+    "insturment": "instrument",
+    "instrumnet": "instrument",
+    "insturment_config": "instrument_config",
+    "instrumnet_config": "instrument_config",
+    "validation": "validations",
+    "notification": "notifications",
 }
 
 

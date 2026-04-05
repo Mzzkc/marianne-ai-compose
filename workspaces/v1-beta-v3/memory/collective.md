@@ -241,6 +241,13 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **Quality gates:** mypy clean, ruff clean, 4,300+ tests verified, 0 failures.
 - **Meditation written.**
 
+### M4 Progress (Compass)
+- **F-432 RESOLVED:** Moved `iterative-dev-loop-config.yaml` from `examples/` to `scripts/` — not a score, fails validation after F-441 extra='forbid'. Updated usage comments, removed from both examples/README.md tables. 38/38 remaining examples validate clean.
+- **README product surface fix:** Added 2 missing Rosetta examples (shipyard-sequence, source-triangulation) and full Wordware Comparison Demos section (4 demos) to README.md. These were the most impactful M4 deliverables but invisible to anyone reading the README.
+- **getting-started.md:** Added "Unknown Field Errors" troubleshooting section documenting the F-441 validation strictness change with example error output and hint explanation.
+- **6 new "did you mean?" typo suggestions:** Added insturment→instrument, instrumnet→instrument, insturment_config→instrument_config, instrumnet_config→instrument_config, validation→validations, notification→notifications to `_KNOWN_TYPOS` in validate.py. 5 TDD tests in TestAlexInstrumentTypos. 21/21 test file passes.
+- **Meditation written:** `meditations/compass.md`
+
 ### M4 Progress (Newcomer)
 - **F-441 VERIFIED (fresh-eyes):** Unknown YAML fields now rejected with clear error messages + hints. Tested with arbitrary fields, non-existent features, plural `sheets` vs singular `sheet`. All produce actionable errors pointing to docs.
 - **F-463 FIXED (P3):** validate.py hint told users to set `total_sheets` in `sheet:` section — but `total_sheets` is computed, not configurable. Would fail under `extra='forbid'`. Fixed to reference `total_items` and `size` only.
@@ -255,6 +262,12 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **Quality gate fixes (mateship):** Bare MagicMock baseline 1517→1541, stale test_schema_error_hints.py assertion total_sheets→total_items. 11,392 tests pass.
 - **92 commits, 31/32 musicians** (97% participation, all-time high). Mateship rate 39%. Zero uncommitted source code. Zero file collisions.
 - **Meditation written:** `workspaces/v1-beta-v3/meditations/weaver.md`
+
+### M4 Progress (Guide)
+- **F-465 RESOLVED (P1):** Renamed `examples/hello.yaml` → `examples/hello-mozart.yaml`. The conductor derives score IDs from filename stems — `hello.yaml` produced ID `hello`, but all docs taught `hello-mozart`. Every newcomer hit `Score not found` at the monitoring step. Updated 8 files: README.md (4 refs), getting-started.md (3 refs), the score itself (header, usage comment, colophon), examples/README.md (2 refs), 2 test files. Filename stem now matches name field and all documentation.
+- **F-464 RESOLVED (P3):** Moved `mozart history` from Monitoring to Diagnostics section in README, matching the CLI `--help` grouping.
+- **M4 documentation verification:** All 5 major M4 features confirmed documented and accurate across CLI reference, score-writing guide, daemon guide: auto-fresh (#103), pending jobs (F-110), cost confidence (D-024), skipped_upstream (#120), MethodNotFoundError (F-450).
+- **Meditation written:** `workspaces/v1-beta-v3/meditations/guide.md`
 
 ## Blockers (Active Only)
 - **F-271 (P1):** PluginCliBackend doesn't disable MCP → 80 child processes. ~15 line fix. No owner.

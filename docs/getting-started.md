@@ -45,7 +45,7 @@ Mozart uses Claude CLI as its default instrument. Ensure you have:
 
 After installation, run `mozart doctor` to verify your environment is ready.
 
-## Quick Start: Run hello.yaml
+## Quick Start: Run hello-mozart.yaml
 
 The fastest way to see Mozart in action:
 
@@ -54,7 +54,7 @@ The fastest way to see Mozart in action:
 mozart start
 
 # 2. Run the hello score
-mozart run examples/hello.yaml
+mozart run examples/hello-mozart.yaml
 
 # 3. Watch progress
 mozart status hello-mozart
@@ -64,7 +64,7 @@ open workspaces/hello-mozart/the-sky-library.html   # macOS
 # xdg-open workspaces/hello-mozart/the-sky-library.html  # Linux
 ```
 
-`hello.yaml` creates an interconnected fiction experience in three movements: a world setting, three parallel character vignettes, and a finale that weaves them together — all presented as a beautifully designed HTML page you can open in any browser. Five sheets, ~5 minutes, real creative output.
+`hello-mozart.yaml` creates an interconnected fiction experience in three movements: a world setting, three parallel character vignettes, and a finale that weaves them together — all presented as a beautifully designed HTML page you can open in any browser. Five sheets, ~5 minutes, real creative output.
 
 ## How Sheets Work
 
@@ -478,6 +478,25 @@ If a score is stuck waiting on a rate limit that has already expired, clear it m
 mozart clear-rate-limits                    # Clear all stale rate limits
 mozart clear-rate-limits --instrument NAME  # Clear for a specific instrument
 ```
+
+### Unknown Field Errors
+
+Mozart strictly validates score YAML — any field name it doesn't recognize is an error, not silently ignored. This catches typos immediately:
+
+```
+Error: Schema validation failed: 1 validation error for JobConfig
+insturment_config
+  Extra inputs are not permitted
+```
+
+Mozart suggests corrections for common typos:
+
+```
+Hints:
+  - Unknown field 'insturment_config' — did you mean 'instrument_config'?
+```
+
+If you see this error, check for typos in your YAML field names. See the [Score Writing Guide](score-writing-guide.md) for valid fields.
 
 ### Resume Not Working
 

@@ -165,6 +165,10 @@ This is the highest priority task. You are running inside a live conductor. You 
 - [x] [Lens] instruments.py JSON error path: console.print(json.dumps) → output_json() for Rich markup safety. 7 TDD regression tests for rejection hint behavior (test_rejection_hints_ux.py). Commit 4b83dae. (priority: P2) [source: error standardization]
 - [x] [Newcomer] Fix F-153/F-460: "job" → "score" terminology across CLI + docs — run.py, validate.py, recover.py docstrings/help text; README.md (12 fixes); getting-started.md (10 fixes); cli-reference.md (11 fixes). ~35 total fixes across 6 files. (priority: P2) [source: F-153, F-460, fresh-eyes audit]
 - [x] [Lens] Add hints to 8 hintless output_error() calls + fix raw console.print error in clear validation. Layer 2 completion: every output_error in the CLI now has actionable hints. 10 TDD tests in test_hintless_error_audit.py. Quality gate baseline 1440→1455. Commit d286e07. (priority: P2) [source: error quality audit, M4]
+- [x] [Guide] Fix F-465: Rename hello.yaml → hello-mozart.yaml so filename-derived score ID matches name field and all docs. Updated 8 files (README, getting-started, examples/README, hello-mozart.yaml internal comments, 2 test files). (priority: P1) [source: F-465, Newcomer M3]
+- [x] [Guide] Fix F-464: Move `history` command from Monitoring to Diagnostics section in README to match CLI grouping. (priority: P3) [source: F-464, Newcomer M3]
+- [x] [Guide] Verify M4 documentation accuracy: all 5 major M4 features (auto-fresh, pending jobs, cost confidence, skipped_upstream, MethodNotFoundError) confirmed documented and accurate across CLI reference, score-writing guide, daemon guide. (priority: P2) [source: documentation verification, M4]
+- [x] [Guide] Write meditation to meditations/guide.md (priority: P1) [source: composer directive, M5]
 - [ ] Beautify ALL status displays: status, list, conductor-status (priority: P1) [source: composer directive, M5] — Current display is functional but not lovable. Show musical context (movements, stage names), relative time, bounded synthesis tables, progress in list view, clean conductor dashboard. See docs/plans/2026-04-04-status-display-beautification.md for mockups and design principles. Data is already there (Sheet.movement, Sheet.description) — just needs surfacing.
 
 ### The Meditation (ALL musicians)
@@ -386,7 +390,7 @@ Handoff: `docs/plans/compose-system/SESSION-HANDOFF-2.md`
 - [x] [Prism] Fix quality gate drift: bare MagicMock in test_top_error_ux.py → spec'd mocks (priority: P2) [source: quality gate failure]
 - [x] [Prism] Fix Rosetta score instrument_fallbacks field that fails extra='forbid' (priority: P1) [source: F-441 side effect]
 - [ ] Fix F-431: Add extra='forbid' to DaemonConfig, ProfilerConfig, and all daemon config models (priority: P2) [source: F-431, Prism M4]
-- [ ] Fix F-432: Move iterative-dev-loop-config.yaml out of examples/ (not a score) (priority: P2) [source: F-432, Prism M4]
+- [x] [Compass] Fix F-432: Move iterative-dev-loop-config.yaml out of examples/ to scripts/ (not a score) (priority: P2) [source: F-432, Prism M4] — Moved to scripts/ (next to its generator script). Updated usage comments. Removed from examples/README.md tables. No other references existed.
 - [ ] Fix F-430: ValidationRule.sheet docstring/code precedence mismatch (priority: P3) [source: F-430, Prism M4]
 
 ---
