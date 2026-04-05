@@ -2242,3 +2242,23 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 - **Description:** `examples/iterative-dev-loop-config.yaml` is a generator config (consumed by `scripts/generate-iterative-dev-loop.py`), NOT a score. It has custom fields (`spec_dir`, `cycles`) that fail `extra="forbid"` on `JobConfig`. With the F-441 fix, any automated validation of `examples/*.yaml` will report this file as broken.
 - **Impact:** Automated example validation (Journey M4 ran `find examples/ -name "*.yaml" -exec mozart validate {} \;`) will flag this file. New users exploring examples/ will find a broken file. The file header explains it's a generator config, but the filename pattern matches score expectations.
 - **Action:** Move to `scripts/templates/iterative-dev-loop-config.yaml` or `examples/generators/` to separate it from score examples. Add a README note.
+
+### F-470: BatonAdapter._synced_status Memory Leak on Job Deregister
+- **Found by:** Adversary, Movement 4
+- **Severity:** P2 (medium — production-relevant for long-running daemons)
+- **Status:** Open
+- **Category:** bug
+- **Description:** `BatonAdapter.deregister_job()` at `src/mozart/daemon/baton/adapter.py:492-518` cleans up `_job_sheets`, `_job_renderers`, `_job_cross_sheet`, `_completion_events`, `_completion_results`, and `_active_tasks` — but does NOT clean up `_synced_status` (the F-211 state-diff dedup cache at line 344). The `_synced_status` dict is keyed by `(job_id, sheet_num)` tuples and grows proportionally to the total number of sheets across ALL jobs ever processed. For a long-running daemon processing thousands of jobs (e.g., the v3 orchestra at 706 sheets), the cache accumulates ~706 entries per run and never shrinks.
+- **Evidence:** Test `test_synced_status_not_cleaned_on_deregister` in `tests/test_m4_adversarial_adversary.py` proves the leak: after deregistering all 100 simulated jobs (1000 entries), the cache still contains all 1000 entries.
+- **Impact:** Memory growth O(total_sheets_ever) for the daemon process. For the orchestra's scale (706 sheets per run, multiple runs per day), this could reach tens of thousands of stale entries per day. Not critical for v1 beta but will compound in production.
+- **Action:** Add cleanup of `_synced_status` entries to `deregister_job()`. Pattern: `self._synced_status = {k: v for k, v in self._synced_status.items() if k[0] != job_id}` or iterate and pop matching keys.
+- **Error class:** Same class as F-129 (ephemeral state not cleaned up), F-077 (lifecycle mismatch).
+
+### F-471: Pending Jobs Lost on Daemon Restart
+- **Found by:** Adversary, Movement 4
+- **Severity:** P2 (medium — architectural gap, not a code bug)
+- **Status:** Open
+- **Category:** architecture
+- **Description:** `JobManager._pending_jobs` at `src/mozart/daemon/manager.py:156` is a plain `dict[str, JobRequest]` stored only in memory. Jobs queued as PENDING during rate limit backpressure (via `_queue_pending_job` at line ~815) have their `JobRequest` objects stored here. If the daemon restarts while jobs are PENDING, the `_pending_jobs` dict is lost (starts empty in `__init__`). The persistent `JobRegistry` records the job as `DaemonJobStatus.PENDING`, but the recovery path (`_recover_baton_orphans` at line ~519) only processes PAUSED jobs, not PENDING ones. The `_start_pending_jobs` method only processes the in-memory dict.
+- **Impact:** After daemon restart, PENDING jobs appear in `mozart list` as PENDING but will never start. The user must manually `mozart cancel` and resubmit. This gap is more severe during rate limit storms where multiple jobs could be queued.
+- **Action:** Either (a) persist the JobRequest alongside the registry entry and recover PENDING jobs in `start()`, or (b) document PENDING as ephemeral state that does not survive restart, with clear user guidance on resubmission.

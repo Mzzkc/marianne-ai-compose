@@ -124,6 +124,7 @@ This is the highest priority task. You are running inside a live conductor. You 
 - [x] [Breakpoint] M3 Pass 4 integration gap adversarial tests (48 tests: coordinator clear concurrency/edge cases, manager clear_rate_limits error paths, _read_pid/_pid_alive adversarial inputs, stale PID cleanup, resume_via_baton no_reload fallback, parallel stagger timing boundaries, F-200 regression, coordinator boundary values, IPC probe resilience, dual-path clear consistency, start_conductor race conditions) (priority: P1) [source: adversarial testing, movement 3 pass 4] — Found and fixed F-201 (clear_instrument_rate_limit empty string fallthrough — same bug class as F-200). 10 test classes targeting integration seams. Quality gate baseline updated (1327→1346 BARE_MAGICMOCK).
 - [x] [Adversary] M3 Phase 1 baton adversarial tests (67 tests: dispatch failure handling, multi-job instrument sharing, recovery from corrupted checkpoint, state sync callback, completion signaling, cost limit boundaries, event ordering attacks, deregistration during execution, F-440 propagation edge cases, dispatch concurrency constraints, terminal state resistance, exhaustion decision tree, observer event conversion, auto-instrument registration) (priority: P1) [source: adversarial testing, movement 3, Phase 1 baton readiness] — Zero bugs found. All M3 fixes verified (F-152, F-145, F-158, F-200/F-201, F-440). 1358 baton tests pass. Baton recommended for Phase 1 --conductor-clone testing.
 - [x] [Breakpoint] M4 adversarial tests (57 tests: auto-fresh tolerance boundary, pending job edge cases, cross-sheet SKIPPED/FAILED parity, max_chars boundary, lookback edge cases, MethodNotFoundError round-trip, credential redaction defensive pattern, capture files stale detection, pattern expansion, baton/legacy parity, rejection reason boundaries) (priority: P1) [source: adversarial testing, movement 4] — Found F-202 (baton/legacy parity gap: FAILED sheet stdout excluded on baton path). Mateship pickup: committed Litmus's 7 new M4 litmus tests (32→38 test catalog). 10 test classes across all M4 attack surfaces.
+- [x] [Adversary] M4 adversarial tests (55 tests: F-441 strictness 20 edge cases across 8 model families, F-211 sync dedup memory leak 4 tests, auto-fresh 9 boundary conditions, cross-sheet context 6 edge cases, credential redaction defensive pattern 5 tests, real score patterns 7 tests, state mapping completeness 2 tests, feature interaction 4 tests) (priority: P1) [source: adversarial testing, movement 4] — Found F-470 (_synced_status memory leak on deregister) and F-471 (pending jobs lost on restart). Zero code-level bugs in F-441 strictness — all 51 models correctly reject unknown fields. 8 test classes covering all M4 attack surfaces.
 - [x] [Adversary] M1C3 adversarial tests (27 tests: F-111 rate limit error lost in parallel, F-113 failed deps as done, F-075 resume regression, F-122 IPC clone bypass, baton state edges, cross-system integration) (priority: P1) [source: adversarial testing, movement 1 cycle 3] — Found F-128 (E006 unreachable via classify_execution), F-129 (F-113 behavior changes after restart)
 - [x] [Tempo] Configurable preflight token thresholds (PreflightConfig in DaemonConfig) (priority: P1) [source: investigation — committed as mateship pickup, F-019 resolved]
 - [x] [Theorem] Property-based tests for movement 2 features — 27 new tests (59→86) proving 10 new invariants: completion mode, F-018 guard, cost enforcement, exhaustion decision tree, rate limit cross-job isolation, dispatch config correctness, record_attempt F-055, retry delay monotonicity, process crash routing, auth failure terminality (priority: P1) [source: invariant analysis, movement 2]
@@ -377,6 +378,16 @@ Handoff: `docs/plans/compose-system/SESSION-HANDOFF-2.md`
 - [ ] Implement concert execution wiring (priority: P1) [source: compose-system/05-concert-execution.md]
 - [ ] Implement manifest + remediation (priority: P2) [source: compose-system/06-manifest-remediation.md]
 - [ ] Implement in-score spec generation (immune system model) (priority: P2) [source: compose-system/07-in-score-spec-gen.md]
+
+---
+
+## Blind Spot Fixes (Prism M4 Pass 2)
+
+- [x] [Prism] Fix quality gate drift: bare MagicMock in test_top_error_ux.py → spec'd mocks (priority: P2) [source: quality gate failure]
+- [x] [Prism] Fix Rosetta score instrument_fallbacks field that fails extra='forbid' (priority: P1) [source: F-441 side effect]
+- [ ] Fix F-431: Add extra='forbid' to DaemonConfig, ProfilerConfig, and all daemon config models (priority: P2) [source: F-431, Prism M4]
+- [ ] Fix F-432: Move iterative-dev-loop-config.yaml out of examples/ (not a score) (priority: P2) [source: F-432, Prism M4]
+- [ ] Fix F-430: ValidationRule.sheet docstring/code precedence mismatch (priority: P3) [source: F-430, Prism M4]
 
 ---
 

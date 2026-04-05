@@ -119,6 +119,13 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **F-251 RESOLVED (P2):** Baton cross-sheet [SKIPPED] placeholder parity with legacy runner (#120). Added SKIPPED status check at `adapter.py:730`. Updated existing test assertion. 4 TDD tests.
 - **M4 safety audit:** 10 areas across 20 changed source files. F-210 cross-sheet credential flow safe (musician redacts stdout at capture). F-211 checkpoint sync architecturally clean (duck typing + state-diff dedup). F-110 pending jobs properly bounded. Auto-fresh TOCTOU benign. Cost accuracy JSON parsing defensive. MethodNotFoundError clean. 2 gaps found (F-250, F-251), both fixed.
 
+### M4 Progress (Adversary)
+- **M4 adversarial tests COMPLETE:** 55 new tests in `test_m4_adversarial_adversary.py`. 8 test classes targeting F-441 strictness (20 tests across 14 model families), F-211 sync dedup lifecycle (4 tests), auto-fresh boundaries (9 tests), cross-sheet context (6 tests), credential redaction defensive pattern (5 tests), real score patterns (7 tests), state mapping completeness (2 tests), feature interactions (4 tests).
+- **F-470 filed (P2):** BatonAdapter._synced_status memory leak — cache not cleaned on deregister_job(). Grows O(total_sheets_ever). Same error class as F-129, F-077.
+- **F-471 filed (P2):** Pending jobs lost on daemon restart — _pending_jobs is in-memory only. PENDING registry entries become orphans after restart.
+- **F-441 verification:** Zero code-level bugs. All 51 config models correctly reject unknown fields.
+- **Meditation written:** `meditations/adversary.md`
+
 ### M4 Progress (Oracle)
 - **F-300 filed (P2):** Resource anomaly patterns show zero effectiveness differentiation.
 - **F-301 filed (P2):** instrument_name null for 30,229 of 30,232 patterns.
@@ -291,3 +298,11 @@ Foundation laid: learning store fixes, critical bug resolution, dead code remova
 - **Cost display honesty verified:** `$0.00 (est.)` with "10-100x higher" disclaimer + `cost_confidence: 0.7` in JSON. Most important UX change of any movement — honest uncertainty over plausible lies.
 - **3 findings filed:** F-451 (diagnose can't find completed jobs that status can), F-452 (list --json null cost vs status --json structured cost), F-453 (dashboard e2e cross-test state leakage).
 - **Meditation written:** `meditations/ember.md`
+
+### M4 Progress (Prism — Pass 2)
+- **F-441 architectural review:** extra='forbid' across 45+ config models is correct and comprehensive for score YAML. All 43 example scores validate. Backward compat preserved via strip_computed_fields(). UX improved with Journey's unknown-field hints.
+- **Quality gate fixed:** Bare MagicMock drift in test_top_error_ux.py (2 instances → spec'd). Baseline 1519→1517.
+- **Rosetta score fixed:** instrument_fallbacks field commented out (doesn't exist on JobConfig yet — fails with extra='forbid').
+- **3 findings filed:** F-430 (ValidationRule.sheet docstring/code mismatch, P3), F-431 (DaemonConfig/ProfilerConfig missing extra='forbid' — same bug class as F-441, P2), F-432 (iterative-dev-loop-config.yaml is a generator config, not a score — fails validation, P2).
+- **Test suite:** 11,332 passed (up 351 from M3 gate). mypy/ruff clean.
+- **Observation:** Input strictness (config validation) advancing while output verification (baton real-run testing) stalls. Five movements of "baton ready, Phase 1 not started." The integration cliff grows taller with every test that verifies the code without running the product.
