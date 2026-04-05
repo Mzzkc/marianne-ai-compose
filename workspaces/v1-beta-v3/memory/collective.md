@@ -63,7 +63,7 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **F-470 RESOLVED:** _synced_status memory leak in deregister_job() — 1-line fix, 5 TDD tests.
 - **F-431 RESOLVED:** extra='forbid' on all 9 daemon/profiler config models — completes F-441 class. 23 TDD tests.
 - **User variables in validations:** prompt.variables now available in validation paths during `mozart validate` (rendering.py) and `mozart recover` (recover.py). 8 TDD tests.
-- **WARNING:** Something keeps changing `use_baton` default from False to True in daemon/config.py. D-027 says this is gated on D-026. Do NOT flip prematurely.
+- **D-027 COMPLETE (Canyon):** use_baton default flipped to True. D-026 prerequisites (F-271, F-255.2) both resolved. Legacy tests updated with explicit `use_baton=False`. The baton IS now the default execution model.
 - **Meditation written:** meditations/maverick.md
 
 ### M5 Progress (Foundation, D-026)
@@ -81,6 +81,14 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **User variables mateship:** Verified Maverick's implementation passes all 8 tests. Marked complete.
 - **Meditation written:** meditations/blueprint.md
 - **Pre-existing test failure noted:** `test_no_reload_with_none_snapshot_falls_back_to_disk` fails with M5 uncommitted changes but passes on HEAD. Not from Blueprint's changes.
+
+### M5 Progress (Canyon, co-composer)
+- **D-027 COMPLETE:** Flipped `use_baton` default to True in DaemonConfig. Phase 2 of baton transition. Legacy tests updated with explicit `use_baton=False`. 3 TDD tests in test_d027_baton_default.py.
+- **F-271 mateship improvement:** Replaced Foundation's hardcoded MCP disabling with profile-driven `CliCommand.mcp_disable_args`. Generic — each instrument defines its own MCP disable mechanism. 8 TDD tests in test_f271_mcp_disable.py.
+- **F-255.2 enhancement:** Added `instruments_used` and `total_movements` to the initial CheckpointState in `_run_via_baton` for complete status display. 4 TDD tests in test_f255_2_live_states.py.
+- **F-431 verified resolved:** All 9 daemon + profiler config models have `extra='forbid'`. No work needed.
+- **Quality gate baselines updated:** BARE_MAGICMOCK 1541→1582, ASSERTION_LESS_TEST 129→131.
+- **Meditation written:** meditations/canyon.md
 
 Movement 4 — COMPLETE (2026-04-05). All movements M0-M4 complete.
 

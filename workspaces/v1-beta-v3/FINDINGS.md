@@ -2188,7 +2188,7 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 - **Action:** Add MCP disabling to `_build_command()`: when `mcp_config_flag` is set and no MCP servers are requested, add `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`. Litmus test 39 documents the gap — when fixed, the test assertion should be inverted.
 - **Evidence:** Litmus test `TestPluginCliBackendMcpGap::test_build_command_ignores_mcp_config_flag` proves the gap exists. Legacy backend inspection via `TestPluginCliBackendMcpGap::test_legacy_backend_disables_mcp_by_default` confirms the protection exists in the old path but not the new.
 - **Related:** F-255.3 (production discovery), F-105 (instrument schema expansion)
-- **Resolution:** Profile-driven approach via `CliCommand.mcp_disable_args` list field. `_build_command()` injects these args when non-empty. Claude-code profile updated with `["--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']`. Litmus test updated to verify fix holds. 7 TDD tests in `test_foundation_m5_f271_mcp.py`.
+- **Resolution:** Canyon M5 mateship: profile-driven `CliCommand.mcp_disable_args` field replaces hardcoded approach. `_build_command()` injects these args when non-empty. Claude-code profile updated with `["--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']`. Litmus test updated to verify fix holds. 8 TDD tests in `test_f271_mcp_disable.py`.
 
 ### F-451: Diagnose Can't Find Completed Jobs That Status Can Find
 - **Found by:** Ember, Movement 4

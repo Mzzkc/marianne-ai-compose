@@ -539,12 +539,12 @@ class TestUseBatonFeatureFlag:
     """The use_baton flag in DaemonConfig controls execution path."""
 
     def test_daemon_config_has_use_baton_field(self) -> None:
-        """DaemonConfig has a use_baton field defaulting to False."""
+        """DaemonConfig has a use_baton field defaulting to True (D-027)."""
         from mozart.daemon.config import DaemonConfig
 
         config = DaemonConfig()
         assert hasattr(config, "use_baton")
-        assert config.use_baton is False
+        assert config.use_baton is True
 
     def test_daemon_config_use_baton_true(self) -> None:
         """use_baton can be set to True."""

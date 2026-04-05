@@ -53,8 +53,13 @@ def _make_unique_config(tmp_path: Path, index: int) -> Path:
     return dest
 
 
-def _make_daemon_config(tmp_path: Path) -> DaemonConfig:
-    """Build a DaemonConfig with paths scoped to tmp_path."""
+def _make_daemon_config(tmp_path: Path, *, use_baton: bool = False) -> DaemonConfig:
+    """Build a DaemonConfig with paths scoped to tmp_path.
+
+    Args:
+        use_baton: Whether to enable the baton execution model.
+            Defaults to False for legacy tests that mock JobService.start_job.
+    """
     return DaemonConfig(
         socket=SocketConfig(path=tmp_path / "test-mozart.sock"),
         pid_file=tmp_path / "test-mozart.pid",
@@ -65,6 +70,7 @@ def _make_daemon_config(tmp_path: Path) -> DaemonConfig:
         monitor_interval_seconds=5.0,
         # Short shutdown timeout for test speed
         shutdown_timeout_seconds=10.0,
+        use_baton=use_baton,
     )
 
 
@@ -798,6 +804,7 @@ class TestBackpressureIntegration:
                 max_memory_mb=1000,
                 max_processes=20,
             ),
+            use_baton=False,  # Legacy runner for backpressure tests
         )
         dp = DaemonProcess(config)
 
@@ -1369,6 +1376,7 @@ class TestMonitorCancellation:
                 max_memory_mb=512,
                 max_processes=50,
             ),
+            use_baton=False,  # Legacy runner for tests that mock start_job
         )
         dp = DaemonProcess(config)
 
