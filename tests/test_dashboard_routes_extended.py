@@ -444,7 +444,7 @@ class TestWorkspacePathTraversal:
         from mozart.dashboard.routes.scores import run_extended_validation
 
         config = self._make_config()
-        content = 'name: "test"\nsheet:\n  total_sheets: 1\nprompt:\n  template: "hello"'
+        content = 'name: "test"\nsheet:\n  total_items: 1\nprompt:\n  template: "hello"'
 
         # Path with '..' should be silently rejected
         issues = run_extended_validation(
@@ -458,7 +458,7 @@ class TestWorkspacePathTraversal:
         from mozart.dashboard.routes.scores import run_extended_validation
 
         config = self._make_config()
-        content = 'name: "test"\nsheet:\n  total_sheets: 1\nprompt:\n  template: "hello"'
+        content = 'name: "test"\nsheet:\n  total_items: 1\nprompt:\n  template: "hello"'
 
         sensitive_paths = ["/etc/shadow", "/proc/self/environ", "/sys/kernel", "/dev/null"]
         for path in sensitive_paths:
@@ -470,7 +470,7 @@ class TestWorkspacePathTraversal:
         from mozart.dashboard.routes.scores import run_extended_validation
 
         config = self._make_config()
-        content = 'name: "test"\nsheet:\n  total_sheets: 1\nprompt:\n  template: "hello"'
+        content = 'name: "test"\nsheet:\n  total_items: 1\nprompt:\n  template: "hello"'
 
         issues = run_extended_validation(config, content, "test.yaml", workspace_path=str(tmp_path))
         assert isinstance(issues, list)
@@ -480,7 +480,7 @@ class TestWorkspacePathTraversal:
         from mozart.dashboard.routes.scores import run_extended_validation
 
         config = self._make_config()
-        content = 'name: "test"\nsheet:\n  total_sheets: 1\nprompt:\n  template: "hello"'
+        content = 'name: "test"\nsheet:\n  total_items: 1\nprompt:\n  template: "hello"'
 
         issues = run_extended_validation(config, content, "test.yaml", workspace_path=None)
         assert isinstance(issues, list)

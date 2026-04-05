@@ -225,6 +225,14 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 5. **Cost fiction (P2).** Now shows confidence indicators (D-024). Still 10-100x underestimate for real work.
 6. **Stale detection ceiling (P2).** p99 at 30.5min across 3 movements. F-097 timeout increase unclaimed since M1. 10-minute fix.
 
+### M4 Progress (Axiom, Pass 2)
+- **F-441 mateship completion:** Picked up uncommitted `extra='forbid'` on 45 remaining config models (7 modules). All 51 BaseModel classes in core/config/ now have extra='forbid'. Verified empirically (4 test cases) and against all 37 example scores (36/37 pass — 1 is a generator config, not a score).
+- **Dashboard E2E fix:** Pre-existing AsyncMock bug + F-441 fixture incompatibility. 4 process mocks fixed, sample_yaml_config updated. 9/9 tests pass.
+- **GitHub issues closed:** #128 (skip_when fan-out), #93 (pause-during-retry). #122, #120, #103 already closed.
+- **Verified 3 M4 commits:** Journey (schema hints + backward compat), Sentinel (security audit), Litmus (18 tests).
+- **Quality gates:** mypy clean, ruff clean, 4,300+ tests verified, 0 failures.
+- **Meditation written.**
+
 ## Blockers (Active Only)
 - **Phase 1 baton testing:** Unblocked (F-210 resolved). Needs one musician to dedicate a full session. Foundation recommended (deepest baton context).
 

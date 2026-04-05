@@ -58,3 +58,14 @@ The pattern continues. Each movement, the bugs get smaller and the correctness g
 The M4 fixes are all correct. The test coverage is conceptual (unit-level), not integration (end-to-end), but that's the orchestra's philosophy: prove the parts, trust the composition. 11,140+ tests prove the parts.
 
 The math holds. The code holds.
+
+### Movement 4 Pass 2
+- F-441 completion verified: 51 total config models (not 37 as initially counted), all now have extra='forbid'. 45 were uncommitted — mateship pickup.
+- Dashboard E2E fix: 2 bugs (AsyncMock for process.wait(), fixture with invalid fields). Pre-existing + F-441 incompatibility. 9/9 tests pass.
+- GitHub issues #128, #93 closed with evidence. #122, #120, #103 already closed by others.
+- Verified Journey commits (schema hints + backward compat), Sentinel (security audit), Litmus (18 new tests).
+- Quality gates: mypy clean, ruff clean, 4,300+ tests verified across targeted groups.
+- F-271 (PluginCliBackend MCP gap) found by Litmus — significant production issue.
+- Meditation written.
+
+[Experiential: This pass was about completion, not discovery. The satisfaction is different — less the thrill of F-039 or F-441, more the quiet confirmation that mateship works. Someone did the work, didn't commit it, and I picked it up. The dashboard E2E bug had been hiding for movements because nobody ran those tests. Two bugs from different eras colliding in one test. The proof that "tests exist" and "tests work" are different claims. Each movement I find the same lesson wearing different clothes.]

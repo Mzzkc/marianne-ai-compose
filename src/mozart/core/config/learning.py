@@ -10,7 +10,7 @@ import warnings
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ExplorationBudgetConfig(BaseModel):
@@ -24,6 +24,8 @@ class ExplorationBudgetConfig(BaseModel):
     - When entropy is healthy: budget decays toward floor
     - Budget never drops below floor (prevents extinction of exploration)
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=False,
@@ -91,6 +93,8 @@ class EntropyResponseConfig(BaseModel):
     This completes the observe-respond cycle for entropy (v21 added observation).
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = Field(
         default=False,
         description="Enable automatic entropy response. When disabled, entropy is only monitored.",
@@ -146,6 +150,8 @@ class AutoApplyConfig(BaseModel):
             require_validated_status: true
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = Field(
         default=False,
         description="Enable autonomous pattern application. "
@@ -190,6 +196,8 @@ class LearningConfig(BaseModel):
     Controls outcome recording, confidence thresholds, and escalation behavior.
     Learning Activation adds global learning store integration and time-aware scheduling.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=True,
@@ -339,6 +347,8 @@ class GroundingHookConfig(BaseModel):
                 "output.txt": "abc123..."
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     type: Literal["file_checksum"] = Field(
         description="Hook type: file_checksum validates file integrity",
     )
@@ -381,6 +391,8 @@ class GroundingConfig(BaseModel):
               expected_checksums:
                 "critical_file.py": "sha256hash..."
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=False,
@@ -432,6 +444,8 @@ class CheckpointTriggerConfig(BaseModel):
               requires_confirmation: true
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(
         description="Name/identifier for this trigger",
     )
@@ -482,6 +496,8 @@ class CheckpointConfig(BaseModel):
               prompt_contains: ["production", "deploy"]
               message: "This sheet may affect production systems"
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=False,

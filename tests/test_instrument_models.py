@@ -676,16 +676,18 @@ class TestInstrumentModelsAdversarial:
         assert profile.name == "模型-cli"
 
     @pytest.mark.adversarial
-    def test_extra_fields_ignored_by_default(self):
-        """Unknown fields in YAML should not cause errors (forward compat)."""
+    def test_extra_fields_rejected(self):
+        """Unknown fields in YAML must raise errors (extra='forbid')."""
         from mozart.core.config.instruments import ModelCapacity
 
-        # Pydantic v2 ignores extra fields by default
-        mc = ModelCapacity.model_validate({
-            "name": "test",
-            "context_window": 1000,
-            "cost_per_1k_input": 0.0,
-            "cost_per_1k_output": 0.0,
-            "future_field": "should be ignored",
-        })
-        assert mc.name == "test"
+        # Composer directive: unknown fields are errors, not silent ignores.
+        # Forward compat is handled by explicit schema versioning, not
+        # by silently dropping unknown fields.
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            ModelCapacity.model_validate({
+                "name": "test",
+                "context_window": 1000,
+                "cost_per_1k_input": 0.0,
+                "cost_per_1k_output": 0.0,
+                "future_field": "should be rejected",
+            })

@@ -9,11 +9,13 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class RetryConfig(BaseModel):
     """Configuration for retry behavior including partial completion recovery."""
+
+    model_config = ConfigDict(extra="forbid")
 
     max_retries: int = Field(default=3, ge=0, description="Maximum retry attempts per sheet")
     base_delay_seconds: float = Field(
@@ -53,6 +55,8 @@ class RetryConfig(BaseModel):
 
 class RateLimitConfig(BaseModel):
     """Configuration for rate limit detection and handling."""
+
+    model_config = ConfigDict(extra="forbid")
 
     detection_patterns: list[str] = Field(
         default=[
@@ -113,6 +117,8 @@ class CircuitBreakerConfig(BaseModel):
           cross_workspace_coordination: true
           honor_other_jobs_rate_limits: true
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=True,
@@ -177,6 +183,8 @@ class CostLimitConfig(BaseModel):
         cost_per_1k_input_tokens: 0.015
         cost_per_1k_output_tokens: 0.075
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=False,
@@ -258,6 +266,8 @@ class StaleDetectionConfig(BaseModel):
     recommended for LLM-based workloads.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = Field(
         default=False,
         description="Enable stale execution detection. "
@@ -307,6 +317,8 @@ class PreflightConfig(BaseModel):
         preflight:
           token_error_threshold: 0
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     token_warning_threshold: int = Field(
         default=50_000,
@@ -360,6 +372,8 @@ class ParallelConfig(BaseModel):
     With this config, sheets 2 and 3 can run in parallel after sheet 1
     completes, then sheet 4 runs after both 2 and 3 complete.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=False,
@@ -421,6 +435,8 @@ class ValidationRule(BaseModel):
     - Stage 4: Security (cargo audit, npm audit)
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     type: Literal[
         "file_exists",
         "file_modified",
@@ -475,6 +491,21 @@ class ValidationRule(BaseModel):
         description="Delay between retry attempts in milliseconds. "
         "Default 200ms provides filesystem sync time without excessive waiting.",
     )
+    sheet: int | None = Field(
+        default=None,
+        ge=1,
+        description="Target sheet number for this validation. When set, the "
+        "validation only runs for the specified sheet. Equivalent to "
+        "condition: 'sheet_num == N'. If both sheet and condition are set, "
+        "the sheet filter takes precedence.",
+    )
+
+    @model_validator(mode="after")
+    def _sheet_to_condition(self) -> ValidationRule:
+        """Convert sheet: N shorthand to condition expression."""
+        if self.sheet is not None and self.condition is None:
+            self.condition = f"sheet_num == {self.sheet}"
+        return self
 
     @model_validator(mode="after")
     def _check_type_specific_fields(self) -> ValidationRule:
@@ -514,6 +545,8 @@ class SkipWhenCommand(BaseModel):
     The ``command`` field supports ``{workspace}`` template expansion,
     following the same pattern as validation commands.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     command: str = Field(
         description="Shell command to evaluate. Exit 0 = skip the sheet. "

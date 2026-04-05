@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # --- Sub-models (leaf types first, composed types after) ---
 
@@ -35,6 +35,8 @@ class CodeModeInterface(BaseModel):
     interfaces in a sandboxed runtime. Based on Cloudflare's Dynamic Workers
     pattern — 81% token reduction vs MCP.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(
         min_length=1,
@@ -59,6 +61,8 @@ class CodeModeConfig(BaseModel):
     runs agent-generated code against the declared interfaces.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     interfaces: list[CodeModeInterface] = Field(
         default_factory=list,
         description="TypeScript interfaces the agent can code against",
@@ -82,6 +86,8 @@ class ModelCapacity(BaseModel):
     what it costs — used by the conductor for cost tracking, context
     budget calculation, and instrument selection.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(
         min_length=1,
@@ -117,6 +123,8 @@ class CliCommand(BaseModel):
     concept via flags. When prompt_flag is None, the prompt is passed as a
     positional argument.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     executable: str = Field(
         min_length=1,
@@ -204,6 +212,8 @@ class CliOutputConfig(BaseModel):
     - jsonl: split stdout into JSON lines, find completion event
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     format: Literal["text", "json", "jsonl"] = Field(
         default="text",
         description="Output format: text, json, or jsonl",
@@ -254,6 +264,8 @@ class CliErrorConfig(BaseModel):
     Supplements Mozart's existing ErrorClassifier with instrument-specific
     patterns for rate limit detection and auth error recognition.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     success_exit_codes: list[int] = Field(
         default_factory=lambda: [0],
@@ -306,6 +318,8 @@ class CliProfile(BaseModel):
     - errors: how to detect failures
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     command: CliCommand = Field(
         description="How to build the CLI command",
     )
@@ -327,6 +341,8 @@ class HttpProfile(BaseModel):
     Covers OpenAI-compatible, Anthropic API, and Gemini API endpoints.
     One HTTP handler will cover most of them via schema_family.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     base_url: str = Field(
         description="Base URL for the HTTP API",
@@ -362,6 +378,8 @@ class InstrumentProfile(BaseModel):
     - Execution config (CLI flags or HTTP endpoints)
     - Code-mode technique config (foundation — not wired in v1)
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # Identity
     name: str = Field(

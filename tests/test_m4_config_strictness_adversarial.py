@@ -333,7 +333,7 @@ class TestLoadCheckpointDaemonRegistry:
 
         from mozart.daemon.manager import JobManager
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))
         )
         assert result is None
@@ -361,7 +361,7 @@ class TestLoadCheckpointDaemonRegistry:
 
         from mozart.daemon.manager import JobManager
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))
         )
         assert result is not None
@@ -379,7 +379,7 @@ class TestLoadCheckpointDaemonRegistry:
 
         from mozart.daemon.manager import JobManager
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))
         )
         assert result is None
@@ -397,7 +397,7 @@ class TestLoadCheckpointDaemonRegistry:
 
         from mozart.daemon.manager import JobManager
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))
         )
         assert result is None
@@ -429,7 +429,7 @@ class TestLoadCheckpointDaemonRegistry:
 
             from mozart.daemon.manager import JobManager
 
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 JobManager._load_checkpoint(manager, "test-job", Path(tmp))
             )
             # Must return None from registry, NOT the stale workspace file
@@ -446,7 +446,7 @@ class TestLoadCheckpointDaemonRegistry:
 
         from mozart.daemon.manager import JobManager
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))
         )
         assert result is None

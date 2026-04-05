@@ -100,7 +100,10 @@ class TestTopNoMonitorDatabase:
     def test_missing_db_uses_output_error(self, tmp_path: Path) -> None:
         """When the monitor database is missing, _get_storage() should
         use output_error() with a hint about running the conductor."""
-        fake_config = MagicMock()
+        from mozart.daemon.profiler.models import ProfilerConfig
+
+        fake_config = MagicMock(spec=ProfilerConfig())
+        fake_config.storage_path = MagicMock(spec=Path)
         fake_config.storage_path.expanduser.return_value = (
             tmp_path / "nonexistent.db"
         )
@@ -127,7 +130,10 @@ class TestTopNoMonitorData:
 
     def test_no_jsonl_file_uses_output_error(self, tmp_path: Path) -> None:
         """When the JSONL file doesn't exist, should use output_error()."""
-        fake_config = MagicMock()
+        from mozart.daemon.profiler.models import ProfilerConfig
+
+        fake_config = MagicMock(spec=ProfilerConfig())
+        fake_config.jsonl_path = MagicMock(spec=Path)
         fake_config.jsonl_path.expanduser.return_value = (
             tmp_path / "nonexistent.jsonl"
         )

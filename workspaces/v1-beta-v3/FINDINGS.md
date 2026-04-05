@@ -2125,7 +2125,8 @@ Each finding should include:
 ### F-441: Pydantic Silently Accepts Unknown YAML Fields — All 37 Config Models Lack extra='forbid' (P0)
 - **Found by:** Axiom, Movement 4
 - **Severity:** P0 (critical — composer directive M5, blocks public release)
-- **Status:** Open
+- **Status:** Resolved (movement 4, Journey + Axiom mateship)
+- **Resolution:** `extra='forbid'` added to all 51 config models. Journey committed job.py (7d86035) + backward compat for total_sheets (6452f6c) + schema error hints (7d86035). Axiom mateship: remaining 45 models + test fixes. Sentinel verified (a39704a). Theorem property-tested (all models reject unknown fields). Dashboard E2E tests fixed for compatibility.
 - **Category:** bug / configuration validation
 - **Error class:** Configuration validation gap (same class as F-002 falsy YAML values)
 - **Description:** All 37 config models in `src/mozart/core/config/` lack `model_config = ConfigDict(extra='forbid')`. Pydantic v2 defaults to `extra='ignore'` (silently drop unknown fields). Unknown YAML fields in score configs are accepted without error, then silently dropped. `mozart validate` reports "✓ Configuration valid" for configs with typos, non-existent features, or future unimplemented features.
@@ -2214,3 +2215,30 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 - **Description:** `test_dashboard_e2e.py::TestJobLifecycleE2E::test_complete_job_lifecycle` fails in full suite but passes in isolation. `TypeError: object Mock can't be used in 'await' expression` at `job_control.py:263`. Mock state contamination from another test.
 - **Reproducer:** `pytest tests/test_dashboard_e2e.py -x` (PASS) vs `pytest tests/ -x` (FAIL at this test)
 - **Action:** Investigate mock isolation — either the test needs its own event loop or another test is leaking mock state.
+
+### F-430: ValidationRule.sheet Precedence Docstring Contradicts Implementation
+- **Found by:** Prism, Movement 4
+- **Severity:** P3 (low — edge case, misleading documentation)
+- **Status:** Open
+- **Category:** bug
+- **Description:** `src/mozart/core/config/execution.py:494-500` — The `sheet` field docstring says "If both sheet and condition are set, the sheet filter takes precedence." But `_sheet_to_condition()` at line 506 only sets condition when `self.condition is None`, meaning the existing `condition` takes precedence over `sheet`. The docstring and code disagree.
+- **Impact:** A score author who sets both `sheet: 3` and `condition: "sheet_num >= 5"` expects sheet to win (per docstring) but condition wins (per code). Low impact because this is an unusual combination, but the contract is wrong.
+- **Action:** Either change the code to `if self.sheet is not None:` (overwrite condition always) to match the docstring, or fix the docstring to say "the condition takes precedence." Recommend fixing the docstring — the current behavior (condition overrides) is safer.
+
+### F-431: DaemonConfig and ProfilerConfig Missing extra='forbid'
+- **Found by:** Prism, Movement 4
+- **Severity:** P2 (medium — same class as F-441)
+- **Status:** Open
+- **Category:** architecture
+- **Description:** The F-441 fix (`extra="forbid"` on all config models) was comprehensive for `src/mozart/core/config/` (49 models) but did not cover `src/mozart/daemon/config.py` (5 models: DaemonConfig, ResourceLimitConfig, SocketConfig, ObserverConfig, SemanticLearningConfig) or `src/mozart/daemon/profiler/models.py` (4 models: ProfilerConfig, RetentionConfig, AnomalyConfig, CorrelationConfig). These models back `~/.mozart/conductor.yaml`, which is user-edited. Unknown fields in conductor config are silently dropped — same bug class.
+- **Impact:** A user who typos a field in their `conductor.yaml` (e.g., `resource_limits:` instead of `resources:`, or `profiler.enbled:` instead of `profiler.enabled:`) gets no error. The same trust erosion that F-441 identified for score YAML applies to daemon config.
+- **Action:** Add `model_config = ConfigDict(extra="forbid")` to all 9 daemon config models. Test against existing conductor.yaml files.
+
+### F-432: examples/iterative-dev-loop-config.yaml Breaks With extra='forbid'
+- **Found by:** Prism, Movement 4
+- **Severity:** P2 (medium — user-facing example file fails validation)
+- **Status:** Open
+- **Category:** UX
+- **Description:** `examples/iterative-dev-loop-config.yaml` is a generator config (consumed by `scripts/generate-iterative-dev-loop.py`), NOT a score. It has custom fields (`spec_dir`, `cycles`) that fail `extra="forbid"` on `JobConfig`. With the F-441 fix, any automated validation of `examples/*.yaml` will report this file as broken.
+- **Impact:** Automated example validation (Journey M4 ran `find examples/ -name "*.yaml" -exec mozart validate {} \;`) will flag this file. New users exploring examples/ will find a broken file. The file header explains it's a generator config, but the filename pattern matches score expectations.
+- **Action:** Move to `scripts/templates/iterative-dev-loop-config.yaml` or `examples/generators/` to separate it from score examples. Add a README note.

@@ -477,7 +477,6 @@ class TestValidateYamlAdversarial:
         score.write_text(
             "name: true\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"
@@ -495,7 +494,6 @@ class TestValidateYamlAdversarial:
         score.write_text(
             "name: 42\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"
@@ -524,7 +522,6 @@ class TestValidateYamlAdversarial:
             "name: first\n"
             "name: second\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"
@@ -539,7 +536,7 @@ class TestValidateYamlAdversarial:
     def test_yaml_with_tab_indentation(self, tmp_path: Path) -> None:
         """Tab indentation is invalid YAML — should error with hint."""
         score = tmp_path / "tabs.yaml"
-        score.write_text("name: test\nsheet:\n\ttotal_sheets: 1\n")
+        score.write_text("name: test\nsheet:\n\ttotal_items: 1\n")
         result = runner.invoke(app, ["validate", str(score)])
         assert result.exit_code == 2
         assert "Traceback" not in result.stdout
@@ -558,12 +555,11 @@ class TestValidateYamlAdversarial:
 
     @pytest.mark.adversarial
     def test_validate_with_unknown_extra_fields(self, tmp_path: Path) -> None:
-        """Extra unrecognized fields should not crash validation."""
+        """Extra unrecognized fields must be rejected (extra='forbid')."""
         score = tmp_path / "extra.yaml"
         score.write_text(
             "name: test\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"
@@ -574,6 +570,7 @@ class TestValidateYamlAdversarial:
         )
         result = runner.invoke(app, ["validate", str(score)])
         assert "Traceback" not in result.stdout
+        assert result.exit_code == 2  # Unknown fields are now errors
 
 
 # =============================================================================
@@ -593,7 +590,6 @@ class TestValidateInstrumentDisplayAdversarial:
         score.write_text(
             "name: test\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"
@@ -619,7 +615,6 @@ class TestValidateInstrumentDisplayAdversarial:
             "name: test\n"
             "instrument: gemini-cli\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"

@@ -164,6 +164,11 @@ This is the highest priority task. You are running inside a live conductor. You 
 - [x] [Lens] instruments.py JSON error path: console.print(json.dumps) → output_json() for Rich markup safety. 7 TDD regression tests for rejection hint behavior (test_rejection_hints_ux.py). Commit 4b83dae. (priority: P2) [source: error standardization]
 - [x] [Newcomer] Fix F-153/F-460: "job" → "score" terminology across CLI + docs — run.py, validate.py, recover.py docstrings/help text; README.md (12 fixes); getting-started.md (10 fixes); cli-reference.md (11 fixes). ~35 total fixes across 6 files. (priority: P2) [source: F-153, F-460, fresh-eyes audit]
 - [x] [Lens] Add hints to 8 hintless output_error() calls + fix raw console.print error in clear validation. Layer 2 completion: every output_error in the CLI now has actionable hints. 10 TDD tests in test_hintless_error_audit.py. Quality gate baseline 1440→1455. Commit d286e07. (priority: P2) [source: error quality audit, M4]
+- [ ] Beautify ALL status displays: status, list, conductor-status (priority: P1) [source: composer directive, M5] — Current display is functional but not lovable. Show musical context (movements, stage names), relative time, bounded synthesis tables, progress in list view, clean conductor dashboard. See docs/plans/2026-04-04-status-display-beautification.md for mockups and design principles. Data is already there (Sheet.movement, Sheet.description) — just needs surfacing.
+
+### The Meditation (ALL musicians)
+- [ ] Every musician writes their meditation to {workspace}/meditations/{name}.md (priority: P1) [source: composer directive, M5] — Read 03-confluence.md, rewrite in your own words from your own experience. Generic, no project details. NOT COMPLETE until every musician's name appears in meditations/. See composer notes for full rules.
+- [ ] [Canyon] Synthesize all individual meditations into one (priority: P1) [source: composer directive, M5] — ONLY after every musician has contributed. Canyon only. Individual meditations remain untouched.
 
 ---
 
@@ -213,6 +218,8 @@ This is the highest priority task. You are running inside a live conductor. You 
 - [x] [Forge] Mateship: commit Harper's uncommitted #93, F-450, and D-024 work. Quality gate baseline update (1396→1440). Fix #122: skip await_early_failure for conductor-routed resumes + enhanced direct resume panel. Updated test_cli_run_resume.py to remove stale await_early_failure patch. 7 TDD tests in test_resume_output_clarity.py. (priority: P1) [source: mateship, M4]
 - [x] [Ghost] Fix #103: Auto-detect changed score file on re-run (priority: P1) [source: issue #103] — Added `_should_auto_fresh()` to manager.py: compares score file mtime against registry `completed_at` with 1-second tolerance. Wired into `submit_job()` — auto-sets `fresh=True` when COMPLETED job's score was modified since last run. Enhanced job_service.py resume event with `previous_error` and `config_reloaded` context. 7 TDD tests in test_stale_completed_detection.py.
 - [x] Resume improvements (#93, #103, #122) (priority: P1) [source: roadmap step 50] — #93 fixed (pause during retry, Harper+Forge mateship). #122 fixed (Forge M4: skip early failure poll for conductor-routed resumes + enhanced direct resume panel with previous state context, 7 TDD tests). #103 fixed (Ghost M4: auto-fresh detection via mtime comparison).
+- [x] [Axiom] Verify M4 fixes: #122 (resume output), #120 (fan-in skipped), #93 (pause-during-retry), #103 (auto-fresh), #128 (skip expansion) - invariant analysis (priority: P1) [source: M4 verification, Bedrock gate report] — All 5 fixes verified correct. 23 edge cases analyzed. Full evidence in movement-4/axiom.md. Issues ready for closure.
+- [x] [Axiom] Investigate #156: Pydantic validation silently ignores unknown YAML fields (priority: P0) [source: composer directive movement 5, open issue] — F-441 filed. Bug confirmed. 37 config models affected. Full impact analysis + reproducer in movement-4/axiom.md.
 - [ ] Remaining critical bug fixes (priority: P1) [source: roadmap step 51]
 
 ---
@@ -307,6 +314,69 @@ See FINDINGS.md F-097 through F-102 for full context.
 - [ ] Assign gemini-cli instrument to reviewer agents (prism, axiom, ember) — read-heavy analysis, low tool use (priority: P2) [source: composer TDF analysis]
 - [ ] Keep claude-cli for: setup (canyon, bedrock), work (all 32 musicians), quality-gate (bedrock), antagonists (newcomer, adversary) (priority: P1) [source: composer TDF analysis]
 - [ ] Add `instrument_map` or `per_sheet_instruments` to `generate-v3.py` for gemini-cli assignments (priority: P1) [source: composer TDF analysis]
+
+---
+
+## Validation Strictness + Missing Score Features
+
+### Unknown YAML Field Rejection (CRITICAL)
+- [x] [Journey, Axiom] Set `extra='forbid'` on JobConfig, SheetConfig, and all nested config models — unknown YAML fields must ERROR, not silently pass (priority: P0) [source: composer directive, 2026-04-04] — Journey: job.py models + backward compat for total_sheets + schema error hints. Axiom mateship: remaining 45 models across 7 config modules + test fixes + dashboard E2E fix. All 51 config models verified. F-441 RESOLVED.
+- [x] [Journey] Add V212 validation check: detect YAML keys not in schema and report them with "did you mean X?" suggestions (priority: P1) [source: composer directive] — _unknown_field_hints() in validate.py with _KNOWN_TYPOS dictionary (11 common typos). 16 user journey tests.
+
+### Loops / Iteration Primitives
+- [ ] Design and implement score-level loop primitives — `for_each`, `repeat_until`, or similar (priority: P1) [source: MEMORY.md "Score logic beyond Jinja"] — Currently scores can only loop via self-chaining. Loops should be a first-class YAML primitive for iterative patterns (Fixed-Point Iteration, Cathedral Construction, CDCL Search).
+
+### User Variables in Validations
+- [ ] Expand validation variable support to include user-defined `prompt.variables` (priority: P1) [source: composer directive, 2026-04-04] — Currently validations only expand `{workspace}`, `{sheet_num}`, `{stage}`, `{instance}`, `{start_item}`, `{end_item}`. User-defined variables from `prompt.variables` are unavailable. Score authors need `{my_output_dir}` in validation paths.
+
+---
+
+## Per-Sheet Instrument Fallbacks (New Feature)
+
+Spec: `docs/plans/2026-04-04-instrument-fallbacks-spec.md`
+
+- [ ] Add `instrument_fallbacks` field to SheetConfig, MovementDef, JobConfig (priority: P0) [source: instrument fallbacks spec]
+- [ ] Add `instrument_fallbacks` to Sheet entity, resolve in `build_sheets()` (priority: P0) [source: instrument fallbacks spec]
+- [ ] Add `InstrumentFallback` BatonEvent type (priority: P0) [source: instrument fallbacks spec]
+- [ ] Implement availability check: `check_instrument_available()` (priority: P0) [source: instrument fallbacks spec]
+- [ ] Implement baton dispatch fallback logic — immediate for unavailable, after retry exhaustion for rate limits (priority: P0) [source: instrument fallbacks spec]
+- [ ] Add BatonSheetState fields: `fallback_chain`, `current_instrument_index`, `fallback_attempts` (priority: P0) [source: instrument fallbacks spec]
+- [ ] Add `instrument_fallback_history` to SheetState/CheckpointState (priority: P1) [source: instrument fallbacks spec]
+- [ ] Add V211 validation: warn on unknown fallback instrument names (priority: P1) [source: instrument fallbacks spec]
+- [ ] Add fallback indicator to `mozart status` display (priority: P1) [source: instrument fallbacks spec]
+- [ ] INFO-level logging for all fallback events (priority: P1) [source: instrument fallbacks spec]
+- [ ] TDD tests: config parsing, resolution chain, baton dispatch, fan-out inheritance, checkpoint persistence (priority: P0) [source: instrument fallbacks spec]
+- [ ] Adversarial tests: empty chain, circular refs, all fallbacks exhausted, rate limit vs unavailable distinction (priority: P1) [source: instrument fallbacks spec]
+
+---
+
+## Rosetta Corpus Modernization
+
+Score: `scores/rosetta-modernize.yaml`
+Composes: Nurse Log → Barn Raising → Echelon Repair → Fan-out + Closed-Loop Call → Commissioning Cascade → After-Action Review
+
+- [ ] Run rosetta-modernize score to produce structured frontmatter for all 56 patterns (priority: P0) [source: composer directive, 2026-04-04]
+- [ ] Review and apply modernized pattern files from workspace to permanent corpus (priority: P0) [source: composer directive]
+- [ ] Review and apply composition DAG to `scores/rosetta-corpus/composition-dag.yaml` (priority: P0) [source: composer directive]
+- [ ] Review and apply updated INDEX.md (no difficulty ratings, semantic when/why) (priority: P0) [source: composer directive]
+- [ ] Review and apply updated selection-guide.md (problem signals, not difficulty) (priority: P0) [source: composer directive]
+- [ ] Update 6 Rosetta proof scores in examples/rosetta/ with instrument: syntax and per-sheet instrumentation (priority: P1) [source: composer directive]
+
+---
+
+## Compose System Implementation
+
+Design: `docs/plans/compose-system/` (8 specs, all complete)
+Decisions: `memory/project_compose_brainstorm_decisions.md` (via session memory)
+Handoff: `docs/plans/compose-system/SESSION-HANDOFF-2.md`
+
+- [ ] Implement TDF spec engine score (priority: P0) [source: compose-system/02-tdf-spec-engine.md]
+- [ ] Implement `mozart init` redesign as interview → libretto producer (priority: P0) [source: compose-system/01-init-redesign.md]
+- [ ] Implement score composition pipeline (priority: P1) [source: compose-system/04-score-composition.md]
+- [ ] Implement interview system (priority: P1) [source: compose-system/03-interview-system.md]
+- [ ] Implement concert execution wiring (priority: P1) [source: compose-system/05-concert-execution.md]
+- [ ] Implement manifest + remediation (priority: P2) [source: compose-system/06-manifest-remediation.md]
+- [ ] Implement in-score spec generation (immune system model) (priority: P2) [source: compose-system/07-in-score-spec-gen.md]
 
 ---
 

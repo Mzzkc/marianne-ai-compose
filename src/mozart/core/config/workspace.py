@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class IsolationMode(str, Enum):
@@ -35,6 +35,8 @@ class IsolationConfig(BaseModel):
           branch_prefix: mozart
           cleanup_on_success: true
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=False,
@@ -127,6 +129,8 @@ class WorkspaceLifecycleConfig(BaseModel):
             - ".worktrees/**"
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     archive_on_fresh: bool = Field(
         default=False,
         description="Archive workspace files when --fresh flag is used. "
@@ -182,6 +186,8 @@ class LogConfig(BaseModel):
     Controls log level, output format, and file rotation settings.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO",
         description="Minimum log level to capture",
@@ -231,6 +237,8 @@ class AIReviewConfig(BaseModel):
 
     Enables automated quality assessment of code changes with scoring.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=False,
@@ -282,6 +290,8 @@ class CrossSheetConfig(BaseModel):
     sheet needs context from prior execution.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     auto_capture_stdout: bool = Field(
         default=False,
         description="Automatically include previous sheets' stdout_tail in context. "
@@ -319,6 +329,8 @@ class FeedbackConfig(BaseModel):
           pattern: '(?s)FEEDBACK_START(.+?)FEEDBACK_END'
           format: json
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=False,

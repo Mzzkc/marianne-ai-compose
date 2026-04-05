@@ -10,7 +10,7 @@ import warnings
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.fields import PydanticUndefined  # type: ignore[attr-defined]
 
 
@@ -20,6 +20,8 @@ class RecursiveLightConfig(BaseModel):
     Enables TDF-aligned processing through the Recursive Light Framework
     with dual-LLM confidence scoring and domain activations.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     endpoint: str = Field(
         default="http://localhost:8080",
@@ -50,6 +52,8 @@ class OllamaConfig(BaseModel):
             model: "llama3.1:8b"
             num_ctx: 32768
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # Connection settings
     base_url: str = Field(
@@ -114,6 +118,8 @@ class MCPServerConfig(BaseModel):
               args: ["-y", "@anthropic/mcp-server-filesystem", "/home/user"]
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(
         description="Unique name for this MCP server",
     )
@@ -176,6 +182,8 @@ class BridgeConfig(BaseModel):
           complexity_threshold: 0.7
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = Field(
         default=False,
         description="Enable bridge mode (Ollama with MCP tools)",
@@ -235,6 +243,8 @@ class SheetBackendOverride(BaseModel):
               timeout_seconds: 600
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     # CLI-specific overrides
     cli_model: str | None = Field(
         default=None,
@@ -274,6 +284,8 @@ class BackendConfig(BaseModel):
     The ``_validate_type_specific_fields`` validator warns when fields for an
     unselected backend are set to non-default values.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     type: Literal["claude_cli", "anthropic_api", "recursive_light", "ollama"] = Field(
         default="claude_cli",

@@ -41,7 +41,6 @@ class TestMayaInstrumentTerminology:
             "name: test\n"
             "instrument: claude-code\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"
@@ -65,7 +64,6 @@ class TestMayaInstrumentTerminology:
         score.write_text(
             "name: test\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"
@@ -102,7 +100,6 @@ class TestRajEdgeCases:
         score.write_text(
             "name: test\n"
             "defaults: &defaults\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "sheet:\n"
@@ -123,7 +120,6 @@ class TestRajEdgeCases:
         score.write_text(
             f"name: {long_name}\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"
@@ -176,7 +172,6 @@ class TestRajEdgeCases:
         score.write_text(
             "name: test\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt: 42\n"
@@ -195,7 +190,6 @@ class TestRajEdgeCases:
         score.write_text(
             "name: test\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "prompt:\n"

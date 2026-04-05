@@ -61,26 +61,26 @@ class TestPreludeBugFix:
             InjectionItem.model_validate({"as": "context"})
 
     @pytest.mark.adversarial
-    def test_injection_item_both_path_and_file(self):
-        """If both 'path' and 'file' are provided, only 'file' matters."""
-        item = InjectionItem.model_validate(
-            {"file": "correct.md", "path": "ignored.md", "as": "context"}
-        )
-        assert item.file == "correct.md"
+    def test_injection_item_rejects_unknown_path_field(self):
+        """'path' is not a field on InjectionItem — rejected by extra='forbid'."""
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            InjectionItem.model_validate(
+                {"file": "correct.md", "path": "rejected.md", "as": "context"}
+            )
 
     @pytest.mark.adversarial
-    def test_top_level_prelude_silently_dropped(self):
-        """Top-level prelude on JobConfig is silently ignored (extra='ignore').
+    def test_top_level_prelude_rejected(self):
+        """Top-level prelude on JobConfig is rejected (extra='forbid').
 
-        This documents the current behavior: top-level prelude is NOT supported.
+        Prelude belongs under sheet:, not at the top level.
         """
-        config = JobConfig.model_validate({
-            "name": "test",
-            "sheet": {"size": 1, "total_items": 1},
-            "prompt": {"template": "test"},
-            "prelude": [{"file": "test.md", "as": "context"}],
-        })
-        assert config.sheet.prelude == []
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            JobConfig.model_validate({
+                "name": "test",
+                "sheet": {"size": 1, "total_items": 1},
+                "prompt": {"template": "test"},
+                "prelude": [{"file": "test.md", "as": "context"}],
+            })
 
     @pytest.mark.adversarial
     def test_prelude_correct_nesting_works(self):

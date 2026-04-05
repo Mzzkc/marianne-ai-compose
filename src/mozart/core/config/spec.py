@@ -31,7 +31,7 @@ class SpecFragment(BaseModel):
     fragments matching those tags.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str = Field(
         description="Fragment identifier, typically the filename stem "
@@ -81,7 +81,7 @@ class SpecCorpusConfig(BaseModel):
     for injection into agent prompts.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     spec_dir: str = Field(
         default="",

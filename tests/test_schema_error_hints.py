@@ -42,7 +42,6 @@ class TestAlexFirstScore:
         score.write_text(
             "name: test\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             'prompt: "Hello world"\n'
@@ -77,7 +76,6 @@ class TestAlexFirstScore:
         score.write_text(
             "name: test\n"
             "sheet:\n"
-            "  total_sheets: 1\n"
             "  total_items: 1\n"
             "  size: 1\n"
             "workspace: ./ws\n"

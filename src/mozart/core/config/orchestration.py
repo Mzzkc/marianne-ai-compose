@@ -10,7 +10,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ConductorRole(str, Enum):
@@ -31,6 +31,8 @@ class ConductorPreferences(BaseModel):
     Controls notification, escalation, and interaction patterns.
     These are hints that the system should respect where possible.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     prefer_minimal_output: bool = Field(
         default=False,
@@ -72,6 +74,8 @@ class ConductorConfig(BaseModel):
             auto_retry_on_transient_errors: true
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(
         default="default",
         min_length=1,
@@ -101,6 +105,8 @@ class ConductorConfig(BaseModel):
 
 class NotificationConfig(BaseModel):
     """Configuration for a notification channel."""
+
+    model_config = ConfigDict(extra="forbid")
 
     type: Literal["desktop", "slack", "webhook", "email"]
     on_events: list[Literal[
@@ -161,6 +167,8 @@ class PostSuccessHookConfig(BaseModel):
             command: "curl -X POST https://api.example.com/notify"
             description: "Notify deployment system"
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     type: Literal["run_job", "run_command", "run_script"] = Field(
         description="Hook type: run_job chains to another Mozart job, "
@@ -247,6 +255,8 @@ class ConcertConfig(BaseModel):
           cooldown_between_jobs_seconds: 60
           concert_log_path: "./concert.log"
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=False,

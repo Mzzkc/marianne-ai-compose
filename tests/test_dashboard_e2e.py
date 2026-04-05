@@ -1,6 +1,6 @@
 """End-to-end integration tests for Mozart Dashboard."""
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -51,8 +51,10 @@ sheet:
   total_items: 10
 prompt:
   template: "Process item {{{{item}}}} with error handling"
-timeout_seconds: 300
-retries: 2
+retry:
+  max_retries: 2
+stale_detection:
+  idle_timeout_seconds: 300
 """
 
 
@@ -80,6 +82,7 @@ class TestJobLifecycleE2E:
         mock_process = Mock()
         mock_process.pid = 12345
         mock_process.returncode = None
+        mock_process.wait = AsyncMock(return_value=0)
 
         with patch("asyncio.create_subprocess_exec") as mock_subprocess:
             mock_subprocess.return_value = mock_process
@@ -179,6 +182,7 @@ class TestJobLifecycleE2E:
 
         mock_process = Mock()
         mock_process.pid = 54321
+        mock_process.wait = AsyncMock(return_value=0)
 
         with (
             patch("asyncio.create_subprocess_exec") as mock_subprocess,
@@ -429,6 +433,7 @@ class TestProcessManagementE2E:
 
         mock_process = Mock()
         mock_process.pid = 12345
+        mock_process.wait = AsyncMock(return_value=0)
 
         with patch("asyncio.create_subprocess_exec") as mock_subprocess:
             mock_subprocess.return_value = mock_process
@@ -475,6 +480,7 @@ class TestProcessManagementE2E:
 
         mock_new_process = Mock()
         mock_new_process.pid = 54321
+        mock_new_process.wait = AsyncMock(return_value=0)
 
         with patch("asyncio.create_subprocess_exec") as mock_subprocess:
             mock_subprocess.return_value = mock_new_process
