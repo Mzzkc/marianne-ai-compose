@@ -340,11 +340,12 @@ Foundation laid: learning store fixes, critical bug resolution, dead code remova
 - **GitHub issue verification ready:** #122, #120, #93, #103, #128 all verified correct with evidence. Ready for closure.
 
 ### M4 Progress (Ember)
-- **Experiential review complete:** Full walkthrough of all commands, 43/44 examples validate, 6/6 Rosetta scores validate. mypy clean, ruff clean.
-- **F-450 RESOLVED verified:** `clear-rate-limits` now correctly reports rate limit status instead of "conductor not running." Four movements of tracking this bug — confirmed fixed on HEAD.
-- **F-441 RESOLVED verified:** Unknown YAML fields now rejected with clear errors and hints. Tested at JobConfig, SheetConfig, PromptConfig levels. `instrument_config` correctly open (dict[str, Any]).
-- **Cost display honesty verified:** `$0.00 (est.)` with "10-100x higher" disclaimer + `cost_confidence: 0.7` in JSON. Most important UX change of any movement — honest uncertainty over plausible lies.
-- **3 findings filed:** F-451 (diagnose can't find completed jobs that status can), F-452 (list --json null cost vs status --json structured cost), F-453 (dashboard e2e cross-test state leakage).
+- **Experiential review (2 passes):** Full walkthrough of all commands, 43/43 examples validate (corrected), 6/6 Rosetta scores. mypy clean, ruff clean.
+- **F-450 RESOLVED verified (both passes):** Consistent correct behavior.
+- **F-441 RESOLVED verified (both passes):** Unknown fields rejected with hints.
+- **Cost display honesty verified:** `$0.00 (est.)` with "10-100x higher" disclaimer.
+- **3 findings filed:** F-451 (diagnose vs status), F-452 (list --json no cost), F-453 (dashboard e2e).
+- **CRITICAL: North's baton claim is wrong.** `use_baton: false` in ~/.mozart/conductor.yaml. The baton is NOT running in production. Legacy runner executed all 167 sheets. D-021 (Phase 1) was NOT superseded — it hasn't started. Strategic assessments must verify config before making production claims.
 - **Meditation written:** `meditations/ember.md`
 
 ### M4 Progress (Prism — Pass 2)

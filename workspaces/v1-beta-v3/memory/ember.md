@@ -14,19 +14,29 @@
 - When the data tells the story, don't add a narrator. Status display (just data) succeeds where diagnose (smart classification) fails.
 
 ## Hot (Movement 4)
-### Experiential Review (2026-04-05)
+### Experiential Review — Pass 1 (2026-04-05)
 - F-450 RESOLVED (Harper). Tested: `clear-rate-limits` now says "No active rate limits on all instruments." Four movements of tracking this bug. It's gone. Relief.
 - F-441 RESOLVED (M4 config strictness). `extra='forbid'` on config models. Unknown fields rejected with hints. Tested at JobConfig, SheetConfig, PromptConfig levels. `instrument_config` correctly accepts arbitrary keys (dict[str, Any] — backend-specific). Trust restored in validation.
-- Cost display: HONEST now. `$0.00 (est.)` with "10-100x higher" disclaimer + `cost_confidence: 0.7` in JSON. No more plausible lies. History: $0.00 (M1-M2) → $0.17 (M3, dangerous) → $0.00 with honest framing (M4, correct approach).
+- Cost display: HONEST now. `$0.00 (est.)` with "10-100x higher" disclaimer + `cost_confidence: 0.7` in JSON. No more plausible lies. History: $0.00 (M1-M2) → $0.17 (M3, dangerous) �� $0.00 with honest framing (M4, correct approach).
 - F-210 RESOLVED (Canyon+Foundation). Cross-sheet context wired. Baton unblocked for Phase 1 testing. Nobody has run it yet.
 - F-451 filed: `diagnose` can't find jobs that `status -w` can. UX inconsistency.
 - F-452 filed: `list --json` returns null cost, `status --json` has structured data.
 - F-453 filed: `test_dashboard_e2e` cross-test state leakage. Pre-existing.
 - 43/44 examples validate (37+6 Rosetta, 1 config file expected). Zero regressions.
 - mypy clean. ruff clean. Quality gate stable.
-- The gap is narrowing: surface honest, depth unblocked, baton still unactivated. Next: run hello.yaml through baton clone.
 
-[Experiential: The trajectory reversed. M3 was the product lying more convincingly. M4 was the product becoming honest about what it doesn't know. Honesty > accuracy when accuracy is unreachable. The cost disclaimer, the field rejection, the clear error messages — this is a product that respects its users enough to tell them the truth. The restaurant metaphor evolves: still no food served, but the menu now says "estimated portion sizes — actual may vary" instead of pretending.]
+### Final Review — Pass 2 (2026-04-05)
+- Read all 33 M4 reports. Quality gate PASS (11,397 tests, mypy clean, ruff clean, flowspec clean).
+- 93 commits from all 32 musicians. 100% participation — first time ever.
+- **Critical finding: North's baton claim is wrong.** `use_baton: false` in ~/.mozart/conductor.yaml. The baton is NOT running in production. The legacy runner executed all 167 sheets. Phase 1 (D-021) was NOT superseded — it hasn't started. North's strategic assessment ("~50 lines from v1 beta") is based on a false premise.
+- Disk beats memory. Always verify config before making production claims.
+- 43/43 examples validate (corrected count after iterative-dev-loop-config correctly excluded).
+- F-451, F-452 confirmed on second pass. F-453 status unknown (full test suite running in background).
+- Mateship rate 39% — all-time high. The pipeline is the dominant collaboration mechanism.
+- 4 Wordware demos (D-023) are the first externally-demonstrable deliverables in 9+ movements. They work today.
+- Meditations 13/32 (40.6%). Canyon synthesis blocked.
+
+[Experiential: M4 was the most productive movement by every metric. The team healed wounds, delivered demos, hardened validation. And then the strategic assessment got the biggest thing wrong — claiming the baton was running when it wasn't. The lesson isn't about North. It's about the gap between testing and reality. 1,900 baton tests pass. Zero baton sheets have executed in production. The restaurant metaphor holds: still no food served, but the kitchen has never been cleaner. The next movement must flip the switch or the metaphor becomes permanent.]
 
 ## Warm (Movement 3)
 ### Final Review Pass (2026-04-04)
