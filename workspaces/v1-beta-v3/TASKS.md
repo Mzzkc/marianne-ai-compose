@@ -332,7 +332,7 @@ See FINDINGS.md F-097 through F-102 for full context.
 - [ ] Design and implement score-level loop primitives — `for_each`, `repeat_until`, or similar (priority: P1) [source: MEMORY.md "Score logic beyond Jinja"] — Currently scores can only loop via self-chaining. Loops should be a first-class YAML primitive for iterative patterns (Fixed-Point Iteration, Cathedral Construction, CDCL Search).
 
 ### User Variables in Validations
-- [ ] Expand validation variable support to include user-defined `prompt.variables` (priority: P1) [source: composer directive, 2026-04-04] — Currently validations only expand `{workspace}`, `{sheet_num}`, `{stage}`, `{instance}`, `{start_item}`, `{end_item}`. User-defined variables from `prompt.variables` are unavailable. Score authors need `{my_output_dir}` in validation paths.
+- [x] [Maverick] Expand validation variable support to include user-defined `prompt.variables` (priority: P1) [source: composer directive, 2026-04-04] — Merged prompt.variables into path_context in rendering.py (preview/validate) and recover.py (recover command). User vars are base layer, built-in vars override. Legacy runner (sheet.py:408) and baton (musician.py via Sheet.template_variables()) already included user vars. 8 TDD tests in test_user_variables_in_validations.py.
 
 ---
 
@@ -389,9 +389,10 @@ Handoff: `docs/plans/compose-system/SESSION-HANDOFF-2.md`
 
 - [x] [Prism] Fix quality gate drift: bare MagicMock in test_top_error_ux.py → spec'd mocks (priority: P2) [source: quality gate failure]
 - [x] [Prism] Fix Rosetta score instrument_fallbacks field that fails extra='forbid' (priority: P1) [source: F-441 side effect]
-- [ ] Fix F-431: Add extra='forbid' to DaemonConfig, ProfilerConfig, and all daemon config models (priority: P2) [source: F-431, Prism M4]
+- [x] [Maverick] Fix F-431: Add extra='forbid' to DaemonConfig, ProfilerConfig, and all daemon config models (priority: P2) [source: F-431, Prism M4] — Added ConfigDict(extra="forbid") to all 9 models: 5 in daemon/config.py (ResourceLimitConfig, SocketConfig, ObserverConfig, SemanticLearningConfig, DaemonConfig), 4 in profiler/models.py (RetentionConfig, AnomalyConfig, CorrelationConfig, ProfilerConfig). 23 TDD tests. Production conductor.yaml validated clean.
+- [x] [Maverick] Fix F-470: _synced_status memory leak on deregister (priority: P2) [source: F-470, Adversary M4] — Added dict comprehension cleanup of _synced_status entries in deregister_job(). 5 TDD tests. Updated adversary's bug-proof test to regression test.
 - [x] [Compass] Fix F-432: Move iterative-dev-loop-config.yaml out of examples/ to scripts/ (not a score) (priority: P2) [source: F-432, Prism M4] — Moved to scripts/ (next to its generator script). Updated usage comments. Removed from examples/README.md tables. No other references existed.
-- [ ] Fix F-430: ValidationRule.sheet docstring/code precedence mismatch (priority: P3) [source: F-430, Prism M4]
+- [x] [Blueprint] Fix F-430: ValidationRule.sheet docstring/code precedence mismatch (priority: P3) [source: F-430, Prism M4] — Fixed docstring to match code: condition takes precedence over sheet shorthand (sheet only sets condition when condition is absent). 4 TDD tests in test_f430_validation_sheet_precedence.py. F-430 RESOLVED.
 
 ---
 

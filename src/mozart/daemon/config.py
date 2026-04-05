@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from mozart.core.config.backend import BackendConfig
 from mozart.core.config.execution import PreflightConfig
@@ -25,6 +25,8 @@ class ResourceLimitConfig(BaseModel):
     Prevents runaway resource consumption by capping memory, processes,
     and API call rates at the daemon level.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     max_memory_mb: int = Field(
         default=8192,
@@ -64,6 +66,8 @@ class SocketConfig(BaseModel):
     The socket file is created on daemon start and removed on clean shutdown.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     path: Path = Field(
         default=Path("/tmp/mozart.sock"),
         description="Unix domain socket path for client-daemon communication",
@@ -84,6 +88,8 @@ class SocketConfig(BaseModel):
 
 class ObserverConfig(BaseModel):
     """Configuration for the job observer and event bus."""
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=True,
@@ -150,6 +156,8 @@ class SemanticLearningConfig(BaseModel):
     execution, so any backend type (claude_cli, anthropic_api, ollama,
     recursive_light) can power semantic analysis.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=True,
@@ -221,6 +229,8 @@ class DaemonConfig(BaseModel):
     resource constraints, and state backend selection. Follows the
     same Field() conventions as mozart.core.config.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     socket: SocketConfig = Field(
         default_factory=SocketConfig,
@@ -321,10 +331,10 @@ class DaemonConfig(BaseModel):
         "Set higher for large-context instruments (1M+ context windows).",
     )
     use_baton: bool = Field(
-        default=False,
-        description="Enable the baton execution model. When True, job execution "
-        "uses the event-driven BatonCore instead of the monolithic JobRunner. "
-        "Feature-flagged for safe rollout — old and new paths coexist.",
+        default=True,
+        description="Enable the baton execution model (D-027, Phase 2). "
+        "Uses the event-driven BatonCore for multi-instrument support. "
+        "Set to false to fall back to the legacy monolithic runner.",
     )
     config_file: Path | None = Field(
         default=None,

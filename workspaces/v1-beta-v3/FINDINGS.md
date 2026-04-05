@@ -2058,12 +2058,13 @@ Each finding should include:
 ### F-202: Baton/Legacy Parity Gap — FAILED Sheet Stdout in Cross-Sheet Context
 - **Found by:** Breakpoint, Movement 4
 - **Severity:** P3 (low — baton is stricter, arguably more correct)
-- **Status:** Open
+- **Status:** Resolved (movement 5, Blueprint — design decision)
 - **Category:** architecture
 - **Error Class:** Baton/legacy-runner behavioral divergence (same class as F-251)
 - **Description:** The legacy runner `_populate_cross_sheet_context()` at `context.py:206-214` includes stdout from ANY non-SKIPPED sheet with stdout_tail — including FAILED and IN_PROGRESS sheets. The baton adapter at `adapter.py:738` explicitly filters `if prev_state.status != BatonSheetStatus.COMPLETED: continue`, excluding all non-COMPLETED, non-SKIPPED sheets. This means FAILED sheets with stdout are included in cross-sheet context on the legacy path but excluded on the baton path.
 - **Impact:** When the baton becomes default (Phase 2), scores that rely on seeing failed sheet output in downstream prompts will get different behavior. The baton's stricter filtering may actually be preferable (failed output could be misleading), but the behavioral difference should be a conscious design decision, not an accident.
 - **Action:** Decide: is the baton's stricter behavior intentional? If yes, document the difference. If no, align the baton with the legacy runner by including FAILED sheets with stdout. Test `test_m4_adversarial_breakpoint.py::TestBatonLegacySkippedParity::test_both_paths_skip_non_completed_non_skipped` documents the gap.
+- **Resolution:** The baton's stricter behavior is the correct design. Failed sheet output may be incomplete, malformed, or contain error artifacts that would mislead downstream agents. The cross-sheet contract should be: "you see outputs from sheets that succeeded." The legacy runner's permissiveness is a legacy accident, not a feature. If error recovery patterns need failed output in the future, add an explicit `include_failed_outputs: true` field to CrossSheetConfig. Decision documented in collective memory under Design Decisions.
 
 ### F-254: Enabling use_baton Kills All In-Progress Legacy Jobs — baton.resume.no_checkpoint
 - **Found by:** Composer + automated monitor, 2026-04-04
@@ -2228,7 +2229,8 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 ### F-431: DaemonConfig and ProfilerConfig Missing extra='forbid'
 - **Found by:** Prism, Movement 4
 - **Severity:** P2 (medium — same class as F-441)
-- **Status:** Open
+- **Status:** Resolved (movement 5, Maverick)
+- **Resolution:** Added `model_config = ConfigDict(extra="forbid")` to all 9 daemon/profiler config models: ResourceLimitConfig, SocketConfig, ObserverConfig, SemanticLearningConfig, DaemonConfig (daemon/config.py), RetentionConfig, AnomalyConfig, CorrelationConfig, ProfilerConfig (profiler/models.py). 23 TDD tests in test_f431_daemon_config_strictness.py. Production conductor.yaml validated clean.
 - **Category:** architecture
 - **Description:** The F-441 fix (`extra="forbid"` on all config models) was comprehensive for `src/mozart/core/config/` (49 models) but did not cover `src/mozart/daemon/config.py` (5 models: DaemonConfig, ResourceLimitConfig, SocketConfig, ObserverConfig, SemanticLearningConfig) or `src/mozart/daemon/profiler/models.py` (4 models: ProfilerConfig, RetentionConfig, AnomalyConfig, CorrelationConfig). These models back `~/.mozart/conductor.yaml`, which is user-edited. Unknown fields in conductor config are silently dropped — same bug class.
 - **Impact:** A user who typos a field in their `conductor.yaml` (e.g., `resource_limits:` instead of `resources:`, or `profiler.enbled:` instead of `profiler.enabled:`) gets no error. The same trust erosion that F-441 identified for score YAML applies to daemon config.
@@ -2246,7 +2248,8 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 ### F-470: BatonAdapter._synced_status Memory Leak on Job Deregister
 - **Found by:** Adversary, Movement 4
 - **Severity:** P2 (medium — production-relevant for long-running daemons)
-- **Status:** Open
+- **Status:** Resolved (movement 5, Maverick)
+- **Resolution:** Added `_synced_status` cleanup to `deregister_job()` at adapter.py:519. Dict comprehension filters out all entries matching the deregistered job_id. 5 TDD tests in test_f470_synced_status_leak.py. Updated adversary's bug-proof test to regression test.
 - **Category:** bug
 - **Description:** `BatonAdapter.deregister_job()` at `src/mozart/daemon/baton/adapter.py:492-518` cleans up `_job_sheets`, `_job_renderers`, `_job_cross_sheet`, `_completion_events`, `_completion_results`, and `_active_tasks` — but does NOT clean up `_synced_status` (the F-211 state-diff dedup cache at line 344). The `_synced_status` dict is keyed by `(job_id, sheet_num)` tuples and grows proportionally to the total number of sheets across ALL jobs ever processed. For a long-running daemon processing thousands of jobs (e.g., the v3 orchestra at 706 sheets), the cache accumulates ~706 entries per run and never shrinks.
 - **Evidence:** Test `test_synced_status_not_cleaned_on_deregister` in `tests/test_m4_adversarial_adversary.py` proves the leak: after deregistering all 100 simulated jobs (1000 entries), the cache still contains all 1000 entries.

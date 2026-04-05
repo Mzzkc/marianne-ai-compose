@@ -165,8 +165,13 @@ async def _recover_job(
     for snum in sorted(sheets_to_check):
         console.print(f"\n[bold]Sheet {snum}:[/bold]")
 
-        # Create validation engine for this sheet
+        # Create validation engine for this sheet.
+        # Include user-defined prompt.variables so {my_var} works in paths.
+        user_vars: dict[str, Any] = {
+            str(k): v for k, v in config.prompt.variables.items()
+        }
         sheet_context: dict[str, Any] = {
+            **user_vars,
             "sheet_num": snum,
             "start_item": None,
             "end_item": None,

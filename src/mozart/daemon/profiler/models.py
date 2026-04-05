@@ -11,7 +11,7 @@ import time
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -270,6 +270,8 @@ class ResourceEstimate(BaseModel):
 class RetentionConfig(BaseModel):
     """Data retention policy for profiler storage."""
 
+    model_config = ConfigDict(extra="forbid")
+
     full_resolution_hours: int = Field(
         default=24, ge=1, description="Hours to keep full-resolution snapshots"
     )
@@ -283,6 +285,8 @@ class RetentionConfig(BaseModel):
 
 class AnomalyConfig(BaseModel):
     """Thresholds for anomaly detection."""
+
+    model_config = ConfigDict(extra="forbid")
 
     memory_spike_threshold: float = Field(
         default=1.5,
@@ -311,6 +315,8 @@ class AnomalyConfig(BaseModel):
 class CorrelationConfig(BaseModel):
     """Configuration for the periodic correlation analyzer."""
 
+    model_config = ConfigDict(extra="forbid")
+
     interval_minutes: int = Field(
         default=30,
         ge=5,
@@ -329,6 +335,8 @@ class ProfilerConfig(BaseModel):
     Controls data collection, storage, anomaly detection thresholds,
     and correlation analysis frequency.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=True, description="Master switch for the profiler subsystem"

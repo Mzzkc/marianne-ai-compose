@@ -515,6 +515,11 @@ class BatonAdapter:
         self._completion_events.pop(job_id, None)
         self._completion_results.pop(job_id, None)
 
+        # F-470: Clean up state-diff dedup cache to prevent memory leak
+        self._synced_status = {
+            k: v for k, v in self._synced_status.items() if k[0] != job_id
+        }
+
         _logger.info("adapter.job_deregistered", extra={"job_id": job_id})
 
     # =========================================================================

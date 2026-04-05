@@ -286,7 +286,12 @@ def generate_preview(
             snippet = f"[render error: {render_error}]"
 
         # 5. Expand validation paths and check applicability
+        # Start with user-defined prompt.variables (lowest precedence),
+        # then overlay built-in variables so they always win.
         path_context: dict[str, str] = {
+            str(k): str(v) for k, v in config.prompt.variables.items()
+        }
+        path_context.update({
             "workspace": str(config.workspace),
             "sheet_num": str(sheet_num),
             "start_item": str(context.start_item),
@@ -298,7 +303,7 @@ def generate_preview(
             "total_stages": str(
                 context.total_stages if context.total_stages > 0 else total_sheets
             ),
-        }
+        })
 
         condition_context: dict[str, int] = {
             "sheet_num": sheet_num,

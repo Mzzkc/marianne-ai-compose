@@ -279,13 +279,12 @@ class TestF441StrictnessEdges:
 class TestSyncDedupCacheLifecycle:
     """Test _synced_status cache behavior across job lifecycle."""
 
-    def test_synced_status_not_cleaned_on_deregister(self) -> None:
-        """F-470: _synced_status entries are NOT removed when a job is
-        deregistered. This is a memory leak for long-running daemons.
+    def test_synced_status_cleaned_on_deregister(self) -> None:
+        """F-470 FIXED: _synced_status entries ARE removed when a job is
+        deregistered. Previously a memory leak for long-running daemons.
 
-        After deregister_job(), the cache retains entries for the removed
-        job's sheets. For a daemon processing thousands of jobs, the cache
-        grows without bound.
+        Regression test: after deregister_job(), the cache must NOT retain
+        entries for the removed job's sheets.
         """
         adapter = BatonAdapter(
             event_bus=MagicMock(),
@@ -303,15 +302,15 @@ class TestSyncDedupCacheLifecycle:
         # Deregister job-1
         adapter.deregister_job("job-1")
 
-        # FINDING: job-1 entries remain in _synced_status
-        assert ("job-1", 1) in adapter._synced_status
-        assert ("job-1", 2) in adapter._synced_status
-        assert ("job-1", 3) in adapter._synced_status
+        # FIX VERIFIED: job-1 entries are now cleaned up
+        assert ("job-1", 1) not in adapter._synced_status
+        assert ("job-1", 2) not in adapter._synced_status
+        assert ("job-1", 3) not in adapter._synced_status
         # job-2 unaffected
         assert ("job-2", 1) in adapter._synced_status
 
-        # Total: 4 entries remain. Should be 1 after deregister.
-        assert len(adapter._synced_status) == 4
+        # Only 1 entry remains (job-2)
+        assert len(adapter._synced_status) == 1
 
     def test_dedup_prevents_duplicate_callback(self) -> None:
         """Sync callback not invoked when status hasn't changed."""
@@ -352,9 +351,9 @@ class TestSyncDedupCacheLifecycle:
         adapter._invoke_sync_callback("job-1", 1, new_status)
         assert callback.call_count == 1
 
-    def test_dedup_cache_accumulates_across_multiple_jobs(self) -> None:
-        """Cache grows proportionally to total sheets across all jobs.
-        No cleanup on deregister means memory is O(total_sheets_ever).
+    def test_dedup_cache_cleaned_across_multiple_jobs(self) -> None:
+        """F-470 FIXED: Cache entries are cleaned on deregister.
+        Memory is now O(active_sheets), not O(total_sheets_ever).
         """
         adapter = BatonAdapter(
             event_bus=MagicMock(),
@@ -369,12 +368,12 @@ class TestSyncDedupCacheLifecycle:
 
         assert len(adapter._synced_status) == 1000
 
-        # Deregister all jobs — cache still has 1000 entries
+        # Deregister all jobs — cache is now cleaned
         for job_num in range(100):
             adapter.deregister_job(f"job-{job_num}")
 
-        # Memory leak: all 1000 entries remain
-        assert len(adapter._synced_status) == 1000
+        # FIX VERIFIED: all entries cleaned after deregister
+        assert len(adapter._synced_status) == 0
 
 
 # =============================================================================
