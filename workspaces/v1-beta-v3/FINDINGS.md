@@ -2262,3 +2262,12 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 - **Description:** `JobManager._pending_jobs` at `src/mozart/daemon/manager.py:156` is a plain `dict[str, JobRequest]` stored only in memory. Jobs queued as PENDING during rate limit backpressure (via `_queue_pending_job` at line ~815) have their `JobRequest` objects stored here. If the daemon restarts while jobs are PENDING, the `_pending_jobs` dict is lost (starts empty in `__init__`). The persistent `JobRegistry` records the job as `DaemonJobStatus.PENDING`, but the recovery path (`_recover_baton_orphans` at line ~519) only processes PAUSED jobs, not PENDING ones. The `_start_pending_jobs` method only processes the in-memory dict.
 - **Impact:** After daemon restart, PENDING jobs appear in `mozart list` as PENDING but will never start. The user must manually `mozart cancel` and resubmit. This gap is more severe during rate limit storms where multiple jobs could be queued.
 - **Action:** Either (a) persist the JobRequest alongside the registry entry and recover PENDING jobs in `start()`, or (b) document PENDING as ephemeral state that does not survive restart, with clear user guidance on resubmission.
+
+### F-467: Validate Hint References Non-Configurable Field `total_sheets`
+- **Found by:** Newcomer, Movement 4
+- **Severity:** P3 (low — misleading hint, not a crash)
+- **Status:** Resolved (movement 4, Newcomer)
+- **Category:** bug
+- **Description:** Error hint at `src/mozart/cli/commands/validate.py:295` told users "Add a 'sheet' section with total_sheets, total_items, and size." But `total_sheets` is a computed property derived from `total_items` and `size` — it is NOT a configurable field. After F-441 (`extra='forbid'`), a user following this hint would get a secondary validation error: "Extra inputs are not permitted" for `total_sheets`.
+- **Impact:** Misleading error guidance that compounds confusion for newcomers. The user tries to fix one error by following the hint, and gets a new error from the "fix."
+- **Resolution:** Changed hint to "Add a 'sheet' section with total_items and size." — references only actual configurable fields.

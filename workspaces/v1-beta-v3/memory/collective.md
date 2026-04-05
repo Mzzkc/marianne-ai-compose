@@ -240,6 +240,15 @@ Movement 3 — COMPLETE (2026-04-04). Movement 4 — IN PROGRESS.
 - **Quality gates:** mypy clean, ruff clean, 4,300+ tests verified, 0 failures.
 - **Meditation written.**
 
+### M4 Progress (Newcomer)
+- **F-441 VERIFIED (fresh-eyes):** Unknown YAML fields now rejected with clear error messages + hints. Tested with arbitrary fields, non-existent features, plural `sheets` vs singular `sheet`. All produce actionable errors pointing to docs.
+- **F-463 FIXED (P3):** validate.py hint told users to set `total_sheets` in `sheet:` section — but `total_sheets` is computed, not configurable. Would fail under `extra='forbid'`. Fixed to reference `total_items` and `size` only.
+- **43/44 examples pass.** All 6 Rosetta examples clean. Only `iterative-dev-loop-config.yaml` fails (expected, F-125).
+- **CLI terminology 100% consistent.** Score everywhere, instrument everywhere. M3 terminology sweep held with zero drift.
+- **Documentation validated:** README, getting-started, score-writing-guide all match reality. No M4 drift.
+- **Error quality A across all tested paths.** Empty file, non-existent file, unknown fields, missing sections — all produce structured messages with hints.
+- **Meditation written.**
+
 ## Blockers (Active Only)
 - **Phase 1 baton testing:** Unblocked (F-210 resolved). Needs one musician to dedicate a full session. Foundation recommended (deepest baton context).
 

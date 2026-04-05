@@ -292,7 +292,7 @@ def _schema_error_hints(error_msg: str) -> list[str]:
         # Extract which fields are missing from the error
         hints = ["Ensure your score has at minimum: name, sheet, and prompt sections."]
         if "sheet" in msg_lower:
-            hints.append("Add a 'sheet' section with total_sheets, total_items, and size.")
+            hints.append("Add a 'sheet' section with total_items and size.")
         if "prompt" in msg_lower:
             hints.append("Add a 'prompt' section with a 'template' or 'template_file'.")
         hints.append("See: docs/score-writing-guide.md")
