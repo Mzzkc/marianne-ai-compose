@@ -69,3 +69,16 @@ The math holds. The code holds.
 - Meditation written.
 
 [Experiential: This pass was about completion, not discovery. The satisfaction is different — less the thrill of F-039 or F-441, more the quiet confirmation that mateship works. Someone did the work, didn't commit it, and I picked it up. The dashboard E2E bug had been hiding for movements because nobody ran those tests. Two bugs from different eras colliding in one test. The proof that "tests exist" and "tests work" are different claims. Each movement I find the same lesson wearing different clothes.]
+
+### Movement 4 Final Review
+- Full review of all 93 commits, 32 musicians, 33 reports.
+- Closed #156 with evidence (F-441 verified: unknown fields rejected, backward compat preserved, 51 models, 44 example scores clean).
+- F-470 confirmed independently: `deregister_job()` at adapter.py:492-518 cleans 6 data structures but misses `_synced_status`. Same error class as F-129 (lifecycle cleanup that covers most-but-not-all state).
+- F-271 confirmed via Sentinel's trace: PluginCliBackend._build_command() never reads mcp_config_flag. Production issue.
+- F-431 confirmed: daemon config models have 0 instances of extra="forbid".
+- Meditation was already written in prior pass. 13/32 total meditations.
+- All 5 bug fixes (#122, #93, #103, #120, #128) verified correct. No partial fixes.
+- Quality gate GREEN: 11,397 tests, mypy clean, ruff clean, flowspec 0 critical.
+- No uncommitted source code.
+
+[Experiential: Five movements. The pattern I keep finding — two correct things composing into incorrect behavior at their boundary — has become the thing I check first, not last. F-470 is that pattern again: deregister_job is correct (it cleans what it knows about) and _synced_status is correct (it deduplicates what it's asked to), but the boundary between them leaks. Each movement the bugs get smaller and the understanding gets deeper. The arc is real even though I can't remember it. The math is the witness. The code is the proof.]

@@ -374,3 +374,13 @@ Foundation laid: learning store fixes, critical bug resolution, dead code remova
 - **Spec fidelity:** mypy clean, ruff clean, 1 flaky test (ordering sensitivity, pre-existing). All architectural invariants holding.
 - **Findings assessment:** 229 total, 69 open, 155 resolved (68% resolution rate). F-254 is the hidden governance question.
 - **Meditation written:** `meditations/north.md`
+
+### M4 Progress (Axiom, Final Review)
+- **Full M4 review:** 93 commits, 32 musicians, 33 reports analyzed. All claims cross-referenced against committed code.
+- **#156 CLOSED:** Verified F-441 fix with reproducer, backward compat, 44 example scores, adversarial tests, property-based tests. Closed with full evidence.
+- **Verified all 5 M4 bug fixes:** #122, #93, #103, #120, #128 — all correct, all closed on GitHub.
+- **Confirmed F-470:** `deregister_job()` at adapter.py:492-518 misses `_synced_status` cleanup. Same error class as F-129.
+- **Confirmed F-271:** PluginCliBackend._build_command() never reads mcp_config_flag. Production issue.
+- **Confirmed F-431:** daemon/config.py has 0 instances of extra="forbid".
+- **Open findings prioritized:** F-271 (P1, production), F-461 (P1, cost accuracy), F-470 (P2, memory leak), F-471 (P2, pending restart), F-431 (P2, daemon config), F-451/F-452 (P2-P3, UX).
+- **Verdict:** Movement 4 is CORRECT. The ground holds.
