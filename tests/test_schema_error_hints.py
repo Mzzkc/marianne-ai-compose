@@ -67,7 +67,7 @@ class TestAlexFirstScore:
         assert result.exit_code == 2
         out = result.stdout
         assert "sheet" in out.lower()
-        assert "total_sheets" in out
+        assert "total_items" in out
 
     @pytest.mark.adversarial
     def test_missing_prompt_gives_specific_hint(self, tmp_path: Path) -> None:
@@ -152,7 +152,7 @@ class TestSchemaErrorHints:
             "  Field required"
         )
         hints = _schema_error_hints(error)
-        assert any("total_sheets" in h for h in hints)
+        assert any("total_items" in h for h in hints)
 
     def test_missing_prompt_field_detected(self) -> None:
         """Missing 'prompt' field triggers specific hint."""
