@@ -59,18 +59,16 @@ description: "Self-perpetuating pattern discovery — six domains, adversarial r
 
 workspace: "/home/emzi/Projects/mozart-ai-compose/workspaces/rosetta-workspace"
 
-backend:
-  type: claude_cli
-  skip_permissions: true
-  disable_mcp: true
+instrument: claude-code
+instrument_config:
   timeout_seconds: 3600
-  output_format: text
   allowed_tools:
     - Read
     - Write
     - Glob
     - Grep
     - WebSearch
+# instrument_fallbacks: [gemini-cli]  # Aspirational — field doesn't exist yet (F-441)
 
 # Self-chaining: discover → prove → discover more
 concert:
@@ -474,8 +472,18 @@ prompt:
        weak, metaphorical, or underspecified? These need strengthening
        or cutting.
     5. **Instrument gaps.** How many patterns specify non-LLM instruments?
-       How many use mixed-instrument strategies? This dimension is
-       likely underexplored.
+       How many use mixed-instrument strategies? How many include
+       instrument fallback guidance? This dimension is likely underexplored.
+    6. **Frontmatter completeness.** Do all patterns have structured YAML
+       frontmatter (between `---` markers at the top of the file)?
+       Frontmatter fields: name, scale, status, forces, generators,
+       problem, signals, stages, dependencies, composes_with.
+       Patterns without frontmatter need it — flag them for the final
+       corpus stage to fix.
+    7. **Composition DAG health.** Does
+       `{{ corpus_index | replace('INDEX.md', 'composition-dag.yaml') }}`
+       exist? If so, check for isolated patterns (no composition edges)
+       and underconnected clusters.
 
     If no corpus exists, this is the first iteration — do a broad sweep.
 
@@ -703,6 +711,37 @@ prompt:
 
     Cut what the reviewers killed. Strengthen what they flagged.
     Keep what survived. Add a "Review Integration" section.
+
+    ## Structured Frontmatter Requirement
+
+    Every pattern in the corpus MUST have YAML frontmatter. If existing
+    patterns are missing frontmatter (flagged in Stage 1), add it now.
+    New patterns from this iteration must include frontmatter from the start.
+
+    Frontmatter schema (between `---` markers at the top):
+    ```yaml
+    ---
+    name: "Pattern Name"
+    scale: foundational | within-stage | score-level | concert-level | communication | adaptation | instrument-strategy | iteration
+    status: working | aspirational | approximation
+    forces: [force names from corpus forces.md]
+    generators: [generator names from corpus forces.md]
+    problem: "One sentence: the coordination problem this addresses"
+    signals:
+      - "when you'd reach for this pattern"
+    stages:
+      - name: stage-name
+        sheets: 1 | fan_out(N)
+        instrument_guidance: "what kind of instrument and why"
+        fallback_friendly: true | false
+        purpose: "what this stage accomplishes"
+    dependencies:
+      stage-b: [stage-a]
+    composes_with:
+      - pattern: "Other Pattern"
+        how: "one line explaining the composition"
+    ---
+    ```
 
     Write the corpus to BOTH locations:
 

@@ -13,7 +13,18 @@
 - dispatch.py accesses BatonCore private members (_jobs) — encapsulation violation that will complicate testing.
 
 ## Hot (Movement 4)
-### M4 Review (2026-04-04)
+### M4 Review Pass 2 (2026-04-05)
+Second pass focused on uncommitted work + cross-domain blind spots:
+1. **F-441 extra='forbid' is architecturally sound.** 45+ config models covered. All 43 example scores validate (1 is a generator config, not a score — F-432). Backward compat preserved via strip_computed_fields().
+2. **Boundary gap: daemon config models NOT covered.** DaemonConfig, ProfilerConfig, etc. still silently drop unknown fields. Same bug class. F-431 filed.
+3. **ValidationRule.sheet docstring lies.** Says "sheet takes precedence" when both set. Code does the opposite. F-430 filed.
+4. **Fixed quality gate drift.** Bare MagicMock in test_top_error_ux.py → spec'd. Baseline 1519→1517.
+5. **Fixed Rosetta score.** instrument_fallbacks field doesn't exist yet — commented out before extra='forbid' catches it.
+6. **Input strictness vs output verification gap.** Mozart is getting stricter about config validation while the baton (the actual execution engine) has zero real-run tests. Input strictness without output verification is half a contract.
+
+11,332 tests pass (up from 10,981 at M3 gate). The integration cliff grows taller every movement.
+
+### M4 Review Pass 1 (2026-04-04)
 Architectural review of M4 work. Key observations:
 1. **F-210/F-211 resolved correctly.** Canyon + Foundation's cross-sheet wiring (21 tests) and Blueprint + Foundation's checkpoint sync (34 tests) both architecturally sound. The baton now has the infrastructure it lacked.
 2. **Uncommitted architectural work exists.** `manager.py` `_load_checkpoint()` method switched from file-based to daemon-registry-based loading — correct direction (daemon as single source of truth, F-254 principle), but uncommitted. F-400 filed.
