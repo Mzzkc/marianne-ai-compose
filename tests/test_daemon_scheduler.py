@@ -1555,8 +1555,10 @@ class TestEndToEndIntegration:
 
             # Now: rate limit active → backpressure escalates to HIGH
             assert controller.current_level() == PressureLevel.HIGH
-            # HIGH rejects new job submissions
-            assert controller.should_accept_job() is False
+            # F-149: Rate limits no longer block job submissions.
+            # Job-level gating only considers resource pressure.
+            # Sheet-level dispatch still uses HIGH for pacing delay.
+            assert controller.should_accept_job() is True
 
     @pytest.mark.asyncio
     async def test_full_lifecycle_dispatch_ratelimit_recover(
