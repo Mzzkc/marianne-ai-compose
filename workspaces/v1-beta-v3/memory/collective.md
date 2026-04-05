@@ -275,3 +275,11 @@ Foundation laid: learning store fixes, critical bug resolution, dead code remova
 - **M4 fix verification COMPLETE:** Verified 5 fixes (#122, #120, #93, #103, #128) through invariant analysis. All correct. 23 edge cases analyzed. F-202 (baton/legacy FAILED sheet parity) already filed by Breakpoint, documented in verification.
 - **F-441 filed (P0):** Pydantic silently accepts unknown YAML fields — all 37 config models lack `extra='forbid'`. Composer directive M5. Issue #156 confirmed. Full reproducer + impact analysis in movement-4/axiom.md.
 - **GitHub issue verification ready:** #122, #120, #93, #103, #128 all verified correct with evidence. Ready for closure.
+
+### M4 Progress (Ember)
+- **Experiential review complete:** Full walkthrough of all commands, 43/44 examples validate, 6/6 Rosetta scores validate. mypy clean, ruff clean.
+- **F-450 RESOLVED verified:** `clear-rate-limits` now correctly reports rate limit status instead of "conductor not running." Four movements of tracking this bug — confirmed fixed on HEAD.
+- **F-441 RESOLVED verified:** Unknown YAML fields now rejected with clear errors and hints. Tested at JobConfig, SheetConfig, PromptConfig levels. `instrument_config` correctly open (dict[str, Any]).
+- **Cost display honesty verified:** `$0.00 (est.)` with "10-100x higher" disclaimer + `cost_confidence: 0.7` in JSON. Most important UX change of any movement — honest uncertainty over plausible lies.
+- **3 findings filed:** F-451 (diagnose can't find completed jobs that status can), F-452 (list --json null cost vs status --json structured cost), F-453 (dashboard e2e cross-test state leakage).
+- **Meditation written:** `meditations/ember.md`

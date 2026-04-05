@@ -2186,3 +2186,31 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 - **Action:** Add MCP disabling to `_build_command()`: when `mcp_config_flag` is set and no MCP servers are requested, add `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`. Litmus test 39 documents the gap — when fixed, the test assertion should be inverted.
 - **Evidence:** Litmus test `TestPluginCliBackendMcpGap::test_build_command_ignores_mcp_config_flag` proves the gap exists. Legacy backend inspection via `TestPluginCliBackendMcpGap::test_legacy_backend_disables_mcp_by_default` confirms the protection exists in the old path but not the new.
 - **Related:** F-255.3 (production discovery), F-105 (instrument schema expansion)
+
+### F-451: Diagnose Can't Find Completed Jobs That Status Can Find
+- **Found by:** Ember, Movement 4
+- **Severity:** P2 (medium — UX inconsistency between commands)
+- **Status:** Open
+- **Category:** UX
+- **Description:** `mozart diagnose hello` returns "Score not found" even though `mozart status hello -w <workspace>` successfully shows full COMPLETED status. `diagnose` doesn't support `-w` (workspace) flag and only queries the conductor's registry. After a conductor restart, completed jobs may not be in the registry.
+- **Impact:** Users can see a score's status (with -w) but can't diagnose it. The natural debugging path (`status` → see problem → `diagnose`) breaks when the conductor doesn't know about the job.
+- **Reproducer:** `mozart status hello -w workspaces/hello-mozart` (PASS) then `mozart diagnose hello` (FAIL: "Score not found")
+- **Action:** Add `-w` workspace fallback to diagnose, or ensure completed jobs persist in registry across restarts.
+
+### F-452: `mozart list --json` Returns Null Cost, `status --json` Returns Structured Cost
+- **Found by:** Ember, Movement 4
+- **Severity:** P3 (low — machine consumer inconsistency)
+- **Status:** Open
+- **Category:** UX
+- **Description:** `mozart list --json` returns `cost_usd: null` for all entries. `mozart status <job> --json` returns structured cost data (`total_estimated_cost`, `cost_confidence`, token counts). Machine consumers get inconsistent cost data depending on which command they use.
+- **Reproducer:** `mozart list --json | jq '.[0].cost_usd'` returns `null`. `mozart status mozart-orchestra-v3 --json | jq '.cost'` returns `{total_estimated_cost: 0.004872, cost_confidence: 0.7, ...}`.
+- **Action:** Add cost summary fields to `list --json` output.
+
+### F-453: Dashboard E2E Test Cross-Test State Leakage
+- **Found by:** Ember, Movement 4
+- **Severity:** P3 (low — test infrastructure, not product bug)
+- **Status:** Open
+- **Category:** pattern / test-isolation
+- **Description:** `test_dashboard_e2e.py::TestJobLifecycleE2E::test_complete_job_lifecycle` fails in full suite but passes in isolation. `TypeError: object Mock can't be used in 'await' expression` at `job_control.py:263`. Mock state contamination from another test.
+- **Reproducer:** `pytest tests/test_dashboard_e2e.py -x` (PASS) vs `pytest tests/ -x` (FAIL at this test)
+- **Action:** Investigate mock isolation — either the test needs its own event loop or another test is leaking mock state.
