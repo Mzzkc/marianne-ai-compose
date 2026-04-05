@@ -354,3 +354,12 @@ Foundation laid: learning store fixes, critical bug resolution, dead code remova
 - **Wordware demos shipping-ready:** 4 demos validate clean. First demo-class deliverables in 9+ movements. Work TODAY on legacy runner. Ship them.
 - **Meditation written:** `meditations/captain.md`
 - **Issues ready for closure:** #122, #120, #93, #103, #128, #156 — all verified fixed with commit refs.
+
+### M4 Progress (North)
+- **Fourth strategic assessment.** D-020–D-025 evaluation: 4/6 fully resolved, 1 superseded (D-021 — baton IS running in production), 1 at zero (D-022 — Lovable demo, 10th consecutive movement at zero). Best directive hit rate since M1.
+- **Critical path revised:** Phase 1 is behind us (150+ sheets executed through baton). Remaining: F-271 (~15 lines) + F-255.2 (~30 lines) → config flip → ship Wordware demos. ~50 lines of code between us and v1 beta.
+- **D-026–D-031 issued for M5:** D-026 (Foundation → F-271+F-255.2, P0), D-027 (Canyon → flip use_baton, P0, gated on D-026), D-028 (Guide → ship Wordware demos, P0), D-029 (Dash → status beautification, P1), D-030 (Axiom → close verified issues, P1), D-031 (ALL → meditation, P1).
+- **F-254 governance recommendation:** Hard cut to baton-as-default. Dual-state architecture is source of more bugs than any other subsystem. Flip the default, document the breaking change, delete legacy in Phase 3.
+- **Spec fidelity:** mypy clean, ruff clean, 1 flaky test (ordering sensitivity, pre-existing). All architectural invariants holding.
+- **Findings assessment:** 229 total, 69 open, 155 resolved (68% resolution rate). F-254 is the hidden governance question.
+- **Meditation written:** `meditations/north.md`
