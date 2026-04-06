@@ -96,20 +96,19 @@ run automatically.
 This only applies to **completed** scores. Failed or paused scores are
 always resumed from their checkpoint, regardless of file changes.
 
-#### Rate Limit Queuing
+#### Backpressure and Rate Limits
 
-When the conductor is under rate limit pressure but system resources are
-healthy, `mozart run` queues the score as **pending** instead of rejecting
-it. The score starts automatically when rate limits clear. You can monitor
-or cancel pending scores normally:
+The conductor rejects new score submissions only when the system is under
+**resource pressure** (high memory usage or too many child processes). Rate
+limits do not cause job rejection — they are per-instrument concerns handled
+at the sheet dispatch level by the baton. A rate limit on one instrument
+does not block scores targeting different instruments.
 
-```bash
-mozart status my-score --watch   # Monitor pending → running transition
-mozart cancel my-score           # Cancel before it starts
+If the system is under resource pressure, `mozart run` exits with an error:
+
 ```
-
-If the system is under resource pressure (high memory, too many processes),
-the score is rejected outright — queuing more work would be dangerous.
+Error: System under high pressure — try again later.
+```
 
 #### Examples
 
@@ -484,6 +483,7 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 | V206 | Fan-out without dependencies defined |
 | V208 | User variable shadows a built-in template variable |
 | V210 | Instrument name not found in known profiles |
+| V211 | Instrument fallback name not found in known profiles |
 | V212 | `skip_when`/`skip_when_command` keys reference out-of-range sheets |
 
 **Info** (suggestions):
@@ -775,7 +775,7 @@ The diagnostic report includes:
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--workspace` | `-w` | | *(hidden)* Debug override: bypass conductor for diagnostics |
+| `--workspace` | `-w` | | Workspace directory. When the conductor doesn't recognize a score ID, Mozart falls back to reading state directly from this workspace directory. Useful for diagnosing scores from stopped conductors or clone conductors. |
 | `--json` | `-j` | false | Output diagnostic report as JSON |
 | `--include-logs` | | false | Inline the last 50 lines from each sheet/hook log file |
 
@@ -790,6 +790,9 @@ mozart diagnose my-job --json
 
 # Include inline log content
 mozart diagnose my-job --include-logs
+
+# Diagnose from workspace (when conductor doesn't know the score)
+mozart diagnose my-job -w ./workspaces/my-job
 ```
 
 ---

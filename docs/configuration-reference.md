@@ -11,6 +11,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 - [Top-Level Fields](#top-level-fields)
 - [instruments](#instruments)
   - [InstrumentDef Sub-Config](#instrumentdef-sub-config)
+- [Instrument Fallbacks](#instrument-fallbacks)
 - [movements](#movements)
   - [MovementDef Sub-Config](#movementdef-sub-config)
 - [workspace_lifecycle](#workspace_lifecycle)
@@ -70,6 +71,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults (e.g., `model`, `timeout_seconds`). Only valid when `instrument` is set. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
+| `instrument_fallbacks` | `list[str]` | `[]` | Score-level default fallback instrument chain. Tried in order when the primary instrument is unavailable or rate-limited to exhaustion. Each entry is an instrument name (profile or score alias). See [Instrument Fallbacks](#instrument-fallbacks). |
 
 ```yaml
 # Using instrument: (recommended for new scores)
@@ -120,6 +122,45 @@ instruments:
 
 ---
 
+## Instrument Fallbacks
+
+When a primary instrument is unavailable or rate-limited to exhaustion, Mozart can
+automatically try fallback instruments in order. Fallbacks are specified as a list
+of instrument names (profile names or score-local aliases).
+
+Fallback chains can be set at three levels — per-sheet overrides replace (not merge
+with) inherited chains:
+
+```yaml
+# Score-level default fallbacks (all sheets inherit this)
+instrument: claude-code
+instrument_fallbacks: [gemini-cli, codex-cli]
+
+movements:
+  2:
+    name: Implementation
+    instrument: gemini-cli
+    # Movement-level fallbacks override score-level for sheets in this movement
+    instrument_fallbacks: [claude-code, aider]
+
+sheet:
+  size: 1
+  total_items: 5
+  # Per-sheet fallback override (replaces, does not merge)
+  per_sheet_fallbacks:
+    3: [codex-cli]    # Sheet 3 only falls back to codex-cli
+```
+
+**Fallback resolution precedence** (highest wins):
+1. `sheet.per_sheet_fallbacks[N]` — per-sheet override
+2. `movements.N.instrument_fallbacks` — per-movement default
+3. Top-level `instrument_fallbacks` — score default
+
+The `mozart validate` command checks fallback names against known profiles (V211)
+and warns if any name doesn't match a registered instrument.
+
+---
+
 ## movements
 
 *Source: `src/mozart/core/config/job.py` — `JobConfig.movements`*
@@ -158,6 +199,7 @@ movements:
 | `instrument` | `str \| None` | `None` | min_length=1 | Instrument for all sheets in this movement. Overrides the score-level `instrument:` but is overridden by per-sheet assignments. Can reference a score-local `instruments:` alias or a registered profile name. |
 | `instrument_config` | `dict` | `{}` | | Instrument configuration overrides for this movement. Merged with the resolved instrument's defaults. |
 | `voices` | `int \| None` | `None` | `>= 1` | Number of parallel voices in this movement. Shorthand for `fan_out: {N: voices}`. |
+| `instrument_fallbacks` | `list[str]` | `[]` | | Default fallback chain for sheets in this movement. Overrides score-level `instrument_fallbacks`. |
 
 **Instrument resolution precedence** (highest to lowest):
 1. `sheet.per_sheet_instruments` (per-sheet override)
@@ -335,6 +377,7 @@ Defines how the work is divided into sheets (execution units).
 | `per_sheet_instruments` | `dict[int, str]` | `{}` | Positive int keys | Per-sheet instrument overrides. Map of `sheet_num -> instrument_name`. Highest precedence in the instrument resolution chain. Example: `{3: 'gemini-cli', 5: 'codex-cli'}`. |
 | `per_sheet_instrument_config` | `dict[int, dict]` | `{}` | | Per-sheet instrument configuration overrides. Map of `sheet_num -> config dict`. Merged with the resolved instrument's defaults for that sheet. Example: `{3: {model: 'gemini-2.5-flash'}}`. |
 | `instrument_map` | `dict[str, list[int]]` | `{}` | No duplicate sheets | Batch instrument assignment. Map of `instrument_name -> list of sheet numbers`. Overrides score-level instrument for listed sheets. Overridden by `per_sheet_instruments`. A sheet cannot appear in multiple instrument lists. |
+| `per_sheet_fallbacks` | `dict[int, list[str]]` | `{}` | Positive int keys | Per-sheet instrument fallback overrides. Map of `sheet_num -> list of fallback instrument names`. Replaces (does not merge with) inherited fallback chains. See [Instrument Fallbacks](#instrument-fallbacks). |
 
 ```yaml
 sheet:
@@ -1209,7 +1252,7 @@ Available but rarely need changing:
 | `observer` | `ObserverConfig` | *(see sub-config)* | | Observer and event bus configuration |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
 | `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |
-| `use_baton` | `bool` | `false` | | Enable the baton execution engine. When `true`, job execution uses event-driven per-sheet dispatch instead of the monolithic runner. Test with `--conductor-clone` first. |
+| `use_baton` | `bool` | `true` | | Enable the baton execution engine. When `true`, job execution uses event-driven per-sheet dispatch instead of the monolithic runner. Set to `false` to fall back to the legacy runner. |
 | `config_file` | `Path \| None` | `None` | | Path to the YAML config file. Set automatically on startup; used by SIGHUP reload to re-read config from disk. |
 
 ### Daemon Operational Profiles

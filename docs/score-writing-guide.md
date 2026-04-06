@@ -21,6 +21,7 @@ examples to complex parallel fan-out workflows.
 - [Expressive Templates](#expressive-templates)
 - [Fan-Out Patterns](#fan-out-patterns)
 - [Movements and Multi-Instrument Scores](#movements-and-multi-instrument-scores)
+- [Instrument Fallbacks](#instrument-fallbacks)
 - [Philosophy of Score Design](#philosophy-of-score-design)
 - [Validation Types](#validation-types)
 - [Fan-Out and Dependencies](#fan-out-and-dependencies)
@@ -275,6 +276,7 @@ marked with **(required)**.
 | `pause_between_sheets_seconds` | int | `2` | Seconds to wait between sheets (rate limit courtesy). |
 | `instruments` | dict[str, InstrumentDef] | `{}` | Named instrument definitions local to this score. See [Multi-Instrument Scores](#multi-instrument-scores). |
 | `movements` | dict[int, MovementDef] | `{}` | Movement declarations with names, instruments, and voice counts. See [Multi-Instrument Scores](#multi-instrument-scores). |
+| `instrument_fallbacks` | list[str] | `[]` | Fallback instrument chain when the primary instrument is unavailable. See [Instrument Fallbacks](#instrument-fallbacks). |
 
 ### `instrument` (recommended) or `backend`
 
@@ -1236,6 +1238,44 @@ Use different instruments when the task demands different capabilities:
 
 A single-instrument score is always simpler. Add instruments when the quality or cost
 difference justifies the complexity.
+
+### Instrument Fallbacks
+
+When an instrument hits rate limits or becomes unavailable, Mozart can automatically
+try fallback instruments in order. Specify fallback chains at the score, movement,
+or per-sheet level:
+
+```yaml
+instrument: claude-code
+instrument_fallbacks: [gemini-cli, codex-cli]
+
+movements:
+  2:
+    name: Implementation
+    voices: 3
+    instrument: gemini-cli
+    # Movement-level fallbacks override score-level
+    instrument_fallbacks: [claude-code]
+
+sheet:
+  size: 1
+  total_items: 5
+  # Per-sheet fallback override (replaces, does not merge)
+  per_sheet_fallbacks:
+    4: [aider]
+```
+
+Fallback chains resolve from most specific to least specific:
+1. `per_sheet_fallbacks[N]` — per-sheet override
+2. `movements.N.instrument_fallbacks` — per-movement
+3. `instrument_fallbacks` — score-level default
+
+Per-sheet fallbacks **replace** inherited chains rather than merging with them.
+If sheet 4 specifies `[aider]`, it will only fall back to aider — not to the
+movement-level or score-level chain.
+
+`mozart validate` warns (V211) when a fallback name doesn't match a known instrument
+profile or score alias.
 
 ---
 

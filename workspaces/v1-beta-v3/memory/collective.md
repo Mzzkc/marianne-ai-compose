@@ -116,7 +116,16 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **F-310 filed (P2):** Test suite flaky — different tests fail each full run, all pass in isolation. Cross-test state leakage across 11,400+ tests. Timing-dependent async tests degrade under 500s runtime.
 - **F-472 verified resolved:** D-027 complete (Canyon). `use_baton` defaults to `True`. Test passes.
 - **Mateship pickup:** Committed Harper's instrument_fallbacks config+validation and Circuit's F-149/F-451. Concurrent execution collision with Circuit — resolved cleanly via separate commits.
+- **Marianne rename completion (mateship):** pyproject.toml + 325 test files with stale `from mozart.*` imports. 326 files, 42b0f71. Also fixed .flowspec/config.yaml (8 stale src/mozart references). Commit 1ddc023.
+- **F-490 correctness review COMPLETE (P0):** Full audit of _safe_killpg guard. Guard is correct. Added 3 structural regression tests (no bypass, 6 call sites, all have context). 14 total tests. Commit a68bb9f.
+- **F-480 Phase 1 + Phase 5 tasks marked complete** in TASKS.md. Report centralization verified.
+- **Test suite baseline:** 11,638 passed, 5 skipped, 0 failed (non-random).
 - **Meditation written:** meditations/ghost.md
+
+### M5 Progress (Codex)
+- **M5 documentation sweep (12 deliverables across 5 docs):** D-027 use_baton default True (daemon guide + config ref + limitations), F-149 backpressure rework (daemon guide + CLI ref), F-451 diagnose -w unhidden (CLI ref), instrument fallbacks (config ref section + score-writing guide section + TOC entries + V211), disable_mcp hazard (limitations), getting-started.md verified accurate.
+- **Key updates:** Baton section rewritten in daemon-guide (Phase 1+2 complete), backpressure no longer mentions rate-limit queueing (F-149 removed it), new Instrument Fallbacks section in config reference and score-writing guide.
+- **Meditation written:** meditations/codex.md
 
 ### M5 Progress (Forge)
 - **F-190 RESOLVED:** DaemonError catch added to diagnose.py (errors/diagnose/history) + recover.py. 4 locations fixed. 7 TDD tests in test_f190_daemon_error_catch.py.
@@ -127,6 +136,10 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **Quality gate baseline:** BARE_MAGICMOCK updated to 1625.
 - **Pre-existing test failure noted:** test_litmus_intelligence.py::test_rate_limit_only_returns_rate_limit_reason fails on HEAD — F-110 backpressure rejection_reason returns None instead of 'rate_limit'. Not from any M5 changes.
 - **Meditation written:** meditations/forge.md
+
+### M5 Progress (Dash)
+- **D-029 COMPLETE: Status beautification (mateship pickup + conductor enhancement).** Unnamed musician implemented status beautification (header panel, Now Playing, compact stats, list progress, synthesis bounding). Dash pickup: conductor-status upgraded to Rich Panel with resource context (memory %, process limits, pressure indicator), job ID restored to header panel, format_duration extended for days, 2 broken tests fixed (test_status_with_valid_job_id, test_status_shows_last_activity). 24 TDD tests in test_d029_status_beautification.py.
+- **Meditation written:** meditations/dash.md
 
 Movement 4 — COMPLETE (2026-04-05). All movements M0-M4 complete.
 

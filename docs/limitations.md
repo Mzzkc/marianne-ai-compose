@@ -68,17 +68,15 @@ Execution is batch-oriented. stdout and stderr are captured after each sheet com
 
 ## Daemon Internals
 
-### Baton Execution Engine Not Yet Default
+### Legacy Runner Still Available
 
-The baton (`src/mozart/daemon/baton/`) is an event-driven execution engine that replaces the monolithic sequential runner with per-sheet dispatch, per-instrument concurrency, timer-based retry, rate limit auto-resume, and restart recovery. It is fully built and tested (1,900+ tests) but not yet the default execution path.
+The baton (`src/mozart/daemon/baton/`) is now the default execution engine (`use_baton: true`), providing event-driven per-sheet dispatch, per-instrument concurrency, timer-based retry, rate limit auto-resume, and restart recovery. The legacy monolithic runner remains available as a fallback.
 
-**What this means:** Jobs currently run via `JobService.start_job()` using the legacy sequential runner. The baton can be activated with `use_baton: true` in `~/.mozart/conductor.yaml` but should only be tested with `--conductor-clone` first.
+**What this means:** Jobs run via the baton by default. Set `use_baton: false` in `~/.mozart/conductor.yaml` to fall back to the legacy runner if needed.
 
-**Why:** The baton represents a fundamental architecture change. It needs production validation before becoming the default. The legacy runner continues to receive bug fixes in the meantime.
+**Impact of legacy fallback:** The legacy runner ignores per-sheet instrument assignments — it uses a single backend regardless of per-sheet configuration. Rate limit handling is also less sophisticated.
 
-**Impact:** Without the baton, per-sheet instrument assignment doesn't take effect at runtime (the config models accept it, but the legacy runner uses a single backend). Rate limit handling in parallel mode has known issues (F-111, now fixed) that the baton avoids structurally.
-
-**Status:** Built, tested, feature-flagged. A three-phase transition plan (prove → default → remove toggle) is documented in the [Daemon Guide](daemon-guide.md#transition-plan).
+**Status:** Baton is default (Phase 2 complete). Phase 3 (remove the toggle) will delete the legacy runner entirely. A three-phase transition plan is documented in the [Daemon Guide](daemon-guide.md#transition-plan).
 
 ---
 
@@ -125,6 +123,26 @@ The error classifier (`src/mozart/core/errors/classifier.py`) was originally des
 **Workaround:** Define instrument-specific error patterns in the instrument profile YAML. The `PluginCliBackend` uses these patterns instead of the global defaults.
 
 **Status:** Improving. Each instrument profile is verified against the actual CLI tool's output.
+
+### MCP Servers Load Ambient by Default
+
+When `disable_mcp` is not set (or set to `false`) on a Claude CLI instrument, the backend does not pass `--strict-mcp-config`. This means Claude Code loads **all** MCP servers from the user's plugin configuration — potentially dozens of ambient servers that the score doesn't need.
+
+**What this means:**
+
+- Each sheet execution may spawn MCP server processes that consume resources
+- Ambient MCP servers may have side effects the score author doesn't intend
+- Without `--strict-mcp-config`, there is no control over which tools are available to the agent
+
+**Workaround:** Set `disable_mcp: true` in your score's `instrument_config:` unless your score specifically needs MCP tools. This passes `--strict-mcp-config` with an empty config, preventing ambient server loading.
+
+```yaml
+instrument: claude-code
+instrument_config:
+  disable_mcp: true    # Prevents loading ambient MCP servers
+```
+
+**Status:** The `mozart validate` command warns about this (V209). A proper technique system for per-sheet MCP/skill configuration is planned but not yet implemented.
 
 ---
 
