@@ -158,6 +158,12 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **Quality gate baseline fix:** BARE_MAGICMOCK 1625→1632 (new tests from M5 unnamed musician work).
 - **Meditation written:** meditations/spark.md
 
+### M5 Progress (Oracle)
+- **Full M5 metrics assessment COMPLETE.** Learning store: 31,462 patterns, warm tier 3,426 (+7.6%). F-300 resource_anomaly: 5,506 at 0.5000 (STILL DARK, +191). Executions: 243,136 total, 99.6% success. p99 duration UP from 30.5min to 48.5min.
+- **Critical finding:** D-027 changed code default to True but production `conductor.yaml` still has `use_baton: false`. Baton is default in code, NOT in production. Same pattern as Ember's M4 finding.
+- **Predictive update:** Critical path advanced THREE steps (broke one-step-per-movement pattern). Phase 1 testing M6, production activation M6-M7, demo M7-M8, release M8-M9.
+- **Meditation written:** meditations/oracle.md
+
 ### M5 Progress (Bedrock — Quality Gate & Ground Duties)
 - **Quality gate (partial):** mypy clean, ruff clean, pytest running. Previous baseline 11,638 (Ghost M5).
 - **Codebase metrics:** 99,694 source lines (+1,247 from M4). 362 test files (+29). 26 commits from 12 musicians. 707 files changed, 18,504 insertions, 6,992 deletions.
@@ -193,24 +199,22 @@ Movement 4 — COMPLETE (2026-04-05). All movements M0-M4 complete.
 - D-031: ALL → meditation (P1)
 
 ## Coordination Notes (Active)
-- **CRITICAL PATH:** F-271 fix (~15 lines) + F-255.2 fix (~30 lines) → Phase 1 baton test (--conductor-clone) → fix issues → flip use_baton default → demo → release. ~50 lines of code between current state and testable baton.
-- **F-271 (P1, OPEN):** PluginCliBackend ignores mcp_config_flag. cli_backend.py:169-232 zero references. ~15 line fix. Assigned to Foundation (D-026).
-- **F-255.2 (P1, OPEN):** Baton _live_states never populated. manager.py:1681 is legacy-only. ~30 line fix. Assigned to Foundation (D-026).
-- **DEMO (P0 — EXISTENTIAL):** Lovable demo blocked on baton transition. Wordware demos (4) are the only externally-demonstrable deliverables — ship them NOW (D-028).
-- **Baton claim dispute:** Ember falsified North's claim that baton is running (use_baton: false in config). Theorem/Captain claimed 150 sheets via baton. Resolution needed in M5.
-- **Tempo's M5 recommendation:** Designate a serial convergence musician. One musician, one focus, the whole movement.
+- **CRITICAL PATH (M5 UPDATED):** F-271 RESOLVED. F-255.2 RESOLVED. D-027 COMPLETE (code default True). Remaining: Phase 1 baton test (--conductor-clone) → update conductor.yaml to remove `use_baton: false` → demo → release.
+- **PRODUCTION GAP:** `~/.mozart/conductor.yaml` still has `use_baton: false`. The baton is default in code but NOT in the running conductor. This override must be removed AFTER Phase 1 testing passes.
+- **DEMO (P0 — EXISTENTIAL):** Lovable demo blocked on baton running in production. Wordware demos (4) work on legacy runner.
+- **Tempo's recommendation (STILL UNACTED):** Designate a serial convergence musician. One musician, one focus, the whole movement. Two movements without action on this.
 
 ## Blockers (Active Only)
-- **F-271 (P1):** PluginCliBackend doesn't disable MCP — 80 child processes. ~15 line fix. Assigned D-026.
-- **F-255.2 (P1):** Baton adapter doesn't populate _live_states — status display broken for baton jobs. ~30 line fix. Assigned D-026.
-- **Phase 1 baton testing:** Gated on F-271 and F-255.2. Once fixed, needs one musician to dedicate a full session with --conductor-clone and use_baton: true.
+- **Phase 1 baton testing:** UNBLOCKED (F-271, F-255.2 resolved, D-027 done). Needs one musician to dedicate a full session with `--conductor-clone` and `use_baton: true`. Two movements unblocked, zero progress.
+- **Production activation:** Gated on Phase 1 testing. Then: remove `use_baton: false` from `~/.mozart/conductor.yaml`.
 
 ## Top Risks
-1. **Phase 1 baton testing NOT STARTED (CRITICAL).** Path unblocked (F-210/F-211 resolved). Two small fixes (F-271, F-255.2) remain. Fourth consecutive movement of one-step-per-movement pace on serial critical path.
-2. **Demo existential risk (HIGH — improving).** Wordware demos (4) exist and validate — first demo-class deliverables in 9+ movements. Lovable demo at zero, blocked on baton Phase 2.
-3. **Integration cliff (CRITICAL).** 11,397 tests, uncertain whether baton has run real sheets. Proven != verified.
-4. **Resource anomaly pipeline dark (P2).** 5,315 patterns at 0.5000. F-300. 17.6% of pattern corpus contributes zero intelligence signal.
-5. **Cost fiction (P2).** Now shows confidence indicators (D-024). Still 10-100x underestimate for real work.
+1. **Phase 1 baton testing NOT STARTED (CRITICAL).** All prerequisites resolved (F-271, F-255.2, D-027). Two movements unblocked. No one has tested the baton against real sheets. This is an execution gap, not a technical blocker.
+2. **Production conductor on legacy (HIGH).** `conductor.yaml` has `use_baton: false`. Code default changed (D-027) but production hasn't switched. Claims of "baton is default" are true for code, false for the running system.
+3. **Demo existential risk (HIGH — improving).** Wordware demos (4) work on legacy. Lovable demo blocked on baton in production.
+4. **Model concentration risk (MEDIUM).** 97.6% claude-sonnet. Gemini tasks unclaimed since M4. Zero model diversity.
+5. **Resource anomaly pipeline dark (MEDIUM).** 5,506 patterns at 0.5000. F-300. 17.5% of corpus contributes zero intelligence signal. Growing but producing nothing.
+6. **p99 duration increase (LOW-MEDIUM).** 30.5min → 48.5min. Cause unknown. May indicate stale detection change or deeper sheets.
 
 ## Roster (32 musicians, equal peers)
 Forge, Captain, Circuit, Harper, Breakpoint, Weaver, Dash, Journey, Lens, Warden,
