@@ -86,6 +86,8 @@ mozart-opus-evolution-v*.yaml
 CLAUDE.md
 memory-bank/
 STATUS.md
+.claude
+.playwright*
 
 # Exceptions: tracked directories that might match patterns above
 !examples/
@@ -102,6 +104,7 @@ site/
 
 # Flowspec (cache and generated output — config.yaml IS tracked)
 .flowspec/cache/
+flowspec*
 
 # OS
 .DS_Store

@@ -142,7 +142,22 @@ def _tui_mode(*, filter_job: str | None, interval: float) -> None:
             f"in TUI mode. Use --json for filtered output.[/dim]"
         )
     app = MonitorApp(reader=reader, refresh_interval=interval)
-    app.run()
+    try:
+        app.run()
+    except RuntimeError as e:
+        if "cannot join thread before it is started" in str(e):
+            from mozart.cli.output import output_error
+
+            output_error(
+                "TUI monitor failed to start due to severe system resource contention.",
+                hints=[
+                    "Your system may be out of PIDs or memory (Resource temporarily unavailable).",
+                    "Try closing unused applications or reducing MCP fanout concurrency.",
+                    "Use 'mozart status' or 'mozart top --json' for a non-graphical view.",
+                ],
+            )
+            raise typer.Exit(1) from None
+        raise
 
 
 # =============================================================================

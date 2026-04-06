@@ -327,6 +327,7 @@ class DaemonProcess:
                 self._config,
                 start_time=self._start_time,
                 monitor=self._monitor,
+                pgroup=self._pgroup,
             )
             # Now wire the manager back into the monitor for job counts.
             self._monitor.set_manager(self._manager)

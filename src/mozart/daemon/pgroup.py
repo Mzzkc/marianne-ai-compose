@@ -30,18 +30,11 @@ from mozart.core.logging import get_logger
 
 _logger = get_logger("daemon.pgroup")
 
-# Patterns that identify orphaned backend child processes.
-# These are processes spawned by Claude CLI (or similar backends) that
-# should not outlive their parent.  Matched against the joined cmdline.
-_ORPHAN_CMDLINE_PATTERNS: tuple[str, ...] = (
-    "symbols run",           # Claude Code LSP MCP servers
-    "tsserver",              # TypeScript language server
-    "typingsinstaller",      # TypeScript typings installer
-    "pyright-langserver",    # Pyright language server
-    "rust-analyzer",         # Rust language server (via symbols)
-    "typescript-language-server",  # TS language server (via symbols)
-    "clangd",                # C/C++ language server (via symbols)
-)
+# No hardcoded cmdline patterns for orphan detection.
+# Orphans are identified by ancestry: if a tracked backend PID is dead
+# but its children survive (reparented to init/systemd), those children
+# are orphans regardless of what they're called. This works for any
+# MCP server, LSP server, or tool server on any system.
 
 
 class ProcessGroupManager:
@@ -60,6 +53,10 @@ class ProcessGroupManager:
         self._original_pgid: int = os.getpgrp()
         self._is_leader: bool = False
         self._atexit_registered: bool = False
+        # PIDs of processes spawned by backends (claude, etc.).
+        # Used to identify orphaned children: if a tracked PID is dead
+        # but its children survive, those children are orphans.
+        self._tracked_backend_pids: set[int] = set()
 
     @property
     def is_leader(self) -> bool:
@@ -70,6 +67,23 @@ class ProcessGroupManager:
     def original_pgid(self) -> int:
         """Process group ID before setup() was called."""
         return self._original_pgid
+
+    def track_backend_pid(self, pid: int) -> None:
+        """Register a backend process PID for orphan tracking.
+
+        When a backend (claude, gemini-cli, etc.) spawns a process, call
+        this with the process PID. On cleanup, any surviving children of
+        dead tracked PIDs are killed as orphans — regardless of what
+        they're called. This replaces cmdline pattern matching with
+        ancestry-based detection.
+        """
+        self._tracked_backend_pids.add(pid)
+        _logger.debug("pgroup.track_backend", pid=pid)
+
+    def untrack_backend_pid(self, pid: int) -> None:
+        """Remove a backend PID from tracking after clean exit."""
+        self._tracked_backend_pids.discard(pid)
+        _logger.debug("pgroup.untrack_backend", pid=pid)
 
     def setup(self) -> None:
         """Create a new process group with the daemon as leader.
@@ -197,24 +211,34 @@ class ProcessGroupManager:
                         )
                         continue
 
-                    # Detect orphaned MCP servers (reparented away from us).
-                    # On classic Unix, reparented children get ppid=1 (init).
-                    # On systemd user instances or WSL, the reparent target
-                    # may be a user-level init with a different PID.  We check
-                    # both ppid==1 AND ppid!=our_pid to catch both cases.
-                    cmdline = " ".join(child.cmdline()).lower()
+                    # Detect orphaned child processes by ancestry.
+                    # If a tracked backend PID is dead but its children
+                    # survive (reparented to init/systemd), those children
+                    # are orphans. Works for ANY tool server on any system.
                     my_pid = os.getpid()
                     child_ppid = child.ppid()
                     is_orphan = child_ppid != my_pid and child_ppid != 0
-                    if "mcp" in cmdline and is_orphan:
-                        child.terminate()
-                        orphans.append(child.pid)
-                        _logger.warning(
-                            "pgroup.killed_orphan_mcp",
-                            pid=child.pid,
-                            ppid=child_ppid,
-                            cmdline_snippet=cmdline[:120],
-                        )
+
+                    if is_orphan and self._tracked_backend_pids:
+                        dead_backends = set()
+                        for bpid in self._tracked_backend_pids:
+                            try:
+                                os.kill(bpid, 0)
+                            except OSError:
+                                dead_backends.add(bpid)
+                        self._tracked_backend_pids -= dead_backends
+
+                        if dead_backends:
+                            cmdline = " ".join(child.cmdline()).lower()
+                            child.kill()
+                            orphans.append(child.pid)
+                            _logger.warning(
+                                "pgroup.killed_orphan",
+                                pid=child.pid,
+                                ppid=child_ppid,
+                                cmdline_snippet=cmdline[:120],
+                                dead_backend_pids=list(dead_backends),
+                            )
 
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
@@ -269,23 +293,29 @@ class ProcessGroupManager:
                     if ppid not in (0, 1):
                         continue
 
-                    cmdline_parts = info.get("cmdline")
-                    if not cmdline_parts:
+                    # If we have dead tracked backends, any orphan
+                    # reparented to init is suspect — kill it.
+                    if not self._tracked_backend_pids:
                         continue
-                    cmdline = " ".join(cmdline_parts).lower()
+                    dead_backends = set()
+                    for bpid in self._tracked_backend_pids:
+                        try:
+                            os.kill(bpid, 0)
+                        except OSError:
+                            dead_backends.add(bpid)
+                    self._tracked_backend_pids -= dead_backends
 
-                    # Match against known orphan patterns
-                    for pattern in _ORPHAN_CMDLINE_PATTERNS:
-                        if pattern in cmdline:
-                            proc.kill()  # SIGKILL — these already ignored SIGTERM
-                            killed.append(info["pid"])
-                            _logger.warning(
-                                "pgroup.reaped_orphaned_backend_child",
-                                pid=info["pid"],
-                                pattern=pattern,
-                                cmdline_snippet=cmdline[:120],
-                            )
-                            break
+                    if dead_backends:
+                        cmdline_parts = info.get("cmdline")
+                        cmdline = " ".join(cmdline_parts).lower() if cmdline_parts else ""
+                        proc.kill()
+                        killed.append(info["pid"])
+                        _logger.warning(
+                            "pgroup.reaped_orphaned_backend_child",
+                            pid=info["pid"],
+                            cmdline_snippet=cmdline[:120],
+                            dead_backend_pids=list(dead_backends),
+                        )
 
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     continue
@@ -335,8 +365,7 @@ class ProcessGroupManager:
                 break
         return orphans
 
-    @staticmethod
-    def _reap_orphans_proc() -> list[int]:
+    def _reap_orphans_proc(self) -> list[int]:
         """Fallback system-wide orphan scan using /proc (Linux only)."""
         killed: list[int] = []
         my_uid = os.getuid()
@@ -371,24 +400,31 @@ class ProcessGroupManager:
                 if ppid not in (0, 1):
                     continue
 
-                # Check cmdline
-                with open(f"{proc_path}/{pid}/cmdline") as f:
-                    cmdline = f.read().replace("\0", " ").lower()
+                # Kill if we have dead tracked backends
+                if not self._tracked_backend_pids:
+                    continue
+                dead_backends = set()
+                for bpid in self._tracked_backend_pids:
+                    try:
+                        os.kill(bpid, 0)
+                    except OSError:
+                        dead_backends.add(bpid)
+                self._tracked_backend_pids -= dead_backends
 
-                for pattern in _ORPHAN_CMDLINE_PATTERNS:
-                    if pattern in cmdline:
-                        try:
-                            os.kill(pid, signal.SIGKILL)
-                            killed.append(pid)
-                            _logger.warning(
-                                "pgroup.reaped_orphaned_backend_child",
-                                pid=pid,
-                                pattern=pattern,
-                                cmdline_snippet=cmdline[:120],
-                            )
-                        except (OSError, ProcessLookupError):
-                            pass
-                        break
+                if dead_backends:
+                    with open(f"{proc_path}/{pid}/cmdline") as f:
+                        cmdline = f.read().replace("\0", " ").lower()
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                        killed.append(pid)
+                        _logger.warning(
+                            "pgroup.reaped_orphaned_backend_child",
+                            pid=pid,
+                            cmdline_snippet=cmdline[:120],
+                            dead_backend_pids=list(dead_backends),
+                        )
+                    except (OSError, ProcessLookupError):
+                        pass
 
             except (OSError, ValueError):
                 continue

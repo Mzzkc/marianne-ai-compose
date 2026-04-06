@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from mozart.backends.base import ExecutionResult
     from mozart.core.checkpoint import CheckpointState
     from mozart.execution.grounding import GroundingEngine, GroundingResult
+    from mozart.execution.parallel import ResourceChecker
     from mozart.execution.retry_strategy import ErrorRecord
     from mozart.execution.validation import SheetValidationResult
     from mozart.learning.global_store import GlobalLearningStore
@@ -615,6 +616,11 @@ class RunnerContext:
 
     self_healing_auto_confirm: bool = False
     """Auto-confirm suggested fixes (equivalent to --yes flag)."""
+
+    resource_checker: ResourceChecker | None = field(
+        default=None,
+        metadata={"description": "Resource checker for parallel execution backpressure."},
+    )
 
 
 # Re-export commonly used types from other modules for convenience

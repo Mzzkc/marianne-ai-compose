@@ -31,6 +31,7 @@ from mozart.daemon.monitor import ResourceMonitor
 from mozart.daemon.observer import JobObserver
 from mozart.daemon.observer_recorder import ObserverRecorder
 from mozart.daemon.output import StructuredOutput
+from mozart.daemon.pgroup import ProcessGroupManager
 from mozart.daemon.rate_coordinator import RateLimitCoordinator
 from mozart.daemon.registry import DaemonJobStatus, JobRecord, JobRegistry
 from mozart.daemon.scheduler import GlobalSheetScheduler
@@ -109,6 +110,21 @@ class JobMeta:
         return result
 
 
+class DaemonResourceChecker:
+    """Bridges ResourceMonitor to ParallelExecutor's ResourceChecker protocol.
+
+    Used by JobManager to provide backpressure hints to the parallel
+    executor during fanout stages.
+    """
+
+    def __init__(self, monitor: ResourceMonitor) -> None:
+        self._monitor = monitor
+
+    async def can_start_parallel_sheet(self) -> bool:
+        """Check if system resource pressure allows another parallel sheet."""
+        return self._monitor.is_accepting_work()
+
+
 class JobManager:
     """Manages concurrent job execution within the daemon.
 
@@ -123,9 +139,11 @@ class JobManager:
         *,
         start_time: float | None = None,
         monitor: ResourceMonitor | None = None,
+        pgroup: ProcessGroupManager | None = None,
     ) -> None:
         self._config = config
         self._start_time = start_time or time.monotonic()
+        self._pgroup = pgroup
 
         # Phase 3: Centralized learning hub.
         # Single GlobalLearningStore shared across all jobs — pattern
@@ -297,6 +315,7 @@ class JobManager:
             registry=self._registry,
             token_warning_threshold=self._config.preflight.token_warning_threshold,
             token_error_threshold=self._config.preflight.token_error_threshold,
+            pgroup_manager=self._pgroup,
         )
         # Start semantic analyzer after event bus (needs bus for subscription).
         # Failure must not prevent the conductor from starting.
@@ -1958,6 +1977,7 @@ class JobManager:
                 dry_run=request.dry_run,
                 pause_event=self._pause_events.get(job_id),
                 config_path=str(request.config_path),
+                resource_checker=DaemonResourceChecker(self._monitor),
             )
 
             # Track whether this run actually completed new sheets
@@ -2279,6 +2299,7 @@ class JobManager:
                 config_path=meta.config_path if meta else None,
                 no_reload=no_reload,
                 pause_event=self._pause_events.get(job_id),
+                resource_checker=DaemonResourceChecker(self._monitor),
             )
 
             # Track whether this run actually completed new sheets

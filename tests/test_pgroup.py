@@ -253,9 +253,12 @@ class TestAtexitCleanup:
 class TestReapOrphanedBackends:
     """Test system-wide orphan reaper for leaked backend children."""
 
-    def test_kills_matching_orphans(self) -> None:
-        """Processes matching orphan patterns with ppid=1 are killed."""
+    def test_kills_orphans_from_dead_tracked_backend(self) -> None:
+        """Orphaned processes are killed when their tracked backend is dead."""
         mgr = ProcessGroupManager()
+        # Simulate a backend PID that no longer exists
+        mgr.track_backend_pid(99999)
+
         mock_proc = MagicMock()
         mock_proc.info = {
             "pid": 12345,
@@ -265,7 +268,8 @@ class TestReapOrphanedBackends:
         }
 
         with patch("psutil.process_iter", return_value=[mock_proc]):
-            killed = mgr.reap_orphaned_backends()
+            with patch("os.kill", side_effect=OSError("No such process")):
+                killed = mgr.reap_orphaned_backends()
 
         assert 12345 in killed
         mock_proc.kill.assert_called_once()
@@ -304,14 +308,14 @@ class TestReapOrphanedBackends:
         assert killed == []
         mock_proc.kill.assert_not_called()
 
-    def test_skips_non_matching_cmdline(self) -> None:
-        """Processes that don't match any orphan pattern are left alone."""
+    def test_skips_orphans_when_no_tracked_backends(self) -> None:
+        """No orphans killed when no backend PIDs are tracked."""
         mgr = ProcessGroupManager()
         mock_proc = MagicMock()
         mock_proc.info = {
             "pid": 12345,
             "ppid": 1,
-            "cmdline": ["python", "my_important_server.py"],
+            "cmdline": ["node", "symbols", "run", "pyright-langserver"],
             "uids": MagicMock(real=os.getuid()),
         }
 
@@ -327,6 +331,8 @@ class TestReapOrphanedBackends:
         import psutil
 
         mgr = ProcessGroupManager()
+        mgr.track_backend_pid(99999)  # Dead backend
+
         mock_proc = MagicMock()
         mock_proc.info = {
             "pid": 12345,
@@ -337,7 +343,8 @@ class TestReapOrphanedBackends:
         mock_proc.kill.side_effect = psutil.NoSuchProcess(12345)
 
         with patch("psutil.process_iter", return_value=[mock_proc]):
-            killed = mgr.reap_orphaned_backends()
+            with patch("os.kill", side_effect=OSError("No such process")):
+                killed = mgr.reap_orphaned_backends()
 
         # Process disappeared before kill — no crash, not counted as killed
         assert killed == []

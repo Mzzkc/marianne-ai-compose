@@ -271,9 +271,10 @@ class TestCleanupOrphans:
         assert 999 in result
         mock_waitpid.assert_called_once_with(999, os.WNOHANG)
 
-    def test_cleanup_kills_orphaned_mcp(self):
-        """cleanup_orphans terminates orphaned MCP servers."""
+    def test_cleanup_kills_orphans_of_dead_tracked_backend(self):
+        """cleanup_orphans kills orphans when their tracked backend is dead."""
         pgm = ProcessGroupManager()
+        pgm.track_backend_pid(99999)  # Will appear dead via os.kill probe
 
         mock_psutil = MagicMock()
         mock_psutil.STATUS_ZOMBIE = "zombie"
@@ -294,11 +295,12 @@ class TestCleanupOrphans:
         with (
             patch.dict("sys.modules", {"psutil": mock_psutil}),
             patch("mozart.daemon.pgroup.os.getpid", return_value=1000),
+            patch("mozart.daemon.pgroup.os.kill", side_effect=OSError),
         ):
             result = pgm.cleanup_orphans()
 
         assert 888 in result
-        orphan.terminate.assert_called_once()
+        orphan.kill.assert_called_once()
 
     def test_cleanup_ignores_normal_children(self):
         """cleanup_orphans leaves healthy children alone."""

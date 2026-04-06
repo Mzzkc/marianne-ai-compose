@@ -93,6 +93,12 @@ class ClaudeCliBackend(Backend):
         self.progress_interval_seconds = progress_interval_seconds
         self.cli_extra_args = cli_extra_args or []
 
+        # PID tracking callbacks for orphan detection.
+        # Set by the daemon's ProcessGroupManager when running under the conductor.
+        # Standalone CLI mode leaves these as None — no orphan tracking needed.
+        self._on_process_spawned: Callable[[int], None] | None = None
+        self._on_process_exited: Callable[[int], None] | None = None
+
         # Real-time output logging paths (set per-sheet by runner)
         # Industry standard: separate files for stdout and stderr
         self._stdout_log_path: Path | None = None
@@ -642,6 +648,10 @@ class ClaudeCliBackend(Backend):
                 start_new_session=True,
             )
 
+            # Track PID for orphan detection by the daemon's pgroup manager
+            if self._on_process_spawned and process.pid is not None:
+                self._on_process_spawned(process.pid)
+
             # Write prompt to subprocess stdin, then close to signal EOF.
             # Must happen before _stream_with_progress: if the subprocess waits
             # for stdin EOF before producing output, reading stdout first would
@@ -839,42 +849,47 @@ class ClaudeCliBackend(Backend):
 
         Fix: After streams close, wait briefly for Claude to exit. If it doesn't,
         kill the entire process group (Claude + all children including MCP servers).
-
-        Detection: When #1935 is fixed, process.wait() will succeed within
-        PROCESS_EXIT_TIMEOUT consistently. Monitor the "process_exit_timeout" log
-        event — when it drops to zero, this workaround can be removed.
         """
+        pid = process.pid
+        # Check if the process is already dead (e.g. from SIGABRT)
+        is_already_dead = process.returncode is not None
+
         try:
-            await asyncio.wait_for(process.wait(), timeout=PROCESS_EXIT_TIMEOUT)
+            if not is_already_dead:
+                await asyncio.wait_for(process.wait(), timeout=PROCESS_EXIT_TIMEOUT)
+                return
         except TimeoutError:
-            pid = process.pid
             _logger.warning(
                 "process_exit_timeout",
                 message="Claude did not exit after streams closed (likely MCP server bug)",
                 pid=pid,
                 timeout_seconds=PROCESS_EXIT_TIMEOUT,
             )
-            # Stage 1: SIGTERM the entire process group (graceful)
-            try:
-                pgid = os.getpgid(pid)
-                os.killpg(pgid, signal.SIGTERM)
-                await asyncio.sleep(1.0)
-            except (OSError, ProcessLookupError):
-                pgid = None
 
-            # Stage 2: SIGKILL the entire process group (force)
-            # MCP servers / LSP servers often ignore SIGTERM — escalate to
-            # SIGKILL on the full group, not just the main process.
-            if pgid is not None:
+        # Process is either dead but hanging on children, or timed out.
+        # Immediately escalate to SIGKILL on the entire process group.
+        # Skip SIGTERM/sleep if already dead to prevent orphan compounding.
+        try:
+            pgid = os.getpgid(pid)
+            if not is_already_dead:
+                os.killpg(pgid, signal.SIGTERM)
+                # Briefest possible wait for graceful group exit if not already dead
                 try:
-                    os.killpg(pgid, signal.SIGKILL)
-                except (OSError, ProcessLookupError):
+                    await asyncio.wait_for(process.wait(), timeout=0.5)
+                    return
+                except TimeoutError:
                     pass
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
-            await process.wait()
+
+            # Force kill the full group — MCP servers often ignore SIGTERM
+            os.killpg(pgid, signal.SIGKILL)
+        except (OSError, ProcessLookupError):
+            pass
+
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        await process.wait()
 
     async def _stream_with_progress(
         self,
@@ -961,6 +976,10 @@ class ClaudeCliBackend(Backend):
             raise
 
         await self._await_process_exit(process)
+
+        # Untrack PID — process and children are cleaned up
+        if self._on_process_exited and process.pid is not None:
+            self._on_process_exited(process.pid)
 
         return b"".join(stdout_chunks), b"".join(stderr_chunks)
 

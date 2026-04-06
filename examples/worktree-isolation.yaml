@@ -18,7 +18,8 @@
 name: parallel-safe-code-review
 description: Code review with worktree isolation for parallel safety
 workspace: ../workspaces/review-workspace
-working_directory: /path/to/your/repo  # Must be a git repository
+# Note: The git repository is auto-detected from the score's location.
+# Use isolation.source_branch to specify which branch to base worktrees on.
 
 instrument: claude-code
 instrument_config:

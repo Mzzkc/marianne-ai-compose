@@ -24,8 +24,10 @@ from mozart.daemon.output import NullOutput, OutputProtocol
 if TYPE_CHECKING:
     from mozart.backends.base import Backend
     from mozart.core.config import JobConfig
+    from mozart.daemon.pgroup import ProcessGroupManager
     from mozart.daemon.registry import JobRegistry
     from mozart.execution.grounding import GroundingEngine
+    from mozart.execution.parallel import ResourceChecker
     from mozart.execution.runner import JobRunner
     from mozart.execution.runner.models import RunSummary
     from mozart.learning.global_store import GlobalLearningStore
@@ -120,6 +122,7 @@ class JobService:
         registry: JobRegistry | None = None,
         token_warning_threshold: int | None = None,
         token_error_threshold: int | None = None,
+        pgroup_manager: ProcessGroupManager | None = None,
     ) -> None:
         self._output = output or NullOutput()
         self._learning_store = global_learning_store
@@ -129,6 +132,7 @@ class JobService:
         self._registry = registry
         self._token_warning_threshold = token_warning_threshold
         self._token_error_threshold = token_error_threshold
+        self._pgroup_manager = pgroup_manager
         self._notification_consecutive_failures = 0
         self._notifications_degraded = False
 
@@ -156,6 +160,7 @@ class JobService:
         dry_run: bool = False,
         pause_event: asyncio.Event | None = None,
         config_path: str | None = None,
+        resource_checker: ResourceChecker | None = None,
     ) -> RunSummary:
         """Start a job from config.
 
@@ -235,6 +240,7 @@ class JobService:
                 self_healing=self_healing,
                 self_healing_auto_confirm=self_healing_auto_confirm,
                 pause_event=pause_event,
+                resource_checker=resource_checker,
             )
 
             return await self._execute_runner(
@@ -267,6 +273,7 @@ class JobService:
         self_healing: bool = False,
         self_healing_auto_confirm: bool = False,
         pause_event: asyncio.Event | None = None,
+        resource_checker: ResourceChecker | None = None,
     ) -> RunSummary:
         """Resume a paused or failed job.
 
@@ -392,6 +399,7 @@ class JobService:
                 self_healing=self_healing,
                 self_healing_auto_confirm=self_healing_auto_confirm,
                 pause_event=pause_event,
+                resource_checker=resource_checker,
             )
 
             return await self._execute_runner(
@@ -494,6 +502,7 @@ class JobService:
         self_healing: bool = False,
         self_healing_auto_confirm: bool = False,
         pause_event: asyncio.Event | None = None,
+        resource_checker: ResourceChecker | None = None,
     ) -> JobRunner:
         """Create a configured JobRunner from components."""
         from mozart.execution.runner import JobRunner as JR
@@ -516,6 +525,7 @@ class JobService:
             daemon_managed=True,
             token_warning_threshold=self._token_warning_threshold,
             token_error_threshold=self._token_error_threshold,
+            resource_checker=resource_checker,
         )
 
         return JR(
@@ -775,6 +785,13 @@ class JobService:
         )
 
         backend = create_backend(config)
+
+        # Wire PID tracking for orphan detection when running under daemon.
+        if self._pgroup_manager is not None:
+            if hasattr(backend, "_on_process_spawned"):
+                backend._on_process_spawned = self._pgroup_manager.track_backend_pid
+            if hasattr(backend, "_on_process_exited"):
+                backend._on_process_exited = self._pgroup_manager.untrack_backend_pid
 
         outcome_store, global_learning_store = setup_learning(
             config,

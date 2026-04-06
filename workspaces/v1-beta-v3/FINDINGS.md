@@ -2312,3 +2312,128 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 - **Finding:** `test_instrument_fallbacks_not_silently_ignored` expected `JobConfig(**score)` to raise for unknown field `instrument_fallbacks`, but `instrument_fallbacks` was added as a real field on `JobConfig` at `src/mozart/core/config/job.py:684`. Test failed deterministically.
 - **Impact:** Full test suite fails on every run.
 - **Resolution:** Updated test to use `instrument_priorities` (genuinely non-existent field). Test renamed to `test_instrument_priorities_not_silently_ignored`. All 21 tests pass.
+
+### F-480: Trademark Collision — "Mozart" Name Blocked by Two Active Products
+- **Found by:** Composer + monitor, Movement 5
+- **Severity:** P0 (blocks v1 release under current name)
+- **Status:** Open — rename to Marianne initiated
+- **Category:** legal / identity
+- **Description:** Two entities hold active claims on "Mozart" in the AI orchestration space. (1) Mozart AI (London) — AI music production startup, $6M seed from Balderton Capital, 100K users. (2) Automation Anywhere — $2.8B company with "Mozart Orchestrator" product doing AI agent orchestration, USPTO trademark serial 99680702. The second is a direct product-category collision: same name, same domain (AI agent orchestration), backed by enterprise legal resources.
+- **Impact:** Continuing under "Mozart" exposes the project to trademark enforcement the moment it gains public visibility. The v1 beta cannot ship under this name.
+- **Resolution plan:** Rename to "Marianne AI Compose" (CLI: `mzt`). Named for Maria Anna "Marianne" Mozart — Wolfgang's older sister, the prodigy history forgot. The orchestral metaphor and all musical vocabulary (scores, sheets, conductors, musicians, concerts, baton, libretto, fermata) are retained. Only the product name and package name change. Package: `marianne`. Config path: `~/.mzt/`. Full scope in composer-notes.yaml P0 directive.
+
+### F-481: Orphan Detection Relies on Hardcoded Cmdline Patterns — Environment-Specific, Silent Failure on Other Systems
+- **Found by:** Composer, post-Movement 5
+- **Severity:** P1 (high — silent failure on non-developer systems)
+- **Status:** Partially resolved — legacy runner path wired, baton path unwired
+- **Category:** architecture
+- **Finding:** `ProcessGroupManager` used a hardcoded tuple `_ORPHAN_CMDLINE_PATTERNS` containing patterns specific to one developer's MCP stack (`symbols run`, `pyright-langserver`, `rust-analyzer`, `clangd`, etc.). On any other system these patterns match nothing — orphaned MCP/LSP servers accumulate silently until thread/PID exhaustion kills the conductor. The original `"mcp" in cmdline` fallback was also environment-specific (not all tool servers have "mcp" in their command line).
+- **Resolution (partial):** Replaced pattern matching with PID ancestry tracking. `ProcessGroupManager` now has `track_backend_pid(pid)` / `untrack_backend_pid(pid)`. When a tracked backend PID dies, any orphaned children in the daemon's process tree are killed — regardless of what they're called. Works for any MCP server, LSP server, or tool server on any system.
+- **What's wired:** Legacy runner path (`JobService._setup_components` → sets `backend._on_process_spawned` / `_on_process_exited` callbacks). Chain: `DaemonProcess._pgroup` → `JobManager._pgroup` → `JobService._pgroup_manager` → `_setup_components()`.
+- **What's NOT wired:** Baton path. `BackendPool._acquire_locked()` creates `PluginCliBackend` instances without PID tracking callbacks. `PluginCliBackend` itself lacks `_on_process_spawned`/`_on_process_exited` callback slots. Until wired, any score using instruments + baton has zero orphan detection.
+- **Action:** Wire baton path. (1) Add callback slots to `PluginCliBackend`. (2) Pass pgroup reference to `BackendPool`. (3) Wire callbacks in `BackendPool._acquire_locked()` after backend creation. Same pattern as `JobService._setup_components`.
+
+### F-482: MCP Server Leak Cascade — Thread Exhaustion Kill Chain
+- **Found by:** Composer, post-Movement 5
+- **Severity:** P1 (high — conductor death from MCP-enabled scores)
+- **Status:** Resolved for selective MCP; structural fix in F-481
+- **Category:** bug
+- **Finding:** Running a score with `disable_mcp: false` and no `--strict-mcp-config` caused Claude Code to load ALL ambient MCP servers from installed plugins. With `max_concurrent: 2`, each agent spawned N MCP servers. When Claude got SIGABRT, `_await_process_exit` waited 5 seconds before cleanup, giving orphans time to compound. The profiler's aiosqlite (thread-per-connection model) then hit `RuntimeError: can't start new thread`, killing the conductor. In one observed incident, 148 orphaned `symbols run` LSP servers consumed 11GB of RAM.
+- **Resolution:** (1) `_await_process_exit` now skips the 5s sleep when process is already dead (SIGABRT) — immediately escalates to SIGKILL on the process group. (2) SIGTERM grace period reduced from 1.0s to 0.5s. (3) Score-level fix: use `cli_extra_args: ["--strict-mcp-config", "--mcp-config", '{"mcpServers":{...}}']` to limit each agent to only the MCP servers it needs, instead of `disable_mcp: false` which loads everything ambient.
+- **Structural gap:** No per-sheet MCP configuration exists in score YAML. The `cli_extra_args` escape hatch works but is fragile. A proper technique system (MCP/skills specified per-instrument or per-sheet in score config) is needed for v1.
+
+### F-483: `cli_extra_args` Overrides Work — Validated for Selective MCP
+- **Found by:** Composer, post-Movement 5
+- **Severity:** Informational
+- **Status:** Confirmed working
+- **Category:** pattern
+- **Finding:** `cli_extra_args` in backend config is applied last in `_build_command()` (line 270-272 of `claude_cli.py`), overriding any earlier flags. Using `disable_mcp: false` (prevents the backend from adding empty `--mcp-config`) combined with `cli_extra_args: ["--strict-mcp-config", "--mcp-config", '<json>']` successfully limits each agent to exactly the specified MCP servers. Verified by process command line inspection and 5 consecutive sheet completions with Playwright MCP.
+- **Implication:** This is the correct workaround until a proper technique system exists. Scores needing specific MCP servers should use this pattern rather than `disable_mcp: false` alone.
+
+### F-484: Agent-Spawned Background Processes Escape PGID Cleanup
+- **Found by:** Composer, mzt-site monitoring session (2026-04-06)
+- **Severity:** P2 (resource leak, potential port conflicts, accumulates over long concerts)
+- **Status:** Open
+- **Category:** bug
+
+- **Finding:** When an agent uses Claude Code's Bash tool to spawn a background process (e.g., `python3 -m http.server 8800 &`), that process ends up in its own PGID — NOT in the agent's PGID. Mozart's cleanup kills the agent's PGID on sheet completion, but the Bash-spawned process survives indefinitely.
+
+  **Mechanism:**
+  1. `claude_cli.py:648` uses `start_new_session=True` → agent gets PGID X
+  2. Agent's Bash tool spawns `bash -c '...'` → Claude Code gives it PGID Y (not X)
+  3. Background process (`http.server &`) inherits PGID Y
+  4. Sheet ends → Mozart kills PGID X → agent + MCP children die
+  5. PGID Y survives — not in agent's group, not reparented to init
+
+  **Observed:** Sheet 6 of mzt-site spawned `python3 -m http.server 8800` (PID 3353, PGID 3352). It survived 45+ minutes past sheet completion, through 9 subsequent sheet transitions, and persisted after the entire 15-sheet score completed. Port 8800 remained bound — any future sheet trying to start a server on 8800 would fail with `Address already in use`.
+
+  **Why pgroup.py misses it:**
+  - `cleanup_orphans()` walks daemon's child tree — Bash-spawned processes aren't in it (PPID is terminal, not daemon)
+  - `reap_orphaned_backends()` scans for ppid=0/1 (reparented to init) — these have ppid=terminal PID, not init
+  - `kill_all_children()` signals daemon's PGID — the orphan is in a different PGID entirely
+
+  **Process tree evidence:**
+  ```
+  Conductor PGID 2420:
+    PID 2420 (mozart start)
+
+  Agent PGID 2435 (sheet 6):          ← killed on sheet end ✓
+    PID 2435 (claude)
+    PID 2461 (npm → playwright)
+    PID 2521 (sh)
+    PID 2522 (playwright-mcp node)
+
+  Orphan PGID 3352:                   ← NOT killed, survives indefinitely
+    PID 3352 (bash wrapper)
+    PID 3353 (python3 -m http.server)
+
+  Chrome PGID 5964:                   ← cleaned by Playwright exit handler ✓
+    PID 5964 + 9 children
+  ```
+
+- **Action:**
+  1. **Short-term:** Score authors should avoid prompts that cause agents to spawn persistent background processes, OR include cleanup instructions in downstream sheets.
+  2. **Medium-term:** Track ALL PIDs spawned during a sheet's execution window (not just the agent PID). On sheet completion, kill any processes spawned after the agent started that are still alive and not in the agent's PGID.
+  3. **Long-term:** The Bash tool PGID escape is a Claude Code architectural issue (#1935 area). Mozart could work around it by recording the full process tree snapshot before/after each sheet and killing the delta.
+
+### F-485: Conductor RSS Step Function After Playwright-Heavy Sheets
+- **Found by:** Composer, mzt-site monitoring session (2026-04-06)
+- **Severity:** P3 (low — no continuous growth, but worth monitoring)
+- **Status:** Open
+- **Category:** risk
+
+- **Finding:** Conductor RSS jumped from 84 MB to 101 MB (20% increase) between checks at ~T+25m, after sheets 6-7 completed (both used Playwright/Chrome, generating ~1 GB of transient Chrome processes). RSS then stabilized at 101 MB for the remaining 8 sheets and never returned to baseline.
+
+  **RSS timeline:**
+  ```
+  T+0m:   80.7 MB (baseline)
+  T+2m:   80.7 MB
+  T+8m:   82.1 MB (Chrome active for sheet 6)
+  T+15m:  82.6 MB (sheet 6 ended, Chrome cleaned up)
+  T+20m:  83.8 MB
+  T+27m:  101.2 MB  ← step function jump
+  T+33m:  101.3 MB (stable)
+  T+38m:  101.3 MB
+  T+44m:  101.3 MB
+  T+50m:  101.3 MB
+  T+55m:  101.9 MB
+  ```
+
+  This is NOT a continuous leak — RSS stabilized. But 20 MB retained after transient activity suggests Python object retention (event bus history, learning hub state, or job metadata accumulated during Chrome-heavy sheets). In a long concert with many Playwright sheets, this could accumulate.
+
+- **Action:** Monitor across longer runs (4+ hours). If RSS continues stepping up per-sheet, investigate with `tracemalloc` or `objgraph` on the daemon.
+
+### F-486: Chrome/Playwright Process Group Isolation — Working As Designed
+- **Found by:** Composer, mzt-site monitoring session (2026-04-06)
+- **Severity:** Informational
+- **Status:** Confirmed working
+- **Category:** architecture
+
+- **Finding:** Chrome browser processes spawned by Playwright MCP run in their own PGID (separate from both the conductor and the agent). This initially appeared to be a leak risk, but Playwright's exit handler cleans Chrome correctly when the MCP node process is killed. Verified across 3 sheet transitions where Chrome was active:
+  - Sheet 6 → Check 4: Chrome PGID 3389 (10 processes, ~1 GB) fully cleaned up
+  - Sheet 8 → Check 8: Chrome PGID 5964 (10 processes, ~878 MB) fully cleaned up
+  - Sheet 12-14: No Chrome spawned (agent didn't use Playwright)
+
+  The cleanup chain: Mozart kills agent PGID → playwright-mcp (node) dies → Playwright exit handler kills Chrome → all Chrome children terminate. This works because Playwright registers its own cleanup, not because Mozart manages Chrome's PGID.
+
+- **Implication:** No Mozart-side fix needed for Chrome cleanup. However, any MCP server that spawns child processes WITHOUT registering an exit handler would leak in the same way as F-484.

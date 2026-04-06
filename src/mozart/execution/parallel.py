@@ -16,7 +16,7 @@ a method to execute a batch of sheets concurrently.
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from mozart.core.checkpoint import SheetStatus
 from mozart.core.logging import get_logger
@@ -26,6 +26,19 @@ if TYPE_CHECKING:
     from mozart.core.checkpoint import CheckpointState
     from mozart.execution.runner import JobRunner
     from mozart.state.base import StateBackend
+
+
+class ResourceChecker(Protocol):
+    """Protocol for checking system resource pressure.
+
+    Satisfied by DaemonResourceChecker in daemon mode, or a NoOp checker
+    in standalone CLI mode.
+    """
+
+    async def can_start_parallel_sheet(self) -> bool:
+        """Whether another parallel sheet can be started safely."""
+        ...
+
 
 # Module logger
 _logger = get_logger("parallel")
@@ -230,15 +243,18 @@ class ParallelExecutor:
         self,
         runner: "JobRunner",
         config: ParallelExecutionConfig,
+        resource_checker: ResourceChecker | None = None,
     ):
         """Initialize parallel executor.
 
         Args:
             runner: The JobRunner that executes individual sheets.
             config: Parallel execution configuration.
+            resource_checker: Optional resource checker for backpressure.
         """
         self.runner = runner
         self.config = config
+        self.resource_checker = resource_checker
         self._logger = _logger
         self._permanently_failed: set[int] = set()
 
@@ -273,16 +289,14 @@ class ParallelExecutor:
         if not sheets:
             return result
 
-        # Limit concurrency
-        batch = sheets[: self.config.max_concurrent]
+        # Initial batch selection
+        batch_candidates = sheets[: self.config.max_concurrent]
         if len(sheets) > self.config.max_concurrent:
-            # Sheets beyond limit are skipped for this batch
-            # They'll be picked up in the next iteration
             result.skipped = sheets[self.config.max_concurrent :]
 
         self._logger.info(
             "parallel.batch_start",
-            sheets=batch,
+            sheets=batch_candidates,
             max_concurrent=self.config.max_concurrent,
             skipped=len(result.skipped),
         )
@@ -294,20 +308,39 @@ class ParallelExecutor:
 
         stagger_seconds = self.config.stagger_delay_ms / 1000.0
         tasks: dict[int, asyncio.Task[None]] = {}
+        batch_dispatched: list[int] = []
+
         try:
             # Use TaskGroup for structured concurrency (Python 3.11+)
             async with asyncio.TaskGroup() as tg:
-                for i, sheet_num in enumerate(batch):
+                for i, sheet_num in enumerate(batch_candidates):
+                    # Dynamic backpressure: check resource checker before starting each sheet.
+                    # If resources are scarce, don't start any more sheets in this batch.
+                    if self.resource_checker is not None and i > 0:
+                        can_start = await self.resource_checker.can_start_parallel_sheet()
+                        if not can_start:
+                            self._logger.warning(
+                                "parallel.backpressure_active",
+                                msg="Resource pressure detected, reducing batch concurrency",
+                                sheet_num=sheet_num,
+                                remaining_in_batch=batch_candidates[i:],
+                            )
+                            # Remaining candidates are skipped for now
+                            result.skipped.extend(batch_candidates[i:])
+                            break
+
                     if i > 0 and stagger_seconds > 0:
                         await asyncio.sleep(stagger_seconds)
+
                     task = tg.create_task(
                         self._execute_single_sheet(sheet_num, state),
                         name=f"sheet-{sheet_num}",
                     )
                     tasks[sheet_num] = task
+                    batch_dispatched.append(sheet_num)
 
-            # All tasks completed successfully (TaskGroup raises ExceptionGroup on failure)
-            result.completed.extend(tasks.keys())
+            # All dispatched tasks completed successfully
+            result.completed.extend(batch_dispatched)
 
         except* Exception as eg:
             # TaskGroup raises ExceptionGroup on failure

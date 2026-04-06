@@ -698,23 +698,24 @@ class TestAwaitProcessExit:
 
     @pytest.mark.asyncio
     async def test_timeout_kills_process_group(self, backend: ClaudeCliBackend):
-        """Process doesn't exit → kills process group."""
+        """Process doesn't exit → SIGTERM → still won't exit → SIGKILL."""
         proc = _make_mock_process(returncode=None, pid=9999)
         call_count = 0
 
-        async def wait_with_timeout():
+        async def timeout_then_exit():
             nonlocal call_count
             call_count += 1
-            if call_count == 1:
+            # First 2 calls: initial wait + SIGTERM wait both timeout
+            if call_count <= 2:
                 raise asyncio.TimeoutError()
+            # Third call: after SIGKILL, process finally exits
             return 0
 
-        proc.wait = wait_with_timeout
+        proc.wait = timeout_then_exit
         with patch("os.killpg") as mock_killpg, \
              patch("os.getpgid", return_value=9999):
             await backend._await_process_exit(proc)
-        # Two-stage kill: SIGTERM (graceful) then SIGKILL (force) on
-        # the entire process group — MCP/LSP servers ignore SIGTERM.
+        # SIGTERM fails (timeout), escalates to SIGKILL on process group.
         assert mock_killpg.call_count == 2
         mock_killpg.assert_any_call(9999, signal.SIGTERM)
         mock_killpg.assert_any_call(9999, signal.SIGKILL)

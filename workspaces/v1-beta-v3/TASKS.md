@@ -330,6 +330,11 @@ See FINDINGS.md F-097 through F-102 for full context.
 - [ ] Keep claude-cli for: setup (canyon, bedrock), work (all 32 musicians), quality-gate (bedrock), antagonists (newcomer, adversary) (priority: P1) [source: composer TDF analysis]
 - [ ] Add `instrument_map` or `per_sheet_instruments` to `generate-v3.py` for gemini-cli assignments (priority: P1) [source: composer TDF analysis]
 
+### Report Centralization
+- [ ] Create `{{ workspace }}/reports/` directory structure: coordination/, strategy/, cadence/, integration/, safety/, metrics/, reviews/ (priority: P1) [source: composer directive, M5]
+- [ ] Consolidate existing reports from movement-1 through movement-4 into reports/ structure — one-time mateship task for Captain or Weaver (priority: P1) [source: composer directive, M5]
+- [ ] All reporting agents (Captain, North, Tempo, Weaver, Warden, Oracle, reviewers) copy reports to reports/ subdirectory going forward (priority: P1) [source: composer directive, M5]
+
 ---
 
 ## Validation Strictness + Missing Score Features
@@ -413,3 +418,85 @@ Handoff: `docs/plans/compose-system/SESSION-HANDOFF-2.md`
 - [ ] Code-mode techniques implementation [source: roadmap]
 - [ ] Distributed execution (#52) [source: issue #52]
 - [ ] Full HITL (#64) [source: issue #64]
+
+---
+
+## The Rename: Mozart → Marianne (F-480)
+
+Composer directive: P0. See composer-notes.yaml for full context and scope.
+Marianne = Maria Anna "Marianne" Mozart, Wolfgang's older sister, the prodigy history sidelined.
+CLI: `mzt`. Package: `marianne`. Config: `~/.mzt/`. Musical vocabulary unchanged.
+
+### Phase 1: Package and Import Rename
+- [ ] Rename `src/mozart/` → `src/marianne/` (priority: P0) [source: F-480]
+- [ ] Update all internal imports from `mozart.*` → `marianne.*` across src/ (priority: P0) [source: F-480]
+- [ ] Update all test imports from `mozart.*` → `marianne.*` across tests/ (priority: P0) [source: F-480]
+- [ ] Update `pyproject.toml`: package name, entry points, project metadata (priority: P0) [source: F-480]
+- [ ] Rename CLI entry point: `mozart` → `mzt` in pyproject.toml console_scripts (priority: P0) [source: F-480]
+
+### Phase 2: Config and Runtime Paths
+- [ ] Update default config path: `~/.mozart/` → `~/.mzt/` with backward compat migration (priority: P0) [source: F-480]
+- [ ] Update socket path: `~/.mozart/mozart.sock` → `~/.mzt/mzt.sock` (priority: P0) [source: F-480]
+- [ ] Update state DB path: `~/.mozart/mozart-state.db` → `~/.mzt/mzt-state.db` (priority: P0) [source: F-480]
+- [ ] Update log path: `~/.mozart/mozart.log` → `~/.mzt/mzt.log` (priority: P0) [source: F-480]
+- [ ] Add one-time migration: detect `~/.mozart/`, copy to `~/.mzt/`, warn user (priority: P1) [source: F-480]
+
+### Phase 3: Documentation and Examples
+- [ ] Update CLAUDE.md — all references to Mozart → Marianne, mozart → mzt (priority: P0) [source: F-480]
+- [ ] Update .mozart/spec/ corpus — all 5 files (priority: P0) [source: F-480]
+- [ ] Update all docs/ files — daemon-guide, score-writing-guide, cli-reference, configuration-reference, getting-started, limitations (priority: P0) [source: F-480]
+- [ ] Update all examples/ scores — any hardcoded `mozart` references (priority: P0) [source: F-480]
+- [ ] Update scores/ operational scores (priority: P0) [source: F-480]
+- [ ] Rename `.mozart/` project directory → `.mzt/` (priority: P0) [source: F-480]
+
+### Phase 4: Tell the Story
+- [ ] [Guide] Write Marianne's story for the README — who she was, why the name, what it means for this project (priority: P0) [source: F-480, composer directive]
+- [ ] [Codex] Write Marianne's story for the docs landing page (priority: P0) [source: F-480, composer directive]
+- [ ] [Guide] Update getting-started.md with the new name, CLI examples, and story context (priority: P0) [source: F-480]
+
+### Phase 5: Verification
+- [ ] All tests pass under new package name (priority: P0) [source: F-480]
+- [ ] `mypy src/` clean (priority: P0) [source: F-480]
+- [ ] `ruff check src/` clean (priority: P0) [source: F-480]
+- [ ] `mzt start && mzt run examples/hello-mozart.yaml` works end-to-end (priority: P0) [source: F-480]
+- [ ] Backward compat: old `~/.mozart/` config migrated on first run (priority: P1) [source: F-480]
+- [ ] No remaining references to `mozart` in src/ except backward-compat migration code (priority: P0) [source: F-480]
+
+---
+
+## Orphan Detection: Wire Baton Path (F-481)
+
+PID ancestry-based orphan detection is implemented and wired for the legacy runner path. The baton path is unwired. This means any score using instruments + baton has zero orphan detection — leaked MCP/tool server processes accumulate until they kill the conductor.
+
+**Context:** `ProcessGroupManager` tracks PIDs of backend-spawned processes. When a tracked PID dies, any surviving children are killed as orphans. This replaces the old cmdline pattern matching (which was environment-specific and would silently fail on other systems).
+
+**What's done (legacy runner path):**
+- [x] `ProcessGroupManager.track_backend_pid(pid)` / `untrack_backend_pid(pid)` — `src/mozart/daemon/pgroup.py`
+- [x] `ClaudeCliBackend._on_process_spawned` / `_on_process_exited` callback slots — `src/mozart/backends/claude_cli.py`
+- [x] Callbacks fire on process spawn (line 651) and after `_await_process_exit` cleanup (line 980)
+- [x] Wiring chain: `DaemonProcess._pgroup` → `JobManager(pgroup=)` → `JobService(pgroup_manager=)` → `_setup_components()` wires callbacks via `hasattr` check
+- [x] Tests updated: `test_pgroup.py`, `test_daemon_pgroup.py`, `test_claude_cli_backend.py`
+
+**What needs doing (baton path):**
+- [ ] Add `_on_process_spawned` / `_on_process_exited` callback slots to `PluginCliBackend` (`src/mozart/execution/instruments/cli_backend.py`) (priority: P1) [source: F-481]
+- [ ] Fire callbacks in `PluginCliBackend` at process spawn and exit points — same pattern as `ClaudeCliBackend` (priority: P1) [source: F-481]
+- [ ] Pass pgroup reference to `BackendPool` (`src/mozart/daemon/baton/backend_pool.py`) (priority: P1) [source: F-481]
+- [ ] Wire callbacks in `BackendPool._acquire_locked()` after `_create_backend_for_profile()` returns — same `hasattr` pattern as `JobService._setup_components()` (priority: P1) [source: F-481]
+- [ ] Thread pgroup from `BatonCore` or `BatonAdapter` into `BackendPool.__init__()` (priority: P1) [source: F-481]
+- [ ] Tests: verify orphan detection works for baton-created backends (priority: P1) [source: F-481]
+
+**Key files:**
+- `src/mozart/daemon/pgroup.py` — `track_backend_pid` / `untrack_backend_pid` (already implemented)
+- `src/mozart/backends/claude_cli.py` — reference implementation of callback slots + firing
+- `src/mozart/daemon/job_service.py:789-793` — reference implementation of wiring
+- `src/mozart/daemon/baton/backend_pool.py:273-314` — `_acquire_locked()`, the wiring point
+- `src/mozart/execution/instruments/cli_backend.py` — `PluginCliBackend`, needs callback slots
+
+---
+
+## Technique System: Per-Sheet MCP/Skill Configuration (F-482, F-483)
+
+Scores currently have no way to specify which MCP servers or skills a sheet needs. The workaround is `cli_extra_args` with `--strict-mcp-config --mcp-config '<json>'`, which works but is fragile and backend-specific.
+
+- [ ] Design technique system: MCP servers and skills specified per-instrument or per-sheet in score YAML (priority: P2) [source: F-482, F-483]
+- [ ] `disable_mcp: false` without `--strict-mcp-config` loads ALL ambient MCP servers from plugins — document this as a known hazard until technique system exists (priority: P1) [source: F-482]
