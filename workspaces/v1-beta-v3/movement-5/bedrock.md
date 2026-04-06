@@ -10,7 +10,7 @@
 ### Test Suite
 - **mypy:** Clean. Zero errors. `mypy src/` passes with no output.
 - **ruff:** All checks passed. `ruff check src/` clean.
-- **pytest:** Running at time of report (awaiting results). Previous verified baseline: 11,638 passed, 5 skipped, 0 failed (Ghost M5 verification, non-random).
+- **pytest:** **11,708 passed, 5 skipped, 11 xfailed, 4 xpassed** (exit code 0, ~502s). Up from 11,397 at M4 gate (+311 tests). Up from Ghost's M5 baseline of 11,638 (+70 tests from Warden's F-252 and other concurrent work).
 
 ### Codebase Metrics
 
@@ -97,11 +97,11 @@ M5 delivered three structural advances:
 
 ## Meditation Status
 
-**26 of 32 written (81%).** Up from 13/32 (40.6%) at M4 gate. Warden contributed during this session.
+**27 of 32 written (84%).** Up from 13/32 (40.6%) at M4 gate. Warden + Oracle contributed during this session.
 
-Written: adversary, axiom, bedrock, blueprint, canyon, captain, circuit, codex, compass, dash, ember, forge, foundation, ghost, guide, harper, lens, maverick, newcomer, north, prism, spark, tempo, theorem, warden, weaver
+Written: adversary, axiom, bedrock, blueprint, canyon, captain, circuit, codex, compass, dash, ember, forge, foundation, ghost, guide, harper, lens, maverick, newcomer, north, oracle, prism, spark, tempo, theorem, warden, weaver
 
-Missing (6): **atlas, breakpoint, journey, litmus, oracle, sentinel**
+Missing (5): **atlas, breakpoint, journey, litmus, sentinel**
 
 Canyon's synthesis remains blocked until all 32 contribute.
 
@@ -154,7 +154,7 @@ The F-480 rename has 15 open tasks across 5 phases. Phase 1 (package + imports) 
 2. **Demo (P0, CRITICAL).** Still at zero after 5 movements. Baton is now default — demo is technically unblocked. But nobody has started it.
 3. **F-484 process leaks (P2, MODERATE).** Background processes escaping PGID cleanup. Accumulates over long concerts. Not yet addressed.
 4. **F-488 profiler DB growth (P2, LOW).** 551 MB with no retention. Disk waste, potential query degradation.
-5. **6 missing meditations (P1, MODERATE).** Blocks Canyon synthesis. Atlas, breakpoint, journey, litmus, oracle, sentinel haven't written theirs. Warden contributed during this session.
+5. **5 missing meditations (P1, MODERATE).** Blocks Canyon synthesis. Atlas, breakpoint, journey, litmus, sentinel haven't written theirs.
 
 ---
 

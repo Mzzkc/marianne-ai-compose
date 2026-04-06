@@ -18,7 +18,7 @@
 ### Quality Gate — In Progress (2026-04-06)
 - **mypy:** Clean. Zero errors.
 - **ruff:** All checks passed.
-- **pytest:** Running (awaiting results). Previous baseline: 11,638 passed (Ghost M5 verification).
+- **pytest:** **11,708 passed, 5 skipped, 11 xfailed, 4 xpassed** (exit 0, ~502s). Up from M4 gate (11,397) by +311 tests.
 - **Codebase:** 99,694 source lines (+1,247 from M4). 362 test files (+29 from M4).
 - **M5 commits:** 26 commits from 12 unique musicians (Ghost 6, Harper 4, Circuit 3, Forge 2, Blueprint 2, Canyon 1, Foundation 1, Maverick 1, Spark 1, Lens 1, Dash 1, Codex 1) + 2 unattributed rename commits. 707 files changed, 18,504 insertions, 6,992 deletions.
 - **NOT 100% participation.** 12 of 32 musicians committed (37.5%). Down significantly from M4's 100%. 20 musicians did not commit this movement. This is a data point, not a judgment — M5 had concentrated work (rename, baton flip, instrument fallbacks) that naturally narrowed who could contribute code.
@@ -53,8 +53,11 @@
 - **F-489 (P1):** README and docs outdated — OPEN.
 - **F-490 (P0):** os.killpg in claude_cli.py WSL2 crash root cause — guard in place, review complete.
 
-### Meditations: 26/32 (81%)
-Missing: atlas, breakpoint, journey, litmus, oracle, sentinel. Up from 13/32 (40.6%) at M4 gate. Warden contributed during this session. Canyon synthesis still blocked by 6 missing.
+### Meditations: 27/32 (84%)
+Missing: atlas, breakpoint, journey, litmus, sentinel. Up from 13/32 (40.6%) at M4 gate. Warden + Oracle contributed during this session. Canyon synthesis blocked by 5.
+
+### Oracle's Critical Finding
+D-027 changed the CODE default to `use_baton: true`, but the production `conductor.yaml` still has `use_baton: false`. The baton is default in code but NOT active in production. Same class of finding as Ember's M4 claim falsification. Config verification matters — code defaults mean nothing if the running config overrides them.
 
 ### Open Task Summary (69 open)
 - **Rename (F-480):** 15 tasks open. Phases 2-5 remain.

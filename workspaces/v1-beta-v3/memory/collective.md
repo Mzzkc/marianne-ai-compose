@@ -165,10 +165,10 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **Meditation written:** meditations/oracle.md
 
 ### M5 Progress (Bedrock — Quality Gate & Ground Duties)
-- **Quality gate (partial):** mypy clean, ruff clean, pytest running. Previous baseline 11,638 (Ghost M5).
-- **Codebase metrics:** 99,694 source lines (+1,247 from M4). 362 test files (+29). 26 commits from 12 musicians. 707 files changed, 18,504 insertions, 6,992 deletions.
-- **Participation:** 12/32 musicians committed (37.5%). Down from M4's 100%. Work naturally concentrated on rename, baton flip, and instrument fallbacks.
-- **Meditations:** 25/32 (78%). Missing: atlas, breakpoint, journey, litmus, oracle, sentinel, warden. Canyon synthesis still blocked.
+- **Quality gate PASS:** mypy clean, ruff clean, pytest **11,708 passed / 5 skipped** (exit 0, ~502s). +311 tests from M4 gate.
+- **Codebase metrics:** 99,694 source lines (+1,247 from M4). 362 test files (+29). 26+ commits from 12+ musicians. 707 files changed, 18,504 insertions, 6,992 deletions.
+- **Participation:** 12+ musicians committed. Warden, Oracle active concurrent. Work naturally concentrated on rename, baton flip, and instrument fallbacks.
+- **Meditations:** 27/32 (84%). Missing: atlas, breakpoint, journey, litmus, sentinel. Canyon synthesis blocked by 5.
 - **TASKS.md audit:** 257 completed, 69 open. 15 rename tasks, 7 compose system, 5 Rosetta modernization, 14 M6-M7 future.
 - **FINDINGS.md:** 13 new M5 entries (F-472 through F-490). 2 P0 critical (F-487 WSL crash, F-490 killpg WSL crash) — both resolved. 3 open P2s (F-484, F-485, F-488).
 - **Key M5 assessment:** D-026+D-027 achieved. Baton IS the default. Instrument fallbacks shipped. Marianne rename Phase 1 complete. The serial critical path advanced two steps this movement (F-271+F-255.2 → baton flip). Phase 3 (remove toggle) and demo remain.
