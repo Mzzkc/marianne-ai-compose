@@ -1,4 +1,4 @@
-"""Litmus tests for Mozart's intelligence layer — does it ACTUALLY work?
+"""Litmus tests for Marianne's intelligence layer — does it ACTUALLY work?
 
 These are not unit tests. Unit tests verify that functions return expected
 values. Litmus tests verify that the intelligence layer makes the system
@@ -82,6 +82,20 @@ Test categories:
 45. Cross-sheet credential pipeline — F-250 + F-210: trace a credential
     through the full pipeline (workspace → context → redact → prompt) and
     verify it never reaches the rendered output.
+46. F-149 Backpressure rework — rate limits don't block unrelated jobs.
+    should_accept_job() only considers resource pressure, not rate limits.
+47. D-027 Baton default flip — DaemonConfig().use_baton defaults to True.
+    The baton IS the default execution model.
+48. Instrument fallback chain — three-level resolution (per-sheet > movement
+    > score). Replace semantics, not merge. History capped at 50.
+49. F-271 MCP process explosion fix — profile-driven mcp_disable_args
+    prevent unwanted MCP servers. _build_command() injects args.
+50. User variables in validations — prompt.variables available during
+    `mozart validate` and `mozart recover`.
+51. D-029 Status beautification — format_relative_time, edge cases,
+    compact relative time formatting.
+52. F-490 Process control — safe kill guards. All os.killpg through
+    _safe_killpg. pgid > 1 guard. Own process group check.
 
 Every test in this file answers: "Is the system smarter WITH this than WITHOUT?"
 """
@@ -1856,7 +1870,7 @@ class TestCloneConfigIsolation:
 
     F-132: The clone conductor must NOT share the production state DB.
     Without this, test jobs submitted to the clone appear in production
-    `mozart list`, and production jobs could be corrupted by test operations.
+    `mzt list`, and production jobs could be corrupted by test operations.
     """
 
     def test_clone_state_db_differs_from_production(self) -> None:
@@ -1865,8 +1879,8 @@ class TestCloneConfigIsolation:
 
         clone_config = build_clone_config(None)
 
-        # The production default is ~/.mozart/daemon-state.db or similar
-        default_path = str(Path.home() / ".mozart" / "daemon-state.db")
+        # The production default is ~/.marianne/daemon-state.db or similar
+        default_path = str(Path.home() / ".marianne" / "daemon-state.db")
         clone_db = str(clone_config.state_db_path)
 
         assert clone_db != default_path, (
@@ -2882,7 +2896,7 @@ class TestRateLimitAutoResumeEffectiveness:
     """Does the rate limit auto-resume actually schedule a timer that clears?
 
     Before F-112: WAITING sheets stayed blocked forever unless manually cleared
-    via `mozart clear-rate-limits`. The timer event, handler, and wheel all
+    via `mzt clear-rate-limits`. The timer event, handler, and wheel all
     existed — only the trigger was missing.
 
     The litmus: when a rate limit hit is processed, does the baton schedule
@@ -3470,7 +3484,7 @@ class TestAutoFreshDetection:
     """#103 litmus: does _should_auto_fresh prevent stale reruns when
     the score file has been modified?
 
-    WITHOUT #103: user edits score, runs `mozart run` again, gets the old
+    WITHOUT #103: user edits score, runs `mzt run` again, gets the old
     cached result because the job is COMPLETED → confusion.
     WITH #103: manager detects mtime > completed_at → auto-sets fresh=True
     → user gets a new run with their changes.
@@ -4502,4 +4516,665 @@ class TestCrossSheetCredentialPipelineEndToEnd:
             "F-250: Baton adapter (_collect_cross_sheet_context) MUST call "
             "redact_credentials on captured file content. Without this, "
             "the baton path leaks credentials through cross-sheet context."
+        )
+
+
+# =============================================================================
+# 46. F-149 BACKPRESSURE REWORK — RATE LIMITS DON'T BLOCK UNRELATED JOBS
+# =============================================================================
+
+
+class TestBackpressureReworkIntelligence:
+    """F-149 litmus: when instrument A is rate-limited, does the system still
+    accept jobs targeting instrument B?
+
+    WITHOUT F-149: One rate limit blocks ALL jobs via should_accept_job().
+    WITH F-149: Only resource pressure (memory >85%, process count) causes
+    rejection. Rate limits handled at sheet dispatch.
+
+    The litmus: rate limits must NOT cause job rejection. Only resource
+    pressure should.
+    """
+
+    def test_should_accept_job_returns_true_during_rate_limits(self) -> None:
+        """Rate limits alone must NOT cause should_accept_job() to return False."""
+        from unittest.mock import MagicMock
+
+        from marianne.daemon.backpressure import BackpressureController
+
+        controller = BackpressureController.__new__(BackpressureController)
+        controller._monitor = MagicMock()
+        controller._monitor.current_memory_mb.return_value = 200  # Low memory
+        controller._monitor.max_memory_mb = 1000
+        controller._monitor.is_degraded = False
+        controller._monitor.is_accepting_work.return_value = True
+        controller._rate_coordinator = MagicMock()
+        controller._rate_coordinator.active_limits = {"claude-cli": 60, "gemini-cli": 30}
+
+        result = controller.should_accept_job()
+
+        assert result is True, (
+            "F-149: should_accept_job() MUST return True when only rate limits "
+            "are active and resource pressure is low. Rate limits are per-instrument "
+            "and should not block jobs targeting other instruments."
+        )
+
+    def test_should_accept_job_rejects_on_resource_pressure(self) -> None:
+        """High memory pressure MUST cause rejection regardless of rate limits."""
+        from unittest.mock import MagicMock
+
+        from marianne.daemon.backpressure import BackpressureController
+
+        controller = BackpressureController.__new__(BackpressureController)
+        controller._monitor = MagicMock()
+        controller._monitor.current_memory_mb.return_value = 900  # 90% of max
+        controller._monitor.max_memory_mb = 1000
+        controller._monitor.is_degraded = False
+        controller._monitor.is_accepting_work.return_value = True
+        controller._rate_coordinator = MagicMock()
+        controller._rate_coordinator.active_limits = {}
+
+        result = controller.should_accept_job()
+
+        assert result is False, (
+            "F-149: should_accept_job() MUST return False under resource pressure "
+            "(memory >85%). Resource pressure is always dangerous."
+        )
+
+    def test_rejection_reason_never_returns_rate_limit(self) -> None:
+        """rejection_reason() must never return 'rate_limit' — only 'resource' or None."""
+        from unittest.mock import MagicMock
+
+        from marianne.daemon.backpressure import BackpressureController
+
+        # Test every relevant combination of state
+        for mem_pct, accepting, has_limits, expected in [
+            (0.2, True, True, None),       # Low mem, rate limits → accept
+            (0.2, True, False, None),      # Low mem, no limits → accept
+            (0.9, True, True, "resource"), # High mem + limits → resource
+            (0.9, True, False, "resource"),# High mem, no limits → resource
+            (0.5, False, False, "resource"),  # Process limit → resource
+        ]:
+            controller = BackpressureController.__new__(BackpressureController)
+            controller._monitor = MagicMock()
+            controller._monitor.current_memory_mb.return_value = mem_pct * 1000
+            controller._monitor.max_memory_mb = 1000
+            controller._monitor.is_degraded = False
+            controller._monitor.is_accepting_work.return_value = accepting
+            controller._rate_coordinator = MagicMock()
+            controller._rate_coordinator.active_limits = (
+                {"claude-cli": 60} if has_limits else {}
+            )
+
+            reason = controller.rejection_reason()
+
+            assert reason != "rate_limit", (
+                f"F-149: rejection_reason() MUST NEVER return 'rate_limit'. "
+                f"Got 'rate_limit' with mem_pct={mem_pct}, accepting={accepting}, "
+                f"has_limits={has_limits}. Expected: {expected}"
+            )
+            assert reason == expected, (
+                f"F-149: rejection_reason() returned {reason!r}, expected {expected!r} "
+                f"with mem_pct={mem_pct}, accepting={accepting}, has_limits={has_limits}"
+            )
+
+    def test_should_accept_job_source_does_not_reference_rate_limits(self) -> None:
+        """Source inspection: should_accept_job must NOT check rate limit state."""
+        import inspect
+
+        from marianne.daemon.backpressure import BackpressureController
+
+        source = inspect.getsource(BackpressureController.should_accept_job)
+
+        assert "active_limits" not in source, (
+            "F-149: should_accept_job() source MUST NOT reference active_limits. "
+            "Rate limits are per-instrument — job acceptance should only consider "
+            "system resource pressure."
+        )
+        assert "rate_limit" not in source.replace("F-149", "").replace("rate-limit", ""), (
+            "F-149: should_accept_job() source should not reference rate limit "
+            "state variables."
+        )
+
+
+# =============================================================================
+# 47. D-027 BATON DEFAULT FLIP
+# =============================================================================
+
+
+class TestBatonDefaultFlipIntelligence:
+    """D-027 litmus: does the baton activate by default without explicit config?
+
+    WITHOUT D-027: DaemonConfig().use_baton defaults to False. The legacy
+    runner executes all sheets. All baton work is theoretical.
+    WITH D-027: DaemonConfig().use_baton defaults to True. The baton IS
+    the default execution model.
+
+    The litmus: a bare DaemonConfig() must have use_baton=True.
+    """
+
+    def test_daemon_config_default_use_baton_is_true(self) -> None:
+        """DaemonConfig() with no args must have use_baton=True."""
+        from marianne.daemon.config import DaemonConfig
+
+        config = DaemonConfig()
+
+        assert config.use_baton is True, (
+            "D-027: DaemonConfig().use_baton MUST default to True. "
+            "The baton is the default execution model as of Phase 2. "
+            "If this is False, ALL baton work is theoretical."
+        )
+
+    def test_use_baton_field_has_correct_description(self) -> None:
+        """The field description must reference D-027 and Phase 2."""
+        from marianne.daemon.config import DaemonConfig
+
+        field_info = DaemonConfig.model_fields["use_baton"]
+
+        assert "D-027" in (field_info.description or ""), (
+            "D-027: use_baton field description should reference the directive "
+            "that established this default."
+        )
+
+    def test_explicit_false_overrides_default(self) -> None:
+        """use_baton=False must still work for opting out."""
+        from marianne.daemon.config import DaemonConfig
+
+        config = DaemonConfig(use_baton=False)
+
+        assert config.use_baton is False, (
+            "D-027: Explicit use_baton=False must override the True default. "
+            "Operators need an opt-out path."
+        )
+
+
+# =============================================================================
+# 48. INSTRUMENT FALLBACK CHAIN — THREE-LEVEL RESOLUTION
+# =============================================================================
+
+
+class TestInstrumentFallbackChainIntelligence:
+    """Litmus: does the fallback chain walk through per-sheet → movement → score?
+
+    WITHOUT fallback chain: a rate-limited instrument fails the sheet. Period.
+    WITH fallback chain: the system tries alternative instruments before failing.
+
+    The litmus: per-sheet overrides movement-level, movement-level overrides
+    score-level. Replace semantics (not merge).
+    """
+
+    def test_per_sheet_overrides_movement_level(self) -> None:
+        """Per-sheet fallbacks MUST replace movement-level fallbacks."""
+        from marianne.core.config.job import JobConfig, MovementDef
+        from marianne.core.sheet import build_sheets
+
+        config = JobConfig(
+            name="test-fallback-chain",
+            workspace=Path("/tmp/test-fallback-chain"),
+            instrument_fallbacks=["score-fallback"],
+            movements={
+                1: MovementDef(instrument_fallbacks=["movement-fallback"]),
+            },
+            sheet={
+                "size": 1,
+                "total_items": 1,
+                "per_sheet_fallbacks": {1: ["sheet-fallback"]},
+            },
+            prompt=PromptConfig(template="test"),
+        )
+
+        sheets = build_sheets(config)
+
+        assert sheets[0].instrument_fallbacks == ["sheet-fallback"], (
+            "Fallback chain: per-sheet fallbacks MUST replace (not merge with) "
+            f"movement-level fallbacks. Got: {sheets[0].instrument_fallbacks}"
+        )
+
+    def test_movement_overrides_score_level(self) -> None:
+        """Movement-level fallbacks MUST replace score-level fallbacks."""
+        from marianne.core.config.job import JobConfig, MovementDef
+        from marianne.core.sheet import build_sheets
+
+        config = JobConfig(
+            name="test-fallback-chain",
+            workspace=Path("/tmp/test-fallback-chain"),
+            instrument_fallbacks=["score-fallback"],
+            movements={
+                1: MovementDef(instrument_fallbacks=["movement-fallback"]),
+            },
+            sheet={"size": 1, "total_items": 1},
+            prompt=PromptConfig(template="test"),
+        )
+
+        sheets = build_sheets(config)
+
+        assert sheets[0].instrument_fallbacks == ["movement-fallback"], (
+            "Fallback chain: movement-level fallbacks MUST replace score-level "
+            f"fallbacks. Got: {sheets[0].instrument_fallbacks}"
+        )
+
+    def test_score_level_used_when_no_overrides(self) -> None:
+        """Score-level fallbacks apply when no per-sheet or movement overrides exist."""
+        from marianne.core.config.job import JobConfig
+        from marianne.core.sheet import build_sheets
+
+        config = JobConfig(
+            name="test-fallback-chain",
+            workspace=Path("/tmp/test-fallback-chain"),
+            instrument_fallbacks=["score-fallback-a", "score-fallback-b"],
+            sheet={"size": 1, "total_items": 1},
+            prompt=PromptConfig(template="test"),
+        )
+
+        sheets = build_sheets(config)
+
+        assert sheets[0].instrument_fallbacks == ["score-fallback-a", "score-fallback-b"], (
+            "Fallback chain: score-level fallbacks must be used when no "
+            f"per-sheet or movement overrides exist. Got: {sheets[0].instrument_fallbacks}"
+        )
+
+    def test_replace_semantics_not_merge(self) -> None:
+        """Overrides REPLACE, they do NOT merge with parent fallbacks."""
+        from marianne.core.config.job import JobConfig
+        from marianne.core.sheet import build_sheets
+
+        config = JobConfig(
+            name="test-replace-semantics",
+            workspace=Path("/tmp/test-replace-semantics"),
+            instrument_fallbacks=["score-a", "score-b"],
+            sheet={
+                "size": 1,
+                "total_items": 1,
+                "per_sheet_fallbacks": {1: ["sheet-only"]},
+            },
+            prompt=PromptConfig(template="test"),
+        )
+
+        sheets = build_sheets(config)
+
+        assert "score-a" not in sheets[0].instrument_fallbacks, (
+            "Fallback chain: per-sheet REPLACES score-level. 'score-a' from "
+            "the score-level chain must NOT appear when per-sheet is set."
+        )
+        assert sheets[0].instrument_fallbacks == ["sheet-only"], (
+            "Fallback chain: only the per-sheet chain should be present."
+        )
+
+    def test_fallback_history_capped_at_50(self) -> None:
+        """F-252: instrument_fallback_history must be bounded."""
+        from marianne.core.checkpoint import MAX_INSTRUMENT_FALLBACK_HISTORY, SheetState
+
+        assert MAX_INSTRUMENT_FALLBACK_HISTORY == 50, (
+            "F-252: MAX_INSTRUMENT_FALLBACK_HISTORY must be 50. "
+            f"Got: {MAX_INSTRUMENT_FALLBACK_HISTORY}"
+        )
+
+        state = SheetState(sheet_num=1)
+
+        # Add 60 records — should be trimmed to 50
+        for i in range(60):
+            state.add_fallback_to_history({
+                "from": f"instrument-{i}",
+                "to": f"instrument-{i + 1}",
+                "reason": "rate_limit",
+                "timestamp": "2026-04-06T00:00:00Z",
+            })
+
+        assert len(state.instrument_fallback_history) <= 50, (
+            f"F-252: Fallback history must be capped at 50 entries. "
+            f"Got: {len(state.instrument_fallback_history)}"
+        )
+
+
+# =============================================================================
+# 49. F-271 MCP PROCESS EXPLOSION FIX
+# =============================================================================
+
+
+class TestMcpProcessExplosionFixIntelligence:
+    """F-271 litmus: does profile-driven mcp_disable_args prevent unwanted
+    MCP servers from spawning child processes?
+
+    WITHOUT F-271: PluginCliBackend spawns 80 child processes (MCP servers
+    for tools that aren't needed for the task).
+    WITH F-271: Profile specifies mcp_disable_args → 8 processes.
+
+    The litmus: _build_command() MUST inject mcp_disable_args when present.
+    """
+
+    def test_cli_command_has_mcp_disable_args_field(self) -> None:
+        """CliCommand model must have mcp_disable_args as list[str]."""
+        from marianne.core.config.instruments import CliCommand
+
+        field_info = CliCommand.model_fields.get("mcp_disable_args")
+
+        assert field_info is not None, (
+            "F-271: CliCommand MUST have 'mcp_disable_args' field. "
+            "Without it, there's no profile-driven mechanism to prevent "
+            "MCP process explosion."
+        )
+
+    def test_build_command_injects_mcp_disable_args(self) -> None:
+        """_build_command() MUST include mcp_disable_args in the command."""
+        from marianne.core.config.instruments import InstrumentProfile
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+
+        profile = InstrumentProfile(
+            name="test-mcp",
+            display_name="Test MCP",
+            kind="cli",
+            cli={
+                "command": {
+                    "executable": "/usr/bin/test-cli",
+                    "prompt_flag": "-p",
+                    "mcp_disable_args": ["--no-mcp", "--strict"],
+                },
+                "output": {"format": "text"},
+                "errors": {},
+            },
+        )
+
+        backend = PluginCliBackend(profile)
+        cmd = backend._build_command("hello", timeout_seconds=None)
+
+        assert "--no-mcp" in cmd, (
+            "F-271: _build_command() MUST inject mcp_disable_args into the "
+            f"command. '--no-mcp' not found in: {cmd}"
+        )
+        assert "--strict" in cmd, (
+            "F-271: _build_command() MUST inject ALL mcp_disable_args. "
+            f"'--strict' not found in: {cmd}"
+        )
+
+    def test_build_command_source_references_mcp_disable_args(self) -> None:
+        """Source inspection: _build_command MUST reference mcp_disable_args."""
+        import inspect
+
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+
+        source = inspect.getsource(PluginCliBackend._build_command)
+
+        assert "mcp_disable_args" in source, (
+            "F-271: _build_command() source MUST reference mcp_disable_args. "
+            "Without this, the profile-driven disable mechanism is dead code."
+        )
+
+    def test_different_profiles_define_different_strategies(self) -> None:
+        """Different instrument profiles can define different MCP disable strategies."""
+        from marianne.core.config.instruments import InstrumentProfile
+
+        # Claude-code style: strict MCP config with empty server map
+        claude_profile = InstrumentProfile(
+            name="claude-code",
+            display_name="Claude Code",
+            kind="cli",
+            cli={
+                "command": {
+                    "executable": "claude",
+                    "prompt_flag": "-p",
+                    "mcp_disable_args": [
+                        "--strict-mcp-config",
+                        "--mcp-config",
+                        '{"mcpServers":{}}',
+                    ],
+                },
+                "output": {"format": "text"},
+                "errors": {},
+            },
+        )
+
+        # Generic style: simple flag
+        generic_profile = InstrumentProfile(
+            name="generic-cli",
+            display_name="Generic CLI",
+            kind="cli",
+            cli={
+                "command": {
+                    "executable": "ai-tool",
+                    "prompt_flag": "-p",
+                    "mcp_disable_args": ["--no-mcp-servers"],
+                },
+                "output": {"format": "text"},
+                "errors": {},
+            },
+        )
+
+        assert claude_profile.cli.command.mcp_disable_args != generic_profile.cli.command.mcp_disable_args, (
+            "F-271: Different profiles MUST be able to define different MCP "
+            "disable strategies. The mechanism is profile-driven, not hardcoded."
+        )
+
+
+# =============================================================================
+# 50. USER VARIABLES IN VALIDATIONS
+# =============================================================================
+
+
+class TestUserVariablesInValidationsIntelligence:
+    """Litmus: do prompt.variables resolve during `mozart validate`?
+
+    WITHOUT user variables: validation paths with {my_var} fail as unresolved.
+    WITH user variables: prompt.variables are available in the rendering context
+    during both validate and recover.
+
+    The litmus: prompt.variables must be in the validation rendering context.
+    """
+
+    def test_validation_rendering_includes_prompt_variables(self) -> None:
+        """Source inspection: generate_preview must include prompt.variables."""
+        import inspect
+
+        from marianne.validation.rendering import generate_preview
+
+        source = inspect.getsource(generate_preview)
+
+        assert "prompt.variables" in source or "prompt_variables" in source, (
+            "User variables in validations: generate_preview MUST "
+            "include prompt.variables in its rendering context. Without this, "
+            "validation paths with user-defined variables fail to resolve."
+        )
+
+    def test_user_variables_available_in_path_context(self) -> None:
+        """The path_context dict must include user-defined variables."""
+        import inspect
+
+        from marianne.validation.rendering import generate_preview
+
+        source = inspect.getsource(generate_preview)
+
+        assert "config.prompt.variables" in source, (
+            "User variables: generate_preview must read from "
+            "config.prompt.variables to populate the path context. "
+            "This is how user-defined template variables become available "
+            "during `mozart validate` and `mozart recover`."
+        )
+
+
+# =============================================================================
+# 51. D-029 STATUS BEAUTIFICATION
+# =============================================================================
+
+
+class TestStatusBeautificationIntelligence:
+    """D-029 litmus: does beautified output convey MORE USEFUL information?
+
+    WITHOUT D-029: Raw timestamps, workspace paths in list, unbounded synthesis.
+    WITH D-029: Relative times ("5m ago"), progress column, bounded synthesis.
+
+    The litmus: the beautified output must be more informative and compact.
+    """
+
+    def test_format_relative_time_exists(self) -> None:
+        """format_relative_time must exist in output.py."""
+        from marianne.cli.output import format_relative_time
+
+        assert callable(format_relative_time), (
+            "D-029: format_relative_time must be a callable in output.py."
+        )
+
+    def test_format_relative_time_just_now(self) -> None:
+        """Edge case: <60s returns 'just now' or seconds."""
+        from datetime import UTC, datetime, timedelta
+
+        from marianne.cli.output import format_relative_time
+
+        now = datetime.now(UTC)
+        result = format_relative_time(now - timedelta(seconds=5), now=now)
+
+        assert "5s ago" == result or "just now" in result, (
+            f"D-029: <60s delta should return seconds or 'just now'. Got: {result!r}"
+        )
+
+    def test_format_relative_time_minutes(self) -> None:
+        """Minutes range produces compact 'Xm ago' format."""
+        from datetime import UTC, datetime, timedelta
+
+        from marianne.cli.output import format_relative_time
+
+        now = datetime.now(UTC)
+        result = format_relative_time(now - timedelta(minutes=15), now=now)
+
+        assert "15m ago" == result, (
+            f"D-029: 15 minutes delta should return '15m ago'. Got: {result!r}"
+        )
+
+    def test_format_relative_time_hours(self) -> None:
+        """Hours range produces 'Xh Ym ago' format."""
+        from datetime import UTC, datetime, timedelta
+
+        from marianne.cli.output import format_relative_time
+
+        now = datetime.now(UTC)
+        result = format_relative_time(now - timedelta(hours=3, minutes=15), now=now)
+
+        assert "3h 15m ago" == result, (
+            f"D-029: 3h15m delta should return '3h 15m ago'. Got: {result!r}"
+        )
+
+    def test_format_relative_time_days(self) -> None:
+        """Days range produces 'Xd Yh ago' format."""
+        from datetime import UTC, datetime, timedelta
+
+        from marianne.cli.output import format_relative_time
+
+        now = datetime.now(UTC)
+        result = format_relative_time(now - timedelta(days=6, hours=12), now=now)
+
+        assert "6d 12h ago" == result, (
+            f"D-029: 6d12h delta should return '6d 12h ago'. Got: {result!r}"
+        )
+
+    def test_format_relative_time_none(self) -> None:
+        """None input returns '-'."""
+        from marianne.cli.output import format_relative_time
+
+        result = format_relative_time(None)
+
+        assert result == "-", (
+            f"D-029: None datetime should return '-'. Got: {result!r}"
+        )
+
+
+# =============================================================================
+# 52. F-490 PROCESS CONTROL — SAFE KILL GUARDS
+# =============================================================================
+
+
+class TestProcessControlSafeKillGuardsIntelligence:
+    """F-490 litmus: do all os.killpg calls go through _safe_killpg with
+    proper guards?
+
+    WITHOUT F-490: os.killpg(1, SIGKILL) translates to kill(-1, SIGKILL)
+    in the kernel — nukes EVERY process the caller owns. On WSL, this
+    includes the daemon, pytest, every terminal, and systemd --user.
+    WITH F-490: _safe_killpg guards pgid > 1 and own-process-group check.
+
+    The litmus: zero direct os.killpg outside _safe_killpg. All calls guarded.
+    """
+
+    def test_safe_killpg_refuses_pgid_le_1(self) -> None:
+        """_safe_killpg MUST refuse pgid <= 1."""
+        import signal
+
+        from marianne.backends.claude_cli import _safe_killpg
+
+        for bad_pgid in [0, 1, -1]:
+            result = _safe_killpg(bad_pgid, signal.SIGTERM, context="test")
+
+            assert result is False, (
+                f"F-490: _safe_killpg({bad_pgid}) MUST return False (refused). "
+                f"pgid=0 sends to own group, pgid=1 sends to ALL user processes. "
+                f"Got: {result}"
+            )
+
+    def test_safe_killpg_refuses_own_process_group(self) -> None:
+        """_safe_killpg MUST refuse to kill our own process group."""
+        import os
+        import signal
+
+        from marianne.backends.claude_cli import _safe_killpg
+
+        own_pgid = os.getpgid(0)
+        result = _safe_killpg(own_pgid, signal.SIGTERM, context="test")
+
+        assert result is False, (
+            f"F-490: _safe_killpg({own_pgid}) MUST refuse own process group. "
+            f"Killing own group would terminate pytest, the shell, and everything "
+            f"sharing this group."
+        )
+
+    def test_no_direct_os_killpg_outside_safe_wrapper(self) -> None:
+        """Source inspection: no os.killpg outside _safe_killpg and pgroup.py."""
+        import ast
+        from pathlib import Path
+
+        src_root = Path("src/marianne")
+        violations: list[str] = []
+
+        # Files that are ALLOWED to call os.killpg directly
+        allowed_files = {
+            "backends/claude_cli.py",  # _safe_killpg definition
+            "daemon/pgroup.py",        # ProcessGroupManager (SIG_IGN guarded)
+        }
+
+        for py_file in src_root.rglob("*.py"):
+            rel = str(py_file.relative_to(src_root))
+            if rel in allowed_files:
+                continue
+
+            source = py_file.read_text()
+            if "os.killpg" in source:
+                violations.append(rel)
+
+        assert violations == [], (
+            f"F-490: Found direct os.killpg calls outside safe wrappers: "
+            f"{violations}. All killpg calls MUST go through _safe_killpg "
+            f"or pgroup.py's SIG_IGN-guarded path."
+        )
+
+    def test_safe_killpg_has_pgid_gt_1_guard(self) -> None:
+        """Source inspection: _safe_killpg MUST check pgid > 1."""
+        import inspect
+
+        from marianne.backends.claude_cli import _safe_killpg
+
+        source = inspect.getsource(_safe_killpg)
+
+        assert "pgid <= 1" in source or "pgid < 2" in source, (
+            "F-490: _safe_killpg source MUST contain a pgid <= 1 guard. "
+            "Without this, pgid=1 translates to kill(-1, sig) which kills "
+            "every process the caller owns."
+        )
+
+    def test_safe_killpg_has_own_pgroup_guard(self) -> None:
+        """Source inspection: _safe_killpg MUST check own process group."""
+        import inspect
+
+        from marianne.backends.claude_cli import _safe_killpg
+
+        source = inspect.getsource(_safe_killpg)
+
+        assert "getpgid" in source, (
+            "F-490: _safe_killpg source MUST check os.getpgid(0) to detect "
+            "when the target pgid is our own process group."
         )
