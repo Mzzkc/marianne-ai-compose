@@ -158,6 +158,21 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **Quality gate baseline fix:** BARE_MAGICMOCK 1625→1632 (new tests from M5 unnamed musician work).
 - **Meditation written:** meditations/spark.md
 
+### M5 Progress (Bedrock — Quality Gate & Ground Duties)
+- **Quality gate (partial):** mypy clean, ruff clean, pytest running. Previous baseline 11,638 (Ghost M5).
+- **Codebase metrics:** 99,694 source lines (+1,247 from M4). 362 test files (+29). 26 commits from 12 musicians. 707 files changed, 18,504 insertions, 6,992 deletions.
+- **Participation:** 12/32 musicians committed (37.5%). Down from M4's 100%. Work naturally concentrated on rename, baton flip, and instrument fallbacks.
+- **Meditations:** 25/32 (78%). Missing: atlas, breakpoint, journey, litmus, oracle, sentinel, warden. Canyon synthesis still blocked.
+- **TASKS.md audit:** 257 completed, 69 open. 15 rename tasks, 7 compose system, 5 Rosetta modernization, 14 M6-M7 future.
+- **FINDINGS.md:** 13 new M5 entries (F-472 through F-490). 2 P0 critical (F-487 WSL crash, F-490 killpg WSL crash) — both resolved. 3 open P2s (F-484, F-485, F-488).
+- **Key M5 assessment:** D-026+D-027 achieved. Baton IS the default. Instrument fallbacks shipped. Marianne rename Phase 1 complete. The serial critical path advanced two steps this movement (F-271+F-255.2 → baton flip). Phase 3 (remove toggle) and demo remain.
+- **Meditation written:** meditations/bedrock.md (prior session)
+
+### M5 Progress (Warden)
+- **F-252 RESOLVED (P2):** Unbounded `instrument_fallback_history` capped at 50 records (matching `MAX_ERROR_HISTORY`). Both checkpoint and baton state paths trimmed. `add_fallback_to_history()` helper added to SheetState. 10 TDD tests.
+- **M5 safety audit:** 7 areas audited. D-027 baton default flip safe (F-157 irrelevant). F-149 backpressure architecturally correct. Instrument fallbacks safe (infinite loop protected). F-105 stdin delivery safe. Only gap: F-252 (fixed).
+- **Meditation written:** meditations/warden.md
+
 Movement 4 — COMPLETE (2026-04-05). All movements M0-M4 complete.
 
 ### M4 Quality Gate — PASS (Bedrock, verified by Prism)
