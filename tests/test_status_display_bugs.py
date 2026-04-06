@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.checkpoint import CheckpointState, JobStatus
 
 
 # =========================================================================
@@ -93,10 +93,10 @@ class TestF068CompletedTimestamp:
         self, running_job_with_completed_at: CheckpointState
     ) -> None:
         """RUNNING job should NOT show 'Completed:' in status display."""
-        from mozart.cli.commands.status import _output_status_rich
+        from marianne.cli.commands.status import _output_status_rich
 
         _ = None  # output capture handled by mock
-        with patch("mozart.cli.commands.status.console") as mock_console:
+        with patch("marianne.cli.commands.status.console") as mock_console:
             # Capture all print calls
             printed: list[str] = []
             mock_console.print = lambda *args, **kwargs: printed.append(
@@ -118,10 +118,10 @@ class TestF068CompletedTimestamp:
         self, completed_job: CheckpointState
     ) -> None:
         """COMPLETED job SHOULD show 'Completed:' in status display."""
-        from mozart.cli.commands.status import _output_status_rich
+        from marianne.cli.commands.status import _output_status_rich
 
         printed: list[str] = []
-        with patch("mozart.cli.commands.status.console") as mock_console:
+        with patch("marianne.cli.commands.status.console") as mock_console:
             mock_console.print = lambda *args, **kwargs: printed.append(
                 " ".join(str(a) for a in args)
             )
@@ -139,10 +139,10 @@ class TestF068CompletedTimestamp:
         self, failed_job: CheckpointState
     ) -> None:
         """FAILED job SHOULD show 'Completed:' in status display."""
-        from mozart.cli.commands.status import _output_status_rich
+        from marianne.cli.commands.status import _output_status_rich
 
         printed: list[str] = []
-        with patch("mozart.cli.commands.status.console") as mock_console:
+        with patch("marianne.cli.commands.status.console") as mock_console:
             mock_console.print = lambda *args, **kwargs: printed.append(
                 " ".join(str(a) for a in args)
             )
@@ -162,10 +162,10 @@ class TestF068CompletedTimestamp:
         """PAUSED job should NOT show 'Completed:' in status display."""
         running_job_with_completed_at.status = JobStatus.PAUSED
 
-        from mozart.cli.commands.status import _output_status_rich
+        from marianne.cli.commands.status import _output_status_rich
 
         printed: list[str] = []
-        with patch("mozart.cli.commands.status.console") as mock_console:
+        with patch("marianne.cli.commands.status.console") as mock_console:
             mock_console.print = lambda *args, **kwargs: printed.append(
                 " ".join(str(a) for a in args)
             )
@@ -196,13 +196,13 @@ class TestF069V101FalsePositive:
 
     @pytest.fixture
     def checker(self) -> object:
-        from mozart.validation.checks.jinja import JinjaUndefinedVariableCheck
+        from marianne.validation.checks.jinja import JinjaUndefinedVariableCheck
         return JinjaUndefinedVariableCheck()
 
     @pytest.fixture
     def minimal_config(self, tmp_path: Path) -> tuple[object, Path]:
         """Create a minimal config for testing V101."""
-        from mozart.core.config.job import JobConfig
+        from marianne.core.config.job import JobConfig
         yaml_content = """
 name: test-v101
 sheet:
@@ -217,7 +217,7 @@ prompt:
 
     def test_for_loop_variable_not_flagged(self, checker: object) -> None:
         """{% for id, char in items %} should NOT flag char or id."""
-        from mozart.validation.checks.jinja import JinjaUndefinedVariableCheck
+        from marianne.validation.checks.jinja import JinjaUndefinedVariableCheck
         import jinja2
 
         template = (
@@ -236,7 +236,7 @@ prompt:
 
     def test_set_variable_not_flagged(self, checker: object) -> None:
         """{% set char = expr %} should NOT flag char."""
-        from mozart.validation.checks.jinja import JinjaUndefinedVariableCheck
+        from marianne.validation.checks.jinja import JinjaUndefinedVariableCheck
         import jinja2
 
         template = (
@@ -253,7 +253,7 @@ prompt:
 
     def test_conditional_branch_set_not_flagged(self, checker: object) -> None:
         """{% set %} inside {% elif %} should NOT cause false positive."""
-        from mozart.validation.checks.jinja import JinjaUndefinedVariableCheck
+        from marianne.validation.checks.jinja import JinjaUndefinedVariableCheck
         import jinja2
 
         template = (
@@ -274,7 +274,7 @@ prompt:
 
     def test_truly_undefined_variable_still_flagged(self, checker: object) -> None:
         """Variables that are genuinely undefined should still be flagged."""
-        from mozart.validation.checks.jinja import JinjaUndefinedVariableCheck
+        from marianne.validation.checks.jinja import JinjaUndefinedVariableCheck
         import jinja2
 
         template = "{{ totally_undefined }}"
@@ -287,8 +287,8 @@ prompt:
 
     def test_hello_yaml_no_false_positives(self) -> None:
         """The flagship hello-mozart.yaml example should produce zero V101 warnings."""
-        from mozart.core.config.job import JobConfig
-        from mozart.validation.checks.jinja import JinjaUndefinedVariableCheck
+        from marianne.core.config.job import JobConfig
+        from marianne.validation.checks.jinja import JinjaUndefinedVariableCheck
 
         config_path = Path("examples/hello-mozart.yaml")
         if not config_path.exists():
@@ -327,7 +327,7 @@ class TestF048CostTrackingWithoutLimits:
         the await _track_cost call must appear BEFORE the cost_limits.enabled return.
         """
         import inspect
-        from mozart.execution.runner.sheet import SheetExecutionMixin
+        from marianne.execution.runner.sheet import SheetExecutionMixin
 
         source = inspect.getsource(SheetExecutionMixin._enforce_cost_limits)
         # Strip docstring — only look at executable code
@@ -366,10 +366,10 @@ class TestF048CostTrackingWithoutLimits:
     @pytest.mark.asyncio
     async def test_cost_tracked_in_state_when_limits_disabled(self) -> None:
         """Integration: cost tracking populates state even with limits off."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.core.checkpoint import CheckpointState, SheetState
-        from mozart.core.config.job import CostLimitConfig, JobConfig
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.backends.base import ExecutionResult
+        from marianne.core.checkpoint import CheckpointState, SheetState
+        from marianne.core.config.job import CostLimitConfig, JobConfig
+        from marianne.execution.runner.cost import CostMixin
 
         # Create a minimal CostMixin with disabled cost limits
         mixin = CostMixin.__new__(CostMixin)

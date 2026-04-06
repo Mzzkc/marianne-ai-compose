@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 from rich.console import Console
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
 
 
 def _make_job(
@@ -45,7 +45,7 @@ class TestSheetDetailsTableInstrumentColumn:
 
     def test_instrument_column_present_when_sheets_have_instruments(self) -> None:
         """Table includes Instrument column when has_instruments=True."""
-        from mozart.cli.output import create_sheet_details_table
+        from marianne.cli.output import create_sheet_details_table
 
         table = create_sheet_details_table(has_instruments=True)
         col_names = [c.header for c in table.columns]
@@ -53,7 +53,7 @@ class TestSheetDetailsTableInstrumentColumn:
 
     def test_instrument_column_absent_when_no_instruments(self) -> None:
         """Table omits Instrument column when has_instruments=False (default)."""
-        from mozart.cli.output import create_sheet_details_table
+        from marianne.cli.output import create_sheet_details_table
 
         table = create_sheet_details_table()
         col_names = [c.header for c in table.columns]
@@ -61,7 +61,7 @@ class TestSheetDetailsTableInstrumentColumn:
 
     def test_instrument_column_absent_by_default(self) -> None:
         """Default create_sheet_details_table has no Instrument column."""
-        from mozart.cli.output import create_sheet_details_table
+        from marianne.cli.output import create_sheet_details_table
 
         table = create_sheet_details_table(has_descriptions=True)
         col_names = [c.header for c in table.columns]
@@ -73,14 +73,14 @@ class TestRenderSheetDetailsWithInstruments:
 
     def test_renders_instrument_when_sheets_have_instrument_name(self) -> None:
         """When any sheet has instrument_name, the instrument column appears."""
-        from mozart.cli.commands.status import _render_sheet_details
+        from marianne.cli.commands.status import _render_sheet_details
 
         job = _make_job(3, instruments={1: "claude-code", 2: "gemini-cli", 3: "claude-code"})
 
         buf = StringIO()
         con = Console(file=buf, width=120, force_terminal=True)
 
-        with patch("mozart.cli.commands.status.console", con):
+        with patch("marianne.cli.commands.status.console", con):
             _render_sheet_details(job)
 
         output = buf.getvalue()
@@ -89,14 +89,14 @@ class TestRenderSheetDetailsWithInstruments:
 
     def test_no_instrument_column_when_no_instruments(self) -> None:
         """When no sheet has instrument_name, the Instrument column is absent."""
-        from mozart.cli.commands.status import _render_sheet_details
+        from marianne.cli.commands.status import _render_sheet_details
 
         job = _make_job(3)
 
         buf = StringIO()
         con = Console(file=buf, width=120, force_terminal=True)
 
-        with patch("mozart.cli.commands.status.console", con):
+        with patch("marianne.cli.commands.status.console", con):
             _render_sheet_details(job)
 
         output = buf.getvalue()
@@ -104,14 +104,14 @@ class TestRenderSheetDetailsWithInstruments:
 
     def test_renders_instrument_for_single_instrument_job(self) -> None:
         """Even when all sheets use the same instrument, column appears."""
-        from mozart.cli.commands.status import _render_sheet_details
+        from marianne.cli.commands.status import _render_sheet_details
 
         job = _make_job(2, instruments={1: "claude-code", 2: "claude-code"})
 
         buf = StringIO()
         con = Console(file=buf, width=120, force_terminal=True)
 
-        with patch("mozart.cli.commands.status.console", con):
+        with patch("marianne.cli.commands.status.console", con):
             _render_sheet_details(job)
 
         output = buf.getvalue()
@@ -123,7 +123,7 @@ class TestSheetSummaryWithInstruments:
 
     def test_summary_shows_instrument_breakdown(self) -> None:
         """For large scores, summary should list unique instruments."""
-        from mozart.cli.commands.status import _render_sheet_summary
+        from marianne.cli.commands.status import _render_sheet_summary
 
         # Create a 55-sheet job with mixed instruments
         instruments = {}
@@ -135,7 +135,7 @@ class TestSheetSummaryWithInstruments:
         buf = StringIO()
         con = Console(file=buf, width=120, force_terminal=True)
 
-        with patch("mozart.cli.commands.status.console", con):
+        with patch("marianne.cli.commands.status.console", con):
             _render_sheet_summary(job)
 
         output = buf.getvalue()
@@ -148,7 +148,7 @@ class TestMovementGroupedInstrumentDisplay:
 
     def test_movement_groups_collect_instruments(self) -> None:
         """_build_movement_groups includes instrument data."""
-        from mozart.cli.commands.status import _build_movement_groups
+        from marianne.cli.commands.status import _build_movement_groups
 
         job = _make_job(4)
         # Set movement metadata
@@ -173,7 +173,7 @@ class TestMovementGroupedInstrumentDisplay:
 
     def test_movement_groups_multi_instrument(self) -> None:
         """_build_movement_groups handles multiple instruments per movement."""
-        from mozart.cli.commands.status import _build_movement_groups
+        from marianne.cli.commands.status import _build_movement_groups
 
         job = _make_job(2)
         job.sheets[1].movement = 1

@@ -14,10 +14,10 @@ without grounding context dependency. Covers all branches:
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from mozart.core.config import JobConfig, ValidationRule
-from mozart.execution.runner import JobRunner
-from mozart.execution.runner.models import GroundingDecisionContext, SheetExecutionMode
-from mozart.execution.validation import SheetValidationResult, ValidationResult
+from marianne.core.config import JobConfig, ValidationRule
+from marianne.execution.runner import JobRunner
+from marianne.execution.runner.models import GroundingDecisionContext, SheetExecutionMode
+from marianne.execution.validation import SheetValidationResult, ValidationResult
 
 
 def _make_config(**overrides: object) -> JobConfig:

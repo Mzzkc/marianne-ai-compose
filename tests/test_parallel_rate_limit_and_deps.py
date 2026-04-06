@@ -8,14 +8,14 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.execution.dag import DependencyDAG
-from mozart.execution.parallel import (
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.execution.dag import DependencyDAG
+from marianne.execution.parallel import (
     ParallelBatchResult,
     ParallelExecutionConfig,
     ParallelExecutor,
 )
-from mozart.execution.runner.models import FatalError, RateLimitExhaustedError
+from marianne.execution.runner.models import FatalError, RateLimitExhaustedError
 
 
 def _make_state(total: int, job_id: str = "test-job") -> CheckpointState:

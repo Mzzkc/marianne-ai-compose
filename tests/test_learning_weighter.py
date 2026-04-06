@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from mozart.learning.weighter import (
+from marianne.learning.weighter import (
     DEFAULT_DECAY_RATE_PER_MONTH,
     DEFAULT_EFFECTIVENESS_THRESHOLD,
     DEFAULT_EPISTEMIC_THRESHOLD,

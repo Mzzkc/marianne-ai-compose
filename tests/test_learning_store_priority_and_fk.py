@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from mozart.learning.store import GlobalLearningStore
-from mozart.learning.store.patterns_crud import PatternCrudMixin
+from marianne.learning.store import GlobalLearningStore
+from marianne.learning.store.patterns_crud import PatternCrudMixin
 
 
 # ---------------------------------------------------------------------------
@@ -849,7 +849,7 @@ class TestContentHashDedup:
         record_pattern step 2: if type+name don't match but content_hash does,
         merge into the existing pattern (increment count, update last_seen).
         """
-        from mozart.learning.store.patterns_crud import PatternCrudMixin
+        from marianne.learning.store.patterns_crud import PatternCrudMixin
 
         # Create first pattern
         pid1 = store.record_pattern(
@@ -931,7 +931,7 @@ class TestContentHashDedup:
 
     def test_ch_003_content_hash_deterministic(self) -> None:
         """TEST-CH-003: Content hash is deterministic for same inputs."""
-        from mozart.learning.store.patterns_crud import PatternCrudMixin
+        from marianne.learning.store.patterns_crud import PatternCrudMixin
 
         hash1 = PatternCrudMixin._compute_content_hash(
             "TYPE", "name", "description",

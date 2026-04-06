@@ -15,14 +15,14 @@ from datetime import UTC, datetime
 
 import pytest
 
-from mozart.core.errors import (
+from marianne.core.errors import (
     ClassificationResult,
     ClassifiedError,
     ErrorCategory,
     ErrorCode,
     RetryBehavior,
 )
-from mozart.execution.retry_strategy import (
+from marianne.execution.retry_strategy import (
     AdaptiveRetryStrategy,
     DelayHistory,
     DelayOutcome,

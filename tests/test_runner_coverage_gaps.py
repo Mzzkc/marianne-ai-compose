@@ -22,9 +22,9 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.core.config import JobConfig
-from mozart.execution.escalation import (
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.core.config import JobConfig
+from marianne.execution.escalation import (
     CheckpointContext,
     CheckpointResponse,
     CheckpointTrigger,
@@ -34,8 +34,8 @@ from mozart.execution.escalation import (
     EscalationResponse,
     HistoricalSuggestion,
 )
-from mozart.execution.runner.models import FatalError, RunSummary
-from mozart.execution.runner.patterns import (
+from marianne.execution.runner.models import FatalError, RunSummary
+from marianne.execution.runner.patterns import (
     PatternFeedbackContext,
     PatternsMixin,
     _deduplicate_patterns,
@@ -249,7 +249,7 @@ class TestPatternsMixin:
         store.get_patterns.return_value = [pattern]
         runner._global_learning_store = store
 
-        with patch("mozart.execution.runner.patterns.random") as mock_random:
+        with patch("marianne.execution.runner.patterns.random") as mock_random:
             mock_random.random.return_value = 0.99  # exploitation mode
             descriptions, ids = runner._query_relevant_patterns("job-1", 1)
 
@@ -273,7 +273,7 @@ class TestPatternsMixin:
         store.get_patterns.return_value = [pattern]
         runner._global_learning_store = store
 
-        with patch("mozart.execution.runner.patterns.random") as mock_random:
+        with patch("marianne.execution.runner.patterns.random") as mock_random:
             mock_random.random.return_value = 0.01  # exploration mode
             descriptions, ids = runner._query_relevant_patterns("job-1", 1)
 
@@ -296,7 +296,7 @@ class TestPatternsMixin:
         store.get_patterns.return_value = [pattern]
         runner._global_learning_store = store
 
-        with patch("mozart.execution.runner.patterns.random") as mock_random:
+        with patch("marianne.execution.runner.patterns.random") as mock_random:
             mock_random.random.return_value = 0.99
             descriptions, ids = runner._query_relevant_patterns("job-1", 1)
 
@@ -310,7 +310,7 @@ class TestPatternsMixin:
         store.get_patterns.side_effect = sqlite3.IntegrityError("FK violation")
         runner._global_learning_store = store
 
-        with patch("mozart.execution.runner.patterns.random") as mock_random:
+        with patch("marianne.execution.runner.patterns.random") as mock_random:
             mock_random.random.return_value = 0.99
             descriptions, ids = runner._query_relevant_patterns("job-1", 1)
         assert descriptions == []
@@ -325,7 +325,7 @@ class TestPatternsMixin:
         store.get_patterns.side_effect = sqlite3.OperationalError("db locked")
         runner._global_learning_store = store
 
-        with patch("mozart.execution.runner.patterns.random") as mock_random:
+        with patch("marianne.execution.runner.patterns.random") as mock_random:
             mock_random.random.return_value = 0.99
             descriptions, ids = runner._query_relevant_patterns("job-1", 1)
         assert descriptions == []
@@ -339,7 +339,7 @@ class TestPatternsMixin:
         store.get_patterns.return_value = []
         runner._global_learning_store = store
 
-        with patch("mozart.execution.runner.patterns.random") as mock_random:
+        with patch("marianne.execution.runner.patterns.random") as mock_random:
             mock_random.random.return_value = 0.99
             runner._query_relevant_patterns("job-1", 1, context_tags=["custom:tag"])
 
@@ -554,7 +554,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_setup_isolation_disabled(self) -> None:
         """Disabled isolation returns None immediately."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         mixin.config = _make_config()
@@ -567,7 +567,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_setup_isolation_unsupported_mode(self) -> None:
         """Non-worktree mode returns None with warning."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         config = _make_config(isolation={"enabled": True, "mode": "worktree"})
@@ -579,7 +579,7 @@ class TestIsolationMixin:
             mock_mode.value = "unsupported"
             # Since IsolationMode only has worktree, we'll test the exact code path
             # by making mode != IsolationMode.WORKTREE
-            from mozart.core.config import IsolationMode
+            from marianne.core.config import IsolationMode
             mock_mode.__eq__ = lambda self, other: False
             mock_mode.__ne__ = lambda self, other: True
 
@@ -590,7 +590,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_setup_isolation_reuses_existing_worktree(self) -> None:
         """Existing worktree path is reused on resume."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         mixin.config = _make_config(isolation={"enabled": True, "mode": "worktree"})
@@ -606,7 +606,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_setup_isolation_not_git_repo_fallback(self) -> None:
         """Non-git repo with fallback_on_error returns None."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         mixin.config = _make_config(
@@ -618,7 +618,7 @@ class TestIsolationMixin:
 
         state = _make_state()
 
-        with patch("mozart.isolation.worktree.GitWorktreeManager") as MockManager:
+        with patch("marianne.isolation.worktree.GitWorktreeManager") as MockManager:
             MockManager.return_value.is_git_repository.return_value = False
             result = await mixin._setup_isolation(state)
             assert result is None
@@ -627,7 +627,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_setup_isolation_not_git_repo_no_fallback(self) -> None:
         """Non-git repo without fallback raises FatalError."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         mixin.config = _make_config(
@@ -639,7 +639,7 @@ class TestIsolationMixin:
 
         state = _make_state()
 
-        with patch("mozart.isolation.worktree.GitWorktreeManager") as MockManager:
+        with patch("marianne.isolation.worktree.GitWorktreeManager") as MockManager:
             MockManager.return_value.is_git_repository.return_value = False
             with pytest.raises(FatalError, match="git repository"):
                 await mixin._setup_isolation(state)
@@ -647,7 +647,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_setup_isolation_creation_failure_with_fallback(self) -> None:
         """Worktree creation failure with fallback returns None."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         mixin.config = _make_config(
@@ -659,7 +659,7 @@ class TestIsolationMixin:
 
         state = _make_state()
 
-        with patch("mozart.isolation.worktree.GitWorktreeManager") as MockManager:
+        with patch("marianne.isolation.worktree.GitWorktreeManager") as MockManager:
             mgr = MockManager.return_value
             mgr.is_git_repository.return_value = True
             result_mock = MagicMock(success=False, error="creation failed", worktree=None)
@@ -671,7 +671,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_setup_isolation_creation_success(self) -> None:
         """Successful worktree creation returns path."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         mixin.config = _make_config(
@@ -683,7 +683,7 @@ class TestIsolationMixin:
 
         state = _make_state()
 
-        with patch("mozart.isolation.worktree.GitWorktreeManager") as MockManager:
+        with patch("marianne.isolation.worktree.GitWorktreeManager") as MockManager:
             mgr = MockManager.return_value
             mgr.is_git_repository.return_value = True
             worktree_mock = MagicMock(
@@ -702,7 +702,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_cleanup_isolation_no_worktree(self) -> None:
         """No worktree path returns immediately."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         mixin.config = _make_config()
@@ -714,7 +714,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_cleanup_isolation_worktree_already_removed(self) -> None:
         """Missing worktree path logs and returns."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         mixin.config = _make_config()
@@ -727,7 +727,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_cleanup_isolation_preserves_on_failure(self) -> None:
         """Failed job with cleanup_on_failure=False preserves worktree."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
         import tempfile
 
         mixin = IsolationMixin.__new__(IsolationMixin)
@@ -752,7 +752,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_cleanup_isolation_preserves_on_pause(self) -> None:
         """Paused job never cleans up worktree."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
         import tempfile
 
         mixin = IsolationMixin.__new__(IsolationMixin)
@@ -775,7 +775,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_cleanup_isolation_removes_on_success(self) -> None:
         """Completed job with cleanup_on_success cleans up worktree."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
         import tempfile
 
         mixin = IsolationMixin.__new__(IsolationMixin)
@@ -797,7 +797,7 @@ class TestIsolationMixin:
             state.worktree_path = tmpdir
             state.worktree_locked = True
 
-            with patch("mozart.isolation.worktree.GitWorktreeManager") as MockManager:
+            with patch("marianne.isolation.worktree.GitWorktreeManager") as MockManager:
                 mgr = MockManager.return_value
                 mgr.unlock_worktree = AsyncMock(return_value=MagicMock(success=True))
                 mgr.remove_worktree = AsyncMock(return_value=MagicMock(success=True))
@@ -811,7 +811,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_cleanup_isolation_unlock_failure(self) -> None:
         """Unlock failure is warned but cleanup continues."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
         import tempfile
 
         mixin = IsolationMixin.__new__(IsolationMixin)
@@ -832,7 +832,7 @@ class TestIsolationMixin:
             state.worktree_path = tmpdir
             state.worktree_locked = True
 
-            with patch("mozart.isolation.worktree.GitWorktreeManager") as MockManager:
+            with patch("marianne.isolation.worktree.GitWorktreeManager") as MockManager:
                 mgr = MockManager.return_value
                 mgr.unlock_worktree = AsyncMock(
                     return_value=MagicMock(success=False, error="lock error")
@@ -845,7 +845,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_cleanup_isolation_remove_failure(self) -> None:
         """Removal failure is warned but doesn't fail job."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
         import tempfile
 
         mixin = IsolationMixin.__new__(IsolationMixin)
@@ -866,7 +866,7 @@ class TestIsolationMixin:
             state.worktree_path = tmpdir
             state.worktree_locked = False
 
-            with patch("mozart.isolation.worktree.GitWorktreeManager") as MockManager:
+            with patch("marianne.isolation.worktree.GitWorktreeManager") as MockManager:
                 mgr = MockManager.return_value
                 mgr.remove_worktree = AsyncMock(
                     return_value=MagicMock(success=False, error="busy")
@@ -878,7 +878,7 @@ class TestIsolationMixin:
     @pytest.mark.asyncio
     async def test_cleanup_isolation_exception_caught(self) -> None:
         """Exceptions during cleanup operations are caught and logged."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
         import tempfile
 
         mixin = IsolationMixin.__new__(IsolationMixin)
@@ -899,7 +899,7 @@ class TestIsolationMixin:
             state.worktree_path = tmpdir
             state.worktree_locked = False
 
-            with patch("mozart.isolation.worktree.GitWorktreeManager") as MockManager:
+            with patch("marianne.isolation.worktree.GitWorktreeManager") as MockManager:
                 mgr = MockManager.return_value
                 # Make the remove operation raise inside the try/except
                 mgr.remove_worktree = AsyncMock(side_effect=RuntimeError("unexpected"))
@@ -909,7 +909,7 @@ class TestIsolationMixin:
 
     def test_get_effective_working_directory_with_worktree(self) -> None:
         """Active worktree path is used as working directory."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
         import tempfile
 
         mixin = IsolationMixin.__new__(IsolationMixin)
@@ -923,7 +923,7 @@ class TestIsolationMixin:
 
     def test_get_effective_working_directory_no_worktree(self) -> None:
         """No worktree falls back to config workspace."""
-        from mozart.execution.runner.isolation import IsolationMixin
+        from marianne.execution.runner.isolation import IsolationMixin
 
         mixin = IsolationMixin.__new__(IsolationMixin)
         mixin.config = _make_config()
@@ -943,7 +943,7 @@ class TestContextBuildingMixin:
     """Tests for ContextBuildingMixin methods."""
 
     def _make_mixin(self) -> Any:
-        from mozart.execution.runner.context import ContextBuildingMixin
+        from marianne.execution.runner.context import ContextBuildingMixin
 
         mixin = ContextBuildingMixin.__new__(ContextBuildingMixin)
         mixin.config = _make_config()
@@ -977,7 +977,7 @@ class TestContextBuildingMixin:
 
     def test_resolve_injections_missing_context_file(self) -> None:
         """Missing context file logs warning and skips."""
-        from mozart.core.config.job import InjectionCategory, InjectionItem
+        from marianne.core.config.job import InjectionCategory, InjectionItem
 
         mixin = self._make_mixin()
         # Add a prelude injection pointing to nonexistent file
@@ -994,7 +994,7 @@ class TestContextBuildingMixin:
 
     def test_resolve_injections_missing_skill_file(self) -> None:
         """Missing skill file logs error."""
-        from mozart.core.config.job import InjectionCategory, InjectionItem
+        from marianne.core.config.job import InjectionCategory, InjectionItem
 
         mixin = self._make_mixin()
         item = InjectionItem(file="/nonexistent/skill.md", as_=InjectionCategory.SKILL)
@@ -1011,7 +1011,7 @@ class TestContextBuildingMixin:
     def test_resolve_injections_reads_valid_file(self) -> None:
         """Valid file is read and injected into context."""
         import tempfile
-        from mozart.core.config.job import InjectionCategory, InjectionItem
+        from marianne.core.config.job import InjectionCategory, InjectionItem
 
         mixin = self._make_mixin()
 
@@ -1033,7 +1033,7 @@ class TestContextBuildingMixin:
 
     def test_resolve_injections_jinja_error(self) -> None:
         """Jinja template error in path logs warning."""
-        from mozart.core.config.job import InjectionCategory, InjectionItem
+        from marianne.core.config.job import InjectionCategory, InjectionItem
 
         mixin = self._make_mixin()
         item = InjectionItem(file="{{ invalid }", as_=InjectionCategory.CONTEXT)
@@ -1049,7 +1049,7 @@ class TestContextBuildingMixin:
 
     def test_populate_cross_sheet_context_stdout(self) -> None:
         """Cross-sheet stdout capture works."""
-        from mozart.execution.runner.context import ContextBuildingMixin
+        from marianne.execution.runner.context import ContextBuildingMixin
 
         mixin = self._make_mixin()
         state = _make_state(total_sheets=3)
@@ -1572,7 +1572,7 @@ class TestRecoveryBroadcastPolling:
     """Tests for _poll_broadcast_discoveries in RecoveryMixin."""
 
     def _make_mixin(self) -> Any:
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         mixin = RecoveryMixin.__new__(RecoveryMixin)
         mixin.config = _make_config()
@@ -1706,7 +1706,7 @@ class TestLifecycleParallelMode:
     """Tests for lifecycle parallel execution mode and post-success hooks."""
 
     def _make_runner(self) -> Any:
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         runner = LifecycleMixin.__new__(LifecycleMixin)
         runner.config = _make_config()
@@ -1792,7 +1792,7 @@ class TestLifecyclePostSuccessHooks:
     """Tests for _execute_post_success_hooks."""
 
     def _make_runner(self) -> Any:
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         runner = LifecycleMixin.__new__(LifecycleMixin)
         runner.config = _make_config()
@@ -1831,7 +1831,7 @@ class TestLifecyclePostSuccessHooks:
             chained_job_info=None,
         )
 
-        with patch("mozart.execution.runner.lifecycle.HookExecutor") as MockExec:
+        with patch("marianne.execution.runner.lifecycle.HookExecutor") as MockExec:
             MockExec.return_value.execute_hooks = AsyncMock(return_value=[hook_result])
             await runner._execute_post_success_hooks(state)
 
@@ -1858,7 +1858,7 @@ class TestLifecyclePostSuccessHooks:
             chained_job_info=None,
         )
 
-        with patch("mozart.execution.runner.lifecycle.HookExecutor") as MockExec:
+        with patch("marianne.execution.runner.lifecycle.HookExecutor") as MockExec:
             MockExec.return_value.execute_hooks = AsyncMock(return_value=[hook_result])
             await runner._execute_post_success_hooks(state)
 
@@ -1874,7 +1874,7 @@ class TestLifecyclePostSuccessHooks:
 
         state = _make_state(status=JobStatus.COMPLETED)
 
-        with patch("mozart.execution.runner.lifecycle.HookExecutor") as MockExec:
+        with patch("marianne.execution.runner.lifecycle.HookExecutor") as MockExec:
             MockExec.return_value.execute_hooks = AsyncMock(return_value=[])
             await runner._execute_post_success_hooks(state)
 
@@ -1885,7 +1885,7 @@ class TestLifecycleParallelBatches:
     """Tests for _execute_parallel_mode batch processing."""
 
     def _make_runner(self) -> Any:
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         runner = LifecycleMixin.__new__(LifecycleMixin)
         runner.config = _make_config(
@@ -2045,7 +2045,7 @@ class TestLifecycleSynthesizer:
     """Tests for _synthesize_batch_outputs."""
 
     def _make_runner(self) -> Any:
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         runner = LifecycleMixin.__new__(LifecycleMixin)
         runner._logger = MagicMock()
@@ -2079,8 +2079,8 @@ class TestLifecycleSynthesizer:
         state.sheets[1] = SheetState(sheet_num=1, status=SheetStatus.COMPLETED)
         state.sheets[1].stdout_tail = "some output"
 
-        with patch("mozart.execution.synthesizer.ResultSynthesizer") as MockSynth:
-            with patch("mozart.execution.synthesizer.SynthesisConfig"):
+        with patch("marianne.execution.synthesizer.ResultSynthesizer") as MockSynth:
+            with patch("marianne.execution.synthesizer.SynthesisConfig"):
                 synth_instance = MockSynth.return_value
                 synth_result = MagicMock(
                     status="ready", batch_id="b-1", to_dict=MagicMock(return_value={})
@@ -2098,7 +2098,7 @@ class TestLifecycleGlobalAggregation:
     """Tests for _aggregate_to_global_store."""
 
     def _make_runner(self) -> Any:
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         runner = LifecycleMixin.__new__(LifecycleMixin)
         runner.config = _make_config()
@@ -2130,7 +2130,7 @@ class TestLifecycleGlobalAggregation:
         state.sheets[2].validation_passed = False
         state.sheets[2].attempt_count = 2
 
-        with patch("mozart.learning.aggregator.EnhancedPatternAggregator") as MockAgg:
+        with patch("marianne.learning.aggregator.EnhancedPatternAggregator") as MockAgg:
             agg_result = MagicMock(
                 outcomes_recorded=2,
                 patterns_detected=1,
@@ -2166,7 +2166,7 @@ class TestLifecycleGlobalAggregation:
         state.sheets[1].validation_passed = None  # Unknown
         state.sheets[1].attempt_count = 1
 
-        with patch("mozart.learning.aggregator.EnhancedPatternAggregator") as MockAgg:
+        with patch("marianne.learning.aggregator.EnhancedPatternAggregator") as MockAgg:
             agg_result = MagicMock(
                 outcomes_recorded=1,
                 patterns_detected=0,
@@ -2187,7 +2187,7 @@ class TestLifecycleSkipWhenCommand:
     """Tests for _should_skip_sheet with command-based conditions."""
 
     def _make_runner(self) -> Any:
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         runner = LifecycleMixin.__new__(LifecycleMixin)
         runner.config = _make_config()
@@ -2275,7 +2275,7 @@ class TestLifecycleSequentialMode:
     """Tests for sequential mode edge cases."""
 
     def _make_runner(self) -> Any:
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         runner = LifecycleMixin.__new__(LifecycleMixin)
         runner.config = _make_config()
@@ -2377,7 +2377,7 @@ class TestPatternsAutoApply:
         store.get_patterns.return_value = [regular_pattern]
         runner._global_learning_store = store
 
-        with patch("mozart.execution.runner.patterns.random") as mock_random:
+        with patch("marianne.execution.runner.patterns.random") as mock_random:
             mock_random.random.return_value = 0.99
             descriptions, ids = runner._query_relevant_patterns("job-1", 1)
 
@@ -2414,7 +2414,7 @@ class TestPatternsAutoApply:
         store.get_patterns.return_value = [shared_pattern]
         runner._global_learning_store = store
 
-        with patch("mozart.execution.runner.patterns.random") as mock_random:
+        with patch("marianne.execution.runner.patterns.random") as mock_random:
             mock_random.random.return_value = 0.99
             descriptions, ids = runner._query_relevant_patterns("job-1", 1)
 
@@ -2432,7 +2432,7 @@ class TestSheetCheckpointAndStale:
 
     def _make_sheet_mixin(self) -> Any:
         """Build a minimal SheetExecutionMixin for testing."""
-        from mozart.execution.runner.sheet import SheetExecutionMixin
+        from marianne.execution.runner.sheet import SheetExecutionMixin
 
         mixin = SheetExecutionMixin.__new__(SheetExecutionMixin)
         mixin.config = _make_config()
@@ -2544,7 +2544,7 @@ class TestSheetCheckpointAndStale:
 
     def test_stale_execution_error_attrs(self) -> None:
         """_StaleExecutionError stores idle_seconds and timeout."""
-        from mozart.execution.runner.sheet import _StaleExecutionError
+        from marianne.execution.runner.sheet import _StaleExecutionError
 
         err = _StaleExecutionError(idle_seconds=120.5, timeout=60.0)
         assert err.idle_seconds == 120.5
@@ -2553,7 +2553,7 @@ class TestSheetCheckpointAndStale:
 
     def test_sheet_skipped_exception(self) -> None:
         """_SheetSkipped is a plain exception."""
-        from mozart.execution.runner.sheet import _SheetSkipped
+        from marianne.execution.runner.sheet import _SheetSkipped
 
         err = _SheetSkipped()
         assert isinstance(err, Exception)
@@ -2574,7 +2574,7 @@ class TestFanInSkippedUpstream120:
     """
 
     def _make_mixin(self) -> Any:
-        from mozart.execution.runner.context import ContextBuildingMixin
+        from marianne.execution.runner.context import ContextBuildingMixin
 
         mixin = ContextBuildingMixin.__new__(ContextBuildingMixin)
         mixin.config = _make_config()

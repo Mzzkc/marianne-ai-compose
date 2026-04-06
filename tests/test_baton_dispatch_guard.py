@@ -21,9 +21,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
 
 # =========================================================================
@@ -89,7 +89,7 @@ class TestDispatchGuardBackendAcquireFailure:
     @pytest.mark.asyncio
     async def test_value_error_sends_failure_result(self) -> None:
         """ValueError from acquire() triggers a SheetAttemptResult failure event."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -119,7 +119,7 @@ class TestDispatchGuardBackendAcquireFailure:
     @pytest.mark.asyncio
     async def test_not_implemented_error_sends_failure_result(self) -> None:
         """NotImplementedError (unsupported kind) triggers a failure event."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1, instrument="http-instrument")]
@@ -150,7 +150,7 @@ class TestDispatchGuardBackendAcquireFailure:
     @pytest.mark.asyncio
     async def test_runtime_error_sends_failure_result(self) -> None:
         """RuntimeError (pool closed) triggers a failure event."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -173,7 +173,7 @@ class TestDispatchGuardBackendAcquireFailure:
     @pytest.mark.asyncio
     async def test_failure_result_includes_error_message(self) -> None:
         """The SheetAttemptResult error_message includes the original error."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -195,7 +195,7 @@ class TestDispatchGuardBackendAcquireFailure:
     @pytest.mark.asyncio
     async def test_failure_result_includes_instrument_name(self) -> None:
         """The SheetAttemptResult instrument_name matches the failed sheet."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1, instrument="gemini-cli")]
@@ -217,7 +217,7 @@ class TestDispatchGuardBackendAcquireFailure:
     @pytest.mark.asyncio
     async def test_no_backend_pool_sends_failure_result(self) -> None:
         """When backend_pool is None, dispatch sends a failure result."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -237,7 +237,7 @@ class TestDispatchGuardBackendAcquireFailure:
     @pytest.mark.asyncio
     async def test_sheet_not_found_sends_failure_result(self) -> None:
         """When the sheet is not found, dispatch sends a failure result."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -260,8 +260,8 @@ class TestDispatchGuardBackendAcquireFailure:
     async def test_failure_prevents_infinite_dispatch_loop(self) -> None:
         """After backend failure, the sheet should not stay in READY — it should
         progress to FAILED via the baton state machine, preventing re-dispatch."""
-        from mozart.daemon.baton.adapter import BatonAdapter
-        from mozart.daemon.baton.dispatch import dispatch_ready
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.dispatch import dispatch_ready
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -305,7 +305,7 @@ class TestCompletedNewWorkFlag:
 
     def test_has_completed_sheets_all_completed(self) -> None:
         """has_completed_sheets returns True when all sheets completed."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -320,7 +320,7 @@ class TestCompletedNewWorkFlag:
 
     def test_has_completed_sheets_partial_success(self) -> None:
         """has_completed_sheets returns True when some sheets completed, some failed."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -336,7 +336,7 @@ class TestCompletedNewWorkFlag:
 
     def test_has_completed_sheets_none_completed(self) -> None:
         """has_completed_sheets returns False when no sheets completed."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -351,14 +351,14 @@ class TestCompletedNewWorkFlag:
 
     def test_has_completed_sheets_unknown_job(self) -> None:
         """has_completed_sheets returns False for unregistered jobs."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         assert adapter.has_completed_sheets("nonexistent") is False
 
     def test_has_completed_sheets_all_skipped(self) -> None:
         """has_completed_sheets returns False when all sheets are skipped."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -373,7 +373,7 @@ class TestCompletedNewWorkFlag:
 
     def test_completion_event_reports_success_correctly(self) -> None:
         """Adapter correctly distinguishes all-success from partial failure."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -389,7 +389,7 @@ class TestCompletedNewWorkFlag:
 
     def test_completion_event_reports_failure_correctly(self) -> None:
         """When some sheets fail, completion result is False."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]

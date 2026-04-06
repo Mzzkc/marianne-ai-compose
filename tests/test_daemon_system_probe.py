@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from mozart.daemon.system_probe import SystemProbe
+from marianne.daemon.system_probe import SystemProbe
 
 
 # ─── get_memory_mb ─────────────────────────────────────────────────────
@@ -35,14 +35,14 @@ class TestGetMemoryMb:
         mock_process.memory_info.return_value.rss = 512 * 1024 * 1024
         mock_psutil.Process.return_value = mock_process
 
-        with patch("mozart.daemon.system_probe._psutil", mock_psutil):
+        with patch("marianne.daemon.system_probe._psutil", mock_psutil):
             result = SystemProbe.get_memory_mb()
             assert result == pytest.approx(512.0)
 
     def test_returns_none_when_all_probes_fail(self):
         """Returns None when both psutil and /proc fail."""
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe._psutil", None),
             patch("builtins.open", side_effect=OSError("no /proc")),
         ):
             result = SystemProbe.get_memory_mb()
@@ -57,7 +57,7 @@ class TestGetMemoryMb:
             "VmSize:\t 204800 kB\n"
         )
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe._psutil", None),
             patch("builtins.open", mock_open(read_data=proc_status)),
         ):
             result = SystemProbe.get_memory_mb()
@@ -69,7 +69,7 @@ class TestGetMemoryMb:
         """Returns None when VmRSS value is corrupt."""
         proc_status = "VmRSS:\t  corrupt kB\n"
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe._psutil", None),
             patch("builtins.open", mock_open(read_data=proc_status)),
         ):
             result = SystemProbe.get_memory_mb()
@@ -90,7 +90,7 @@ class TestGetChildCount:
 
     def test_fallback_when_psutil_unavailable(self):
         """Falls back to /proc scanning when psutil is not available."""
-        with patch("mozart.daemon.system_probe._psutil", None):
+        with patch("marianne.daemon.system_probe._psutil", None):
             result = SystemProbe.get_child_count()
             assert isinstance(result, int)
             assert result >= 0
@@ -98,8 +98,8 @@ class TestGetChildCount:
     def test_proc_fallback_returns_none_when_no_entries_readable(self):
         """Returns None when /proc lists PIDs but none are readable."""
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
-            patch("mozart.daemon.system_probe.os.listdir", return_value=["1", "2", "3"]),
+            patch("marianne.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe.os.listdir", return_value=["1", "2", "3"]),
             patch.object(SystemProbe, "_read_proc_ppid", return_value=None),
         ):
             result = SystemProbe.get_child_count()
@@ -118,9 +118,9 @@ class TestGetChildCount:
             }.get(pid_str)
 
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
-            patch("mozart.daemon.system_probe.os.listdir", return_value=["1001", "1002", "1003", "1004", "self"]),
-            patch("mozart.daemon.system_probe.os.getpid", return_value=my_pid),
+            patch("marianne.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe.os.listdir", return_value=["1001", "1002", "1003", "1004", "self"]),
+            patch("marianne.daemon.system_probe.os.getpid", return_value=my_pid),
             patch.object(SystemProbe, "_read_proc_ppid", side_effect=fake_ppid),
         ):
             result = SystemProbe.get_child_count()
@@ -130,8 +130,8 @@ class TestGetChildCount:
     def test_proc_fallback_returns_none_on_listdir_oserror(self):
         """Returns None when /proc listdir fails entirely."""
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
-            patch("mozart.daemon.system_probe.os.listdir", side_effect=OSError("permission denied")),
+            patch("marianne.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe.os.listdir", side_effect=OSError("permission denied")),
         ):
             result = SystemProbe.get_child_count()
             assert result is None
@@ -178,8 +178,8 @@ class TestReapZombies:
         mock_psutil.Process.return_value = current
 
         with (
-            patch("mozart.daemon.system_probe._psutil", mock_psutil),
-            patch("mozart.daemon.system_probe.os.waitpid") as mock_waitpid,
+            patch("marianne.daemon.system_probe._psutil", mock_psutil),
+            patch("marianne.daemon.system_probe.os.waitpid") as mock_waitpid,
         ):
             result = SystemProbe.reap_zombies()
 
@@ -189,10 +189,10 @@ class TestReapZombies:
     def test_fallback_to_waitpid(self):
         """Uses os.waitpid loop when psutil is not available."""
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe._psutil", None),
             # waitpid will return (0, 0) meaning no zombies
             patch(
-                "mozart.daemon.system_probe.os.waitpid",
+                "marianne.daemon.system_probe.os.waitpid",
                 side_effect=ChildProcessError,
             ),
         ):
@@ -232,8 +232,8 @@ class TestCountGroupMembers:
             return {100: 1234, 200: 1234, 300: 5678}[pid]
 
         with (
-            patch("mozart.daemon.system_probe._psutil", mock_psutil),
-            patch("mozart.daemon.system_probe.os.getpgid", side_effect=fake_getpgid),
+            patch("marianne.daemon.system_probe._psutil", mock_psutil),
+            patch("marianne.daemon.system_probe.os.getpgid", side_effect=fake_getpgid),
         ):
             # Exclude pid 100, only pid 200 matches
             count = SystemProbe.count_group_members(1234, exclude_pid=100)
@@ -242,7 +242,7 @@ class TestCountGroupMembers:
 
     def test_fallback_when_psutil_unavailable(self):
         """Falls back to /proc when psutil is not installed."""
-        with patch("mozart.daemon.system_probe._psutil", None):
+        with patch("marianne.daemon.system_probe._psutil", None):
             # Just test it doesn't crash
             result = SystemProbe.count_group_members(
                 os.getpgrp(), exclude_pid=os.getpid(),
@@ -268,8 +268,8 @@ class TestCountGroupMembers:
             raise OSError("not found")
 
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
-            patch("mozart.daemon.system_probe.os.listdir", return_value=["100", "200", "300", "self"]),
+            patch("marianne.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe.os.listdir", return_value=["100", "200", "300", "self"]),
             patch("builtins.open", side_effect=fake_open),
         ):
             result = SystemProbe.count_group_members(target_pgid, exclude_pid=0)
@@ -292,8 +292,8 @@ class TestCountGroupMembers:
             raise OSError("not found")
 
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
-            patch("mozart.daemon.system_probe.os.listdir", return_value=["100", "200"]),
+            patch("marianne.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe.os.listdir", return_value=["100", "200"]),
             patch("builtins.open", side_effect=fake_open),
         ):
             # Exclude pid 100, only pid 200 should match
@@ -304,8 +304,8 @@ class TestCountGroupMembers:
     def test_proc_group_count_returns_none_on_listdir_failure(self):
         """Returns None when /proc listdir fails entirely."""
         with (
-            patch("mozart.daemon.system_probe._psutil", None),
-            patch("mozart.daemon.system_probe.os.listdir", side_effect=OSError("no /proc")),
+            patch("marianne.daemon.system_probe._psutil", None),
+            patch("marianne.daemon.system_probe.os.listdir", side_effect=OSError("no /proc")),
         ):
             result = SystemProbe.count_group_members(1234, exclude_pid=0)
             assert result is None
@@ -319,7 +319,7 @@ class TestMonitorDelegation:
 
     def test_memory_delegation(self):
         """ResourceMonitor._get_memory_usage_mb delegates to SystemProbe."""
-        from mozart.daemon.monitor import ResourceMonitor
+        from marianne.daemon.monitor import ResourceMonitor
 
         with patch.object(SystemProbe, "get_memory_mb", return_value=256.0):
             result = ResourceMonitor._get_memory_usage_mb()
@@ -327,7 +327,7 @@ class TestMonitorDelegation:
 
     def test_child_count_delegation(self):
         """ResourceMonitor._get_child_process_count delegates to SystemProbe."""
-        from mozart.daemon.monitor import ResourceMonitor
+        from marianne.daemon.monitor import ResourceMonitor
 
         with patch.object(SystemProbe, "get_child_count", return_value=5):
             result = ResourceMonitor._get_child_process_count()
@@ -335,7 +335,7 @@ class TestMonitorDelegation:
 
     def test_zombie_delegation(self):
         """ResourceMonitor._check_for_zombies delegates to SystemProbe."""
-        from mozart.daemon.monitor import ResourceMonitor
+        from marianne.daemon.monitor import ResourceMonitor
 
         with patch.object(SystemProbe, "reap_zombies", return_value=[42]):
             result = ResourceMonitor._check_for_zombies()

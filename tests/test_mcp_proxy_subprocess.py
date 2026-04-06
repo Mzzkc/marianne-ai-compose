@@ -9,11 +9,11 @@ import textwrap
 
 import pytest
 
-from mozart.bridge.mcp_proxy import (
+from marianne.bridge.mcp_proxy import (
     MCPProxyService,
     ToolNotFoundError,
 )
-from mozart.core.config import MCPServerConfig
+from marianne.core.config import MCPServerConfig
 
 
 @pytest.fixture(scope="module")

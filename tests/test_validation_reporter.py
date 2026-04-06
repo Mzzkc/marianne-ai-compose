@@ -14,8 +14,8 @@ from io import StringIO
 
 from rich.console import Console
 
-from mozart.validation.base import ValidationIssue, ValidationSeverity
-from mozart.validation.reporter import ValidationReporter
+from marianne.validation.base import ValidationIssue, ValidationSeverity
+from marianne.validation.reporter import ValidationReporter
 
 
 def _make_issue(

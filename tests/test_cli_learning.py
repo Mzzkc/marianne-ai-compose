@@ -20,16 +20,16 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
 # Patch target for get_global_store (deferred import at source)
-_GS_PATCH = "mozart.learning.global_store.get_global_store"
+_GS_PATCH = "marianne.learning.global_store.get_global_store"
 # Patch target for GlobalLearningStore class (used directly in learning-insights)
-_GS_CLS_PATCH = "mozart.learning.global_store.GlobalLearningStore"
+_GS_CLS_PATCH = "marianne.learning.global_store.GlobalLearningStore"
 # Patch target for check_migration_status
-_MIGRATION_PATCH = "mozart.learning.migration.check_migration_status"
+_MIGRATION_PATCH = "marianne.learning.migration.check_migration_status"
 
 
 def _make_mock_store() -> MagicMock:

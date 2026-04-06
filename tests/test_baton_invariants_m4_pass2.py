@@ -25,7 +25,7 @@ from unittest.mock import MagicMock
 import hypothesis.strategies as st
 from hypothesis import HealthCheck, assume, given, settings
 
-from mozart.utils.credential_scanner import redact_credentials
+from marianne.utils.credential_scanner import redact_credentials
 
 # =============================================================================
 # Strategies

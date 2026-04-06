@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mozart.core.config import JobConfig
-from mozart.execution.setup import (
+from marianne.core.config import JobConfig
+from marianne.execution.setup import (
     create_backend,
     create_state_backend,
     setup_grounding,
@@ -96,7 +96,7 @@ class TestSetupLearning:
             workspace=str(tmp_path),
         )
         with patch(
-            "mozart.learning.global_store.get_global_store"
+            "marianne.learning.global_store.get_global_store"
         ) as mock_get_global:
             mock_get_global.return_value = MagicMock()
             outcome, gls = setup_learning(config)
@@ -187,25 +187,25 @@ class TestCreateStateBackend:
 
     def test_json_backend_default(self, tmp_path: Path) -> None:
         backend = create_state_backend(tmp_path)
-        from mozart.state import JsonStateBackend
+        from marianne.state import JsonStateBackend
 
         assert isinstance(backend, JsonStateBackend)
 
     def test_json_backend_explicit(self, tmp_path: Path) -> None:
         backend = create_state_backend(tmp_path, backend_type="json")
-        from mozart.state import JsonStateBackend
+        from marianne.state import JsonStateBackend
 
         assert isinstance(backend, JsonStateBackend)
 
     def test_sqlite_backend(self, tmp_path: Path) -> None:
         backend = create_state_backend(tmp_path, backend_type="sqlite")
-        from mozart.state import SQLiteStateBackend
+        from marianne.state import SQLiteStateBackend
 
         assert isinstance(backend, SQLiteStateBackend)
 
     def test_unknown_type_falls_to_json(self, tmp_path: Path) -> None:
         """Unknown backend_type falls through to JSON (else branch)."""
         backend = create_state_backend(tmp_path, backend_type="redis")
-        from mozart.state import JsonStateBackend
+        from marianne.state import JsonStateBackend
 
         assert isinstance(backend, JsonStateBackend)

@@ -17,9 +17,9 @@ import signal
 
 import pytest
 
-from mozart.core.errors.classifier import ErrorClassifier
-from mozart.core.errors.codes import ErrorCategory, ErrorCode
-from mozart.core.errors.models import ClassificationResult
+from marianne.core.errors.classifier import ErrorClassifier
+from marianne.core.errors.codes import ErrorCategory, ErrorCode
+from marianne.core.errors.models import ClassificationResult
 
 # =============================================================================
 # Fixtures

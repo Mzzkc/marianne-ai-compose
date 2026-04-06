@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import pytest
 
-from mozart.core.constants import (
+from marianne.core.constants import (
     RESET_TIME_MAXIMUM_WAIT_SECONDS,
     RESET_TIME_MINIMUM_WAIT_SECONDS,
 )
-from mozart.core.errors.classifier import ErrorClassifier
+from marianne.core.errors.classifier import ErrorClassifier
 
 
 @pytest.fixture

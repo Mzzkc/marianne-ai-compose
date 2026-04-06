@@ -20,16 +20,16 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.adapter import BatonAdapter
-from mozart.daemon.baton.events import (
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.adapter import BatonAdapter
+from marianne.daemon.baton.events import (
     CancelJob,
     EscalationResolved,
     EscalationTimeout,
     SheetAttemptResult,
     ShutdownRequested,
 )
-from mozart.daemon.baton.state import BatonSheetStatus
+from marianne.daemon.baton.state import BatonSheetStatus
 
 
 # =========================================================================

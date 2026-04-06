@@ -7,9 +7,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from mozart.core.checkpoint import SheetStatus
-from mozart.learning.outcomes import SheetOutcome
-from mozart.learning.patterns import (
+from marianne.core.checkpoint import SheetStatus
+from marianne.learning.outcomes import SheetOutcome
+from marianne.learning.patterns import (
     DetectedPattern,
     PatternApplicator,
     PatternDetector,

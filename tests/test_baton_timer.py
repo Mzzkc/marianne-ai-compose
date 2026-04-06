@@ -18,7 +18,7 @@ import time
 
 import pytest
 
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.events import (
     CronTick,
     DispatchRetry,
     JobTimeout,
@@ -27,7 +27,7 @@ from mozart.daemon.baton.events import (
     RetryDue,
     StaleCheck,
 )
-from mozart.daemon.baton.timer import TimerHandle, TimerWheel
+from marianne.daemon.baton.timer import TimerHandle, TimerWheel
 
 
 # =============================================================================

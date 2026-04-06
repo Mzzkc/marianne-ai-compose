@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.daemon.config import ResourceLimitConfig
-from mozart.daemon.monitor import ResourceMonitor, ResourceSnapshot, _compute_percent
+from marianne.daemon.config import ResourceLimitConfig
+from marianne.daemon.monitor import ResourceMonitor, ResourceSnapshot, _compute_percent
 
 
 # ─── _compute_percent ──────────────────────────────────────────────────
@@ -243,7 +243,7 @@ class TestMemoryThresholds:
             active_sheets=1,
         )
 
-        with patch("mozart.daemon.monitor._logger") as mock_logger:
+        with patch("marianne.daemon.monitor._logger") as mock_logger:
             await monitor._evaluate(snapshot)
             mock_logger.warning.assert_called()
             # Check it was a memory warning
@@ -267,7 +267,7 @@ class TestMemoryThresholds:
             pass
 
         with (
-            patch("mozart.daemon.monitor._logger") as mock_logger,
+            patch("marianne.daemon.monitor._logger") as mock_logger,
             patch.object(monitor, "_enforce_memory_limit", side_effect=noop_enforce),
         ):
             await monitor._evaluate(snapshot)
@@ -286,7 +286,7 @@ class TestMemoryThresholds:
             active_sheets=0,
         )
 
-        with patch("mozart.daemon.monitor._logger") as mock_logger:
+        with patch("marianne.daemon.monitor._logger") as mock_logger:
             await monitor._evaluate(snapshot)
             mock_logger.warning.assert_not_called()
             mock_logger.error.assert_not_called()
@@ -311,7 +311,7 @@ class TestProcessCountTracking:
             active_sheets=1,
         )
 
-        with patch("mozart.daemon.monitor._logger") as mock_logger:
+        with patch("marianne.daemon.monitor._logger") as mock_logger:
             await monitor._evaluate(snapshot)
             mock_logger.warning.assert_called()
             # Check it was a processes warning
@@ -335,7 +335,7 @@ class TestProcessCountTracking:
             pass
 
         with (
-            patch("mozart.daemon.monitor._logger") as mock_logger,
+            patch("marianne.daemon.monitor._logger") as mock_logger,
             patch.object(monitor, "_enforce_process_limit", side_effect=noop_enforce),
         ):
             await monitor._evaluate(snapshot)

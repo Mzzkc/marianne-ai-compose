@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mozart.cli.commands.validate import _schema_error_hints
-from mozart.core.config.job import JobConfig
+from marianne.cli.commands.validate import _schema_error_hints
+from marianne.core.config.job import JobConfig
 
 
 class TestSarahFirstScoreTypos:

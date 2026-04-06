@@ -17,8 +17,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.cli.commands.validate import _schema_error_hints
+from marianne.cli import app
+from marianne.cli.commands.validate import _schema_error_hints
 
 runner = CliRunner()
 

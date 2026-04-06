@@ -17,9 +17,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.cli.commands.validate import _schema_error_hints
-from mozart.cli.output import _format_compact_duration, format_rate_limit_info
+from marianne.cli import app
+from marianne.cli.commands.validate import _schema_error_hints
+from marianne.cli.output import _format_compact_duration, format_rate_limit_info
 
 runner = CliRunner()
 
@@ -293,13 +293,13 @@ class TestStopSafetyGuardAdversarial:
         when IPC is down) would be worse — you'd never be able to stop a
         stuck conductor.
         """
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
-            patch("mozart.daemon.process._read_pid", return_value=12345),
-            patch("mozart.daemon.process._pid_alive", return_value=True),
-            patch("mozart.daemon.process._check_running_jobs", return_value=None),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process._read_pid", return_value=12345),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process._check_running_jobs", return_value=None),
+            patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
             # No SystemExit on success — function returns normally after sending signal
             stop_conductor()
@@ -308,16 +308,16 @@ class TestStopSafetyGuardAdversarial:
     @pytest.mark.adversarial
     def test_zero_running_jobs_proceeds_without_warning(self) -> None:
         """When no jobs are running, stop proceeds without asking."""
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
-            patch("mozart.daemon.process._read_pid", return_value=12345),
-            patch("mozart.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process._read_pid", return_value=12345),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
             patch(
-                "mozart.daemon.process._check_running_jobs",
+                "marianne.daemon.process._check_running_jobs",
                 return_value={"running_jobs": 0, "job_ids": []},
             ),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
             stop_conductor()
             mock_kill.assert_called_once_with(12345, signal.SIGTERM)
@@ -325,15 +325,15 @@ class TestStopSafetyGuardAdversarial:
     @pytest.mark.adversarial
     def test_force_flag_skips_ipc_check(self) -> None:
         """--force bypasses the running jobs check entirely."""
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
-            patch("mozart.daemon.process._read_pid", return_value=12345),
-            patch("mozart.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process._read_pid", return_value=12345),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
             patch(
-                "mozart.daemon.process._check_running_jobs"
+                "marianne.daemon.process._check_running_jobs"
             ) as mock_check,
-            patch("mozart.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
             stop_conductor(force=True)
             mock_check.assert_not_called()
@@ -344,12 +344,12 @@ class TestStopSafetyGuardAdversarial:
         """When PID is dead, stop cleans up stale PID file and exits."""
         from click.exceptions import Exit as ClickExit
 
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         mock_pid_file = MagicMock(spec=Path)
         with (
-            patch("mozart.daemon.process._read_pid", return_value=None),
-            patch("mozart.daemon.process.DaemonConfig") as mock_config_cls,
+            patch("marianne.daemon.process._read_pid", return_value=None),
+            patch("marianne.daemon.process.DaemonConfig") as mock_config_cls,
         ):
             mock_config_cls.return_value.pid_file = mock_pid_file
             with pytest.raises(ClickExit) as exc_info:
@@ -362,17 +362,17 @@ class TestStopSafetyGuardAdversarial:
         """When user declines the safety prompt, stop aborts."""
         from click.exceptions import Exit as ClickExit
 
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
-            patch("mozart.daemon.process._read_pid", return_value=12345),
-            patch("mozart.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process._read_pid", return_value=12345),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
             patch(
-                "mozart.daemon.process._check_running_jobs",
+                "marianne.daemon.process._check_running_jobs",
                 return_value={"running_jobs": 3, "job_ids": ["a", "b", "c"]},
             ),
-            patch("mozart.daemon.process.typer.confirm", return_value=False),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.typer.confirm", return_value=False),
+            patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
             with pytest.raises(ClickExit) as exc_info:
                 stop_conductor()
@@ -391,7 +391,7 @@ class TestStalePidDetectionAdversarial:
     @pytest.mark.adversarial
     def test_read_pid_with_garbage_content(self) -> None:
         """PID file with non-integer content returns None."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
         pid_file = MagicMock(spec=Path)
         pid_file.read_text.return_value = "not-a-number\n"
@@ -400,7 +400,7 @@ class TestStalePidDetectionAdversarial:
     @pytest.mark.adversarial
     def test_read_pid_with_empty_file(self) -> None:
         """Empty PID file returns None."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
         pid_file = MagicMock(spec=Path)
         pid_file.read_text.return_value = ""
@@ -409,7 +409,7 @@ class TestStalePidDetectionAdversarial:
     @pytest.mark.adversarial
     def test_read_pid_with_trailing_whitespace(self) -> None:
         """PID file with trailing newlines is handled by strip()."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
         pid_file = MagicMock(spec=Path)
         pid_file.read_text.return_value = "12345\n\n"
@@ -418,7 +418,7 @@ class TestStalePidDetectionAdversarial:
     @pytest.mark.adversarial
     def test_read_pid_with_multiple_pids(self) -> None:
         """PID file with multiple lines — int() on stripped content should fail."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
         pid_file = MagicMock(spec=Path)
         pid_file.read_text.return_value = "12345\n67890\n"
@@ -428,7 +428,7 @@ class TestStalePidDetectionAdversarial:
     @pytest.mark.adversarial
     def test_read_pid_missing_file(self) -> None:
         """Missing PID file returns None."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
         pid_file = MagicMock(spec=Path)
         pid_file.read_text.side_effect = FileNotFoundError
@@ -437,18 +437,18 @@ class TestStalePidDetectionAdversarial:
     @pytest.mark.adversarial
     def test_pid_alive_with_permission_error_returns_true(self) -> None:
         """PermissionError means process exists but we can't signal — alive."""
-        from mozart.daemon.process import _pid_alive
+        from marianne.daemon.process import _pid_alive
 
-        with patch("mozart.daemon.process.os.kill", side_effect=PermissionError):
+        with patch("marianne.daemon.process.os.kill", side_effect=PermissionError):
             assert _pid_alive(1) is True
 
     @pytest.mark.adversarial
     def test_pid_alive_with_process_not_found_returns_false(self) -> None:
         """ProcessLookupError means process is dead."""
-        from mozart.daemon.process import _pid_alive
+        from marianne.daemon.process import _pid_alive
 
         with patch(
-            "mozart.daemon.process.os.kill", side_effect=ProcessLookupError
+            "marianne.daemon.process.os.kill", side_effect=ProcessLookupError
         ):
             assert _pid_alive(99999) is False
 
@@ -640,10 +640,10 @@ class TestCheckRunningJobsAdversarial:
     @pytest.mark.adversarial
     def test_ipc_exception_returns_none(self) -> None:
         """Any exception during IPC → None (fail-open)."""
-        from mozart.daemon.process import _check_running_jobs
+        from marianne.daemon.process import _check_running_jobs
 
         with patch(
-            "mozart.daemon.process.asyncio.run",
+            "marianne.daemon.process.asyncio.run",
             side_effect=OSError("connection refused"),
         ):
             result = _check_running_jobs(socket_path=Path("/tmp/nonexistent.sock"))
@@ -652,10 +652,10 @@ class TestCheckRunningJobsAdversarial:
     @pytest.mark.adversarial
     def test_ipc_timeout_returns_none(self) -> None:
         """IPC timeout → None (fail-open)."""
-        from mozart.daemon.process import _check_running_jobs
+        from marianne.daemon.process import _check_running_jobs
 
         with patch(
-            "mozart.daemon.process.asyncio.run",
+            "marianne.daemon.process.asyncio.run",
             side_effect=TimeoutError("IPC probe timed out"),
         ):
             result = _check_running_jobs(socket_path=Path("/tmp/nonexistent.sock"))

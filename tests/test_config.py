@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mozart.core.config import (
+from marianne.core.config import (
     BackendConfig,
     ConductorConfig,
     ConductorPreferences,
@@ -455,7 +455,7 @@ class TestSheetBackendOverride:
 
     def test_sheet_overrides_model_override(self):
         """Test per-sheet model override."""
-        from mozart.core.config.backend import SheetBackendOverride
+        from marianne.core.config.backend import SheetBackendOverride
 
         config = BackendConfig(
             type="anthropic_api",
@@ -472,14 +472,14 @@ class TestSheetBackendOverride:
         """Test temperature must be 0-1 in sheet overrides."""
         import pytest
 
-        from mozart.core.config.backend import SheetBackendOverride
+        from marianne.core.config.backend import SheetBackendOverride
 
         with pytest.raises(Exception):  # noqa: B017
             SheetBackendOverride(temperature=1.5)
 
     def test_sheet_overrides_cli_model(self):
         """Test per-sheet CLI model override."""
-        from mozart.core.config.backend import SheetBackendOverride
+        from marianne.core.config.backend import SheetBackendOverride
 
         config = BackendConfig(
             type="claude_cli",
@@ -491,7 +491,7 @@ class TestSheetBackendOverride:
 
     def test_sheet_overrides_timeout_override(self):
         """Test per-sheet timeout via sheet_overrides."""
-        from mozart.core.config.backend import SheetBackendOverride
+        from marianne.core.config.backend import SheetBackendOverride
 
         config = BackendConfig(
             sheet_overrides={
@@ -502,7 +502,7 @@ class TestSheetBackendOverride:
 
     def test_sheet_overrides_multiple_sheets(self):
         """Test overrides for multiple sheets simultaneously."""
-        from mozart.core.config.backend import SheetBackendOverride
+        from marianne.core.config.backend import SheetBackendOverride
 
         config = BackendConfig(
             type="anthropic_api",
@@ -520,7 +520,7 @@ class TestSheetBackendOverride:
 
     def test_sheet_overrides_model_dump_excludes_none(self):
         """Test model_dump only includes non-None fields for override application."""
-        from mozart.core.config.backend import SheetBackendOverride
+        from marianne.core.config.backend import SheetBackendOverride
 
         override = SheetBackendOverride(model="claude-opus-4-6", temperature=0.2)
         dumped = {k: v for k, v in override.model_dump().items() if v is not None}

@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.state import (
     AttemptContext,
     AttemptMode,
     BatonJobState,

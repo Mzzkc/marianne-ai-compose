@@ -16,7 +16,7 @@ from hypothesis import HealthCheck, given, settings
 
 from tests.conftest_adversarial import _nonneg_float, _positive_int, _short_text
 
-from mozart.core.config.instruments import (
+from marianne.core.config.instruments import (
     CliCommand,
     CliErrorConfig,
     CliOutputConfig,
@@ -27,7 +27,7 @@ from mozart.core.config.instruments import (
     InstrumentProfile,
     ModelCapacity,
 )
-from mozart.core.config.job import InstrumentDef, MovementDef
+from marianne.core.config.job import InstrumentDef, MovementDef
 
 # ---------------------------------------------------------------------------
 # Strategies

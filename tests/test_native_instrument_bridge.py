@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from mozart.core.config.instruments import InstrumentProfile
+from marianne.core.config.instruments import InstrumentProfile
 
 
 # --- InstrumentRegistry ---
@@ -22,7 +22,7 @@ class TestInstrumentRegistry:
 
     def test_empty_registry(self):
         """A fresh registry has no instruments."""
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.instruments.registry import InstrumentRegistry
 
         registry = InstrumentRegistry()
         assert len(registry) == 0
@@ -30,12 +30,12 @@ class TestInstrumentRegistry:
 
     def test_register_and_get(self):
         """Register a profile and retrieve by name."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
         )
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.instruments.registry import InstrumentRegistry
 
         profile = InstrumentProfile(
             name="test-cli",
@@ -52,12 +52,12 @@ class TestInstrumentRegistry:
 
     def test_register_duplicate_raises(self):
         """Registering the same name twice raises ValueError."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
         )
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.instruments.registry import InstrumentRegistry
 
         profile = InstrumentProfile(
             name="dup",
@@ -75,12 +75,12 @@ class TestInstrumentRegistry:
 
     def test_register_duplicate_with_override(self):
         """Override flag allows replacing an existing instrument."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
         )
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.instruments.registry import InstrumentRegistry
 
         p1 = InstrumentProfile(
             name="dup",
@@ -107,12 +107,12 @@ class TestInstrumentRegistry:
 
     def test_list_all(self):
         """list_all returns all registered profiles sorted by name."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
         )
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.instruments.registry import InstrumentRegistry
 
         registry = InstrumentRegistry()
         for name in ["zzz", "aaa", "mmm"]:
@@ -132,12 +132,12 @@ class TestInstrumentRegistry:
 
     def test_contains(self):
         """Registry supports 'in' operator."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
         )
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.instruments.registry import InstrumentRegistry
 
         registry = InstrumentRegistry()
         registry.register(
@@ -163,7 +163,7 @@ class TestNativeInstrumentBridge:
 
     def test_register_native_instruments(self):
         """register_native_instruments populates 4 native backends."""
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )
@@ -178,7 +178,7 @@ class TestNativeInstrumentBridge:
 
     def test_claude_cli_profile(self):
         """Claude CLI native instrument has correct metadata."""
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )
@@ -198,7 +198,7 @@ class TestNativeInstrumentBridge:
 
     def test_anthropic_api_profile(self):
         """Anthropic API native instrument has correct metadata."""
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )
@@ -213,7 +213,7 @@ class TestNativeInstrumentBridge:
 
     def test_ollama_profile(self):
         """Ollama native instrument has correct metadata."""
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )
@@ -228,7 +228,7 @@ class TestNativeInstrumentBridge:
 
     def test_recursive_light_profile(self):
         """Recursive Light native instrument has correct metadata."""
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )
@@ -242,7 +242,7 @@ class TestNativeInstrumentBridge:
 
     def test_native_instruments_are_profiles(self):
         """All native instruments are valid InstrumentProfile instances."""
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )
@@ -261,7 +261,7 @@ class TestNativeInstrumentBridge:
 
     def test_native_instruments_have_descriptions(self):
         """All native instruments include a description."""
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )
@@ -281,12 +281,12 @@ class TestRegistryComposition:
 
     def test_custom_does_not_override_native(self):
         """Custom profile with same name as native raises by default."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
         )
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )
@@ -308,12 +308,12 @@ class TestRegistryComposition:
 
     def test_custom_can_override_native_explicitly(self):
         """Custom profile can override native with override=True."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
         )
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )
@@ -335,12 +335,12 @@ class TestRegistryComposition:
 
     def test_custom_instruments_coexist_with_native(self):
         """Custom instruments register alongside native ones."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
         )
-        from mozart.instruments.registry import (
+        from marianne.instruments.registry import (
             InstrumentRegistry,
             register_native_instruments,
         )

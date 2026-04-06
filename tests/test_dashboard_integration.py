@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.dashboard.app import create_app
-from mozart.dashboard.services.job_control import JobControlService
-from mozart.dashboard.services.sse_manager import SSEEvent, SSEManager
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.dashboard.app import create_app
+from marianne.dashboard.services.job_control import JobControlService
+from marianne.dashboard.services.sse_manager import SSEEvent, SSEManager
+from marianne.state.json_backend import JsonStateBackend
 
 
 @pytest.fixture
@@ -94,7 +94,7 @@ def sse_manager():
 class TestJobLifecycleIntegration:
     """Test complete job lifecycle through API."""
 
-    @patch('mozart.dashboard.services.job_control.asyncio.create_subprocess_exec')
+    @patch('marianne.dashboard.services.job_control.asyncio.create_subprocess_exec')
     async def test_start_pause_resume_cancel_flow(
         self,
         mock_subprocess,
@@ -161,7 +161,7 @@ class TestJobLifecycleIntegration:
                 job_id = start_data["job_id"]
 
                 # Verify state is saved by start_job
-                from mozart.dashboard.app import get_state_backend
+                from marianne.dashboard.app import get_state_backend
                 backend = get_state_backend()
                 job_state = await backend.load(job_id)
                 assert job_state is not None
@@ -331,7 +331,7 @@ class TestJobLifecycleIntegration:
         assert hello_artifact["size"] > 0
 
     @pytest.mark.skip(reason="fchmod PermissionError in mock")
-    @patch('mozart.dashboard.services.job_control.asyncio.create_subprocess_exec')
+    @patch('marianne.dashboard.services.job_control.asyncio.create_subprocess_exec')
     async def test_concurrent_job_starts(
         self,
         mock_subprocess,

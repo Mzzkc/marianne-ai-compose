@@ -17,10 +17,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import JobConfig
-from mozart.execution.runner import JobRunner
-from mozart.execution.runner.models import GracefulShutdownError
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config import JobConfig
+from marianne.execution.runner import JobRunner
+from marianne.execution.runner.models import GracefulShutdownError
 
 
 @pytest.fixture

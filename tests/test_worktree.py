@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from mozart.isolation.worktree import (
+from marianne.isolation.worktree import (
     BranchExistsError,
     GitWorktreeManager,
     NotGitRepositoryError,
@@ -724,7 +724,7 @@ class TestIsolationConfig:
 
     def test_default_config(self) -> None:
         """Test default IsolationConfig values."""
-        from mozart.core.config import IsolationConfig, IsolationMode
+        from marianne.core.config import IsolationConfig, IsolationMode
 
         config = IsolationConfig()
         assert config.enabled is False
@@ -736,7 +736,7 @@ class TestIsolationConfig:
 
     def test_get_worktree_base_default(self, tmp_path: Path) -> None:
         """Test default worktree base path."""
-        from mozart.core.config import IsolationConfig
+        from marianne.core.config import IsolationConfig
 
         config = IsolationConfig()
         workspace = tmp_path / "workspace"
@@ -744,7 +744,7 @@ class TestIsolationConfig:
 
     def test_get_worktree_base_custom(self, tmp_path: Path) -> None:
         """Test custom worktree base path."""
-        from mozart.core.config import IsolationConfig
+        from marianne.core.config import IsolationConfig
 
         custom_base = tmp_path / "custom"
         config = IsolationConfig(worktree_base=custom_base)
@@ -753,7 +753,7 @@ class TestIsolationConfig:
 
     def test_get_branch_name(self) -> None:
         """Test branch name generation."""
-        from mozart.core.config import IsolationConfig
+        from marianne.core.config import IsolationConfig
 
         config = IsolationConfig(branch_prefix="myprefix")
         assert config.get_branch_name("job-123") == "myprefix/job-123"
@@ -762,7 +762,7 @@ class TestIsolationConfig:
         """Test branch prefix pattern validation."""
         from pydantic import ValidationError
 
-        from mozart.core.config import IsolationConfig
+        from marianne.core.config import IsolationConfig
 
         # Valid prefixes
         IsolationConfig(branch_prefix="mozart")
@@ -781,7 +781,7 @@ class TestJobConfigIsolation:
 
     def test_job_config_has_isolation(self) -> None:
         """Test JobConfig has isolation field with default."""
-        from mozart.core.config import IsolationConfig, JobConfig
+        from marianne.core.config import IsolationConfig, JobConfig
 
         config_yaml = """
 name: test-job
@@ -801,7 +801,7 @@ prompt:
 
     def test_job_config_isolation_enabled(self) -> None:
         """Test JobConfig with isolation enabled."""
-        from mozart.core.config import IsolationMode, JobConfig
+        from marianne.core.config import IsolationMode, JobConfig
 
         config_yaml = """
 name: isolated-job
@@ -832,7 +832,7 @@ class TestCheckpointStateWorktreeFields:
 
     def test_checkpoint_state_default_worktree_fields(self) -> None:
         """Test CheckpointState has worktree fields with correct defaults."""
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         state = CheckpointState(
             job_id="test-123",
@@ -850,7 +850,7 @@ class TestCheckpointStateWorktreeFields:
 
     def test_checkpoint_state_worktree_fields_populated(self) -> None:
         """Test CheckpointState worktree fields can be populated."""
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         state = CheckpointState(
             job_id="isolated-123",
@@ -873,7 +873,7 @@ class TestCheckpointStateWorktreeFields:
 
     def test_checkpoint_state_fallback_tracking(self) -> None:
         """Test tracking when isolation falls back to workspace."""
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         state = CheckpointState(
             job_id="fallback-123",
@@ -891,7 +891,7 @@ class TestCheckpointStateWorktreeFields:
 
     def test_checkpoint_state_serialization(self) -> None:
         """Test CheckpointState with worktree fields can be serialized."""
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         state = CheckpointState(
             job_id="serialize-123",
@@ -926,7 +926,7 @@ class TestRunnerIsolationSetup:
         """Create a mock backend with working_directory attribute."""
         from unittest.mock import MagicMock
 
-        from mozart.backends.base import Backend
+        from marianne.backends.base import Backend
 
         backend = MagicMock(spec=Backend)
         backend.working_directory = None
@@ -937,7 +937,7 @@ class TestRunnerIsolationSetup:
         """Create minimal JobConfig for testing."""
         import yaml
 
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config_yaml = f"""
 name: test-isolation-job
@@ -955,7 +955,7 @@ isolation:
 
     def test_setup_isolation_disabled(self, minimal_config) -> None:  # type: ignore[no-untyped-def]
         """Test _setup_isolation returns None when isolation is disabled."""
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         CheckpointState(
             job_id="test-123",
@@ -972,8 +972,8 @@ isolation:
         """Test _setup_isolation falls back when not in git repo."""
         import yaml
 
-        from mozart.core.checkpoint import CheckpointState
-        from mozart.core.config import JobConfig
+        from marianne.core.checkpoint import CheckpointState
+        from marianne.core.config import JobConfig
 
         # Create a config with isolation enabled but workspace is not a git repo
         workspace = tmp_path / "workspace"
@@ -1014,7 +1014,7 @@ class TestRunnerIsolationCleanup:
 
     def test_cleanup_isolation_no_worktree(self) -> None:
         """Test _cleanup_isolation does nothing when no worktree path."""
-        from mozart.core.checkpoint import CheckpointState, JobStatus
+        from marianne.core.checkpoint import CheckpointState, JobStatus
 
         state = CheckpointState(
             job_id="no-worktree",
@@ -1029,7 +1029,7 @@ class TestRunnerIsolationCleanup:
 
     def test_cleanup_preserves_on_failure(self) -> None:
         """Test worktree is preserved when job fails and cleanup_on_failure=False."""
-        from mozart.core.checkpoint import CheckpointState, JobStatus
+        from marianne.core.checkpoint import CheckpointState, JobStatus
 
         state = CheckpointState(
             job_id="failed-job",
@@ -1052,7 +1052,7 @@ class TestRunnerBackendWorkingDirectory:
         """Test that backend working_directory can be overridden."""
         from pathlib import Path
 
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         backend = ClaudeCliBackend(working_directory=Path("/original"))
         assert backend.working_directory == Path("/original")
@@ -1070,7 +1070,7 @@ class TestRunnerBackendWorkingDirectory:
         """Test dynamic attribute access works for working_directory."""
         from pathlib import Path
 
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         backend = ClaudeCliBackend(working_directory=Path("/test"))
 

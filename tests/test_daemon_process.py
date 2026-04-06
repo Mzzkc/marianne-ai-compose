@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import typer
 
-from mozart.daemon.process import (
+from marianne.daemon.process import (
     DaemonProcess,
     _pid_alive,
     _read_pid,
@@ -104,7 +104,7 @@ class TestPidAlive:
 
     def test_permission_error_treated_as_alive(self):
         """PermissionError from os.kill returns True (process exists)."""
-        with patch("mozart.daemon.process.os.kill", side_effect=PermissionError):
+        with patch("marianne.daemon.process.os.kill", side_effect=PermissionError):
             assert _pid_alive(1) is True
 
 
@@ -116,10 +116,10 @@ class TestStartConductor:
 
     def test_start_already_running_exits_1(self, tmp_path: Path):
         """start_conductor exits with code 1 if conductor already running."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text(str(os.getpid()))
 
-        with patch("mozart.daemon.process._load_config") as mock_config:
+        with patch("marianne.daemon.process._load_config") as mock_config:
             cfg = MagicMock()
             cfg.pid_file = pid_file
             cfg.log_level = "info"
@@ -130,15 +130,15 @@ class TestStartConductor:
 
     def test_start_foreground_skips_daemonize(self, tmp_path: Path):
         """In foreground mode, _daemonize() is NOT called."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
 
         with (
-            patch("mozart.daemon.process._load_config") as mock_config,
-            patch("mozart.daemon.process._daemonize") as mock_daemonize,
-            patch("mozart.daemon.process._read_pid", return_value=None),
-            patch("mozart.core.logging.configure_logging"),
-            patch("mozart.daemon.process.DaemonProcess"),
-            patch("mozart.daemon.process.asyncio.run"),
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch("marianne.daemon.process._daemonize") as mock_daemonize,
+            patch("marianne.daemon.process._read_pid", return_value=None),
+            patch("marianne.core.logging.configure_logging"),
+            patch("marianne.daemon.process.DaemonProcess"),
+            patch("marianne.daemon.process.asyncio.run"),
         ):
             cfg = MagicMock()
             cfg.pid_file = pid_file
@@ -152,15 +152,15 @@ class TestStartConductor:
 
     def test_start_background_calls_daemonize(self, tmp_path: Path):
         """Without foreground=True, _daemonize() is called."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
 
         with (
-            patch("mozart.daemon.process._load_config") as mock_config,
-            patch("mozart.daemon.process._daemonize") as mock_daemonize,
-            patch("mozart.daemon.process._read_pid", return_value=None),
-            patch("mozart.core.logging.configure_logging"),
-            patch("mozart.daemon.process.DaemonProcess"),
-            patch("mozart.daemon.process.asyncio.run"),
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch("marianne.daemon.process._daemonize") as mock_daemonize,
+            patch("marianne.daemon.process._read_pid", return_value=None),
+            patch("marianne.core.logging.configure_logging"),
+            patch("marianne.daemon.process.DaemonProcess"),
+            patch("marianne.daemon.process.asyncio.run"),
         ):
             cfg = MagicMock()
             cfg.pid_file = pid_file
@@ -178,20 +178,20 @@ class TestStopConductor:
 
     def test_stop_not_running_exits_1(self, tmp_path: Path):
         """stop_conductor exits with code 1 when conductor is not running."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
 
         with pytest.raises(typer.Exit):
             stop_conductor(pid_file=pid_file)
 
     def test_stop_sends_sigterm(self, tmp_path: Path):
         """stop_conductor sends SIGTERM to the PID by default."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
         with (
-            patch("mozart.daemon.process._pid_alive", return_value=True),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
-            patch("mozart.daemon.process._check_running_jobs", return_value={"running_jobs": 0, "job_ids": []}),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process._check_running_jobs", return_value={"running_jobs": 0, "job_ids": []}),
         ):
             stop_conductor(pid_file=pid_file)
 
@@ -199,12 +199,12 @@ class TestStopConductor:
 
     def test_stop_force_sends_sigkill(self, tmp_path: Path):
         """stop_conductor with force=True sends SIGKILL."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
         with (
-            patch("mozart.daemon.process._pid_alive", return_value=True),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
             stop_conductor(pid_file=pid_file, force=True)
 
@@ -216,14 +216,14 @@ class TestGetConductorStatus:
 
     def test_status_not_running_exits_1(self, tmp_path: Path):
         """get_conductor_status exits with code 1 when not running."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
 
         with pytest.raises(typer.Exit):
             get_conductor_status(pid_file=pid_file)
 
     def test_status_shows_pid_when_running(self, tmp_path: Path, capsys):
         """get_conductor_status shows the PID when running."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
         def _mock_asyncio_run(coro):
@@ -232,8 +232,8 @@ class TestGetConductorStatus:
             raise OSError("no socket")
 
         with (
-            patch("mozart.daemon.process._pid_alive", return_value=True),
-            patch("mozart.daemon.process.asyncio.run", side_effect=_mock_asyncio_run),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.asyncio.run", side_effect=_mock_asyncio_run),
         ):
             get_conductor_status(pid_file=pid_file, socket_path=tmp_path / "sock")
 
@@ -246,7 +246,7 @@ class TestDaemonProcess:
 
     def test_daemon_process_init(self):
         """DaemonProcess initializes with config and pgroup."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()
         dp = DaemonProcess(config)
@@ -256,7 +256,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_daemon_process_signal_handler_registration(self):
         """DaemonProcess.run() installs signal handlers for SIGTERM and SIGINT."""
-        from mozart.daemon.config import DaemonConfig, ProfilerConfig, SocketConfig
+        from marianne.daemon.config import DaemonConfig, ProfilerConfig, SocketConfig
 
         config = DaemonConfig(
             pid_file=Path("/tmp/test-conductor-signal.pid"),
@@ -277,12 +277,12 @@ class TestDaemonProcess:
             patch.object(dp._pgroup, "setup"),
             patch.object(dp._pgroup, "kill_all_children"),
             patch.object(dp._pgroup, "cleanup_orphans", return_value=[]),
-            patch("mozart.daemon.process._write_pid"),
-            patch("mozart.daemon.ipc.server.DaemonServer") as mock_server_cls,
-            patch("mozart.daemon.manager.JobManager") as mock_mgr_cls,
-            patch("mozart.daemon.monitor.ResourceMonitor") as mock_mon_cls,
-            patch("mozart.daemon.ipc.handler.RequestHandler"),
-            patch("mozart.daemon.health.HealthChecker") as mock_health_cls,
+            patch("marianne.daemon.process._write_pid"),
+            patch("marianne.daemon.ipc.server.DaemonServer") as mock_server_cls,
+            patch("marianne.daemon.manager.JobManager") as mock_mgr_cls,
+            patch("marianne.daemon.monitor.ResourceMonitor") as mock_mon_cls,
+            patch("marianne.daemon.ipc.handler.RequestHandler"),
+            patch("marianne.daemon.health.HealthChecker") as mock_health_cls,
             patch("asyncio.get_running_loop", return_value=mock_loop),
         ):
             mock_server = AsyncMock()
@@ -312,7 +312,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_run_cleans_pid_file_on_crash(self):
         """run() removes PID file even if an exception occurs mid-lifecycle."""
-        from mozart.daemon.config import DaemonConfig, SocketConfig
+        from marianne.daemon.config import DaemonConfig, SocketConfig
 
         pid_file = Path("/tmp/test-conductor-crash.pid")
         config = DaemonConfig(
@@ -323,7 +323,7 @@ class TestDaemonProcess:
 
         with (
             patch.object(dp._pgroup, "setup", side_effect=RuntimeError("crash!")),
-            patch("mozart.daemon.process._write_pid") as mock_write,
+            patch("marianne.daemon.process._write_pid") as mock_write,
         ):
             # _write_pid is called, then setup() raises, then finally cleans up
             mock_write.side_effect = (
@@ -340,7 +340,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_register_methods_wires_rpc(self):
         """_register_methods registers all expected JSON-RPC methods."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()
         dp = DaemonProcess(config)
@@ -369,7 +369,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_handle_sighup_reloads_config(self, tmp_path: Path):
         """_handle_sighup reloads config from disk and applies changes."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         # Create a config file with initial settings
         import yaml
@@ -398,7 +398,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_handle_sighup_no_config_file(self):
         """_handle_sighup does nothing when no config file was recorded."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()  # config_file defaults to None
         dp = DaemonProcess(config)
@@ -409,7 +409,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_handle_sighup_warns_non_reloadable(self, tmp_path: Path):
         """_handle_sighup logs warnings when non-reloadable fields change."""
-        from mozart.daemon.config import DaemonConfig, SocketConfig
+        from marianne.daemon.config import DaemonConfig, SocketConfig
 
         import yaml
         cfg_path = tmp_path / "daemon.yaml"
@@ -433,7 +433,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_register_methods_without_health(self):
         """_register_methods skips health probes when health is None."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()
         dp = DaemonProcess(config)
@@ -453,7 +453,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_handle_sighup_corrupt_yaml_keeps_current_config(self, tmp_path: Path):
         """_handle_sighup keeps current config when the file contains invalid YAML."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         cfg_path = tmp_path / "daemon.yaml"
         cfg_path.write_text("max_concurrent_jobs: 5")
@@ -478,7 +478,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_handle_sighup_deleted_file_keeps_current_config(self, tmp_path: Path):
         """_handle_sighup keeps current config when the config file is deleted."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         cfg_path = tmp_path / "daemon.yaml"
         cfg_path.write_text("max_concurrent_jobs: 5")
@@ -503,7 +503,7 @@ class TestDaemonProcess:
     @pytest.mark.asyncio
     async def test_daemon_config_rpc_handler_returns_config(self):
         """The daemon.config RPC handler returns the current config as dict."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig(max_concurrent_jobs=7)
         dp = DaemonProcess(config)

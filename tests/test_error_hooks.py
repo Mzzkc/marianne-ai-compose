@@ -14,13 +14,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.errors import (
+from marianne.core.errors import (
     ClassificationResult,
     ClassifiedError,
     ErrorCategory,
     ErrorCode,
 )
-from mozart.learning.error_hooks import (
+from marianne.learning.error_hooks import (
     ErrorLearningConfig,
     ErrorLearningContext,
     ErrorLearningHooks,
@@ -389,14 +389,14 @@ class TestWrapClassifier:
     """Tests for wrap_classifier_with_learning."""
 
     def test_returns_classifier_and_hooks(self):
-        from mozart.core.errors import ErrorClassifier
+        from marianne.core.errors import ErrorClassifier
         classifier = ErrorClassifier()
         c, hooks = wrap_classifier_with_learning(classifier)
         assert c is classifier
         assert isinstance(hooks, ErrorLearningHooks)
 
     def test_hooks_disabled_without_store(self):
-        from mozart.core.errors import ErrorClassifier
+        from marianne.core.errors import ErrorClassifier
         _, hooks = wrap_classifier_with_learning(ErrorClassifier(), global_store=None)
         assert not hooks.enabled
 

@@ -19,13 +19,13 @@ from unittest.mock import patch
 
 import pytest
 
-from mozart.daemon.backpressure import (
+from marianne.daemon.backpressure import (
     BackpressureController,
     PressureLevel,
 )
-from mozart.daemon.config import ResourceLimitConfig
-from mozart.daemon.monitor import ResourceMonitor
-from mozart.daemon.rate_coordinator import RateLimitCoordinator
+from marianne.daemon.config import ResourceLimitConfig
+from marianne.daemon.monitor import ResourceMonitor
+from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────

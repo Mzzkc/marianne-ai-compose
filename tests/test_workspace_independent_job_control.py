@@ -26,13 +26,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.backends.base import Backend
-from mozart.core.checkpoint import CheckpointState
-from mozart.core.config import JobConfig
-from mozart.daemon.config import DaemonConfig
-from mozart.daemon.manager import DaemonJobStatus, JobManager, JobMeta
-from mozart.execution.runner.models import GracefulShutdownError, RunnerContext
-from mozart.state.base import StateBackend
+from marianne.backends.base import Backend
+from marianne.core.checkpoint import CheckpointState
+from marianne.core.config import JobConfig
+from marianne.daemon.config import DaemonConfig
+from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+from marianne.execution.runner.models import GracefulShutdownError, RunnerContext
+from marianne.state.base import StateBackend
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -89,7 +89,7 @@ def _make_runner_base(
     Uses JobRunnerBase directly (not the full JobRunner mixin chain) to
     keep tests focused on the base layer without pulling in all mixins.
     """
-    from mozart.execution.runner.base import JobRunnerBase
+    from marianne.execution.runner.base import JobRunnerBase
 
     ws = workspace or str(tmp_path / "workspace")
     config = _make_config(tmp_path, {"workspace": ws})
@@ -132,7 +132,7 @@ class TestPauseEventOnJobRunnerBase:
 
     def test_pause_event_none_when_no_context(self, tmp_path: Path) -> None:
         """_pause_event is None when no context is provided."""
-        from mozart.execution.runner.base import JobRunnerBase
+        from marianne.execution.runner.base import JobRunnerBase
 
         config = _make_config(tmp_path)
         runner = JobRunnerBase(config, MagicMock(spec=Backend), AsyncMock(spec=StateBackend))
@@ -279,7 +279,7 @@ def daemon_config(tmp_path: Path) -> DaemonConfig:
 
 @pytest.fixture
 async def manager(daemon_config: DaemonConfig) -> AsyncIterator[JobManager]:
-    from mozart.daemon.job_service import JobService
+    from marianne.daemon.job_service import JobService
 
     mgr = JobManager(daemon_config)
     await mgr._registry.open()
@@ -405,7 +405,7 @@ class TestPauseJobWithEvent:
         self, daemon_config: DaemonConfig, tmp_path: Path,
     ) -> None:
         """_run_managed_task creates a pause event for the job."""
-        from mozart.daemon.job_service import JobService
+        from marianne.daemon.job_service import JobService
 
         mgr = JobManager(daemon_config)
         await mgr._registry.open()
@@ -450,8 +450,8 @@ class TestPauseEventThreading:
     @pytest.mark.asyncio
     async def test_create_runner_passes_pause_event(self, tmp_path: Path) -> None:
         """_create_runner with pause_event= results in runner._pause_event being set."""
-        from mozart.backends.base import Backend
-        from mozart.daemon.job_service import JobService
+        from marianne.backends.base import Backend
+        from marianne.daemon.job_service import JobService
 
         service = JobService()
         config = _make_service_config(tmp_path)
@@ -478,8 +478,8 @@ class TestPauseEventThreading:
     @pytest.mark.asyncio
     async def test_create_runner_without_pause_event(self, tmp_path: Path) -> None:
         """_create_runner without pause_event= leaves runner._pause_event as None."""
-        from mozart.backends.base import Backend
-        from mozart.daemon.job_service import JobService
+        from marianne.backends.base import Backend
+        from marianne.daemon.job_service import JobService
 
         service = JobService()
         config = _make_service_config(tmp_path)
@@ -563,11 +563,11 @@ class TestCancelCLI:
     """mozart cancel command exists and routes to IPC."""
 
     def test_cancel_command_importable(self) -> None:
-        from mozart.cli.commands.cancel import cancel
+        from marianne.cli.commands.cancel import cancel
         assert callable(cancel)
 
     def test_cancel_command_registered(self) -> None:
-        from mozart.cli import app
+        from marianne.cli import app
         # Typer leaves cmd.name as None for auto-derived names; check callback name
         command_names = [
             cmd.name or (cmd.callback.__name__ if cmd.callback else None)
@@ -587,6 +587,6 @@ class TestPauseForceFlag:
     def test_pause_has_force_option(self) -> None:
         import inspect
 
-        from mozart.cli.commands.pause import pause
+        from marianne.cli.commands.pause import pause
         sig = inspect.signature(pause)
         assert "force" in sig.parameters

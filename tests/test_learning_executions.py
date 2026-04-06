@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.checkpoint import SheetStatus
-from mozart.learning.outcomes import SheetOutcome
-from mozart.learning.store import ExecutionRecord, GlobalLearningStore
+from marianne.core.checkpoint import SheetStatus
+from marianne.learning.outcomes import SheetOutcome
+from marianne.learning.store import ExecutionRecord, GlobalLearningStore
 
 
 @pytest.fixture

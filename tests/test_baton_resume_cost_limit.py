@@ -13,13 +13,13 @@ Found by: Axiom, Movement 2 (backward-trace invariant analysis)
 
 import pytest
 
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.events import (
     PauseJob,
     ResumeJob,
     SheetAttemptResult,
 )
-from mozart.daemon.baton.state import SheetExecutionState
+from marianne.daemon.baton.state import SheetExecutionState
 
 
 def _make_sheet(

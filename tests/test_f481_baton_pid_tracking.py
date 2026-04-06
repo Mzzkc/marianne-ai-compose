@@ -20,7 +20,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.config.instruments import (
+from marianne.core.config.instruments import (
     CliCommand,
     CliErrorConfig,
     CliOutputConfig,
@@ -28,9 +28,9 @@ from mozart.core.config.instruments import (
     InstrumentProfile,
     ModelCapacity,
 )
-from mozart.daemon.baton.backend_pool import BackendPool
-from mozart.daemon.pgroup import ProcessGroupManager
-from mozart.execution.instruments.cli_backend import PluginCliBackend
+from marianne.daemon.baton.backend_pool import BackendPool
+from marianne.daemon.pgroup import ProcessGroupManager
+from marianne.execution.instruments.cli_backend import PluginCliBackend
 
 
 def _make_profile(name: str = "test-cli") -> InstrumentProfile:
@@ -296,7 +296,7 @@ class TestManagerPgroupThreading:
         rather than the full manager initialization (which requires
         many dependencies).
         """
-        from mozart.daemon.baton.backend_pool import BackendPool
+        from marianne.daemon.baton.backend_pool import BackendPool
 
         registry = MagicMock()
         pgroup = MagicMock(spec=ProcessGroupManager)

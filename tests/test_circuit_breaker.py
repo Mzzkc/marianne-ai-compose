@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from mozart.execution.circuit_breaker import (
+from marianne.execution.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerStats,
     CircuitState,

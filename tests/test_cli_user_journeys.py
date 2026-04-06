@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
@@ -412,7 +412,7 @@ class TestCancelJourney:
         from unittest.mock import AsyncMock, patch
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"cancelled": False}),
         ):
@@ -430,7 +430,7 @@ class TestCancelJourney:
         from unittest.mock import AsyncMock, patch
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"cancelled": False}),
         ):

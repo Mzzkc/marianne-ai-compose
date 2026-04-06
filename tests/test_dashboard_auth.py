@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from mozart.dashboard.auth import (
+from marianne.dashboard.auth import (
     AuthConfig,
     AuthMiddleware,
     AuthMode,
@@ -408,7 +408,7 @@ class TestSlidingWindowCounter:
 
     def test_allows_requests_under_limit(self) -> None:
         """Requests under the max are allowed."""
-        from mozart.dashboard.auth.rate_limit import SlidingWindowCounter
+        from marianne.dashboard.auth.rate_limit import SlidingWindowCounter
 
         counter = SlidingWindowCounter(window_seconds=60, max_requests=5)
         for _ in range(5):
@@ -417,7 +417,7 @@ class TestSlidingWindowCounter:
 
     def test_blocks_requests_over_limit(self) -> None:
         """Requests exceeding the max are blocked."""
-        from mozart.dashboard.auth.rate_limit import SlidingWindowCounter
+        from marianne.dashboard.auth.rate_limit import SlidingWindowCounter
 
         counter = SlidingWindowCounter(window_seconds=60, max_requests=3)
         for _ in range(3):
@@ -430,7 +430,7 @@ class TestSlidingWindowCounter:
 
     def test_different_keys_independent(self) -> None:
         """Different client keys have independent counters."""
-        from mozart.dashboard.auth.rate_limit import SlidingWindowCounter
+        from marianne.dashboard.auth.rate_limit import SlidingWindowCounter
 
         counter = SlidingWindowCounter(window_seconds=60, max_requests=2)
         counter.is_allowed("client-a")
@@ -441,7 +441,7 @@ class TestSlidingWindowCounter:
 
     def test_remaining_decreases(self) -> None:
         """Remaining count decreases with each request."""
-        from mozart.dashboard.auth.rate_limit import SlidingWindowCounter
+        from marianne.dashboard.auth.rate_limit import SlidingWindowCounter
 
         counter = SlidingWindowCounter(window_seconds=60, max_requests=3)
         _, remaining1, _ = counter.is_allowed("c")
@@ -451,7 +451,7 @@ class TestSlidingWindowCounter:
 
     def test_get_count(self) -> None:
         """get_count returns current request count in window."""
-        from mozart.dashboard.auth.rate_limit import SlidingWindowCounter
+        from marianne.dashboard.auth.rate_limit import SlidingWindowCounter
 
         counter = SlidingWindowCounter(window_seconds=60, max_requests=10)
         assert counter.get_count("c") == 0
@@ -461,7 +461,7 @@ class TestSlidingWindowCounter:
 
     def test_reset_specific_key(self) -> None:
         """reset(key) clears only that key's counter."""
-        from mozart.dashboard.auth.rate_limit import SlidingWindowCounter
+        from marianne.dashboard.auth.rate_limit import SlidingWindowCounter
 
         counter = SlidingWindowCounter(window_seconds=60, max_requests=10)
         counter.is_allowed("a")
@@ -472,7 +472,7 @@ class TestSlidingWindowCounter:
 
     def test_reset_all(self) -> None:
         """reset(None) clears all counters."""
-        from mozart.dashboard.auth.rate_limit import SlidingWindowCounter
+        from marianne.dashboard.auth.rate_limit import SlidingWindowCounter
 
         counter = SlidingWindowCounter(window_seconds=60, max_requests=10)
         counter.is_allowed("a")
@@ -485,7 +485,7 @@ class TestSlidingWindowCounter:
         """Entries older than the window are cleaned up."""
         import time
 
-        from mozart.dashboard.auth.rate_limit import SlidingWindowCounter
+        from marianne.dashboard.auth.rate_limit import SlidingWindowCounter
 
         counter = SlidingWindowCounter(window_seconds=1, max_requests=2)
         counter.is_allowed("c")
@@ -504,7 +504,7 @@ class TestRateLimiter:
 
     def test_disabled_allows_all(self) -> None:
         """When disabled, all requests are allowed."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
 
         config = RateLimitConfig(enabled=False)
         limiter = RateLimiter(config)
@@ -514,7 +514,7 @@ class TestRateLimiter:
 
     def test_burst_limit_enforced(self) -> None:
         """Burst limit (1-second window) is enforced."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
 
         config = RateLimitConfig(
             burst_limit=2, requests_per_minute=100, requests_per_hour=1000,
@@ -528,7 +528,7 @@ class TestRateLimiter:
 
     def test_minute_limit_enforced(self) -> None:
         """Per-minute limit is enforced after burst passes."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
 
         config = RateLimitConfig(
             burst_limit=100, requests_per_minute=3, requests_per_hour=1000,
@@ -542,7 +542,7 @@ class TestRateLimiter:
 
     def test_hour_limit_enforced(self) -> None:
         """Per-hour limit is enforced after burst and minute pass."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
 
         config = RateLimitConfig(
             burst_limit=100, requests_per_minute=100, requests_per_hour=3,
@@ -556,7 +556,7 @@ class TestRateLimiter:
 
     def test_allowed_returns_remaining_info(self) -> None:
         """Allowed requests return remaining counts for all windows."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
 
         config = RateLimitConfig(
             burst_limit=10, requests_per_minute=50, requests_per_hour=500,
@@ -570,7 +570,7 @@ class TestRateLimiter:
 
     def test_reset_clears_all_windows(self) -> None:
         """Reset clears counters for all time windows."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig, RateLimiter
 
         config = RateLimitConfig(burst_limit=2)
         limiter = RateLimiter(config)
@@ -586,7 +586,7 @@ class TestGetClientIdentifier:
 
     def test_defaults_to_ip(self) -> None:
         """Without by_api_key, returns IP-based identifier."""
-        from mozart.dashboard.auth.rate_limit import get_client_identifier
+        from marianne.dashboard.auth.rate_limit import get_client_identifier
 
         request = MagicMock()
         request.client.host = "192.168.1.1"
@@ -596,7 +596,7 @@ class TestGetClientIdentifier:
 
     def test_uses_api_key_when_enabled(self) -> None:
         """With by_api_key=True and key present, returns key-based identifier."""
-        from mozart.dashboard.auth.rate_limit import get_client_identifier
+        from marianne.dashboard.auth.rate_limit import get_client_identifier
 
         request = MagicMock()
         request.headers = {"X-API-Key": "sk-abc123def456"}
@@ -605,7 +605,7 @@ class TestGetClientIdentifier:
 
     def test_falls_back_to_ip_when_no_key(self) -> None:
         """With by_api_key=True but no key header, falls back to IP."""
-        from mozart.dashboard.auth.rate_limit import get_client_identifier
+        from marianne.dashboard.auth.rate_limit import get_client_identifier
 
         request = MagicMock()
         request.headers = {}
@@ -615,7 +615,7 @@ class TestGetClientIdentifier:
 
     def test_unknown_when_no_client(self) -> None:
         """Returns 'unknown' when request has no client info."""
-        from mozart.dashboard.auth.rate_limit import get_client_identifier
+        from marianne.dashboard.auth.rate_limit import get_client_identifier
 
         request = MagicMock()
         request.client = None
@@ -629,7 +629,7 @@ class TestRateLimitMiddleware:
 
     @staticmethod
     def _create_app(config=None):
-        from mozart.dashboard.auth.rate_limit import RateLimitMiddleware
+        from marianne.dashboard.auth.rate_limit import RateLimitMiddleware
 
         app = FastAPI()
         app.add_middleware(RateLimitMiddleware, config=config)
@@ -646,7 +646,7 @@ class TestRateLimitMiddleware:
 
     def test_adds_rate_limit_headers(self) -> None:
         """Allowed requests include rate limit headers."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig
 
         config = RateLimitConfig(requests_per_minute=100)
         app = self._create_app(config)
@@ -658,7 +658,7 @@ class TestRateLimitMiddleware:
 
     def test_returns_429_when_limited(self) -> None:
         """Returns 429 with Retry-After when rate limit exceeded."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig
 
         config = RateLimitConfig(
             burst_limit=1, requests_per_minute=100, requests_per_hour=1000,
@@ -674,7 +674,7 @@ class TestRateLimitMiddleware:
 
     def test_excluded_paths_bypass_limits(self) -> None:
         """Excluded paths (like /health) bypass rate limiting."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig
 
         config = RateLimitConfig(burst_limit=1)
         app = self._create_app(config)
@@ -685,7 +685,7 @@ class TestRateLimitMiddleware:
 
     def test_disabled_passes_through(self) -> None:
         """When disabled, all requests pass through without headers."""
-        from mozart.dashboard.auth.rate_limit import RateLimitConfig
+        from marianne.dashboard.auth.rate_limit import RateLimitConfig
 
         config = RateLimitConfig(enabled=False)
         app = self._create_app(config)
@@ -701,7 +701,7 @@ class TestRateLimitMiddleware:
 
 import os
 
-from mozart.dashboard.auth.security import (
+from marianne.dashboard.auth.security import (
     SecurityConfig,
     SecurityHeadersMiddleware,
     configure_cors,

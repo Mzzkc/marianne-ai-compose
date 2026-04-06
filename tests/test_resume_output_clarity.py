@@ -10,7 +10,7 @@ the historical failure and the active resume attempt.
 
 from __future__ import annotations
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.checkpoint import CheckpointState, JobStatus
 
 
 class TestResumeOutputClarity:

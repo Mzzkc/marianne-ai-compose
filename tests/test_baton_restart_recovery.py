@@ -18,19 +18,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.adapter import (
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.adapter import (
     BatonAdapter,
     checkpoint_to_baton_status,
     sheets_to_execution_states,
 )
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.events import (
     DispatchRetry,
     SheetAttemptResult,
     SheetSkipped,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     BatonSheetStatus,
     SheetExecutionState,
 )

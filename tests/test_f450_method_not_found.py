@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-_CLIENT_PATH = "mozart.daemon.ipc.client.DaemonClient"
+_CLIENT_PATH = "marianne.daemon.ipc.client.DaemonClient"
 
 
 # ---------------------------------------------------------------------------
@@ -28,26 +28,26 @@ class TestMethodNotFoundErrorExists:
 
     def test_exception_importable(self):
         """MethodNotFoundError can be imported from daemon.exceptions."""
-        from mozart.daemon.exceptions import MethodNotFoundError
+        from marianne.daemon.exceptions import MethodNotFoundError
 
         assert MethodNotFoundError is not None
 
     def test_inherits_from_daemon_error(self):
         """MethodNotFoundError is a DaemonError subclass."""
-        from mozart.daemon.exceptions import DaemonError, MethodNotFoundError
+        from marianne.daemon.exceptions import DaemonError, MethodNotFoundError
 
         assert issubclass(MethodNotFoundError, DaemonError)
 
     def test_can_be_instantiated_with_message(self):
         """Exception carries the method name in its message."""
-        from mozart.daemon.exceptions import MethodNotFoundError
+        from marianne.daemon.exceptions import MethodNotFoundError
 
         exc = MethodNotFoundError("Method not found: daemon.new_feature")
         assert "daemon.new_feature" in str(exc)
 
     def test_caught_by_daemon_error_handler(self):
         """MethodNotFoundError is caught by except DaemonError."""
-        from mozart.daemon.exceptions import DaemonError, MethodNotFoundError
+        from marianne.daemon.exceptions import DaemonError, MethodNotFoundError
 
         with pytest.raises(DaemonError):
             raise MethodNotFoundError("test")
@@ -63,8 +63,8 @@ class TestMethodNotFoundMapping:
 
     def test_method_not_found_maps_to_specific_exception(self):
         """JSON-RPC -32601 produces MethodNotFoundError, not base DaemonError."""
-        from mozart.daemon.exceptions import MethodNotFoundError
-        from mozart.daemon.ipc.errors import METHOD_NOT_FOUND, rpc_error_to_exception
+        from marianne.daemon.exceptions import MethodNotFoundError
+        from marianne.daemon.ipc.errors import METHOD_NOT_FOUND, rpc_error_to_exception
 
         error_dict = {
             "code": METHOD_NOT_FOUND,
@@ -77,7 +77,7 @@ class TestMethodNotFoundMapping:
 
     def test_method_not_found_preserves_message(self):
         """The server's error message is preserved in the exception."""
-        from mozart.daemon.ipc.errors import METHOD_NOT_FOUND, rpc_error_to_exception
+        from marianne.daemon.ipc.errors import METHOD_NOT_FOUND, rpc_error_to_exception
 
         error_dict = {
             "code": METHOD_NOT_FOUND,
@@ -88,8 +88,8 @@ class TestMethodNotFoundMapping:
 
     def test_other_codes_still_work(self):
         """Existing mappings (JOB_NOT_FOUND etc.) are unaffected."""
-        from mozart.daemon.exceptions import JobSubmissionError
-        from mozart.daemon.ipc.errors import JOB_NOT_FOUND, rpc_error_to_exception
+        from marianne.daemon.exceptions import JobSubmissionError
+        from marianne.daemon.ipc.errors import JOB_NOT_FOUND, rpc_error_to_exception
 
         error_dict = {"code": JOB_NOT_FOUND, "message": "job not found"}
         exc = rpc_error_to_exception(error_dict)
@@ -97,8 +97,8 @@ class TestMethodNotFoundMapping:
 
     def test_unknown_code_falls_back_to_daemon_error(self):
         """Unmapped codes still fall back to base DaemonError."""
-        from mozart.daemon.exceptions import DaemonError, MethodNotFoundError
-        from mozart.daemon.ipc.errors import rpc_error_to_exception
+        from marianne.daemon.exceptions import DaemonError, MethodNotFoundError
+        from marianne.daemon.ipc.errors import rpc_error_to_exception
 
         error_dict = {"code": -99999, "message": "unknown"}
         exc = rpc_error_to_exception(error_dict)
@@ -125,7 +125,7 @@ class TestTryDaemonRouteMethodNotFound:
         Previously returned (False, None) → misleading "not running" message.
         Now re-raises with restart guidance so callers show an accurate error.
         """
-        from mozart.daemon.exceptions import MethodNotFoundError
+        from marianne.daemon.exceptions import MethodNotFoundError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
@@ -153,8 +153,8 @@ class TestTryDaemonRouteMethodNotFound:
         This is the regression test for F-450: the old behavior was to
         return (False, None) which made the CLI say "conductor not running."
         """
-        from mozart.daemon.detect import try_daemon_route
-        from mozart.daemon.exceptions import MethodNotFoundError
+        from marianne.daemon.detect import try_daemon_route
+        from marianne.daemon.exceptions import MethodNotFoundError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
@@ -171,7 +171,7 @@ class TestTryDaemonRouteMethodNotFound:
 
     async def test_job_submission_error_still_reraises(self):
         """JobSubmissionError still re-raises (existing behavior preserved)."""
-        from mozart.daemon.exceptions import JobSubmissionError
+        from marianne.daemon.exceptions import JobSubmissionError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
@@ -187,7 +187,7 @@ class TestTryDaemonRouteMethodNotFound:
 
     async def test_resource_exhausted_still_reraises(self):
         """ResourceExhaustedError still re-raises (existing behavior preserved)."""
-        from mozart.daemon.exceptions import ResourceExhaustedError
+        from marianne.daemon.exceptions import ResourceExhaustedError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
@@ -207,7 +207,7 @@ class TestTryDaemonRouteMethodNotFound:
         Only MethodNotFoundError gets re-raised. Plain DaemonError (e.g., from
         a shutting-down conductor) still returns False for fallback handling.
         """
-        from mozart.daemon.exceptions import DaemonError
+        from marianne.daemon.exceptions import DaemonError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
@@ -229,7 +229,7 @@ class TestTryDaemonRouteMethodNotFound:
         This verifies we didn't accidentally change behavior for other
         DaemonError subclasses.
         """
-        from mozart.daemon.exceptions import DaemonAlreadyRunningError
+        from marianne.daemon.exceptions import DaemonAlreadyRunningError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
@@ -261,7 +261,7 @@ class TestIpcClientMethodNotFoundIntegration:
         client receives it, rpc_error_to_exception maps it to
         MethodNotFoundError (a DaemonError subclass).
         """
-        from mozart.daemon.exceptions import DaemonError, MethodNotFoundError
+        from marianne.daemon.exceptions import DaemonError, MethodNotFoundError
 
         # MethodNotFoundError IS-A DaemonError, so existing code that
         # catches DaemonError will still work
@@ -276,4 +276,4 @@ class TestIpcClientMethodNotFoundIntegration:
             pytest.fail("MethodNotFoundError should be caught before DaemonError")
 
 
-from mozart.daemon.detect import try_daemon_route  # noqa: E402
+from marianne.daemon.detect import try_daemon_route  # noqa: E402

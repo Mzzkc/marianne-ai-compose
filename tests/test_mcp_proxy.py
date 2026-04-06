@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.bridge.mcp_proxy import (
+from marianne.bridge.mcp_proxy import (
     ContentBlock,
     MCPConnection,
     MCPProxyService,
@@ -24,7 +24,7 @@ from mozart.bridge.mcp_proxy import (
     ToolNotFoundError,
     ToolResult,
 )
-from mozart.core.config import MCPServerConfig
+from marianne.core.config import MCPServerConfig
 
 # =============================================================================
 # Fixtures
@@ -876,7 +876,7 @@ class TestSubprocessSpawn:
         mock_proc.stdout = AsyncMock()
 
         with patch(
-            "mozart.bridge.mcp_proxy.asyncio.create_subprocess_exec",
+            "marianne.bridge.mcp_proxy.asyncio.create_subprocess_exec",
             return_value=mock_proc,
         ) as mock_create:
             conn = await proxy._start_server(config)
@@ -919,7 +919,7 @@ class TestSubprocessSpawn:
         mock_proc.stdout = AsyncMock()
 
         with patch(
-            "mozart.bridge.mcp_proxy.asyncio.create_subprocess_exec",
+            "marianne.bridge.mcp_proxy.asyncio.create_subprocess_exec",
             return_value=mock_proc,
         ) as mock_create:
             await proxy._start_server(config)
@@ -940,7 +940,7 @@ class TestSubprocessSpawn:
         mock_proc.stdout = AsyncMock()
 
         with patch(
-            "mozart.bridge.mcp_proxy.asyncio.create_subprocess_exec",
+            "marianne.bridge.mcp_proxy.asyncio.create_subprocess_exec",
             return_value=mock_proc,
         ) as mock_create:
             await proxy._start_server(config)
@@ -963,7 +963,7 @@ class TestSubprocessSpawn:
         mock_proc.stdout = None
 
         with patch(
-            "mozart.bridge.mcp_proxy.asyncio.create_subprocess_exec",
+            "marianne.bridge.mcp_proxy.asyncio.create_subprocess_exec",
             return_value=mock_proc,
         ):
             with pytest.raises(RuntimeError, match="Failed to create pipes"):
@@ -1103,7 +1103,7 @@ class TestPartialStartup:
             return mock_proc
 
         with patch(
-            "mozart.bridge.mcp_proxy.asyncio.create_subprocess_exec",
+            "marianne.bridge.mcp_proxy.asyncio.create_subprocess_exec",
             side_effect=mock_create,
         ):
             await proxy.start()  # Should not raise
@@ -1117,7 +1117,7 @@ class TestPartialStartup:
         proxy = MCPProxyService(servers=two_server_configs)
 
         with patch(
-            "mozart.bridge.mcp_proxy.asyncio.create_subprocess_exec",
+            "marianne.bridge.mcp_proxy.asyncio.create_subprocess_exec",
             side_effect=OSError("Command not found"),
         ):
             with pytest.raises(RuntimeError, match="All 2 MCP servers failed"):
@@ -1146,7 +1146,7 @@ class TestPartialStartup:
         mock_proc.stdout.readline = AsyncMock(return_value=b"")
 
         with patch(
-            "mozart.bridge.mcp_proxy.asyncio.create_subprocess_exec",
+            "marianne.bridge.mcp_proxy.asyncio.create_subprocess_exec",
             return_value=mock_proc,
         ):
             with pytest.raises(RuntimeError, match="All 1 MCP servers failed"):
@@ -1178,7 +1178,7 @@ class TestPartialStartup:
         )
 
         with patch(
-            "mozart.bridge.mcp_proxy.asyncio.create_subprocess_exec",
+            "marianne.bridge.mcp_proxy.asyncio.create_subprocess_exec",
             return_value=mock_proc,
         ):
             with pytest.raises(RuntimeError, match="All 1 MCP servers failed"):

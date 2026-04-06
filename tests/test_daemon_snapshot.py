@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from mozart.daemon.snapshot import SnapshotManager
+from marianne.daemon.snapshot import SnapshotManager
 
 # ─── Fixtures ────────────────────────────────────────────────────────
 

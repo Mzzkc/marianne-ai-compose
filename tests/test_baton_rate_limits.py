@@ -16,18 +16,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.events import (
     RateLimitExpired,
     RateLimitHit,
     SheetAttemptResult,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     BatonSheetStatus,
     InstrumentState,
     SheetExecutionState,
 )
-from mozart.daemon.baton.timer import TimerWheel
+from marianne.daemon.baton.timer import TimerWheel
 
 
 def _make_sheets(
@@ -362,7 +362,7 @@ class TestRateLimitDispatchIntegration:
 
     def test_get_open_circuit_breakers(self) -> None:
         """get_open_circuit_breakers returns instruments with open breakers."""
-        from mozart.daemon.baton.state import CircuitBreakerState
+        from marianne.daemon.baton.state import CircuitBreakerState
 
         baton = BatonCore()
         baton.register_instrument("claude-code", max_concurrent=4)

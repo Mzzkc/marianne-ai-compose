@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.config.job import InstrumentDef, JobConfig, MovementDef
-from mozart.core.sheet import build_sheets
+from marianne.core.config.job import InstrumentDef, JobConfig, MovementDef
+from marianne.core.sheet import build_sheets
 
 
 class TestScoreLevelInstrumentResolution:
@@ -167,7 +167,7 @@ class TestV210ScoreLevelInstrumentNames:
 
     def test_v210_accepts_score_level_name_in_per_sheet(self, tmp_path):
         """V210 should not warn about 'fast' when it's defined in instruments: block."""
-        from mozart.validation.checks.config import InstrumentNameCheck
+        from marianne.validation.checks.config import InstrumentNameCheck
 
         config = JobConfig(
             name="test-v210",
@@ -206,7 +206,7 @@ prompt:
 
     def test_v210_still_warns_on_truly_unknown_name(self, tmp_path):
         """V210 should still warn about names that aren't profiles OR score-level names."""
-        from mozart.validation.checks.config import InstrumentNameCheck
+        from marianne.validation.checks.config import InstrumentNameCheck
 
         config = JobConfig(
             name="test-v210-unknown",
@@ -244,7 +244,7 @@ prompt:
 
     def test_v210_accepts_score_level_name_in_instrument_map(self, tmp_path):
         """V210 should not warn about score-level names used in instrument_map."""
-        from mozart.validation.checks.config import InstrumentNameCheck
+        from marianne.validation.checks.config import InstrumentNameCheck
 
         config = JobConfig(
             name="test-v210-map",
@@ -282,7 +282,7 @@ prompt:
 
     def test_v210_accepts_score_level_name_in_movement(self, tmp_path):
         """V210 should not warn about score-level names used in movement instrument."""
-        from mozart.validation.checks.config import InstrumentNameCheck
+        from marianne.validation.checks.config import InstrumentNameCheck
 
         config = JobConfig(
             name="test-v210-movement",

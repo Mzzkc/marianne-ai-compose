@@ -12,7 +12,7 @@ from unittest.mock import patch
 import yaml
 from typer.testing import CliRunner
 
-from mozart.cli.commands.config_cmd import config_app
+from marianne.cli.commands.config_cmd import config_app
 
 runner = CliRunner()
 
@@ -90,13 +90,13 @@ class TestConfigShow:
 
     def test_show_live_config_from_conductor(self) -> None:
         """show displays live config when conductor is running."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         live_config = DaemonConfig(max_concurrent_jobs=12)
         live_dict = live_config.model_dump(mode="json")
 
         with patch(
-            "mozart.cli.commands.config_cmd._try_live_config",
+            "marianne.cli.commands.config_cmd._try_live_config",
             return_value=live_dict,
         ):
             result = runner.invoke(config_app, ["show"])
@@ -113,7 +113,7 @@ class TestConfigShow:
         cfg.write_text(yaml.dump({"max_concurrent_jobs": 7}))
 
         with patch(
-            "mozart.cli.commands.config_cmd._try_live_config",
+            "marianne.cli.commands.config_cmd._try_live_config",
             return_value=None,
         ):
             result = runner.invoke(
@@ -127,7 +127,7 @@ class TestConfigShow:
     def test_show_defaults_when_no_conductor_no_file(self) -> None:
         """show displays defaults when conductor is offline and no config file exists."""
         with patch(
-            "mozart.cli.commands.config_cmd._try_live_config",
+            "marianne.cli.commands.config_cmd._try_live_config",
             return_value=None,
         ):
             result = runner.invoke(
@@ -140,13 +140,13 @@ class TestConfigShow:
 
     def test_show_essential_only_by_default(self) -> None:
         """Default show displays essential fields but not advanced ones."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         live_config = DaemonConfig()
         live_dict = live_config.model_dump(mode="json")
 
         with patch(
-            "mozart.cli.commands.config_cmd._try_live_config",
+            "marianne.cli.commands.config_cmd._try_live_config",
             return_value=live_dict,
         ):
             result = runner.invoke(config_app, ["show"])
@@ -162,13 +162,13 @@ class TestConfigShow:
 
     def test_show_all_flag(self) -> None:
         """--all shows advanced fields too."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         live_config = DaemonConfig()
         live_dict = live_config.model_dump(mode="json")
 
         with patch(
-            "mozart.cli.commands.config_cmd._try_live_config",
+            "marianne.cli.commands.config_cmd._try_live_config",
             return_value=live_dict,
         ):
             result = runner.invoke(config_app, ["show", "--all"])
@@ -182,13 +182,13 @@ class TestConfigShow:
 
     def test_show_section_filter(self) -> None:
         """--section filters to a specific config section."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         live_config = DaemonConfig()
         live_dict = live_config.model_dump(mode="json")
 
         with patch(
-            "mozart.cli.commands.config_cmd._try_live_config",
+            "marianne.cli.commands.config_cmd._try_live_config",
             return_value=live_dict,
         ):
             result = runner.invoke(config_app, ["show", "--section", "profiler"])
@@ -202,13 +202,13 @@ class TestConfigShow:
 
     def test_show_section_unknown(self) -> None:
         """Unknown section shows empty table without crashing."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         live_config = DaemonConfig()
         live_dict = live_config.model_dump(mode="json")
 
         with patch(
-            "mozart.cli.commands.config_cmd._try_live_config",
+            "marianne.cli.commands.config_cmd._try_live_config",
             return_value=live_dict,
         ):
             result = runner.invoke(config_app, ["show", "--section", "nonexistent"])
@@ -223,7 +223,7 @@ class TestFlattenModel:
 
     def test_flatten_model_produces_dotted_keys(self) -> None:
         """Nested dicts are flattened to dot-notation keys."""
-        from mozart.cli.commands.config_cmd import _flatten_model
+        from marianne.cli.commands.config_cmd import _flatten_model
 
         data = {"socket": {"path": "/tmp/test.sock", "backlog": 5}, "max_concurrent_jobs": 3}
         flat = _flatten_model(data)
@@ -237,7 +237,7 @@ class TestFlattenModel:
 
     def test_flatten_model_no_double_dot(self) -> None:
         """Ensure no '.socket.path' (leading dot) in flattened output."""
-        from mozart.cli.commands.config_cmd import _flatten_model
+        from marianne.cli.commands.config_cmd import _flatten_model
 
         data = {"a": {"b": {"c": 1}}}
         flat = _flatten_model(data)
@@ -266,7 +266,7 @@ class TestCoerceValue:
     """Tests for _coerce_value type coercion helper."""
 
     def test_true_values(self) -> None:
-        from mozart.cli.commands.config_cmd import _coerce_value
+        from marianne.cli.commands.config_cmd import _coerce_value
 
         assert _coerce_value("true") is True
         assert _coerce_value("True") is True
@@ -274,31 +274,31 @@ class TestCoerceValue:
         assert _coerce_value("YES") is True
 
     def test_false_values(self) -> None:
-        from mozart.cli.commands.config_cmd import _coerce_value
+        from marianne.cli.commands.config_cmd import _coerce_value
 
         assert _coerce_value("false") is False
         assert _coerce_value("no") is False
 
     def test_null_values(self) -> None:
-        from mozart.cli.commands.config_cmd import _coerce_value
+        from marianne.cli.commands.config_cmd import _coerce_value
 
         assert _coerce_value("null") is None
         assert _coerce_value("none") is None
         assert _coerce_value("~") is None
 
     def test_int_coercion(self) -> None:
-        from mozart.cli.commands.config_cmd import _coerce_value
+        from marianne.cli.commands.config_cmd import _coerce_value
 
         assert _coerce_value("42") == 42
         assert _coerce_value("0") == 0
 
     def test_float_coercion(self) -> None:
-        from mozart.cli.commands.config_cmd import _coerce_value
+        from marianne.cli.commands.config_cmd import _coerce_value
 
         assert _coerce_value("3.14") == 3.14
 
     def test_string_fallback(self) -> None:
-        from mozart.cli.commands.config_cmd import _coerce_value
+        from marianne.cli.commands.config_cmd import _coerce_value
 
         assert _coerce_value("hello") == "hello"
         assert _coerce_value("/tmp/custom.sock") == "/tmp/custom.sock"
@@ -308,23 +308,23 @@ class TestGetNested:
     """Tests for _get_nested dot-notation access."""
 
     def test_simple_key(self) -> None:
-        from mozart.cli.commands.config_cmd import _get_nested
+        from marianne.cli.commands.config_cmd import _get_nested
 
         assert _get_nested({"a": 1}, "a") == 1
 
     def test_nested_key(self) -> None:
-        from mozart.cli.commands.config_cmd import _get_nested
+        from marianne.cli.commands.config_cmd import _get_nested
 
         assert _get_nested({"a": {"b": {"c": 3}}}, "a.b.c") == 3
 
     def test_missing_key_returns_none(self) -> None:
-        from mozart.cli.commands.config_cmd import _get_nested
+        from marianne.cli.commands.config_cmd import _get_nested
 
         assert _get_nested({"a": 1}, "b") is None
         assert _get_nested({"a": {"b": 2}}, "a.c") is None
 
     def test_non_dict_intermediate_returns_none(self) -> None:
-        from mozart.cli.commands.config_cmd import _get_nested
+        from marianne.cli.commands.config_cmd import _get_nested
 
         assert _get_nested({"a": 42}, "a.b") is None
 
@@ -333,21 +333,21 @@ class TestSetNested:
     """Tests for _set_nested dot-notation setter."""
 
     def test_simple_key(self) -> None:
-        from mozart.cli.commands.config_cmd import _set_nested
+        from marianne.cli.commands.config_cmd import _set_nested
 
         data: dict = {}
         _set_nested(data, "a", 1)
         assert data == {"a": 1}
 
     def test_nested_key_creates_intermediates(self) -> None:
-        from mozart.cli.commands.config_cmd import _set_nested
+        from marianne.cli.commands.config_cmd import _set_nested
 
         data: dict = {}
         _set_nested(data, "a.b.c", 42)
         assert data == {"a": {"b": {"c": 42}}}
 
     def test_overwrites_non_dict_intermediate(self) -> None:
-        from mozart.cli.commands.config_cmd import _set_nested
+        from marianne.cli.commands.config_cmd import _set_nested
 
         data: dict = {"a": "string-value"}
         _set_nested(data, "a.b", 99)
@@ -358,13 +358,13 @@ class TestLoadConfigData:
     """Tests for _load_config_data fallback behavior."""
 
     def test_missing_file_returns_empty_dict(self, tmp_path: Path) -> None:
-        from mozart.cli.commands.config_cmd import _load_config_data
+        from marianne.cli.commands.config_cmd import _load_config_data
 
         result = _load_config_data(tmp_path / "no-such-file.yaml")
         assert result == {}
 
     def test_empty_file_returns_empty_dict(self, tmp_path: Path) -> None:
-        from mozart.cli.commands.config_cmd import _load_config_data
+        from marianne.cli.commands.config_cmd import _load_config_data
 
         cfg = tmp_path / "empty.yaml"
         cfg.write_text("")
@@ -372,7 +372,7 @@ class TestLoadConfigData:
         assert result == {}
 
     def test_valid_yaml_returns_data(self, tmp_path: Path) -> None:
-        from mozart.cli.commands.config_cmd import _load_config_data
+        from marianne.cli.commands.config_cmd import _load_config_data
 
         cfg = tmp_path / "valid.yaml"
         cfg.write_text(yaml.dump({"max_concurrent_jobs": 15}))
@@ -501,7 +501,7 @@ class TestTryLiveConfig:
         """_try_live_config returns None when no conductor is running."""
         from unittest.mock import AsyncMock
 
-        from mozart.cli.commands.config_cmd import _try_live_config
+        from marianne.cli.commands.config_cmd import _try_live_config
 
         # DaemonClient is imported lazily inside _try_live_config, so
         # mock at the source module level
@@ -509,7 +509,7 @@ class TestTryLiveConfig:
         mock_client.config.side_effect = ConnectionRefusedError("No conductor")
 
         with patch(
-            "mozart.daemon.ipc.client.DaemonClient",
+            "marianne.daemon.ipc.client.DaemonClient",
             return_value=mock_client,
         ):
             result = _try_live_config()
@@ -520,7 +520,7 @@ class TestTryLiveConfig:
     def test_show_falls_back_on_invalid_live_config(self) -> None:
         """show falls back to disk when live config fails validation."""
         with patch(
-            "mozart.cli.commands.config_cmd._try_live_config",
+            "marianne.cli.commands.config_cmd._try_live_config",
             return_value={"max_concurrent_jobs": -999},  # Invalid
         ):
             result = runner.invoke(
@@ -537,7 +537,7 @@ class TestStringifyPaths:
     """Tests for _stringify_paths helper."""
 
     def test_converts_path_objects(self) -> None:
-        from mozart.cli.commands.config_cmd import _stringify_paths
+        from marianne.cli.commands.config_cmd import _stringify_paths
 
         data: dict = {"socket": {"path": Path("/tmp/test.sock")}, "name": "test"}
         _stringify_paths(data)

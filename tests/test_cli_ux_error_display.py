@@ -10,8 +10,8 @@ TDD: Red first, then green.
 
 from __future__ import annotations
 
-from mozart.cli.output import infer_error_type
-from mozart.core.checkpoint import (
+from marianne.cli.output import infer_error_type
+from marianne.core.checkpoint import (
     ErrorCategory,
     SheetState,
     SheetStatus,

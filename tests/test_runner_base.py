@@ -31,12 +31,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from rich.console import Console
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import JobConfig
-from mozart.execution.dag import CycleDetectedError, InvalidDependencyError
-from mozart.execution.runner import JobRunner
-from mozart.execution.runner.base import JobRunnerBase
-from mozart.execution.runner.models import (
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config import JobConfig
+from marianne.execution.dag import CycleDetectedError, InvalidDependencyError
+from marianne.execution.runner import JobRunner
+from marianne.execution.runner.base import JobRunnerBase
+from marianne.execution.runner.models import (
     GracefulShutdownError,
     RunnerContext,
 )
@@ -853,7 +853,7 @@ class TestInternalInfrastructure:
     def test_prompt_builder_configured_from_config(self) -> None:
         """Prompt builder is created with the job's prompt config."""
         runner = _make_runner()
-        from mozart.prompts.templating import PromptBuilder
+        from marianne.prompts.templating import PromptBuilder
         assert isinstance(runner.prompt_builder, PromptBuilder)
         # Verify it received the config's prompt settings
         assert runner.prompt_builder.config is runner.config.prompt
@@ -861,7 +861,7 @@ class TestInternalInfrastructure:
     def test_error_classifier_can_classify(self) -> None:
         """Error classifier is created and can classify outputs."""
         runner = _make_runner()
-        from mozart.core.errors import ErrorClassifier
+        from marianne.core.errors import ErrorClassifier
         assert isinstance(runner.error_classifier, ErrorClassifier)
         # Verify it can perform classification (not just is not None)
         result = runner.error_classifier.classify(stdout="", exit_code=0)
@@ -870,13 +870,13 @@ class TestInternalInfrastructure:
     def test_preflight_checker_has_workspace(self) -> None:
         """Preflight checker is configured with the job's workspace."""
         runner = _make_runner()
-        from mozart.execution.preflight import PreflightChecker
+        from marianne.execution.preflight import PreflightChecker
         assert isinstance(runner.preflight_checker, PreflightChecker)
 
     def test_retry_strategy_respects_config(self) -> None:
         """Retry strategy is built from the job's retry config."""
         runner = _make_runner()
-        from mozart.execution.retry_strategy import AdaptiveRetryStrategy
+        from marianne.execution.retry_strategy import AdaptiveRetryStrategy
         assert isinstance(runner._retry_strategy, AdaptiveRetryStrategy)
         # Verify config values propagated
         assert runner._retry_strategy.config.base_delay == runner.config.retry.base_delay_seconds
@@ -885,7 +885,7 @@ class TestInternalInfrastructure:
     def test_logger_has_runner_component(self) -> None:
         """Logger is created with 'runner' component name."""
         runner = _make_runner()
-        from mozart.core.logging import MozartLogger
+        from marianne.core.logging import MozartLogger
         assert isinstance(runner._logger, MozartLogger)
 
     def test_pattern_tracking_accumulates_independently(self) -> None:
@@ -931,5 +931,5 @@ class TestInternalInfrastructure:
         cfg = _make_config(parallel_enabled=True)
         runner = _make_runner(config=cfg)
         assert runner._parallel_executor is not None
-        from mozart.execution.parallel import ParallelExecutor
+        from marianne.execution.parallel import ParallelExecutor
         assert isinstance(runner._parallel_executor, ParallelExecutor)

@@ -21,19 +21,19 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.adapter import (
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.adapter import (
     BatonAdapter,
     baton_to_checkpoint_status,
     checkpoint_to_baton_status,
 )
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.events import (
     DispatchRetry,
     SheetAttemptResult,
     SheetSkipped,
 )
-from mozart.daemon.baton.state import BatonSheetStatus
+from marianne.daemon.baton.state import BatonSheetStatus
 
 
 # =========================================================================
@@ -451,7 +451,7 @@ class TestMusicianCredentialRedactionAdversarial:
     def test_redact_all_13_credential_patterns(self) -> None:
         """The credential scanner must redact ALL 13 known patterns.
         Each pattern verified individually."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         # Token strings must meet minimum length requirements in the scanner
         # regex to avoid false positives. Real tokens are this long or longer.
@@ -478,7 +478,7 @@ class TestMusicianCredentialRedactionAdversarial:
 
     def test_redact_returns_input_for_clean_string(self) -> None:
         """Clean strings should pass through unchanged."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         clean = "Just a normal error message with no secrets"
         result = redact_credentials(clean)
@@ -486,7 +486,7 @@ class TestMusicianCredentialRedactionAdversarial:
 
     def test_multiline_traceback_with_credential(self) -> None:
         """Exception tracebacks with credentials must be redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         traceback_text = (
             "Traceback (most recent call last):\n"
@@ -504,7 +504,7 @@ class TestMusicianCredentialRedactionAdversarial:
         """The musician exception handler uses:
             error_msg = redact_credentials(raw_error_msg) or raw_error_msg
         This fallback pattern must handle all cases correctly."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         # Normal case: redaction returns redacted string
         # Key must be long enough to match the pattern (10+ chars after sk-ant-api)
@@ -520,7 +520,7 @@ class TestMusicianCredentialRedactionAdversarial:
     def test_short_credential_not_redacted(self) -> None:
         """Short strings that look like credentials but aren't long enough
         should NOT be redacted. The scanner is deliberately conservative."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         # sk-ant-api03-secret is only 9 chars after sk-ant-api — below 10 threshold
         short = "Error: sk-ant-api03-secret"
@@ -540,9 +540,9 @@ class TestParallelRateLimitExtractionAdversarial:
 
     def test_rate_limit_found_in_exceptions_dict(self) -> None:
         """Rate limit error in exceptions dict must be extracted."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
-        from mozart.execution.parallel import ParallelBatchResult
-        from mozart.execution.runner.models import RateLimitExhaustedError
+        from marianne.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.parallel import ParallelBatchResult
+        from marianne.execution.runner.models import RateLimitExhaustedError
 
         exc = RateLimitExhaustedError(
             message="Rate limit exhausted on claude-code",
@@ -564,8 +564,8 @@ class TestParallelRateLimitExtractionAdversarial:
 
     def test_no_rate_limit_returns_none(self) -> None:
         """When no rate limit error exists, return None."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
-        from mozart.execution.parallel import ParallelBatchResult
+        from marianne.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.parallel import ParallelBatchResult
 
         result = ParallelBatchResult(
             sheets=[1],
@@ -580,9 +580,9 @@ class TestParallelRateLimitExtractionAdversarial:
     def test_multiple_rate_limits_returns_first(self) -> None:
         """When multiple rate limit errors exist, return the first one
         (by iteration order over failed list)."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
-        from mozart.execution.parallel import ParallelBatchResult
-        from mozart.execution.runner.models import RateLimitExhaustedError
+        from marianne.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.parallel import ParallelBatchResult
+        from marianne.execution.runner.models import RateLimitExhaustedError
 
         result = ParallelBatchResult(
             sheets=[1, 2, 3],
@@ -601,8 +601,8 @@ class TestParallelRateLimitExtractionAdversarial:
 
     def test_empty_batch_no_crash(self) -> None:
         """An empty batch should return None."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
-        from mozart.execution.parallel import ParallelBatchResult
+        from marianne.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.parallel import ParallelBatchResult
 
         result = ParallelBatchResult(sheets=[], completed=[], failed=[])
 
@@ -611,8 +611,8 @@ class TestParallelRateLimitExtractionAdversarial:
 
     def test_failed_sheet_missing_from_exceptions_dict(self) -> None:
         """A sheet in failed list but not in exceptions dict must not crash."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
-        from mozart.execution.parallel import ParallelBatchResult
+        from marianne.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.parallel import ParallelBatchResult
 
         result = ParallelBatchResult(
             sheets=[1, 2],
@@ -640,9 +640,9 @@ class TestFailurePropagationAdversarial:
     ) -> "Any":
         """Create a ParallelExecutor with a mocked runner providing the DAG."""
         import logging
-        from mozart.execution.parallel import ParallelExecutor
-        from mozart.execution.dag import DependencyDAG
-        from mozart.execution.runner.base import JobRunnerBase
+        from marianne.execution.parallel import ParallelExecutor
+        from marianne.execution.dag import DependencyDAG
+        from marianne.execution.runner.base import JobRunnerBase
 
         dag = DependencyDAG.from_dependencies(total_sheets, deps)
         executor = ParallelExecutor.__new__(ParallelExecutor)
@@ -658,8 +658,8 @@ class TestFailurePropagationAdversarial:
     def _make_executor_no_dag() -> "Any":
         """Create a ParallelExecutor with no DAG (runner returns None)."""
         import logging
-        from mozart.execution.parallel import ParallelExecutor
-        from mozart.execution.runner.base import JobRunnerBase
+        from marianne.execution.parallel import ParallelExecutor
+        from marianne.execution.runner.base import JobRunnerBase
 
         executor = ParallelExecutor.__new__(ParallelExecutor)
         mock_runner = MagicMock(spec=JobRunnerBase)
@@ -756,7 +756,7 @@ class TestCostLimitFieldCorrectness:
 
     def test_cost_limit_config_has_correct_field(self) -> None:
         """CostLimitConfig must have max_cost_per_job, NOT max_cost_usd."""
-        from mozart.core.config.execution import CostLimitConfig
+        from marianne.core.config.execution import CostLimitConfig
 
         config = CostLimitConfig(enabled=True, max_cost_per_job=25.0)
         assert hasattr(config, "max_cost_per_job")
@@ -766,7 +766,7 @@ class TestCostLimitFieldCorrectness:
 
     def test_cost_limit_none_when_disabled(self) -> None:
         """When cost limits are disabled, the manager should pass None."""
-        from mozart.core.config.execution import CostLimitConfig
+        from marianne.core.config.execution import CostLimitConfig
 
         config = CostLimitConfig(enabled=False, max_cost_per_job=25.0)
         max_cost = None
@@ -777,7 +777,7 @@ class TestCostLimitFieldCorrectness:
 
     def test_max_cost_per_job_defaults_to_none(self) -> None:
         """Default CostLimitConfig should have max_cost_per_job=None."""
-        from mozart.core.config.execution import CostLimitConfig
+        from marianne.core.config.execution import CostLimitConfig
 
         config = CostLimitConfig()
         assert config.max_cost_per_job is None
@@ -936,8 +936,8 @@ class TestParallelBatchResultExceptionsField:
 
     def test_exceptions_dict_preserves_type(self) -> None:
         """The exceptions dict must preserve the original exception type."""
-        from mozart.execution.parallel import ParallelBatchResult
-        from mozart.execution.runner.models import RateLimitExhaustedError
+        from marianne.execution.parallel import ParallelBatchResult
+        from marianne.execution.runner.models import RateLimitExhaustedError
 
         exc = RateLimitExhaustedError(
             message="Rate limit exhausted on claude-code",
@@ -955,7 +955,7 @@ class TestParallelBatchResultExceptionsField:
 
     def test_to_dict_excludes_exceptions(self) -> None:
         """to_dict() must NOT include exceptions — not JSON-serializable."""
-        from mozart.execution.parallel import ParallelBatchResult
+        from marianne.execution.parallel import ParallelBatchResult
 
         result = ParallelBatchResult(
             sheets=[1], failed=[1],
@@ -967,7 +967,7 @@ class TestParallelBatchResultExceptionsField:
 
     def test_default_exceptions_is_empty_dict(self) -> None:
         """Default exceptions field should be an empty dict, not None."""
-        from mozart.execution.parallel import ParallelBatchResult
+        from marianne.execution.parallel import ParallelBatchResult
 
         result = ParallelBatchResult(sheets=[1], completed=[1])
         assert result.exceptions == {}
@@ -1070,28 +1070,28 @@ class TestCredentialRedactionBoundaryCases:
 
     def test_redact_none_returns_none(self) -> None:
         """None input must return None, not crash or return empty string."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         result = redact_credentials(None)
         assert result is None
 
     def test_redact_empty_string_returns_empty(self) -> None:
         """Empty string returns empty string unchanged."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         result = redact_credentials("")
         assert result == ""
 
     def test_redact_non_string_passes_through(self) -> None:
         """Non-string inputs should pass through unchanged."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         assert redact_credentials(42) == 42
         assert redact_credentials(True) is True
 
     def test_multiple_credentials_in_one_string(self) -> None:
         """Multiple credential patterns in a single string all get redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         raw = (
             "Anthropic: sk-ant-api03-secretkeyabcdefghijk "
@@ -1107,7 +1107,7 @@ class TestCredentialRedactionBoundaryCases:
     def test_classify_error_redacts_auth_failure_with_key(self) -> None:
         """When _classify_error returns an error message containing a credential,
         the musician's redaction at line 129 should catch it."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         # Simulate what _classify_error might return for an auth failure
         error_msg = (
@@ -1122,7 +1122,7 @@ class TestCredentialRedactionBoundaryCases:
     def test_fallback_or_pattern_handles_none_redaction(self) -> None:
         """The musician pattern `redact_credentials(raw) or raw` should
         work when redact_credentials returns the same string (no credentials)."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         # When no credentials, redact_credentials returns the input unchanged
         raw = "Normal error: connection timeout"
@@ -1131,7 +1131,7 @@ class TestCredentialRedactionBoundaryCases:
 
     def test_json_embedded_credential(self) -> None:
         """Credentials embedded in JSON error bodies must be redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         json_error = (
             '{"error": {"message": "Invalid API key: sk-ant-api03-embedded1234567890",'
@@ -1154,8 +1154,8 @@ class TestScoreLevelInstrumentAdversarial:
         """If per_sheet_instruments assigns a name that isn't in instruments:
         block and isn't a profile name, it should be passed through as-is
         (the conductor resolves it at runtime)."""
-        from mozart.core.config.job import JobConfig
-        from mozart.core.sheet import build_sheets
+        from marianne.core.config.job import JobConfig
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test-undefined",
@@ -1176,8 +1176,8 @@ class TestScoreLevelInstrumentAdversarial:
     def test_instrument_config_merged_from_all_levels(self) -> None:
         """instrument_config from InstrumentDef should merge with
         per_sheet_instrument_config."""
-        from mozart.core.config.job import InstrumentDef, JobConfig
-        from mozart.core.sheet import build_sheets
+        from marianne.core.config.job import InstrumentDef, JobConfig
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test-config-merge",
@@ -1208,8 +1208,8 @@ class TestScoreLevelInstrumentAdversarial:
     def test_score_instrument_with_same_name_as_profile(self) -> None:
         """An InstrumentDef whose name matches a profile name resolves
         correctly, with config merged."""
-        from mozart.core.config.job import InstrumentDef, JobConfig
-        from mozart.core.sheet import build_sheets
+        from marianne.core.config.job import InstrumentDef, JobConfig
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test-same-name",
@@ -1235,7 +1235,7 @@ class TestScoreLevelInstrumentAdversarial:
 
     def test_instrument_def_requires_profile(self) -> None:
         """InstrumentDef must require profile field — no implicit defaults."""
-        from mozart.core.config.job import InstrumentDef
+        from marianne.core.config.job import InstrumentDef
         import pydantic
 
         with pytest.raises(pydantic.ValidationError):
@@ -1253,8 +1253,8 @@ class TestFailurePropagationExtended:
     def test_propagation_error_message_includes_failed_sheet(self) -> None:
         """Failure propagation must set an error_message on dependents
         identifying which sheet failed."""
-        from mozart.execution.dag import DependencyDAG
-        from mozart.execution.parallel import ParallelExecutor
+        from marianne.execution.dag import DependencyDAG
+        from marianne.execution.parallel import ParallelExecutor
 
         dag = DependencyDAG.from_dependencies(3, {2: [1], 3: [1]})
         executor = ParallelExecutor.__new__(ParallelExecutor)
@@ -1283,8 +1283,8 @@ class TestFailurePropagationExtended:
     def test_propagation_skips_missing_sheets(self) -> None:
         """If a sheet number in the DAG doesn't exist in the checkpoint,
         propagation must skip it without crashing."""
-        from mozart.execution.dag import DependencyDAG
-        from mozart.execution.parallel import ParallelExecutor
+        from marianne.execution.dag import DependencyDAG
+        from marianne.execution.parallel import ParallelExecutor
 
         dag = DependencyDAG.from_dependencies(3, {2: [1], 3: [1]})
         executor = ParallelExecutor.__new__(ParallelExecutor)

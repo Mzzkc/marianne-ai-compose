@@ -13,9 +13,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mozart.daemon.baton.adapter import BatonAdapter
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+from marianne.daemon.baton.adapter import BatonAdapter
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
 
 def _make_states(
@@ -183,8 +183,8 @@ class TestAdapterRecoveryPropagation:
 
     def test_adapter_recover_propagates_failures(self) -> None:
         """BatonAdapter.recover_job() propagates failures from checkpoint."""
-        from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-        from mozart.core.sheet import Sheet
+        from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+        from marianne.core.sheet import Sheet
 
         adapter = BatonAdapter(max_concurrent_sheets=4)
 

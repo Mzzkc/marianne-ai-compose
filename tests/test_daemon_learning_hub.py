@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from mozart.daemon.learning_hub import LearningHub
-from mozart.learning.global_store import GlobalLearningStore
+from marianne.daemon.learning_hub import LearningHub
+from marianne.learning.global_store import GlobalLearningStore
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ class TestSharedStoreSemantics:
     @pytest.mark.asyncio
     async def test_default_db_path_when_none(self):
         """When no db_path is given, DEFAULT_GLOBAL_STORE_PATH is used."""
-        from mozart.learning.store.base import DEFAULT_GLOBAL_STORE_PATH
+        from marianne.learning.store.base import DEFAULT_GLOBAL_STORE_PATH
 
         hub = LearningHub(db_path=None)
         assert hub._db_path == DEFAULT_GLOBAL_STORE_PATH

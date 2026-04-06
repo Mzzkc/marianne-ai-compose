@@ -104,11 +104,11 @@ class TestWaitCapClamping:
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_clamp_output_bounded(self, seconds: float) -> None:
         """For any finite float, _clamp_wait returns a value in [MIN, MAX]."""
-        from mozart.core.constants import (
+        from marianne.core.constants import (
             RESET_TIME_MAXIMUM_WAIT_SECONDS,
             RESET_TIME_MINIMUM_WAIT_SECONDS,
         )
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.classifier import ErrorClassifier
 
         result = ErrorClassifier._clamp_wait(seconds)
         assert result >= RESET_TIME_MINIMUM_WAIT_SECONDS, (
@@ -122,11 +122,11 @@ class TestWaitCapClamping:
     @settings(max_examples=100)
     def test_clamp_preserves_valid_range(self, seconds: float) -> None:
         """Values already within bounds are preserved (up to floor clamping)."""
-        from mozart.core.constants import (
+        from marianne.core.constants import (
             RESET_TIME_MAXIMUM_WAIT_SECONDS,
             RESET_TIME_MINIMUM_WAIT_SECONDS,
         )
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.classifier import ErrorClassifier
 
         result = ErrorClassifier._clamp_wait(seconds)
         if RESET_TIME_MINIMUM_WAIT_SECONDS <= seconds <= RESET_TIME_MAXIMUM_WAIT_SECONDS:
@@ -138,15 +138,15 @@ class TestWaitCapClamping:
     @settings(max_examples=100)
     def test_clamp_floors_negative(self, seconds: float) -> None:
         """Negative values are floored to MINIMUM."""
-        from mozart.core.constants import RESET_TIME_MINIMUM_WAIT_SECONDS
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.constants import RESET_TIME_MINIMUM_WAIT_SECONDS
+        from marianne.core.errors.classifier import ErrorClassifier
 
         result = ErrorClassifier._clamp_wait(seconds)
         assert result == RESET_TIME_MINIMUM_WAIT_SECONDS
 
     def test_clamp_idempotent(self) -> None:
         """_clamp_wait(_clamp_wait(x)) == _clamp_wait(x) for representative values."""
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.classifier import ErrorClassifier
 
         for val in [-1000, -1, 0, 0.5, 5, 30, 3600, 86400, 1e9]:
             first = ErrorClassifier._clamp_wait(val)
@@ -169,8 +169,8 @@ class TestClearRateLimitSpecificity:
         self, names: list[str], rate_limited: list[bool]
     ) -> Any:
         """Create a BatonCore with registered instruments and a job."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         # Register instruments
@@ -270,7 +270,7 @@ class TestClearRateLimitSpecificity:
     @settings(max_examples=50)
     def test_clear_moves_waiting_to_pending(self, n_instruments: int) -> None:
         """Cleared instruments have their WAITING sheets moved to PENDING."""
-        from mozart.daemon.baton.state import BatonSheetStatus
+        from marianne.daemon.baton.state import BatonSheetStatus
 
         names = [f"inst-{i}" for i in range(n_instruments)]
         limited = [True] * n_instruments
@@ -304,9 +304,9 @@ class TestRateLimitHitTransition:
         self, status: str, wait_seconds: float
     ) -> None:
         """_handle_rate_limit_hit only transitions DISPATCHED/RUNNING to WAITING."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import RateLimitHit
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import RateLimitHit
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         baton_status = BatonSheetStatus(status)
@@ -370,8 +370,8 @@ class TestObserverEventClassification:
         duration: float,
     ) -> None:
         """Every valid SheetAttemptResult maps to exactly one known event."""
-        from mozart.daemon.baton.adapter import attempt_result_to_observer_event
-        from mozart.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.adapter import attempt_result_to_observer_event
+        from marianne.daemon.baton.events import SheetAttemptResult
 
         result = SheetAttemptResult(
             job_id="test",
@@ -404,8 +404,8 @@ class TestObserverEventClassification:
         self, execution_success: bool, validation_pass_rate: float
     ) -> None:
         """rate_limited=True always produces 'rate_limit.active' regardless of other fields."""
-        from mozart.daemon.baton.adapter import attempt_result_to_observer_event
-        from mozart.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.adapter import attempt_result_to_observer_event
+        from marianne.daemon.baton.events import SheetAttemptResult
 
         result = SheetAttemptResult(
             job_id="test", sheet_num=1, instrument_name="inst", attempt=1,
@@ -438,8 +438,8 @@ class TestExhaustionDecisionTree:
         healing_attempts: int,
     ) -> None:
         """_handle_exhaustion produces exactly one outcome."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         sheet = SheetExecutionState(
@@ -471,8 +471,8 @@ class TestExhaustionDecisionTree:
 
     def test_exhaustion_priority_order(self) -> None:
         """Self-healing takes priority over escalation when both enabled."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         sheet = SheetExecutionState(
@@ -506,7 +506,7 @@ class TestRetryDelayMonotonicity:
     @settings(max_examples=100)
     def test_delay_bounded_by_max(self, attempt: int) -> None:
         """Delay never exceeds max_retry_delay."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore()
         delay = baton.calculate_retry_delay(attempt)
@@ -518,7 +518,7 @@ class TestRetryDelayMonotonicity:
     @settings(max_examples=100)
     def test_delay_non_decreasing(self, attempt: int) -> None:
         """Each subsequent attempt has equal or greater delay."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore()
         d1 = baton.calculate_retry_delay(attempt)
@@ -543,7 +543,7 @@ class TestStateMappingRoundTrip:
     @settings(max_examples=20)
     def test_round_trip_preserves_checkpoint(self, status: str) -> None:
         """checkpoint_to_baton → baton_to_checkpoint recovers the original."""
-        from mozart.daemon.baton.adapter import (
+        from marianne.daemon.baton.adapter import (
             baton_to_checkpoint_status,
             checkpoint_to_baton_status,
         )
@@ -556,8 +556,8 @@ class TestStateMappingRoundTrip:
 
     def test_baton_to_checkpoint_is_total(self) -> None:
         """Every BatonSheetStatus has a checkpoint mapping (totality)."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
-        from mozart.daemon.baton.state import BatonSheetStatus
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.state import BatonSheetStatus
 
         for status in BatonSheetStatus:
             result = baton_to_checkpoint_status(status)
@@ -583,7 +583,7 @@ class TestStaggerDelayBounds:
         """Values outside [0, 5000] are rejected; valid values accepted."""
         from pydantic import ValidationError
 
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         if 0 <= value <= 5000:
             config = ParallelConfig(stagger_delay_ms=value)
@@ -605,9 +605,9 @@ class TestRateLimitAutoResumeTimer:
     @settings(max_examples=50)
     def test_timer_scheduled_when_available(self, wait_seconds: float) -> None:
         """When a timer wheel exists, a RateLimitExpired event is scheduled."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import RateLimitExpired, RateLimitHit
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import RateLimitExpired, RateLimitHit
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         mock_timer = MagicMock(spec=["schedule"])
         baton = BatonCore(timer=mock_timer)
@@ -634,9 +634,9 @@ class TestRateLimitAutoResumeTimer:
 
     def test_no_timer_no_crash(self) -> None:
         """When no timer wheel, rate limit handling still works without crash."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import RateLimitHit
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import RateLimitHit
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore(timer=None)
         baton.register_instrument("inst")
@@ -676,8 +676,8 @@ class TestRecordAttemptBudget:
         cost: float, duration: float,
     ) -> None:
         """Only failed, non-rate-limited attempts increment normal_attempts."""
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.state import SheetExecutionState
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.state import SheetExecutionState
 
         sheet = SheetExecutionState(
             sheet_num=1, instrument_name="inst",
@@ -724,9 +724,9 @@ class TestF018NoValidationGuard:
     @settings(max_examples=100)
     def test_no_validation_success_completes(self, pass_rate: float) -> None:
         """The F-018 guard ensures no-validation successes complete."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         sheet = SheetExecutionState(
@@ -765,9 +765,9 @@ class TestTerminalStateResistance:
     @settings(max_examples=20)
     def test_attempt_result_terminal_noop(self, terminal_status: str) -> None:
         """_handle_attempt_result ignores terminal sheets."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         baton_status = BatonSheetStatus(terminal_status)
@@ -789,9 +789,9 @@ class TestTerminalStateResistance:
     @settings(max_examples=20)
     def test_sheet_skipped_terminal_noop(self, terminal_status: str) -> None:
         """_handle_sheet_skipped ignores terminal sheets."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import SheetSkipped
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import SheetSkipped
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         baton_status = BatonSheetStatus(terminal_status)
@@ -811,9 +811,9 @@ class TestTerminalStateResistance:
     @settings(max_examples=20)
     def test_rate_limit_hit_terminal_noop(self, terminal_status: str) -> None:
         """_handle_rate_limit_hit never regresses terminal sheets."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import RateLimitHit
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import RateLimitHit
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         baton_status = BatonSheetStatus(terminal_status)
@@ -849,9 +849,9 @@ class TestDispatchFailureGuarantee:
         self, sheet_num: int, attempt_count: int
     ) -> None:
         """_send_dispatch_failure always produces a SheetAttemptResult with success=False."""
-        from mozart.daemon.baton.adapter import BatonAdapter
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.state import SheetExecutionState
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.state import SheetExecutionState
 
         # Create a minimal adapter with a mock baton
         mock_baton = MagicMock()
@@ -895,8 +895,8 @@ class TestClearRateLimitIdempotency:
     @settings(max_examples=20)
     def test_double_clear_returns_zero(self, n_clears: int) -> None:
         """After clearing, subsequent clears return 0."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import SheetExecutionState
 
         baton = BatonCore()
         inst = baton.register_instrument("inst")
@@ -919,7 +919,7 @@ class TestClearRateLimitIdempotency:
 
     def test_clear_all_idempotent(self) -> None:
         """Clearing all when none are limited returns 0."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore()
         baton.register_instrument("a")

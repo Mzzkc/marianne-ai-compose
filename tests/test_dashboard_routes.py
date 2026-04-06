@@ -11,11 +11,11 @@ _FIXED_TIME = datetime(2024, 1, 15, 12, 0, 0)
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.dashboard.app import create_app
-from mozart.dashboard.routes.jobs import JobActionResponse, StartJobRequest
-from mozart.dashboard.services.job_control import JobActionResult, JobStartResult
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.dashboard.app import create_app
+from marianne.dashboard.routes.jobs import JobActionResponse, StartJobRequest
+from marianne.dashboard.services.job_control import JobActionResult, JobStartResult
+from marianne.state.json_backend import JsonStateBackend
 
 
 @pytest.fixture
@@ -125,7 +125,7 @@ class TestJobRoutes:
     def test_start_job_with_config_content(self, client, sample_config_yaml):
         """Test starting job with inline config content."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.start_job'
+            'marianne.dashboard.services.job_control.JobControlService.start_job'
         ) as mock_start:
             mock_start.return_value = JobStartResult(
                 job_id="test-123",
@@ -168,7 +168,7 @@ class TestJobRoutes:
         config_file.write_text(sample_config_yaml)
 
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.start_job'
+            'marianne.dashboard.services.job_control.JobControlService.start_job'
         ) as mock_start:
             mock_start.return_value = JobStartResult(
                 job_id="test-456",
@@ -215,7 +215,7 @@ class TestJobRoutes:
     def test_start_job_file_not_found(self, client):
         """Test file not found error."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.start_job'
+            'marianne.dashboard.services.job_control.JobControlService.start_job'
         ) as mock_start:
             mock_start.side_effect = FileNotFoundError("Config file not found: /nonexistent.yaml")
 
@@ -229,7 +229,7 @@ class TestJobRoutes:
     def test_start_job_runtime_error(self, client, sample_config_yaml):
         """Test runtime error during job start."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.start_job'
+            'marianne.dashboard.services.job_control.JobControlService.start_job'
         ) as mock_start:
             mock_start.side_effect = RuntimeError("Failed to start job: Permission denied")
 
@@ -243,7 +243,7 @@ class TestJobRoutes:
     def test_pause_job_success(self, client):
         """Test successful job pause."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.pause_job'
+            'marianne.dashboard.services.job_control.JobControlService.pause_job'
         ) as mock_pause:
             mock_pause.return_value = JobActionResult(
                 success=True,
@@ -264,7 +264,7 @@ class TestJobRoutes:
     def test_pause_job_not_found(self, client):
         """Test pausing non-existent job."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.pause_job'
+            'marianne.dashboard.services.job_control.JobControlService.pause_job'
         ) as mock_pause:
             mock_pause.return_value = JobActionResult(
                 success=False,
@@ -281,7 +281,7 @@ class TestJobRoutes:
     def test_resume_job_success(self, client):
         """Test successful job resume."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.resume_job'
+            'marianne.dashboard.services.job_control.JobControlService.resume_job'
         ) as mock_resume:
             mock_resume.return_value = JobActionResult(
                 success=True,
@@ -300,7 +300,7 @@ class TestJobRoutes:
     def test_cancel_job_success(self, client):
         """Test successful job cancellation."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.cancel_job'
+            'marianne.dashboard.services.job_control.JobControlService.cancel_job'
         ) as mock_cancel:
             mock_cancel.return_value = JobActionResult(
                 success=True,
@@ -319,7 +319,7 @@ class TestJobRoutes:
     def test_delete_job_success(self, client):
         """Test successful job deletion."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.delete_job'
+            'marianne.dashboard.services.job_control.JobControlService.delete_job'
         ) as mock_delete:
             mock_delete.return_value = True
 
@@ -334,7 +334,7 @@ class TestJobRoutes:
     def test_delete_job_not_found(self, client):
         """Test deleting non-existent job."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.delete_job'
+            'marianne.dashboard.services.job_control.JobControlService.delete_job'
         ) as mock_delete:
             mock_delete.return_value = False
 
@@ -465,7 +465,7 @@ class TestCoreReadRoutes:
 
     def test_get_job_status(self, client, app):
         """Test getting job status."""
-        from mozart.core.checkpoint import SheetState, SheetStatus
+        from marianne.core.checkpoint import SheetState, SheetStatus
 
         backend = app.state.backend
         state = CheckpointState(
@@ -526,7 +526,7 @@ class TestArtifactRoutes:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/artifacts")
@@ -563,7 +563,7 @@ class TestArtifactRoutes:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/artifacts?recursive=false")
@@ -578,7 +578,7 @@ class TestArtifactRoutes:
 
     def test_list_artifacts_job_not_found(self, client):
         """Test listing artifacts for non-existent job."""
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=None)
 
             response = client.get("/api/jobs/nonexistent/artifacts")
@@ -598,7 +598,7 @@ class TestArtifactRoutes:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/artifacts")
@@ -624,7 +624,7 @@ class TestArtifactRoutes:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/artifacts/test.txt")
@@ -650,7 +650,7 @@ class TestArtifactRoutes:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/artifacts/test.txt?download=true")
@@ -674,7 +674,7 @@ class TestArtifactRoutes:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/artifacts/nonexistent.txt")
@@ -697,7 +697,7 @@ class TestArtifactRoutes:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             # URL-encode the path traversal to bypass ASGI normalization
@@ -712,7 +712,7 @@ class TestStreamRoutes:
 
     def test_stream_job_status_job_not_found(self, client):
         """Test streaming status for non-existent job."""
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=None)
 
             response = client.get("/api/jobs/nonexistent/stream")
@@ -722,7 +722,7 @@ class TestStreamRoutes:
 
     def test_stream_job_status_invalid_poll_interval(self, client, sample_job_state):
         """Test streaming with invalid poll interval."""
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=sample_job_state)
 
             response = client.get("/api/jobs/test-123/stream?poll_interval=50")
@@ -732,7 +732,7 @@ class TestStreamRoutes:
 
     def test_stream_logs_invalid_tail_lines(self, client, sample_job_state):
         """Test log streaming with invalid tail_lines."""
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=sample_job_state)
 
             response = client.get("/api/jobs/test-123/logs?tail_lines=2000")
@@ -758,7 +758,7 @@ class TestStreamRoutes:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/logs/static")
@@ -786,7 +786,7 @@ class TestStreamRoutes:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/logs/info")

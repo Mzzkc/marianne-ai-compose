@@ -22,8 +22,8 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from mozart.learning.patterns import PatternType
-from mozart.learning.store.models import QuarantineStatus
+from marianne.learning.patterns import PatternType
+from marianne.learning.store.models import QuarantineStatus
 
 
 class TestPatternTypeCase:
@@ -33,10 +33,10 @@ class TestPatternTypeCase:
         """Verify that PatternType.SEMANTIC_INSIGHT.value is lowercase."""
         assert PatternType.SEMANTIC_INSIGHT.value == "semantic_insight"
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_export_uses_enum_value_not_uppercase_string(self, mock_store_factory):
         """Export should use PatternType.SEMANTIC_INSIGHT.value, not 'SEMANTIC_INSIGHT'."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         mock_store.get_patterns.return_value = []
@@ -54,7 +54,7 @@ class TestPatternTypeCase:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
+        with patch("marianne.cli.commands.learning._export.console"):
             learning_export(output_dir="/tmp/test-export")
 
         # Verify get_patterns was called with lowercase pattern type
@@ -91,10 +91,10 @@ class TestPendingPatternFiltering:
         p.context_tags = []
         return p
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_include_pending_true_exports_pending_patterns(self, mock_store_factory):
         """When include_pending=True (default), PENDING patterns should be exported."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         patterns = [
@@ -120,8 +120,8 @@ class TestPendingPatternFiltering:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
-            with patch("mozart.cli.commands.learning._export._write_file") as mock_write:
+        with patch("marianne.cli.commands.learning._export.console"):
+            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
                 learning_export(output_dir="/tmp/test", include_pending=True)
 
                 # Check semantic-insights.md was written with patterns
@@ -135,10 +135,10 @@ class TestPendingPatternFiltering:
                 assert "Pattern 1" in content
                 assert "Pattern 2" in content
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_include_pending_false_excludes_pending_patterns(self, mock_store_factory):
         """When include_pending=False, PENDING patterns should be filtered out."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         patterns = [
@@ -164,8 +164,8 @@ class TestPendingPatternFiltering:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
-            with patch("mozart.cli.commands.learning._export._write_file") as mock_write:
+        with patch("marianne.cli.commands.learning._export.console"):
+            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
                 learning_export(output_dir="/tmp/test", include_pending=False)
 
                 # Check semantic-insights.md shows no patterns
@@ -202,12 +202,12 @@ class TestEffectivenessFiltering:
         p.context_tags = []
         return p
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_min_effectiveness_filters_low_effectiveness_patterns(
         self, mock_store_factory
     ):
         """Patterns below min_effectiveness should be filtered out."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         patterns = [
@@ -230,8 +230,8 @@ class TestEffectivenessFiltering:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
-            with patch("mozart.cli.commands.learning._export._write_file") as mock_write:
+        with patch("marianne.cli.commands.learning._export.console"):
+            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
                 learning_export(output_dir="/tmp/test", min_effectiveness=0.6)
 
                 # Check semantic-insights.md only has patterns >= 0.6
@@ -246,10 +246,10 @@ class TestEffectivenessFiltering:
                 assert "Pattern p2" in content  # 0.6 >= 0.6
                 assert "Pattern p3" in content  # 0.8 >= 0.6
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_min_effectiveness_zero_includes_all_patterns(self, mock_store_factory):
         """When min_effectiveness=0.0 (default), all patterns should be included."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         patterns = [
@@ -272,8 +272,8 @@ class TestEffectivenessFiltering:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
-            with patch("mozart.cli.commands.learning._export._write_file") as mock_write:
+        with patch("marianne.cli.commands.learning._export.console"):
+            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
                 learning_export(output_dir="/tmp/test", min_effectiveness=0.0)
 
                 # Check semantic-insights.md has all patterns
@@ -292,10 +292,10 @@ class TestEffectivenessFiltering:
 class TestFilterDocumentation:
     """Test that export file headers document applied filters."""
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_no_filters_shows_no_filters_applied(self, mock_store_factory):
         """When no filters are applied, header should say so."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         mock_store.get_patterns.return_value = []
@@ -313,8 +313,8 @@ class TestFilterDocumentation:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
-            with patch("mozart.cli.commands.learning._export._write_file") as mock_write:
+        with patch("marianne.cli.commands.learning._export.console"):
+            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
                 learning_export(
                     output_dir="/tmp/test", include_pending=True, min_effectiveness=0.0
                 )
@@ -329,10 +329,10 @@ class TestFilterDocumentation:
                 content = semantic_calls[0][0][1]
                 assert "No filters applied" in content
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_pending_filter_documented_in_header(self, mock_store_factory):
         """When --no-include-pending is used, header should document it."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         mock_store.get_patterns.return_value = []
@@ -350,8 +350,8 @@ class TestFilterDocumentation:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
-            with patch("mozart.cli.commands.learning._export._write_file") as mock_write:
+        with patch("marianne.cli.commands.learning._export.console"):
+            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
                 learning_export(output_dir="/tmp/test", include_pending=False)
 
                 semantic_calls = [
@@ -363,10 +363,10 @@ class TestFilterDocumentation:
                 content = semantic_calls[0][0][1]
                 assert "excluding PENDING patterns" in content
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_effectiveness_filter_documented_in_header(self, mock_store_factory):
         """When --min-effectiveness is set, header should document it."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         mock_store.get_patterns.return_value = []
@@ -384,8 +384,8 @@ class TestFilterDocumentation:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
-            with patch("mozart.cli.commands.learning._export._write_file") as mock_write:
+        with patch("marianne.cli.commands.learning._export.console"):
+            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
                 learning_export(output_dir="/tmp/test", min_effectiveness=0.6)
 
                 semantic_calls = [
@@ -423,10 +423,10 @@ class TestPatternHealthPendingReporting:
         p.context_tags = []
         return p
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_pending_patterns_shown_in_health_report(self, mock_store_factory):
         """Pattern-health.md should have a 'Pending Validation Patterns' section."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         patterns = [
@@ -452,8 +452,8 @@ class TestPatternHealthPendingReporting:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
-            with patch("mozart.cli.commands.learning._export._write_file") as mock_write:
+        with patch("marianne.cli.commands.learning._export.console"):
+            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
                 learning_export(output_dir="/tmp/test")
 
                 # Find pattern-health.md call
@@ -471,10 +471,10 @@ class TestPatternHealthPendingReporting:
                 assert "Pattern p1" in content
                 assert "Pattern p2" in content
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_quarantine_status_enum_comparison(self, mock_store_factory):
         """Pattern health should compare against QuarantineStatus enum, not strings."""
-        from mozart.cli.commands.learning._export import _format_markdown_health
+        from marianne.cli.commands.learning._export import _format_markdown_health
 
         patterns = [
             self._create_mock_pattern("p1", QuarantineStatus.PENDING),
@@ -511,10 +511,10 @@ class TestFilterCombinations:
         p.context_tags = []
         return p
 
-    @patch("mozart.learning.global_store.get_global_store")
+    @patch("marianne.learning.global_store.get_global_store")
     def test_both_filters_applied_together(self, mock_store_factory):
         """Both --no-include-pending and --min-effectiveness should filter correctly."""
-        from mozart.cli.commands.learning._export import learning_export
+        from marianne.cli.commands.learning._export import learning_export
 
         mock_store = Mock()
         patterns = [
@@ -537,8 +537,8 @@ class TestFilterCombinations:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("mozart.cli.commands.learning._export.console"):
-            with patch("mozart.cli.commands.learning._export._write_file") as mock_write:
+        with patch("marianne.cli.commands.learning._export.console"):
+            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
                 learning_export(
                     output_dir="/tmp/test",
                     include_pending=False,

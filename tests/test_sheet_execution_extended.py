@@ -27,22 +27,22 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.checkpoint import (
+from marianne.backends.base import ExecutionResult
+from marianne.core.checkpoint import (
     CheckpointState,
     OutcomeCategory,
     SheetState,
 )
-from mozart.core.config import JobConfig
-from mozart.execution.escalation import ConsoleEscalationHandler, EscalationResponse
-from mozart.execution.preflight import PreflightResult, PromptMetrics
-from mozart.execution.runner.models import (
+from marianne.core.config import JobConfig
+from marianne.execution.escalation import ConsoleEscalationHandler, EscalationResponse
+from marianne.execution.preflight import PreflightResult, PromptMetrics
+from marianne.execution.runner.models import (
     FatalError,
     GracefulShutdownError,
     SheetExecutionMode,
     ValidationSuccessContext,
 )
-from mozart.prompts.templating import PromptBuilder
+from marianne.prompts.templating import PromptBuilder
 
 # ---------------------------------------------------------------------------
 # Fixtures (reusing the pattern from test_sheet_execution.py)
@@ -85,10 +85,10 @@ class _MockMixin:
     def __init__(self, config: JobConfig) -> None:
         from rich.console import Console
 
-        from mozart.core.errors import ErrorClassifier
-        from mozart.core.logging import get_logger
-        from mozart.execution.preflight import PreflightChecker
-        from mozart.execution.retry_strategy import AdaptiveRetryStrategy, RetryStrategyConfig
+        from marianne.core.errors import ErrorClassifier
+        from marianne.core.logging import get_logger
+        from marianne.execution.preflight import PreflightChecker
+        from marianne.execution.retry_strategy import AdaptiveRetryStrategy, RetryStrategyConfig
 
         self.config = config
         self.backend = MagicMock()
@@ -171,9 +171,9 @@ class _MockMixin:
         pass
 
 
-from mozart.execution.runner.context import ContextBuildingMixin
-from mozart.execution.runner.recovery import RecoveryMixin
-from mozart.execution.runner.sheet import SheetExecutionMixin
+from marianne.execution.runner.context import ContextBuildingMixin
+from marianne.execution.runner.recovery import RecoveryMixin
+from marianne.execution.runner.sheet import SheetExecutionMixin
 
 
 class _TestableSheetMixin(_MockMixin, SheetExecutionMixin, ContextBuildingMixin, RecoveryMixin):

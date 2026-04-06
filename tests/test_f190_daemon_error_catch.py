@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.daemon.exceptions import DaemonError, MethodNotFoundError
+from marianne.cli import app
+from marianne.daemon.exceptions import DaemonError, MethodNotFoundError
 
 runner = CliRunner()
 
@@ -30,7 +30,7 @@ class TestDiagnoseErrorsDaemonErrorCatch:
         """MethodNotFoundError from try_daemon_route produces clean error,
         not a raw traceback."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             side_effect=MethodNotFoundError(
                 "Method 'job.errors' not found on conductor. "
@@ -46,7 +46,7 @@ class TestDiagnoseErrorsDaemonErrorCatch:
     def test_generic_daemon_error_on_errors(self) -> None:
         """Generic DaemonError produces clean error output."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             side_effect=DaemonError("Connection lost to conductor"),
         ):
@@ -61,7 +61,7 @@ class TestDiagnoseDaemonErrorCatch:
     def test_method_not_found_on_diagnose(self) -> None:
         """MethodNotFoundError from try_daemon_route produces clean error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             side_effect=MethodNotFoundError(
                 "Method 'job.diagnose' not found"
@@ -75,7 +75,7 @@ class TestDiagnoseDaemonErrorCatch:
     def test_generic_daemon_error_on_diagnose(self) -> None:
         """Generic DaemonError produces clean error output."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             side_effect=DaemonError("Conductor internal error"),
         ):
@@ -90,7 +90,7 @@ class TestHistoryDaemonErrorCatch:
     def test_method_not_found_on_history(self) -> None:
         """MethodNotFoundError from try_daemon_route produces clean error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             side_effect=MethodNotFoundError(
                 "Method 'job.history' not found"
@@ -108,7 +108,7 @@ class TestRecoverDaemonErrorCatch:
     def test_method_not_found_on_recover(self) -> None:
         """MethodNotFoundError from try_daemon_route produces clean error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             side_effect=MethodNotFoundError(
                 "Method 'job.recover' not found"
@@ -122,7 +122,7 @@ class TestRecoverDaemonErrorCatch:
     def test_generic_daemon_error_on_recover(self) -> None:
         """Generic DaemonError produces clean error output."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             side_effect=DaemonError("Conductor busy"),
         ):

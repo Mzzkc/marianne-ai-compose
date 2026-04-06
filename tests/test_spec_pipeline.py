@@ -24,9 +24,9 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.config.spec import SpecCorpusConfig, SpecFragment
-from mozart.prompts.templating import PromptBuilder
-from mozart.spec.loader import SpecCorpusLoader
+from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
+from marianne.prompts.templating import PromptBuilder
+from marianne.spec.loader import SpecCorpusLoader
 
 
 # =============================================================================

@@ -8,11 +8,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
-_GS_PATCH = "mozart.learning.global_store.get_global_store"
+_GS_PATCH = "marianne.learning.global_store.get_global_store"
 
 
 def _make_pattern(

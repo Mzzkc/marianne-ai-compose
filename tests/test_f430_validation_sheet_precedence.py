@@ -8,7 +8,7 @@ This test pins the behavior so the docstring/code stay in sync.
 
 from __future__ import annotations
 
-from mozart.core.config.execution import ValidationRule
+from marianne.core.config.execution import ValidationRule
 
 
 class TestSheetConditionPrecedence:

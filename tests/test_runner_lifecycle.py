@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.execution.runner.lifecycle import LifecycleMixin
-from mozart.execution.runner.models import FatalError, RunSummary
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.execution.runner.lifecycle import LifecycleMixin
+from marianne.execution.runner.models import FatalError, RunSummary
 
 
 # ─── Mock Runner ─────────────────────────────────────────────────────

@@ -15,14 +15,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.errors import (
+from marianne.core.errors import (
     ClassificationResult,
     ClassifiedError,
     ErrorCategory,
     ErrorClassifier,
     ErrorCode,
 )
-from mozart.learning.error_hooks import (
+from marianne.learning.error_hooks import (
     ErrorLearningConfig,
     ErrorLearningContext,
     ErrorLearningHooks,

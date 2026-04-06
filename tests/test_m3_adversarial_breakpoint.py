@@ -24,13 +24,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.events import (
     RateLimitExpired,
     RateLimitHit,
     SheetAttemptResult,
 )
-from mozart.daemon.baton.core import _JobRecord
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.core import _JobRecord
+from marianne.daemon.baton.state import (
     BatonSheetStatus,
     InstrumentState,
     SheetExecutionState,
@@ -117,7 +117,7 @@ class TestDispatchGuardExceptionTaxonomy:
 
     def test_send_dispatch_failure_attempt_math_zero_attempts(self) -> None:
         """When state has zero attempts, failure event should be attempt 1."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
         baton.inbox = asyncio.Queue()
@@ -135,7 +135,7 @@ class TestDispatchGuardExceptionTaxonomy:
 
     def test_send_dispatch_failure_attempt_math_after_retries(self) -> None:
         """After 3 normal + 2 completion attempts, failure should be attempt 6."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
         baton.inbox = asyncio.Queue()
@@ -152,7 +152,7 @@ class TestDispatchGuardExceptionTaxonomy:
 
     def test_send_dispatch_failure_no_state(self) -> None:
         """When state is None (sheet not found), attempt defaults to 1."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
         baton.inbox = asyncio.Queue()
@@ -168,7 +168,7 @@ class TestDispatchGuardExceptionTaxonomy:
 
     def test_dispatch_failure_error_classification_is_e505(self) -> None:
         """All dispatch failures must use E505 classification."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
         baton.inbox = asyncio.Queue()
@@ -186,7 +186,7 @@ class TestDispatchGuardExceptionTaxonomy:
 
     def test_dispatch_failure_preserves_job_and_sheet_ids(self) -> None:
         """Failure event must carry the correct job_id and sheet_num."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
         baton.inbox = asyncio.Queue()
@@ -222,7 +222,7 @@ class TestRateLimitAutoResume:
         The timer scheduling is guarded by `if self._timer is not None`.
         Without this guard, NoneType.schedule() raises AttributeError.
         """
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._instruments = {"claude-code": _make_instrument()}
@@ -251,7 +251,7 @@ class TestRateLimitAutoResume:
         still be scheduled (not skipped) because it's the only mechanism
         to move WAITING sheets back to PENDING.
         """
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._instruments = {"claude-code": _make_instrument()}
@@ -278,7 +278,7 @@ class TestRateLimitAutoResume:
 
     def test_rate_limit_expired_clears_instrument_state(self) -> None:
         """RateLimitExpired must clear rate_limited flag AND move sheets."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -301,7 +301,7 @@ class TestRateLimitAutoResume:
 
     def test_rate_limit_expired_does_not_move_non_waiting_sheets(self) -> None:
         """Only WAITING sheets move to PENDING. Others are untouched."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -326,7 +326,7 @@ class TestRateLimitAutoResume:
 
     def test_rate_limit_expired_unknown_instrument_no_crash(self) -> None:
         """Expiry for an instrument that was never registered should not crash."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -340,7 +340,7 @@ class TestRateLimitAutoResume:
 
     def test_rate_limit_cross_instrument_isolation(self) -> None:
         """Rate limit on one instrument must not affect another's sheets."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -382,7 +382,7 @@ class TestModelOverrideAdversarial:
 
     def test_apply_overrides_empty_dict_is_noop(self) -> None:
         """Empty overrides dict must not set _has_overrides flag."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = MagicMock()
         profile.default_model = "original"
@@ -400,7 +400,7 @@ class TestModelOverrideAdversarial:
 
     def test_apply_overrides_saves_original(self) -> None:
         """apply_overrides must save original model before overwriting."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         backend = PluginCliBackend.__new__(PluginCliBackend)
         backend._model = "opus-4"
@@ -415,7 +415,7 @@ class TestModelOverrideAdversarial:
 
     def test_clear_overrides_restores_original(self) -> None:
         """clear_overrides must restore the pre-override model."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         backend = PluginCliBackend.__new__(PluginCliBackend)
         backend._model = "sonnet-4"
@@ -430,7 +430,7 @@ class TestModelOverrideAdversarial:
 
     def test_double_clear_is_safe(self) -> None:
         """Calling clear_overrides twice must not corrupt state."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         backend = PluginCliBackend.__new__(PluginCliBackend)
         backend._model = "sonnet-4"
@@ -452,7 +452,7 @@ class TestModelOverrideAdversarial:
         for the entire apply→execute→clear window. Without it, this happens.
         Document the behavior.
         """
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         backend = PluginCliBackend.__new__(PluginCliBackend)
         backend._model = "opus-4"
@@ -473,7 +473,7 @@ class TestModelOverrideAdversarial:
 
     def test_apply_overrides_coerces_non_string_model(self) -> None:
         """Model value should be coerced to string via str()."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         backend = PluginCliBackend.__new__(PluginCliBackend)
         backend._model = "opus-4"
@@ -492,7 +492,7 @@ class TestModelOverrideAdversarial:
         is not None before passing to acquire(). But if it leaks through,
         the backend converts it to the string "None".
         """
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         backend = PluginCliBackend.__new__(PluginCliBackend)
         backend._model = "opus-4"
@@ -506,7 +506,7 @@ class TestModelOverrideAdversarial:
     @pytest.mark.asyncio
     async def test_backend_pool_release_clears_overrides(self) -> None:
         """BackendPool.release() must call clear_overrides() before pooling."""
-        from mozart.daemon.baton.backend_pool import BackendPool
+        from marianne.daemon.baton.backend_pool import BackendPool
 
         registry = MagicMock()
         profile = MagicMock()
@@ -539,7 +539,7 @@ class TestCompletedNewWork:
 
     def test_no_completed_sheets(self) -> None:
         """All FAILED/CANCELLED sheets → has_completed_sheets returns False."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         baton = MagicMock()
@@ -555,7 +555,7 @@ class TestCompletedNewWork:
 
     def test_one_completed_among_failures(self) -> None:
         """One COMPLETED sheet among FAILEDs → returns True."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         baton = MagicMock()
@@ -572,7 +572,7 @@ class TestCompletedNewWork:
 
     def test_skipped_does_not_count_as_completed(self) -> None:
         """SKIPPED is terminal but NOT COMPLETED. Must return False."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         baton = MagicMock()
@@ -588,7 +588,7 @@ class TestCompletedNewWork:
 
     def test_missing_job_returns_false(self) -> None:
         """Job not in baton's registry → False (not KeyError)."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         baton = MagicMock()
@@ -599,7 +599,7 @@ class TestCompletedNewWork:
 
     def test_empty_sheets_returns_false(self) -> None:
         """Job with zero sheets → False."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         baton = MagicMock()
@@ -623,7 +623,7 @@ class TestSemanticContextTags:
 
     def test_empty_validations_produce_broad_tags_only(self) -> None:
         """Config with no validations should still produce 3 broad tags."""
-        from mozart.execution.runner.patterns import build_semantic_context_tags
+        from marianne.execution.runner.patterns import build_semantic_context_tags
 
         config = MagicMock()
         config.validations = []
@@ -637,7 +637,7 @@ class TestSemanticContextTags:
 
     def test_validation_types_become_tags(self) -> None:
         """Each validation rule type becomes a validation:TYPE tag."""
-        from mozart.execution.runner.patterns import build_semantic_context_tags
+        from marianne.execution.runner.patterns import build_semantic_context_tags
 
         rule1 = MagicMock()
         rule1.type = "file_exists"
@@ -654,7 +654,7 @@ class TestSemanticContextTags:
 
     def test_duplicate_validation_types_deduplicated(self) -> None:
         """Two rules with same type should produce only one tag."""
-        from mozart.execution.runner.patterns import build_semantic_context_tags
+        from marianne.execution.runner.patterns import build_semantic_context_tags
 
         rule1 = MagicMock()
         rule1.type = "file_exists"
@@ -676,7 +676,7 @@ class TestSemanticContextTags:
         The stored format is "validation:TYPE", "retry:effective", etc.
         NOT "validation_TYPE" or "validation-TYPE" or "validation TYPE".
         """
-        from mozart.execution.runner.patterns import build_semantic_context_tags
+        from marianne.execution.runner.patterns import build_semantic_context_tags
 
         rule = MagicMock()
         rule.type = "contains_text"
@@ -697,7 +697,7 @@ class TestSemanticContextTags:
 
         This was the entire root cause of F-009.
         """
-        from mozart.execution.runner.patterns import build_semantic_context_tags
+        from marianne.execution.runner.patterns import build_semantic_context_tags
 
         rule = MagicMock()
         rule.type = "file_exists"
@@ -712,7 +712,7 @@ class TestSemanticContextTags:
 
     def test_broad_tags_always_present(self) -> None:
         """Broad category tags are always present regardless of validation config."""
-        from mozart.execution.runner.patterns import build_semantic_context_tags
+        from marianne.execution.runner.patterns import build_semantic_context_tags
 
         config = MagicMock()
         config.validations = []
@@ -736,7 +736,7 @@ class TestPromptRendererWiring:
 
     def test_register_job_no_prompt_config(self) -> None:
         """When prompt_config=None, no renderer is created (but job registers)."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         adapter._baton = MagicMock()
@@ -761,7 +761,7 @@ class TestPromptRendererWiring:
 
     def test_register_job_with_prompt_config_creates_renderer(self) -> None:
         """When prompt_config is provided, renderer is created and stored."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         adapter._baton = MagicMock()
@@ -782,11 +782,11 @@ class TestPromptRendererWiring:
 
         prompt_config = MagicMock()
 
-        with patch("mozart.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls:
+        with patch("marianne.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls:
             # Patch inside the lazy import path
             with patch.dict(
                 "sys.modules",
-                {"mozart.daemon.baton.prompt": MagicMock(PromptRenderer=mock_cls)},
+                {"marianne.daemon.baton.prompt": MagicMock(PromptRenderer=mock_cls)},
             ):
                 adapter.register_job(
                     job_id="test-job",
@@ -803,7 +803,7 @@ class TestPromptRendererWiring:
 
     def test_total_stages_single_movement(self) -> None:
         """All sheets in same movement → total_stages = 1."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         adapter._baton = MagicMock()
@@ -820,10 +820,10 @@ class TestPromptRendererWiring:
             s.instrument_name = "claude-code"
             sheets.append(s)
 
-        with patch("mozart.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls:
+        with patch("marianne.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls:
             with patch.dict(
                 "sys.modules",
-                {"mozart.daemon.baton.prompt": MagicMock(PromptRenderer=mock_cls)},
+                {"marianne.daemon.baton.prompt": MagicMock(PromptRenderer=mock_cls)},
             ):
                 adapter.register_job(
                     job_id="test-job",
@@ -840,7 +840,7 @@ class TestPromptRendererWiring:
         The code uses `len({s.movement for s in sheets}) or 1`. If all
         movements are None, the set has 1 element ({None}) → total_stages=1.
         """
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         adapter._baton = MagicMock()
@@ -854,10 +854,10 @@ class TestPromptRendererWiring:
         sheet.movement = None
         sheet.instrument_name = "claude-code"
 
-        with patch("mozart.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls:
+        with patch("marianne.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls:
             with patch.dict(
                 "sys.modules",
-                {"mozart.daemon.baton.prompt": MagicMock(PromptRenderer=mock_cls)},
+                {"marianne.daemon.baton.prompt": MagicMock(PromptRenderer=mock_cls)},
             ):
                 adapter.register_job(
                     job_id="test-job",
@@ -884,7 +884,7 @@ class TestClearRateLimits:
 
     def test_clear_specific_instrument(self) -> None:
         """Clearing one instrument leaves others rate-limited."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -902,7 +902,7 @@ class TestClearRateLimits:
 
     def test_clear_all_instruments(self) -> None:
         """Clearing with instrument=None clears ALL rate-limited instruments."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -925,7 +925,7 @@ class TestClearRateLimits:
         to clear-all when instrument was a truthy string not in the dict.
         Fixed in core.py clear_instrument_rate_limit().
         """
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -942,7 +942,7 @@ class TestClearRateLimits:
 
     def test_clear_moves_waiting_sheets_to_pending(self) -> None:
         """WAITING sheets on cleared instrument must move to PENDING."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -967,7 +967,7 @@ class TestClearRateLimits:
 
     def test_clear_not_rate_limited_returns_zero(self) -> None:
         """Clearing an instrument that isn't rate-limited returns 0."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -981,7 +981,7 @@ class TestClearRateLimits:
 
     def test_double_clear_is_idempotent(self) -> None:
         """Clearing twice should produce 0 on second call."""
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -1003,7 +1003,7 @@ class TestClearRateLimits:
         The code uses `if instrument:` — empty string is falsy,
         falls through to clear all. Same behavior as None.
         """
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -1029,14 +1029,14 @@ class TestStaggerDelayBoundary:
 
     def test_stagger_delay_zero_is_valid(self) -> None:
         """stagger_delay_ms=0 should be accepted (no delay)."""
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         config = ParallelConfig(stagger_delay_ms=0)
         assert config.stagger_delay_ms == 0
 
     def test_stagger_delay_max_boundary(self) -> None:
         """stagger_delay_ms=5000 should be accepted (max boundary)."""
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         config = ParallelConfig(stagger_delay_ms=5000)
         assert config.stagger_delay_ms == 5000
@@ -1045,7 +1045,7 @@ class TestStaggerDelayBoundary:
         """stagger_delay_ms > 5000 should be rejected by Pydantic validation."""
         from pydantic import ValidationError
 
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         with pytest.raises(ValidationError):
             ParallelConfig(stagger_delay_ms=5001)
@@ -1054,14 +1054,14 @@ class TestStaggerDelayBoundary:
         """Negative stagger_delay_ms should be rejected."""
         from pydantic import ValidationError
 
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         with pytest.raises(ValidationError):
             ParallelConfig(stagger_delay_ms=-1)
 
     def test_stagger_delay_default_is_zero(self) -> None:
         """Default stagger_delay_ms should be 0 (no delay)."""
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         config = ParallelConfig()
         assert config.stagger_delay_ms == 0
@@ -1100,7 +1100,7 @@ class TestTerminalStatusInvariants:
         Terminal sheets must be excluded. Already-WAITING sheets stay WAITING
         (they were already waiting for a rate limit).
         """
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -1156,7 +1156,7 @@ class TestTerminalStatusInvariants:
 
         Terminal sheets (even if instrument matches) must not be touched.
         """
-        from mozart.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.core import BatonCore
 
         baton = BatonCore.__new__(BatonCore)
         baton._state_dirty = False
@@ -1198,7 +1198,7 @@ class TestDispatchCallbackIntegration:
     @pytest.mark.asyncio
     async def test_dispatch_sheet_not_found_sends_failure(self) -> None:
         """Sheet not found in adapter registry → failure event in inbox."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         baton = MagicMock()
@@ -1217,7 +1217,7 @@ class TestDispatchCallbackIntegration:
     @pytest.mark.asyncio
     async def test_dispatch_no_backend_pool_sends_failure(self) -> None:
         """No backend pool → failure event in inbox."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         baton = MagicMock()
@@ -1245,7 +1245,7 @@ class TestDispatchCallbackIntegration:
     @pytest.mark.asyncio
     async def test_dispatch_backend_acquire_exception_sends_failure(self) -> None:
         """Backend acquisition raises → failure event in inbox."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         baton = MagicMock()
@@ -1278,7 +1278,7 @@ class TestDispatchCallbackIntegration:
     @pytest.mark.asyncio
     async def test_dispatch_runtime_error_sends_failure(self) -> None:
         """RuntimeError during acquire → failure event (not crash)."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter.__new__(BatonAdapter)
         baton = MagicMock()
@@ -1318,14 +1318,14 @@ class TestRateLimitWaitCap:
 
     def test_cap_constant_exists(self) -> None:
         """RESET_TIME_MAXIMUM_WAIT_SECONDS must exist and be 86400."""
-        from mozart.core.constants import RESET_TIME_MAXIMUM_WAIT_SECONDS
+        from marianne.core.constants import RESET_TIME_MAXIMUM_WAIT_SECONDS
 
         assert RESET_TIME_MAXIMUM_WAIT_SECONDS == 86400.0
 
     def test_clamp_wait_caps_extreme_values(self) -> None:
         """_clamp_wait must cap values exceeding the maximum."""
-        from mozart.core.constants import RESET_TIME_MAXIMUM_WAIT_SECONDS
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.constants import RESET_TIME_MAXIMUM_WAIT_SECONDS
+        from marianne.core.errors.classifier import ErrorClassifier
 
         # 114-year wait (the adversarial case from F-160)
         result = ErrorClassifier._clamp_wait(999_999 * 3600)
@@ -1338,8 +1338,8 @@ class TestRateLimitWaitCap:
         300s are clamped UP to the minimum. This is by design — very short
         waits suggest the API response is unreliable.
         """
-        from mozart.core.constants import RESET_TIME_MINIMUM_WAIT_SECONDS
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.constants import RESET_TIME_MINIMUM_WAIT_SECONDS
+        from marianne.core.errors.classifier import ErrorClassifier
 
         # Values above minimum should pass through
         assert ErrorClassifier._clamp_wait(3600.0) == 3600.0

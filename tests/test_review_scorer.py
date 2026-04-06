@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.review.scorer import (
+from marianne.review.scorer import (
     AIReviewResult,
     AIReviewer,
     GitDiffProvider,

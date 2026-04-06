@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.checkpoint import SheetState, SheetStatus
+from marianne.core.checkpoint import SheetState, SheetStatus
 
 
 # =========================================================================
@@ -35,7 +35,7 @@ class TestF077HookRestoration:
 
     @pytest.fixture
     def daemon_config(self, tmp_path: Path) -> Any:
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         return DaemonConfig(
             max_concurrent_jobs=2,
@@ -45,7 +45,7 @@ class TestF077HookRestoration:
 
     @pytest.fixture
     async def manager(self, daemon_config: Any) -> Any:
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         mgr = JobManager(daemon_config)
         await mgr._registry.open()
@@ -57,7 +57,7 @@ class TestF077HookRestoration:
         self, manager: Any, tmp_path: Path
     ) -> None:
         """After restart, hook_config should be loaded from the registry DB."""
-        from mozart.daemon.manager import DaemonJobStatus, JobMeta
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
 
         # Simulate a job submitted with hooks — write directly to registry
         job_id = "test-hook-job"
@@ -98,7 +98,7 @@ class TestF077HookRestoration:
         # Re-run just the restoration logic by calling start()
         # We need to be careful here — start() does more than just restore.
         # Let's directly test the restoration loop pattern.
-        from mozart.daemon.registry import JobRecord
+        from marianne.daemon.registry import JobRecord
 
         all_records = await manager._registry.list_jobs(limit=10_000)
         assert len(all_records) == 1

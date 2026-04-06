@@ -9,7 +9,7 @@ FIX-11d: mark_job_failed() clears PID (Batch 1 FIX-03)
 import os
 from pathlib import Path
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.checkpoint import CheckpointState, JobStatus
 
 
 class TestSuccessWithoutRetry:
@@ -169,7 +169,7 @@ class TestJsonBackendZombieDetection:
 
     async def test_json_backend_auto_recovers_zombie(self, tmp_path: Path) -> None:
         """JSON backend load() should auto-recover zombie state."""
-        from mozart.state.json_backend import JsonStateBackend
+        from marianne.state.json_backend import JsonStateBackend
 
         backend = JsonStateBackend(tmp_path)
 

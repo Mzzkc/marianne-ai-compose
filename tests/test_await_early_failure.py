@@ -40,10 +40,10 @@ class TestAwaitEarlyFailure:
         client = _make_client_mock([failure])
 
         with (
-            patch("mozart.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
-            patch("mozart.daemon.ipc.client.DaemonClient", return_value=client),
+            patch("marianne.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
+            patch("marianne.daemon.ipc.client.DaemonClient", return_value=client),
         ):
-            from mozart.cli.helpers import await_early_failure
+            from marianne.cli.helpers import await_early_failure
             result = await await_early_failure("test-job", timeout=1.0, poll_interval=0.05)
 
         assert result is not None
@@ -58,10 +58,10 @@ class TestAwaitEarlyFailure:
         client = _make_client_mock([running] * 50)
 
         with (
-            patch("mozart.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
-            patch("mozart.daemon.ipc.client.DaemonClient", return_value=client),
+            patch("marianne.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
+            patch("marianne.daemon.ipc.client.DaemonClient", return_value=client),
         ):
-            from mozart.cli.helpers import await_early_failure
+            from marianne.cli.helpers import await_early_failure
             result = await await_early_failure("test-job", timeout=0.2, poll_interval=0.05)
 
         assert result is None
@@ -73,10 +73,10 @@ class TestAwaitEarlyFailure:
         client = _make_client_mock([queued] * 50)
 
         with (
-            patch("mozart.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
-            patch("mozart.daemon.ipc.client.DaemonClient", return_value=client),
+            patch("marianne.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
+            patch("marianne.daemon.ipc.client.DaemonClient", return_value=client),
         ):
-            from mozart.cli.helpers import await_early_failure
+            from marianne.cli.helpers import await_early_failure
             result = await await_early_failure("test-job", timeout=0.2, poll_interval=0.05)
 
         assert result is None
@@ -88,10 +88,10 @@ class TestAwaitEarlyFailure:
         client.call = AsyncMock(side_effect=ConnectionError("refused"))
 
         with (
-            patch("mozart.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
-            patch("mozart.daemon.ipc.client.DaemonClient", return_value=client),
+            patch("marianne.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
+            patch("marianne.daemon.ipc.client.DaemonClient", return_value=client),
         ):
-            from mozart.cli.helpers import await_early_failure
+            from marianne.cli.helpers import await_early_failure
             result = await await_early_failure("test-job", timeout=0.5, poll_interval=0.05)
 
         assert result is None
@@ -100,10 +100,10 @@ class TestAwaitEarlyFailure:
     async def test_fails_open_on_import_error(self) -> None:
         """ImportError during lazy import -> returns None (fail open)."""
         with patch(
-            "mozart.daemon.detect._resolve_socket_path",
+            "marianne.daemon.detect._resolve_socket_path",
             side_effect=ImportError("no module"),
         ):
-            from mozart.cli.helpers import await_early_failure
+            from marianne.cli.helpers import await_early_failure
             result = await await_early_failure("test-job", timeout=0.2, poll_interval=0.05)
 
         assert result is None
@@ -118,10 +118,10 @@ class TestAwaitEarlyFailure:
         client = _make_client_mock(responses)
 
         with (
-            patch("mozart.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
-            patch("mozart.daemon.ipc.client.DaemonClient", return_value=client),
+            patch("marianne.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
+            patch("marianne.daemon.ipc.client.DaemonClient", return_value=client),
         ):
-            from mozart.cli.helpers import await_early_failure
+            from marianne.cli.helpers import await_early_failure
             result = await await_early_failure("test-job", timeout=2.0, poll_interval=0.05)
 
         assert result is not None
@@ -134,10 +134,10 @@ class TestAwaitEarlyFailure:
         client = _make_client_mock([cancelled])
 
         with (
-            patch("mozart.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
-            patch("mozart.daemon.ipc.client.DaemonClient", return_value=client),
+            patch("marianne.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
+            patch("marianne.daemon.ipc.client.DaemonClient", return_value=client),
         ):
-            from mozart.cli.helpers import await_early_failure
+            from marianne.cli.helpers import await_early_failure
             result = await await_early_failure("test-job", timeout=1.0, poll_interval=0.05)
 
         assert result is not None
@@ -150,10 +150,10 @@ class TestAwaitEarlyFailure:
         client = _make_client_mock([completed])
 
         with (
-            patch("mozart.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
-            patch("mozart.daemon.ipc.client.DaemonClient", return_value=client),
+            patch("marianne.daemon.detect._resolve_socket_path", return_value="/tmp/test.sock"),
+            patch("marianne.daemon.ipc.client.DaemonClient", return_value=client),
         ):
-            from mozart.cli.helpers import await_early_failure
+            from marianne.cli.helpers import await_early_failure
             result = await await_early_failure("test-job", timeout=1.0, poll_interval=0.05)
 
         assert result is not None
@@ -172,7 +172,7 @@ class TestRunCommandEarlyFailure:
         """submit=accepted + status=failed -> _try_daemon_submit raises Exit(1)."""
         import typer
 
-        from mozart.cli.commands.run import _try_daemon_submit
+        from marianne.cli.commands.run import _try_daemon_submit
 
         submit_result = {
             "status": "accepted",
@@ -186,17 +186,17 @@ class TestRunCommandEarlyFailure:
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(True, submit_result),
             ),
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.cli.commands.run.await_early_failure",
+                "marianne.cli.commands.run.await_early_failure",
                 new_callable=AsyncMock,
                 return_value=failure_result,
             ),
@@ -217,7 +217,7 @@ class TestRunCommandEarlyFailure:
     @pytest.mark.asyncio
     async def test_cli_run_succeeds_when_no_early_failure(self) -> None:
         """submit=accepted + polling returns None -> normal success."""
-        from mozart.cli.commands.run import _try_daemon_submit
+        from marianne.cli.commands.run import _try_daemon_submit
 
         submit_result = {
             "status": "accepted",
@@ -227,17 +227,17 @@ class TestRunCommandEarlyFailure:
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(True, submit_result),
             ),
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.cli.commands.run.await_early_failure",
+                "marianne.cli.commands.run.await_early_failure",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -259,7 +259,7 @@ class TestRunCommandEarlyFailure:
         """JSON mode: early failure prints failure dict and exits 1."""
         import typer
 
-        from mozart.cli.commands.run import _try_daemon_submit
+        from marianne.cli.commands.run import _try_daemon_submit
 
         submit_result = {
             "status": "accepted",
@@ -273,17 +273,17 @@ class TestRunCommandEarlyFailure:
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(True, submit_result),
             ),
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.cli.commands.run.await_early_failure",
+                "marianne.cli.commands.run.await_early_failure",
                 new_callable=AsyncMock,
                 return_value=failure_result,
             ),

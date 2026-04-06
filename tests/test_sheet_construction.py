@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.config.execution import ValidationRule
-from mozart.core.config.job import InjectionCategory, InjectionItem
+from marianne.core.config.execution import ValidationRule
+from marianne.core.config.job import InjectionCategory, InjectionItem
 
 
 class TestBuildSheetsBasic:
@@ -23,7 +23,7 @@ class TestBuildSheetsBasic:
 
     def _make_config(self, **overrides):
         """Helper to create a minimal JobConfig for testing."""
-        from mozart.core.config.job import JobConfig
+        from marianne.core.config.job import JobConfig
 
         defaults = {
             "name": "test-job",
@@ -36,7 +36,7 @@ class TestBuildSheetsBasic:
 
     def test_builds_correct_number_of_sheets(self):
         """build_sheets produces one Sheet per concrete sheet."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config()
         sheets = build_sheets(config)
@@ -44,7 +44,7 @@ class TestBuildSheetsBasic:
 
     def test_sheet_nums_are_sequential(self):
         """Sheet numbers are 1-indexed and sequential."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config()
         sheets = build_sheets(config)
@@ -52,7 +52,7 @@ class TestBuildSheetsBasic:
 
     def test_instrument_name_from_backend_type(self):
         """When no instrument: field exists, use backend.type."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config()
         sheets = build_sheets(config)
@@ -61,7 +61,7 @@ class TestBuildSheetsBasic:
 
     def test_instrument_name_from_anthropic_api(self):
         """Backend type anthropic_api maps correctly."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(backend={"type": "anthropic_api"})
         sheets = build_sheets(config)
@@ -70,7 +70,7 @@ class TestBuildSheetsBasic:
 
     def test_prompt_template_from_config(self):
         """prompt_template comes from prompt.template."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config()
         sheets = build_sheets(config)
@@ -79,7 +79,7 @@ class TestBuildSheetsBasic:
 
     def test_prompt_template_file(self):
         """template_file comes from prompt.template_file."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             prompt={"template_file": "/tmp/template.j2"},
@@ -91,7 +91,7 @@ class TestBuildSheetsBasic:
 
     def test_variables_from_config(self):
         """Template variables come from prompt.variables."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             prompt={
@@ -105,7 +105,7 @@ class TestBuildSheetsBasic:
 
     def test_workspace_from_config(self):
         """Workspace path comes from config."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             workspace=Path("/home/user/work"),
@@ -116,7 +116,7 @@ class TestBuildSheetsBasic:
 
     def test_timeout_from_backend(self):
         """Timeout comes from backend.timeout_seconds."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             backend={"type": "claude_cli", "timeout_seconds": 600.0},
@@ -127,7 +127,7 @@ class TestBuildSheetsBasic:
 
     def test_timeout_override_per_sheet(self):
         """Per-sheet timeout overrides take precedence."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             backend={
@@ -143,7 +143,7 @@ class TestBuildSheetsBasic:
 
     def test_validations_applied_to_all_sheets(self):
         """Score-level validations apply to all sheets."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             validations=[
@@ -160,7 +160,7 @@ class TestBuildSheetsDescriptions:
     """Test sheet description resolution."""
 
     def _make_config(self, **overrides):
-        from mozart.core.config.job import JobConfig
+        from marianne.core.config.job import JobConfig
 
         defaults = {
             "name": "test-job",
@@ -173,7 +173,7 @@ class TestBuildSheetsDescriptions:
 
     def test_descriptions_from_sheet_config(self):
         """Sheet descriptions come from sheet.descriptions dict."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             sheet={
@@ -190,7 +190,7 @@ class TestBuildSheetsDescriptions:
 
     def test_missing_descriptions_are_none(self):
         """Sheets without descriptions get None."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             sheet={
@@ -210,7 +210,7 @@ class TestBuildSheetsContextInjection:
     """Test prelude, cadenza, and prompt extension resolution."""
 
     def _make_config(self, **overrides):
-        from mozart.core.config.job import JobConfig
+        from marianne.core.config.job import JobConfig
 
         defaults = {
             "name": "test-job",
@@ -223,7 +223,7 @@ class TestBuildSheetsContextInjection:
 
     def test_prelude_shared_across_all_sheets(self):
         """Prelude items are shared across all sheets."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             sheet={
@@ -242,7 +242,7 @@ class TestBuildSheetsContextInjection:
 
     def test_cadenzas_per_sheet(self):
         """Cadenzas are per-sheet context injections."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             sheet={
@@ -262,7 +262,7 @@ class TestBuildSheetsContextInjection:
 
     def test_prompt_extensions_merged(self):
         """Score-level and per-sheet prompt extensions are merged."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config(
             prompt={
@@ -290,7 +290,7 @@ class TestBuildSheetsFanOut:
     """Test Sheet construction with fan-out (harmonized movements)."""
 
     def _make_config(self, **overrides):
-        from mozart.core.config.job import JobConfig
+        from marianne.core.config.job import JobConfig
 
         defaults = {
             "name": "fan-out-job",
@@ -308,7 +308,7 @@ class TestBuildSheetsFanOut:
 
     def test_fan_out_produces_extra_sheets(self):
         """Fan-out 3 voices in stage 2 → 5 total sheets (1 + 3 + 1)."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config()
         sheets = build_sheets(config)
@@ -316,7 +316,7 @@ class TestBuildSheetsFanOut:
 
     def test_fan_out_movement_numbers(self):
         """Fan-out sheets have correct movement numbers."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config()
         sheets = build_sheets(config)
@@ -326,7 +326,7 @@ class TestBuildSheetsFanOut:
 
     def test_fan_out_voice_numbers(self):
         """Fan-out sheets have correct voice numbers."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config()
         sheets = build_sheets(config)
@@ -340,7 +340,7 @@ class TestBuildSheetsFanOut:
 
     def test_fan_out_voice_count(self):
         """Fan-out sheets report correct voice_count."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = self._make_config()
         sheets = build_sheets(config)

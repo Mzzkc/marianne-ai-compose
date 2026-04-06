@@ -10,8 +10,8 @@ F-065b: diagnose progress counts disagree with timeline display.
 
 from datetime import UTC, datetime, timedelta
 
-from mozart.cli.commands.diagnose import _build_diagnostic_report
-from mozart.core.checkpoint import (
+from marianne.cli.commands.diagnose import _build_diagnostic_report
+from marianne.core.checkpoint import (
     CheckpointState,
     JobStatus,
     SheetState,

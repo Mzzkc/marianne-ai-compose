@@ -12,11 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import BackendConfig, JobConfig, PromptConfig, SheetConfig
-from mozart.dashboard.services.job_control import JobControlService
-from mozart.execution.runner import GracefulShutdownError, JobRunner
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config import BackendConfig, JobConfig, PromptConfig, SheetConfig
+from marianne.dashboard.services.job_control import JobControlService
+from marianne.execution.runner import GracefulShutdownError, JobRunner
+from marianne.state.json_backend import JsonStateBackend
 
 
 @pytest.fixture
@@ -180,8 +180,8 @@ class TestJobRunnerPauseHandling:
 class TestSequentialExecutionPauseIntegration:
     """Test pause integration in sequential execution mode."""
 
-    @patch('mozart.execution.runner.JobRunner._get_next_sheet_dag_aware')
-    @patch('mozart.execution.runner.JobRunner._execute_sheet_with_recovery')
+    @patch('marianne.execution.runner.JobRunner._get_next_sheet_dag_aware')
+    @patch('marianne.execution.runner.JobRunner._execute_sheet_with_recovery')
     async def test_sequential_execution_pause_check(
         self,
         mock_execute_sheet,
@@ -216,7 +216,7 @@ class TestSequentialExecutionPauseIntegration:
         # Verify state is paused
         assert state.status == JobStatus.PAUSED
 
-    @patch('mozart.execution.runner.JobRunner._get_next_sheet_dag_aware')
+    @patch('marianne.execution.runner.JobRunner._get_next_sheet_dag_aware')
     async def test_sequential_execution_no_pause_signal(
         self,
         mock_next_sheet,

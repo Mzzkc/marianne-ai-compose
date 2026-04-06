@@ -16,12 +16,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.config.execution import ValidationRule
-from mozart.core.config.job import InjectionCategory, InjectionItem
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.musician import _build_prompt, sheet_task
-from mozart.daemon.baton.state import AttemptContext, AttemptMode
+from marianne.core.config.execution import ValidationRule
+from marianne.core.config.job import InjectionCategory, InjectionItem
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.musician import _build_prompt, sheet_task
+from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
 
 def _make_sheet(

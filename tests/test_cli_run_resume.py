@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.core.checkpoint import CheckpointState, JobStatus
+from marianne.cli import app
+from marianne.core.checkpoint import CheckpointState, JobStatus
 
 runner = CliRunner()
 
@@ -225,7 +225,7 @@ class TestRunDaemonRequired:
     def test_run_without_daemon_shows_error(self, sample_yaml_config: Path) -> None:
         """Running without a daemon should show a clear error message."""
         with patch(
-            "mozart.daemon.detect.is_daemon_available",
+            "marianne.daemon.detect.is_daemon_available",
             new_callable=AsyncMock,
             return_value=False,
         ):
@@ -239,7 +239,7 @@ class TestRunDaemonRequired:
     def test_run_without_daemon_json_error(self, sample_yaml_config: Path) -> None:
         """Running without daemon + --json should produce JSON error."""
         with patch(
-            "mozart.daemon.detect.is_daemon_available",
+            "marianne.daemon.detect.is_daemon_available",
             new_callable=AsyncMock,
             return_value=False,
         ):
@@ -254,11 +254,11 @@ class TestRunDaemonRequired:
     def test_run_routes_through_daemon(self, sample_yaml_config: Path) -> None:
         """Successful daemon submission should report acceptance."""
         with patch(
-            "mozart.daemon.detect.is_daemon_available",
+            "marianne.daemon.detect.is_daemon_available",
             new_callable=AsyncMock,
             return_value=True,
         ), patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {
                 "job_id": "test-job-abc123",
@@ -282,11 +282,11 @@ class TestRunDaemonRequired:
             return (True, {"job_id": "x", "status": "accepted", "message": ""})
 
         with patch(
-            "mozart.daemon.detect.is_daemon_available",
+            "marianne.daemon.detect.is_daemon_available",
             new_callable=AsyncMock,
             return_value=True,
         ), patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             side_effect=_mock_route,
         ):
             result = runner.invoke(
@@ -305,11 +305,11 @@ class TestRunDaemonRequired:
             return (True, {"job_id": "x", "status": "accepted", "message": ""})
 
         with patch(
-            "mozart.daemon.detect.is_daemon_available",
+            "marianne.daemon.detect.is_daemon_available",
             new_callable=AsyncMock,
             return_value=True,
         ), patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             side_effect=_mock_route,
         ):
             result = runner.invoke(
@@ -357,7 +357,7 @@ class TestFindJobState:
         """Should raise typer.Exit when workspace doesn't exist."""
         import typer
 
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         with pytest.raises(typer.Exit):
             await _find_job_state("job-1", Path("/nonexistent"), force=False)
@@ -367,7 +367,7 @@ class TestFindJobState:
         """Should raise typer.Exit when job state not found."""
         import typer
 
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
@@ -380,7 +380,7 @@ class TestFindJobState:
         """Completed job without --force should raise typer.Exit."""
         import typer
 
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
             job_id="completed-job",
@@ -391,7 +391,7 @@ class TestFindJobState:
         )
 
         with patch(
-            "mozart.cli.commands.resume.require_job_state",
+            "marianne.cli.commands.resume.require_job_state",
             new_callable=AsyncMock,
             return_value=(state, AsyncMock()),
         ), pytest.raises(typer.Exit):
@@ -402,7 +402,7 @@ class TestFindJobState:
         """Pending job should raise typer.Exit with hint to use 'run'."""
         import typer
 
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
             job_id="pending-job",
@@ -412,7 +412,7 @@ class TestFindJobState:
         )
 
         with patch(
-            "mozart.cli.commands.resume.require_job_state",
+            "marianne.cli.commands.resume.require_job_state",
             new_callable=AsyncMock,
             return_value=(state, AsyncMock()),
         ), pytest.raises(typer.Exit):
@@ -421,7 +421,7 @@ class TestFindJobState:
     @pytest.mark.asyncio
     async def test_find_job_state_paused_job_succeeds(self) -> None:
         """Paused job should return state and backend."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
             job_id="paused-job",
@@ -433,7 +433,7 @@ class TestFindJobState:
         mock_backend = AsyncMock()
 
         with patch(
-            "mozart.cli.commands.resume.require_job_state",
+            "marianne.cli.commands.resume.require_job_state",
             new_callable=AsyncMock,
             return_value=(state, mock_backend),
         ):
@@ -449,7 +449,7 @@ class TestReconstructConfig:
 
     def test_priority_1_explicit_config_file(self, sample_yaml_config: Path) -> None:
         """Provided --config file should take highest priority."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
             job_id="test", job_name="Test", total_sheets=3,
@@ -464,7 +464,7 @@ class TestReconstructConfig:
 
     def test_priority_2_auto_reload_from_config_path(self, sample_yaml_config: Path) -> None:
         """Should auto-reload from stored config_path when file exists."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
             job_id="test", job_name="Test", total_sheets=3,
@@ -479,7 +479,7 @@ class TestReconstructConfig:
 
     def test_priority_3_snapshot_fallback_when_file_missing(self, tmp_path: Path) -> None:
         """Should fall back to snapshot when config_path file doesn't exist."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         snapshot = {
             "name": "snapshot-job",
@@ -500,7 +500,7 @@ class TestReconstructConfig:
 
     def test_priority_3_snapshot_fallback_when_no_config_path(self) -> None:
         """Should fall back to snapshot when no config_path stored."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         snapshot = {
             "name": "snapshot-job",
@@ -521,7 +521,7 @@ class TestReconstructConfig:
 
     def test_no_reload_flag_skips_auto_reload(self, sample_yaml_config: Path) -> None:
         """--no-reload should skip auto-reload and use snapshot."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         snapshot = {
             "name": "snapshot-job",
@@ -544,7 +544,7 @@ class TestReconstructConfig:
         """Should raise typer.Exit when no config source is available."""
         import typer
 
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
             job_id="test", job_name="Test", total_sheets=3,
@@ -555,7 +555,7 @@ class TestReconstructConfig:
 
     def test_explicit_config_wins_over_no_reload(self, sample_yaml_config: Path) -> None:
         """--config should win even when --no-reload is set."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
             job_id="test", job_name="Test", total_sheets=3,
@@ -578,22 +578,22 @@ class TestSharedHelpers:
 
     def test_create_backend_claude_cli(self) -> None:
         """create_backend should return ClaudeCliBackend for claude_cli type."""
-        from mozart.cli.commands._shared import create_backend
-        from mozart.core.config import BackendConfig, JobConfig
+        from marianne.cli.commands._shared import create_backend
+        from marianne.core.config import BackendConfig, JobConfig
 
         config = MagicMock(spec=JobConfig)
         # Use real BackendConfig to ensure all fields are available
         config.backend = BackendConfig(type="claude_cli")
 
         backend = create_backend(config)
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
         assert isinstance(backend, ClaudeCliBackend)
 
     def test_create_progress_bar_default(self) -> None:
         """create_progress_bar should return a Progress instance."""
         from rich.progress import Progress
 
-        from mozart.cli.commands._shared import create_progress_bar
+        from marianne.cli.commands._shared import create_progress_bar
 
         progress = create_progress_bar()
         assert isinstance(progress, Progress)
@@ -602,7 +602,7 @@ class TestSharedHelpers:
         """create_progress_bar with include_exec_status should add extra column."""
         from rich.progress import Progress
 
-        from mozart.cli.commands._shared import create_progress_bar
+        from marianne.cli.commands._shared import create_progress_bar
 
         progress = create_progress_bar(include_exec_status=True)
         assert isinstance(progress, Progress)
@@ -612,7 +612,7 @@ class TestSharedHelpers:
 
     def test_setup_learning_disabled(self) -> None:
         """setup_learning should return (None, None) when learning is disabled."""
-        from mozart.cli.commands._shared import setup_learning
+        from marianne.cli.commands._shared import setup_learning
 
         config = MagicMock()
         config.learning.enabled = False
@@ -623,7 +623,7 @@ class TestSharedHelpers:
 
     def test_setup_notifications_none_config(self) -> None:
         """setup_notifications should return None when no notifications configured."""
-        from mozart.cli.commands._shared import setup_notifications
+        from marianne.cli.commands._shared import setup_notifications
 
         config = MagicMock()
         config.notifications = None
@@ -633,7 +633,7 @@ class TestSharedHelpers:
 
     def test_setup_escalation_disabled(self) -> None:
         """setup_escalation should return None when not enabled."""
-        from mozart.cli.commands._shared import setup_escalation
+        from marianne.cli.commands._shared import setup_escalation
 
         config = MagicMock()
         result = setup_escalation(config, enabled=False)
@@ -641,7 +641,7 @@ class TestSharedHelpers:
 
     def test_setup_grounding_disabled(self) -> None:
         """setup_grounding should return None when grounding is disabled."""
-        from mozart.cli.commands._shared import setup_grounding
+        from marianne.cli.commands._shared import setup_grounding
 
         config = MagicMock()
         config.grounding.enabled = False
@@ -652,7 +652,7 @@ class TestSharedHelpers:
     @pytest.mark.asyncio
     async def test_handle_job_completion_completed(self) -> None:
         """handle_job_completion should display summary for completed jobs."""
-        from mozart.cli.commands._shared import handle_job_completion
+        from marianne.cli.commands._shared import handle_job_completion
 
         state = MagicMock(status=JobStatus.COMPLETED)
         summary = MagicMock()
@@ -663,7 +663,7 @@ class TestSharedHelpers:
 
         notification_manager = AsyncMock()
 
-        with patch("mozart.cli.commands._shared.display_run_summary"):
+        with patch("marianne.cli.commands._shared.display_run_summary"):
             await handle_job_completion(
                 state=state,
                 summary=summary,
@@ -677,7 +677,7 @@ class TestSharedHelpers:
     @pytest.mark.asyncio
     async def test_handle_job_completion_failed(self) -> None:
         """handle_job_completion should send failure notification for failed jobs."""
-        from mozart.cli.commands._shared import handle_job_completion
+        from marianne.cli.commands._shared import handle_job_completion
 
         state = MagicMock(status=JobStatus.FAILED, current_sheet=3)
         summary = MagicMock()
@@ -685,7 +685,7 @@ class TestSharedHelpers:
 
         notification_manager = AsyncMock()
 
-        with patch("mozart.cli.commands._shared.display_run_summary"):
+        with patch("marianne.cli.commands._shared.display_run_summary"):
             await handle_job_completion(
                 state=state,
                 summary=summary,
@@ -699,13 +699,13 @@ class TestSharedHelpers:
     @pytest.mark.asyncio
     async def test_handle_job_completion_no_notifications(self) -> None:
         """handle_job_completion with None notification_manager should not fail."""
-        from mozart.cli.commands._shared import handle_job_completion
+        from marianne.cli.commands._shared import handle_job_completion
 
         state = MagicMock(status=JobStatus.COMPLETED)
         summary = MagicMock()
         summary.final_status = JobStatus.COMPLETED
 
-        with patch("mozart.cli.commands._shared.display_run_summary") as mock_display:
+        with patch("marianne.cli.commands._shared.display_run_summary") as mock_display:
             await handle_job_completion(
                 state=state,
                 summary=summary,
@@ -728,7 +728,7 @@ class TestResumeErrorMessages:
     @pytest.mark.asyncio
     async def test_completed_job_uses_output_error(self, tmp_path: Path) -> None:
         """Completed job without --force shows warning with hint."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
             job_id="done-job",
@@ -741,11 +741,11 @@ class TestResumeErrorMessages:
         import typer
 
         with patch(
-            "mozart.cli.commands.resume.require_job_state",
+            "marianne.cli.commands.resume.require_job_state",
             new_callable=AsyncMock,
             return_value=(state, AsyncMock()),
         ), patch(
-            "mozart.cli.commands.resume.output_error"
+            "marianne.cli.commands.resume.output_error"
         ) as mock_err, pytest.raises(typer.Exit):
             await _find_job_state("done-job", tmp_path, force=False)
 
@@ -758,7 +758,7 @@ class TestResumeErrorMessages:
     @pytest.mark.asyncio
     async def test_pending_job_uses_output_error(self, tmp_path: Path) -> None:
         """Pending job shows warning with hint to use 'mozart run'."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
             job_id="pending-job",
@@ -770,11 +770,11 @@ class TestResumeErrorMessages:
         import typer
 
         with patch(
-            "mozart.cli.commands.resume.require_job_state",
+            "marianne.cli.commands.resume.require_job_state",
             new_callable=AsyncMock,
             return_value=(state, AsyncMock()),
         ), patch(
-            "mozart.cli.commands.resume.output_error"
+            "marianne.cli.commands.resume.output_error"
         ) as mock_err, pytest.raises(typer.Exit):
             await _find_job_state("pending-job", tmp_path, force=False)
 
@@ -800,7 +800,7 @@ class TestResumeRejectedHints:
 
     async def test_not_found_suggests_list(self) -> None:
         """When resume is rejected with 'not found', suggest 'mozart list'."""
-        from mozart.cli.commands.resume import _resume_job
+        from marianne.cli.commands.resume import _resume_job
 
         result_dict = {
             "status": "rejected",
@@ -811,11 +811,11 @@ class TestResumeRejectedHints:
         import typer
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, result_dict),
         ), patch(
-            "mozart.cli.commands.resume.output_error"
+            "marianne.cli.commands.resume.output_error"
         ) as mock_err, pytest.raises(typer.Exit):
             await _resume_job(
                 "nonexistent", None, None, False, False, False, False, False
@@ -832,7 +832,7 @@ class TestResumeRejectedHints:
 
     async def test_not_resumable_suggests_diagnose(self) -> None:
         """When resume is rejected for a known score, suggest 'diagnose'."""
-        from mozart.cli.commands.resume import _resume_job
+        from marianne.cli.commands.resume import _resume_job
 
         result_dict = {
             "status": "rejected",
@@ -843,11 +843,11 @@ class TestResumeRejectedHints:
         import typer
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, result_dict),
         ), patch(
-            "mozart.cli.commands.resume.output_error"
+            "marianne.cli.commands.resume.output_error"
         ) as mock_err, pytest.raises(typer.Exit):
             await _resume_job(
                 "my-job", None, None, False, False, False, False, False
@@ -868,7 +868,7 @@ class TestResumeScoreTerminology:
 
     async def test_success_message_uses_score(self) -> None:
         """Accepted resume should say 'score', not 'job'."""
-        from mozart.cli.commands.resume import _resume_job
+        from marianne.cli.commands.resume import _resume_job
 
         result_dict = {
             "status": "accepted",
@@ -877,11 +877,11 @@ class TestResumeScoreTerminology:
         }
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, result_dict),
         ), patch(
-            "mozart.cli.commands.resume.console"
+            "marianne.cli.commands.resume.console"
         ) as mock_console:
             await _resume_job(
                 "my-score", None, None, False, False, False, False, False

@@ -18,10 +18,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.state import AttemptContext, AttemptMode
+from marianne.backends.base import ExecutionResult
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
 
 # =========================================================================
@@ -95,7 +95,7 @@ class TestMusicianHappyPath:
     @pytest.mark.asyncio
     async def test_successful_execution_reports_completed(self) -> None:
         """A successful execution with no validations produces a 100% pass result."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -131,7 +131,7 @@ class TestMusicianHappyPath:
     @pytest.mark.asyncio
     async def test_backend_execute_called_with_prompt(self) -> None:
         """The musician passes the sheet's prompt to the backend."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -157,7 +157,7 @@ class TestMusicianHappyPath:
     @pytest.mark.asyncio
     async def test_cost_tracking_from_token_counts(self) -> None:
         """Cost is estimated from token counts when backend doesn't provide it."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -197,7 +197,7 @@ class TestMusicianExecutionFailure:
     @pytest.mark.asyncio
     async def test_execution_failure_reports_failure(self) -> None:
         """A failed execution is reported with execution_success=False."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -230,7 +230,7 @@ class TestMusicianExecutionFailure:
     @pytest.mark.asyncio
     async def test_rate_limited_execution_reported(self) -> None:
         """Rate-limited execution is flagged as rate_limited, not a failure."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -262,7 +262,7 @@ class TestMusicianExecutionFailure:
     @pytest.mark.asyncio
     async def test_backend_exception_still_reports(self) -> None:
         """If the backend throws an exception, the musician still reports."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -290,7 +290,7 @@ class TestMusicianExecutionFailure:
     @pytest.mark.asyncio
     async def test_exit_code_none_process_killed(self) -> None:
         """exit_code=None (process killed by signal) is reported correctly."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -331,7 +331,7 @@ class TestMusicianValidation:
     @pytest.mark.asyncio
     async def test_no_validations_yields_100_percent(self) -> None:
         """Sheets with no validation rules report 100% pass rate (F-018 contract)."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -358,7 +358,7 @@ class TestMusicianValidation:
     @pytest.mark.asyncio
     async def test_validations_skipped_on_execution_failure(self) -> None:
         """Validations are not run when execution fails."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -368,7 +368,7 @@ class TestMusicianValidation:
         backend.name = "claude-code"
 
         # Sheet has validations but execution failed — should skip them
-        from mozart.core.config.execution import ValidationRule
+        from marianne.core.config.execution import ValidationRule
 
         rule = ValidationRule(type="file_exists", path="output.txt")
         sheet = _make_sheet(validations=[rule])
@@ -399,7 +399,7 @@ class TestMusicianAttemptContext:
     @pytest.mark.asyncio
     async def test_attempt_number_in_result(self) -> None:
         """The attempt number from context appears in the result."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -423,7 +423,7 @@ class TestMusicianAttemptContext:
     @pytest.mark.asyncio
     async def test_model_used_from_execution(self) -> None:
         """The model actually used is captured from the execution result."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -458,7 +458,7 @@ class TestMusicianOutputHandling:
     @pytest.mark.asyncio
     async def test_stdout_tail_captured(self) -> None:
         """Stdout tail is included in the result for diagnostics."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -484,7 +484,7 @@ class TestMusicianOutputHandling:
     @pytest.mark.asyncio
     async def test_credentials_redacted_in_output(self) -> None:
         """Credentials in stdout are redacted before reporting."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -514,7 +514,7 @@ class TestMusicianOutputHandling:
     @pytest.mark.asyncio
     async def test_timeout_passed_to_backend(self) -> None:
         """Sheet timeout_seconds is passed to backend.execute."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
@@ -548,7 +548,7 @@ class TestMusicianTiming:
     @pytest.mark.asyncio
     async def test_duration_from_execution_result(self) -> None:
         """Duration is taken from the execution result."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()

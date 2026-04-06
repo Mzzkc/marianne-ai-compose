@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
@@ -32,10 +32,10 @@ class TestStartCommand:
 
     def test_start_already_running_exits_1(self, tmp_path: Path):
         """start exits with code 1 if conductor already running."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text(str(os.getpid()))
 
-        with patch("mozart.daemon.process._load_config") as mock_config:
+        with patch("marianne.daemon.process._load_config") as mock_config:
             cfg = MagicMock()
             cfg.pid_file = pid_file
             cfg.log_level = "info"
@@ -48,15 +48,15 @@ class TestStartCommand:
 
     def test_start_foreground_skips_daemonize(self, tmp_path: Path):
         """In foreground mode, _daemonize() is NOT called."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
 
         with (
-            patch("mozart.daemon.process._load_config") as mock_config,
-            patch("mozart.daemon.process._daemonize") as mock_daemonize,
-            patch("mozart.daemon.process._read_pid", return_value=None),
-            patch("mozart.core.logging.configure_logging"),
-            patch("mozart.daemon.process.DaemonProcess"),
-            patch("mozart.daemon.process.asyncio.run"),
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch("marianne.daemon.process._daemonize") as mock_daemonize,
+            patch("marianne.daemon.process._read_pid", return_value=None),
+            patch("marianne.core.logging.configure_logging"),
+            patch("marianne.daemon.process.DaemonProcess"),
+            patch("marianne.daemon.process.asyncio.run"),
         ):
             cfg = MagicMock()
             cfg.pid_file = pid_file
@@ -71,15 +71,15 @@ class TestStartCommand:
 
     def test_start_background_calls_daemonize(self, tmp_path: Path):
         """Without --foreground, _daemonize() is called."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
 
         with (
-            patch("mozart.daemon.process._load_config") as mock_config,
-            patch("mozart.daemon.process._daemonize") as mock_daemonize,
-            patch("mozart.daemon.process._read_pid", return_value=None),
-            patch("mozart.core.logging.configure_logging"),
-            patch("mozart.daemon.process.DaemonProcess"),
-            patch("mozart.daemon.process.asyncio.run"),
+            patch("marianne.daemon.process._load_config") as mock_config,
+            patch("marianne.daemon.process._daemonize") as mock_daemonize,
+            patch("marianne.daemon.process._read_pid", return_value=None),
+            patch("marianne.core.logging.configure_logging"),
+            patch("marianne.daemon.process.DaemonProcess"),
+            patch("marianne.daemon.process.asyncio.run"),
         ):
             cfg = MagicMock()
             cfg.pid_file = pid_file
@@ -107,7 +107,7 @@ class TestStopCommand:
 
     def test_stop_not_running_exits_1(self, tmp_path: Path):
         """stop exits with code 1 when conductor is not running."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
 
         result = runner.invoke(app, ["stop", "--pid-file", str(pid_file)])
 
@@ -116,15 +116,15 @@ class TestStopCommand:
 
     def test_stop_sends_sigterm(self, tmp_path: Path):
         """stop sends SIGTERM to the PID by default."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
         import signal
 
         with (
-            patch("mozart.daemon.process._pid_alive", return_value=True),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
-            patch("mozart.daemon.process._check_running_jobs", return_value={"running_jobs": 0, "job_ids": []}),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process._check_running_jobs", return_value={"running_jobs": 0, "job_ids": []}),
         ):
             result = runner.invoke(app, ["stop", "--pid-file", str(pid_file)])
 
@@ -134,14 +134,14 @@ class TestStopCommand:
 
     def test_stop_force_sends_sigkill(self, tmp_path: Path):
         """stop --force sends SIGKILL."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
         import signal
 
         with (
-            patch("mozart.daemon.process._pid_alive", return_value=True),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
             result = runner.invoke(app, ["stop", "--pid-file", str(pid_file), "--force"])
 
@@ -165,9 +165,9 @@ class TestRestartCommand:
     def test_restart_calls_stop_then_start(self, tmp_path: Path):
         """restart calls stop_conductor, waits, then start_conductor."""
         with (
-            patch("mozart.daemon.process.stop_conductor") as mock_stop,
-            patch("mozart.daemon.process.wait_for_conductor_exit", return_value=True),
-            patch("mozart.daemon.process.start_conductor") as mock_start,
+            patch("marianne.daemon.process.stop_conductor") as mock_stop,
+            patch("marianne.daemon.process.wait_for_conductor_exit", return_value=True),
+            patch("marianne.daemon.process.start_conductor") as mock_start,
         ):
             result = runner.invoke(app, ["restart", "--foreground"])
 
@@ -179,11 +179,11 @@ class TestRestartCommand:
         """restart continues with start even if stop raises SystemExit."""
         with (
             patch(
-                "mozart.daemon.process.stop_conductor",
+                "marianne.daemon.process.stop_conductor",
                 side_effect=SystemExit(1),
             ),
-            patch("mozart.daemon.process.wait_for_conductor_exit", return_value=True),
-            patch("mozart.daemon.process.start_conductor") as mock_start,
+            patch("marianne.daemon.process.wait_for_conductor_exit", return_value=True),
+            patch("marianne.daemon.process.start_conductor") as mock_start,
         ):
             result = runner.invoke(app, ["restart", "--foreground"])
 
@@ -193,9 +193,9 @@ class TestRestartCommand:
     def test_restart_aborts_if_old_conductor_wont_exit(self, tmp_path: Path):
         """restart exits 1 if old conductor doesn't exit within timeout."""
         with (
-            patch("mozart.daemon.process.stop_conductor"),
-            patch("mozart.daemon.process.wait_for_conductor_exit", return_value=False),
-            patch("mozart.daemon.process.start_conductor") as mock_start,
+            patch("marianne.daemon.process.stop_conductor"),
+            patch("marianne.daemon.process.wait_for_conductor_exit", return_value=False),
+            patch("marianne.daemon.process.start_conductor") as mock_start,
         ):
             result = runner.invoke(app, ["restart", "--foreground"])
 
@@ -218,7 +218,7 @@ class TestConductorStatusCommand:
 
     def test_conductor_status_not_running(self, tmp_path: Path):
         """conductor-status exits with 1 when not running."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
 
         result = runner.invoke(
             app, ["conductor-status", "--pid-file", str(pid_file)],
@@ -229,7 +229,7 @@ class TestConductorStatusCommand:
 
     def test_conductor_status_shows_pid(self, tmp_path: Path):
         """conductor-status shows PID when conductor is running."""
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
         def _mock_asyncio_run(coro):
@@ -238,8 +238,8 @@ class TestConductorStatusCommand:
             raise OSError("no socket")
 
         with (
-            patch("mozart.daemon.process._pid_alive", return_value=True),
-            patch("mozart.daemon.process.asyncio.run", side_effect=_mock_asyncio_run),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.asyncio.run", side_effect=_mock_asyncio_run),
         ):
             result = runner.invoke(
                 app,
@@ -258,18 +258,18 @@ class TestWaitForConductorExit:
 
     def test_returns_true_when_no_pid_file(self, tmp_path: Path):
         """Returns True immediately when PID file doesn't exist."""
-        from mozart.daemon.process import wait_for_conductor_exit
+        from marianne.daemon.process import wait_for_conductor_exit
 
         assert wait_for_conductor_exit(tmp_path / "missing.pid") is True
 
     def test_returns_true_when_process_already_dead(self, tmp_path: Path):
         """Returns True immediately when PID is not alive."""
-        from mozart.daemon.process import wait_for_conductor_exit
+        from marianne.daemon.process import wait_for_conductor_exit
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("99999999")  # Non-existent PID
 
-        with patch("mozart.daemon.process._pid_alive", return_value=False):
+        with patch("marianne.daemon.process._pid_alive", return_value=False):
             result = wait_for_conductor_exit(pid_file, timeout=1.0)
 
         assert result is True
@@ -277,9 +277,9 @@ class TestWaitForConductorExit:
 
     def test_returns_true_when_process_exits_during_wait(self, tmp_path: Path):
         """Returns True when process dies while we're polling."""
-        from mozart.daemon.process import wait_for_conductor_exit
+        from marianne.daemon.process import wait_for_conductor_exit
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
         # Alive for first 2 checks, then dead
@@ -291,8 +291,8 @@ class TestWaitForConductorExit:
             return call_count <= 2
 
         with (
-            patch("mozart.daemon.process._pid_alive", side_effect=_alive_then_dead),
-            patch("mozart.daemon.process.time.sleep"),  # Don't actually sleep
+            patch("marianne.daemon.process._pid_alive", side_effect=_alive_then_dead),
+            patch("marianne.daemon.process.time.sleep"),  # Don't actually sleep
         ):
             result = wait_for_conductor_exit(pid_file, timeout=5.0)
 
@@ -301,20 +301,20 @@ class TestWaitForConductorExit:
 
     def test_returns_false_on_timeout(self, tmp_path: Path):
         """Returns False when process stays alive past timeout."""
-        from mozart.daemon.process import wait_for_conductor_exit
+        from marianne.daemon.process import wait_for_conductor_exit
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
         with (
-            patch("mozart.daemon.process._pid_alive", return_value=True),
-            patch("mozart.daemon.process.time.monotonic", side_effect=[
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.time.monotonic", side_effect=[
                 0.0,   # Initial deadline calc: deadline = 0.0 + 0.5 = 0.5
                 0.0,   # First loop check: 0.0 < 0.5 → continue
                 0.3,   # Second loop check: 0.3 < 0.5 → continue
                 0.6,   # Third loop check: 0.6 >= 0.5 → exit
             ]),
-            patch("mozart.daemon.process.time.sleep"),
+            patch("marianne.daemon.process.time.sleep"),
         ):
             result = wait_for_conductor_exit(pid_file, timeout=0.5)
 

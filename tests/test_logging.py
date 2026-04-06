@@ -16,8 +16,8 @@ def strip_ansi(text: str) -> str:
     ansi_pattern = re.compile(r'\x1b\[[0-9;]*m')
     return ansi_pattern.sub('', text)
 
-from mozart.core.config import LogConfig
-from mozart.core.logging import (
+from marianne.core.config import LogConfig
+from marianne.core.logging import (
     SENSITIVE_PATTERNS,
     CompressingRotatingFileHandler,
     MozartLogger,
@@ -314,7 +314,7 @@ class TestLogConfigInJobConfig:
 
     def test_job_config_has_logging(self, sample_config_dict: dict):
         """Test that JobConfig includes logging configuration."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config = JobConfig(**sample_config_dict)
 
@@ -323,7 +323,7 @@ class TestLogConfigInJobConfig:
 
     def test_job_config_logging_defaults(self, sample_config_dict: dict):
         """Test that logging has sensible defaults when not specified."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config = JobConfig(**sample_config_dict)
 
@@ -332,7 +332,7 @@ class TestLogConfigInJobConfig:
 
     def test_job_config_custom_logging(self, sample_config_dict: dict):
         """Test that custom logging config is respected."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         sample_config_dict["logging"] = {
             "level": "DEBUG",
@@ -401,7 +401,7 @@ class TestExecutionContext:
 
     def test_create_minimal_context(self):
         """Test creating context with only required fields."""
-        from mozart.core.logging import ExecutionContext
+        from marianne.core.logging import ExecutionContext
 
         ctx = ExecutionContext(job_id="test-job")
 
@@ -414,7 +414,7 @@ class TestExecutionContext:
 
     def test_create_full_context(self):
         """Test creating context with all fields."""
-        from mozart.core.logging import ExecutionContext
+        from marianne.core.logging import ExecutionContext
 
         ctx = ExecutionContext(
             job_id="test-job",
@@ -432,7 +432,7 @@ class TestExecutionContext:
 
     def test_context_is_immutable(self):
         """Test that ExecutionContext is frozen (immutable)."""
-        from mozart.core.logging import ExecutionContext
+        from marianne.core.logging import ExecutionContext
 
         ctx = ExecutionContext(job_id="test-job")
 
@@ -441,7 +441,7 @@ class TestExecutionContext:
 
     def test_with_sheet_creates_new_context(self):
         """Test that with_sheet creates a new context with updated sheet_num."""
-        from mozart.core.logging import ExecutionContext
+        from marianne.core.logging import ExecutionContext
 
         ctx = ExecutionContext(job_id="test-job", run_id="run-123", component="runner")
         new_ctx = ctx.with_sheet(10)
@@ -459,7 +459,7 @@ class TestExecutionContext:
 
     def test_with_component_creates_new_context(self):
         """Test that with_component creates a new context with updated component."""
-        from mozart.core.logging import ExecutionContext
+        from marianne.core.logging import ExecutionContext
 
         ctx = ExecutionContext(job_id="test-job", run_id="run-123", sheet_num=5)
         new_ctx = ctx.with_component("backend")
@@ -477,7 +477,7 @@ class TestExecutionContext:
 
     def test_as_child_creates_nested_context(self):
         """Test that as_child creates a child context with parent tracking."""
-        from mozart.core.logging import ExecutionContext
+        from marianne.core.logging import ExecutionContext
 
         parent = ExecutionContext(job_id="test-job", run_id="parent-run")
         child = parent.as_child()
@@ -493,7 +493,7 @@ class TestExecutionContext:
 
     def test_as_child_with_custom_run_id(self):
         """Test as_child with explicit child_run_id."""
-        from mozart.core.logging import ExecutionContext
+        from marianne.core.logging import ExecutionContext
 
         parent = ExecutionContext(job_id="test-job", run_id="parent-run")
         child = parent.as_child(child_run_id="custom-child-id")
@@ -503,7 +503,7 @@ class TestExecutionContext:
 
     def test_to_dict_excludes_none_values(self):
         """Test that to_dict excludes None values."""
-        from mozart.core.logging import ExecutionContext
+        from marianne.core.logging import ExecutionContext
 
         ctx = ExecutionContext(job_id="test-job", run_id="run-123")
         result = ctx.to_dict()
@@ -518,7 +518,7 @@ class TestExecutionContext:
 
     def test_to_dict_includes_all_set_values(self):
         """Test that to_dict includes all set values."""
-        from mozart.core.logging import ExecutionContext
+        from marianne.core.logging import ExecutionContext
 
         ctx = ExecutionContext(
             job_id="test-job",
@@ -543,25 +543,25 @@ class TestContextVar:
 
     def setup_method(self):
         """Clear context before each test."""
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         clear_context()
 
     def teardown_method(self):
         """Clear context after each test."""
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         clear_context()
 
     def test_get_current_context_returns_none_when_not_set(self):
         """Test that get_current_context returns None by default."""
-        from mozart.core.logging import get_current_context
+        from marianne.core.logging import get_current_context
 
         assert get_current_context() is None
 
     def test_set_context_and_get_context(self):
         """Test set_context and get_current_context."""
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             get_current_context,
             set_context,
@@ -575,7 +575,7 @@ class TestContextVar:
 
     def test_clear_context(self):
         """Test that clear_context removes the context."""
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             clear_context,
             get_current_context,
@@ -591,7 +591,7 @@ class TestContextVar:
 
     def test_with_context_sets_and_clears(self):
         """Test that with_context sets context for block duration."""
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             get_current_context,
             with_context,
@@ -611,7 +611,7 @@ class TestContextVar:
 
     def test_with_context_yields_context(self):
         """Test that with_context yields the context."""
-        from mozart.core.logging import ExecutionContext, with_context
+        from marianne.core.logging import ExecutionContext, with_context
 
         ctx = ExecutionContext(job_id="test-job")
 
@@ -620,7 +620,7 @@ class TestContextVar:
 
     def test_with_context_restores_on_exception(self):
         """Test that with_context restores context on exception."""
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             get_current_context,
             with_context,
@@ -640,7 +640,7 @@ class TestContextVar:
 
     def test_nested_with_context(self):
         """Test nested with_context blocks."""
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             get_current_context,
             with_context,
@@ -667,19 +667,19 @@ class TestAddContextProcessor:
 
     def setup_method(self):
         """Clear context before each test."""
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         clear_context()
 
     def teardown_method(self):
         """Clear context after each test."""
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         clear_context()
 
     def test_add_context_with_no_context(self):
         """Test _add_context when no context is set."""
-        from mozart.core.logging import _add_context
+        from marianne.core.logging import _add_context
 
         event_dict = {"event": "test", "foo": "bar"}
         result = _add_context(None, "info", event_dict)
@@ -689,7 +689,7 @@ class TestAddContextProcessor:
 
     def test_add_context_adds_fields(self):
         """Test _add_context adds context fields."""
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             _add_context,
             set_context,
@@ -713,7 +713,7 @@ class TestAddContextProcessor:
 
     def test_add_context_preserves_explicit_values(self):
         """Test that explicit event_dict values take precedence."""
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             _add_context,
             set_context,
@@ -742,7 +742,7 @@ class TestContextIntegration:
         """Reset logging configuration and context before each test."""
         import logging
 
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         structlog.reset_defaults()
         root_logger = logging.getLogger()
@@ -752,7 +752,7 @@ class TestContextIntegration:
 
     def teardown_method(self):
         """Clear context after each test."""
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         clear_context()
 
@@ -760,7 +760,7 @@ class TestContextIntegration:
         """Test that logger includes context fields when context is set."""
         import json
 
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             configure_logging,
             get_logger,
@@ -805,7 +805,7 @@ class TestContextIntegration:
         """Test that context is not added when include_context=False."""
         import json
 
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             configure_logging,
             get_logger,
@@ -850,20 +850,20 @@ class TestAsyncContextPropagation:
 
     def setup_method(self):
         """Clear context before each test."""
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         clear_context()
 
     def teardown_method(self):
         """Clear context after each test."""
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         clear_context()
 
     @pytest.mark.asyncio
     async def test_context_propagates_in_async_code(self):
         """Test that context propagates correctly in async code."""
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             get_current_context,
             with_context,
@@ -884,7 +884,7 @@ class TestAsyncContextPropagation:
         """Test that context is isolated between concurrent tasks."""
         import asyncio
 
-        from mozart.core.logging import (
+        from marianne.core.logging import (
             ExecutionContext,
             get_current_context,
             with_context,
@@ -930,7 +930,7 @@ class TestErrorClassifierLogging:
 
     def test_rate_limit_classification_logs_warning(self, capsys: pytest.CaptureFixture[str]):
         """Test that rate limit classification logs a warning."""
-        from mozart.core.errors import ErrorCategory, ErrorClassifier
+        from marianne.core.errors import ErrorCategory, ErrorClassifier
 
         # Configure logging - note: due to module-level logger creation,
         # we get console format output even when requesting JSON
@@ -954,7 +954,7 @@ class TestErrorClassifierLogging:
 
     def test_fatal_error_classification_logs_warning(self, capsys: pytest.CaptureFixture[str]):
         """Test that fatal error classification logs a warning."""
-        from mozart.core.errors import ErrorCategory, ErrorClassifier
+        from marianne.core.errors import ErrorCategory, ErrorClassifier
 
         configure_logging(
             level="WARNING",
@@ -975,7 +975,7 @@ class TestErrorClassifierLogging:
 
     def test_validation_category_does_not_log(self, capsys: pytest.CaptureFixture[str]):
         """Test that successful execution (validation needed) does not log."""
-        from mozart.core.errors import ErrorCategory, ErrorClassifier
+        from marianne.core.errors import ErrorCategory, ErrorClassifier
 
         configure_logging(
             level="DEBUG",
@@ -1017,8 +1017,8 @@ class TestStateBackendLogging:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ):
         """Test that JSON backend logs checkpoint saves."""
-        from mozart.core.checkpoint import CheckpointState, JobStatus
-        from mozart.state.json_backend import JsonStateBackend
+        from marianne.core.checkpoint import CheckpointState, JobStatus
+        from marianne.state.json_backend import JsonStateBackend
 
         state_dir = tmp_path / "state"
         state_dir.mkdir()
@@ -1051,8 +1051,8 @@ class TestStateBackendLogging:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ):
         """Test that JSON backend logs checkpoint loads."""
-        from mozart.core.checkpoint import CheckpointState, JobStatus
-        from mozart.state.json_backend import JsonStateBackend
+        from marianne.core.checkpoint import CheckpointState, JobStatus
+        from marianne.state.json_backend import JsonStateBackend
 
         state_dir = tmp_path / "state"
         state_dir.mkdir()
@@ -1089,7 +1089,7 @@ class TestStateBackendLogging:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ):
         """Test that JSON backend logs corruption detection."""
-        from mozart.state.json_backend import JsonStateBackend, StateCorruptionError
+        from marianne.state.json_backend import JsonStateBackend, StateCorruptionError
 
         state_dir = tmp_path / "state"
         state_dir.mkdir()
@@ -1136,7 +1136,7 @@ class TestCheckpointStateTransitionLogging:
 
     def test_sheet_started_logs_debug(self, capsys: pytest.CaptureFixture[str]):
         """Test that sheet started transition logs debug message."""
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         configure_logging(
             level="DEBUG",
@@ -1162,7 +1162,7 @@ class TestCheckpointStateTransitionLogging:
 
     def test_sheet_completed_logs_debug(self, capsys: pytest.CaptureFixture[str]):
         """Test that sheet completed transition logs debug message."""
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         configure_logging(
             level="DEBUG",
@@ -1190,7 +1190,7 @@ class TestCheckpointStateTransitionLogging:
 
     def test_job_failed_logs_error(self, capsys: pytest.CaptureFixture[str]):
         """Test that job failed transition logs error message."""
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         configure_logging(
             level="ERROR",
@@ -1214,7 +1214,7 @@ class TestCheckpointStateTransitionLogging:
 
     def test_job_paused_logs_info(self, capsys: pytest.CaptureFixture[str]):
         """Test that job paused transition logs info message."""
-        from mozart.core.checkpoint import CheckpointState, JobStatus
+        from marianne.core.checkpoint import CheckpointState, JobStatus
 
         configure_logging(
             level="INFO",
@@ -1494,7 +1494,7 @@ class TestLogsCLI:
         """Test that the logs command is registered."""
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         # Check that 'logs' command exists via --help
         runner = CliRunner()
@@ -1507,7 +1507,7 @@ class TestLogsCLI:
         """Test that logs command has proper help text."""
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         runner = CliRunner()
         result = runner.invoke(app, ["logs", "--help"])
@@ -1523,7 +1523,7 @@ class TestLogsCLI:
         """Test logs command when no log file exists."""
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         # Change to empty workspace
         monkeypatch.chdir(tmp_path)
@@ -1540,7 +1540,7 @@ class TestLogsCLI:
 
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         # Create log directory and file
         log_dir = tmp_path / "logs"
@@ -1571,7 +1571,7 @@ class TestLogsCLI:
 
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         # Create log directory and file
         log_dir = tmp_path / "logs"
@@ -1601,7 +1601,7 @@ class TestLogsCLI:
 
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         # Create log directory and file
         log_dir = tmp_path / "logs"
@@ -1631,7 +1631,7 @@ class TestLogsCLI:
 
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         # Create log directory and file
         log_dir = tmp_path / "logs"
@@ -1662,7 +1662,7 @@ class TestLogsCLI:
 
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         # Create log directory
         log_dir = tmp_path / "logs"
@@ -1692,7 +1692,7 @@ class TestLogsCLI:
 
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         # Create log directory and file
         log_dir = tmp_path / "logs"
@@ -1722,7 +1722,7 @@ class TestLogsCLI:
         """Test logs command rejects invalid log level."""
         from typer.testing import CliRunner
 
-        from mozart.cli import app
+        from marianne.cli import app
 
         # Create log directory and file
         log_dir = tmp_path / "logs"

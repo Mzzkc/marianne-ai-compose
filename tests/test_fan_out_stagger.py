@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.config.execution import ParallelConfig
-from mozart.execution.parallel import ParallelExecutionConfig, ParallelExecutor
+from marianne.core.config.execution import ParallelConfig
+from marianne.execution.parallel import ParallelExecutionConfig, ParallelExecutor
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ class TestParallelConfigStagger:
 
     def test_stagger_delay_in_yaml(self) -> None:
         """stagger_delay_ms is accepted from YAML config."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config = JobConfig.model_validate({
             "name": "test",

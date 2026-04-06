@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from mozart.core.tokens import estimate_tokens
-from mozart.execution.preflight import (
+from marianne.core.tokens import estimate_tokens
+from marianne.execution.preflight import (
     LINE_WARNING_THRESHOLD,
     PreflightChecker,
     PreflightResult,
@@ -447,7 +447,7 @@ class TestFilePathExtraction:
     def test_very_long_strings_rejected_as_paths(self):
         """Test that _is_plausible_path rejects very long strings."""
         long_str = "a/b.txt" + " extra content " * 50
-        from mozart.execution.preflight import _is_plausible_path
+        from marianne.execution.preflight import _is_plausible_path
 
         assert not _is_plausible_path(long_str)
 

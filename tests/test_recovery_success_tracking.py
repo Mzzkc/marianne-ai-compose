@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from mozart.learning.global_store import GlobalLearningStore
+from marianne.learning.global_store import GlobalLearningStore
 
 
 @pytest.fixture
@@ -270,7 +270,7 @@ def test_get_effective_model_for_claude_cli():
 
     Evolution #25 Candidate 4: Fix Recovery Success Tracking
     """
-    from mozart.core.config import BackendConfig
+    from marianne.core.config import BackendConfig
 
     # Test Claude CLI backend with cli_model set
     cli_backend = BackendConfig(
@@ -298,7 +298,7 @@ def test_get_effective_model_for_claude_cli():
 
 def test_get_effective_model_for_anthropic_api():
     """Test that _get_effective_model() returns model for Anthropic API backend."""
-    from mozart.core.config import BackendConfig
+    from marianne.core.config import BackendConfig
 
     # Test Anthropic API backend
     api_backend = BackendConfig(

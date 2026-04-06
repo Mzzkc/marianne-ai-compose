@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
-from mozart.daemon.config import DaemonConfig
-from mozart.daemon.process import DaemonProcess
+from marianne.daemon.config import DaemonConfig
+from marianne.daemon.process import DaemonProcess
 
 
 def _build_daemon_and_register(
@@ -145,7 +145,7 @@ class TestLearningPatternsHandler:
     @pytest.mark.asyncio
     async def test_returns_pattern_data(self):
         """Returns serialized pattern records from the store."""
-        from mozart.learning.store.models import PatternRecord, QuarantineStatus
+        from marianne.learning.store.models import PatternRecord, QuarantineStatus
 
         record = PatternRecord(
             id="pat-001",

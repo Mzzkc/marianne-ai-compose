@@ -10,9 +10,9 @@ import jinja2
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.dashboard.app import create_app
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.dashboard.app import create_app
+from marianne.state.json_backend import JsonStateBackend
 
 # Exceptions tolerated when rendering templates that mix Jinja2 and Alpine.js
 # syntax.  The route being registered (not 404) is what these tests verify.

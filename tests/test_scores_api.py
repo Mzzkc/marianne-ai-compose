@@ -2,8 +2,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.dashboard.app import create_app
-from mozart.state.json_backend import JsonStateBackend
+from marianne.dashboard.app import create_app
+from marianne.state.json_backend import JsonStateBackend
 
 
 @pytest.fixture
@@ -389,7 +389,7 @@ class TestTemplateAPI:
     @pytest.fixture
     def client(self):
         """Create test client."""
-        from mozart.dashboard.app import create_app
+        from marianne.dashboard.app import create_app
         app = create_app()
         return TestClient(app)
 
@@ -539,7 +539,7 @@ class TestTemplateAnalysis:
 
     def test_analyze_simple_template(self):
         """Test analyze_template with simple config."""
-        from mozart.dashboard.routes.scores import analyze_template
+        from marianne.dashboard.routes.scores import analyze_template
 
         content = """
 name: test-job
@@ -554,7 +554,7 @@ sheet:
 
     def test_analyze_complex_template(self):
         """Test analyze_template with complex config."""
-        from mozart.dashboard.routes.scores import analyze_template
+        from marianne.dashboard.routes.scores import analyze_template
 
         content = """
 name: complex-job
@@ -580,7 +580,7 @@ notifications:
 
     def test_analyze_template_with_jinja(self):
         """Test analyze_template extracts Jinja variables."""
-        from mozart.dashboard.routes.scores import analyze_template
+        from marianne.dashboard.routes.scores import analyze_template
 
         # Use quoted YAML values so Jinja syntax doesn't break YAML parsing
         content = """
@@ -601,7 +601,7 @@ sheet:
 
     def test_analyze_template_error_handling(self):
         """Test analyze_template handles invalid YAML gracefully."""
-        from mozart.dashboard.routes.scores import analyze_template
+        from marianne.dashboard.routes.scores import analyze_template
 
         content = "invalid: [yaml: content"  # Invalid YAML
 

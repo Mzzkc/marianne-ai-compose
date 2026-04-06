@@ -26,7 +26,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from mozart.utils.credential_scanner import redact_credentials
+from marianne.utils.credential_scanner import redact_credentials
 
 # =========================================================================
 # Test: error_message field in SheetAttemptResult gets redacted
@@ -279,7 +279,7 @@ class TestMusicianSheetTaskErrorRedaction:
 
     def _make_sheet(self, tmp_path: Path) -> Any:
         """Create a minimal Sheet for testing."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         return Sheet(
             num=1,
@@ -302,7 +302,7 @@ class TestMusicianSheetTaskErrorRedaction:
 
     def _make_context(self) -> Any:
         """Create a minimal AttemptContext."""
-        from mozart.daemon.baton.state import AttemptContext, AttemptMode
+        from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
         return AttemptContext(
             attempt_number=1,
@@ -314,8 +314,8 @@ class TestMusicianSheetTaskErrorRedaction:
     ) -> None:
         """When a backend raises an exception containing an Anthropic key,
         the SheetAttemptResult.error_message must have the key redacted."""
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -352,8 +352,8 @@ class TestMusicianSheetTaskErrorRedaction:
         self, tmp_path: Path
     ) -> None:
         """AWS key in exception message must be redacted."""
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -385,8 +385,8 @@ class TestMusicianSheetTaskErrorRedaction:
         self, tmp_path: Path
     ) -> None:
         """Normal exceptions without credentials preserve the full message."""
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -415,8 +415,8 @@ class TestMusicianSheetTaskErrorRedaction:
         self, tmp_path: Path
     ) -> None:
         """Multiple credential types in one exception all get redacted."""
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -470,7 +470,7 @@ class TestClassifyErrorPathRedaction:
 
     def _make_sheet(self, tmp_path: Path) -> Any:
         """Create a minimal Sheet for testing."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         return Sheet(
             num=1,
@@ -493,7 +493,7 @@ class TestClassifyErrorPathRedaction:
 
     def _make_context(self) -> Any:
         """Create a minimal AttemptContext."""
-        from mozart.daemon.baton.state import AttemptContext, AttemptMode
+        from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
         return AttemptContext(
             attempt_number=1,
@@ -508,9 +508,9 @@ class TestClassifyErrorPathRedaction:
         Exercises the TRANSIENT path at musician.py _classify_error line 608
         (exit_code=None → process killed by signal).
         """
-        from mozart.backends.base import ExecutionResult
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.backends.base import ExecutionResult
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -554,9 +554,9 @@ class TestClassifyErrorPathRedaction:
 
         Exercises the AUTH_FAILURE path at musician.py _classify_error line 622.
         """
-        from mozart.backends.base import ExecutionResult
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.backends.base import ExecutionResult
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -600,9 +600,9 @@ class TestClassifyErrorPathRedaction:
 
         Exercises the default EXECUTION_ERROR path at _classify_error line 627.
         """
-        from mozart.backends.base import ExecutionResult
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.backends.base import ExecutionResult
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -642,9 +642,9 @@ class TestClassifyErrorPathRedaction:
         self, tmp_path: Path
     ) -> None:
         """Backend returning error_message=None: passes through unchanged."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.backends.base import ExecutionResult
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -681,9 +681,9 @@ class TestClassifyErrorPathRedaction:
         self, tmp_path: Path
     ) -> None:
         """Backend returning error_message without credentials: preserved intact."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.backends.base import ExecutionResult
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()

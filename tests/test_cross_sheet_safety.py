@@ -28,7 +28,7 @@ class TestCaptureFilesCredentialRedaction:
 
     def test_legacy_runner_redacts_capture_files(self, tmp_path: Path) -> None:
         """Legacy runner _capture_cross_sheet_files redacts credentials."""
-        from mozart.prompts.templating import SheetContext
+        from marianne.prompts.templating import SheetContext
 
         # Write a workspace file containing an API key
         secret_file = tmp_path / "config.env"
@@ -38,7 +38,7 @@ class TestCaptureFilesCredentialRedaction:
 
         mixin = _make_context_mixin(workspace=tmp_path)
 
-        from mozart.core.config.workspace import CrossSheetConfig
+        from marianne.core.config.workspace import CrossSheetConfig
 
         cross_sheet = CrossSheetConfig(
             capture_files=[str(secret_file)],
@@ -67,7 +67,7 @@ class TestCaptureFilesCredentialRedaction:
         self, tmp_path: Path
     ) -> None:
         """OpenAI keys in captured files are redacted."""
-        from mozart.prompts.templating import SheetContext
+        from marianne.prompts.templating import SheetContext
 
         secret_file = tmp_path / "secrets.txt"
         secret_file.write_text(
@@ -76,7 +76,7 @@ class TestCaptureFilesCredentialRedaction:
 
         mixin = _make_context_mixin(workspace=tmp_path)
 
-        from mozart.core.config.workspace import CrossSheetConfig
+        from marianne.core.config.workspace import CrossSheetConfig
 
         cross_sheet = CrossSheetConfig(
             capture_files=[str(secret_file)],
@@ -99,7 +99,7 @@ class TestCaptureFilesCredentialRedaction:
 
     def test_baton_adapter_redacts_capture_files(self, tmp_path: Path) -> None:
         """Baton adapter _collect_cross_sheet_context redacts credentials."""
-        from mozart.core.config.workspace import CrossSheetConfig
+        from marianne.core.config.workspace import CrossSheetConfig
 
         secret_file = tmp_path / "leaked.txt"
         secret_file.write_text(
@@ -130,7 +130,7 @@ class TestCaptureFilesCredentialRedaction:
 
     def test_non_credential_content_preserved(self, tmp_path: Path) -> None:
         """Normal file content (no credentials) is preserved unchanged."""
-        from mozart.core.config.workspace import CrossSheetConfig
+        from marianne.core.config.workspace import CrossSheetConfig
 
         normal_file = tmp_path / "output.md"
         normal_file.write_text("# Analysis Results\n\nThe data shows improvement.")
@@ -155,7 +155,7 @@ class TestCaptureFilesCredentialRedaction:
 
     def test_truncation_happens_after_redaction(self, tmp_path: Path) -> None:
         """File content is redacted first, then truncated."""
-        from mozart.core.config.workspace import CrossSheetConfig
+        from marianne.core.config.workspace import CrossSheetConfig
 
         padding = "x" * 50
         credential = "sk-ant-api03-FAKEKEYFAKEKEYFAKEKEY12345678"
@@ -180,7 +180,7 @@ class TestCaptureFilesCredentialRedaction:
 
     def test_bearer_token_in_files_redacted(self, tmp_path: Path) -> None:
         """Bearer tokens in captured workspace files are redacted."""
-        from mozart.core.config.workspace import CrossSheetConfig
+        from marianne.core.config.workspace import CrossSheetConfig
 
         config_file = tmp_path / "api-config.json"
         config_file.write_text(
@@ -206,7 +206,7 @@ class TestCaptureFilesCredentialRedaction:
 
     def test_aws_key_in_files_redacted(self, tmp_path: Path) -> None:
         """AWS access keys in captured files are redacted."""
-        from mozart.core.config.workspace import CrossSheetConfig
+        from marianne.core.config.workspace import CrossSheetConfig
 
         env_file = tmp_path / ".env"
         env_file.write_text("AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE")
@@ -239,8 +239,8 @@ class TestBatonSkippedUpstream:
 
     def test_skipped_sheets_get_placeholder(self) -> None:
         """Skipped upstream sheets should inject [SKIPPED] in previous_outputs."""
-        from mozart.core.config.workspace import CrossSheetConfig
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.core.config.workspace import CrossSheetConfig
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         adapter = _make_baton_adapter()
         job_id = "test-job"
@@ -292,8 +292,8 @@ class TestBatonSkippedUpstream:
 
     def test_only_skipped_status_gets_placeholder(self) -> None:
         """PENDING/FAILED sheets should NOT get [SKIPPED] placeholder."""
-        from mozart.core.config.workspace import CrossSheetConfig
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.core.config.workspace import CrossSheetConfig
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         adapter = _make_baton_adapter()
         job_id = "test-job"
@@ -326,8 +326,8 @@ class TestBatonSkippedUpstream:
 
     def test_skipped_upstream_with_lookback(self) -> None:
         """[SKIPPED] placeholder respects lookback_sheets window."""
-        from mozart.core.config.workspace import CrossSheetConfig
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.core.config.workspace import CrossSheetConfig
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         adapter = _make_baton_adapter()
         job_id = "test-job"
@@ -386,7 +386,7 @@ class TestBatonSkippedUpstream:
 
 def _make_context_mixin(workspace: Path) -> Any:
     """Create a minimal ContextBuildingMixin instance for testing."""
-    from mozart.execution.runner.context import ContextBuildingMixin
+    from marianne.execution.runner.context import ContextBuildingMixin
 
     class FakeRunner(ContextBuildingMixin):
         def __init__(self, ws: Path) -> None:
@@ -411,7 +411,7 @@ def _make_mock_state(started_at_ts: float = 0.0) -> MagicMock:
 
 def _make_baton_adapter() -> Any:
     """Create a minimal BatonAdapter for testing."""
-    from mozart.daemon.baton.adapter import BatonAdapter
+    from marianne.daemon.baton.adapter import BatonAdapter
 
     adapter = BatonAdapter(
         event_bus=MagicMock(),
@@ -424,7 +424,7 @@ def _make_attempt_result(
     execution_success: bool = True,
 ) -> Any:
     """Create a SheetAttemptResult for testing."""
-    from mozart.daemon.baton.events import SheetAttemptResult
+    from marianne.daemon.baton.events import SheetAttemptResult
 
     return SheetAttemptResult(
         job_id="test-job",

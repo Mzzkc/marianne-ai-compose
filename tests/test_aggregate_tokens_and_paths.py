@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 
-from mozart.utils.json_path import extract_json_path, extract_json_path_all
+from marianne.utils.json_path import extract_json_path, extract_json_path_all
 
 
 # =============================================================================
@@ -148,7 +148,7 @@ class TestAggregateTokensInBackend:
         output_tokens_path: str = "usage.output_tokens",
     ):
         """Create a PluginCliBackend with aggregate_tokens configured."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliErrorConfig,
             CliOutputConfig,
@@ -156,7 +156,7 @@ class TestAggregateTokensInBackend:
             InstrumentProfile,
             ModelCapacity,
         )
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = InstrumentProfile(
             name="test-instrument",
@@ -310,19 +310,19 @@ class TestCliOutputConfigAggregateTokens:
 
     def test_default_is_false(self) -> None:
         """aggregate_tokens defaults to False for backward compat."""
-        from mozart.core.config.instruments import CliOutputConfig
+        from marianne.core.config.instruments import CliOutputConfig
         config = CliOutputConfig(format="json")
         assert config.aggregate_tokens is False
 
     def test_can_set_true(self) -> None:
         """aggregate_tokens can be set to True."""
-        from mozart.core.config.instruments import CliOutputConfig
+        from marianne.core.config.instruments import CliOutputConfig
         config = CliOutputConfig(format="json", aggregate_tokens=True)
         assert config.aggregate_tokens is True
 
     def test_survives_serialization(self) -> None:
         """aggregate_tokens round-trips through dict serialization."""
-        from mozart.core.config.instruments import CliOutputConfig
+        from marianne.core.config.instruments import CliOutputConfig
         config = CliOutputConfig(format="json", aggregate_tokens=True)
         data = config.model_dump()
         restored = CliOutputConfig.model_validate(data)
@@ -330,7 +330,7 @@ class TestCliOutputConfigAggregateTokens:
 
     def test_loaded_from_yaml_dict(self) -> None:
         """aggregate_tokens loads correctly from YAML-like dict."""
-        from mozart.core.config.instruments import CliOutputConfig
+        from marianne.core.config.instruments import CliOutputConfig
         data = {
             "format": "json",
             "aggregate_tokens": True,

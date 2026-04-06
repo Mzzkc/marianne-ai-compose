@@ -129,10 +129,10 @@ class TestRecoveryStateMappingFidelity:
         """Every checkpoint status maps to the correct baton status after recovery."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.core.sheet import Sheet
-        from mozart.daemon.baton.adapter import BatonAdapter
-        from mozart.daemon.baton.state import BatonSheetStatus
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.core.sheet import Sheet
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.state import BatonSheetStatus
 
         # Build a minimal checkpoint with one sheet
         checkpoint = MagicMock()
@@ -211,9 +211,9 @@ class TestRecoveryAttemptCountPreservation:
         """Attempt counts from checkpoint carry into baton state exactly."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.core.sheet import Sheet
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.core.sheet import Sheet
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         checkpoint = MagicMock()
         sheet_state = MagicMock(spec=SheetState)
@@ -259,8 +259,8 @@ class TestRecoveryAttemptCountPreservation:
         """Sheets not in the checkpoint start with zero attempt counts."""
         from unittest.mock import MagicMock
 
-        from mozart.core.sheet import Sheet
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.core.sheet import Sheet
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         checkpoint = MagicMock()
         checkpoint.sheets = {}  # Empty — sheet 1 not in checkpoint
@@ -317,10 +317,10 @@ class TestRecoveryDispatchReadiness:
         """Dispatchability aligns with recovery status."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.core.sheet import Sheet
-        from mozart.daemon.baton.adapter import BatonAdapter
-        from mozart.daemon.baton.state import (
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.core.sheet import Sheet
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.state import (
             _DISPATCHABLE_BATON_STATUSES,
             _TERMINAL_BATON_STATUSES,
         )
@@ -391,7 +391,7 @@ class TestClonePathMutualExclusion:
         """No path overlap between two different clone names."""
         assume(name_a != name_b)
 
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths_a = resolve_clone_paths(name_a)
         paths_b = resolve_clone_paths(name_b)
@@ -408,7 +408,7 @@ class TestClonePathMutualExclusion:
     @settings(max_examples=50)
     def test_clone_paths_internally_disjoint(self, name: str) -> None:
         """All 4 paths for a single clone are distinct from each other."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths(name)
         all_paths = [paths.socket, paths.pid_file, paths.state_db, paths.log_file]
@@ -418,7 +418,7 @@ class TestClonePathMutualExclusion:
 
     def test_default_clone_vs_named_clone_disjoint(self) -> None:
         """Default clone (name=None) and any named clone have disjoint paths."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         default_paths = resolve_clone_paths(None)
         named_paths = resolve_clone_paths("test-clone")
@@ -460,8 +460,8 @@ class TestCloneConfigPathIsolation:
         self, name: str | None
     ) -> None:
         """Clone socket path is never the production default."""
-        from mozart.daemon.clone import build_clone_config
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.clone import build_clone_config
+        from marianne.daemon.config import DaemonConfig
 
         prod = DaemonConfig()
         clone = build_clone_config(name)
@@ -476,8 +476,8 @@ class TestCloneConfigPathIsolation:
         self, name: str | None
     ) -> None:
         """Clone PID file is never the production default."""
-        from mozart.daemon.clone import build_clone_config
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.clone import build_clone_config
+        from marianne.daemon.config import DaemonConfig
 
         prod = DaemonConfig()
         clone = build_clone_config(name)
@@ -492,8 +492,8 @@ class TestCloneConfigPathIsolation:
         self, name: str | None
     ) -> None:
         """Clone state DB is never the production default."""
-        from mozart.daemon.clone import build_clone_config
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.clone import build_clone_config
+        from marianne.daemon.config import DaemonConfig
 
         prod = DaemonConfig()
         clone = build_clone_config(name)
@@ -504,8 +504,8 @@ class TestCloneConfigPathIsolation:
 
     def test_clone_from_base_config_inherits_non_path_fields(self) -> None:
         """When cloning from a base config, non-path fields survive."""
-        from mozart.daemon.clone import build_clone_config
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.clone import build_clone_config
+        from marianne.daemon.config import DaemonConfig
 
         base = DaemonConfig(max_concurrent_jobs=42)
         clone = build_clone_config("inherit-test", base_config=base)
@@ -540,7 +540,7 @@ class TestCredentialRedactionTotality:
         self, credential: str, prefix: str, suffix: str
     ) -> None:
         """Any credential embedded in text is removed by redaction."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = f"{prefix}{credential}{suffix}"
         result = redact_credentials(text)
@@ -556,7 +556,7 @@ class TestCredentialRedactionTotality:
     @settings(max_examples=100)
     def test_bare_credential_fully_redacted(self, credential: str) -> None:
         """A bare credential string is fully replaced by a redaction marker."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         result = redact_credentials(credential)
         assert credential not in result
@@ -572,7 +572,7 @@ class TestCredentialRedactionTotality:
         self, cred_a: str, cred_b: str, separator: str
     ) -> None:
         """Multiple credentials in the same string are all redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = f"{cred_a}{separator}{cred_b}"
         result = redact_credentials(text)
@@ -603,7 +603,7 @@ class TestCredentialRedactionIdempotency:
         self, credential: str, prefix: str, suffix: str
     ) -> None:
         """Double redaction equals single redaction."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = f"{prefix}{credential}{suffix}"
         once = redact_credentials(text)
@@ -617,7 +617,7 @@ class TestCredentialRedactionIdempotency:
 
     def test_redaction_marker_not_itself_redacted(self) -> None:
         """The [REDACTED_*] marker text is not mistaken for a credential."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         markers = [
             "[REDACTED_ANTHROPIC_KEY]",
@@ -651,25 +651,25 @@ class TestCredentialRedactionPreservesNonCredentials:
     @settings(max_examples=100)
     def test_safe_text_unchanged(self, text: str) -> None:
         """Pure alphabetic text is never modified."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         assert redact_credentials(text) == text
 
     def test_none_passthrough(self) -> None:
         """None input returns None."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         assert redact_credentials(None) is None
 
     def test_empty_string_passthrough(self) -> None:
         """Empty string returns empty string."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         assert redact_credentials("") == ""
 
     def test_non_string_passthrough(self) -> None:
         """Non-string input is returned unchanged."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         assert redact_credentials(42) == 42  # type: ignore[arg-type]
         assert redact_credentials([1, 2]) == [1, 2]  # type: ignore[arg-type]
@@ -689,7 +689,7 @@ class TestV210InstrumentNameCheckCoverage:
 
     def _make_config(self, instrument_name: str) -> Any:
         """Build a minimal valid JobConfig with the given instrument."""
-        from mozart.core.config.job import JobConfig, PromptConfig, SheetConfig
+        from marianne.core.config.job import JobConfig, PromptConfig, SheetConfig
 
         return JobConfig(
             name="test-job",
@@ -702,7 +702,7 @@ class TestV210InstrumentNameCheckCoverage:
         """Built-in instrument names don't produce V210 warnings."""
         from unittest.mock import patch
 
-        from mozart.validation.checks.config import InstrumentNameCheck
+        from marianne.validation.checks.config import InstrumentNameCheck
 
         known = {"claude-code", "gemini-cli", "codex-cli", "aider", "goose", "ollama"}
 
@@ -711,7 +711,7 @@ class TestV210InstrumentNameCheckCoverage:
         for name in known:
             config = self._make_config(name)
             with patch(
-                "mozart.instruments.loader.load_all_profiles",
+                "marianne.instruments.loader.load_all_profiles",
                 return_value={n: None for n in known},
             ):
                 issues = check.check(config, Path("test.yaml"), "")
@@ -740,7 +740,7 @@ class TestV210InstrumentNameCheckCoverage:
         """Unknown instrument names always produce V210 warnings."""
         from unittest.mock import patch
 
-        from mozart.validation.checks.config import InstrumentNameCheck
+        from marianne.validation.checks.config import InstrumentNameCheck
 
         known = {"claude-code", "gemini-cli", "codex-cli", "aider", "goose", "ollama"}
 
@@ -748,7 +748,7 @@ class TestV210InstrumentNameCheckCoverage:
         config = self._make_config(name)
 
         with patch(
-            "mozart.instruments.loader.load_all_profiles",
+            "marianne.instruments.loader.load_all_profiles",
             return_value={n: None for n in known},
         ):
             issues = check.check(config, Path("test.yaml"), "")
@@ -789,8 +789,8 @@ class TestFailurePropagationPreservesTerminals:
         terminal_position: int,
     ) -> None:
         """Terminal sheets in the dependency chain are never overwritten."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         assume(terminal_position <= chain_length)
 
@@ -808,7 +808,7 @@ class TestFailurePropagationPreservesTerminals:
         target.status = BatonSheetStatus[terminal_status]
 
         # Fail sheet 1 — propagation should respect terminal positions
-        from mozart.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.events import SheetAttemptResult
 
         result = SheetAttemptResult(
             job_id="j1",
@@ -831,9 +831,9 @@ class TestFailurePropagationPreservesTerminals:
 
     def test_completed_sheet_survives_upstream_failure(self) -> None:
         """COMPLETED sheet is never changed to FAILED by propagation."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         # 1 → 2 → 3, where 2 is already COMPLETED
@@ -895,10 +895,10 @@ class TestRecoveryMultiSheetComposition:
         """Each sheet recovers independently based on its checkpoint status."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.core.sheet import Sheet
-        from mozart.daemon.baton.adapter import BatonAdapter
-        from mozart.daemon.baton.state import BatonSheetStatus
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.core.sheet import Sheet
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.state import BatonSheetStatus
 
         checkpoint = MagicMock()
         checkpoint.sheets = {}

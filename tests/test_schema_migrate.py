@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import aiosqlite
 
-from mozart.schema.migrate import apply_migrations, get_version, set_version
+from marianne.schema.migrate import apply_migrations, get_version, set_version
 
 
 # ---------------------------------------------------------------------------

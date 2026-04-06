@@ -18,9 +18,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.daemon.exceptions import DaemonError, DaemonNotRunningError, JobSubmissionError
-from mozart.daemon.ipc.client import DaemonClient
-from mozart.daemon.ipc.errors import JOB_NOT_FOUND
+from marianne.daemon.exceptions import DaemonError, DaemonNotRunningError, JobSubmissionError
+from marianne.daemon.ipc.client import DaemonClient
+from marianne.daemon.ipc.errors import JOB_NOT_FOUND
 
 
 # ---------------------------------------------------------------------------

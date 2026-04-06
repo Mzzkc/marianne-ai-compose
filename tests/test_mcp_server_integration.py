@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mozart.mcp.server import MCPServer
+from marianne.mcp.server import MCPServer
 
 
 class TestMCPServerIntegration:

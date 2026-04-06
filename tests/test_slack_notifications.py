@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from mozart.notifications.base import NotificationContext, NotificationEvent
-from mozart.notifications.slack import (
+from marianne.notifications.base import NotificationContext, NotificationEvent
+from marianne.notifications.slack import (
     MockSlackNotifier,
     SlackNotifier,
     _get_event_color,

@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.state.json_backend import JsonStateBackend
 
 
 class TestAtomicOperations:
@@ -282,7 +282,7 @@ class TestCorruptedStateRecovery:
     @pytest.mark.asyncio
     async def test_load_corrupted_json(self, tmp_path: Path) -> None:
         """Test loading a corrupted JSON file raises StateCorruptionError."""
-        from mozart.state.json_backend import StateCorruptionError
+        from marianne.state.json_backend import StateCorruptionError
 
         backend = JsonStateBackend(tmp_path)
 
@@ -297,7 +297,7 @@ class TestCorruptedStateRecovery:
     @pytest.mark.asyncio
     async def test_load_invalid_schema(self, tmp_path: Path) -> None:
         """Test loading JSON with invalid schema raises StateCorruptionError."""
-        from mozart.state.json_backend import StateCorruptionError
+        from marianne.state.json_backend import StateCorruptionError
 
         backend = JsonStateBackend(tmp_path)
 
@@ -498,7 +498,7 @@ class TestZombieDetectionAndRecovery:
     @pytest.mark.asyncio
     async def test_truncated_json_raises_corruption_error(self, tmp_path: Path) -> None:
         """Test that a truncated JSON file (crash during write) raises StateCorruptionError."""
-        from mozart.state.json_backend import StateCorruptionError
+        from marianne.state.json_backend import StateCorruptionError
 
         backend = JsonStateBackend(tmp_path)
 
@@ -511,7 +511,7 @@ class TestZombieDetectionAndRecovery:
     @pytest.mark.asyncio
     async def test_empty_file_raises_corruption_error(self, tmp_path: Path) -> None:
         """Test that an empty state file raises StateCorruptionError."""
-        from mozart.state.json_backend import StateCorruptionError
+        from marianne.state.json_backend import StateCorruptionError
 
         backend = JsonStateBackend(tmp_path)
 

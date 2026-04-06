@@ -12,7 +12,7 @@ import signal
 
 import pytest
 
-from mozart.core.errors import (
+from marianne.core.errors import (
     ClassifiedError,
     ErrorCategory,
     ErrorClassifier,
@@ -511,7 +511,7 @@ class TestErrorCodeIntegration:
 
     def test_error_record_uses_error_code(self) -> None:
         """Test that ErrorRecord can store error codes."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         state = SheetState(sheet_num=1)
         record_error_on_sheet(

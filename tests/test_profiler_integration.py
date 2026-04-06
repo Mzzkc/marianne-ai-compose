@@ -19,9 +19,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mozart.daemon.event_bus import EventBus
-from mozart.daemon.profiler.collector import ProfilerCollector
-from mozart.daemon.profiler.models import (
+from marianne.daemon.event_bus import EventBus
+from marianne.daemon.profiler.collector import ProfilerCollector
+from marianne.daemon.profiler.models import (
     EventType,
     GpuMetric,
     ProcessEvent,
@@ -29,8 +29,8 @@ from mozart.daemon.profiler.models import (
     ProfilerConfig,
     SystemSnapshot,
 )
-from mozart.daemon.profiler.storage import MonitorStorage, generate_resource_report
-from mozart.daemon.types import ObserverEvent
+from marianne.daemon.profiler.storage import MonitorStorage, generate_resource_report
+from marianne.daemon.types import ObserverEvent
 
 
 # ---------------------------------------------------------------------------
@@ -153,13 +153,13 @@ class TestProfilerCollectorLifecycle:
         # Manually collect and persist snapshots (simulates what the loop does)
         for i in range(5):
             with (
-                patch("mozart.daemon.profiler.collector._psutil", None),
+                patch("marianne.daemon.profiler.collector._psutil", None),
                 patch(
-                    "mozart.daemon.profiler.collector.SystemProbe.get_memory_mb",
+                    "marianne.daemon.profiler.collector.SystemProbe.get_memory_mb",
                     return_value=100.0 + i * 50,
                 ),
                 patch(
-                    "mozart.daemon.profiler.collector.os.getloadavg",
+                    "marianne.daemon.profiler.collector.os.getloadavg",
                     return_value=(1.0, 0.8, 0.5),
                 ),
             ):
@@ -212,8 +212,8 @@ class TestAnomalyToLearningFlow:
     async def test_anomaly_to_learning_flow(self) -> None:
         """When AnomalyDetector finds an anomaly, it flows through EventBus
         to SemanticAnalyzer which stores a RESOURCE_ANOMALY pattern."""
-        from mozart.daemon.semantic_analyzer import SemanticAnalyzer
-        from mozart.learning.patterns import PatternType
+        from marianne.daemon.semantic_analyzer import SemanticAnalyzer
+        from marianne.learning.patterns import PatternType
 
         event_bus = EventBus(max_queue_size=100)
         await event_bus.start()
@@ -519,7 +519,7 @@ class TestProfilerConfigInDaemonConfig:
 
     def test_profiler_config_in_daemon_config(self) -> None:
         """DaemonConfig includes ProfilerConfig with correct defaults."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()
         assert hasattr(config, "profiler")
@@ -536,7 +536,7 @@ class TestProfilerConfigInDaemonConfig:
 
     def test_profiler_config_custom_values(self) -> None:
         """DaemonConfig accepts custom profiler settings."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig(
             profiler=ProfilerConfig(
@@ -552,7 +552,7 @@ class TestProfilerConfigInDaemonConfig:
 
     def test_profiler_config_nested_sections(self) -> None:
         """Profiler retention, anomaly, and correlation configs are nested."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()
 

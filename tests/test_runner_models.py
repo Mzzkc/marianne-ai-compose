@@ -7,10 +7,10 @@ from typing import Any
 
 import pytest
 
-from mozart.core.checkpoint import JobStatus
-from mozart.core.errors.codes import ErrorCategory, ErrorCode
-from mozart.core.errors.models import ClassificationResult, ClassifiedError, ErrorChain
-from mozart.execution.runner.models import (
+from marianne.core.checkpoint import JobStatus
+from marianne.core.errors.codes import ErrorCategory, ErrorCode
+from marianne.core.errors.models import ClassificationResult, ClassifiedError, ErrorChain
+from marianne.execution.runner.models import (
     FatalError,
     GracefulShutdownError,
     GroundingDecisionContext,

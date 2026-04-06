@@ -16,9 +16,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import JobConfig, PostSuccessHookConfig
-from mozart.execution.hooks import HookExecutor
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config import JobConfig, PostSuccessHookConfig
+from marianne.execution.hooks import HookExecutor
 
 # =========================================================================
 # Fixtures
@@ -155,8 +155,8 @@ class TestHookExecutorFreshFlag:
             proc.poll.return_value = None  # Child still alive for liveness check
             return proc
 
-        with patch("mozart.execution.hooks._try_daemon_submit", return_value=(False, None)), \
-             patch("mozart.execution.hooks._subprocess.Popen", side_effect=mock_popen):
+        with patch("marianne.execution.hooks._try_daemon_submit", return_value=(False, None)), \
+             patch("marianne.execution.hooks._subprocess.Popen", side_effect=mock_popen):
             results = await executor.execute_hooks()
 
         assert len(results) == 1
@@ -201,8 +201,8 @@ class TestHookExecutorFreshFlag:
             proc.poll.return_value = None  # Child still alive for liveness check
             return proc
 
-        with patch("mozart.execution.hooks._try_daemon_submit", return_value=(False, None)), \
-             patch("mozart.execution.hooks._subprocess.Popen", side_effect=mock_popen):
+        with patch("marianne.execution.hooks._try_daemon_submit", return_value=(False, None)), \
+             patch("marianne.execution.hooks._subprocess.Popen", side_effect=mock_popen):
             results = await executor.execute_hooks()
 
         assert len(results) == 1
@@ -221,8 +221,8 @@ class TestZeroWorkGuard:
     @pytest.mark.asyncio
     async def test_hooks_skipped_when_already_completed(self) -> None:
         """on_success hooks should NOT fire when job was already COMPLETED."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.execution.runner import JobRunner, RunnerContext
+        from marianne.backends.base import ExecutionResult
+        from marianne.execution.runner import JobRunner, RunnerContext
 
         config = JobConfig.model_validate({
             "name": "guard-test",
@@ -282,8 +282,8 @@ class TestZeroWorkGuard:
     @pytest.mark.asyncio
     async def test_hooks_fire_when_new_work_done(self, tmp_path: Path) -> None:
         """on_success hooks SHOULD fire when job completes with real work."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.execution.runner import JobRunner, RunnerContext
+        from marianne.backends.base import ExecutionResult
+        from marianne.execution.runner import JobRunner, RunnerContext
 
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -339,8 +339,8 @@ class TestZeroWorkGuard:
     @pytest.mark.asyncio
     async def test_hooks_fire_when_resumed_partial(self, tmp_path: Path) -> None:
         """on_success hooks SHOULD fire when a partial job resumes and completes."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.execution.runner import JobRunner, RunnerContext
+        from marianne.backends.base import ExecutionResult
+        from marianne.execution.runner import JobRunner, RunnerContext
 
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -559,7 +559,7 @@ class TestExecutePostSuccessHooksDirect:
     @pytest.mark.asyncio
     async def test_no_hooks_returns_early(self, tmp_path: Path) -> None:
         """Method returns immediately when on_success is empty."""
-        from mozart.execution.runner import JobRunner, RunnerContext
+        from marianne.execution.runner import JobRunner, RunnerContext
 
         config = JobConfig.model_validate({
             "name": "no-hooks",
@@ -587,9 +587,9 @@ class TestExecutePostSuccessHooksDirect:
     @pytest.mark.asyncio
     async def test_hooks_update_summary(self, tmp_path: Path) -> None:
         """Hook execution results are reflected in the run summary."""
-        from mozart.execution.hooks import HookResult
-        from mozart.execution.runner import JobRunner, RunnerContext
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.hooks import HookResult
+        from marianne.execution.runner import JobRunner, RunnerContext
+        from marianne.execution.runner.models import RunSummary
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
@@ -632,7 +632,7 @@ class TestExecutePostSuccessHooksDirect:
             HookResult(hook_type="run_command", description="false", success=False),
         ]
         with patch(
-            "mozart.execution.runner.lifecycle.HookExecutor"
+            "marianne.execution.runner.lifecycle.HookExecutor"
         ) as MockExecutorClass:
             mock_executor = AsyncMock()
             mock_executor.execute_hooks = AsyncMock(return_value=mock_results)
@@ -648,7 +648,7 @@ class TestExecutePostSuccessHooksDirect:
     @pytest.mark.asyncio
     async def test_concert_context_is_none(self, tmp_path: Path) -> None:
         """Verify concert_context=None is passed to HookExecutor (TODO #37)."""
-        from mozart.execution.runner import JobRunner, RunnerContext
+        from marianne.execution.runner import JobRunner, RunnerContext
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
@@ -677,7 +677,7 @@ class TestExecutePostSuccessHooksDirect:
         state.status = JobStatus.COMPLETED
 
         with patch(
-            "mozart.execution.runner.lifecycle.HookExecutor"
+            "marianne.execution.runner.lifecycle.HookExecutor"
         ) as MockExecutorClass:
             mock_executor = AsyncMock()
             mock_executor.execute_hooks = AsyncMock(return_value=[])
@@ -700,8 +700,8 @@ class TestDaemonManagedHookSuppression:
     @pytest.mark.asyncio
     async def test_hooks_suppressed_when_daemon_managed(self, tmp_path: Path) -> None:
         """When daemon_managed=True, run() skips _execute_post_success_hooks."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.execution.runner import JobRunner, RunnerContext
+        from marianne.backends.base import ExecutionResult
+        from marianne.execution.runner import JobRunner, RunnerContext
 
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -759,8 +759,8 @@ class TestDaemonManagedHookSuppression:
     @pytest.mark.asyncio
     async def test_hooks_fire_when_not_daemon_managed(self, tmp_path: Path) -> None:
         """When daemon_managed=False (default), run() fires hooks normally."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.execution.runner import JobRunner, RunnerContext
+        from marianne.backends.base import ExecutionResult
+        from marianne.execution.runner import JobRunner, RunnerContext
 
         workspace = tmp_path / "workspace"
         workspace.mkdir()

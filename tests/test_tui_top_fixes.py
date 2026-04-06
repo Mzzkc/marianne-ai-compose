@@ -21,12 +21,12 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 import psutil
 import pytest
 
-from mozart.daemon.backpressure import BackpressureController, PressureLevel
-from mozart.daemon.event_bus import EventBus
-from mozart.daemon.manager import JobManager
-from mozart.daemon.monitor import ResourceMonitor
-from mozart.daemon.pgroup import ProcessGroupManager
-from mozart.daemon.profiler.models import (
+from marianne.daemon.backpressure import BackpressureController, PressureLevel
+from marianne.daemon.event_bus import EventBus
+from marianne.daemon.manager import JobManager
+from marianne.daemon.monitor import ResourceMonitor
+from marianne.daemon.pgroup import ProcessGroupManager
+from marianne.daemon.profiler.models import (
     EventType,
     JobProgress,
     ProcessEvent,
@@ -50,7 +50,7 @@ def _fake_checkpoint(
     pid: int = 9999,
 ) -> MagicMock:
     """Build a mock CheckpointState with the fields profiler reads."""
-    from mozart.core.checkpoint import CheckpointState
+    from marianne.core.checkpoint import CheckpointState
     state = MagicMock(spec=CheckpointState)
     state.job_id = job_id
     state.total_sheets = total_sheets
@@ -82,7 +82,7 @@ def _fake_psutil_process(
 @pytest.fixture()
 def _no_async_tasks():
     """Neuter asyncio.create_task for sync tests that trigger fire-and-forget coroutines."""
-    with patch("mozart.daemon.profiler.collector.asyncio.create_task"):
+    with patch("marianne.daemon.profiler.collector.asyncio.create_task"):
         yield
 
 
@@ -94,8 +94,8 @@ class TestFix1TimelineEventsWithoutPID:
 
     def _make_collector(self) -> Any:
         """Build a ProfilerCollector with minimal mocked deps."""
-        from mozart.daemon.profiler.collector import ProfilerCollector
-        from mozart.daemon.profiler.models import ProfilerConfig
+        from marianne.daemon.profiler.collector import ProfilerCollector
+        from marianne.daemon.profiler.models import ProfilerConfig
 
         config = ProfilerConfig(enabled=False, strace_enabled=False)
         monitor = MagicMock(spec=ResourceMonitor)
@@ -224,8 +224,8 @@ class TestFix2WorkspacePIDMapping:
         job_meta: dict[str, Any],
         live_states: dict[str, Any],
     ) -> Any:
-        from mozart.daemon.profiler.collector import ProfilerCollector
-        from mozart.daemon.profiler.models import ProfilerConfig
+        from marianne.daemon.profiler.collector import ProfilerCollector
+        from marianne.daemon.profiler.models import ProfilerConfig
 
         config = ProfilerConfig(enabled=False, strace_enabled=False)
         monitor = MagicMock(spec=ResourceMonitor)
@@ -245,7 +245,7 @@ class TestFix2WorkspacePIDMapping:
         Direct children of the daemon should map to different jobs based
         on workspace path in their command line.
         """
-        from mozart.daemon.manager import JobMeta
+        from marianne.daemon.manager import JobMeta
 
         jobs = {
             "observer-integration": JobMeta(
@@ -306,7 +306,7 @@ class TestFix2WorkspacePIDMapping:
             child_observer, child_enhanced, child_monitor, child_solver,
         ]
 
-        with patch("mozart.daemon.profiler.collector._psutil") as mock_psutil:
+        with patch("marianne.daemon.profiler.collector._psutil") as mock_psutil:
             mock_psutil.Process.return_value = daemon_proc
             pid_map = collector._build_pid_job_map()
 
@@ -329,7 +329,7 @@ class TestFix2WorkspacePIDMapping:
         """A process whose cmdline doesn't contain any workspace path
         should NOT appear in the map (shown as orphan).
         """
-        from mozart.daemon.manager import JobMeta
+        from marianne.daemon.manager import JobMeta
 
         jobs = {
             "my-job": JobMeta(
@@ -356,7 +356,7 @@ class TestFix2WorkspacePIDMapping:
         daemon_proc = MagicMock(spec=psutil.Process)
         daemon_proc.children.return_value = [child_matched, child_orphan]
 
-        with patch("mozart.daemon.profiler.collector._psutil") as mock_psutil:
+        with patch("marianne.daemon.profiler.collector._psutil") as mock_psutil:
             mock_psutil.Process.return_value = daemon_proc
             pid_map = collector._build_pid_job_map()
 
@@ -366,8 +366,8 @@ class TestFix2WorkspacePIDMapping:
 
     def test_no_manager_returns_empty_map(self) -> None:
         """When no manager is set, _build_pid_job_map returns empty."""
-        from mozart.daemon.profiler.collector import ProfilerCollector
-        from mozart.daemon.profiler.models import ProfilerConfig
+        from marianne.daemon.profiler.collector import ProfilerCollector
+        from marianne.daemon.profiler.models import ProfilerConfig
 
         config = ProfilerConfig(enabled=False)
         collector = ProfilerCollector(
@@ -380,12 +380,12 @@ class TestFix2WorkspacePIDMapping:
 
     def test_no_psutil_returns_empty_map(self) -> None:
         """When psutil is unavailable, _build_pid_job_map returns empty."""
-        from mozart.daemon.manager import JobMeta
+        from marianne.daemon.manager import JobMeta
 
         jobs = {"j": JobMeta(job_id="j", config_path=Path("j.yaml"), workspace=Path("/ws"))}
         collector = self._make_collector_with_manager(jobs, {})
 
-        with patch("mozart.daemon.profiler.collector._psutil", None):
+        with patch("marianne.daemon.profiler.collector._psutil", None):
             pid_map = collector._build_pid_job_map()
 
         assert pid_map == {}
@@ -396,7 +396,7 @@ class TestFix2WorkspacePIDMapping:
         """
         import psutil
 
-        from mozart.daemon.manager import JobMeta
+        from marianne.daemon.manager import JobMeta
 
         jobs = {"j": JobMeta(job_id="j", config_path=Path("j.yaml"), workspace=Path("/ws"))}
         live_states = {"j": _fake_checkpoint(job_id="j")}
@@ -413,7 +413,7 @@ class TestFix2WorkspacePIDMapping:
         daemon_proc = MagicMock(spec=psutil.Process)
         daemon_proc.children.return_value = [bad_child, good_child]
 
-        with patch("mozart.daemon.profiler.collector._psutil") as mock_psutil:
+        with patch("marianne.daemon.profiler.collector._psutil") as mock_psutil:
             mock_psutil.Process.return_value = daemon_proc
             mock_psutil.NoSuchProcess = psutil.NoSuchProcess
             mock_psutil.AccessDenied = psutil.AccessDenied
@@ -437,8 +437,8 @@ class TestFix3JobProgressInSnapshot:
     @pytest.mark.asyncio
     async def test_collect_snapshot_populates_job_progress(self) -> None:
         """collect_snapshot must read _live_states and build JobProgress entries."""
-        from mozart.daemon.profiler.collector import ProfilerCollector
-        from mozart.daemon.profiler.models import ProfilerConfig
+        from marianne.daemon.profiler.collector import ProfilerCollector
+        from marianne.daemon.profiler.models import ProfilerConfig
 
         config = ProfilerConfig(enabled=False, strace_enabled=False)
         monitor = MagicMock(spec=ResourceMonitor)
@@ -485,8 +485,8 @@ class TestFix3JobProgressInSnapshot:
     @pytest.mark.asyncio
     async def test_collect_snapshot_populates_conductor_uptime(self) -> None:
         """collect_snapshot must read manager.uptime_seconds."""
-        from mozart.daemon.profiler.collector import ProfilerCollector
-        from mozart.daemon.profiler.models import ProfilerConfig
+        from marianne.daemon.profiler.collector import ProfilerCollector
+        from marianne.daemon.profiler.models import ProfilerConfig
 
         config = ProfilerConfig(enabled=False)
         manager = MagicMock(spec=JobManager)
@@ -512,8 +512,8 @@ class TestFix3JobProgressInSnapshot:
     @pytest.mark.asyncio
     async def test_no_manager_means_empty_progress(self) -> None:
         """Without a manager, job_progress should be empty, not crash."""
-        from mozart.daemon.profiler.collector import ProfilerCollector
-        from mozart.daemon.profiler.models import ProfilerConfig
+        from marianne.daemon.profiler.collector import ProfilerCollector
+        from marianne.daemon.profiler.models import ProfilerConfig
 
         config = ProfilerConfig(enabled=False)
         collector = ProfilerCollector(
@@ -546,7 +546,7 @@ class TestFix4ProgressBarCalculation:
         but job_progress says 5/10 completed. The display must show
         the job_progress data, not the process count.
         """
-        from mozart.tui.panels.jobs import JobsPanel
+        from marianne.tui.panels.jobs import JobsPanel
 
         # 32 processes all mapped to the same job (the old bug)
         procs = [
@@ -596,7 +596,7 @@ class TestFix4ProgressBarCalculation:
         assert jp.total_sheets == 10
         assert jp.last_completed_sheet == 5
 
-        from mozart.tui.panels.jobs import _format_progress_bar
+        from marianne.tui.panels.jobs import _format_progress_bar
 
         progress = _format_progress_bar(jp.last_completed_sheet, jp.total_sheets)
         assert "50%" in progress  # 5/10 = 50%
@@ -648,7 +648,7 @@ class TestFix4ProgressBarCalculation:
 
         progress_by_job = {jp.job_id: jp for jp in snap.job_progress}
 
-        from mozart.tui.panels.jobs import _format_progress_bar
+        from marianne.tui.panels.jobs import _format_progress_bar
 
         bar_a = _format_progress_bar(progress_by_job["job-a"].last_completed_sheet, progress_by_job["job-a"].total_sheets)
         bar_b = _format_progress_bar(progress_by_job["job-b"].last_completed_sheet, progress_by_job["job-b"].total_sheets)
@@ -672,7 +672,7 @@ class TestFix5ConductorUptime:
         """The uptime passed to the header panel must come from
         snapshot.conductor_uptime_seconds, not from a TUI-local timer.
         """
-        from mozart.tui.app import MonitorApp
+        from marianne.tui.app import MonitorApp
 
         app = MonitorApp()
 
@@ -704,7 +704,7 @@ class TestFix5ConductorUptime:
         """MonitorApp must NOT have _first_snapshot_time — that field
         was the root cause of the uptime bug.
         """
-        from mozart.tui.app import MonitorApp
+        from marianne.tui.app import MonitorApp
 
         app = MonitorApp()
         assert not hasattr(app, "_first_snapshot_time"), (
@@ -714,8 +714,8 @@ class TestFix5ConductorUptime:
 
     def test_manager_uptime_seconds_property(self) -> None:
         """JobManager.uptime_seconds must return real daemon lifetime."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.config import DaemonConfig
 
         start = time.monotonic() - 120.0  # Started 2 minutes ago
         mgr = JobManager(DaemonConfig(), start_time=start)
@@ -803,7 +803,7 @@ class TestIntegrationFullBrokenScenario:
         assert len(snap.job_progress) == 4
 
         # Each has sane progress (not 3100%)
-        from mozart.tui.panels.jobs import _format_progress_bar
+        from marianne.tui.panels.jobs import _format_progress_bar
         for jp in snap.job_progress:
             bar = _format_progress_bar(jp.last_completed_sheet, jp.total_sheets)
             pct = jp.last_completed_sheet / jp.total_sheets * 100
@@ -870,14 +870,14 @@ class TestTimelinePanelFileEvents:
 
     def _make_panel(self) -> Any:
         """Build a TimelinePanel for testing."""
-        from mozart.tui.panels.timeline import TimelinePanel
+        from marianne.tui.panels.timeline import TimelinePanel
 
         panel = TimelinePanel()
         return panel
 
     def test_file_created_event_rendered(self) -> None:
         """observer.file_created events appear in timeline entries."""
-        from mozart.tui.panels.timeline import TimelinePanel
+        from marianne.tui.panels.timeline import TimelinePanel
 
         panel = TimelinePanel()
         obs_events = [
@@ -904,7 +904,7 @@ class TestTimelinePanelFileEvents:
 
     def test_file_modified_event_rendered(self) -> None:
         """observer.file_modified events appear in timeline."""
-        from mozart.tui.panels.timeline import TimelinePanel
+        from marianne.tui.panels.timeline import TimelinePanel
 
         panel = TimelinePanel()
         obs_events = [
@@ -927,7 +927,7 @@ class TestTimelinePanelFileEvents:
 
     def test_file_deleted_event_rendered(self) -> None:
         """observer.file_deleted events appear in timeline."""
-        from mozart.tui.panels.timeline import TimelinePanel
+        from marianne.tui.panels.timeline import TimelinePanel
 
         panel = TimelinePanel()
         obs_events = [
@@ -949,7 +949,7 @@ class TestTimelinePanelFileEvents:
 
     def test_file_events_have_color_mappings(self) -> None:
         """Event color map includes entries for all file event types."""
-        from mozart.tui.panels.timeline import _EVENT_COLORS
+        from marianne.tui.panels.timeline import _EVENT_COLORS
 
         assert "observer_file_created" in _EVENT_COLORS
         assert "observer_file_modified" in _EVENT_COLORS
@@ -960,7 +960,7 @@ class TestTimelinePanelFileEvents:
 
     def test_mixed_process_and_file_events(self) -> None:
         """Both observer.process_* and observer.file_* events render together."""
-        from mozart.tui.panels.timeline import TimelinePanel
+        from marianne.tui.panels.timeline import TimelinePanel
 
         panel = TimelinePanel()
         obs_events = [
@@ -994,7 +994,7 @@ class TestTimelinePanelFileEvents:
 
     def test_long_path_truncated(self) -> None:
         """File paths longer than 40 chars get truncated in the timeline."""
-        from mozart.tui.panels.timeline import TimelinePanel
+        from marianne.tui.panels.timeline import TimelinePanel
 
         panel = TimelinePanel()
         long_path = "/workspace/" + "a" * 50 + "/file.txt"
@@ -1023,7 +1023,7 @@ class TestJobsPanelObserverFileEvents:
 
     def test_jobs_panel_stores_observer_file_events(self) -> None:
         """JobsPanel.update_data accepts observer_file_events parameter."""
-        from mozart.tui.panels.jobs import JobsPanel
+        from marianne.tui.panels.jobs import JobsPanel
 
         panel = JobsPanel()
         file_events = [
@@ -1044,7 +1044,7 @@ class TestJobsPanelObserverFileEvents:
         """
         from textual.widgets import Static, Tree
 
-        from mozart.tui.panels.jobs import JobsPanel
+        from marianne.tui.panels.jobs import JobsPanel
 
         panel = JobsPanel()
         # Manually initialize the tree widget (normally done in compose())
@@ -1110,7 +1110,7 @@ class TestJobsPanelObserverFileEvents:
         """
         from textual.widgets import Static, Tree
 
-        from mozart.tui.panels.jobs import JobsPanel
+        from marianne.tui.panels.jobs import JobsPanel
 
         panel = JobsPanel()
         # Manually initialize the tree widget (normally done in compose())
@@ -1150,7 +1150,7 @@ class TestDetailPanelFileActivity:
         """When a job item has observer_file_events, show_item() should
         include 'File Activity' in the rendered content.
         """
-        from mozart.tui.panels.detail import DetailPanel
+        from marianne.tui.panels.detail import DetailPanel
 
         panel = DetailPanel()
         item: dict[str, Any] = {
@@ -1181,7 +1181,7 @@ class TestDetailPanelFileActivity:
         """When a job item has empty observer_file_events, show_item()
         still renders job details without error.
         """
-        from mozart.tui.panels.detail import DetailPanel
+        from marianne.tui.panels.detail import DetailPanel
 
         panel = DetailPanel()
         item: dict[str, Any] = {

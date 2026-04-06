@@ -21,12 +21,12 @@ from unittest.mock import patch
 
 import pytest
 
-from mozart.core.checkpoint import (
+from marianne.core.checkpoint import (
     MAX_ERROR_HISTORY,
     CheckpointState,
     SheetState,
 )
-from mozart.execution.hooks import (
+from marianne.execution.hooks import (
     HookResult,
     get_hook_log_path,
 )
@@ -182,7 +182,7 @@ class TestApiBackendWritesLogFiles:
 
     def test_write_log_file_creates_file(self, tmp_path: Path):
         """_write_log_file should create and populate the log file."""
-        from mozart.backends.anthropic_api import AnthropicApiBackend
+        from marianne.backends.anthropic_api import AnthropicApiBackend
 
         backend = AnthropicApiBackend.__new__(AnthropicApiBackend)
         backend._stdout_log_path = None
@@ -197,7 +197,7 @@ class TestApiBackendWritesLogFiles:
 
     def test_write_log_file_creates_parent_dirs(self, tmp_path: Path):
         """_write_log_file should create parent directories."""
-        from mozart.backends.anthropic_api import AnthropicApiBackend
+        from marianne.backends.anthropic_api import AnthropicApiBackend
 
         backend = AnthropicApiBackend.__new__(AnthropicApiBackend)
 
@@ -210,7 +210,7 @@ class TestApiBackendWritesLogFiles:
 
     def test_write_log_file_skips_when_path_is_none(self):
         """_write_log_file should do nothing when path is None."""
-        from mozart.backends.anthropic_api import AnthropicApiBackend
+        from marianne.backends.anthropic_api import AnthropicApiBackend
 
         backend = AnthropicApiBackend.__new__(AnthropicApiBackend)
 
@@ -219,7 +219,7 @@ class TestApiBackendWritesLogFiles:
 
     def test_set_output_log_path_creates_both_paths(self, tmp_path: Path):
         """set_output_log_path should set both stdout and stderr paths."""
-        from mozart.backends.anthropic_api import AnthropicApiBackend
+        from marianne.backends.anthropic_api import AnthropicApiBackend
 
         backend = AnthropicApiBackend.__new__(AnthropicApiBackend)
         backend._stdout_log_path = None
@@ -233,7 +233,7 @@ class TestApiBackendWritesLogFiles:
 
     def test_set_output_log_path_none_clears_paths(self):
         """set_output_log_path(None) should clear both log paths."""
-        from mozart.backends.anthropic_api import AnthropicApiBackend
+        from marianne.backends.anthropic_api import AnthropicApiBackend
 
         backend = AnthropicApiBackend.__new__(AnthropicApiBackend)
         backend._stdout_log_path = Path("/some/path.stdout.log")
@@ -255,7 +255,7 @@ class TestCliBackendLogsWriteFailures:
 
     def test_write_log_file_oserror_logged_as_warning(self, tmp_path: Path):
         """_write_log_file should log warning on OSError, not swallow silently."""
-        from mozart.backends.anthropic_api import AnthropicApiBackend
+        from marianne.backends.anthropic_api import AnthropicApiBackend
 
         backend = AnthropicApiBackend.__new__(AnthropicApiBackend)
 
@@ -264,7 +264,7 @@ class TestCliBackendLogsWriteFailures:
         blocker.write_text("I am a file")
         bad_path = blocker / "impossible" / "path.log"
 
-        with patch("mozart.backends.anthropic_api._logger") as mock_logger:
+        with patch("marianne.backends.anthropic_api._logger") as mock_logger:
             backend._write_log_file(bad_path, "content")
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args
@@ -272,7 +272,7 @@ class TestCliBackendLogsWriteFailures:
 
     def test_cli_backend_tracks_log_write_failures(self, tmp_path: Path):
         """ClaudeCliBackend should increment log_write_failures on OSError."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend._stdout_log_path = None
@@ -291,7 +291,7 @@ class TestCliBackendLogsWriteFailures:
 
     def test_cli_backend_prepare_log_files_creates_dirs(self, tmp_path: Path):
         """_prepare_log_files should create parent directories for log paths."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.log_write_failures = 0
@@ -328,7 +328,7 @@ class TestExecutionHistoryRecorded:
     @pytest.mark.asyncio
     async def test_record_execution_stores_data(self, tmp_path: Path):
         """record_execution() should insert a row retrievable via get_execution_history()."""
-        from mozart.state.sqlite_backend import SQLiteStateBackend
+        from marianne.state.sqlite_backend import SQLiteStateBackend
 
         db_path = tmp_path / "state.db"
         backend = SQLiteStateBackend(db_path)
@@ -358,7 +358,7 @@ class TestExecutionHistoryRecorded:
     @pytest.mark.asyncio
     async def test_record_multiple_executions(self, tmp_path: Path):
         """Multiple executions should all be retrievable."""
-        from mozart.state.sqlite_backend import SQLiteStateBackend
+        from marianne.state.sqlite_backend import SQLiteStateBackend
 
         db_path = tmp_path / "state.db"
         backend = SQLiteStateBackend(db_path)
@@ -381,7 +381,7 @@ class TestExecutionHistoryRecorded:
     @pytest.mark.asyncio
     async def test_get_execution_history_count(self, tmp_path: Path):
         """get_execution_history_count() should return correct count."""
-        from mozart.state.sqlite_backend import SQLiteStateBackend
+        from marianne.state.sqlite_backend import SQLiteStateBackend
 
         db_path = tmp_path / "state.db"
         backend = SQLiteStateBackend(db_path)
@@ -403,7 +403,7 @@ class TestExecutionHistoryRecorded:
     @pytest.mark.asyncio
     async def test_get_execution_history_filters_by_sheet(self, tmp_path: Path):
         """get_execution_history() should filter by sheet_num when specified."""
-        from mozart.state.sqlite_backend import SQLiteStateBackend
+        from marianne.state.sqlite_backend import SQLiteStateBackend
 
         db_path = tmp_path / "state.db"
         backend = SQLiteStateBackend(db_path)
@@ -438,7 +438,7 @@ class TestMozartHistoryCommand:
 
     def test_history_command_is_registered(self):
         """The history command should be registered in the CLI app."""
-        from mozart.cli import app
+        from marianne.cli import app
 
         command_names = [
             cmd.name or (cmd.callback.__name__ if cmd.callback else "")
@@ -448,14 +448,14 @@ class TestMozartHistoryCommand:
 
     def test_history_function_exists(self):
         """The history function should be importable from diagnose module."""
-        from mozart.cli.commands.diagnose import history
+        from marianne.cli.commands.diagnose import history
 
         assert callable(history)
 
     @pytest.mark.asyncio
     async def test_history_job_with_sqlite_backend(self, tmp_path: Path):
         """_history_job should retrieve and display records from SQLite."""
-        from mozart.state.sqlite_backend import SQLiteStateBackend
+        from marianne.state.sqlite_backend import SQLiteStateBackend
 
         db_path = tmp_path / "state.db"
         backend = SQLiteStateBackend(db_path)
@@ -494,7 +494,7 @@ class TestDiagnoseIncludesLogFiles:
 
     def test_discover_log_files_finds_sheet_logs(self, tmp_path: Path):
         """_discover_log_files should find logs in {workspace}/logs/."""
-        from mozart.cli.commands.diagnose import _discover_log_files
+        from marianne.cli.commands.diagnose import _discover_log_files
 
         # Create workspace with log files
         logs_dir = tmp_path / "logs"
@@ -512,7 +512,7 @@ class TestDiagnoseIncludesLogFiles:
 
     def test_discover_log_files_finds_hook_logs(self, tmp_path: Path):
         """_discover_log_files should find logs in {workspace}/hooks/."""
-        from mozart.cli.commands.diagnose import _discover_log_files
+        from marianne.cli.commands.diagnose import _discover_log_files
 
         hooks_dir = tmp_path / "hooks"
         hooks_dir.mkdir()
@@ -526,7 +526,7 @@ class TestDiagnoseIncludesLogFiles:
 
     def test_discover_log_files_returns_metadata(self, tmp_path: Path):
         """Discovered log files should include size, path, and modified_at."""
-        from mozart.cli.commands.diagnose import _discover_log_files
+        from marianne.cli.commands.diagnose import _discover_log_files
 
         logs_dir = tmp_path / "logs"
         logs_dir.mkdir()
@@ -544,20 +544,20 @@ class TestDiagnoseIncludesLogFiles:
 
     def test_discover_log_files_returns_empty_for_none(self):
         """_discover_log_files should return empty list for None workspace."""
-        from mozart.cli.commands.diagnose import _discover_log_files
+        from marianne.cli.commands.diagnose import _discover_log_files
 
         assert _discover_log_files(None) == []
 
     def test_discover_log_files_returns_empty_for_missing_dir(self, tmp_path: Path):
         """_discover_log_files should return empty list for missing workspace."""
-        from mozart.cli.commands.diagnose import _discover_log_files
+        from marianne.cli.commands.diagnose import _discover_log_files
 
         nonexistent = tmp_path / "nonexistent"
         assert _discover_log_files(nonexistent) == []
 
     def test_build_diagnostic_report_includes_log_files(self, tmp_path: Path):
         """_build_diagnostic_report should include log_files in report."""
-        from mozart.cli.commands.diagnose import _build_diagnostic_report
+        from marianne.cli.commands.diagnose import _build_diagnostic_report
 
         # Create workspace with logs
         logs_dir = tmp_path / "logs"
@@ -584,7 +584,7 @@ class TestDiagnoseIncludesLogFiles:
 
     def test_attach_log_contents_inlines_content(self, tmp_path: Path):
         """_attach_log_contents should inline tail of log files."""
-        from mozart.cli.commands.diagnose import _attach_log_contents
+        from marianne.cli.commands.diagnose import _attach_log_contents
 
         log_dir = tmp_path / "logs"
         log_dir.mkdir()

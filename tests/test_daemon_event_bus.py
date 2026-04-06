@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.daemon.event_bus import EventBus
-from mozart.daemon.types import ObserverEvent
+from marianne.daemon.event_bus import EventBus
+from marianne.daemon.types import ObserverEvent
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────

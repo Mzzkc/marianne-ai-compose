@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 import yaml
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
@@ -54,12 +54,12 @@ class TestRejectionHintsShutdown:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=_mock_rejection("Daemon is shutting down"),
             ),
@@ -83,12 +83,12 @@ class TestRejectionHintsPressure:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=_mock_rejection(
                     "System under high pressure — try again later"
@@ -115,12 +115,12 @@ class TestRejectionHintsDuplicate:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=_mock_rejection(
                     "Job 'test-job' is already running. "
@@ -151,12 +151,12 @@ class TestRejectionHintsWorkspace:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=_mock_rejection(
                     "Workspace parent directory does not exist: /tmp/no-such-dir. "
@@ -184,12 +184,12 @@ class TestRejectionHintsConfigParse:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=_mock_rejection(
                     "Failed to parse config file: test.yaml "
@@ -226,12 +226,12 @@ class TestEarlyFailureDisplay:
         # Mock: daemon accepts, then early poll shows failure
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(
                     True,
@@ -239,7 +239,7 @@ class TestEarlyFailureDisplay:
                 ),
             ),
             patch(
-                "mozart.cli.commands.run.await_early_failure",
+                "marianne.cli.commands.run.await_early_failure",
                 new_callable=AsyncMock,
                 return_value={
                     "status": "failed",
@@ -264,12 +264,12 @@ class TestEarlyFailureDisplay:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(
                     True,
@@ -277,7 +277,7 @@ class TestEarlyFailureDisplay:
                 ),
             ),
             patch(
-                "mozart.cli.commands.run.await_early_failure",
+                "marianne.cli.commands.run.await_early_failure",
                 new_callable=AsyncMock,
                 return_value={"status": "failed", "error_message": ""},
             ),

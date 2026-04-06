@@ -15,7 +15,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from mozart.daemon.manager import _should_auto_fresh
+from marianne.daemon.manager import _should_auto_fresh
 
 
 class TestShouldAutoFresh:

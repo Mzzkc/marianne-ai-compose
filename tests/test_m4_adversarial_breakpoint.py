@@ -23,11 +23,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.core.config.workspace import CrossSheetConfig
-from mozart.daemon.manager import _MTIME_TOLERANCE_SECONDS, _should_auto_fresh
-from mozart.prompts.templating import SheetContext
-from mozart.utils.credential_scanner import redact_credentials
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.config.workspace import CrossSheetConfig
+from marianne.daemon.manager import _MTIME_TOLERANCE_SECONDS, _should_auto_fresh
+from marianne.prompts.templating import SheetContext
+from marianne.utils.credential_scanner import redact_credentials
 
 
 # =============================================================================
@@ -203,8 +203,8 @@ class TestPendingJobWorkspaceNone:
 
     def test_start_pending_no_meta_no_crash(self) -> None:
         """_start_pending_jobs handles missing meta gracefully."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.types import JobRequest
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.types import JobRequest
 
         config = MagicMock()
         config.max_concurrent_jobs = 5
@@ -245,8 +245,8 @@ class TestPendingJobCancellation:
 
     def test_cancel_pending_removes_from_queue(self) -> None:
         """cancel_job for PENDING job removes from _pending_jobs dict."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.types import JobRequest
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.types import JobRequest
 
         config = MagicMock()
         config.max_concurrent_jobs = 5
@@ -280,8 +280,8 @@ class TestBackpressureReassertionDuringPendingStart:
 
     def test_backpressure_reasserted_stops_iteration(self) -> None:
         """should_accept_job alternates True/False → only first job started."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.types import JobRequest
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.types import JobRequest
 
         config = MagicMock()
         config.max_concurrent_jobs = 5
@@ -588,8 +588,8 @@ class TestMethodNotFoundErrorCodeMapping:
 
     def test_exception_to_code_to_exception_roundtrip(self) -> None:
         """MethodNotFoundError → METHOD_NOT_FOUND code → MethodNotFoundError."""
-        from mozart.daemon.exceptions import MethodNotFoundError
-        from mozart.daemon.ipc.errors import (
+        from marianne.daemon.exceptions import MethodNotFoundError
+        from marianne.daemon.ipc.errors import (
             METHOD_NOT_FOUND,
             _CODE_EXCEPTION_MAP,
             rpc_error_to_exception,
@@ -605,13 +605,13 @@ class TestMethodNotFoundErrorCodeMapping:
 
     def test_method_not_found_code_is_standard_json_rpc(self) -> None:
         """METHOD_NOT_FOUND uses the standard JSON-RPC 2.0 code -32601."""
-        from mozart.daemon.ipc.errors import METHOD_NOT_FOUND
+        from marianne.daemon.ipc.errors import METHOD_NOT_FOUND
 
         assert METHOD_NOT_FOUND == -32601
 
     def test_method_not_found_builder_includes_method_in_data(self) -> None:
         """method_not_found() includes the method name in error data."""
-        from mozart.daemon.ipc.errors import method_not_found
+        from marianne.daemon.ipc.errors import method_not_found
 
         error = method_not_found(42, "daemon.nonexistent")
         assert error.error.data is not None
@@ -625,14 +625,14 @@ class TestMethodNotFoundErrorCodeMapping:
         handler code. MethodNotFoundError is raised by the IPC dispatcher
         before handlers run — the dispatcher uses method_not_found() directly.
         """
-        from mozart.daemon.exceptions import MethodNotFoundError
-        from mozart.daemon.ipc.errors import _EXCEPTION_CODE_MAP
+        from marianne.daemon.exceptions import MethodNotFoundError
+        from marianne.daemon.ipc.errors import _EXCEPTION_CODE_MAP
 
         assert MethodNotFoundError not in _EXCEPTION_CODE_MAP
 
     def test_method_not_found_is_daemon_error_subclass(self) -> None:
         """MethodNotFoundError inherits from DaemonError."""
-        from mozart.daemon.exceptions import DaemonError, MethodNotFoundError
+        from marianne.daemon.exceptions import DaemonError, MethodNotFoundError
 
         exc = MethodNotFoundError("test method not found")
         assert isinstance(exc, DaemonError)
@@ -644,7 +644,7 @@ class TestDetectLayerMethodNotFound:
 
     def test_method_not_found_message_contains_restart_guidance(self) -> None:
         """The re-raised MethodNotFoundError mentions 'mozart restart'."""
-        from mozart.daemon.exceptions import MethodNotFoundError
+        from marianne.daemon.exceptions import MethodNotFoundError
 
         # Simulate the message format from detect.py line 174-178
         method = "daemon.nonexistent_method"
@@ -941,7 +941,7 @@ class TestRejectionReasonEdgeCases:
 
     def test_no_pressure_returns_none(self) -> None:
         """No resource pressure, no rate limits → None."""
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         monitor = MagicMock()
         monitor.current_memory_mb.return_value = 100.0
@@ -961,7 +961,7 @@ class TestRejectionReasonEdgeCases:
         Rate limits alone no longer cause rejection. Per-instrument
         rate limits are handled at the sheet dispatch level.
         """
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         monitor = MagicMock()
         monitor.current_memory_mb.return_value = 100.0
@@ -977,7 +977,7 @@ class TestRejectionReasonEdgeCases:
 
     def test_high_memory_returns_resource_even_with_rate_limits(self) -> None:
         """Memory > 85% → 'resource' even if rate limits are also active."""
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         monitor = MagicMock()
         monitor.current_memory_mb.return_value = 900.0
@@ -993,7 +993,7 @@ class TestRejectionReasonEdgeCases:
 
     def test_monitor_degraded_returns_resource(self) -> None:
         """Degraded monitor → 'resource' (fail closed)."""
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         monitor = MagicMock()
         monitor.current_memory_mb.return_value = None  # Probe failed
@@ -1013,7 +1013,7 @@ class TestRejectionReasonEdgeCases:
         But if rate limits are active, it returns "rate_limit".
         If no rate limits, returns None.
         """
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         monitor = MagicMock()
         monitor.current_memory_mb.return_value = 850.0
@@ -1030,7 +1030,7 @@ class TestRejectionReasonEdgeCases:
 
     def test_memory_one_mb_over_85_is_resource(self) -> None:
         """Memory at 86% → 'resource'."""
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         monitor = MagicMock()
         monitor.current_memory_mb.return_value = 860.0
@@ -1059,7 +1059,7 @@ class TestMethodNotFoundVsDaemonErrorCascade:
 
     def test_method_not_found_is_caught_before_daemon_error(self) -> None:
         """MethodNotFoundError isinstance check must be before DaemonError."""
-        from mozart.daemon.exceptions import DaemonError, MethodNotFoundError
+        from marianne.daemon.exceptions import DaemonError, MethodNotFoundError
 
         exc = MethodNotFoundError("test")
 
@@ -1077,8 +1077,8 @@ class TestMethodNotFoundVsDaemonErrorCascade:
 
     def test_unknown_error_code_maps_to_daemon_error(self) -> None:
         """Unknown error codes map to base DaemonError, not MethodNotFoundError."""
-        from mozart.daemon.exceptions import DaemonError, MethodNotFoundError
-        from mozart.daemon.ipc.errors import rpc_error_to_exception
+        from marianne.daemon.exceptions import DaemonError, MethodNotFoundError
+        from marianne.daemon.ipc.errors import rpc_error_to_exception
 
         error = {"code": -99999, "message": "totally unknown error"}
         exc = rpc_error_to_exception(error)

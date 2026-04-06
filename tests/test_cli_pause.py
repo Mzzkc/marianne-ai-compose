@@ -17,14 +17,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.cli.helpers import (
+from marianne.cli import app
+from marianne.cli.helpers import (
     _create_pause_signal,
     _find_job_workspace,
     _wait_for_pause_ack,
 )
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.state.json_backend import JsonStateBackend
 
 runner = CliRunner()
 
@@ -42,7 +42,7 @@ def _no_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
         return False, None
 
     monkeypatch.setattr(
-        "mozart.daemon.detect.try_daemon_route", _fake_route,
+        "marianne.daemon.detect.try_daemon_route", _fake_route,
     )
 
 
@@ -554,7 +554,7 @@ class TestPauseCommand:
 
         # Patch where the function is used (in commands.pause), not where it's defined
         with patch(
-            "mozart.cli.helpers._create_pause_signal",
+            "marianne.cli.helpers._create_pause_signal",
             side_effect=PermissionError("Read-only"),
         ):
             result = runner.invoke(app, [
@@ -576,7 +576,7 @@ class TestPauseCommand:
         async def mock_wait(*_args: object, **_kwargs: object) -> bool:
             return False  # Simulate timeout
 
-        with patch("mozart.cli.helpers._wait_for_pause_ack", mock_wait):
+        with patch("marianne.cli.helpers._wait_for_pause_ack", mock_wait):
             result = runner.invoke(app, [
                 "pause", state.job_id,
                 "--workspace", str(workspace),
@@ -597,7 +597,7 @@ class TestPauseCommand:
         async def mock_wait(*_args: object, **_kwargs: object) -> bool:
             return True  # Simulate acknowledged pause
 
-        with patch("mozart.cli.helpers._wait_for_pause_ack", mock_wait):
+        with patch("marianne.cli.helpers._wait_for_pause_ack", mock_wait):
             result = runner.invoke(app, [
                 "pause", state.job_id,
                 "--workspace", str(workspace),
@@ -826,7 +826,7 @@ class TestModifyCommand:
         state, workspace = paused_job_state
 
         # Mock the runner to avoid actual execution
-        with patch("mozart.execution.runner.JobRunner") as mock_runner_cls:
+        with patch("marianne.execution.runner.JobRunner") as mock_runner_cls:
             mock_runner = AsyncMock()
             mock_runner.run = AsyncMock(return_value=CheckpointState(
                 job_id=state.job_id,
@@ -837,7 +837,7 @@ class TestModifyCommand:
             ))
             mock_runner_cls.return_value = mock_runner
 
-            with patch("mozart.backends.claude_cli.ClaudeCliBackend") as mock_backend:
+            with patch("marianne.backends.claude_cli.ClaudeCliBackend") as mock_backend:
                 mock_backend.from_config = AsyncMock(return_value=mock_backend)
 
                 result = runner.invoke(app, [
@@ -859,7 +859,7 @@ class TestModifyCommand:
         state, workspace = running_job_state
 
         with patch(
-            "mozart.cli.helpers._create_pause_signal",
+            "marianne.cli.helpers._create_pause_signal",
             side_effect=PermissionError("Read-only"),
         ):
             result = runner.invoke(app, [
@@ -1050,7 +1050,7 @@ class TestPauseEdgeCases:
         async def mock_wait(*_: object, **__: object) -> bool:
             return False
 
-        with patch("mozart.cli.helpers._wait_for_pause_ack", mock_wait):
+        with patch("marianne.cli.helpers._wait_for_pause_ack", mock_wait):
             result = runner.invoke(app, [
                 "pause", state.job_id,
                 "-w", str(workspace),
@@ -1088,7 +1088,7 @@ class TestModifyEdgeCases:
         """Test modify with -r short flag for resume."""
         state, workspace = paused_job_state
 
-        with patch("mozart.execution.runner.JobRunner") as mock_runner_cls:
+        with patch("marianne.execution.runner.JobRunner") as mock_runner_cls:
             mock_runner = AsyncMock()
             mock_runner.run = AsyncMock(return_value=CheckpointState(
                 job_id=state.job_id,
@@ -1099,7 +1099,7 @@ class TestModifyEdgeCases:
             ))
             mock_runner_cls.return_value = mock_runner
 
-            with patch("mozart.backends.claude_cli.ClaudeCliBackend") as mock_backend:
+            with patch("marianne.backends.claude_cli.ClaudeCliBackend") as mock_backend:
                 mock_backend.from_config = AsyncMock(return_value=mock_backend)
 
                 result = runner.invoke(app, [
@@ -1145,7 +1145,7 @@ class TestPauseConductorRouted:
 
     def test_conductor_pause_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Conductor reports successful pause."""
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", self._mock_route_success)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", self._mock_route_success)
 
         result = runner.invoke(app, ["pause", "test-job"])
         assert result.exit_code == 0
@@ -1153,7 +1153,7 @@ class TestPauseConductorRouted:
 
     def test_conductor_pause_success_json(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Conductor pause success with JSON output."""
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", self._mock_route_success)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", self._mock_route_success)
 
         result = runner.invoke(app, ["pause", "test-job", "--json"])
         assert result.exit_code == 0
@@ -1162,14 +1162,14 @@ class TestPauseConductorRouted:
 
     def test_conductor_pause_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Conductor reports job cannot be paused (not running)."""
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", self._mock_route_refused)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", self._mock_route_refused)
 
         result = runner.invoke(app, ["pause", "test-job"])
         assert result.exit_code == 1
 
     def test_conductor_pause_refused_json(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Conductor refusal with JSON output includes E502."""
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", self._mock_route_refused)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", self._mock_route_refused)
 
         result = runner.invoke(app, ["pause", "test-job", "--json"])
         assert result.exit_code == 1
@@ -1179,14 +1179,14 @@ class TestPauseConductorRouted:
 
     def test_conductor_connection_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Connection error to conductor produces E501."""
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", self._mock_route_error)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", self._mock_route_error)
 
         result = runner.invoke(app, ["pause", "test-job"])
         assert result.exit_code == 1
 
     def test_conductor_connection_error_json(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Connection error with JSON output."""
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", self._mock_route_error)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", self._mock_route_error)
 
         result = runner.invoke(app, ["pause", "test-job", "--json"])
         assert result.exit_code == 1
@@ -1263,7 +1263,7 @@ class TestPauseJsonEdgeCases:
         async def mock_wait(*_: object, **__: object) -> bool:
             return False
 
-        with patch("mozart.cli.helpers._wait_for_pause_ack", mock_wait):
+        with patch("marianne.cli.helpers._wait_for_pause_ack", mock_wait):
             result = runner.invoke(app, [
                 "pause", state.job_id,
                 "--workspace", str(workspace),
@@ -1353,7 +1353,7 @@ class TestModifyConductorRouted:
                 "message": "Pause signal sent. Will resume with cfg.yaml when paused.",
             },
         )
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", route)
 
         result = runner.invoke(app, [
             "modify", "stale-job",
@@ -1389,7 +1389,7 @@ class TestModifyConductorRouted:
                 "message": "Job resume queued",
             },
         )
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", route)
 
         result = runner.invoke(app, [
             "modify", "failed-job",
@@ -1410,7 +1410,7 @@ class TestModifyConductorRouted:
         valid_config: Path,
     ) -> None:
         """Connection error during job.modify shows E506 error."""
-        from mozart.daemon.exceptions import DaemonError
+        from marianne.daemon.exceptions import DaemonError
 
         route = self._make_route(
             status_response={
@@ -1422,7 +1422,7 @@ class TestModifyConductorRouted:
             },
             modify_response=DaemonError("socket refused"),
         )
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", route)
 
         result = runner.invoke(app, [
             "modify", "conn-err-job",
@@ -1450,7 +1450,7 @@ class TestModifyConductorRouted:
             },
             pause_response={"paused": False, "error": "Job is failed"},
         )
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", route)
 
         result = runner.invoke(app, [
             "modify", "err-job",
@@ -1482,7 +1482,7 @@ class TestModifyConductorRouted:
                 "message": "Pause signal sent. Will resume with cfg.yaml when paused.",
             },
         )
-        monkeypatch.setattr("mozart.daemon.detect.try_daemon_route", route)
+        monkeypatch.setattr("marianne.daemon.detect.try_daemon_route", route)
 
         result = runner.invoke(app, [
             "modify", "json-job",

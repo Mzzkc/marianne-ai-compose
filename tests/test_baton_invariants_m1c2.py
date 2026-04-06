@@ -36,15 +36,15 @@ from typing import Any
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mozart.core.errors.codes import ErrorCode
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.adapter import (
+from marianne.core.errors.codes import ErrorCode
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.adapter import (
     _BATON_TO_CHECKPOINT,
     baton_to_checkpoint_status,
 )
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.state import (
     _DISPATCHABLE_BATON_STATUSES,
     _SATISFIED_BATON_STATUSES,
     _TERMINAL_BATON_STATUSES,
@@ -689,7 +689,7 @@ class TestErrorTaxonomyInvariants:
 
     def test_classifier_distinguishes_stale_from_timeout(self) -> None:
         """When stderr contains 'stale execution', classify as E006 not E001."""
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.classifier import ErrorClassifier
 
         classifier = ErrorClassifier()
 
@@ -723,8 +723,8 @@ class TestErrorTaxonomyInvariants:
         This is the F-098 regression: rate limit text in stdout was masked by
         JSON error parsing in Phase 1, which prevented Phase 4 from firing.
         """
-        from mozart.core.errors.classifier import ErrorClassifier
-        from mozart.core.errors.codes import ErrorCategory
+        from marianne.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.codes import ErrorCategory
 
         classifier = ErrorClassifier()
 
@@ -756,8 +756,8 @@ class TestErrorTaxonomyInvariants:
         self, rate_limit_text: str,
     ) -> None:
         """Known rate limit patterns in stdout must always be detected."""
-        from mozart.core.errors.classifier import ErrorClassifier
-        from mozart.core.errors.codes import ErrorCategory
+        from marianne.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.codes import ErrorCategory
 
         classifier = ErrorClassifier()
         result = classifier.classify_execution(
@@ -853,7 +853,7 @@ class TestPromptAssemblyInvariants:
 
     def test_preamble_always_present_in_assembled_prompt(self) -> None:
         """The preamble (positional identity) is always the first section."""
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(num=3, prompt_template="Do the work.")
         context = AttemptContext(
@@ -869,7 +869,7 @@ class TestPromptAssemblyInvariants:
 
     def test_template_rendered_in_assembled_prompt(self) -> None:
         """The Jinja2 template is rendered with variables."""
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(
             num=7, prompt_template="Sheet number is {{ sheet_num }}.",
@@ -883,7 +883,7 @@ class TestPromptAssemblyInvariants:
 
     def test_completion_suffix_only_in_completion_mode(self) -> None:
         """Completion prompt suffix appears ONLY when mode=COMPLETION."""
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(prompt_template="Do work.")
 
@@ -909,8 +909,8 @@ class TestPromptAssemblyInvariants:
 
     def test_validation_requirements_in_assembled_prompt(self) -> None:
         """When validations exist, they appear as a success checklist."""
-        from mozart.core.config.execution import ValidationRule
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.core.config.execution import ValidationRule
+        from marianne.daemon.baton.musician import _build_prompt
 
         validations = [
             ValidationRule(
@@ -933,7 +933,7 @@ class TestPromptAssemblyInvariants:
     @given(attempt=st.integers(min_value=1, max_value=10))
     def test_prompt_is_deterministic_for_same_inputs(self, attempt: int) -> None:
         """The same inputs must produce the same prompt. No randomness."""
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(prompt_template="Deterministic test {{ sheet_num }}.")
         context = AttemptContext(attempt_number=attempt, mode=AttemptMode.NORMAL)

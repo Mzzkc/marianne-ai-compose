@@ -32,7 +32,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import anthropic
 import pytest
 
-from mozart.backends.anthropic_api import AnthropicApiBackend
+from marianne.backends.anthropic_api import AnthropicApiBackend
 
 
 # ============================================================================
@@ -96,7 +96,7 @@ class TestGetClient:
         backend = AnthropicApiBackend()
         assert backend._client is None
 
-        with patch("mozart.backends.anthropic_api.anthropic.AsyncAnthropic") as mock_cls:
+        with patch("marianne.backends.anthropic_api.anthropic.AsyncAnthropic") as mock_cls:
             mock_instance = MagicMock()
             mock_cls.return_value = mock_instance
             client = await backend._get_client()
@@ -139,7 +139,7 @@ class TestGetClient:
             call_count += 1
             return mock_instance
 
-        with patch("mozart.backends.anthropic_api.anthropic.AsyncAnthropic", side_effect=counting_factory):
+        with patch("marianne.backends.anthropic_api.anthropic.AsyncAnthropic", side_effect=counting_factory):
             # Fire 5 concurrent _get_client() calls
             results = await asyncio.gather(*[backend._get_client() for _ in range(5)])
 

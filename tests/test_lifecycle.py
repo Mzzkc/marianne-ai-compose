@@ -17,11 +17,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetStatus
-from mozart.core.config import JobConfig
-from mozart.execution.dag import DependencyDAG
-from mozart.execution.runner.lifecycle import LifecycleMixin
-from mozart.execution.runner.models import FatalError, GracefulShutdownError, RunSummary
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
+from marianne.core.config import JobConfig
+from marianne.execution.dag import DependencyDAG
+from marianne.execution.runner.lifecycle import LifecycleMixin
+from marianne.execution.runner.models import FatalError, GracefulShutdownError, RunSummary
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -83,7 +83,7 @@ class _MockLifecycleHost:
     def __init__(self, config: JobConfig) -> None:
         from rich.console import Console
 
-        from mozart.core.logging import get_logger
+        from marianne.core.logging import get_logger
 
         self.config = config
 
@@ -1113,7 +1113,7 @@ class TestRunIntegration:
 
         # Mock the hook executor to avoid actual command execution
         with patch(
-            "mozart.execution.runner.lifecycle.HookExecutor"
+            "marianne.execution.runner.lifecycle.HookExecutor"
         ) as MockHE:
             mock_result = MagicMock()
             mock_result.success = True
@@ -1156,7 +1156,7 @@ class TestRunIntegration:
         mixin.state_backend.load = AsyncMock(return_value=existing)
 
         with patch(
-            "mozart.execution.runner.lifecycle.HookExecutor"
+            "marianne.execution.runner.lifecycle.HookExecutor"
         ) as MockHE:
             state, summary = await mixin.run()
 

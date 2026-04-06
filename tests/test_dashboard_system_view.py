@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.daemon.ipc.client import DaemonClient
-from mozart.daemon.types import DaemonStatus
-from mozart.dashboard.app import create_app
-from mozart.dashboard.routes.system import set_system_view
-from mozart.dashboard.services.system_view import DaemonSystemView
-from mozart.state.json_backend import JsonStateBackend
+from marianne.daemon.ipc.client import DaemonClient
+from marianne.daemon.types import DaemonStatus
+from marianne.dashboard.app import create_app
+from marianne.dashboard.routes.system import set_system_view
+from marianne.dashboard.services.system_view import DaemonSystemView
+from marianne.state.json_backend import JsonStateBackend
 
 # ============================================================================
 # Fixtures
@@ -205,7 +205,7 @@ def app_with_system_view(
     tmp_path: Path,
 ) -> TestClient:
     """Create a test app with system routes wired up."""
-    from mozart.dashboard.routes.system import router as system_router
+    from marianne.dashboard.routes.system import router as system_router
 
     backend = JsonStateBackend(tmp_path / "state")
     app = create_app(state_backend=backend)

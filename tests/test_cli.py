@@ -10,9 +10,9 @@ import pytest
 from click.exceptions import Exit as ClickExit
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.state import SQLiteStateBackend
+from marianne.cli import app
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.state import SQLiteStateBackend
 
 # Module-level runner is safe: CliRunner is stateless (no mutable state between invocations).
 # Each invoke() call creates an isolated Click context.
@@ -32,7 +32,7 @@ def _no_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
         return False, None
 
     monkeypatch.setattr(
-        "mozart.daemon.detect.try_daemon_route", _fake_route,
+        "marianne.daemon.detect.try_daemon_route", _fake_route,
     )
 
 
@@ -84,14 +84,14 @@ class TestListCommand:
         """Return a patch that makes try_daemon_route return *jobs*."""
         async def _fake_route(method, params):
             return (True, jobs)
-        return patch("mozart.daemon.detect.try_daemon_route", side_effect=_fake_route)
+        return patch("marianne.daemon.detect.try_daemon_route", side_effect=_fake_route)
 
     @staticmethod
     def _mock_route_down():
         """Return a patch simulating no daemon running."""
         async def _fake_route(method, params):
             return (False, None)
-        return patch("mozart.daemon.detect.try_daemon_route", side_effect=_fake_route)
+        return patch("marianne.daemon.detect.try_daemon_route", side_effect=_fake_route)
 
     def test_list_no_active_jobs(self) -> None:
         """Default list shows 'no active jobs' when only historical jobs exist."""
@@ -454,7 +454,7 @@ class TestResumeCommand:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         # Mock the runner at the module level where it's imported
-        with patch("mozart.execution.runner.JobRunner") as mock_runner_cls:
+        with patch("marianne.execution.runner.JobRunner") as mock_runner_cls:
             mock_runner = AsyncMock()
             mock_runner.run = AsyncMock(return_value=CheckpointState(
                 job_id="paused-job",
@@ -466,7 +466,7 @@ class TestResumeCommand:
             mock_runner_cls.return_value = mock_runner
 
             # Also mock the backend constructors
-            with patch("mozart.backends.claude_cli.ClaudeCliBackend") as mock_backend:
+            with patch("marianne.backends.claude_cli.ClaudeCliBackend") as mock_backend:
                 mock_backend.from_config = AsyncMock(return_value=mock_backend)
 
                 result = runner.invoke(
@@ -494,7 +494,7 @@ class TestResumeCommand:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         # Mock the runner to avoid actual execution
-        with patch("mozart.execution.runner.JobRunner") as mock_runner_cls:
+        with patch("marianne.execution.runner.JobRunner") as mock_runner_cls:
             mock_runner = AsyncMock()
             mock_runner.run = AsyncMock(return_value=CheckpointState(
                 job_id="failed-job",
@@ -505,7 +505,7 @@ class TestResumeCommand:
             ))
             mock_runner_cls.return_value = mock_runner
 
-            with patch("mozart.backends.claude_cli.ClaudeCliBackend") as mock_backend:
+            with patch("marianne.backends.claude_cli.ClaudeCliBackend") as mock_backend:
                 mock_backend.from_config = AsyncMock(return_value=mock_backend)
 
                 result = runner.invoke(
@@ -560,7 +560,7 @@ class TestResumeCommand:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         # Mock the runner
-        with patch("mozart.execution.runner.JobRunner") as mock_runner_cls:
+        with patch("marianne.execution.runner.JobRunner") as mock_runner_cls:
             mock_runner = AsyncMock()
             mock_runner.run = AsyncMock(return_value=CheckpointState(
                 job_id="test-job",
@@ -571,7 +571,7 @@ class TestResumeCommand:
             ))
             mock_runner_cls.return_value = mock_runner
 
-            with patch("mozart.backends.claude_cli.ClaudeCliBackend") as mock_backend:
+            with patch("marianne.backends.claude_cli.ClaudeCliBackend") as mock_backend:
                 mock_backend.from_config = AsyncMock(return_value=mock_backend)
 
                 result = runner.invoke(
@@ -604,7 +604,7 @@ class TestResumeCommand:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         # Mock the runner
-        with patch("mozart.execution.runner.JobRunner") as mock_runner_cls:
+        with patch("marianne.execution.runner.JobRunner") as mock_runner_cls:
             mock_runner = AsyncMock()
             mock_runner.run = AsyncMock(return_value=CheckpointState(
                 job_id="force-job",
@@ -615,7 +615,7 @@ class TestResumeCommand:
             ))
             mock_runner_cls.return_value = mock_runner
 
-            with patch("mozart.backends.claude_cli.ClaudeCliBackend") as mock_backend:
+            with patch("marianne.backends.claude_cli.ClaudeCliBackend") as mock_backend:
                 mock_backend.from_config = AsyncMock(return_value=mock_backend)
 
                 result = runner.invoke(
@@ -654,7 +654,7 @@ class TestFindJobState:
         self, tmp_path: Path, paused_state: CheckpointState
     ) -> None:
         """Test _find_job_state finds state from JSON backend."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state_file = tmp_path / "test-job.json"
         state_file.write_text(json.dumps(paused_state.model_dump(mode="json"), default=str))
@@ -669,7 +669,7 @@ class TestFindJobState:
         self, tmp_path: Path, paused_state: CheckpointState
     ) -> None:
         """Test _find_job_state prefers SQLite backend when workspace has .mozart-state.db."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         # Create both a JSON and SQLite state file
         state_file = tmp_path / "test-job.json"
@@ -690,7 +690,7 @@ class TestFindJobState:
     def test_find_job_state_not_found_exits(self, tmp_path: Path) -> None:
         """Test _find_job_state raises Exit when job doesn't exist."""
 
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         workspace = tmp_path / "empty_ws"
         workspace.mkdir()
@@ -700,7 +700,7 @@ class TestFindJobState:
 
     def test_find_job_state_completed_blocked(self, tmp_path: Path) -> None:
         """Test _find_job_state blocks completed jobs without force."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
             job_id="done-job",
@@ -719,7 +719,7 @@ class TestFindJobState:
 
     def test_find_job_state_completed_with_force(self, tmp_path: Path) -> None:
         """Test _find_job_state allows completed jobs with force=True."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
             job_id="done-job",
@@ -740,7 +740,7 @@ class TestFindJobState:
 
     def test_find_job_state_pending_blocked(self, tmp_path: Path) -> None:
         """Test _find_job_state blocks pending (never started) jobs."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
             job_id="pending-job",
@@ -759,7 +759,7 @@ class TestFindJobState:
 
     def test_find_job_state_workspace_not_found(self, tmp_path: Path) -> None:
         """Test _find_job_state exits when workspace doesn't exist."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         fake_workspace = tmp_path / "does_not_exist"
 
@@ -768,7 +768,7 @@ class TestFindJobState:
 
     def test_find_job_state_running_allowed(self, tmp_path: Path) -> None:
         """Test _find_job_state allows resuming RUNNING jobs (crash recovery)."""
-        from mozart.cli.commands.resume import _find_job_state
+        from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
             job_id="running-job",
@@ -811,7 +811,7 @@ class TestReconstructConfig:
         """Test Priority 1: explicit --config file always wins."""
         import yaml
 
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         config_path = tmp_path / "explicit.yaml"
         config_path.write_text(yaml.dump(config_dict))
@@ -837,7 +837,7 @@ class TestReconstructConfig:
         """Test Priority 2: auto-reload from stored config_path when file exists."""
         import yaml
 
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         config_path = tmp_path / "original.yaml"
         config_path.write_text(yaml.dump(config_dict))
@@ -857,7 +857,7 @@ class TestReconstructConfig:
 
     def test_priority2_file_missing_falls_through_to_snapshot(self, tmp_path: Path, config_dict: dict) -> None:
         """Test Priority 2 -> 3: missing file falls through to snapshot."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
             job_id="test-job",
@@ -877,7 +877,7 @@ class TestReconstructConfig:
         """Test --no-reload skips auto-reload and uses snapshot."""
         import yaml
 
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         config_path = tmp_path / "original.yaml"
         config_path.write_text(yaml.dump({
@@ -902,7 +902,7 @@ class TestReconstructConfig:
 
     def test_priority3_config_snapshot(self, config_dict: dict) -> None:
         """Test Priority 3: reconstruct from config_snapshot when no path."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
             job_id="test-job",
@@ -919,7 +919,7 @@ class TestReconstructConfig:
 
     def test_priority3_invalid_snapshot_exits(self) -> None:
         """Test Priority 3: invalid config_snapshot raises Exit."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
             job_id="test-job",
@@ -935,7 +935,7 @@ class TestReconstructConfig:
 
     def test_no_config_available_exits(self) -> None:
         """Test all priorities exhausted raises Exit."""
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         state = CheckpointState(
             job_id="test-job",
@@ -954,7 +954,7 @@ class TestReconstructConfig:
         """Test Priority 1 overrides existing snapshot."""
         import yaml
 
-        from mozart.cli.commands.resume import _reconstruct_config
+        from marianne.cli.commands.resume import _reconstruct_config
 
         new_config = {
             "name": "new-config",
@@ -1291,7 +1291,7 @@ class TestLoggingOptions:
         """Test --log-level works with list command."""
         async def _fake_route(method, params):
             return (True, [])
-        with patch("mozart.daemon.detect.try_daemon_route", side_effect=_fake_route):
+        with patch("marianne.daemon.detect.try_daemon_route", side_effect=_fake_route):
             result = runner.invoke(
                 app, ["--log-level", "WARNING", "list"]
             )

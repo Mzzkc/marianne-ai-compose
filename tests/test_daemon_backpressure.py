@@ -12,14 +12,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mozart.daemon.backpressure import (
+from marianne.daemon.backpressure import (
     BackpressureController,
     PressureLevel,
     _LEVEL_DELAYS,
 )
-from mozart.daemon.config import ResourceLimitConfig
-from mozart.daemon.monitor import ResourceMonitor
-from mozart.daemon.rate_coordinator import RateLimitCoordinator
+from marianne.daemon.config import ResourceLimitConfig
+from marianne.daemon.monitor import ResourceMonitor
+from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
@@ -317,7 +317,7 @@ class TestSchedulerIntegration:
         self, controller: BackpressureController,
     ):
         """BackpressureController can be used where BackpressureChecker is expected."""
-        from mozart.daemon.scheduler import BackpressureChecker
+        from marianne.daemon.scheduler import BackpressureChecker
 
         # Protocol structural check — must have can_start_sheet
         assert hasattr(controller, "can_start_sheet")
@@ -326,8 +326,8 @@ class TestSchedulerIntegration:
     @pytest.mark.asyncio
     async def test_wires_into_scheduler(self):
         """Controller can be set on the scheduler via set_backpressure()."""
-        from mozart.daemon.config import DaemonConfig
-        from mozart.daemon.scheduler import GlobalSheetScheduler
+        from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.scheduler import GlobalSheetScheduler
 
         config = DaemonConfig(max_concurrent_sheets=5, max_concurrent_jobs=3)
         scheduler = GlobalSheetScheduler(config)

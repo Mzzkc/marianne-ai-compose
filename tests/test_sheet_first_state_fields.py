@@ -7,7 +7,7 @@ correctly with default values.
 
 from __future__ import annotations
 
-from mozart.core.checkpoint import CheckpointState, SheetState
+from marianne.core.checkpoint import CheckpointState, SheetState
 
 
 class TestSheetStateNewFields:

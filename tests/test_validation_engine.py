@@ -17,9 +17,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mozart.core.config import ValidationRule
-from mozart.execution.validation.engine import ValidationEngine
-from mozart.execution.validation.models import (
+from marianne.core.config import ValidationRule
+from marianne.execution.validation.engine import ValidationEngine
+from marianne.execution.validation.models import (
     FileModificationTracker,
     SheetValidationResult,
     ValidationResult,
@@ -993,7 +993,7 @@ class TestCommandSucceedsValidation:
             command="sudo echo hi",
         )
         engine = _make_engine(temp_workspace)
-        with caplog.at_level("WARNING", logger="mozart.execution.validation"):
+        with caplog.at_level("WARNING", logger="marianne.execution.validation"):
             # The command will fail (sudo without tty) but we're testing the warning
             await engine.run_validations([rule])
         assert any("high-risk" in r.message.lower() for r in caplog.records)

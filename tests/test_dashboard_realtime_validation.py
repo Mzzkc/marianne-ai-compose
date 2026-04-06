@@ -8,7 +8,7 @@ including API integration, error markers, and validation panel behavior.
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.dashboard.app import create_app
+from marianne.dashboard.app import create_app
 
 
 class TestRealtimeValidationAPI:
@@ -277,7 +277,7 @@ class TestValidationErrorMarkers:
 
     def test_error_marker_data_structure(self):
         """Test that error data is properly structured for CodeMirror markers."""
-        from mozart.validation.base import ValidationIssue, ValidationSeverity
+        from marianne.validation.base import ValidationIssue, ValidationSeverity
 
         validation_issues = [
             ValidationIssue(

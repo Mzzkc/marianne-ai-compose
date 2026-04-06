@@ -14,10 +14,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.daemon.config import DaemonConfig
-from mozart.daemon.exceptions import JobSubmissionError
-from mozart.daemon.manager import DaemonJobStatus, JobManager, JobMeta
-from mozart.daemon.types import JobRequest
+from marianne.daemon.config import DaemonConfig
+from marianne.daemon.exceptions import JobSubmissionError
+from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+from marianne.daemon.types import JobRequest
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
 
@@ -1161,7 +1161,7 @@ class TestSemanticAnalyzerIntegration:
 
         # Patch SemanticAnalyzer.start to raise
         with patch(
-            "mozart.daemon.manager.SemanticAnalyzer.start",
+            "marianne.daemon.manager.SemanticAnalyzer.start",
             side_effect=RuntimeError("LLM init failed"),
         ):
             await mgr.start()
@@ -1529,7 +1529,7 @@ class TestObserverRecorderIntegration:
         mgr._service = MagicMock()
 
         try:
-            from mozart.daemon.observer_recorder import ObserverRecorder
+            from marianne.daemon.observer_recorder import ObserverRecorder
 
             mock_recorder = MagicMock(spec=ObserverRecorder)
             mgr._observer_recorder = mock_recorder
@@ -1560,7 +1560,7 @@ class TestObserverRecorderIntegration:
         mgr._service = MagicMock()
 
         try:
-            from mozart.daemon.observer_recorder import ObserverRecorder
+            from marianne.daemon.observer_recorder import ObserverRecorder
 
             mock_recorder = MagicMock(spec=ObserverRecorder)
             mgr._observer_recorder = mock_recorder
@@ -1595,7 +1595,7 @@ class TestObserverRecorderIntegration:
         mgr._service = MagicMock()
 
         try:
-            from mozart.daemon.observer_recorder import ObserverRecorder
+            from marianne.daemon.observer_recorder import ObserverRecorder
 
             mock_recorder = MagicMock(spec=ObserverRecorder)
             mgr._observer_recorder = mock_recorder
@@ -1627,7 +1627,7 @@ class TestObserverRecorderIntegration:
         mgr = JobManager(config)
 
         try:
-            with patch("mozart.daemon.manager._logger") as mock_logger:
+            with patch("marianne.daemon.manager._logger") as mock_logger:
                 await mgr.start()
                 # Find the manager.started log call
                 started_calls = [

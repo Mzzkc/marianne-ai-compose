@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from mozart.learning.store.base import (
+from marianne.learning.store.base import (
     DEFAULT_GLOBAL_STORE_PATH,
     GlobalLearningStoreBase,
     WhereBuilder,

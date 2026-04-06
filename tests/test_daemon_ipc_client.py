@@ -12,11 +12,11 @@ from typing import Any
 
 import pytest
 
-from mozart.daemon.exceptions import DaemonNotRunningError, JobSubmissionError
-from mozart.daemon.ipc.client import DaemonClient
-from mozart.daemon.ipc.handler import RequestHandler
-from mozart.daemon.ipc.server import DaemonServer
-from mozart.daemon.types import DaemonStatus, JobRequest, JobResponse
+from marianne.daemon.exceptions import DaemonNotRunningError, JobSubmissionError
+from marianne.daemon.ipc.client import DaemonClient
+from marianne.daemon.ipc.handler import RequestHandler
+from marianne.daemon.ipc.server import DaemonServer
+from marianne.daemon.types import DaemonStatus, JobRequest, JobResponse
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -255,7 +255,7 @@ class TestDaemonClientWithServer:
         try:
             client = DaemonClient(sock)
             # method_not_found maps to -32601 → MethodNotFoundError (F-450 fix)
-            from mozart.daemon.exceptions import MethodNotFoundError
+            from marianne.daemon.exceptions import MethodNotFoundError
 
             with pytest.raises(MethodNotFoundError, match="Method not found"):
                 await client.call("nonexistent.rpc.method")

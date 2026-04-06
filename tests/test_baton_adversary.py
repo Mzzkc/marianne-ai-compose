@@ -23,10 +23,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
-from mozart.daemon.baton.dispatch import DispatchConfig, dispatch_ready
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+from marianne.daemon.baton.dispatch import DispatchConfig, dispatch_ready
+from marianne.daemon.baton.events import (
     CancelJob,
     EscalationNeeded,
     EscalationResolved,
@@ -42,7 +42,7 @@ from mozart.daemon.baton.events import (
     SheetSkipped,
     ShutdownRequested,
 )
-from mozart.daemon.baton.timer import TimerWheel
+from marianne.daemon.baton.timer import TimerWheel
 
 # =====================================================================
 # Helpers
@@ -749,7 +749,7 @@ class TestBackendPoolEdgeCases:
         registry = MagicMock()
         registry.get.return_value = None
 
-        from mozart.daemon.baton.backend_pool import BackendPool
+        from marianne.daemon.baton.backend_pool import BackendPool
 
         pool = BackendPool(registry)
         mock_backend = MagicMock()
@@ -763,7 +763,7 @@ class TestBackendPoolEdgeCases:
     async def test_double_close(self) -> None:
         """Calling close_all twice should be safe."""
         registry = MagicMock()
-        from mozart.daemon.baton.backend_pool import BackendPool
+        from marianne.daemon.baton.backend_pool import BackendPool
 
         pool = BackendPool(registry)
         await pool.close_all()
@@ -772,7 +772,7 @@ class TestBackendPoolEdgeCases:
     async def test_acquire_after_close(self) -> None:
         """Acquiring after close should raise RuntimeError."""
         registry = MagicMock()
-        from mozart.daemon.baton.backend_pool import BackendPool
+        from marianne.daemon.baton.backend_pool import BackendPool
 
         pool = BackendPool(registry)
         await pool.close_all()
@@ -783,7 +783,7 @@ class TestBackendPoolEdgeCases:
     async def test_total_in_flight_with_no_acquires(self) -> None:
         """Total in-flight should be 0 when nothing was acquired."""
         registry = MagicMock()
-        from mozart.daemon.baton.backend_pool import BackendPool
+        from marianne.daemon.baton.backend_pool import BackendPool
 
         pool = BackendPool(registry)
         assert pool.total_in_flight() == 0

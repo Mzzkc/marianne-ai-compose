@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.config import SheetConfig
-from mozart.execution.dag import CycleDetectedError, DependencyDAG, build_dag_from_config
-from mozart.core.fan_out import FanOutMetadata, expand_fan_out
-from mozart.prompts.templating import PromptBuilder, SheetContext
+from marianne.core.config import SheetConfig
+from marianne.execution.dag import CycleDetectedError, DependencyDAG, build_dag_from_config
+from marianne.core.fan_out import FanOutMetadata, expand_fan_out
+from marianne.prompts.templating import PromptBuilder, SheetContext
 
 # ─── Unit tests: expand_fan_out() ────────────────────────────────────────
 
@@ -483,7 +483,7 @@ class TestTemplateIntegration:
 
     def test_stage_instance_fan_count_in_template(self):
         """Jinja template renders stage, instance, fan_count correctly."""
-        from mozart.core.config import PromptConfig
+        from marianne.core.config import PromptConfig
 
         prompt_config = PromptConfig(
             template=(
@@ -508,7 +508,7 @@ class TestTemplateIntegration:
 
     def test_backwards_compat_sheet_num_still_works(self):
         """{{ sheet_num }} still returns concrete expanded number."""
-        from mozart.core.config import PromptConfig
+        from marianne.core.config import PromptConfig
 
         prompt_config = PromptConfig(
             template="Sheet {{ sheet_num }} of {{ total_sheets }}",
@@ -529,7 +529,7 @@ class TestTemplateIntegration:
 
     def test_stage_defaults_to_sheet_num_without_fan_out(self):
         """When no fan_out, {{ stage }} == {{ sheet_num }}."""
-        from mozart.core.config import PromptConfig
+        from marianne.core.config import PromptConfig
 
         prompt_config = PromptConfig(
             template="stage={{ stage }} sheet={{ sheet_num }}",
@@ -548,7 +548,7 @@ class TestTemplateIntegration:
 
     def test_total_stages_defaults_to_total_sheets_without_fan_out(self):
         """When no fan_out, {{ total_stages }} == {{ total_sheets }}."""
-        from mozart.core.config import PromptConfig
+        from marianne.core.config import PromptConfig
 
         prompt_config = PromptConfig(
             template="stages={{ total_stages }} sheets={{ total_sheets }}",
@@ -567,7 +567,7 @@ class TestTemplateIntegration:
 
     def test_conditional_template_with_stage(self):
         """Jinja {% if stage == N %} branching works."""
-        from mozart.core.config import PromptConfig
+        from marianne.core.config import PromptConfig
 
         prompt_config = PromptConfig(
             template=(
@@ -607,7 +607,7 @@ class TestValidationConditions:
 
     def _check(self, condition: str, **context_vars: int) -> bool:
         """Helper to test _check_condition with a sheet_context dict."""
-        from mozart.execution.validation import ValidationEngine
+        from marianne.execution.validation import ValidationEngine
 
         sheet_context = {"sheet_num": context_vars.get("sheet_num", 1)}
         sheet_context.update(context_vars)

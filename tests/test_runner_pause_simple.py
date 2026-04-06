@@ -3,9 +3,9 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import JobConfig
-from mozart.execution.runner import JobRunner
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config import JobConfig
+from marianne.execution.runner import JobRunner
 
 
 def test_pause_signal_detection():

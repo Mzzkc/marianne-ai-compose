@@ -13,21 +13,21 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.config.execution import ValidationRule
-from mozart.execution.validation.engine import ValidationEngine
-from mozart.execution.validation.models import ValidationResult
-from mozart.healing.context import ErrorContext
-from mozart.healing.coordinator import HealingReport, SelfHealingCoordinator
-from mozart.healing.diagnosis import Diagnosis
-from mozart.healing.registry import RemedyRegistry, create_default_registry
-from mozart.healing.remedies.base import (
+from marianne.core.config.execution import ValidationRule
+from marianne.execution.validation.engine import ValidationEngine
+from marianne.execution.validation.models import ValidationResult
+from marianne.healing.context import ErrorContext
+from marianne.healing.coordinator import HealingReport, SelfHealingCoordinator
+from marianne.healing.diagnosis import Diagnosis
+from marianne.healing.registry import RemedyRegistry, create_default_registry
+from marianne.healing.remedies.base import (
     BaseRemedy,
     RemedyCategory,
     RemedyResult,
 )
-from mozart.validation.base import ValidationIssue, ValidationSeverity
-from mozart.validation.reporter import ValidationReporter
-from mozart.validation.runner import ValidationRunner
+from marianne.validation.base import ValidationIssue, ValidationSeverity
+from marianne.validation.reporter import ValidationReporter
+from marianne.validation.runner import ValidationRunner
 from tests.conftest_adversarial import (
     _ADVERSARIAL_PATHS,
     _ADVERSARIAL_STRINGS,
@@ -854,7 +854,7 @@ class TestValidationRunnerCheckAggregation:
         runner = ValidationRunner(checks=[_BrokenCheck()])
         # Need a minimal config to pass to validate
         from unittest.mock import MagicMock
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
         config = MagicMock(spec=JobConfig)
         issues = runner.validate(config, Path("/tmp/fake.yaml"), "")
         assert len(issues) == 1
@@ -880,7 +880,7 @@ class TestValidationRunnerCheckAggregation:
 
         runner = ValidationRunner(checks=[_MultiCheck()])
         from unittest.mock import MagicMock
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
         config = MagicMock(spec=JobConfig)
         issues = runner.validate(config, Path("/tmp/f.yaml"), "")
         severities = [i.severity for i in issues]

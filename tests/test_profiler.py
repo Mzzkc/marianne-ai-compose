@@ -20,11 +20,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.daemon.profiler.anomaly import (
+from marianne.daemon.profiler.anomaly import (
     AnomalyDetector,
     FD_EXHAUSTION_THRESHOLD,
 )
-from mozart.daemon.profiler.models import (
+from marianne.daemon.profiler.models import (
     AnomalyConfig,
     AnomalySeverity,
     AnomalyType,
@@ -36,10 +36,10 @@ from mozart.daemon.profiler.models import (
     RetentionConfig,
     SystemSnapshot,
 )
-from mozart.daemon.profiler.storage import MonitorStorage
-from mozart.daemon.profiler.strace_manager import StraceManager
-from mozart.daemon.types import ObserverEvent
-from mozart.learning.patterns import PatternType
+from marianne.daemon.profiler.storage import MonitorStorage
+from marianne.daemon.profiler.strace_manager import StraceManager
+from marianne.daemon.types import ObserverEvent
+from marianne.learning.patterns import PatternType
 
 
 # ---------------------------------------------------------------------------
@@ -359,25 +359,25 @@ class TestGpuProbe:
 
     def test_no_gpu_returns_empty(self) -> None:
         """When no GPU is available, get_gpu_metrics returns empty list."""
-        from mozart.daemon.profiler import gpu_probe
+        from marianne.daemon.profiler import gpu_probe
 
         with (
             patch.object(gpu_probe, "_pynvml_available", False),
             patch.object(gpu_probe, "_pynvml", None),
             patch(
-                "mozart.daemon.profiler.gpu_probe.GpuProbe._probe_nvidia_smi_sync",
+                "marianne.daemon.profiler.gpu_probe.GpuProbe._probe_nvidia_smi_sync",
                 side_effect=FileNotFoundError("nvidia-smi not found"),
             ),
         ):
-            from mozart.daemon.profiler.gpu_probe import GpuProbe
+            from marianne.daemon.profiler.gpu_probe import GpuProbe
 
             result = GpuProbe.get_gpu_metrics()
             assert result == []
 
     def test_pynvml_fallback_to_nvidia_smi(self) -> None:
         """When pynvml fails, falls back to nvidia-smi."""
-        from mozart.daemon.profiler import gpu_probe
-        from mozart.daemon.profiler.gpu_probe import GpuProbe
+        from marianne.daemon.profiler import gpu_probe
+        from marianne.daemon.profiler.gpu_probe import GpuProbe
 
         expected = [
             gpu_probe.GpuMetric(
@@ -408,8 +408,8 @@ class TestGpuProbe:
 
     def test_no_nvidia_smi_returns_empty(self) -> None:
         """When both pynvml and nvidia-smi fail, returns empty."""
-        from mozart.daemon.profiler import gpu_probe
-        from mozart.daemon.profiler.gpu_probe import GpuProbe
+        from marianne.daemon.profiler import gpu_probe
+        from marianne.daemon.profiler.gpu_probe import GpuProbe
 
         with (
             patch.object(gpu_probe, "_pynvml_available", False),
@@ -425,7 +425,7 @@ class TestGpuProbe:
 
     def test_parse_nvidia_smi_output(self) -> None:
         """Verify parsing of nvidia-smi CSV output."""
-        from mozart.daemon.profiler.gpu_probe import GpuProbe
+        from marianne.daemon.profiler.gpu_probe import GpuProbe
 
         output = "75, 4096, 8192, 65\n30, 2048, 8192, 55\n"
         result = GpuProbe._parse_nvidia_smi_output(output)
@@ -465,7 +465,7 @@ class TestStraceManager:
 
         with (
             patch(
-                "mozart.daemon.profiler.strace_manager._strace_path",
+                "marianne.daemon.profiler.strace_manager._strace_path",
                 "/usr/bin/strace",
             ),
             patch(
@@ -495,7 +495,7 @@ class TestStraceManager:
         mgr = StraceManager(enabled=True)
 
         with patch(
-            "mozart.daemon.profiler.strace_manager._strace_path",
+            "marianne.daemon.profiler.strace_manager._strace_path",
             None,
         ):
             result = await mgr.attach(1234)
@@ -509,7 +509,7 @@ class TestStraceManager:
 
         with (
             patch(
-                "mozart.daemon.profiler.strace_manager._strace_path",
+                "marianne.daemon.profiler.strace_manager._strace_path",
                 "/usr/bin/strace",
             ),
             patch(
@@ -763,7 +763,7 @@ class TestProfilerCollector:
         self, tmp_path: Path, *, enabled: bool = True
     ) -> tuple[Any, MagicMock, MagicMock]:
         """Build a ProfilerCollector with mocked dependencies."""
-        from mozart.daemon.profiler.collector import ProfilerCollector
+        from marianne.daemon.profiler.collector import ProfilerCollector
 
         config = ProfilerConfig(
             enabled=enabled,
@@ -797,15 +797,15 @@ class TestProfilerCollector:
         # Patch out psutil-dependent code so we get a clean snapshot
         with (
             patch(
-                "mozart.daemon.profiler.collector._psutil",
+                "marianne.daemon.profiler.collector._psutil",
                 None,
             ),
             patch(
-                "mozart.daemon.profiler.collector.SystemProbe.get_memory_mb",
+                "marianne.daemon.profiler.collector.SystemProbe.get_memory_mb",
                 return_value=512.0,
             ),
             patch(
-                "mozart.daemon.profiler.collector.os.getloadavg",
+                "marianne.daemon.profiler.collector.os.getloadavg",
                 return_value=(1.5, 1.0, 0.5),
             ),
         ):
@@ -884,7 +884,7 @@ class TestProfilerCollector:
     @pytest.mark.asyncio
     async def test_strace_attached_on_sheet_start(self, tmp_path: Path) -> None:
         """When sheet.started fires with a PID, strace attachment is triggered."""
-        from mozart.daemon.profiler.collector import ProfilerCollector
+        from marianne.daemon.profiler.collector import ProfilerCollector
 
         config = ProfilerConfig(
             enabled=True,
@@ -981,8 +981,8 @@ class TestCorrelationAnalyzer:
         self, tmp_path: Path, min_sample_size: int = 2
     ) -> tuple[Any, MonitorStorage, MagicMock]:
         """Build a CorrelationAnalyzer with mocked LearningHub."""
-        from mozart.daemon.profiler.correlation import CorrelationAnalyzer
-        from mozart.daemon.profiler.models import CorrelationConfig
+        from marianne.daemon.profiler.correlation import CorrelationAnalyzer
+        from marianne.daemon.profiler.models import CorrelationConfig
 
         storage = MonitorStorage(db_path=tmp_path / "monitor.db")
 
@@ -1155,7 +1155,7 @@ class TestSemanticAnalyzerAnomalyEvents:
 
     def test_anomaly_event_stored_as_resource_anomaly(self) -> None:
         """monitor.anomaly events are stored as RESOURCE_ANOMALY patterns."""
-        from mozart.daemon.semantic_analyzer import SemanticAnalyzer
+        from marianne.daemon.semantic_analyzer import SemanticAnalyzer
 
         config = MagicMock()
         config.enabled = True
@@ -1204,7 +1204,7 @@ class TestSemanticAnalyzerAnomalyEvents:
 
     def test_anomaly_event_skipped_when_hub_not_running(self) -> None:
         """Anomaly events are silently skipped if learning hub is down."""
-        from mozart.daemon.semantic_analyzer import SemanticAnalyzer
+        from marianne.daemon.semantic_analyzer import SemanticAnalyzer
 
         config = MagicMock()
         config.enabled = True
@@ -1236,7 +1236,7 @@ class TestSemanticAnalyzerAnomalyEvents:
     @pytest.mark.asyncio
     async def test_anomaly_subscription_created(self) -> None:
         """start() creates subscriptions for both sheet events and anomaly events."""
-        from mozart.daemon.semantic_analyzer import SemanticAnalyzer
+        from marianne.daemon.semantic_analyzer import SemanticAnalyzer
 
         config = MagicMock()
         config.enabled = True
@@ -1273,7 +1273,7 @@ class TestBackpressureResourceEstimation:
     @pytest.mark.asyncio
     async def test_estimate_returns_none_without_hub(self) -> None:
         """Returns None when no learning hub is configured."""
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         monitor = MagicMock()
         rate_coord = MagicMock()
@@ -1285,7 +1285,7 @@ class TestBackpressureResourceEstimation:
     @pytest.mark.asyncio
     async def test_estimate_returns_none_when_hub_not_running(self) -> None:
         """Returns None when learning hub exists but is not started."""
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         learning_hub = MagicMock()
         learning_hub.is_running = False
@@ -1299,7 +1299,7 @@ class TestBackpressureResourceEstimation:
     @pytest.mark.asyncio
     async def test_estimate_returns_none_when_no_patterns(self) -> None:
         """Returns None when learning store has no correlation patterns."""
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         learning_hub = MagicMock()
         learning_hub.is_running = True
@@ -1314,7 +1314,7 @@ class TestBackpressureResourceEstimation:
     @pytest.mark.asyncio
     async def test_estimate_with_memory_patterns(self) -> None:
         """Returns ResourceEstimate when memory correlation patterns exist."""
-        from mozart.daemon.backpressure import BackpressureController
+        from marianne.daemon.backpressure import BackpressureController
 
         # Create mock patterns with memory bin context tags
         pattern1 = MagicMock()
@@ -1353,7 +1353,7 @@ class TestResourceContextEnrichment:
         self, tmp_path: Path
     ) -> tuple[Any, MagicMock, MagicMock]:
         """Build a ProfilerCollector with mocked dependencies."""
-        from mozart.daemon.profiler.collector import ProfilerCollector
+        from marianne.daemon.profiler.collector import ProfilerCollector
 
         config = ProfilerConfig(
             enabled=True,
@@ -1542,7 +1542,7 @@ class TestGenerateResourceReport:
     @pytest.mark.asyncio
     async def test_no_data_returns_short_message(self, tmp_path: Path) -> None:
         """When no profiler data exists, returns a short message."""
-        from mozart.daemon.profiler.storage import generate_resource_report
+        from marianne.daemon.profiler.storage import generate_resource_report
 
         storage = MonitorStorage(db_path=tmp_path / "empty.db")
         await storage.initialize()
@@ -1554,7 +1554,7 @@ class TestGenerateResourceReport:
     @pytest.mark.asyncio
     async def test_report_includes_peak_memory(self, tmp_path: Path) -> None:
         """Report includes peak memory information."""
-        from mozart.daemon.profiler.storage import generate_resource_report
+        from marianne.daemon.profiler.storage import generate_resource_report
 
         storage = MonitorStorage(db_path=tmp_path / "test.db")
         await storage.initialize()
@@ -1574,7 +1574,7 @@ class TestGenerateResourceReport:
     @pytest.mark.asyncio
     async def test_report_includes_per_sheet_breakdown(self, tmp_path: Path) -> None:
         """Report includes per-sheet resource breakdown."""
-        from mozart.daemon.profiler.storage import generate_resource_report
+        from marianne.daemon.profiler.storage import generate_resource_report
 
         storage = MonitorStorage(db_path=tmp_path / "test.db")
         await storage.initialize()
@@ -1596,7 +1596,7 @@ class TestGenerateResourceReport:
     @pytest.mark.asyncio
     async def test_report_includes_syscall_hotspots(self, tmp_path: Path) -> None:
         """Report includes syscall hotspot information."""
-        from mozart.daemon.profiler.storage import generate_resource_report
+        from marianne.daemon.profiler.storage import generate_resource_report
 
         storage = MonitorStorage(db_path=tmp_path / "test.db")
         await storage.initialize()
@@ -1613,7 +1613,7 @@ class TestGenerateResourceReport:
     @pytest.mark.asyncio
     async def test_report_includes_process_lifecycle(self, tmp_path: Path) -> None:
         """Report includes process lifecycle information."""
-        from mozart.daemon.profiler.storage import generate_resource_report
+        from marianne.daemon.profiler.storage import generate_resource_report
 
         storage = MonitorStorage(db_path=tmp_path / "test.db")
         await storage.initialize()

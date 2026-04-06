@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from mozart.learning.global_store import GlobalLearningStore
+from marianne.learning.global_store import GlobalLearningStore
 
 
 @pytest.fixture

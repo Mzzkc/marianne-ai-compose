@@ -5,11 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import JobConfig
-from mozart.daemon.exceptions import JobSubmissionError
-from mozart.daemon.job_service import JobService
-from mozart.daemon.output import NullOutput
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config import JobConfig
+from marianne.daemon.exceptions import JobSubmissionError
+from marianne.daemon.job_service import JobService
+from marianne.daemon.output import NullOutput
 
 # Path to the fixture config (shared across all test classes)
 FIXTURE_CONFIG = Path(__file__).parent / "fixtures" / "test-daemon-job.yaml"
@@ -241,7 +241,7 @@ class TestPublishingBackend:
     @pytest.mark.asyncio
     async def test_save_publishes_state(self):
         """save() delegates to inner backend and fires the callback."""
-        from mozart.daemon.job_service import _PublishingBackend
+        from marianne.daemon.job_service import _PublishingBackend
 
         inner = AsyncMock()
         published: list[CheckpointState] = []
@@ -264,7 +264,7 @@ class TestPublishingBackend:
     @pytest.mark.asyncio
     async def test_callback_error_does_not_propagate(self):
         """Callback failure must not break state saving."""
-        from mozart.daemon.job_service import _PublishingBackend
+        from marianne.daemon.job_service import _PublishingBackend
 
         inner = AsyncMock()
 
@@ -284,7 +284,7 @@ class TestPublishingBackend:
     @pytest.mark.asyncio
     async def test_delegates_other_methods(self):
         """Non-save methods are delegated to the inner backend."""
-        from mozart.daemon.job_service import _PublishingBackend
+        from marianne.daemon.job_service import _PublishingBackend
 
         inner = AsyncMock()
         inner.load = AsyncMock(return_value=None)
@@ -300,7 +300,7 @@ class TestWrapStateBackend:
 
     def test_wraps_when_callback_set(self):
         """With a publish callback, returns a _PublishingBackend."""
-        from mozart.daemon.job_service import _PublishingBackend
+        from marianne.daemon.job_service import _PublishingBackend
 
         service = JobService(state_publish_callback=lambda s: None)
         inner = AsyncMock()
@@ -326,13 +326,13 @@ class TestCreateBackend:
 
     def test_claude_cli_backend(self):
         """Test create_backend creates ClaudeCliBackend for claude_cli."""
-        from mozart.execution.setup import create_backend
+        from marianne.execution.setup import create_backend
 
         mock_config = MagicMock()
         mock_config.backend.type = "claude_cli"
 
         with patch(
-            "mozart.backends.claude_cli.ClaudeCliBackend.from_config"
+            "marianne.backends.claude_cli.ClaudeCliBackend.from_config"
         ) as mock_from_config:
             mock_from_config.return_value = MagicMock()
             create_backend(mock_config)
@@ -340,13 +340,13 @@ class TestCreateBackend:
 
     def test_anthropic_api_backend(self):
         """Test create_backend creates AnthropicApiBackend for anthropic_api."""
-        from mozart.execution.setup import create_backend
+        from marianne.execution.setup import create_backend
 
         mock_config = MagicMock()
         mock_config.backend.type = "anthropic_api"
 
         with patch(
-            "mozart.backends.anthropic_api.AnthropicApiBackend.from_config"
+            "marianne.backends.anthropic_api.AnthropicApiBackend.from_config"
         ) as mock_from_config:
             mock_from_config.return_value = MagicMock()
             create_backend(mock_config)
@@ -354,13 +354,13 @@ class TestCreateBackend:
 
     def test_recursive_light_backend(self):
         """Test create_backend creates RecursiveLightBackend for recursive_light."""
-        from mozart.execution.setup import create_backend
+        from marianne.execution.setup import create_backend
 
         mock_config = MagicMock()
         mock_config.backend.type = "recursive_light"
 
         with patch(
-            "mozart.backends.recursive_light.RecursiveLightBackend.from_config"
+            "marianne.backends.recursive_light.RecursiveLightBackend.from_config"
         ) as mock_from_config:
             mock_from_config.return_value = MagicMock()
             create_backend(mock_config)
@@ -368,13 +368,13 @@ class TestCreateBackend:
 
     def test_unknown_backend_falls_back_to_claude_cli(self):
         """Test create_backend defaults to ClaudeCliBackend for unknown types."""
-        from mozart.execution.setup import create_backend
+        from marianne.execution.setup import create_backend
 
         mock_config = MagicMock()
         mock_config.backend.type = "unknown_type"
 
         with patch(
-            "mozart.backends.claude_cli.ClaudeCliBackend.from_config"
+            "marianne.backends.claude_cli.ClaudeCliBackend.from_config"
         ) as mock_from_config:
             mock_from_config.return_value = MagicMock()
             create_backend(mock_config)
@@ -390,21 +390,21 @@ class TestCreateStateBackend:
     def test_json_backend_default(self, job_service: JobService, tmp_path: Path):
         """Test _create_state_backend creates JsonStateBackend by default."""
         backend = job_service._create_state_backend(tmp_path)
-        from mozart.state import JsonStateBackend
+        from marianne.state import JsonStateBackend
 
         assert isinstance(backend, JsonStateBackend)
 
     def test_json_backend_explicit(self, job_service: JobService, tmp_path: Path):
         """Test _create_state_backend creates JsonStateBackend for 'json'."""
         backend = job_service._create_state_backend(tmp_path, "json")
-        from mozart.state import JsonStateBackend
+        from marianne.state import JsonStateBackend
 
         assert isinstance(backend, JsonStateBackend)
 
     def test_sqlite_backend(self, job_service: JobService, tmp_path: Path):
         """Test _create_state_backend creates SQLiteStateBackend for 'sqlite'."""
         backend = job_service._create_state_backend(tmp_path, "sqlite")
-        from mozart.state import SQLiteStateBackend
+        from marianne.state import SQLiteStateBackend
 
         assert isinstance(backend, SQLiteStateBackend)
 
@@ -441,7 +441,7 @@ class TestFindJobState:
         self, job_service: JobService, tmp_path: Path
     ):
         """Test _find_job_state finds job via JsonStateBackend."""
-        from mozart.state import JsonStateBackend
+        from marianne.state import JsonStateBackend
 
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -632,7 +632,7 @@ class TestReconstructConfig:
         self, job_service: JobService, sample_job_config: JobConfig
     ):
         """Test config_snapshot is used as priority 3."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         # Create a real minimal config dict
         snapshot = {
@@ -663,7 +663,7 @@ class TestStartJobExecution:
         self, job_service: JobService, sample_job_config: JobConfig
     ):
         """Test start_job runs the runner and returns a RunSummary."""
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.runner.models import RunSummary
 
         name = sample_job_config.name
         sheets = sample_job_config.sheet.total_sheets
@@ -704,8 +704,8 @@ class TestStartJobExecution:
         self, job_service: JobService, sample_job_config: JobConfig
     ):
         """Test start_job returns PAUSED summary on GracefulShutdownError."""
-        from mozart.execution.runner import GracefulShutdownError
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.runner import GracefulShutdownError
+        from marianne.execution.runner.models import RunSummary
 
         name = sample_job_config.name
         sheets = sample_job_config.sheet.total_sheets
@@ -741,7 +741,7 @@ class TestStartJobExecution:
         self, job_service: JobService, sample_job_config: JobConfig
     ):
         """Test start_job returns FAILED summary on FatalError."""
-        from mozart.execution.runner import FatalError
+        from marianne.execution.runner import FatalError
 
         sheets = sample_job_config.sheet.total_sheets
 
@@ -772,7 +772,7 @@ class TestStartJobExecution:
         self, job_service: JobService, sample_job_config: JobConfig
     ):
         """Test start_job calls notification manager start, complete, and close."""
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.runner.models import RunSummary
 
         name = sample_job_config.name
         sheets = sample_job_config.sheet.total_sheets
@@ -824,7 +824,7 @@ class TestResumeJobExecution:
         self, job_service: JobService, tmp_path: Path
     ):
         """Test resume_job runs from paused state and returns COMPLETED."""
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.runner.models import RunSummary
 
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -891,7 +891,7 @@ class TestResumeJobExecution:
         self, job_service: JobService, tmp_path: Path
     ):
         """Test resume_job clears stale PID to prevent false-positive 'already running'."""
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.runner.models import RunSummary
 
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -957,7 +957,7 @@ class TestResumeJobExecution:
         self, job_service: JobService, tmp_path: Path
     ):
         """Test resume_job can resume a FAILED job."""
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.runner.models import RunSummary
 
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -1047,7 +1047,7 @@ class TestSetupComponents:
         )
         components = job_service._setup_components(config)
 
-        from mozart.learning.outcomes import JsonOutcomeStore
+        from marianne.learning.outcomes import JsonOutcomeStore
         assert isinstance(components["outcome_store"], JsonOutcomeStore)
         assert components["global_learning_store"] is not None
 
@@ -1077,7 +1077,7 @@ class TestRealComponentWiring:
         self, job_service: JobService, real_config: JobConfig,
     ):
         """_setup_components creates a real ClaudeCliBackend, not a mock."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         components = job_service._setup_components(real_config)
 
@@ -1102,8 +1102,8 @@ class TestRealComponentWiring:
         self, real_config: JobConfig, tmp_path: Path,
     ):
         """When learning is enabled, real outcome store and global store are created."""
-        from mozart.learning.global_store import GlobalLearningStore
-        from mozart.learning.outcomes import JsonOutcomeStore
+        from marianne.learning.global_store import GlobalLearningStore
+        from marianne.learning.outcomes import JsonOutcomeStore
 
         config = real_config.model_copy(
             update={"learning": real_config.learning.model_copy(update={"enabled": True})},
@@ -1124,8 +1124,8 @@ class TestRealComponentWiring:
         self, job_service: JobService, real_config: JobConfig,
     ):
         """_create_runner creates a real JobRunner with real components."""
-        from mozart.execution.runner import JobRunner
-        from mozart.state import JsonStateBackend
+        from marianne.execution.runner import JobRunner
+        from marianne.state import JsonStateBackend
 
         config = real_config
         config.workspace.mkdir(parents=True, exist_ok=True)
@@ -1153,7 +1153,7 @@ class TestRealComponentWiring:
         component setup, runner creation. Only runner.run() is patched so
         we don't need a real Claude CLI.
         """
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.runner.models import RunSummary
 
         service = JobService()
         config = real_config
@@ -1175,7 +1175,7 @@ class TestRealComponentWiring:
 
         # Patch only runner.run() — everything before this runs for real
         with patch(
-            "mozart.execution.runner.LifecycleMixin.run",
+            "marianne.execution.runner.LifecycleMixin.run",
             new_callable=AsyncMock,
             return_value=(expected_state, expected_summary),
         ):
@@ -1198,8 +1198,8 @@ class TestRealComponentWiring:
         store should be passed through _setup_components → _create_runner →
         RunnerContext.global_learning_store. This test verifies that chain.
         """
-        from mozart.execution.runner.models import RunSummary
-        from mozart.learning.global_store import GlobalLearningStore
+        from marianne.execution.runner.models import RunSummary
+        from marianne.learning.global_store import GlobalLearningStore
 
         db_path = tmp_path / "test-learning.db"
         global_store = GlobalLearningStore(db_path=db_path)
@@ -1235,7 +1235,7 @@ class TestRealComponentWiring:
         with (
             patch.object(service, "_create_runner", side_effect=_spy_create_runner),
             patch(
-                "mozart.execution.runner.LifecycleMixin.run",
+                "marianne.execution.runner.LifecycleMixin.run",
                 new_callable=AsyncMock,
                 return_value=(expected_state, expected_summary),
             ),
@@ -1291,7 +1291,7 @@ class TestExecuteRunner:
         self, job_service: JobService,
     ) -> None:
         """GracefulShutdownError → PAUSED status."""
-        from mozart.execution.runner.models import GracefulShutdownError, RunSummary
+        from marianne.execution.runner.models import GracefulShutdownError, RunSummary
 
         runner = MagicMock()
         runner.run = AsyncMock(side_effect=GracefulShutdownError("pausing"))
@@ -1313,7 +1313,7 @@ class TestExecuteRunner:
         self, job_service: JobService,
     ) -> None:
         """FatalError → FAILED status."""
-        from mozart.execution.runner.models import FatalError, RunSummary
+        from marianne.execution.runner.models import FatalError, RunSummary
 
         runner = MagicMock()
         runner.run = AsyncMock(side_effect=FatalError("broken"))
@@ -1371,7 +1371,7 @@ class TestExecuteRunner:
         self, job_service: JobService,
     ) -> None:
         """Notification manager's close() is called on FatalError."""
-        from mozart.execution.runner.models import FatalError, RunSummary
+        from marianne.execution.runner.models import FatalError, RunSummary
 
         runner = MagicMock()
         runner.run = AsyncMock(side_effect=FatalError("fail"))
@@ -1435,7 +1435,7 @@ class TestConfigPathWiring:
         self, job_service: JobService, sample_job_config: JobConfig,
     ) -> None:
         """start_job(config_path=...) passes it through to runner.run()."""
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.runner.models import RunSummary
 
         name = sample_job_config.name
         sheets = sample_job_config.sheet.total_sheets
@@ -1478,7 +1478,7 @@ class TestConfigPathWiring:
         self, job_service: JobService, sample_job_config: JobConfig,
     ) -> None:
         """start_job() without config_path does not pass it to runner.run()."""
-        from mozart.execution.runner.models import RunSummary
+        from marianne.execution.runner.models import RunSummary
 
         name = sample_job_config.name
         sheets = sample_job_config.sheet.total_sheets

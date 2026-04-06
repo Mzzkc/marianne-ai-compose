@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.dashboard import create_app
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.dashboard import create_app
+from marianne.state.json_backend import JsonStateBackend
 
 # ============================================================================
 # Fixtures

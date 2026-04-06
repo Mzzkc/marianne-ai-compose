@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from mozart.learning.store import GlobalLearningStore
+from marianne.learning.store import GlobalLearningStore
 
 
 @pytest.fixture()
@@ -81,7 +81,7 @@ class TestMinPriorityDefault:
         """The default min_priority in get_patterns() signature is 0.01."""
         import inspect
 
-        from mozart.learning.store.patterns_query import PatternQueryMixin
+        from marianne.learning.store.patterns_query import PatternQueryMixin
 
         sig = inspect.signature(PatternQueryMixin.get_patterns)
         param = sig.parameters["min_priority"]

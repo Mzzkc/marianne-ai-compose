@@ -5,14 +5,14 @@ from datetime import datetime
 import pydantic
 import pytest
 
-from mozart.core.checkpoint import (
+from marianne.core.checkpoint import (
     MAX_OUTPUT_CAPTURE_BYTES,
     CheckpointState,
     JobStatus,
     SheetState,
     SheetStatus,
 )
-from mozart.core.errors.codes import ErrorCategory
+from marianne.core.errors.codes import ErrorCategory
 
 
 class TestSheetStatus:

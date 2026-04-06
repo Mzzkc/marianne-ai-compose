@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mozart.daemon.config import ResourceLimitConfig
-from mozart.daemon.health import HealthChecker
-from mozart.daemon.monitor import ResourceMonitor
+from marianne.daemon.config import ResourceLimitConfig
+from marianne.daemon.health import HealthChecker
+from marianne.daemon.monitor import ResourceMonitor
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────

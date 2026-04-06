@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.dashboard.services.job_control import JobActionResult, ProcessHealth
-from mozart.mcp.resources import ConfigResources
-from mozart.mcp.server import MCPServer
-from mozart.mcp.tools import ArtifactTools, ControlTools, JobTools, ScoreTools
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.dashboard.services.job_control import JobActionResult, ProcessHealth
+from marianne.mcp.resources import ConfigResources
+from marianne.mcp.server import MCPServer
+from marianne.mcp.tools import ArtifactTools, ControlTools, JobTools, ScoreTools
 
 # ---------------------------------------------------------------------------
 # Helpers

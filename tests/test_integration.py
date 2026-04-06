@@ -19,12 +19,12 @@ import pytest
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-from mozart.backends.base import ExecutionResult
-from mozart.cli import app
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.dashboard import create_app
-from mozart.execution.runner import RunSummary
-from mozart.state.json_backend import JsonStateBackend
+from marianne.backends.base import ExecutionResult
+from marianne.cli import app
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.dashboard import create_app
+from marianne.execution.runner import RunSummary
+from marianne.state.json_backend import JsonStateBackend
 
 runner = CliRunner()
 
@@ -42,7 +42,7 @@ def _no_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
         return False, None
 
     monkeypatch.setattr(
-        "mozart.daemon.detect.try_daemon_route", _fake_route,
+        "marianne.daemon.detect.try_daemon_route", _fake_route,
     )
 
 
@@ -314,7 +314,7 @@ class TestRunStatusResumeWorkflow:
         state_file = workspace / "resume-test-job.json"
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
-        with patch("mozart.execution.runner.JobRunner") as mock_runner_cls:
+        with patch("marianne.execution.runner.JobRunner") as mock_runner_cls:
             # Create mock runner that returns completed state and summary
             mock_runner = AsyncMock()
             completed_state = CheckpointState(
@@ -335,7 +335,7 @@ class TestRunStatusResumeWorkflow:
             mock_runner.run = AsyncMock(return_value=(completed_state, mock_summary))
             mock_runner_cls.return_value = mock_runner
 
-            with patch("mozart.backends.claude_cli.ClaudeCliBackend") as mock_backend:
+            with patch("marianne.backends.claude_cli.ClaudeCliBackend") as mock_backend:
                 mock_backend.from_config = AsyncMock(return_value=AsyncMock())
 
                 result = runner.invoke(
@@ -402,7 +402,7 @@ class TestRunStatusResumeWorkflow:
         assert "1" in result.stdout and "3" in result.stdout  # 1/3 sheets
 
         # Step 3: Resume and complete
-        with patch("mozart.execution.runner.JobRunner") as mock_runner_cls:
+        with patch("marianne.execution.runner.JobRunner") as mock_runner_cls:
             completed_state = CheckpointState(
                 job_id="e2e-test-job",
                 job_name="End-to-end test",
@@ -422,7 +422,7 @@ class TestRunStatusResumeWorkflow:
             mock_runner.run = AsyncMock(return_value=(completed_state, mock_summary))
             mock_runner_cls.return_value = mock_runner
 
-            with patch("mozart.backends.claude_cli.ClaudeCliBackend") as mock_backend:
+            with patch("marianne.backends.claude_cli.ClaudeCliBackend") as mock_backend:
                 mock_backend.from_config = AsyncMock(return_value=AsyncMock())
 
                 result = runner.invoke(
@@ -445,7 +445,7 @@ class TestListMultipleJobs:
         """Return a patch that makes try_daemon_route return *jobs*."""
         async def _fake_route(method, params):
             return (True, jobs)
-        return patch("mozart.daemon.detect.try_daemon_route", side_effect=_fake_route)
+        return patch("marianne.daemon.detect.try_daemon_route", side_effect=_fake_route)
 
     def test_list_default_shows_active_only(self) -> None:
         """Default list shows only active jobs (running, queued, paused)."""
@@ -634,7 +634,7 @@ class TestAllCLICommandsFunctional:
         jobs = _multi_job_daemon_data()
         async def _fake_route(method, params):
             return (True, jobs)
-        with patch("mozart.daemon.detect.try_daemon_route", side_effect=_fake_route):
+        with patch("marianne.daemon.detect.try_daemon_route", side_effect=_fake_route):
             result = runner.invoke(app, ["list", "--all"])
         assert result.exit_code == 0
         assert "score(s)" in result.stdout
@@ -781,7 +781,7 @@ class TestErrorHandlingIntegration:
         """List without running daemon produces helpful error."""
         async def _fake_route(method, params):
             return (False, None)
-        with patch("mozart.daemon.detect.try_daemon_route", side_effect=_fake_route):
+        with patch("marianne.daemon.detect.try_daemon_route", side_effect=_fake_route):
             result = runner.invoke(app, ["list"])
         assert result.exit_code == 1
         assert "conductor is not running" in result.stdout.lower()

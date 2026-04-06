@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState
+from marianne.core.checkpoint import CheckpointState
 
 
 class TestDiagnoseWorkspaceFallback:
@@ -23,7 +23,7 @@ class TestDiagnoseWorkspaceFallback:
         self, tmp_path: Path,
     ) -> None:
         """JobSubmissionError with -w flag falls back to filesystem instead of exiting."""
-        from mozart.daemon.exceptions import JobSubmissionError
+        from marianne.daemon.exceptions import JobSubmissionError
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
@@ -38,22 +38,22 @@ class TestDiagnoseWorkspaceFallback:
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 AsyncMock(side_effect=JobSubmissionError("Not found")),
             ),
             patch(
-                "mozart.cli.helpers._find_job_state_direct",
+                "marianne.cli.helpers._find_job_state_direct",
                 mock_find,
             ),
             patch(
-                "mozart.cli.commands.diagnose._build_diagnostic_report",
+                "marianne.cli.commands.diagnose._build_diagnostic_report",
                 return_value={"job_id": "test-job", "status": "COMPLETED"},
             ),
             patch(
-                "mozart.cli.commands.diagnose._display_diagnostic_report",
+                "marianne.cli.commands.diagnose._display_diagnostic_report",
             ),
         ):
-            from mozart.cli.commands.diagnose import _diagnose_job
+            from marianne.cli.commands.diagnose import _diagnose_job
 
             # Should NOT raise typer.Exit — falls back to workspace
             await _diagnose_job(
@@ -72,16 +72,16 @@ class TestDiagnoseWorkspaceFallback:
         """JobSubmissionError without -w flag still exits with error."""
         import typer
 
-        from mozart.daemon.exceptions import JobSubmissionError
+        from marianne.daemon.exceptions import JobSubmissionError
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 AsyncMock(side_effect=JobSubmissionError("Not found")),
             ),
-            patch("mozart.cli.commands.diagnose.output_error"),
+            patch("marianne.cli.commands.diagnose.output_error"),
         ):
-            from mozart.cli.commands.diagnose import _diagnose_job
+            from marianne.cli.commands.diagnose import _diagnose_job
 
             with pytest.raises(typer.Exit):
                 await _diagnose_job(
@@ -97,22 +97,22 @@ class TestDiagnoseWorkspaceFallback:
         """When filesystem fallback also fails, exits with error."""
         import typer
 
-        from mozart.daemon.exceptions import JobSubmissionError
+        from marianne.daemon.exceptions import JobSubmissionError
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 AsyncMock(side_effect=JobSubmissionError("Not found")),
             ),
             patch(
-                "mozart.cli.helpers._find_job_state_direct",
+                "marianne.cli.helpers._find_job_state_direct",
                 AsyncMock(side_effect=typer.Exit(1)),
             ),
         ):
-            from mozart.cli.commands.diagnose import _diagnose_job
+            from marianne.cli.commands.diagnose import _diagnose_job
 
             with pytest.raises(typer.Exit):
                 await _diagnose_job(
@@ -126,21 +126,21 @@ class TestDiagnoseWorkspaceFallback:
         """Error hints should mention -w flag when workspace not provided."""
         import typer
 
-        from mozart.daemon.exceptions import JobSubmissionError
+        from marianne.daemon.exceptions import JobSubmissionError
 
         mock_output_error = MagicMock()
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 AsyncMock(side_effect=JobSubmissionError("Not found")),
             ),
             patch(
-                "mozart.cli.commands.diagnose.output_error",
+                "marianne.cli.commands.diagnose.output_error",
                 mock_output_error,
             ),
         ):
-            from mozart.cli.commands.diagnose import _diagnose_job
+            from marianne.cli.commands.diagnose import _diagnose_job
 
             with pytest.raises(typer.Exit):
                 await _diagnose_job(

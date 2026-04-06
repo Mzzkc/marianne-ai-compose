@@ -13,7 +13,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
@@ -214,7 +214,7 @@ class TestInitSchemaValidation:
 
     def test_generated_score_passes_pydantic(self, tmp_path: Path) -> None:
         """The starter score passes JobConfig schema validation."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         runner.invoke(app, ["init", "--path", str(tmp_path)])
         score_file = tmp_path / "my-score.yaml"

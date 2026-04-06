@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from mozart.daemon.baton.adapter import BatonAdapter
+from marianne.daemon.baton.adapter import BatonAdapter
 
 
 def _make_adapter(max_concurrent: int = 10) -> BatonAdapter:

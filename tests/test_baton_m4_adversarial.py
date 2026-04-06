@@ -21,12 +21,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import jinja2
 import pytest
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.config.execution import ValidationRule
-from mozart.core.config.job import InjectionCategory, InjectionItem
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.state import (
+from marianne.backends.base import ExecutionResult
+from marianne.core.config.execution import ValidationRule
+from marianne.core.config.job import InjectionCategory, InjectionItem
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.state import (
     AttemptContext,
     AttemptMode,
     BatonSheetStatus,
@@ -126,7 +126,7 @@ class TestBuildPromptAdversarial:
         If a score references {{ nonexistent_var }}, the musician must
         fail loudly — not silently produce empty text.
         """
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(prompt="{{ nonexistent_var }}")
         ctx = _make_context()
@@ -138,7 +138,7 @@ class TestBuildPromptAdversarial:
         """Template variables are rendered, not executed. Shell metacharacters
         in variable values must appear literally in the output.
         """
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(prompt="Run: {{ workspace }}")
         ctx = _make_context()
@@ -153,7 +153,7 @@ class TestBuildPromptAdversarial:
         The preamble is always prepended. An empty template means the agent
         gets identity but no task — weird but not a crash.
         """
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(prompt="")
         ctx = _make_context()
@@ -167,7 +167,7 @@ class TestBuildPromptAdversarial:
         after validation requirements. The agent reads top-to-bottom;
         "finish your work" before "here's what must pass" is confusing.
         """
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         rule = ValidationRule(
             type="file_exists",
@@ -200,7 +200,7 @@ class TestBuildPromptAdversarial:
         The agent needs to know it failed before — otherwise it repeats
         the same approach.
         """
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(prompt="Do the work")
         ctx_first = _make_context(attempt=1)
@@ -218,7 +218,7 @@ class TestBuildPromptAdversarial:
         Agents in a fan-out need to know they're concurrent to avoid
         conflicting file writes.
         """
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(prompt="Do work", voice_count=5)
         ctx = _make_context()
@@ -234,7 +234,7 @@ class TestBuildPromptAdversarial:
         A score author shouldn't be able to override them with custom vars
         that have the same name — the built-in should win.
         """
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = _make_sheet(prompt="Sheet {{ sheet_num }}")
         ctx = _make_context()
@@ -263,7 +263,7 @@ class TestClassifyErrorAdversarial:
         If rate limits leak into error classification, the baton will
         retry instead of wait — burning through attempts on cooldowns.
         """
-        from mozart.daemon.baton.musician import _classify_error
+        from marianne.daemon.baton.musician import _classify_error
 
         result = _make_exec_result(
             success=False,
@@ -281,7 +281,7 @@ class TestClassifyErrorAdversarial:
         If an agent writes "authentication" in stdout (e.g., building
         an auth module), that's content, not an error.
         """
-        from mozart.daemon.baton.musician import _classify_error
+        from marianne.daemon.baton.musician import _classify_error
 
         result = _make_exec_result(
             success=False,
@@ -298,7 +298,7 @@ class TestClassifyErrorAdversarial:
 
         This is TRANSIENT — the agent didn't finish, wasn't wrong.
         """
-        from mozart.daemon.baton.musician import _classify_error
+        from marianne.daemon.baton.musician import _classify_error
 
         result = _make_exec_result(
             success=False,
@@ -310,7 +310,7 @@ class TestClassifyErrorAdversarial:
 
     def test_success_returns_none_none(self) -> None:
         """Successful execution has no error to classify."""
-        from mozart.daemon.baton.musician import _classify_error
+        from marianne.daemon.baton.musician import _classify_error
 
         result = _make_exec_result(success=True, exit_code=0)
         classification, message = _classify_error(result)
@@ -322,7 +322,7 @@ class TestClassifyErrorAdversarial:
 
         "UNAUTHORIZED" and "unauthorized" are the same error.
         """
-        from mozart.daemon.baton.musician import _classify_error
+        from marianne.daemon.baton.musician import _classify_error
 
         result = _make_exec_result(
             success=False,
@@ -337,7 +337,7 @@ class TestClassifyErrorAdversarial:
 
         Some tools exit nonzero without writing to stderr.
         """
-        from mozart.daemon.baton.musician import _classify_error
+        from marianne.daemon.baton.musician import _classify_error
 
         result = _make_exec_result(
             success=False,
@@ -354,7 +354,7 @@ class TestClassifyErrorAdversarial:
         The rate_limited flag is authoritative — it comes from the backend
         classifier which has full context.
         """
-        from mozart.daemon.baton.musician import _classify_error
+        from marianne.daemon.baton.musician import _classify_error
 
         result = _make_exec_result(
             success=False,
@@ -382,7 +382,7 @@ class TestValidateAdversarial:
     @pytest.mark.asyncio
     async def test_no_validations_success_yields_100(self) -> None:
         """The F-018 contract: success + no validations = 100% pass rate."""
-        from mozart.daemon.baton.musician import _validate
+        from marianne.daemon.baton.musician import _validate
 
         sheet = _make_sheet(validations=[])
         result = _make_exec_result(success=True)
@@ -394,7 +394,7 @@ class TestValidateAdversarial:
     @pytest.mark.asyncio
     async def test_execution_failure_yields_zero(self) -> None:
         """Execution failure means no validations run — rate is 0.0."""
-        from mozart.daemon.baton.musician import _validate
+        from marianne.daemon.baton.musician import _validate
 
         sheet = _make_sheet(validations=[])
         result = _make_exec_result(success=False)
@@ -408,14 +408,14 @@ class TestValidateAdversarial:
 
         This triggers a retry — the musician can't know if work was done.
         """
-        from mozart.daemon.baton.musician import _validate
+        from marianne.daemon.baton.musician import _validate
 
         rule = ValidationRule(type="file_exists", path="/tmp/output.txt")
         sheet = _make_sheet(validations=[rule])
         result = _make_exec_result(success=True)
 
         with patch(
-            "mozart.execution.validation.engine.ValidationEngine",
+            "marianne.execution.validation.engine.ValidationEngine",
             side_effect=RuntimeError("engine broken"),
         ):
             passed, total, rate, details = await _validate(sheet, result)
@@ -435,7 +435,7 @@ class TestCaptureOutputAdversarial:
 
     def test_credentials_redacted_in_stdout(self) -> None:
         """API keys in stdout must be redacted before entering the baton."""
-        from mozart.daemon.baton.musician import _capture_output
+        from marianne.daemon.baton.musician import _capture_output
 
         result = _make_exec_result(
             stdout="Using key sk-ant-api03-secretkey1234567890abcdef",
@@ -446,7 +446,7 @@ class TestCaptureOutputAdversarial:
 
     def test_credentials_redacted_in_stderr(self) -> None:
         """API keys in stderr must be redacted."""
-        from mozart.daemon.baton.musician import _capture_output
+        from marianne.daemon.baton.musician import _capture_output
 
         # Google API key must be 28+ chars after AIzaSy to match the pattern
         google_key = "AIzaSy" + "A" * 30
@@ -459,7 +459,7 @@ class TestCaptureOutputAdversarial:
 
     def test_none_output_handled(self) -> None:
         """None stdout/stderr must produce empty strings, not crash."""
-        from mozart.daemon.baton.musician import _capture_output
+        from marianne.daemon.baton.musician import _capture_output
 
         result = _make_exec_result()
         # Manually set None to simulate backend returning None
@@ -481,8 +481,8 @@ class TestCaptureOutputAdversarial:
         The tail is kept (not the head) because the end of output
         usually contains the error/result.
         """
-        from mozart.core.constants import TRUNCATE_STDOUT_TAIL_CHARS
-        from mozart.daemon.baton.musician import _capture_output
+        from marianne.core.constants import TRUNCATE_STDOUT_TAIL_CHARS
+        from marianne.daemon.baton.musician import _capture_output
 
         long_output = "x" * (TRUNCATE_STDOUT_TAIL_CHARS + 10000)
         result = _make_exec_result(stdout=long_output)
@@ -505,7 +505,7 @@ class TestCloneSanitizationAdversarial:
 
     def test_path_traversal_rejected(self) -> None:
         """../../../etc/passwd must not produce paths outside /tmp."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("../../../etc/passwd")
         assert "/etc/" not in str(paths.socket)
@@ -513,7 +513,7 @@ class TestCloneSanitizationAdversarial:
 
     def test_absolute_path_injection(self) -> None:
         """/tmp/evil must not override the path construction."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("/tmp/evil")
         # Should be sanitized — slashes become hyphens
@@ -521,14 +521,14 @@ class TestCloneSanitizationAdversarial:
 
     def test_null_byte_injection(self) -> None:
         """Null bytes in name must be stripped (C-string truncation attack)."""
-        from mozart.daemon.clone import _sanitize_name
+        from marianne.daemon.clone import _sanitize_name
 
         result = _sanitize_name("test\x00evil")
         assert "\x00" not in result
 
     def test_very_long_name_truncated(self) -> None:
         """Names > 64 chars must be truncated for socket path limits."""
-        from mozart.daemon.clone import _sanitize_name
+        from marianne.daemon.clone import _sanitize_name
 
         long_name = "a" * 500
         result = _sanitize_name(long_name)
@@ -536,7 +536,7 @@ class TestCloneSanitizationAdversarial:
 
     def test_empty_name_produces_default(self) -> None:
         """Empty/None name produces default clone (no suffix)."""
-        from mozart.daemon.clone import _sanitize_name
+        from marianne.daemon.clone import _sanitize_name
 
         assert _sanitize_name("") == ""
         assert _sanitize_name(None) == ""
@@ -547,14 +547,14 @@ class TestCloneSanitizationAdversarial:
         Hyphens are not stripped (preserves uniqueness between clone names).
         The result is distinct from the default clone (empty string).
         """
-        from mozart.daemon.clone import _sanitize_name
+        from marianne.daemon.clone import _sanitize_name
 
         result = _sanitize_name("!@#$%^&*()")
         assert result == "-"
 
     def test_unicode_name_handled(self) -> None:
         """Unicode characters should be replaced, not crash."""
-        from mozart.daemon.clone import _sanitize_name
+        from marianne.daemon.clone import _sanitize_name
 
         result = _sanitize_name("тест-клон-名前")
         # Non-ASCII replaced with hyphens, then collapsed
@@ -570,7 +570,7 @@ class TestCloneGlobalStateAdversarial:
 
     def test_clone_state_cleanup(self) -> None:
         """Setting clone to None restores production mode."""
-        from mozart.daemon.clone import (
+        from marianne.daemon.clone import (
             get_clone_name,
             is_clone_active,
             set_clone_name,
@@ -584,7 +584,7 @@ class TestCloneGlobalStateAdversarial:
 
     def test_named_clones_produce_distinct_paths(self) -> None:
         """Two different clone names must produce different socket paths."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths_a = resolve_clone_paths("alpha")
         paths_b = resolve_clone_paths("beta")
@@ -595,7 +595,7 @@ class TestCloneGlobalStateAdversarial:
 
     def test_default_clone_paths_differ_from_production(self) -> None:
         """Default clone paths must not overlap production paths."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         # Production uses ~/.mozart/mozart.sock (or similar)
         # Clone uses /tmp/mozart-clone.sock
@@ -623,7 +623,7 @@ class TestAdapterStateMappingAdversarial:
 
         A missing mapping means the adapter can't save state for that status.
         """
-        from mozart.daemon.baton.adapter import _BATON_TO_CHECKPOINT
+        from marianne.daemon.baton.adapter import _BATON_TO_CHECKPOINT
 
         for status in BatonSheetStatus:
             assert status in _BATON_TO_CHECKPOINT, (
@@ -636,7 +636,7 @@ class TestAdapterStateMappingAdversarial:
         This is needed for resume — checkpoint state must map back to
         a baton status.
         """
-        from mozart.daemon.baton.adapter import _CHECKPOINT_TO_BATON
+        from marianne.daemon.baton.adapter import _CHECKPOINT_TO_BATON
 
         known_statuses = {"pending", "in_progress", "completed", "failed", "skipped"}
         for status in known_statuses:
@@ -649,7 +649,7 @@ class TestAdapterStateMappingAdversarial:
 
         If COMPLETED maps to "pending", the job never finishes.
         """
-        from mozart.daemon.baton.adapter import _BATON_TO_CHECKPOINT
+        from marianne.daemon.baton.adapter import _BATON_TO_CHECKPOINT
 
         terminal_checkpoint = {"completed", "failed", "skipped"}
         terminal_baton = {
@@ -671,7 +671,7 @@ class TestAdapterStateMappingAdversarial:
         If COMPLETED → "completed" → COMPLETED, the round trip preserves
         terminal status. If not, resume after restart loses terminal state.
         """
-        from mozart.daemon.baton.adapter import (
+        from marianne.daemon.baton.adapter import (
             _BATON_TO_CHECKPOINT,
             _CHECKPOINT_TO_BATON,
         )
@@ -690,7 +690,7 @@ class TestAdapterStateMappingAdversarial:
 
     def test_mapping_functions_match_tables(self) -> None:
         """The public mapping functions must agree with the tables."""
-        from mozart.daemon.baton.adapter import (
+        from marianne.daemon.baton.adapter import (
             _BATON_TO_CHECKPOINT,
             baton_to_checkpoint_status,
             checkpoint_to_baton_status,
@@ -716,7 +716,7 @@ class TestSheetTaskAdversarial:
     @pytest.mark.asyncio
     async def test_backend_raises_always_reports(self) -> None:
         """If the backend throws, the musician still reports a result."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = _make_sheet()
         ctx = _make_context()
@@ -747,7 +747,7 @@ class TestSheetTaskAdversarial:
         This is the PromptRenderer path — the adapter pre-renders the
         prompt. The musician must use it directly.
         """
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = _make_sheet()
         ctx = _make_context()
@@ -781,7 +781,7 @@ class TestSheetTaskAdversarial:
 
         The preamble is optional even when the rendered prompt is provided.
         """
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = _make_sheet()
         ctx = _make_context()
@@ -809,7 +809,7 @@ class TestSheetTaskAdversarial:
         If redaction happens after inbox.put(), a concurrent reader could
         see raw credentials.
         """
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = _make_sheet()
         ctx = _make_context()
@@ -837,7 +837,7 @@ class TestSheetTaskAdversarial:
     @pytest.mark.asyncio
     async def test_zero_cost_for_no_tokens(self) -> None:
         """Zero tokens → zero cost. No phantom charges."""
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = _make_sheet()
         ctx = _make_context()
@@ -876,7 +876,7 @@ class TestInjectionResolutionAdversarial:
 
     def test_missing_context_file_skipped_not_crashed(self) -> None:
         """Missing context files are skipped — not a crash, just a warning."""
-        from mozart.daemon.baton.musician import _resolve_injections
+        from marianne.daemon.baton.musician import _resolve_injections
 
         sheet = _make_sheet(
             prelude=[
@@ -891,7 +891,7 @@ class TestInjectionResolutionAdversarial:
 
     def test_relative_path_resolved_against_workspace(self) -> None:
         """Relative injection paths must be resolved against the workspace."""
-        from mozart.daemon.baton.musician import _resolve_injections
+        from marianne.daemon.baton.musician import _resolve_injections
 
         sheet = _make_sheet(
             workspace="/tmp/test-workspace",
@@ -914,7 +914,7 @@ class TestInjectionResolutionAdversarial:
         This is intentional: a missing variable in a path produces an
         empty segment, not a crash.
         """
-        from mozart.daemon.baton.musician import _resolve_injections
+        from marianne.daemon.baton.musician import _resolve_injections
 
         sheet = _make_sheet(
             prelude=[
@@ -931,7 +931,7 @@ class TestInjectionResolutionAdversarial:
 
     def test_injection_categories_correctly_separated(self) -> None:
         """Context, skill, and tool injections go to different buckets."""
-        from mozart.daemon.baton.musician import _resolve_injections
+        from marianne.daemon.baton.musician import _resolve_injections
         import tempfile
         import os
 
@@ -990,8 +990,8 @@ class TestErrorClassifierPhase45Adversarial:
         Phase 4 is skipped because all_errors is non-empty. Without
         Phase 4.5, the rate limit is invisible.
         """
-        from mozart.core.errors.classifier import ErrorClassifier
-        from mozart.core.errors.codes import ErrorCategory
+        from marianne.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.codes import ErrorCategory
 
         classifier = ErrorClassifier()
         result = classifier.classify_execution(
@@ -1012,8 +1012,8 @@ class TestErrorClassifierPhase45Adversarial:
 
     def test_e006_stale_detection_in_classify_execution(self) -> None:
         """F-097: Stale detection produces E006, not E001 timeout."""
-        from mozart.core.errors.classifier import ErrorClassifier
-        from mozart.core.errors.codes import ErrorCode
+        from marianne.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.codes import ErrorCode
 
         classifier = ErrorClassifier()
         result = classifier.classify_execution(
@@ -1026,8 +1026,8 @@ class TestErrorClassifierPhase45Adversarial:
 
     def test_e001_regular_timeout_in_classify_execution(self) -> None:
         """Regular timeout (no stale text) produces E001."""
-        from mozart.core.errors.classifier import ErrorClassifier
-        from mozart.core.errors.codes import ErrorCode
+        from marianne.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.codes import ErrorCode
 
         classifier = ErrorClassifier()
         result = classifier.classify_execution(
@@ -1044,7 +1044,7 @@ class TestErrorClassifierPhase45Adversarial:
         Stale means "no output activity." A 60s retry would just hit the
         same stale detection again. 120s gives the system breathing room.
         """
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.classifier import ErrorClassifier
 
         classifier = ErrorClassifier()
         stale = classifier.classify_execution(
@@ -1060,8 +1060,8 @@ class TestErrorClassifierPhase45Adversarial:
         add a second one. Double-counting rate limits could confuse
         the baton's retry logic.
         """
-        from mozart.core.errors.classifier import ErrorClassifier
-        from mozart.core.errors.codes import ErrorCategory
+        from marianne.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.codes import ErrorCategory
 
         classifier = ErrorClassifier()
         result = classifier.classify_execution(
@@ -1082,8 +1082,8 @@ class TestErrorClassifierPhase45Adversarial:
         limit check — quota text that ALSO matches rate_limit_patterns
         (e.g., "quota") gets the more specific QUOTA_EXHAUSTED code.
         """
-        from mozart.core.errors.classifier import ErrorClassifier
-        from mozart.core.errors.codes import ErrorCategory, ErrorCode
+        from marianne.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.codes import ErrorCategory, ErrorCode
 
         classifier = ErrorClassifier()
         # Use text that matches both rate_limit_patterns ("quota") AND
@@ -1114,8 +1114,8 @@ class TestErrorClassifierPhase45Adversarial:
         This test documents the known limitation. In practice, most quota
         messages also contain rate-limit-like text, so the gap is narrow.
         """
-        from mozart.core.errors.classifier import ErrorClassifier
-        from mozart.core.errors.codes import ErrorCode
+        from marianne.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.codes import ErrorCode
 
         classifier = ErrorClassifier()
         result = classifier.classify_execution(
@@ -1141,8 +1141,8 @@ class TestErrorClassifierPhase45Adversarial:
         """classify() and classify_execution() should agree on rate limits
         for simple (non-JSON) cases.
         """
-        from mozart.core.errors.classifier import ErrorClassifier
-        from mozart.core.errors.codes import ErrorCategory
+        from marianne.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.codes import ErrorCategory
 
         classifier = ErrorClassifier()
 
@@ -1180,7 +1180,7 @@ class TestAdapterEventConversionAdversarial:
         This can happen when a rate limit is detected mid-execution
         by the backend classifier.
         """
-        from mozart.daemon.baton.adapter import attempt_result_to_observer_event
+        from marianne.daemon.baton.adapter import attempt_result_to_observer_event
 
         result = SheetAttemptResult(
             job_id="test",
@@ -1201,7 +1201,7 @@ class TestAdapterEventConversionAdversarial:
 
         Partial completion triggers completion mode in the baton.
         """
-        from mozart.daemon.baton.adapter import attempt_result_to_observer_event
+        from marianne.daemon.baton.adapter import attempt_result_to_observer_event
 
         result = SheetAttemptResult(
             job_id="test",
@@ -1223,7 +1223,7 @@ class TestAdapterEventConversionAdversarial:
         The execution ran but produced nothing valid. This is the
         completion mode trigger.
         """
-        from mozart.daemon.baton.adapter import attempt_result_to_observer_event
+        from marianne.daemon.baton.adapter import attempt_result_to_observer_event
 
         result = SheetAttemptResult(
             job_id="test",
@@ -1241,7 +1241,7 @@ class TestAdapterEventConversionAdversarial:
 
     def test_event_data_includes_all_required_fields(self) -> None:
         """Observer events must include all fields the dashboard expects."""
-        from mozart.daemon.baton.adapter import attempt_result_to_observer_event
+        from marianne.daemon.baton.adapter import attempt_result_to_observer_event
 
         result = SheetAttemptResult(
             job_id="test",
@@ -1288,7 +1288,7 @@ class TestValidationFormattingAdversarial:
 
     def test_empty_rules_produces_empty_string(self) -> None:
         """No rules → no section. Don't pollute the prompt."""
-        from mozart.daemon.baton.musician import _format_validation_requirements
+        from marianne.daemon.baton.musician import _format_validation_requirements
 
         assert _format_validation_requirements([], {}) == ""
 
@@ -1297,7 +1297,7 @@ class TestValidationFormattingAdversarial:
 
         Defensive getattr() with defaults handles this.
         """
-        from mozart.daemon.baton.musician import _format_validation_requirements
+        from marianne.daemon.baton.musician import _format_validation_requirements
 
         mock_rule = MagicMock(spec=[])
         mock_rule.description = None
@@ -1308,7 +1308,7 @@ class TestValidationFormattingAdversarial:
 
     def test_path_format_expansion_failure_uses_raw(self) -> None:
         """If path format expansion fails, the raw path is used."""
-        from mozart.daemon.baton.musician import _format_validation_requirements
+        from marianne.daemon.baton.musician import _format_validation_requirements
 
         rule = MagicMock()
         rule.description = "Check output"
@@ -1322,7 +1322,7 @@ class TestValidationFormattingAdversarial:
 
     def test_multiple_rules_all_listed(self) -> None:
         """All validation rules should appear in the formatted output."""
-        from mozart.daemon.baton.musician import _format_validation_requirements
+        from marianne.daemon.baton.musician import _format_validation_requirements
 
         rules = []
         for i in range(5):
@@ -1350,14 +1350,14 @@ class TestEstimateCostAdversarial:
     """
 
     def test_zero_tokens_zero_cost(self) -> None:
-        from mozart.daemon.baton.musician import _estimate_cost
+        from marianne.daemon.baton.musician import _estimate_cost
 
         result = _make_exec_result(input_tokens=0, output_tokens=0)
         assert _estimate_cost(result) == 0.0
 
     def test_large_token_count_reasonable_cost(self) -> None:
         """1M tokens should produce a cost between $0 and $100."""
-        from mozart.daemon.baton.musician import _estimate_cost
+        from marianne.daemon.baton.musician import _estimate_cost
 
         result = _make_exec_result(input_tokens=1_000_000, output_tokens=100_000)
         cost = _estimate_cost(result)
@@ -1365,7 +1365,7 @@ class TestEstimateCostAdversarial:
 
     def test_cost_is_non_negative(self) -> None:
         """Cost must never be negative regardless of input."""
-        from mozart.daemon.baton.musician import _estimate_cost
+        from marianne.daemon.baton.musician import _estimate_cost
 
         result = _make_exec_result(input_tokens=100, output_tokens=50)
         assert _estimate_cost(result) >= 0.0

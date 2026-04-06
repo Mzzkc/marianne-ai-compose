@@ -30,10 +30,10 @@ from typing import Any
 import jinja2
 import pytest
 
-from mozart.core.config import PromptConfig, ValidationRule
-from mozart.core.config.spec import SpecFragment
-from mozart.prompts.preamble import build_preamble
-from mozart.prompts.templating import (
+from marianne.core.config import PromptConfig, ValidationRule
+from marianne.core.config.spec import SpecFragment
+from marianne.prompts.preamble import build_preamble
+from marianne.prompts.templating import (
     CompletionContext,
     PromptBuilder,
     SheetContext,
@@ -302,7 +302,7 @@ class TestAssemblyOrderContract:
         )]
 
         # Use a HistoricalFailure-like object
-        from mozart.execution.validation import HistoricalFailure
+        from marianne.execution.validation import HistoricalFailure
         failure = HistoricalFailure(
             sheet_num=0,
             rule_type="file_exists",
@@ -665,7 +665,7 @@ class TestPatternsAndHistoryContract:
         self, builder: PromptBuilder, basic_context: SheetContext
     ) -> None:
         """At most 5 historical failures are shown."""
-        from mozart.execution.validation import HistoricalFailure
+        from marianne.execution.validation import HistoricalFailure
         failures = [
             HistoricalFailure(
                 sheet_num=i,
@@ -693,7 +693,7 @@ class TestPatternsAndHistoryContract:
         self, builder: PromptBuilder, basic_context: SheetContext
     ) -> None:
         """When a failure has a suggested_fix, it appears in the prompt."""
-        from mozart.execution.validation import HistoricalFailure
+        from marianne.execution.validation import HistoricalFailure
         failure = HistoricalFailure(
             sheet_num=1,
             rule_type="file_exists",
@@ -717,7 +717,7 @@ class TestCompletionPromptContract:
 
     def test_completion_prompt_structure(self, workspace: Path) -> None:
         """Completion prompt has required structural elements."""
-        from mozart.execution.validation import ValidationResult
+        from marianne.execution.validation import ValidationResult
         config = PromptConfig(template="Original task.", variables={})
         b = PromptBuilder(config)
 
@@ -754,7 +754,7 @@ class TestCompletionPromptContract:
         self, workspace: Path
     ) -> None:
         """Completion prompt distinguishes passed from failed validations."""
-        from mozart.execution.validation import ValidationResult
+        from marianne.execution.validation import ValidationResult
         config = PromptConfig(template="Task.", variables={})
         b = PromptBuilder(config)
 

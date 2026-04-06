@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import (
+from marianne.core.checkpoint import (
     CheckpointState,
     JobStatus,
     SheetState,
@@ -35,7 +35,7 @@ class TestBatonLiveStatesPopulation:
     @pytest.mark.asyncio
     async def test_run_via_baton_populates_live_states(self) -> None:
         """After calling _run_via_baton, _live_states[job_id] must exist."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         manager = MagicMock(spec=JobManager)
         manager._baton_adapter = MagicMock()
@@ -68,8 +68,8 @@ class TestBatonLiveStatesPopulation:
         mock_request.self_healing = False
 
         with (
-            patch("mozart.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]),
-            patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={}),
+            patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]),
+            patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}),
         ):
             result = await JobManager._run_via_baton(
                 manager, "test-job", mock_config, mock_request,
@@ -84,7 +84,7 @@ class TestBatonLiveStatesPopulation:
     @pytest.mark.asyncio
     async def test_live_state_has_correct_structure(self) -> None:
         """The live state must be a valid CheckpointState with correct fields."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         manager = MagicMock(spec=JobManager)
         manager._baton_adapter = MagicMock()
@@ -117,8 +117,8 @@ class TestBatonLiveStatesPopulation:
         mock_request.self_healing = False
 
         with (
-            patch("mozart.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]),
-            patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={}),
+            patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]),
+            patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}),
         ):
             await JobManager._run_via_baton(
                 manager, "test-job", mock_config, mock_request,
@@ -142,7 +142,7 @@ class TestBatonLiveStatesPopulation:
     @pytest.mark.asyncio
     async def test_live_state_has_instrument_names(self) -> None:
         """Sheet states in live state must have instrument_name populated."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         manager = MagicMock(spec=JobManager)
         manager._baton_adapter = MagicMock()
@@ -171,8 +171,8 @@ class TestBatonLiveStatesPopulation:
         mock_request.self_healing = False
 
         with (
-            patch("mozart.core.sheet.build_sheets", return_value=[mock_sheet_1]),
-            patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={}),
+            patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet_1]),
+            patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}),
         ):
             await JobManager._run_via_baton(
                 manager, "test-job", mock_config, mock_request,
@@ -190,7 +190,7 @@ class TestBatonStateSyncCallback:
     def test_state_sync_updates_sheet_status(self) -> None:
         """When _on_baton_state_sync fires, it must update the sheet status
         in the live CheckpointState."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         manager = MagicMock(spec=JobManager)
 
@@ -216,7 +216,7 @@ class TestBatonStateSyncCallback:
 
     def test_state_sync_noop_when_no_live_state(self) -> None:
         """When no live state exists, _on_baton_state_sync should not crash."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         manager = MagicMock(spec=JobManager)
         manager._live_states = {}
@@ -226,7 +226,7 @@ class TestBatonStateSyncCallback:
 
     def test_state_sync_noop_for_unknown_sheet(self) -> None:
         """When the sheet doesn't exist in the live state, no crash."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         manager = MagicMock(spec=JobManager)
 
@@ -249,7 +249,7 @@ class TestBatonResumeLiveStates:
     async def test_resume_via_baton_populates_live_states(self) -> None:
         """After calling _resume_via_baton, _live_states[job_id] must exist
         with the recovered checkpoint data."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         manager = MagicMock(spec=JobManager)
         manager._baton_adapter = MagicMock()
@@ -297,9 +297,9 @@ class TestBatonResumeLiveStates:
         manager._load_checkpoint = AsyncMock(return_value=checkpoint)
 
         with (
-            patch("mozart.core.config.JobConfig.from_yaml", return_value=mock_config),
-            patch("mozart.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]),
-            patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={}),
+            patch("marianne.core.config.JobConfig.from_yaml", return_value=mock_config),
+            patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]),
+            patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}),
         ):
             result = await JobManager._resume_via_baton(
                 manager, "test-job", Path("/tmp/workspace"),

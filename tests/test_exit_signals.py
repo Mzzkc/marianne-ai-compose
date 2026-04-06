@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.backends.base import ExecutionResult, ExitReason
-from mozart.backends.claude_cli import ClaudeCliBackend
-from mozart.core.checkpoint import SheetState, SheetStatus
-from mozart.core.errors import (
+from marianne.backends.base import ExecutionResult, ExitReason
+from marianne.backends.claude_cli import ClaudeCliBackend
+from marianne.core.checkpoint import SheetState, SheetStatus
+from marianne.core.errors import (
     FATAL_SIGNALS,
     RETRIABLE_SIGNALS,
     ErrorCategory,

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from mozart.core.config.job import JobConfig, SheetConfig
+from marianne.core.config.job import JobConfig, SheetConfig
 
 # ---------------------------------------------------------------------------
 # Step 38: Per-sheet instrument overrides
@@ -90,7 +90,7 @@ class TestScoreLevelInstruments:
 
     def test_instruments_accepts_named_definitions(self) -> None:
         """Can declare named instruments with profile references."""
-        from mozart.core.config.job import InstrumentDef
+        from marianne.core.config.job import InstrumentDef
 
         config = JobConfig(
             name="test",
@@ -112,14 +112,14 @@ class TestScoreLevelInstruments:
 
     def test_instrument_def_profile_required(self) -> None:
         """InstrumentDef requires a profile field."""
-        from mozart.core.config.job import InstrumentDef
+        from marianne.core.config.job import InstrumentDef
 
         with pytest.raises(ValueError):
             InstrumentDef(profile="")  # empty profile name
 
     def test_instrument_def_config_defaults_empty(self) -> None:
         """InstrumentDef.config defaults to empty dict."""
-        from mozart.core.config.job import InstrumentDef
+        from marianne.core.config.job import InstrumentDef
 
         idef = InstrumentDef(profile="gemini-cli")
         assert idef.config == {}
@@ -217,7 +217,7 @@ class TestMovementsKey:
 
     def test_movements_accepts_valid_declarations(self) -> None:
         """Can declare movements with name, instrument, and voices."""
-        from mozart.core.config.job import MovementDef
+        from marianne.core.config.job import MovementDef
 
         config = JobConfig(
             name="test",
@@ -235,7 +235,7 @@ class TestMovementsKey:
 
     def test_movement_def_all_optional(self) -> None:
         """All MovementDef fields are optional."""
-        from mozart.core.config.job import MovementDef
+        from marianne.core.config.job import MovementDef
 
         m = MovementDef()
         assert m.name is None
@@ -245,7 +245,7 @@ class TestMovementsKey:
 
     def test_movement_def_voices_must_be_positive(self) -> None:
         """MovementDef.voices must be >= 1 when set."""
-        from mozart.core.config.job import MovementDef
+        from marianne.core.config.job import MovementDef
 
         with pytest.raises(ValueError):
             MovementDef(voices=0)
@@ -275,7 +275,7 @@ movements:
 
     def test_movement_def_instrument_config(self) -> None:
         """MovementDef can carry instrument config overrides."""
-        from mozart.core.config.job import MovementDef
+        from marianne.core.config.job import MovementDef
 
         m = MovementDef(
             instrument="gemini-cli",
@@ -285,7 +285,7 @@ movements:
 
     def test_movements_rejects_zero_key(self) -> None:
         """Movement numbers must be >= 1."""
-        from mozart.core.config.job import MovementDef
+        from marianne.core.config.job import MovementDef
 
         with pytest.raises(ValueError, match="positive integer"):
             JobConfig(
@@ -305,7 +305,7 @@ class TestInstrumentResolutionChain:
 
     def test_build_sheets_uses_score_instrument(self) -> None:
         """When instrument: is set, build_sheets uses it."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test",
@@ -319,7 +319,7 @@ class TestInstrumentResolutionChain:
 
     def test_build_sheets_per_sheet_overrides_score_default(self) -> None:
         """sheets.N.instrument overrides score-level instrument."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test",
@@ -338,8 +338,8 @@ class TestInstrumentResolutionChain:
 
     def test_build_sheets_movement_instrument_overrides_score(self) -> None:
         """movements.N.instrument overrides score-level for sheets in that movement."""
-        from mozart.core.config.job import MovementDef
-        from mozart.core.sheet import build_sheets
+        from marianne.core.config.job import MovementDef
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test",
@@ -355,8 +355,8 @@ class TestInstrumentResolutionChain:
 
     def test_build_sheets_per_sheet_overrides_movement(self) -> None:
         """sheets.N.instrument overrides movement-level instrument."""
-        from mozart.core.config.job import MovementDef
-        from mozart.core.sheet import build_sheets
+        from marianne.core.config.job import MovementDef
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test",
@@ -375,7 +375,7 @@ class TestInstrumentResolutionChain:
 
     def test_build_sheets_instrument_map_assigns(self) -> None:
         """instrument_map provides batch assignment."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test",
@@ -397,7 +397,7 @@ class TestInstrumentResolutionChain:
 
     def test_build_sheets_per_sheet_overrides_instrument_map(self) -> None:
         """sheets.N.instrument overrides instrument_map."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test",
@@ -417,7 +417,7 @@ class TestInstrumentResolutionChain:
 
     def test_build_sheets_per_sheet_instrument_config(self) -> None:
         """per_sheet_instrument_config is carried through to Sheet."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test",
@@ -437,7 +437,7 @@ class TestInstrumentResolutionChain:
 
     def test_build_sheets_falls_back_to_backend_type(self) -> None:
         """When no instrument: is set, falls back to backend.type."""
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
 
         config = JobConfig(
             name="test",

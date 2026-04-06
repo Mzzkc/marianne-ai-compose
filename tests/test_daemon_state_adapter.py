@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.daemon.exceptions import DaemonError
-from mozart.daemon.ipc.client import DaemonClient
-from mozart.dashboard.state.daemon_adapter import DaemonStateAdapter
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.daemon.exceptions import DaemonError
+from marianne.daemon.ipc.client import DaemonClient
+from marianne.dashboard.state.daemon_adapter import DaemonStateAdapter
 
 
 @pytest.fixture
@@ -141,7 +141,7 @@ async def test_get_next_sheet_raises(adapter: DaemonStateAdapter) -> None:
 
 @pytest.mark.asyncio
 async def test_mark_sheet_status_raises(adapter: DaemonStateAdapter) -> None:
-    from mozart.core.checkpoint import SheetStatus
+    from marianne.core.checkpoint import SheetStatus
 
     with pytest.raises(NotImplementedError, match="read-only"):
         await adapter.mark_sheet_status("x", 1, SheetStatus.COMPLETED)

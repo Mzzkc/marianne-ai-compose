@@ -21,10 +21,10 @@ import asyncio
 
 import pytest
 
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
-from mozart.daemon.baton.dispatch import DispatchConfig, dispatch_ready
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+from marianne.daemon.baton.dispatch import DispatchConfig, dispatch_ready
+from marianne.daemon.baton.events import (
     CancelJob,
     EscalationNeeded,
     EscalationResolved,

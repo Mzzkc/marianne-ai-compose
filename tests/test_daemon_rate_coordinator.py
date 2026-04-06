@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from mozart.daemon.rate_coordinator import RateLimitCoordinator, RateLimitEvent
+from marianne.daemon.rate_coordinator import RateLimitCoordinator, RateLimitEvent
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
@@ -413,7 +413,7 @@ class TestInputValidation:
         self, coordinator: RateLimitCoordinator,
     ):
         """wait_seconds > MAX_WAIT_SECONDS is capped."""
-        from mozart.daemon.rate_coordinator import MAX_WAIT_SECONDS
+        from marianne.daemon.rate_coordinator import MAX_WAIT_SECONDS
 
         await coordinator.report_rate_limit(
             backend_type="claude_cli",
@@ -780,8 +780,8 @@ class TestSchedulerIntegration:
     @pytest.mark.asyncio
     async def test_coordinator_as_rate_limiter(self):
         """Coordinator satisfies RateLimitChecker protocol in scheduler."""
-        from mozart.daemon.config import DaemonConfig
-        from mozart.daemon.scheduler import GlobalSheetScheduler, SheetInfo
+        from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.scheduler import GlobalSheetScheduler, SheetInfo
 
         config = DaemonConfig(max_concurrent_sheets=5, max_concurrent_jobs=5)
         scheduler = GlobalSheetScheduler(config)
@@ -816,8 +816,8 @@ class TestSchedulerIntegration:
     @pytest.mark.asyncio
     async def test_coordinator_clears_after_expiry(self):
         """After limit expires, scheduler can dispatch that backend."""
-        from mozart.daemon.config import DaemonConfig
-        from mozart.daemon.scheduler import GlobalSheetScheduler, SheetInfo
+        from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.scheduler import GlobalSheetScheduler, SheetInfo
 
         config = DaemonConfig(max_concurrent_sheets=5, max_concurrent_jobs=5)
         scheduler = GlobalSheetScheduler(config)

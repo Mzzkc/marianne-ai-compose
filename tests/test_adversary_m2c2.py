@@ -28,22 +28,22 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.daemon.baton.adapter import (
+from marianne.daemon.baton.adapter import (
     _BATON_TO_CHECKPOINT,
     _CHECKPOINT_TO_BATON,
     BatonAdapter,
     baton_to_checkpoint_status,
     checkpoint_to_baton_status,
 )
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.events import (
     PauseJob,
     ProcessExited,
     ResumeJob,
     SheetAttemptResult,
     SheetSkipped,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     BatonSheetStatus,
     SheetExecutionState,
 )
@@ -137,7 +137,7 @@ class TestStateMappingCompleteness:
 
     def test_every_checkpoint_status_maps_to_baton(self) -> None:
         """Every CheckpointState status string must map to a BatonSheetStatus."""
-        from mozart.core.checkpoint import SheetStatus
+        from marianne.core.checkpoint import SheetStatus
 
         for status in SheetStatus:
             assert status.value in _CHECKPOINT_TO_BATON, (
@@ -211,7 +211,7 @@ class TestRecoveryEdgeCases:
         sheets: dict[int, dict[str, Any]],
     ) -> Any:
         """Create a mock checkpoint with given sheet data."""
-        from mozart.core.checkpoint import SheetStatus
+        from marianne.core.checkpoint import SheetStatus
 
         checkpoint = MagicMock()
         mock_sheets: dict[int, MagicMock] = {}
@@ -577,8 +577,8 @@ class TestF111RateLimitRegression:
 
     def test_parallel_batch_result_preserves_exception_types(self) -> None:
         """ParallelBatchResult.exceptions must preserve exception types."""
-        from mozart.execution.parallel import ParallelBatchResult
-        from mozart.execution.runner.lifecycle import RateLimitExhaustedError
+        from marianne.execution.parallel import ParallelBatchResult
+        from marianne.execution.runner.lifecycle import RateLimitExhaustedError
 
         error = RateLimitExhaustedError(
             "Rate limit exceeded",
@@ -596,7 +596,7 @@ class TestF111RateLimitRegression:
 
     def test_rate_limit_error_resume_after_survives_storage(self) -> None:
         """The resume_after timestamp must survive being stored and retrieved."""
-        from mozart.execution.runner.lifecycle import RateLimitExhaustedError
+        from marianne.execution.runner.lifecycle import RateLimitExhaustedError
 
         future_time = time.time() + 600
         error = RateLimitExhaustedError(
@@ -634,8 +634,8 @@ class TestF113FailurePropagationRegression:
     @staticmethod
     def _make_executor(deps: dict[int, list[int]], total: int = 5) -> Any:
         """Create a ParallelExecutor with a mocked runner and real DAG."""
-        from mozart.execution.dag import DependencyDAG
-        from mozart.execution.parallel import ParallelExecutor
+        from marianne.execution.dag import DependencyDAG
+        from marianne.execution.parallel import ParallelExecutor
 
         dag = DependencyDAG.from_dependencies(total, deps)
         runner = MagicMock()
@@ -649,7 +649,7 @@ class TestF113FailurePropagationRegression:
 
     def test_propagation_bfs_reaches_transitive_deps(self) -> None:
         """Failure of sheet 1 must propagate through entire dependency chain."""
-        from mozart.core.checkpoint import SheetStatus
+        from marianne.core.checkpoint import SheetStatus
 
         executor = self._make_executor({2: [1], 3: [2], 4: [3]}, total=4)
 
@@ -669,7 +669,7 @@ class TestF113FailurePropagationRegression:
 
     def test_propagation_does_not_overwrite_completed(self) -> None:
         """Failure propagation must not overwrite terminal states."""
-        from mozart.core.checkpoint import SheetStatus
+        from marianne.core.checkpoint import SheetStatus
 
         executor = self._make_executor({2: [1], 3: [1]}, total=3)
 
@@ -687,7 +687,7 @@ class TestF113FailurePropagationRegression:
 
     def test_propagation_diamond_dependency(self) -> None:
         """Diamond: A → B, A → C, B → D, C → D. Failure of A propagates to all."""
-        from mozart.core.checkpoint import SheetStatus
+        from marianne.core.checkpoint import SheetStatus
 
         executor = self._make_executor({2: [1], 3: [1], 4: [2, 3]}, total=4)
 
@@ -707,7 +707,7 @@ class TestF113FailurePropagationRegression:
 
     def test_propagation_with_no_dag_is_safe(self) -> None:
         """Propagation with no DAG should be a no-op, not crash."""
-        from mozart.execution.parallel import ParallelExecutor
+        from marianne.execution.parallel import ParallelExecutor
 
         runner = MagicMock()
         runner.dependency_dag = None
@@ -995,7 +995,7 @@ class TestCredentialRedactionCoverage:
 
     def test_redact_anthropic_key(self) -> None:
         """Anthropic API keys must be redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         msg = "Auth failed with key sk-ant-api03-secret123"
         redacted = redact_credentials(msg)
@@ -1004,7 +1004,7 @@ class TestCredentialRedactionCoverage:
 
     def test_redact_github_pat(self) -> None:
         """GitHub personal access tokens must be redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         msg = "Using token ghp_abc123def456ghi789jkl012mno345pqr678"
         redacted = redact_credentials(msg)
@@ -1012,14 +1012,14 @@ class TestCredentialRedactionCoverage:
 
     def test_redact_preserves_normal_text(self) -> None:
         """Normal text without credentials must pass through unchanged."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         msg = "Sheet completed successfully with 0 validations"
         assert redact_credentials(msg) == msg
 
     def test_redact_handles_none(self) -> None:
         """None input should return None, not crash."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         result = redact_credentials(None)
         assert result is None

@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.checkpoint import SheetStatus
+from marianne.core.checkpoint import SheetStatus
 
 # =============================================================================
 # MigrationResult tests
@@ -25,7 +25,7 @@ class TestMigrationResult:
 
     def test_default_values(self) -> None:
         """MigrationResult should start with zero counts and empty lists."""
-        from mozart.learning.migration import MigrationResult
+        from marianne.learning.migration import MigrationResult
 
         result = MigrationResult()
         assert result.workspaces_found == 0
@@ -37,7 +37,7 @@ class TestMigrationResult:
 
     def test_repr(self) -> None:
         """MigrationResult repr should show key metrics."""
-        from mozart.learning.migration import MigrationResult
+        from marianne.learning.migration import MigrationResult
 
         result = MigrationResult(
             workspaces_found=3,
@@ -71,7 +71,7 @@ class TestOutcomeMigrator:
 
     def test_migrate_workspace_no_outcomes_file(self, mock_store, tmp_path: Path) -> None:
         """Migrating workspace without outcomes file should report error."""
-        from mozart.learning.migration import OutcomeMigrator
+        from marianne.learning.migration import OutcomeMigrator
 
         migrator = OutcomeMigrator(mock_store)
         result = migrator.migrate_workspace(tmp_path)
@@ -83,7 +83,7 @@ class TestOutcomeMigrator:
 
     def test_migrate_workspace_with_outcomes(self, mock_store, tmp_path: Path) -> None:
         """Migrating workspace with valid outcomes should import them."""
-        from mozart.learning.migration import OutcomeMigrator
+        from marianne.learning.migration import OutcomeMigrator
 
         # Create outcomes file with sample data
         outcomes_data = {
@@ -124,7 +124,7 @@ class TestOutcomeMigrator:
 
     def test_migrate_workspace_empty_outcomes(self, mock_store, tmp_path: Path) -> None:
         """Workspace with empty outcomes list should import zero."""
-        from mozart.learning.migration import OutcomeMigrator
+        from marianne.learning.migration import OutcomeMigrator
 
         outcomes_file = tmp_path / ".mozart-outcomes.json"
         outcomes_file.write_text(json.dumps({"outcomes": []}))
@@ -137,7 +137,7 @@ class TestOutcomeMigrator:
 
     def test_migrate_workspace_idempotent(self, mock_store, tmp_path: Path) -> None:
         """Second migration of same workspace should skip (idempotent)."""
-        from mozart.learning.migration import OutcomeMigrator
+        from marianne.learning.migration import OutcomeMigrator
 
         outcomes_data = {
             "outcomes": [
@@ -164,7 +164,7 @@ class TestOutcomeMigrator:
 
     def test_migrate_all_with_additional_paths(self, mock_store, tmp_path: Path) -> None:
         """migrate_all with additional_paths should scan those paths."""
-        from mozart.learning.migration import OutcomeMigrator
+        from marianne.learning.migration import OutcomeMigrator
 
         # Create workspace with outcomes
         workspace = tmp_path / "my-workspace"
@@ -187,7 +187,7 @@ class TestOutcomeMigrator:
 
     def test_migrate_all_with_aggregator(self, mock_store, tmp_path: Path) -> None:
         """migrate_all with aggregator should run pattern detection."""
-        from mozart.learning.migration import OutcomeMigrator
+        from marianne.learning.migration import OutcomeMigrator
 
         mock_aggregator = MagicMock()
         mock_aggregator._update_all_priorities = MagicMock()
@@ -220,7 +220,7 @@ class TestParseOutcome:
 
     @pytest.fixture
     def migrator(self):
-        from mozart.learning.migration import OutcomeMigrator
+        from marianne.learning.migration import OutcomeMigrator
         return OutcomeMigrator(MagicMock())
 
     def test_parse_outcome_complete(self, migrator) -> None:
@@ -316,7 +316,7 @@ class TestMigrationConvenienceFunctions:
 
     def test_migrate_existing_outcomes(self, tmp_path: Path) -> None:
         """migrate_existing_outcomes should create migrator and call migrate_all."""
-        from mozart.learning.migration import migrate_existing_outcomes
+        from marianne.learning.migration import migrate_existing_outcomes
 
         mock_store = MagicMock()
         mock_store.hash_workspace = MagicMock(return_value="hash")
@@ -331,7 +331,7 @@ class TestMigrationConvenienceFunctions:
 
     def test_check_migration_status(self) -> None:
         """check_migration_status should return stats from global store."""
-        from mozart.learning.migration import check_migration_status
+        from marianne.learning.migration import check_migration_status
 
         mock_store = MagicMock()
         mock_store.get_execution_stats.return_value = {
@@ -349,7 +349,7 @@ class TestMigrationConvenienceFunctions:
 
     def test_check_migration_status_empty(self) -> None:
         """Empty store should report needs_migration=True."""
-        from mozart.learning.migration import check_migration_status
+        from marianne.learning.migration import check_migration_status
 
         mock_store = MagicMock()
         mock_store.get_execution_stats.return_value = {
@@ -373,7 +373,7 @@ class TestJudgmentDataclasses:
 
     def test_judgment_query_creation(self) -> None:
         """JudgmentQuery should store all required fields."""
-        from mozart.learning.judgment import JudgmentQuery
+        from marianne.learning.judgment import JudgmentQuery
 
         query = JudgmentQuery(
             job_id="test-job",
@@ -391,7 +391,7 @@ class TestJudgmentDataclasses:
 
     def test_judgment_response_defaults(self) -> None:
         """JudgmentResponse should have correct defaults."""
-        from mozart.learning.judgment import JudgmentResponse
+        from marianne.learning.judgment import JudgmentResponse
 
         response = JudgmentResponse(
             recommended_action="retry",
@@ -414,7 +414,7 @@ class TestJudgmentClient:
 
     def test_client_initialization(self) -> None:
         """Client should store endpoint and timeout."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080", timeout=15.0)
         assert client.endpoint == "http://localhost:8080"
@@ -422,14 +422,14 @@ class TestJudgmentClient:
 
     def test_endpoint_trailing_slash_stripped(self) -> None:
         """Trailing slash should be stripped from endpoint."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080/")
         assert client.endpoint == "http://localhost:8080"
 
     def test_default_retry_response(self) -> None:
         """_default_retry_response should return low-confidence retry."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
         response = client._default_retry_response("Connection refused")
@@ -441,7 +441,7 @@ class TestJudgmentClient:
 
     def test_parse_judgment_response_valid(self) -> None:
         """Valid API response should parse correctly."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
         data = {
@@ -465,7 +465,7 @@ class TestJudgmentClient:
 
     def test_parse_judgment_response_invalid_action(self) -> None:
         """Invalid action should default to 'retry'."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
         data = {"recommended_action": "destroy_everything", "confidence": 0.9}
@@ -475,7 +475,7 @@ class TestJudgmentClient:
 
     def test_parse_judgment_response_out_of_range_confidence(self) -> None:
         """Confidence outside 0-1 should be clamped."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
 
@@ -489,7 +489,7 @@ class TestJudgmentClient:
 
     def test_parse_judgment_response_invalid_confidence_type(self) -> None:
         """Non-numeric confidence should default to 0.5."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
         data = {"confidence": "high"}
@@ -498,7 +498,7 @@ class TestJudgmentClient:
 
     def test_parse_judgment_response_invalid_prompt_modifications(self) -> None:
         """Non-list prompt_modifications should be set to None."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
         data = {"prompt_modifications": "not a list"}
@@ -507,7 +507,7 @@ class TestJudgmentClient:
 
     def test_parse_judgment_response_invalid_escalation_urgency(self) -> None:
         """Invalid escalation_urgency should be set to None."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
         data = {"escalation_urgency": "critical"}
@@ -516,7 +516,7 @@ class TestJudgmentClient:
 
     def test_parse_judgment_response_non_string_reasoning(self) -> None:
         """Non-string reasoning should be converted to string."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
         data = {"reasoning": 42}
@@ -525,7 +525,7 @@ class TestJudgmentClient:
 
     def test_parse_judgment_response_empty_patterns(self) -> None:
         """Non-list patterns_learned should default to empty list."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
         data = {"patterns_learned": "not_a_list"}
@@ -535,7 +535,7 @@ class TestJudgmentClient:
     @pytest.mark.asyncio
     async def test_client_close(self) -> None:
         """close() should close the underlying httpx client."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         client = JudgmentClient("http://localhost:8080")
         # Access internal client to create it
@@ -548,7 +548,7 @@ class TestJudgmentClient:
     @pytest.mark.asyncio
     async def test_context_manager(self) -> None:
         """Async context manager should close client on exit."""
-        from mozart.learning.judgment import JudgmentClient
+        from marianne.learning.judgment import JudgmentClient
 
         async with JudgmentClient("http://localhost:8080") as client:
             assert isinstance(client, JudgmentClient)
@@ -558,7 +558,7 @@ class TestJudgmentClient:
     @pytest.mark.asyncio
     async def test_get_judgment_connection_error(self) -> None:
         """Connection error should return default retry response."""
-        from mozart.learning.judgment import JudgmentClient, JudgmentQuery
+        from marianne.learning.judgment import JudgmentClient, JudgmentQuery
 
         client = JudgmentClient("http://localhost:99999")
         query = JudgmentQuery(
@@ -583,7 +583,7 @@ class TestLocalJudgmentClient:
 
     @pytest.fixture
     def client(self):
-        from mozart.learning.judgment import LocalJudgmentClient
+        from marianne.learning.judgment import LocalJudgmentClient
         return LocalJudgmentClient(
             proceed_threshold=0.7,
             retry_threshold=0.4,
@@ -597,7 +597,7 @@ class TestLocalJudgmentClient:
         validation_results: list | None = None,
         sheet_num: int = 1,
     ):
-        from mozart.learning.judgment import JudgmentQuery
+        from marianne.learning.judgment import JudgmentQuery
         return JudgmentQuery(
             job_id="test",
             sheet_num=sheet_num,
@@ -666,7 +666,7 @@ class TestLocalJudgmentClient:
     @pytest.mark.asyncio
     async def test_custom_thresholds(self) -> None:
         """Custom thresholds should change decision boundaries."""
-        from mozart.learning.judgment import LocalJudgmentClient
+        from marianne.learning.judgment import LocalJudgmentClient
 
         # Very strict client
         strict_client = LocalJudgmentClient(

@@ -10,10 +10,10 @@ _FIXED_TIME = datetime(2024, 1, 15, 12, 0, 0)
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.dashboard.app import create_app
-from mozart.dashboard.services.job_control import JobActionResult, JobStartResult
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.dashboard.app import create_app
+from marianne.dashboard.services.job_control import JobActionResult, JobStartResult
+from marianne.state.json_backend import JsonStateBackend
 
 
 @pytest.fixture
@@ -74,7 +74,7 @@ name: Test Job
 """
 
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.start_job',
+            'marianne.dashboard.services.job_control.JobControlService.start_job',
         ) as mock_start:
             mock_start.side_effect = RuntimeError("Failed to start job: Invalid YAML")
 
@@ -88,7 +88,7 @@ name: Test Job
     def test_start_job_with_all_optional_parameters(self, client, sample_config_yaml):
         """Test starting job with all optional parameters."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.start_job',
+            'marianne.dashboard.services.job_control.JobControlService.start_job',
         ) as mock_start:
             mock_start.return_value = JobStartResult(
                 job_id="test-456",
@@ -120,7 +120,7 @@ name: Test Job
     def test_pause_job_already_paused(self, client):
         """Test pausing job that's already paused."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.pause_job',
+            'marianne.dashboard.services.job_control.JobControlService.pause_job',
         ) as mock_pause:
             mock_pause.return_value = JobActionResult(
                 success=False,
@@ -137,7 +137,7 @@ name: Test Job
     def test_resume_job_not_found(self, client):
         """Test resuming non-existent job."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.resume_job',
+            'marianne.dashboard.services.job_control.JobControlService.resume_job',
         ) as mock_resume:
             mock_resume.return_value = JobActionResult(
                 success=False,
@@ -154,7 +154,7 @@ name: Test Job
     def test_cancel_job_already_finished(self, client):
         """Test cancelling job that's already finished."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.cancel_job',
+            'marianne.dashboard.services.job_control.JobControlService.cancel_job',
         ) as mock_cancel:
             mock_cancel.return_value = JobActionResult(
                 success=False,
@@ -171,7 +171,7 @@ name: Test Job
     def test_delete_job_currently_paused(self, client):
         """Test deleting paused job (should work)."""
         with patch(
-            'mozart.dashboard.services.job_control.JobControlService.delete_job',
+            'marianne.dashboard.services.job_control.JobControlService.delete_job',
         ) as mock_delete:
             mock_delete.return_value = True
 
@@ -202,7 +202,7 @@ class TestArtifactRoutesExtended:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             # Test with recursive=true (default behavior)
@@ -234,7 +234,7 @@ class TestArtifactRoutesExtended:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/artifacts/test.bin")
@@ -263,7 +263,7 @@ class TestArtifactRoutesExtended:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/artifacts/logs/debug.log")
@@ -286,7 +286,7 @@ class TestArtifactRoutesExtended:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             # Test different traversal patterns
@@ -320,7 +320,7 @@ class TestStreamRoutesExtended:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=completed_state)
 
             # Test minimum valid poll interval (seconds, min=0.1)
@@ -358,7 +358,7 @@ class TestStreamRoutesExtended:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             # Test minimum valid tail_lines (0 is valid per route: tail_lines < 0 is invalid)
@@ -393,7 +393,7 @@ class TestStreamRoutesExtended:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/logs/static")
@@ -417,7 +417,7 @@ class TestStreamRoutesExtended:
             updated_at=_FIXED_TIME,
         )
 
-        with patch('mozart.dashboard.app._state_backend') as mock_backend:
+        with patch('marianne.dashboard.app._state_backend') as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
 
             response = client.get("/api/jobs/test-123/logs/info")
@@ -432,7 +432,7 @@ class TestWorkspacePathTraversal:
     @staticmethod
     def _make_config():
         """Create a minimal valid JobConfig for testing."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
         return JobConfig(
             name="test",
             sheet={"size": 1, "total_items": 1},
@@ -441,7 +441,7 @@ class TestWorkspacePathTraversal:
 
     def test_rejects_dotdot_traversal(self):
         """workspace_path with '..' is rejected and replaced with None."""
-        from mozart.dashboard.routes.scores import run_extended_validation
+        from marianne.dashboard.routes.scores import run_extended_validation
 
         config = self._make_config()
         content = 'name: "test"\nsheet:\n  total_items: 1\nprompt:\n  template: "hello"'
@@ -455,7 +455,7 @@ class TestWorkspacePathTraversal:
 
     def test_rejects_sensitive_system_paths(self):
         """workspace_path pointing to /etc, /proc, /sys, /dev is rejected."""
-        from mozart.dashboard.routes.scores import run_extended_validation
+        from marianne.dashboard.routes.scores import run_extended_validation
 
         config = self._make_config()
         content = 'name: "test"\nsheet:\n  total_items: 1\nprompt:\n  template: "hello"'
@@ -467,7 +467,7 @@ class TestWorkspacePathTraversal:
 
     def test_accepts_valid_workspace_path(self, tmp_path):
         """Valid workspace paths are accepted."""
-        from mozart.dashboard.routes.scores import run_extended_validation
+        from marianne.dashboard.routes.scores import run_extended_validation
 
         config = self._make_config()
         content = 'name: "test"\nsheet:\n  total_items: 1\nprompt:\n  template: "hello"'
@@ -477,7 +477,7 @@ class TestWorkspacePathTraversal:
 
     def test_none_workspace_path_accepted(self):
         """None workspace_path is valid (falls back to cwd)."""
-        from mozart.dashboard.routes.scores import run_extended_validation
+        from marianne.dashboard.routes.scores import run_extended_validation
 
         config = self._make_config()
         content = 'name: "test"\nsheet:\n  total_items: 1\nprompt:\n  template: "hello"'

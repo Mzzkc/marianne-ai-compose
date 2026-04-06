@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.dashboard.app import create_app
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.dashboard.app import create_app
+from marianne.state.json_backend import JsonStateBackend
 
 # Fixed timestamp for deterministic tests
 _FIXED_TIME = datetime(2024, 1, 15, 12, 0, 0)
@@ -84,7 +84,7 @@ class TestReadTailLines:
 
     def test_read_tail_lines_basic(self, tmp_path: Path) -> None:
         """Should return last N lines and total count."""
-        from mozart.dashboard.routes.stream import _read_tail_lines
+        from marianne.dashboard.routes.stream import _read_tail_lines
 
         log = tmp_path / "test.log"
         log.write_text("line1\nline2\nline3\nline4\nline5\n")
@@ -97,7 +97,7 @@ class TestReadTailLines:
 
     def test_read_tail_lines_fewer_than_requested(self, tmp_path: Path) -> None:
         """When file has fewer lines than requested, return all."""
-        from mozart.dashboard.routes.stream import _read_tail_lines
+        from marianne.dashboard.routes.stream import _read_tail_lines
 
         log = tmp_path / "test.log"
         log.write_text("only\ntwo\n")
@@ -108,7 +108,7 @@ class TestReadTailLines:
 
     def test_read_tail_lines_zero(self, tmp_path: Path) -> None:
         """Requesting 0 tail lines should return empty list."""
-        from mozart.dashboard.routes.stream import _read_tail_lines
+        from marianne.dashboard.routes.stream import _read_tail_lines
 
         log = tmp_path / "test.log"
         log.write_text("line1\nline2\n")
@@ -119,7 +119,7 @@ class TestReadTailLines:
 
     def test_read_tail_lines_empty_file(self, tmp_path: Path) -> None:
         """Empty file should return empty list with 0 total."""
-        from mozart.dashboard.routes.stream import _read_tail_lines
+        from marianne.dashboard.routes.stream import _read_tail_lines
 
         log = tmp_path / "test.log"
         log.write_text("")
@@ -134,7 +134,7 @@ class TestMakeLogEvent:
 
     def test_make_log_event_initial(self) -> None:
         """Initial log event should strip trailing newline."""
-        from mozart.dashboard.routes.stream import _make_log_event
+        from marianne.dashboard.routes.stream import _make_log_event
 
         event_str = _make_log_event("hello world\n", 1, is_initial_event=True, event_id="log-0")
         assert "event: log" in event_str
@@ -148,7 +148,7 @@ class TestMakeLogEvent:
 
     def test_make_log_event_follow(self) -> None:
         """Follow-mode log event should preserve line content."""
-        from mozart.dashboard.routes.stream import _make_log_event
+        from marianne.dashboard.routes.stream import _make_log_event
 
         event_str = _make_log_event("new line", 42, is_initial_event=False, event_id="log-42")
         data_line = [x for x in event_str.split("\n") if x.startswith("data:")][0]
@@ -164,7 +164,7 @@ class TestLogStreamNoFollow:
     @pytest.mark.asyncio
     async def test_log_stream_no_follow(self, tmp_path: Path) -> None:
         """Non-follow mode should emit initial lines then complete event."""
-        from mozart.dashboard.routes.stream import _log_stream
+        from marianne.dashboard.routes.stream import _log_stream
 
         log = tmp_path / "test.log"
         log.write_text("line1\nline2\nline3\n")
@@ -181,7 +181,7 @@ class TestLogStreamNoFollow:
     @pytest.mark.asyncio
     async def test_log_stream_no_follow_missing_file(self, tmp_path: Path) -> None:
         """Non-follow mode with missing file should emit complete event."""
-        from mozart.dashboard.routes.stream import _log_stream
+        from marianne.dashboard.routes.stream import _log_stream
 
         log = tmp_path / "nonexistent.log"
 
@@ -204,7 +204,7 @@ class TestStreamEndpoints:
 
     def test_stream_status_poll_interval_too_low(self, client, job_state_with_worktree) -> None:
         """Poll interval below 0.1 should be rejected."""
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state_with_worktree)
             response = client.get("/api/jobs/test-123/stream?poll_interval=0.01")
 
@@ -213,7 +213,7 @@ class TestStreamEndpoints:
 
     def test_stream_status_poll_interval_too_high(self, client, job_state_with_worktree) -> None:
         """Poll interval above 30.0 should be rejected."""
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state_with_worktree)
             response = client.get("/api/jobs/test-123/stream?poll_interval=60")
 
@@ -221,7 +221,7 @@ class TestStreamEndpoints:
 
     def test_stream_logs_tail_lines_negative(self, client, job_state_with_worktree) -> None:
         """Negative tail_lines should be rejected."""
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state_with_worktree)
             response = client.get("/api/jobs/test-123/logs?tail_lines=-1")
 
@@ -230,7 +230,7 @@ class TestStreamEndpoints:
 
     def test_stream_logs_tail_lines_too_high(self, client, job_state_with_worktree) -> None:
         """tail_lines above 1000 should be rejected."""
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state_with_worktree)
             response = client.get("/api/jobs/test-123/logs?tail_lines=5000")
 
@@ -238,7 +238,7 @@ class TestStreamEndpoints:
 
     def test_stream_logs_job_not_found(self, client) -> None:
         """Log streaming for nonexistent job should return 404."""
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=None)
             response = client.get("/api/jobs/nonexistent/logs")
 
@@ -246,7 +246,7 @@ class TestStreamEndpoints:
 
     def test_download_logs_content(self, client, job_state_with_worktree) -> None:
         """Static log download should include header and content."""
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state_with_worktree)
             response = client.get("/api/jobs/test-123/logs/static")
 
@@ -257,7 +257,7 @@ class TestStreamEndpoints:
 
     def test_log_info_returns_metadata(self, client, job_state_with_worktree) -> None:
         """Log info endpoint should return size and line count."""
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state_with_worktree)
             response = client.get("/api/jobs/test-123/logs/info")
 
@@ -270,7 +270,7 @@ class TestStreamEndpoints:
 
     def test_log_info_job_not_found(self, client) -> None:
         """Log info for nonexistent job should return 404."""
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=None)
             response = client.get("/api/jobs/nonexistent/logs/info")
 
@@ -311,7 +311,7 @@ class TestArtifactSecurity:
             updated_at=_FIXED_TIME,
         )
 
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
             response = client.get("/api/jobs/test-123/artifacts/link.txt")
 
@@ -334,7 +334,7 @@ class TestArtifactSecurity:
             updated_at=_FIXED_TIME,
         )
 
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
             response = client.get("/api/jobs/test-123/artifacts/subdir")
 
@@ -358,7 +358,7 @@ class TestArtifactSecurity:
             updated_at=_FIXED_TIME,
         )
 
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
             response = client.get("/api/jobs/test-123/artifacts")
 
@@ -385,7 +385,7 @@ class TestArtifactSecurity:
             updated_at=_FIXED_TIME,
         )
 
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
             response = client.get(
                 "/api/jobs/test-123/artifacts?include_hidden=true"
@@ -415,7 +415,7 @@ class TestArtifactSecurity:
             updated_at=_FIXED_TIME,
         )
 
-        with patch("mozart.dashboard.app._state_backend") as mock_backend:
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
             mock_backend.load = AsyncMock(return_value=job_state)
             response = client.get(
                 "/api/jobs/test-123/artifacts?file_pattern=*.py&recursive=false"
@@ -439,7 +439,7 @@ class TestIsSafePath:
 
     def test_safe_path(self, tmp_path: Path) -> None:
         """Normal relative path should be safe."""
-        from mozart.dashboard.routes.artifacts import _is_safe_path
+        from marianne.dashboard.routes.artifacts import _is_safe_path
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
@@ -449,7 +449,7 @@ class TestIsSafePath:
 
     def test_traversal_path(self, tmp_path: Path) -> None:
         """Path with .. should be blocked."""
-        from mozart.dashboard.routes.artifacts import _is_safe_path
+        from marianne.dashboard.routes.artifacts import _is_safe_path
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
@@ -458,7 +458,7 @@ class TestIsSafePath:
 
     def test_absolute_path_outside(self, tmp_path: Path) -> None:
         """Absolute path outside workspace should be blocked."""
-        from mozart.dashboard.routes.artifacts import _is_safe_path
+        from marianne.dashboard.routes.artifacts import _is_safe_path
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
@@ -467,7 +467,7 @@ class TestIsSafePath:
 
     def test_symlink_blocked(self, tmp_path: Path) -> None:
         """Symlink should be blocked even if resolved path is inside workspace."""
-        from mozart.dashboard.routes.artifacts import _is_safe_path
+        from marianne.dashboard.routes.artifacts import _is_safe_path
 
         workspace = tmp_path / "ws"
         workspace.mkdir()

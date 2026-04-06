@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetStatus
-from mozart.state.sqlite_backend import SQLiteStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
+from marianne.state.sqlite_backend import SQLiteStateBackend
 
 
 @pytest.fixture
@@ -181,7 +181,7 @@ class TestSheetStatePreservation:
         self, sqlite_backend: SQLiteStateBackend, sample_state: CheckpointState
     ) -> None:
         """Test that learning metadata fields are preserved."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         sample_state.sheets[1] = SheetState(
             sheet_num=1,
@@ -210,7 +210,7 @@ class TestSheetStatePreservation:
         self, sqlite_backend: SQLiteStateBackend, sample_state: CheckpointState
     ) -> None:
         """Test that validation fields are preserved."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         sample_state.sheets[1] = SheetState(
             sheet_num=1,
@@ -238,7 +238,7 @@ class TestSheetStatePreservation:
         self, sqlite_backend: SQLiteStateBackend, sample_state: CheckpointState
     ) -> None:
         """Test that execution_duration_seconds, exit_signal, exit_reason survive round-trip."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         sample_state.sheets[1] = SheetState(
             sheet_num=1,
@@ -261,7 +261,7 @@ class TestSheetStatePreservation:
         self, sqlite_backend: SQLiteStateBackend, sample_state: CheckpointState
     ) -> None:
         """Test that None duration/signal/reason stay None (not coerced to 0.0)."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         sample_state.sheets[1] = SheetState(
             sheet_num=1,
@@ -586,7 +586,7 @@ class TestEdgeCases:
         self, sqlite_backend: SQLiteStateBackend, sample_state: CheckpointState
     ) -> None:
         """Test handling of empty lists and None values."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         sample_state.sheets[1] = SheetState(
             sheet_num=1,

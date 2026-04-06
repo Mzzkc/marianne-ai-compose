@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.config import GroundingConfig, GroundingHookConfig
-from mozart.execution.grounding import (
+from marianne.core.config import GroundingConfig, GroundingHookConfig
+from marianne.execution.grounding import (
     FileChecksumGroundingHook,
     GroundingContext,
     GroundingEngine,
@@ -381,7 +381,7 @@ class TestGroundingDecisionContext:
 
     def test_disabled_context(self):
         """Test disabled() factory method."""
-        from mozart.execution.runner import GroundingDecisionContext
+        from marianne.execution.runner import GroundingDecisionContext
 
         ctx = GroundingDecisionContext.disabled()
         assert ctx.passed is True
@@ -391,7 +391,7 @@ class TestGroundingDecisionContext:
 
     def test_from_empty_results(self):
         """Test from_results with empty list."""
-        from mozart.execution.runner import GroundingDecisionContext
+        from marianne.execution.runner import GroundingDecisionContext
 
         ctx = GroundingDecisionContext.from_results([])
         assert ctx.passed is True
@@ -400,7 +400,7 @@ class TestGroundingDecisionContext:
 
     def test_from_single_passing_result(self):
         """Test from_results with single passing result."""
-        from mozart.execution.runner import GroundingDecisionContext
+        from marianne.execution.runner import GroundingDecisionContext
 
         result = GroundingResult(
             passed=True,
@@ -418,7 +418,7 @@ class TestGroundingDecisionContext:
 
     def test_from_single_failing_result(self):
         """Test from_results with single failing result."""
-        from mozart.execution.runner import GroundingDecisionContext
+        from marianne.execution.runner import GroundingDecisionContext
 
         result = GroundingResult(
             passed=False,
@@ -438,7 +438,7 @@ class TestGroundingDecisionContext:
 
     def test_from_mixed_results(self):
         """Test from_results with mixed pass/fail."""
-        from mozart.execution.runner import GroundingDecisionContext
+        from marianne.execution.runner import GroundingDecisionContext
 
         results = [
             GroundingResult(passed=True, hook_name="hook1", confidence=0.9),
@@ -455,7 +455,7 @@ class TestGroundingDecisionContext:
 
     def test_escalation_flag_propagates(self):
         """Test that should_escalate propagates from any result."""
-        from mozart.execution.runner import GroundingDecisionContext
+        from marianne.execution.runner import GroundingDecisionContext
 
         results = [
             GroundingResult(passed=True, hook_name="hook1"),
@@ -469,7 +469,7 @@ class TestGroundingDecisionContext:
 
     def test_multiple_recovery_guidance_combined(self):
         """Test that recovery guidance from multiple failures is combined."""
-        from mozart.execution.runner import GroundingDecisionContext
+        from marianne.execution.runner import GroundingDecisionContext
 
         results = [
             GroundingResult(
@@ -500,7 +500,7 @@ class TestGroundingCompletionIntegration:
         """Test _decide_next_action works without grounding context."""
         from unittest.mock import MagicMock
 
-        from mozart.execution.runner import JobRunner
+        from marianne.execution.runner import JobRunner
 
         # Create minimal JobRunner mock
         config = MagicMock()
@@ -537,7 +537,7 @@ class TestGroundingCompletionIntegration:
         """Test grounding confidence adjusts overall confidence."""
         from unittest.mock import MagicMock
 
-        from mozart.execution.runner import GroundingDecisionContext, JobRunner
+        from marianne.execution.runner import GroundingDecisionContext, JobRunner
 
         config = MagicMock()
         config.retry.completion_threshold_percent = 60.0
@@ -580,7 +580,7 @@ class TestGroundingCompletionIntegration:
         """Test grounding should_escalate triggers escalation mode."""
         from unittest.mock import MagicMock
 
-        from mozart.execution.runner import (
+        from marianne.execution.runner import (
             GroundingDecisionContext,
             JobRunner,
             SheetExecutionMode,
@@ -626,7 +626,7 @@ class TestGroundingCompletionIntegration:
         """Test grounding recovery guidance is included in hints."""
         from unittest.mock import MagicMock
 
-        from mozart.execution.runner import GroundingDecisionContext, JobRunner
+        from marianne.execution.runner import GroundingDecisionContext, JobRunner
 
         config = MagicMock()
         config.retry.completion_threshold_percent = 60.0

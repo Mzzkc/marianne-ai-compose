@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.dashboard.app import create_app
-from mozart.dashboard.services.job_control import JobControlService
-from mozart.state.memory import InMemoryStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.dashboard.app import create_app
+from marianne.dashboard.services.job_control import JobControlService
+from marianne.state.memory import InMemoryStateBackend
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def app(mock_state_backend):
     def get_test_backend():
         return mock_state_backend
 
-    from mozart.dashboard.app import get_state_backend
+    from marianne.dashboard.app import get_state_backend
 
     app = create_app()
     app.dependency_overrides[get_state_backend] = get_test_backend

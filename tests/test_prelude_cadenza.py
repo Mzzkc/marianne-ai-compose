@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import ValidationError
 
-from mozart.core.config import InjectionCategory, InjectionItem, JobConfig, PromptConfig
-from mozart.core.config.job import SheetConfig
-from mozart.execution.runner import JobRunner
-from mozart.prompts.templating import PromptBuilder, SheetContext
+from marianne.core.config import InjectionCategory, InjectionItem, JobConfig, PromptConfig
+from marianne.core.config.job import SheetConfig
+from marianne.execution.runner import JobRunner
+from marianne.prompts.templating import PromptBuilder, SheetContext
 
 
 # ── Phase 1: Config Models & Data Structures ─────────────────────────
@@ -497,7 +497,7 @@ class TestPromptInjectionSections:
 
     def test_injection_coexists_with_validation_rules(self) -> None:
         """Injection sections don't interfere with validation requirements."""
-        from mozart.core.config import ValidationRule
+        from marianne.core.config import ValidationRule
 
         pb = PromptBuilder(PromptConfig(template="Do the task."))
         ctx = SheetContext(
@@ -794,7 +794,7 @@ class TestEndToEndInjection:
         self, tmp_path: Path,
     ) -> None:
         """Injection sections coexist with validation rules in the prompt."""
-        from mozart.core.config import ValidationRule
+        from marianne.core.config import ValidationRule
 
         (tmp_path / "ctx.md").write_text("Background")
 
@@ -837,14 +837,14 @@ class TestPreludeCadenzaValidationCheck:
 
     def test_check_importable(self) -> None:
         """V108 check is importable from the checks package."""
-        from mozart.validation.checks import PreludeCadenzaFileCheck
+        from marianne.validation.checks import PreludeCadenzaFileCheck
 
         check = PreludeCadenzaFileCheck()
         assert check.check_id == "V108"
 
     def test_check_in_default_checks(self) -> None:
         """V108 check is included in create_default_checks()."""
-        from mozart.validation.runner import create_default_checks
+        from marianne.validation.runner import create_default_checks
 
         checks = create_default_checks()
         check_ids = [c.check_id for c in checks]
@@ -852,7 +852,7 @@ class TestPreludeCadenzaValidationCheck:
 
     def test_runner_reports_missing_prelude_file(self, tmp_path: Path) -> None:
         """Full validation runner catches missing prelude files."""
-        from mozart.validation.runner import ValidationRunner, create_default_checks
+        from marianne.validation.runner import ValidationRunner, create_default_checks
 
         yaml_content = (
             "name: test-job\n"

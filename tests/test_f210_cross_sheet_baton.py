@@ -27,12 +27,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.config.job import PromptConfig
-from mozart.core.config.workspace import CrossSheetConfig
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.prompt import PromptRenderer
-from mozart.daemon.baton.state import (
+from marianne.core.config.job import PromptConfig
+from marianne.core.config.workspace import CrossSheetConfig
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.prompt import PromptRenderer
+from marianne.daemon.baton.state import (
     AttemptContext,
     AttemptMode,
     BatonJobState,
@@ -162,7 +162,7 @@ class TestAdapterCrossSheetStorage:
 
     def test_register_job_stores_cross_sheet_config(self) -> None:
         """register_job accepts cross_sheet parameter and stores it."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -182,7 +182,7 @@ class TestAdapterCrossSheetStorage:
 
     def test_register_job_without_cross_sheet(self) -> None:
         """register_job without cross_sheet stores None."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -193,8 +193,8 @@ class TestAdapterCrossSheetStorage:
 
     def test_recover_job_stores_cross_sheet_config(self) -> None:
         """recover_job also accepts and stores cross_sheet."""
-        from mozart.daemon.baton.adapter import BatonAdapter
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.core.checkpoint import CheckpointState
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -215,7 +215,7 @@ class TestAdapterCrossSheetStorage:
 
     def test_deregister_job_cleans_cross_sheet(self) -> None:
         """deregister_job removes cross_sheet config."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -244,7 +244,7 @@ class TestCollectCrossSheetContext:
         total_sheets: int = 5,
     ):
         """Set up adapter with a registered job and baton state."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=i) for i in range(1, total_sheets + 1)]
@@ -400,7 +400,7 @@ class TestCollectCrossSheetContext:
                 _make_sheet(num=i, workspace=ws) for i in range(1, 4)
             ]
 
-            from mozart.daemon.baton.adapter import BatonAdapter
+            from marianne.daemon.baton.adapter import BatonAdapter
 
             adapter = BatonAdapter()
             adapter.register_job("job-1", sheets, {}, cross_sheet=config)
@@ -414,7 +414,7 @@ class TestCollectCrossSheetContext:
 
     def test_nonexistent_job_returns_empty(self) -> None:
         """Unknown job_id → graceful empty return."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         outputs, files = adapter._collect_cross_sheet_context("nonexistent", 1)

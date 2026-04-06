@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mozart.core.config.execution import ValidationRule
-from mozart.core.config.job import InjectionCategory, InjectionItem
+from marianne.core.config.execution import ValidationRule
+from marianne.core.config.job import InjectionCategory, InjectionItem
 
 
 # --- Sheet Construction ---
@@ -27,7 +27,7 @@ class TestSheetConstruction:
 
     def test_minimal_sheet(self):
         """Minimal sheet with required fields only."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         sheet = Sheet(
             num=1,
@@ -55,7 +55,7 @@ class TestSheetConstruction:
 
     def test_full_sheet(self):
         """Fully specified sheet with all optional fields."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         sheet = Sheet(
             num=5,
@@ -96,7 +96,7 @@ class TestSheetConstruction:
 
     def test_sheet_with_template_file(self):
         """Sheet using an external template file instead of inline."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         sheet = Sheet(
             num=1,
@@ -119,7 +119,7 @@ class TestSheetIdentity:
 
     def test_sheet_num_must_be_positive(self):
         """Sheet numbers are 1-indexed, must be >= 1."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         with pytest.raises(ValidationError, match="num"):
             Sheet(
@@ -133,7 +133,7 @@ class TestSheetIdentity:
 
     def test_movement_must_be_positive(self):
         """Movement numbers must be >= 1."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         with pytest.raises(ValidationError, match="movement"):
             Sheet(
@@ -147,7 +147,7 @@ class TestSheetIdentity:
 
     def test_voice_must_be_positive_if_set(self):
         """Voice numbers must be >= 1 when provided."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         with pytest.raises(ValidationError, match="voice"):
             Sheet(
@@ -161,7 +161,7 @@ class TestSheetIdentity:
 
     def test_voice_count_must_be_positive(self):
         """voice_count must be >= 1."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         with pytest.raises(ValidationError, match="voice_count"):
             Sheet(
@@ -182,7 +182,7 @@ class TestSheetTemplateVariables:
 
     def test_basic_template_variables(self):
         """Basic sheet produces standard template variables."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         sheet = Sheet(
             num=3,
@@ -213,7 +213,7 @@ class TestSheetTemplateVariables:
 
     def test_harmonized_movement_template_variables(self):
         """Harmonized movement (multi-voice) produces correct variables."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         sheet = Sheet(
             num=7,
@@ -231,7 +231,7 @@ class TestSheetTemplateVariables:
 
     def test_custom_variables_do_not_override_builtins(self):
         """Custom variables cannot override built-in template variables."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         sheet = Sheet(
             num=1,
@@ -256,7 +256,7 @@ class TestSheetSerialization:
 
     def test_serialization_roundtrip(self):
         """Sheet can be serialized to dict and reconstructed."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         sheet = Sheet(
             num=1,
@@ -284,7 +284,7 @@ class TestSheetAdversarial:
     @pytest.mark.adversarial
     def test_empty_instrument_name_rejected(self):
         """Empty instrument name should fail."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         with pytest.raises(ValidationError, match="instrument_name"):
             Sheet(
@@ -299,7 +299,7 @@ class TestSheetAdversarial:
     @pytest.mark.adversarial
     def test_very_large_sheet_num_accepted(self):
         """Very large sheet numbers should work (big scores)."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         sheet = Sheet(
             num=10000,
@@ -314,7 +314,7 @@ class TestSheetAdversarial:
     @pytest.mark.adversarial
     def test_unicode_in_description(self):
         """Unicode in description should work."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         sheet = Sheet(
             num=1,
@@ -330,7 +330,7 @@ class TestSheetAdversarial:
     @pytest.mark.adversarial
     def test_timeout_must_be_positive(self):
         """timeout_seconds must be > 0."""
-        from mozart.core.sheet import Sheet
+        from marianne.core.sheet import Sheet
 
         with pytest.raises(ValidationError, match="timeout_seconds"):
             Sheet(

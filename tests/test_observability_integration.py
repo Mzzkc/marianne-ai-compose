@@ -25,20 +25,20 @@ from typing import Any
 import pytest
 import structlog
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.checkpoint import (
+from marianne.backends.base import ExecutionResult
+from marianne.core.checkpoint import (
     MAX_ERROR_HISTORY,
     MAX_OUTPUT_CAPTURE_BYTES,
     CheckpointState,
     SheetState,
 )
-from mozart.core.config import JobConfig, LogConfig
-from mozart.core.errors import (
+from marianne.core.config import JobConfig, LogConfig
+from marianne.core.errors import (
     ErrorCategory,
     ErrorClassifier,
     ErrorCode,
 )
-from mozart.core.logging import (
+from marianne.core.logging import (
     CompressingRotatingFileHandler,
     ExecutionContext,
     configure_logging,
@@ -46,17 +46,17 @@ from mozart.core.logging import (
     get_logger,
     with_context,
 )
-from mozart.execution.circuit_breaker import CircuitBreaker, CircuitState
-from mozart.execution.preflight import (
+from marianne.execution.circuit_breaker import CircuitBreaker, CircuitState
+from marianne.execution.preflight import (
     PreflightChecker,
     PromptMetrics,
     run_preflight_check,
 )
-from mozart.execution.retry_strategy import (
+from marianne.execution.retry_strategy import (
     AdaptiveRetryStrategy,
     RetryPattern,
 )
-from mozart.execution.retry_strategy import (
+from marianne.execution.retry_strategy import (
     ErrorRecord as RetryErrorRecord,
 )
 from tests.helpers import record_error_on_sheet

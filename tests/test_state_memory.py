@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.state.memory import InMemoryStateBackend
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.state.memory import InMemoryStateBackend
 
 
 def _make_state(job_id: str = "test-job", total_sheets: int = 3) -> CheckpointState:

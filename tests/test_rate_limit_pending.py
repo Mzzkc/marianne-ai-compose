@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.daemon.backpressure import BackpressureController
+from marianne.daemon.backpressure import BackpressureController
 
 
 # =============================================================================
@@ -136,8 +136,8 @@ class TestSubmitJobPending:
     @pytest.mark.asyncio
     async def test_resource_pressure_still_rejects(self, tmp_path: Path) -> None:
         """When resource pressure (not just rate limits), job is rejected."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.types import JobRequest
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.types import JobRequest
 
         monitor = MagicMock()
         monitor.current_memory_mb.return_value = 960  # 96% — CRITICAL
@@ -177,7 +177,7 @@ class TestCancelPendingJob:
     @pytest.mark.asyncio
     async def test_cancel_pending_job_removes_from_queue(self) -> None:
         """Cancelling a pending job removes it from _pending_jobs."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         with patch.object(JobManager, "__init__", lambda self, *a, **kw: None):
             mgr = JobManager.__new__(JobManager)
@@ -193,7 +193,7 @@ class TestCancelPendingJob:
     @pytest.mark.asyncio
     async def test_cancel_nonexistent_job_returns_false(self) -> None:
         """Cancelling a job that doesn't exist returns False."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         with patch.object(JobManager, "__init__", lambda self, *a, **kw: None):
             mgr = JobManager.__new__(JobManager)
@@ -216,7 +216,7 @@ class TestPendingJobAutoStart:
     @pytest.mark.asyncio
     async def test_start_pending_jobs_creates_task(self) -> None:
         """When rate limits clear, pending jobs get started."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         with patch.object(JobManager, "__init__", lambda self, *a, **kw: None):
             mgr = JobManager.__new__(JobManager)
@@ -249,7 +249,7 @@ class TestPendingJobAutoStart:
     @pytest.mark.asyncio
     async def test_pending_jobs_stay_if_still_pressured(self) -> None:
         """Pending jobs remain queued if backpressure hasn't cleared."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         with patch.object(JobManager, "__init__", lambda self, *a, **kw: None):
             mgr = JobManager.__new__(JobManager)
@@ -275,9 +275,9 @@ class TestCliPendingStatus:
 
     def test_pending_response_shows_info_not_error(self) -> None:
         """When conductor returns 'pending', CLI shows info message, not error."""
-        from mozart.cli.commands.run import _handle_pending_response
+        from marianne.cli.commands.run import _handle_pending_response
 
-        with patch("mozart.cli.commands.run.console") as mock_console:
+        with patch("marianne.cli.commands.run.console") as mock_console:
             _handle_pending_response(
                 job_id="test-job",
                 message="Rate limit active (claude-cli clears in 5m 0s). "
@@ -293,9 +293,9 @@ class TestCliPendingStatus:
 
     def test_pending_response_json_output(self) -> None:
         """When conductor returns 'pending' with --json, CLI outputs JSON."""
-        from mozart.cli.commands.run import _handle_pending_response
+        from marianne.cli.commands.run import _handle_pending_response
 
-        with patch("mozart.cli.commands.run.output_json") as mock_json:
+        with patch("marianne.cli.commands.run.output_json") as mock_json:
             _handle_pending_response(
                 job_id="test-job",
                 message="Job queued as pending.",
@@ -317,7 +317,7 @@ class TestJobResponsePending:
 
     def test_pending_status_valid(self) -> None:
         """JobResponse can be created with 'pending' status."""
-        from mozart.daemon.types import JobResponse
+        from marianne.daemon.types import JobResponse
 
         response = JobResponse(
             job_id="test-job",
@@ -328,7 +328,7 @@ class TestJobResponsePending:
 
     def test_accepted_status_still_valid(self) -> None:
         """Existing 'accepted' status still works."""
-        from mozart.daemon.types import JobResponse
+        from marianne.daemon.types import JobResponse
 
         response = JobResponse(
             job_id="test-job",
@@ -354,7 +354,7 @@ class TestPendingAutoStartWiring:
     @pytest.mark.asyncio
     async def test_clear_rate_limits_triggers_pending_start(self) -> None:
         """clear_rate_limits() should call _start_pending_jobs() afterward."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         with patch.object(JobManager, "__init__", lambda self, *a, **kw: None):
             mgr = JobManager.__new__(JobManager)
@@ -374,7 +374,7 @@ class TestPendingAutoStartWiring:
     @pytest.mark.asyncio
     async def test_clear_rate_limits_for_specific_instrument(self) -> None:
         """Clearing a specific instrument still triggers pending check."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         with patch.object(JobManager, "__init__", lambda self, *a, **kw: None):
             mgr = JobManager.__new__(JobManager)
@@ -396,8 +396,8 @@ class TestPendingAutoStartWiring:
         self, tmp_path: Path,
     ) -> None:
         """Queuing a pending job should schedule a deferred auto-start check."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.types import JobRequest
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.types import JobRequest
 
         config_file = tmp_path / "test-score.yaml"
         config_file.write_text(
@@ -429,7 +429,7 @@ class TestPendingAutoStartWiring:
             )
 
             with patch(
-                "mozart.daemon.manager.asyncio.create_task",
+                "marianne.daemon.manager.asyncio.create_task",
             ) as mock_create_task:
                 mock_task = MagicMock()
                 mock_task.add_done_callback = MagicMock()
@@ -460,7 +460,7 @@ class TestPendingJobVisibility:
 
     def test_pending_status_in_daemon_job_status_enum(self) -> None:
         """DaemonJobStatus should include PENDING."""
-        from mozart.daemon.registry import DaemonJobStatus
+        from marianne.daemon.registry import DaemonJobStatus
 
         assert hasattr(DaemonJobStatus, "PENDING")
         assert DaemonJobStatus.PENDING.value == "pending"
@@ -468,8 +468,8 @@ class TestPendingJobVisibility:
     @pytest.mark.asyncio
     async def test_pending_job_appears_in_list(self, tmp_path: Path) -> None:
         """A pending job should appear in list_jobs() output."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.types import JobRequest
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.types import JobRequest
 
         config_file = tmp_path / "test-score.yaml"
         config_file.write_text(
@@ -500,7 +500,7 @@ class TestPendingJobVisibility:
             )
 
             with patch(
-                "mozart.daemon.manager.asyncio.create_task",
+                "marianne.daemon.manager.asyncio.create_task",
                 return_value=MagicMock(add_done_callback=MagicMock()),
             ):
                 with patch.object(
@@ -522,9 +522,9 @@ class TestPendingJobVisibility:
     @pytest.mark.asyncio
     async def test_pending_job_not_clearable(self) -> None:
         """Pending jobs should not be cleared by mozart clear."""
-        from mozart.daemon.registry import DaemonJobStatus
+        from marianne.daemon.registry import DaemonJobStatus
 
         # "pending" is not in _TERMINAL_STATUSES
-        from mozart.daemon.registry import _TERMINAL_STATUSES
+        from marianne.daemon.registry import _TERMINAL_STATUSES
 
         assert "pending" not in _TERMINAL_STATUSES

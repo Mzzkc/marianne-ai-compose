@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-from mozart.core.config.instruments import (
+from marianne.core.config.instruments import (
     CliCommand,
     CliErrorConfig,
     CliOutputConfig,
@@ -79,7 +79,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_default_model_from_profile(self) -> None:
         """Backend initializes with profile's default_model."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(default_model="gemini-2.5-pro")
         backend = PluginCliBackend(profile)
@@ -87,7 +87,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_apply_overrides_changes_model(self) -> None:
         """apply_overrides with 'model' key changes the active model."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(default_model="gemini-2.5-pro")
         backend = PluginCliBackend(profile)
@@ -97,7 +97,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_clear_overrides_restores_default(self) -> None:
         """clear_overrides restores the profile's default_model."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(default_model="gemini-2.5-pro")
         backend = PluginCliBackend(profile)
@@ -110,7 +110,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_apply_overrides_without_model_is_noop(self) -> None:
         """apply_overrides with unrelated keys doesn't change model."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(default_model="gemini-2.5-pro")
         backend = PluginCliBackend(profile)
@@ -120,7 +120,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_clear_overrides_without_apply_is_safe(self) -> None:
         """clear_overrides without prior apply_overrides is a no-op."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(default_model="gemini-2.5-pro")
         backend = PluginCliBackend(profile)
@@ -130,7 +130,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_apply_overrides_empty_dict_is_noop(self) -> None:
         """apply_overrides with empty dict doesn't change model."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(default_model="gemini-2.5-pro")
         backend = PluginCliBackend(profile)
@@ -140,7 +140,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_model_override_appears_in_build_command(self) -> None:
         """Overridden model appears in the CLI command arguments."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             default_model="gemini-2.5-pro",
@@ -167,7 +167,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_model_override_flows_to_execution_result(self) -> None:
         """Overridden model is reported in ExecutionResult.model."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(default_model="gemini-2.5-pro")
         backend = PluginCliBackend(profile)
@@ -178,7 +178,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_sequential_overrides_are_independent(self) -> None:
         """Each apply/clear cycle is independent — no state leaks."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(default_model="default")
         backend = PluginCliBackend(profile)
@@ -197,7 +197,7 @@ class TestPluginCliBackendModelOverride:
 
     def test_model_override_with_none_profile_default(self) -> None:
         """Override works even when profile has no default_model."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(default_model="default")
         # Manually set default_model to None to simulate no-default profile
@@ -226,8 +226,8 @@ class TestBackendPoolModelOverride:
     @pytest.mark.asyncio
     async def test_acquire_passes_model_to_new_backend(self) -> None:
         """When creating a new backend, model override is applied."""
-        from mozart.daemon.baton.backend_pool import BackendPool
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.instruments.registry import InstrumentRegistry
 
         registry = InstrumentRegistry()
         profile = _make_profile(name="test-instr", default_model="default")
@@ -240,8 +240,8 @@ class TestBackendPoolModelOverride:
     @pytest.mark.asyncio
     async def test_acquire_passes_model_to_reused_backend(self) -> None:
         """When reusing a backend from free list, model override is applied."""
-        from mozart.daemon.baton.backend_pool import BackendPool
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.instruments.registry import InstrumentRegistry
 
         registry = InstrumentRegistry()
         profile = _make_profile(name="test-instr", default_model="default")
@@ -260,8 +260,8 @@ class TestBackendPoolModelOverride:
     @pytest.mark.asyncio
     async def test_release_clears_model_override(self) -> None:
         """Releasing a backend restores its default model."""
-        from mozart.daemon.baton.backend_pool import BackendPool
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.instruments.registry import InstrumentRegistry
 
         registry = InstrumentRegistry()
         profile = _make_profile(name="test-instr", default_model="default")
@@ -278,8 +278,8 @@ class TestBackendPoolModelOverride:
     @pytest.mark.asyncio
     async def test_acquire_without_model_uses_profile_default(self) -> None:
         """When no model is passed to acquire, profile default is used."""
-        from mozart.daemon.baton.backend_pool import BackendPool
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.instruments.registry import InstrumentRegistry
 
         registry = InstrumentRegistry()
         profile = _make_profile(name="test-instr", default_model="profile-default")
@@ -292,8 +292,8 @@ class TestBackendPoolModelOverride:
     @pytest.mark.asyncio
     async def test_reused_backend_without_model_uses_default(self) -> None:
         """Reused backend with no model arg retains profile default after release clear."""
-        from mozart.daemon.baton.backend_pool import BackendPool
-        from mozart.instruments.registry import InstrumentRegistry
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.instruments.registry import InstrumentRegistry
 
         registry = InstrumentRegistry()
         profile = _make_profile(name="test-instr", default_model="default")
@@ -320,7 +320,7 @@ class TestBuildSheetsInstrumentConfigModel:
 
     def test_score_level_model_in_instrument_config(self) -> None:
         """Score-level instrument_config.model flows to Sheet."""
-        from mozart.core.config.job import JobConfig
+        from marianne.core.config.job import JobConfig
 
         config = JobConfig.from_yaml_string("""
             name: model-override-test
@@ -334,7 +334,7 @@ class TestBuildSheetsInstrumentConfigModel:
             prompt:
               template: "Do something"
         """)
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
         sheets = build_sheets(config)
 
         for sheet in sheets:
@@ -342,7 +342,7 @@ class TestBuildSheetsInstrumentConfigModel:
 
     def test_movement_level_model_overrides_score(self) -> None:
         """Movement-level instrument_config.model overrides score-level."""
-        from mozart.core.config.job import JobConfig
+        from marianne.core.config.job import JobConfig
 
         config = JobConfig.from_yaml_string("""
             name: movement-model-test
@@ -360,7 +360,7 @@ class TestBuildSheetsInstrumentConfigModel:
             prompt:
               template: "Do something"
         """)
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
         sheets = build_sheets(config)
 
         # Sheet 1 is in movement 1 — should get movement-level override
@@ -373,7 +373,7 @@ class TestBuildSheetsInstrumentConfigModel:
 
     def test_per_sheet_model_overrides_everything(self) -> None:
         """Per-sheet instrument_config.model overrides both score and movement."""
-        from mozart.core.config.job import JobConfig
+        from marianne.core.config.job import JobConfig
 
         config = JobConfig.from_yaml_string("""
             name: per-sheet-model-test
@@ -390,7 +390,7 @@ class TestBuildSheetsInstrumentConfigModel:
             prompt:
               template: "Do something"
         """)
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
         sheets = build_sheets(config)
 
         sheet_1 = next(s for s in sheets if s.num == 1)
@@ -404,7 +404,7 @@ class TestBuildSheetsInstrumentConfigModel:
 
     def test_instrument_def_config_model(self) -> None:
         """Score-level instrument aliases with config.model flow to sheets."""
-        from mozart.core.config.job import JobConfig
+        from marianne.core.config.job import JobConfig
 
         config = JobConfig.from_yaml_string("""
             name: alias-model-test
@@ -421,7 +421,7 @@ class TestBuildSheetsInstrumentConfigModel:
             prompt:
               template: "Do something"
         """)
-        from mozart.core.sheet import build_sheets
+        from marianne.core.sheet import build_sheets
         sheets = build_sheets(config)
 
         assert sheets[0].instrument_config.get("model") == "gemini-2.5-flash"

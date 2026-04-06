@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mozart.core.config import (
+from marianne.core.config import (
     AIReviewConfig,
     AutoApplyConfig,
     BackendConfig,

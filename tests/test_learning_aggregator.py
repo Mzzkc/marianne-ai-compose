@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import SheetStatus
-from mozart.learning.aggregator import (
+from marianne.core.checkpoint import SheetStatus
+from marianne.learning.aggregator import (
     AggregationResult,
     EnhancedAggregationResult,
     EnhancedPatternAggregator,
@@ -24,10 +24,10 @@ from mozart.learning.aggregator import (
     aggregate_job_outcomes,
     aggregate_job_outcomes_enhanced,
 )
-from mozart.learning.global_store import GlobalLearningStore, PatternRecord
-from mozart.learning.outcomes import SheetOutcome
-from mozart.learning.patterns import DetectedPattern, PatternType
-from mozart.learning.weighter import PatternWeighter
+from marianne.learning.global_store import GlobalLearningStore, PatternRecord
+from marianne.learning.outcomes import SheetOutcome
+from marianne.learning.patterns import DetectedPattern, PatternType
+from marianne.learning.weighter import PatternWeighter
 
 
 # ---------------------------------------------------------------------------

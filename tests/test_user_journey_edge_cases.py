@@ -20,7 +20,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 

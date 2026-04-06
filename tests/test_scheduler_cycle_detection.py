@@ -18,7 +18,7 @@ Created by Ghost, Movement 1.
 
 import pytest
 
-from mozart.daemon.scheduler import GlobalSheetScheduler
+from marianne.daemon.scheduler import GlobalSheetScheduler
 
 
 class TestDetectCycleAcyclic:

@@ -20,8 +20,8 @@ from textwrap import dedent
 
 import pytest
 
-from mozart.core.config import JobConfig
-from mozart.validation.rendering import (
+from marianne.core.config import JobConfig
+from marianne.validation.rendering import (
     ExpandedValidation,
     RenderingPreview,
     SheetPreview,

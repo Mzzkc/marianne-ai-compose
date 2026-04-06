@@ -18,7 +18,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
@@ -52,9 +52,9 @@ class TestStalePidDetection:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """User should see a message about stale PID cleanup."""
-        from mozart.daemon.process import start_conductor
+        from marianne.daemon.process import start_conductor
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("88888")
 
         mock_config = MagicMock()
@@ -63,15 +63,15 @@ class TestStalePidDetection:
 
         with (
             patch(
-                "mozart.daemon.process._load_config",
+                "marianne.daemon.process._load_config",
                 return_value=mock_config,
             ),
-            patch("mozart.daemon.process._read_pid", return_value=88888),
-            patch("mozart.daemon.process._pid_alive", return_value=False),
+            patch("marianne.daemon.process._read_pid", return_value=88888),
+            patch("marianne.daemon.process._pid_alive", return_value=False),
             # After stale cleanup, PID file is deleted so lock check skipped.
             # Stop at configure_logging to prevent full startup.
             patch(
-                "mozart.core.logging.configure_logging",
+                "marianne.core.logging.configure_logging",
                 side_effect=RuntimeError("test stop"),
             ),
         ):
@@ -92,9 +92,9 @@ class TestStalePidDetection:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """When PID is alive, start should still exit with 'already running'."""
-        from mozart.daemon.process import start_conductor
+        from marianne.daemon.process import start_conductor
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
 
         mock_config = MagicMock()
@@ -102,11 +102,11 @@ class TestStalePidDetection:
 
         with (
             patch(
-                "mozart.daemon.process._load_config",
+                "marianne.daemon.process._load_config",
                 return_value=mock_config,
             ),
-            patch("mozart.daemon.process._read_pid", return_value=12345),
-            patch("mozart.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process._read_pid", return_value=12345),
+            patch("marianne.daemon.process._pid_alive", return_value=True),
             pytest.raises(click.exceptions.Exit),
         ):
             start_conductor(foreground=True)
@@ -118,9 +118,9 @@ class TestStalePidDetection:
 
     def test_stale_pid_file_deleted(self, tmp_path: Path) -> None:
         """Stale PID file should be unlinked before starting."""
-        from mozart.daemon.process import start_conductor
+        from marianne.daemon.process import start_conductor
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("77777")
 
         mock_config = MagicMock()
@@ -129,13 +129,13 @@ class TestStalePidDetection:
 
         with (
             patch(
-                "mozart.daemon.process._load_config",
+                "marianne.daemon.process._load_config",
                 return_value=mock_config,
             ),
-            patch("mozart.daemon.process._read_pid", return_value=77777),
-            patch("mozart.daemon.process._pid_alive", return_value=False),
+            patch("marianne.daemon.process._read_pid", return_value=77777),
+            patch("marianne.daemon.process._pid_alive", return_value=False),
             patch(
-                "mozart.core.logging.configure_logging",
+                "marianne.core.logging.configure_logging",
                 side_effect=RuntimeError("test stop"),
             ),
         ):
@@ -150,20 +150,20 @@ class TestStalePidDetection:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """When no PID file exists, start should proceed without messages."""
-        from mozart.daemon.process import start_conductor
+        from marianne.daemon.process import start_conductor
 
         mock_config = MagicMock()
-        mock_config.pid_file = tmp_path / "mozart.pid"
+        mock_config.pid_file = tmp_path / "marianne.pid"
         mock_config.log_file = tmp_path / "mozart.log"
 
         with (
             patch(
-                "mozart.daemon.process._load_config",
+                "marianne.daemon.process._load_config",
                 return_value=mock_config,
             ),
-            patch("mozart.daemon.process._read_pid", return_value=None),
+            patch("marianne.daemon.process._read_pid", return_value=None),
             patch(
-                "mozart.core.logging.configure_logging",
+                "marianne.core.logging.configure_logging",
                 side_effect=RuntimeError("test stop"),
             ),
         ):
@@ -190,12 +190,12 @@ class TestFreshEarlyFailureSuppression:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(
                     True,
@@ -207,7 +207,7 @@ class TestFreshEarlyFailureSuppression:
                 ),
             ),
             patch(
-                "mozart.cli.commands.run.await_early_failure",
+                "marianne.cli.commands.run.await_early_failure",
                 new_callable=AsyncMock,
                 return_value=None,
             ) as mock_early,
@@ -226,12 +226,12 @@ class TestFreshEarlyFailureSuppression:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(
                     True,
@@ -243,7 +243,7 @@ class TestFreshEarlyFailureSuppression:
                 ),
             ),
             patch(
-                "mozart.cli.commands.run.await_early_failure",
+                "marianne.cli.commands.run.await_early_failure",
                 new_callable=AsyncMock,
                 return_value={
                     "status": "failed",
@@ -267,12 +267,12 @@ class TestFreshEarlyFailureSuppression:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(
                     True,
@@ -284,7 +284,7 @@ class TestFreshEarlyFailureSuppression:
                 ),
             ),
             patch(
-                "mozart.cli.commands.run.await_early_failure",
+                "marianne.cli.commands.run.await_early_failure",
                 new_callable=AsyncMock,
                 return_value={
                     "status": "failed",
@@ -316,12 +316,12 @@ class TestContradictoryErrorRegression:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(
                     True,
@@ -349,12 +349,12 @@ class TestContradictoryErrorRegression:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(
                     True,

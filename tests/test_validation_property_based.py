@@ -181,7 +181,7 @@ def _healing_report_context_strategy() -> st.SearchStrategy[dict[str, Any]]:
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_validation_rule_roundtrip(data: dict[str, Any]) -> None:
     """ValidationRule survives model_dump → model_validate round-trip."""
-    from mozart.core.config.execution import ValidationRule
+    from marianne.core.config.execution import ValidationRule
 
     rule = ValidationRule.model_validate(data)
     dumped = rule.model_dump()
@@ -207,7 +207,7 @@ def test_validation_rule_roundtrip(data: dict[str, Any]) -> None:
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_validation_rule_conftest_strategy_roundtrip(data: dict[str, Any]) -> None:
     """Shared validation_rule_strategy produces valid, round-trippable rules."""
-    from mozart.core.config.execution import ValidationRule
+    from marianne.core.config.execution import ValidationRule
 
     rule = ValidationRule.model_validate(data)
     dumped = rule.model_dump()
@@ -233,7 +233,7 @@ def test_condition_evaluation_never_crashes(
     context: dict[str, int],
 ) -> None:
     """Any well-formed condition expression evaluates without raising."""
-    from mozart.validation.rendering import _check_condition
+    from marianne.validation.rendering import _check_condition
 
     result = _check_condition(condition, context)
     assert isinstance(result, bool)
@@ -249,7 +249,7 @@ def test_condition_evaluation_never_crashes(
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_none_condition_always_true(context: dict[str, int]) -> None:
     """A None condition is unconditional — always returns True."""
-    from mozart.validation.rendering import _check_condition
+    from marianne.validation.rendering import _check_condition
 
     assert _check_condition(None, context) is True
 
@@ -270,7 +270,7 @@ def test_condition_evaluation_deterministic(
     context: dict[str, int],
 ) -> None:
     """Same condition + context always produces the same result."""
-    from mozart.validation.rendering import _check_condition
+    from marianne.validation.rendering import _check_condition
 
     result1 = _check_condition(condition, context)
     result2 = _check_condition(condition, context)
@@ -287,7 +287,7 @@ def test_condition_evaluation_deterministic(
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_validation_issue_format_roundtrip(data: dict[str, Any]) -> None:
     """Any ValidationIssue can produce format_short and format_full without error."""
-    from mozart.validation.base import ValidationIssue, ValidationSeverity
+    from marianne.validation.base import ValidationIssue, ValidationSeverity
 
     severity = ValidationSeverity(data.pop("severity"))
     issue = ValidationIssue(severity=severity, **data)
@@ -312,8 +312,8 @@ def test_validation_issue_format_roundtrip(data: dict[str, Any]) -> None:
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_reporter_json_always_valid(issues: list[dict[str, Any]]) -> None:
     """Any set of ValidationIssues produces parseable JSON from report_json."""
-    from mozart.validation.base import ValidationIssue, ValidationSeverity
-    from mozart.validation.reporter import ValidationReporter
+    from marianne.validation.base import ValidationIssue, ValidationSeverity
+    from marianne.validation.reporter import ValidationReporter
 
     issue_objects = []
     for data in issues:
@@ -344,8 +344,8 @@ def test_reporter_json_always_valid(issues: list[dict[str, Any]]) -> None:
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_reporter_json_valid_flag_consistency(issues: list[dict[str, Any]]) -> None:
     """JSON 'valid' flag is True iff no ERROR-severity issues exist."""
-    from mozart.validation.base import ValidationIssue, ValidationSeverity
-    from mozart.validation.reporter import ValidationReporter
+    from marianne.validation.base import ValidationIssue, ValidationSeverity
+    from marianne.validation.reporter import ValidationReporter
 
     issue_objects = []
     for data in issues:
@@ -373,8 +373,8 @@ def test_reporter_json_valid_flag_consistency(issues: list[dict[str, Any]]) -> N
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_reporter_format_plain_always_string(issues: list[dict[str, Any]]) -> None:
     """format_plain always returns a string with expected summary structure."""
-    from mozart.validation.base import ValidationIssue, ValidationSeverity
-    from mozart.validation.reporter import ValidationReporter
+    from marianne.validation.base import ValidationIssue, ValidationSeverity
+    from marianne.validation.reporter import ValidationReporter
 
     issue_objects = []
     for data in issues:
@@ -403,9 +403,9 @@ def test_runner_severity_sorting(issues: list[dict[str, Any]]) -> None:
     """ValidationRunner.validate sorts issues: ERROR < WARNING < INFO."""
     from unittest.mock import MagicMock
 
-    from mozart.validation.base import ValidationCheck, ValidationIssue, ValidationSeverity
-    from mozart.validation.runner import ValidationRunner
-    from mozart.core.config.job import JobConfig
+    from marianne.validation.base import ValidationCheck, ValidationIssue, ValidationSeverity
+    from marianne.validation.runner import ValidationRunner
+    from marianne.core.config.job import JobConfig
 
     issue_objects = []
     for data in issues:
@@ -440,8 +440,8 @@ def test_runner_severity_sorting(issues: list[dict[str, Any]]) -> None:
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_runner_exit_code_consistency(issues: list[dict[str, Any]]) -> None:
     """Exit code is 1 if any ERROR, 0 otherwise."""
-    from mozart.validation.base import ValidationIssue, ValidationSeverity
-    from mozart.validation.runner import ValidationRunner
+    from marianne.validation.base import ValidationIssue, ValidationSeverity
+    from marianne.validation.runner import ValidationRunner
 
     issue_objects = []
     for data in issues:
@@ -465,7 +465,7 @@ def test_runner_exit_code_consistency(issues: list[dict[str, Any]]) -> None:
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_diagnosis_format_roundtrip(data: dict[str, Any]) -> None:
     """Any Diagnosis produces valid format_short and format_full strings."""
-    from mozart.healing.diagnosis import Diagnosis
+    from marianne.healing.diagnosis import Diagnosis
 
     diag = Diagnosis(**data)
 
@@ -493,7 +493,7 @@ def test_diagnosis_format_roundtrip(data: dict[str, Any]) -> None:
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_remedy_result_str(success: bool, message: str, action_taken: str) -> None:
     """RemedyResult.__str__ produces a consistent status marker."""
-    from mozart.healing.remedies.base import RemedyResult
+    from marianne.healing.remedies.base import RemedyResult
 
     result = RemedyResult(success=success, message=message, action_taken=action_taken)
     text = str(result)
@@ -524,9 +524,9 @@ def test_healing_report_properties(
     n_diagnostics: int,
 ) -> None:
     """HealingReport computed properties are consistent with input data."""
-    from mozart.healing.context import ErrorContext
-    from mozart.healing.coordinator import HealingReport
-    from mozart.healing.remedies.base import RemedyResult
+    from marianne.healing.context import ErrorContext
+    from marianne.healing.coordinator import HealingReport
+    from marianne.healing.remedies.base import RemedyResult
 
     context = ErrorContext(**ctx_data)
     actions_taken = [
@@ -568,8 +568,8 @@ def test_healing_report_format_never_crashes(
     verbose: bool,
 ) -> None:
     """HealingReport.format(verbose) always returns a non-empty string."""
-    from mozart.healing.context import ErrorContext
-    from mozart.healing.coordinator import HealingReport
+    from marianne.healing.context import ErrorContext
+    from marianne.healing.coordinator import HealingReport
 
     context = ErrorContext(**ctx_data)
     report = HealingReport(error_context=context)
@@ -601,7 +601,7 @@ def test_expand_path_idempotent(
     template: str, workspace: str, sheet_num: int
 ) -> None:
     """After full expansion, applying _expand_path again has no effect."""
-    from mozart.validation.rendering import _expand_path
+    from marianne.validation.rendering import _expand_path
 
     ctx = {
         "workspace": workspace,
@@ -627,7 +627,7 @@ def test_expand_path_idempotent(
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_build_snippet_truncation(n_lines: int, max_lines: int) -> None:
     """Snippet is truncated with '...' iff input exceeds max_lines."""
-    from mozart.validation.rendering import _build_snippet
+    from marianne.validation.rendering import _build_snippet
 
     text = "\n".join(f"line {i}" for i in range(n_lines))
     snippet = _build_snippet(text, max_lines=max_lines)
@@ -652,8 +652,8 @@ def test_build_snippet_truncation(n_lines: int, max_lines: int) -> None:
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 def test_count_by_severity_totals(issues: list[dict[str, Any]]) -> None:
     """Sum of severity counts equals total issue count."""
-    from mozart.validation.base import ValidationIssue, ValidationSeverity
-    from mozart.validation.runner import ValidationRunner
+    from marianne.validation.base import ValidationIssue, ValidationSeverity
+    from marianne.validation.runner import ValidationRunner
 
     issue_objects = []
     for data in issues:
@@ -685,8 +685,8 @@ def test_skip_when_sheet_range_invariant(
     """∀ k in skip_when.keys(): (1 ≤ k ≤ total_sheets) ↔ no V212 warning."""
     from pathlib import Path
     from unittest.mock import MagicMock
-    from mozart.core.config.job import JobConfig, SheetConfig
-    from mozart.validation.checks.best_practices import SkipWhenSheetRangeCheck
+    from marianne.core.config.job import JobConfig, SheetConfig
+    from marianne.validation.checks.best_practices import SkipWhenSheetRangeCheck
 
     check = SkipWhenSheetRangeCheck()
     config = MagicMock(spec=JobConfig)
@@ -720,7 +720,7 @@ def test_skip_when_sheet_range_invariant(
 @settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
 def test_workspace_config_models_roundtrip(data: dict[str, Any]) -> None:
     """AIReviewConfig, CrossSheetConfig, FeedbackConfig, LogConfig, IsolationConfig, WorkspaceLifecycleConfig survive round-trip."""
-    from mozart.core.config.workspace import (
+    from marianne.core.config.workspace import (
         AIReviewConfig,
         CrossSheetConfig,
         FeedbackConfig,
@@ -754,7 +754,7 @@ def test_workspace_config_models_roundtrip(data: dict[str, Any]) -> None:
 @settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
 def test_execution_config_models_roundtrip(data: dict[str, Any]) -> None:
     """CircuitBreakerConfig, CostLimitConfig, ParallelConfig, RateLimitConfig, RetryConfig, StaleDetectionConfig survive round-trip."""
-    from mozart.core.config.execution import (
+    from marianne.core.config.execution import (
         CircuitBreakerConfig,
         CostLimitConfig,
         ParallelConfig,
@@ -782,7 +782,7 @@ def test_execution_config_models_roundtrip(data: dict[str, Any]) -> None:
 @settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
 def test_skip_when_command_roundtrip(command: str) -> None:
     """SkipWhenCommand survives round-trip with valid command strings."""
-    from mozart.core.config.execution import SkipWhenCommand
+    from marianne.core.config.execution import SkipWhenCommand
 
     obj = SkipWhenCommand(command=command)
     dumped = obj.model_dump()
@@ -801,7 +801,7 @@ def test_skip_when_command_roundtrip(command: str) -> None:
 @settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
 def test_orchestration_config_models_roundtrip(data: dict[str, Any]) -> None:
     """ConcertConfig, ConductorConfig, ConductorPreferences survive round-trip."""
-    from mozart.core.config.orchestration import (
+    from marianne.core.config.orchestration import (
         ConcertConfig,
         ConductorConfig,
         ConductorPreferences,
@@ -822,7 +822,7 @@ def test_orchestration_config_models_roundtrip(data: dict[str, Any]) -> None:
 @settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
 def test_hook_notification_config_roundtrip(hook_type: str, notif_type: str) -> None:
     """PostSuccessHookConfig and NotificationConfig survive round-trip."""
-    from mozart.core.config.orchestration import NotificationConfig, PostSuccessHookConfig
+    from marianne.core.config.orchestration import NotificationConfig, PostSuccessHookConfig
 
     hook_data: dict[str, Any] = {"type": hook_type}
     if hook_type == "run_job":
@@ -848,7 +848,7 @@ def test_hook_notification_config_roundtrip(hook_type: str, notif_type: str) -> 
 @settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
 def test_learning_config_models_roundtrip(data: dict[str, Any]) -> None:
     """AutoApplyConfig, CheckpointConfig, EntropyResponseConfig, ExplorationBudgetConfig, GroundingConfig, LearningConfig survive round-trip."""
-    from mozart.core.config.learning import (
+    from marianne.core.config.learning import (
         AutoApplyConfig,
         CheckpointConfig,
         EntropyResponseConfig,
@@ -876,7 +876,7 @@ def test_learning_config_models_roundtrip(data: dict[str, Any]) -> None:
 @settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
 def test_checkpoint_trigger_grounding_hook_roundtrip(sheet_num: int) -> None:
     """CheckpointTriggerConfig and GroundingHookConfig survive round-trip."""
-    from mozart.core.config.learning import CheckpointTriggerConfig, GroundingHookConfig
+    from marianne.core.config.learning import CheckpointTriggerConfig, GroundingHookConfig
 
     trigger = CheckpointTriggerConfig(name="cp1", sheet_nums=[sheet_num])
     dumped = trigger.model_dump()
@@ -897,7 +897,7 @@ def test_checkpoint_trigger_grounding_hook_roundtrip(sheet_num: int) -> None:
 @settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
 def test_backend_config_models_roundtrip(data: dict[str, Any]) -> None:
     """BackendConfig, BridgeConfig, OllamaConfig, RecursiveLightConfig, SheetBackendOverride survive round-trip."""
-    from mozart.core.config.backend import (
+    from marianne.core.config.backend import (
         BackendConfig,
         BridgeConfig,
         OllamaConfig,
@@ -919,7 +919,7 @@ def test_backend_config_models_roundtrip(data: dict[str, Any]) -> None:
 @settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
 def test_mcp_server_config_roundtrip(name: str) -> None:
     """MCPServerConfig survives round-trip with valid name and command."""
-    from mozart.core.config.backend import MCPServerConfig
+    from marianne.core.config.backend import MCPServerConfig
 
     obj = MCPServerConfig(name=name, command="mcp-server")
     dumped = obj.model_dump()
@@ -940,7 +940,7 @@ def test_mcp_server_config_roundtrip(name: str) -> None:
 @settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
 def test_sheet_config_prompt_config_roundtrip(size: int, total_items: int) -> None:
     """SheetConfig and PromptConfig survive round-trip."""
-    from mozart.core.config.job import PromptConfig, SheetConfig
+    from marianne.core.config.job import PromptConfig, SheetConfig
 
     import warnings
     with warnings.catch_warnings():
@@ -960,7 +960,7 @@ def test_sheet_config_prompt_config_roundtrip(size: int, total_items: int) -> No
 @settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
 def test_injection_item_roundtrip(filename: str, category: str) -> None:
     """InjectionItem survives round-trip with valid file and category."""
-    from mozart.core.config.job import InjectionItem
+    from marianne.core.config.job import InjectionItem
 
     obj = InjectionItem(file=filename, as_=category)
     dumped = obj.model_dump()
@@ -981,7 +981,7 @@ def test_injection_item_roundtrip(filename: str, category: str) -> None:
 @settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow])
 def test_checkpoint_models_roundtrip(sheet_num: int, total_sheets: int) -> None:
     """CheckpointErrorRecord, SheetState, CheckpointState survive round-trip."""
-    from mozart.core.checkpoint import CheckpointErrorRecord, CheckpointState, SheetState
+    from marianne.core.checkpoint import CheckpointErrorRecord, CheckpointState, SheetState
 
     err = CheckpointErrorRecord(
         error_type="transient",
@@ -1015,7 +1015,7 @@ def test_checkpoint_models_roundtrip(sheet_num: int, total_sheets: int) -> None:
 def test_job_config_roundtrip_via_yaml_string(name: str) -> None:
     """JobConfig survives round-trip through to_yaml / from_yaml_string."""
     import warnings
-    from mozart.core.config import JobConfig
+    from marianne.core.config import JobConfig
 
     yaml_str = f"name: {name}\nsheet:\n  size: 1\n  total_items: 1\nprompt:\n  template: 'test'\n"
     with warnings.catch_warnings():
@@ -1047,8 +1047,8 @@ def test_property_based_tests_exist(
     """
     from unittest.mock import MagicMock
 
-    from mozart.core.config.job import JobConfig, SheetConfig
-    from mozart.validation.checks.best_practices import SkipWhenSheetRangeCheck
+    from marianne.core.config.job import JobConfig, SheetConfig
+    from marianne.validation.checks.best_practices import SkipWhenSheetRangeCheck
 
     check = SkipWhenSheetRangeCheck()
     config = MagicMock(spec=JobConfig)

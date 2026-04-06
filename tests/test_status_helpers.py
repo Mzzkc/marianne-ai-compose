@@ -14,16 +14,16 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.cli.commands.status import (
+from marianne.cli import app
+from marianne.cli.commands.status import (
     _collect_recent_errors,
     _format_daemon_timestamp,
     _infer_circuit_breaker_state,
     _infer_error_type,
     _render_cost_summary,
 )
-from mozart.cli.helpers import get_last_activity_time
-from mozart.core.checkpoint import (
+from marianne.cli.helpers import get_last_activity_time
+from marianne.core.checkpoint import (
     CheckpointState,
     ErrorRecord,
     JobStatus,
@@ -43,7 +43,7 @@ def _no_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
         return False, None
 
     monkeypatch.setattr(
-        "mozart.daemon.detect.try_daemon_route", _fake_route,
+        "marianne.daemon.detect.try_daemon_route", _fake_route,
     )
 
 
@@ -648,7 +648,7 @@ class TestListJobsCommand:
     def _mock_daemon_route(jobs: list[dict[str, Any]]):
         """Return a patch that makes try_daemon_route return the given jobs."""
         return patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, jobs),
         )
@@ -861,7 +861,7 @@ class TestListJobsJsonOutput:
     def _mock_daemon_route(jobs: list[dict[str, Any]]):
         """Return a patch that makes try_daemon_route return the given jobs."""
         return patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, jobs),
         )
@@ -930,7 +930,7 @@ class TestListJobsJsonOutput:
     def test_list_json_no_conductor_returns_error(self) -> None:
         """--json without conductor should return JSON error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):

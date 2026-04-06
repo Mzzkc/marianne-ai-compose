@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.core.checkpoint import (
+from marianne.cli import app
+from marianne.core.checkpoint import (
     CheckpointState,
     JobStatus,
     SheetState,
@@ -98,7 +98,7 @@ def _no_daemon_route(monkeypatch: pytest.MonkeyPatch) -> None:
         return False, None
 
     monkeypatch.setattr(
-        "mozart.daemon.detect.try_daemon_route", _fake_route,
+        "marianne.daemon.detect.try_daemon_route", _fake_route,
     )
 
 

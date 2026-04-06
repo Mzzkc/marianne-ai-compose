@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from mozart.daemon.config import DaemonConfig
-from mozart.daemon.scheduler import (
+from marianne.daemon.config import DaemonConfig
+from marianne.daemon.scheduler import (
     GlobalSheetScheduler,
     SheetInfo,
 )
@@ -1390,10 +1390,10 @@ class TestEndToEndIntegration:
     @pytest.fixture
     def wired_components(self, integration_config: DaemonConfig):
         """All three components wired together (backpressure-enabled)."""
-        from mozart.daemon.backpressure import BackpressureController
-        from mozart.daemon.config import ResourceLimitConfig
-        from mozart.daemon.monitor import ResourceMonitor
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.backpressure import BackpressureController
+        from marianne.daemon.config import ResourceLimitConfig
+        from marianne.daemon.monitor import ResourceMonitor
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         scheduler = GlobalSheetScheduler(integration_config)
         coordinator = RateLimitCoordinator()
@@ -1423,7 +1423,7 @@ class TestEndToEndIntegration:
         without triggering the backpressure 30-second HIGH delay that
         active rate limits cause.
         """
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         scheduler = GlobalSheetScheduler(integration_config)
         coordinator = RateLimitCoordinator()
@@ -1490,8 +1490,8 @@ class TestEndToEndIntegration:
         """
         from unittest.mock import patch
 
-        from mozart.daemon.backpressure import PressureLevel
-        from mozart.daemon.monitor import ResourceMonitor
+        from marianne.daemon.backpressure import PressureLevel
+        from marianne.daemon.monitor import ResourceMonitor
 
         scheduler = wired_components["scheduler"]
         controller = wired_components["controller"]
@@ -1529,8 +1529,8 @@ class TestEndToEndIntegration:
         """
         from unittest.mock import patch
 
-        from mozart.daemon.backpressure import PressureLevel
-        from mozart.daemon.monitor import ResourceMonitor
+        from marianne.daemon.backpressure import PressureLevel
+        from marianne.daemon.monitor import ResourceMonitor
 
         coordinator = wired_components["coordinator"]
         controller = wired_components["controller"]
@@ -1748,8 +1748,8 @@ class TestEndToEndIntegration:
         """
         from unittest.mock import patch
 
-        from mozart.daemon.backpressure import PressureLevel
-        from mozart.daemon.monitor import ResourceMonitor
+        from marianne.daemon.backpressure import PressureLevel
+        from marianne.daemon.monitor import ResourceMonitor
 
         scheduler = wired_components["scheduler"]
         controller = wired_components["controller"]
@@ -2090,10 +2090,10 @@ class TestTripleComponentIntegration:
         """Wire all three components together."""
         from unittest.mock import patch as mock_patch
 
-        from mozart.daemon.backpressure import BackpressureController
-        from mozart.daemon.config import ResourceLimitConfig
-        from mozart.daemon.monitor import ResourceMonitor
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.backpressure import BackpressureController
+        from marianne.daemon.config import ResourceLimitConfig
+        from marianne.daemon.monitor import ResourceMonitor
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         config = DaemonConfig(
             max_concurrent_sheets=5,
@@ -2128,8 +2128,8 @@ class TestTripleComponentIntegration:
         """
         from unittest.mock import patch
 
-        from mozart.daemon.backpressure import PressureLevel
-        from mozart.daemon.monitor import ResourceMonitor
+        from marianne.daemon.backpressure import PressureLevel
+        from marianne.daemon.monitor import ResourceMonitor
 
         scheduler = integration_setup["scheduler"]
         controller = integration_setup["controller"]
@@ -2180,7 +2180,7 @@ class TestTripleComponentIntegration:
         controls overall dispatch admission.  Uses a rate-only scheduler
         to avoid the 30s HIGH delay from active rate limits.
         """
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coordinator = integration_setup["coordinator"]
 
@@ -2223,7 +2223,7 @@ class TestTripleComponentIntegration:
         """Multiple workers dispatching while pressure fluctuates."""
         from unittest.mock import patch
 
-        from mozart.daemon.monitor import ResourceMonitor
+        from marianne.daemon.monitor import ResourceMonitor
 
         scheduler = integration_setup["scheduler"]
 

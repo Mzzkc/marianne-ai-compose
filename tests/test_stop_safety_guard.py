@@ -31,7 +31,7 @@ class TestCheckRunningJobs:
 
     def test_returns_running_count(self) -> None:
         """Returns running_jobs count from readiness probe."""
-        from mozart.daemon.process import _check_running_jobs
+        from marianne.daemon.process import _check_running_jobs
 
         mock_client = MagicMock(spec=["readiness"])
         mock_client.readiness = AsyncMock(
@@ -40,11 +40,11 @@ class TestCheckRunningJobs:
 
         with (
             patch(
-                "mozart.daemon.ipc.client.DaemonClient",
+                "marianne.daemon.ipc.client.DaemonClient",
                 return_value=mock_client,
             ),
             patch(
-                "mozart.daemon.detect._resolve_socket_path",
+                "marianne.daemon.detect._resolve_socket_path",
                 return_value=Path("/tmp/test.sock"),
             ),
         ):
@@ -55,15 +55,15 @@ class TestCheckRunningJobs:
 
     def test_returns_none_on_ipc_failure(self) -> None:
         """Returns None when IPC connection fails."""
-        from mozart.daemon.process import _check_running_jobs
+        from marianne.daemon.process import _check_running_jobs
 
         with (
             patch(
-                "mozart.daemon.ipc.client.DaemonClient",
+                "marianne.daemon.ipc.client.DaemonClient",
                 side_effect=ConnectionError("refused"),
             ),
             patch(
-                "mozart.daemon.detect._resolve_socket_path",
+                "marianne.daemon.detect._resolve_socket_path",
                 return_value=Path("/tmp/test.sock"),
             ),
         ):
@@ -73,7 +73,7 @@ class TestCheckRunningJobs:
 
     def test_returns_zero_when_no_jobs(self) -> None:
         """Returns running_jobs=0 when conductor has no running jobs."""
-        from mozart.daemon.process import _check_running_jobs
+        from marianne.daemon.process import _check_running_jobs
 
         mock_client = MagicMock(spec=["readiness"])
         mock_client.readiness = AsyncMock(
@@ -82,11 +82,11 @@ class TestCheckRunningJobs:
 
         with (
             patch(
-                "mozart.daemon.ipc.client.DaemonClient",
+                "marianne.daemon.ipc.client.DaemonClient",
                 return_value=mock_client,
             ),
             patch(
-                "mozart.daemon.detect._resolve_socket_path",
+                "marianne.daemon.detect._resolve_socket_path",
                 return_value=Path("/tmp/test.sock"),
             ),
         ):
@@ -109,11 +109,11 @@ class TestStopConductorSafety:
         """Mock PID file and process existence."""
         with (
             patch(
-                "mozart.daemon.process._read_pid",
+                "marianne.daemon.process._read_pid",
                 return_value=12345,
             ),
             patch(
-                "mozart.daemon.process._pid_alive",
+                "marianne.daemon.process._pid_alive",
                 return_value=True,
             ),
         ):
@@ -121,15 +121,15 @@ class TestStopConductorSafety:
 
     def test_warns_when_jobs_running(self) -> None:
         """Shows warning when jobs are running and user declines."""
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
             patch(
-                "mozart.daemon.process._check_running_jobs",
+                "marianne.daemon.process._check_running_jobs",
                 return_value={"running_jobs": 2, "job_ids": ["j1", "j2"]},
             ),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
-            patch("mozart.daemon.process.typer.confirm", return_value=False),
+            patch("marianne.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.typer.confirm", return_value=False),
             pytest.raises((SystemExit, BaseException)),
         ):
             stop_conductor()
@@ -138,15 +138,15 @@ class TestStopConductorSafety:
 
     def test_proceeds_when_user_confirms(self) -> None:
         """Proceeds when user confirms despite running jobs."""
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
             patch(
-                "mozart.daemon.process._check_running_jobs",
+                "marianne.daemon.process._check_running_jobs",
                 return_value={"running_jobs": 2, "job_ids": ["j1", "j2"]},
             ),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
-            patch("mozart.daemon.process.typer.confirm", return_value=True),
+            patch("marianne.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.typer.confirm", return_value=True),
         ):
             stop_conductor()
 
@@ -154,15 +154,15 @@ class TestStopConductorSafety:
 
     def test_no_prompt_when_no_jobs(self) -> None:
         """No confirmation prompt when no jobs are running."""
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
             patch(
-                "mozart.daemon.process._check_running_jobs",
+                "marianne.daemon.process._check_running_jobs",
                 return_value={"running_jobs": 0, "job_ids": []},
             ),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
-            patch("mozart.daemon.process.typer.confirm") as mock_confirm,
+            patch("marianne.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.typer.confirm") as mock_confirm,
         ):
             stop_conductor()
 
@@ -171,13 +171,13 @@ class TestStopConductorSafety:
 
     def test_force_skips_check(self) -> None:
         """--force skips the running jobs check entirely."""
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
             patch(
-                "mozart.daemon.process._check_running_jobs",
+                "marianne.daemon.process._check_running_jobs",
             ) as mock_check,
-            patch("mozart.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
             stop_conductor(force=True)
 
@@ -186,15 +186,15 @@ class TestStopConductorSafety:
 
     def test_ipc_failure_proceeds(self) -> None:
         """When IPC check fails (returns None), stop proceeds."""
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
             patch(
-                "mozart.daemon.process._check_running_jobs",
+                "marianne.daemon.process._check_running_jobs",
                 return_value=None,
             ),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
-            patch("mozart.daemon.process.typer.confirm") as mock_confirm,
+            patch("marianne.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.typer.confirm") as mock_confirm,
         ):
             stop_conductor()
 
@@ -205,10 +205,10 @@ class TestStopConductorSafety:
         """--force sends SIGKILL instead of SIGTERM."""
         import signal
 
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
-            patch("mozart.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
             stop_conductor(force=True)
 
@@ -218,14 +218,14 @@ class TestStopConductorSafety:
         """Normal stop sends SIGTERM."""
         import signal
 
-        from mozart.daemon.process import stop_conductor
+        from marianne.daemon.process import stop_conductor
 
         with (
             patch(
-                "mozart.daemon.process._check_running_jobs",
+                "marianne.daemon.process._check_running_jobs",
                 return_value={"running_jobs": 0, "job_ids": []},
             ),
-            patch("mozart.daemon.process.os.kill") as mock_kill,
+            patch("marianne.daemon.process.os.kill") as mock_kill,
         ):
             stop_conductor()
 

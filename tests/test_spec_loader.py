@@ -22,8 +22,8 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from mozart.core.config.spec import SpecFragment
-from mozart.spec.loader import SpecCorpusError, SpecCorpusLoader
+from marianne.core.config.spec import SpecFragment
+from marianne.spec.loader import SpecCorpusError, SpecCorpusLoader
 
 
 # --- Happy Path: Valid YAML Files ---
@@ -665,7 +665,7 @@ class TestSpecLoaderAdversarial:
         claude_path.write_bytes(b"\x80\x81\x82\x83")  # invalid UTF-8
 
         # The loader should catch the UnicodeDecodeError and return None
-        with patch("mozart.spec.loader._logger"):
+        with patch("marianne.spec.loader._logger"):
             fragment = SpecCorpusLoader.load_claude_md(tmp_path)
         assert fragment is None
 

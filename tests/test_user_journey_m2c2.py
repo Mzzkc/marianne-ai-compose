@@ -21,13 +21,13 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.core.config.job import InstrumentDef, JobConfig, MovementDef
-from mozart.core.sheet import Sheet, build_sheets
-from mozart.daemon.baton.adapter import BatonAdapter
-from mozart.daemon.baton.events import DispatchRetry, SheetAttemptResult
-from mozart.daemon.baton.state import BatonSheetStatus
-from mozart.utils.credential_scanner import redact_credentials
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.config.job import InstrumentDef, JobConfig, MovementDef
+from marianne.core.sheet import Sheet, build_sheets
+from marianne.daemon.baton.adapter import BatonAdapter
+from marianne.daemon.baton.events import DispatchRetry, SheetAttemptResult
+from marianne.daemon.baton.state import BatonSheetStatus
+from marianne.utils.credential_scanner import redact_credentials
 
 
 # =========================================================================

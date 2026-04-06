@@ -14,11 +14,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.config.execution import ValidationRule
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.musician import _build_prompt
-from mozart.daemon.baton.state import AttemptContext, AttemptMode
+from marianne.core.config.execution import ValidationRule
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.musician import _build_prompt
+from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
 
 # =============================================================================
@@ -260,7 +260,7 @@ class TestValidationInjection:
 
 class TestPreludeCadenzaInjection:
     def test_prelude_context_injected(self, tmp_path: Path) -> None:
-        from mozart.core.config.job import InjectionCategory, InjectionItem
+        from marianne.core.config.job import InjectionCategory, InjectionItem
 
         prelude_file = tmp_path / "context.md"
         prelude_file.write_text("This is shared context for all sheets.")
@@ -276,7 +276,7 @@ class TestPreludeCadenzaInjection:
         assert "This is shared context for all sheets." in prompt
 
     def test_missing_injection_file_skipped(self) -> None:
-        from mozart.core.config.job import InjectionCategory, InjectionItem
+        from marianne.core.config.job import InjectionCategory, InjectionItem
 
         sheet = _make_sheet(prompt_template="Do the work")
         sheet_dict = sheet.model_dump()
@@ -327,7 +327,7 @@ class TestAttemptContextBackwardCompat:
 class TestSheetTaskIntegration:
     @pytest.mark.asyncio
     async def test_sheet_task_renders_template(self) -> None:
-        from mozart.daemon.baton.musician import sheet_task
+        from marianne.daemon.baton.musician import sheet_task
 
         sheet = _make_sheet(
             prompt_template="Work in {{ workspace }}",

@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
@@ -34,7 +34,7 @@ class TestDoctorCommandExists:
     def test_doctor_runs_without_conductor(self) -> None:
         """Doctor should work even when the conductor is not running."""
         with patch(
-            "mozart.cli.commands.doctor._check_conductor_status",
+            "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("not running", None),
         ):
             result = runner.invoke(app, ["doctor"])
@@ -44,7 +44,7 @@ class TestDoctorCommandExists:
     def test_doctor_shows_python_version(self) -> None:
         """Doctor should display the Python version."""
         with patch(
-            "mozart.cli.commands.doctor._check_conductor_status",
+            "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("not running", None),
         ):
             result = runner.invoke(app, ["doctor"])
@@ -53,7 +53,7 @@ class TestDoctorCommandExists:
     def test_doctor_shows_mozart_version(self) -> None:
         """Doctor should display the Mozart version."""
         with patch(
-            "mozart.cli.commands.doctor._check_conductor_status",
+            "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("not running", None),
         ):
             result = runner.invoke(app, ["doctor"])
@@ -71,7 +71,7 @@ class TestDoctorConductorChecks:
     def test_conductor_running_shown(self) -> None:
         """Doctor should report when the conductor is running."""
         with patch(
-            "mozart.cli.commands.doctor._check_conductor_status",
+            "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("running", 12345),
         ):
             result = runner.invoke(app, ["doctor"])
@@ -81,7 +81,7 @@ class TestDoctorConductorChecks:
     def test_conductor_not_running_shown(self) -> None:
         """Doctor should report when the conductor is not running."""
         with patch(
-            "mozart.cli.commands.doctor._check_conductor_status",
+            "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("not running", None),
         ):
             result = runner.invoke(app, ["doctor"])
@@ -100,7 +100,7 @@ class TestDoctorInstrumentChecks:
     def test_native_instruments_listed(self) -> None:
         """Doctor should list the native instruments."""
         with patch(
-            "mozart.cli.commands.doctor._check_conductor_status",
+            "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("not running", None),
         ):
             result = runner.invoke(app, ["doctor"])
@@ -111,7 +111,7 @@ class TestDoctorInstrumentChecks:
         """Doctor should mark instruments as ready when their binary is on PATH."""
         with (
             patch(
-                "mozart.cli.commands.doctor._check_conductor_status",
+                "marianne.cli.commands.doctor._check_conductor_status",
                 return_value=("not running", None),
             ),
             patch("shutil.which", return_value="/usr/local/bin/claude"),
@@ -123,7 +123,7 @@ class TestDoctorInstrumentChecks:
         """Doctor should report when an instrument binary is not found."""
         with (
             patch(
-                "mozart.cli.commands.doctor._check_conductor_status",
+                "marianne.cli.commands.doctor._check_conductor_status",
                 return_value=("not running", None),
             ),
             patch("shutil.which", return_value=None),
@@ -144,7 +144,7 @@ class TestDoctorSafetyChecks:
     def test_no_cost_limits_warning(self) -> None:
         """Doctor should warn if no cost limits are configured by default."""
         with patch(
-            "mozart.cli.commands.doctor._check_conductor_status",
+            "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("not running", None),
         ):
             result = runner.invoke(app, ["doctor"])
@@ -165,7 +165,7 @@ class TestDoctorJsonOutput:
         import json
 
         with patch(
-            "mozart.cli.commands.doctor._check_conductor_status",
+            "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("not running", None),
         ):
             result = runner.invoke(app, ["doctor", "--json"])
@@ -188,7 +188,7 @@ class TestDoctorSummary:
     def test_summary_shows_ready(self) -> None:
         """Doctor should show a summary indicating readiness."""
         with patch(
-            "mozart.cli.commands.doctor._check_conductor_status",
+            "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("running", 12345),
         ):
             result = runner.invoke(app, ["doctor"])
@@ -211,14 +211,14 @@ class TestDoctorSocketFallback:
 
         with (
             patch(
-                "mozart.cli.commands.doctor._check_pid_file",
+                "marianne.cli.commands.doctor._check_pid_file",
                 return_value=None,
             ),
             patch(
-                "mozart.daemon.detect._resolve_socket_path",
+                "marianne.daemon.detect._resolve_socket_path",
             ) as mock_resolve,
             patch(
-                "mozart.daemon.ipc.client.DaemonClient",
+                "marianne.daemon.ipc.client.DaemonClient",
             ) as mock_client_cls,
         ):
             # Socket exists
@@ -230,7 +230,7 @@ class TestDoctorSocketFallback:
             mock_instance.is_daemon_running = AsyncMock(return_value=True)
             mock_client_cls.return_value = mock_instance
 
-            from mozart.cli.commands.doctor import _check_conductor_status
+            from marianne.cli.commands.doctor import _check_conductor_status
 
             status, pid = _check_conductor_status()
             assert status == "running"
@@ -241,17 +241,17 @@ class TestDoctorSocketFallback:
         """When both PID file and socket are missing, report not running."""
         with (
             patch(
-                "mozart.cli.commands.doctor._check_pid_file",
+                "marianne.cli.commands.doctor._check_pid_file",
                 return_value=None,
             ),
             patch(
-                "mozart.daemon.detect._resolve_socket_path",
+                "marianne.daemon.detect._resolve_socket_path",
             ) as mock_resolve,
         ):
             mock_path = type("MockPath", (), {"exists": lambda self: False})()
             mock_resolve.return_value = mock_path
 
-            from mozart.cli.commands.doctor import _check_conductor_status
+            from marianne.cli.commands.doctor import _check_conductor_status
 
             status, pid = _check_conductor_status()
             assert status == "not running"
@@ -260,10 +260,10 @@ class TestDoctorSocketFallback:
     def test_pid_found_skips_socket_probe(self) -> None:
         """When PID file check succeeds, skip the socket probe."""
         with patch(
-            "mozart.cli.commands.doctor._check_pid_file",
+            "marianne.cli.commands.doctor._check_pid_file",
             return_value=12345,
         ):
-            from mozart.cli.commands.doctor import _check_conductor_status
+            from marianne.cli.commands.doctor import _check_conductor_status
 
             status, pid = _check_conductor_status()
             assert status == "running"
@@ -280,11 +280,11 @@ class TestDoctorCloneAwareness:
 
     def test_pid_check_uses_clone_path(self) -> None:
         """_check_pid_file should use clone PID file when clone is active."""
-        from mozart.daemon.clone import set_clone_name
+        from marianne.daemon.clone import set_clone_name
 
         set_clone_name("doctor-test")
         try:
-            from mozart.cli.commands.doctor import _check_pid_file
+            from marianne.cli.commands.doctor import _check_pid_file
 
             # Clone PID file doesn't exist → returns None
             pid = _check_pid_file()

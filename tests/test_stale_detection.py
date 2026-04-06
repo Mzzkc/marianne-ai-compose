@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.backends.base import Backend, ExecutionResult
-from mozart.core.config import JobConfig
-from mozart.core.config.execution import StaleDetectionConfig
-from mozart.execution.runner.sheet import SheetExecutionMixin, _StaleExecutionError
+from marianne.backends.base import Backend, ExecutionResult
+from marianne.core.config import JobConfig
+from marianne.core.config.execution import StaleDetectionConfig
+from marianne.execution.runner.sheet import SheetExecutionMixin, _StaleExecutionError
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ class TestStaleDetectionInJobConfig:
     """Tests that stale_detection integrates into JobConfig correctly."""
 
     def test_default_stale_detection_in_job(self) -> None:
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config = JobConfig(
             name="test-job",
@@ -102,7 +102,7 @@ class TestStaleDetectionInJobConfig:
         assert config.stale_detection.idle_timeout_seconds == 300.0
 
     def test_stale_detection_from_yaml(self) -> None:
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config = JobConfig.from_yaml_string("""
 name: test-stale
@@ -121,7 +121,7 @@ stale_detection:
         assert config.stale_detection.check_interval_seconds == 15.0
 
     def test_invalid_stale_detection_in_yaml(self) -> None:
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         with pytest.raises(ValueError):
             JobConfig.from_yaml_string("""
@@ -171,7 +171,7 @@ class _MinimalRunner(SheetExecutionMixin):
         self,
         stale_config: StaleDetectionConfig | None = None,
     ) -> None:
-        from mozart.core.logging import get_logger
+        from marianne.core.logging import get_logger
 
         self.config = MagicMock(spec=JobConfig)
         self.config.stale_detection = stale_config or StaleDetectionConfig()

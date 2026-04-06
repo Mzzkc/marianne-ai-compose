@@ -15,15 +15,15 @@ import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from mozart.core.config import JobConfig
-from mozart.core.config.execution import ParallelConfig
-from mozart.core.config.workspace import IsolationConfig
+from marianne.core.config import JobConfig
+from marianne.core.config.execution import ParallelConfig
+from marianne.core.config.workspace import IsolationConfig
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState
-from mozart.execution.parallel import ParallelBatchResult
-from mozart.execution.synthesizer import (
+from marianne.core.checkpoint import CheckpointState
+from marianne.execution.parallel import ParallelBatchResult
+from marianne.execution.synthesizer import (
     ResultSynthesizer,
     SynthesisConfig,
     SynthesisResult,
@@ -673,7 +673,7 @@ class TestSynthesizerRunnerIntegration:
     @pytest.mark.asyncio
     async def test_runner_synthesize_batch_outputs(self):
         """Test _synthesize_batch_outputs method integration."""
-        from mozart.execution.runner import JobRunner
+        from marianne.execution.runner import JobRunner
 
         # This is a smoke test to ensure the method exists and can be called
         # Full integration requires backend setup
@@ -700,7 +700,7 @@ class TestCLISynthesisDisplay:
 
     def test_status_rich_shows_synthesis(self):
         """_output_status_rich includes synthesis section."""
-        from mozart.cli import _output_status_rich
+        from marianne.cli import _output_status_rich
 
         state = CheckpointState(
             job_id="test-job",
@@ -717,7 +717,7 @@ class TestCLISynthesisDisplay:
         }
 
         # Capture output - patch where console is used, not where it's re-exported
-        with patch("mozart.cli.commands.status.console") as mock_console:
+        with patch("marianne.cli.commands.status.console") as mock_console:
             _output_status_rich(state)
 
             # Find synthesis section in calls
@@ -732,7 +732,7 @@ class TestCLISynthesisDisplay:
 
     def test_status_rich_skips_empty_synthesis(self):
         """_output_status_rich skips synthesis when empty."""
-        from mozart.cli import _output_status_rich
+        from marianne.cli import _output_status_rich
 
         state = CheckpointState(
             job_id="test-job",
@@ -743,7 +743,7 @@ class TestCLISynthesisDisplay:
         # Empty synthesis_results
         state.synthesis_results = {}
 
-        with patch("mozart.cli.commands.status.console") as mock_console:
+        with patch("marianne.cli.commands.status.console") as mock_console:
             _output_status_rich(state)
 
             call_args_list = mock_console.print.call_args_list
@@ -766,7 +766,7 @@ class TestOutputConflict:
 
     def test_create_conflict(self) -> None:
         """Test creating an output conflict."""
-        from mozart.execution.synthesizer import OutputConflict
+        from marianne.execution.synthesizer import OutputConflict
 
         conflict = OutputConflict(
             key="STATUS",
@@ -786,7 +786,7 @@ class TestOutputConflict:
 
     def test_format_message(self) -> None:
         """Test format_message produces readable output."""
-        from mozart.execution.synthesizer import OutputConflict
+        from marianne.execution.synthesizer import OutputConflict
 
         conflict = OutputConflict(
             key="VERSION",
@@ -809,7 +809,7 @@ class TestConflictDetectionResult:
 
     def test_empty_result(self) -> None:
         """Test empty result has no conflicts."""
-        from mozart.execution.synthesizer import ConflictDetectionResult
+        from marianne.execution.synthesizer import ConflictDetectionResult
 
         result = ConflictDetectionResult()
 
@@ -820,7 +820,7 @@ class TestConflictDetectionResult:
 
     def test_result_with_conflicts(self) -> None:
         """Test result with conflicts."""
-        from mozart.execution.synthesizer import (
+        from marianne.execution.synthesizer import (
             ConflictDetectionResult,
             OutputConflict,
         )
@@ -847,7 +847,7 @@ class TestConflictDetectionResult:
 
     def test_to_dict(self) -> None:
         """Test to_dict serialization."""
-        from mozart.execution.synthesizer import (
+        from marianne.execution.synthesizer import (
             ConflictDetectionResult,
             OutputConflict,
         )
@@ -877,7 +877,7 @@ class TestConflictDetector:
 
     def test_detect_no_conflicts(self) -> None:
         """Test detecting when there are no conflicts."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {
             1: "STATUS: complete\nVERSION: 1.0",
@@ -893,7 +893,7 @@ class TestConflictDetector:
 
     def test_detect_single_conflict(self) -> None:
         """Test detecting a single conflict."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {
             1: "STATUS: complete\nVERSION: 1.0",
@@ -911,7 +911,7 @@ class TestConflictDetector:
 
     def test_detect_multiple_conflicts(self) -> None:
         """Test detecting multiple conflicts."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {
             1: "STATUS: complete\nVERSION: 1.0",
@@ -925,7 +925,7 @@ class TestConflictDetector:
 
     def test_detect_with_key_filter(self) -> None:
         """Test key filter restricts conflict detection."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {
             1: "STATUS: a\nVERSION: 1",
@@ -941,7 +941,7 @@ class TestConflictDetector:
 
     def test_detect_strict_mode(self) -> None:
         """Test strict mode marks conflicts as errors."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {
             1: "STATUS: a",
@@ -955,7 +955,7 @@ class TestConflictDetector:
 
     def test_detect_non_strict_mode(self) -> None:
         """Test non-strict mode marks conflicts as warnings."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {
             1: "STATUS: a",
@@ -969,7 +969,7 @@ class TestConflictDetector:
 
     def test_detect_case_insensitive(self) -> None:
         """Test case-insensitive value comparison."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {
             1: "STATUS: Complete",
@@ -984,7 +984,7 @@ class TestConflictDetector:
 
     def test_detect_single_sheet(self) -> None:
         """Test with single sheet returns no conflicts."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {1: "STATUS: complete"}
 
@@ -996,7 +996,7 @@ class TestConflictDetector:
 
     def test_detect_empty_outputs(self) -> None:
         """Test with empty outputs."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         detector = ConflictDetector()
         result = detector.detect_conflicts({})
@@ -1010,7 +1010,7 @@ class TestConflictDetector:
         Uses canonical reference comparison (first sheet vs all others),
         so 1 vs 3 conflict is detected (reference vs differing sheet).
         """
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {
             1: "STATUS: a",
@@ -1030,7 +1030,7 @@ class TestConflictDetector:
 
     def test_detect_disjoint_keys(self) -> None:
         """Test sheets with no common keys have no conflicts."""
-        from mozart.execution.synthesizer import ConflictDetector
+        from marianne.execution.synthesizer import ConflictDetector
 
         outputs = {
             1: "STATUS: a",
@@ -1048,7 +1048,7 @@ class TestDetectParallelConflicts:
 
     def test_convenience_function(self) -> None:
         """Test the convenience function works."""
-        from mozart.execution.synthesizer import detect_parallel_conflicts
+        from marianne.execution.synthesizer import detect_parallel_conflicts
 
         outputs = {
             1: "STATUS: a",
@@ -1061,7 +1061,7 @@ class TestDetectParallelConflicts:
 
     def test_convenience_with_key_filter(self) -> None:
         """Test convenience function with key filter."""
-        from mozart.execution.synthesizer import detect_parallel_conflicts
+        from marianne.execution.synthesizer import detect_parallel_conflicts
 
         outputs = {
             1: "STATUS: a\nVERSION: 1",
@@ -1074,7 +1074,7 @@ class TestDetectParallelConflicts:
 
     def test_convenience_with_strict_mode(self) -> None:
         """Test convenience function with strict mode."""
-        from mozart.execution.synthesizer import detect_parallel_conflicts
+        from marianne.execution.synthesizer import detect_parallel_conflicts
 
         outputs = {
             1: "STATUS: a",

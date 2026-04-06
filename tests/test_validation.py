@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.core.config import ValidationRule
-from mozart.execution.validation import (
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.config import ValidationRule
+from marianne.execution.validation import (
     FailureHistoryStore,
     HistoricalFailure,
     SheetValidationResult,
@@ -1007,7 +1007,7 @@ class TestKeyVariable:
 
     def test_create_key_variable(self) -> None:
         """Test creating a key variable."""
-        from mozart.execution.validation import KeyVariable
+        from marianne.execution.validation import KeyVariable
 
         kv = KeyVariable(
             key="STATUS",
@@ -1023,7 +1023,7 @@ class TestKeyVariable:
 
     def test_key_variable_minimal(self) -> None:
         """Test creating key variable with minimal info."""
-        from mozart.execution.validation import KeyVariable
+        from marianne.execution.validation import KeyVariable
 
         kv = KeyVariable(key="COUNT", value="42")
 
@@ -1038,7 +1038,7 @@ class TestSemanticInconsistency:
 
     def test_create_inconsistency(self) -> None:
         """Test creating a semantic inconsistency."""
-        from mozart.execution.validation import SemanticInconsistency
+        from marianne.execution.validation import SemanticInconsistency
 
         inc = SemanticInconsistency(
             key="STATUS",
@@ -1058,7 +1058,7 @@ class TestSemanticInconsistency:
 
     def test_format_message(self) -> None:
         """Test format_message produces readable output."""
-        from mozart.execution.validation import SemanticInconsistency
+        from marianne.execution.validation import SemanticInconsistency
 
         inc = SemanticInconsistency(
             key="VERSION",
@@ -1081,7 +1081,7 @@ class TestSemanticConsistencyResult:
 
     def test_empty_result(self) -> None:
         """Test empty result is consistent."""
-        from mozart.execution.validation import SemanticConsistencyResult
+        from marianne.execution.validation import SemanticConsistencyResult
 
         result = SemanticConsistencyResult()
 
@@ -1092,7 +1092,7 @@ class TestSemanticConsistencyResult:
 
     def test_result_with_inconsistencies(self) -> None:
         """Test result with inconsistencies."""
-        from mozart.execution.validation import (
+        from marianne.execution.validation import (
             SemanticConsistencyResult,
             SemanticInconsistency,
         )
@@ -1119,7 +1119,7 @@ class TestSemanticConsistencyResult:
 
     def test_to_dict(self) -> None:
         """Test to_dict serialization."""
-        from mozart.execution.validation import (
+        from marianne.execution.validation import (
             SemanticConsistencyResult,
             SemanticInconsistency,
         )
@@ -1149,7 +1149,7 @@ class TestKeyVariableExtractor:
 
     def test_extract_colon_separated(self) -> None:
         """Test extracting KEY: VALUE format."""
-        from mozart.execution.validation import KeyVariableExtractor
+        from marianne.execution.validation import KeyVariableExtractor
 
         content = """
 STATUS: complete
@@ -1165,7 +1165,7 @@ COUNT: 42
 
     def test_extract_equals_separated(self) -> None:
         """Test extracting KEY=VALUE format."""
-        from mozart.execution.validation import KeyVariableExtractor
+        from marianne.execution.validation import KeyVariableExtractor
 
         content = """
 STATUS=complete
@@ -1182,7 +1182,7 @@ COUNT=42
 
     def test_extract_mixed_formats(self) -> None:
         """Test extracting mixed formats."""
-        from mozart.execution.validation import KeyVariableExtractor
+        from marianne.execution.validation import KeyVariableExtractor
 
         content = """
 STATUS: complete
@@ -1197,7 +1197,7 @@ COUNT = 10
 
     def test_extract_with_filter(self) -> None:
         """Test key filter restricts extraction."""
-        from mozart.execution.validation import KeyVariableExtractor
+        from marianne.execution.validation import KeyVariableExtractor
 
         content = """
 STATUS: complete
@@ -1213,7 +1213,7 @@ COUNT: 42
 
     def test_extract_empty_content(self) -> None:
         """Test extracting from empty content."""
-        from mozart.execution.validation import KeyVariableExtractor
+        from marianne.execution.validation import KeyVariableExtractor
 
         extractor = KeyVariableExtractor()
         variables = extractor.extract("")
@@ -1222,7 +1222,7 @@ COUNT: 42
 
     def test_extract_no_matches(self) -> None:
         """Test extracting when no key-value pairs exist."""
-        from mozart.execution.validation import KeyVariableExtractor
+        from marianne.execution.validation import KeyVariableExtractor
 
         content = "This is just regular text without any key-value pairs."
         extractor = KeyVariableExtractor()
@@ -1232,7 +1232,7 @@ COUNT: 42
 
     def test_extract_preserves_value_whitespace(self) -> None:
         """Test that values with spaces are preserved."""
-        from mozart.execution.validation import KeyVariableExtractor
+        from marianne.execution.validation import KeyVariableExtractor
 
         content = "STATUS: value with spaces"
         extractor = KeyVariableExtractor()
@@ -1243,7 +1243,7 @@ COUNT: 42
 
     def test_extract_ignores_lowercase_keys(self) -> None:
         """Test that lowercase keys are ignored."""
-        from mozart.execution.validation import KeyVariableExtractor
+        from marianne.execution.validation import KeyVariableExtractor
 
         content = """
 status: ignored
@@ -1259,7 +1259,7 @@ STATUS: valid
 
     def test_extract_deduplicates_keys(self) -> None:
         """Test that duplicate keys return only first occurrence."""
-        from mozart.execution.validation import KeyVariableExtractor
+        from marianne.execution.validation import KeyVariableExtractor
 
         content = """
 STATUS: first
@@ -1277,7 +1277,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_consistent_outputs(self) -> None:
         """Test checking consistent outputs."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {
             1: "STATUS: complete\nVERSION: 1.0",
@@ -1293,7 +1293,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_inconsistent_outputs(self) -> None:
         """Test checking inconsistent outputs."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {
             1: "STATUS: running\nVERSION: 1.0",
@@ -1311,7 +1311,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_multiple_inconsistencies(self) -> None:
         """Test detecting multiple inconsistencies."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {
             1: "STATUS: running\nVERSION: 1.0",
@@ -1325,7 +1325,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_sequential_only(self) -> None:
         """Test sequential_only comparison mode."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {
             1: "STATUS: a",
@@ -1344,7 +1344,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_all_pairs(self) -> None:
         """Test all pairs comparison mode."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {
             1: "STATUS: a",
@@ -1361,7 +1361,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_strict_mode(self) -> None:
         """Test strict mode marks inconsistencies as errors."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {
             1: "STATUS: a",
@@ -1375,7 +1375,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_non_strict_mode(self) -> None:
         """Test non-strict mode marks inconsistencies as warnings."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {
             1: "STATUS: a",
@@ -1389,7 +1389,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_case_insensitive_values(self) -> None:
         """Test that value comparison is case-insensitive."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {
             1: "STATUS: Complete",
@@ -1404,7 +1404,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_single_sheet(self) -> None:
         """Test checking with single sheet returns consistent."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {1: "STATUS: complete"}
 
@@ -1416,7 +1416,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_empty_outputs(self) -> None:
         """Test checking empty outputs."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         checker = SemanticConsistencyChecker()
         result = checker.check_consistency({})
@@ -1426,7 +1426,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_disjoint_keys(self) -> None:
         """Test sheets with no common keys are consistent."""
-        from mozart.execution.validation import SemanticConsistencyChecker
+        from marianne.execution.validation import SemanticConsistencyChecker
 
         outputs = {
             1: "STATUS: a",
@@ -1441,7 +1441,7 @@ class TestSemanticConsistencyChecker:
 
     def test_check_custom_extractor(self) -> None:
         """Test using custom extractor."""
-        from mozart.execution.validation import (
+        from marianne.execution.validation import (
             KeyVariableExtractor,
             SemanticConsistencyChecker,
         )

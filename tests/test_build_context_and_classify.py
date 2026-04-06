@@ -11,13 +11,13 @@ analysis, and regex fallback paths.
 import json
 from unittest.mock import AsyncMock
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.checkpoint import CheckpointState
-from mozart.core.config import JobConfig
-from mozart.core.errors.classifier import ErrorClassifier
-from mozart.core.errors.codes import ErrorCategory, ErrorCode
-from mozart.core.errors.models import ClassificationResult
-from mozart.execution.runner import JobRunner
+from marianne.backends.base import ExecutionResult
+from marianne.core.checkpoint import CheckpointState
+from marianne.core.config import JobConfig
+from marianne.core.errors.classifier import ErrorClassifier
+from marianne.core.errors.codes import ErrorCategory, ErrorCode
+from marianne.core.errors.models import ClassificationResult
+from marianne.execution.runner import JobRunner
 
 
 def _make_config(**overrides: object) -> JobConfig:

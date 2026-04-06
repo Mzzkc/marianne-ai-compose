@@ -15,9 +15,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config.job import JobConfig
-from mozart.execution.runner.lifecycle import LifecycleMixin
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config.job import JobConfig
+from marianne.execution.runner.lifecycle import LifecycleMixin
 
 
 def _make_runner(

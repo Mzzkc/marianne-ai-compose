@@ -10,14 +10,14 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from mozart.daemon.config import (
+from marianne.daemon.config import (
     DaemonConfig,
     ObserverConfig,
     ResourceLimitConfig,
     SemanticLearningConfig,
     SocketConfig,
 )
-from mozart.daemon.profiler.models import (
+from marianne.daemon.profiler.models import (
     AnomalyConfig,
     CorrelationConfig,
     ProfilerConfig,

@@ -18,8 +18,8 @@ These tests verify:
 Created by Ghost, Movement 1.
 """
 
-from mozart.core.errors.classifier import ErrorClassifier
-from mozart.core.errors.codes import ErrorCategory
+from marianne.core.errors.classifier import ErrorClassifier
+from marianne.core.errors.codes import ErrorCategory
 
 
 class TestClassifyExecutionExitNone:

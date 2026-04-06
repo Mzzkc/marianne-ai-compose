@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import ValidationError
 
-from mozart.daemon.config import ObserverConfig
-from mozart.daemon.observer_recorder import ObserverRecorder
-from mozart.daemon.types import ObserverEvent
+from marianne.daemon.config import ObserverConfig
+from marianne.daemon.observer_recorder import ObserverRecorder
+from marianne.daemon.types import ObserverEvent
 
 
 @pytest.fixture(autouse=True)
@@ -744,8 +744,8 @@ class TestObserverEventsIPC:
         """Register RPC methods and extract the handler for *method_name*."""
         from unittest.mock import MagicMock
 
-        from mozart.daemon.config import DaemonConfig
-        from mozart.daemon.process import DaemonProcess
+        from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.process import DaemonProcess
 
         config = DaemonConfig()
         dp = DaemonProcess(config)
@@ -763,8 +763,8 @@ class TestObserverEventsIPC:
         """daemon.observer_events must be in registered RPC methods."""
         from unittest.mock import MagicMock
 
-        from mozart.daemon.config import DaemonConfig
-        from mozart.daemon.process import DaemonProcess
+        from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.process import DaemonProcess
 
         config = DaemonConfig()
         dp = DaemonProcess(config)

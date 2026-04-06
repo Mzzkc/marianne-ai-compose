@@ -32,7 +32,7 @@ class TestRateLimitCoordinatorClearLimits:
     @pytest.mark.asyncio
     async def test_clear_all_limits(self) -> None:
         """clear_limits() with no instrument clears all active limits."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -47,7 +47,7 @@ class TestRateLimitCoordinatorClearLimits:
     @pytest.mark.asyncio
     async def test_clear_specific_instrument(self) -> None:
         """clear_limits(instrument='X') clears only that instrument's limit."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -61,7 +61,7 @@ class TestRateLimitCoordinatorClearLimits:
     @pytest.mark.asyncio
     async def test_clear_nonexistent_instrument(self) -> None:
         """clear_limits() on an instrument with no active limit returns 0."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -73,7 +73,7 @@ class TestRateLimitCoordinatorClearLimits:
     @pytest.mark.asyncio
     async def test_clear_already_empty(self) -> None:
         """clear_limits() when no limits are active returns 0."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         cleared = await coord.clear_limits()
@@ -82,7 +82,7 @@ class TestRateLimitCoordinatorClearLimits:
     @pytest.mark.asyncio
     async def test_clear_preserves_event_history(self) -> None:
         """clear_limits() removes active limits but preserves event history."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -105,7 +105,7 @@ class TestManagerClearRateLimits:
     @pytest.mark.asyncio
     async def test_clears_coordinator_limits(self) -> None:
         """clear_rate_limits() calls coordinator.clear_limits()."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -115,7 +115,7 @@ class TestManagerClearRateLimits:
         mgr._baton_adapter = None
         mgr._start_pending_jobs = AsyncMock()
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         result = await JobManager.clear_rate_limits.__get__(mgr, JobManager)(
             instrument=None,
@@ -127,7 +127,7 @@ class TestManagerClearRateLimits:
     @pytest.mark.asyncio
     async def test_clears_baton_instrument_state(self) -> None:
         """clear_rate_limits() clears baton InstrumentState when baton is active."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -141,7 +141,7 @@ class TestManagerClearRateLimits:
         mgr._baton_adapter = baton_adapter
         mgr._start_pending_jobs = AsyncMock()
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         result = await JobManager.clear_rate_limits.__get__(mgr, JobManager)(
             instrument="claude-cli",
@@ -154,7 +154,7 @@ class TestManagerClearRateLimits:
     @pytest.mark.asyncio
     async def test_returns_summary(self) -> None:
         """clear_rate_limits() returns a summary dict."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -165,7 +165,7 @@ class TestManagerClearRateLimits:
         mgr._baton_adapter = None
         mgr._start_pending_jobs = AsyncMock()
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         result = await JobManager.clear_rate_limits.__get__(mgr, JobManager)(
             instrument=None,
@@ -187,8 +187,8 @@ class TestBatonCoreClearRateLimit:
 
     def test_clear_specific_instrument(self) -> None:
         """clear_instrument_rate_limit('X') clears that instrument's rate limit."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import InstrumentState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import InstrumentState
 
         core = BatonCore()
         core._instruments = {
@@ -216,8 +216,8 @@ class TestBatonCoreClearRateLimit:
 
     def test_clear_all_instruments(self) -> None:
         """clear_instrument_rate_limit(None) clears all instruments."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import InstrumentState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import InstrumentState
 
         core = BatonCore()
         core._instruments = {
@@ -243,8 +243,8 @@ class TestBatonCoreClearRateLimit:
 
     def test_clear_not_rate_limited(self) -> None:
         """Clearing a non-rate-limited instrument returns 0."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import InstrumentState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import InstrumentState
 
         core = BatonCore()
         core._instruments = {
@@ -261,8 +261,8 @@ class TestBatonCoreClearRateLimit:
 
     def test_clear_moves_waiting_sheets_to_pending(self) -> None:
         """Clearing a rate limit moves WAITING sheets back to PENDING."""
-        from mozart.daemon.baton.core import BatonCore, _JobRecord
-        from mozart.daemon.baton.state import (
+        from marianne.daemon.baton.core import BatonCore, _JobRecord
+        from marianne.daemon.baton.state import (
             BatonSheetStatus,
             InstrumentState,
             SheetExecutionState,
@@ -354,15 +354,15 @@ class TestCliClearRateLimits:
     @pytest.mark.asyncio
     async def test_clear_all_via_cli(self) -> None:
         """clear_rate_limits with no --instrument clears all."""
-        from mozart.cli.commands.rate_limits import _clear_rate_limits
+        from marianne.cli.commands.rate_limits import _clear_rate_limits
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(True, {"cleared": 2, "instrument": None}),
             ) as mock_route,
-            patch("mozart.cli.commands.rate_limits.configure_global_logging"),
+            patch("marianne.cli.commands.rate_limits.configure_global_logging"),
         ):
             await _clear_rate_limits(instrument=None, json_output=False)
 
@@ -374,15 +374,15 @@ class TestCliClearRateLimits:
     @pytest.mark.asyncio
     async def test_clear_specific_via_cli(self) -> None:
         """clear_rate_limits with --instrument routes correctly."""
-        from mozart.cli.commands.rate_limits import _clear_rate_limits
+        from marianne.cli.commands.rate_limits import _clear_rate_limits
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(True, {"cleared": 1, "instrument": "claude-cli"}),
             ) as mock_route,
-            patch("mozart.cli.commands.rate_limits.configure_global_logging"),
+            patch("marianne.cli.commands.rate_limits.configure_global_logging"),
         ):
             await _clear_rate_limits(instrument="claude-cli", json_output=False)
 
@@ -394,16 +394,16 @@ class TestCliClearRateLimits:
     @pytest.mark.asyncio
     async def test_json_output(self) -> None:
         """--json flag produces JSON output."""
-        from mozart.cli.commands.rate_limits import _clear_rate_limits
+        from marianne.cli.commands.rate_limits import _clear_rate_limits
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(True, {"cleared": 1, "instrument": "claude-cli"}),
             ),
-            patch("mozart.cli.commands.rate_limits.configure_global_logging"),
-            patch("mozart.cli.commands.rate_limits.output_json") as mock_json,
+            patch("marianne.cli.commands.rate_limits.configure_global_logging"),
+            patch("marianne.cli.commands.rate_limits.output_json") as mock_json,
         ):
             await _clear_rate_limits(instrument="claude-cli", json_output=True)
 
@@ -412,16 +412,16 @@ class TestCliClearRateLimits:
     @pytest.mark.asyncio
     async def test_conductor_not_running(self) -> None:
         """When conductor is not running, shows error and exits."""
-        from mozart.cli.commands.rate_limits import _clear_rate_limits
+        from marianne.cli.commands.rate_limits import _clear_rate_limits
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(False, None),
             ),
-            patch("mozart.cli.commands.rate_limits.configure_global_logging"),
-            patch("mozart.cli.commands.rate_limits.output_error") as mock_err,
+            patch("marianne.cli.commands.rate_limits.configure_global_logging"),
+            patch("marianne.cli.commands.rate_limits.output_error") as mock_err,
             pytest.raises((SystemExit, Exception)),
         ):
             await _clear_rate_limits(instrument=None, json_output=False)

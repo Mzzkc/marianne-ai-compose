@@ -27,19 +27,19 @@ from tests.conftest_adversarial import (
     _unit_float,
 )
 
-from mozart.core.checkpoint import (
+from marianne.core.checkpoint import (
     JobStatus,
     SheetState,
     SheetStatus,
 )
-from mozart.execution.escalation import (
+from marianne.execution.escalation import (
     CheckpointTrigger,
     ConsoleCheckpointHandler,
     ConsoleEscalationHandler,
     EscalationResponse,
     HistoricalSuggestion,
 )
-from mozart.execution.runner.models import (
+from marianne.execution.runner.models import (
     FailureHandlingResult,
     GroundingDecisionContext,
     ModeDecisionResult,
@@ -818,7 +818,7 @@ class TestEscalationDataModelProperties:
 # SpecFragment and SpecCorpusConfig property tests
 # ---------------------------------------------------------------------------
 
-from mozart.core.config.spec import SpecCorpusConfig, SpecFragment
+from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
 
 # Strategy for valid SpecFragment names (non-empty, non-whitespace)
 _spec_name = st.text(
@@ -893,7 +893,7 @@ class TestPreflightConfigProperties:
     @settings(max_examples=50)
     def test_preflight_config_threshold_validation(self, data: dict[str, int]) -> None:
         """PreflightConfig rejects warning >= error when both are nonzero."""
-        from mozart.core.config.execution import PreflightConfig
+        from marianne.core.config.execution import PreflightConfig
 
         warn = data["token_warning_threshold"]
         error = data["token_error_threshold"]

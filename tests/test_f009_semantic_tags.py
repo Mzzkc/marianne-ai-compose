@@ -17,8 +17,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.config import JobConfig
-from mozart.execution.runner.patterns import PatternsMixin, build_semantic_context_tags
+from marianne.core.config import JobConfig
+from marianne.execution.runner.patterns import PatternsMixin, build_semantic_context_tags
 
 
 # =============================================================================

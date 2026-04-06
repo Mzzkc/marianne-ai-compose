@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mozart.core.config.instruments import (
+from marianne.core.config.instruments import (
     CliCommand,
     CliErrorConfig,
     CliOutputConfig,
@@ -25,7 +25,7 @@ from mozart.core.config.instruments import (
     InstrumentProfile,
     ModelCapacity,
 )
-from mozart.execution.instruments.cli_backend import (
+from marianne.execution.instruments.cli_backend import (
     SYSTEM_ENV_VARS,
     PluginCliBackend,
 )

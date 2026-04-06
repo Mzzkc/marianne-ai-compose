@@ -49,12 +49,12 @@ import hypothesis.strategies as st
 import pytest
 from hypothesis import HealthCheck, given, settings
 
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.dispatch import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.dispatch import (
     DispatchConfig,
     dispatch_ready,
 )
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.events import (
     BatonEvent,
     CancelJob,
     ConfigReloaded,
@@ -78,7 +78,7 @@ from mozart.daemon.baton.events import (
     StaleCheck,
     to_observer_event,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     _TERMINAL_BATON_STATUSES,
     BatonJobState,
     BatonSheetStatus,
@@ -86,7 +86,7 @@ from mozart.daemon.baton.state import (
     InstrumentState,
     SheetExecutionState,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     SheetExecutionState as RichSheetExecutionState,
 )
 
@@ -1286,8 +1286,8 @@ class TestPromptAssemblyOrderingProperty:
         self, task_text: str, skill_text: str, context_text: str
     ) -> None:
         """Template comes before skills, skills before context."""
-        from mozart.core.config import PromptConfig
-        from mozart.prompts.templating import PromptBuilder, SheetContext
+        from marianne.core.config import PromptConfig
+        from marianne.prompts.templating import PromptBuilder, SheetContext
 
         config = PromptConfig(template=f"TASK: {task_text}")
         builder = PromptBuilder(config)
@@ -1320,8 +1320,8 @@ class TestPromptAssemblyOrderingProperty:
         self, n_patterns: int, n_validations: int
     ) -> None:
         """Patterns always come before validations, regardless of count."""
-        from mozart.core.config import PromptConfig, ValidationRule
-        from mozart.prompts.templating import PromptBuilder, SheetContext
+        from marianne.core.config import PromptConfig, ValidationRule
+        from marianne.prompts.templating import PromptBuilder, SheetContext
 
         config = PromptConfig(template="Do work")
         builder = PromptBuilder(config)

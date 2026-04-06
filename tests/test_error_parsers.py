@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-from mozart.core.errors.codes import ErrorCategory, ErrorCode
-from mozart.core.errors.models import ClassifiedError, ParsedCliError
-from mozart.core.errors.parsers import (
+from marianne.core.errors.codes import ErrorCategory, ErrorCode
+from marianne.core.errors.models import ClassifiedError, ParsedCliError
+from marianne.core.errors.parsers import (
     ROOT_CAUSE_PRIORITY,
     classify_single_json_error,
     select_root_cause,

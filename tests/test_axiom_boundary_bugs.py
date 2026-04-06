@@ -28,11 +28,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.config.execution import ValidationRule
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.musician import _validate, sheet_task
-from mozart.daemon.baton.state import AttemptContext, AttemptMode
+from marianne.core.config.execution import ValidationRule
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.musician import _validate, sheet_task
+from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
 
 # ─── Helpers ────────────────────────────────────────────────────────
@@ -118,7 +118,7 @@ class TestF118ValidationContextGap:
         mock_engine.run_validations = AsyncMock(return_value=mock_result)
 
         with patch(
-            "mozart.execution.validation.engine.ValidationEngine"
+            "marianne.execution.validation.engine.ValidationEngine"
         ) as MockVE:
             MockVE.return_value = mock_engine
             await _validate(
@@ -151,7 +151,7 @@ class TestF118ValidationContextGap:
         exec_result = _success_result()
 
         with patch(
-            "mozart.execution.validation.engine.ValidationEngine"
+            "marianne.execution.validation.engine.ValidationEngine"
         ) as MockVE:
             mock_engine = MagicMock()
             mock_result = MagicMock()
@@ -193,7 +193,7 @@ class TestF118ValidationContextGap:
         exec_result = _success_result()
 
         with patch(
-            "mozart.execution.validation.engine.ValidationEngine"
+            "marianne.execution.validation.engine.ValidationEngine"
         ) as MockVE:
             mock_engine = MagicMock()
             mock_result = MagicMock()
@@ -237,7 +237,7 @@ class TestF118ValidationContextGap:
         exec_result = _success_result()
 
         with patch(
-            "mozart.execution.validation.engine.ValidationEngine"
+            "marianne.execution.validation.engine.ValidationEngine"
         ) as MockVE:
             mock_engine = MagicMock()
             mock_result = MagicMock()
@@ -280,7 +280,7 @@ class TestF118ValidationContextGap:
         exec_result = _success_result()
 
         with patch(
-            "mozart.execution.validation.engine.ValidationEngine"
+            "marianne.execution.validation.engine.ValidationEngine"
         ) as MockVE:
             mock_engine = MagicMock()
             mock_result = MagicMock()
@@ -357,8 +357,8 @@ class TestF113FailedDepsAsDone:
 
         This test documents the bug. When fixed, the assertion should
         flip from 'downstream IS in batch' to 'downstream IS NOT in batch'."""
-        from mozart.core.checkpoint import SheetStatus
-        from mozart.execution.parallel import ParallelExecutor
+        from marianne.core.checkpoint import SheetStatus
+        from marianne.execution.parallel import ParallelExecutor
 
         config = MagicMock()
         config.max_concurrent = 4
@@ -389,8 +389,8 @@ class TestF113FailedDepsAsDone:
 
     def test_completed_sheets_correctly_unblock_downstream(self) -> None:
         """Completed sheets should unblock downstream."""
-        from mozart.core.checkpoint import SheetStatus
-        from mozart.execution.parallel import ParallelExecutor
+        from marianne.core.checkpoint import SheetStatus
+        from marianne.execution.parallel import ParallelExecutor
 
         config = MagicMock()
         config.max_concurrent = 4
@@ -421,7 +421,7 @@ class TestF111RateLimitLostInParallel:
 
     def test_error_details_loses_exception_type(self) -> None:
         """ParallelBatchResult.error_details stores string, not exception."""
-        from mozart.execution.parallel import ParallelBatchResult
+        from marianne.execution.parallel import ParallelBatchResult
 
         result = ParallelBatchResult(sheets=[1, 2])
         result.failed.append(1)
@@ -434,7 +434,7 @@ class TestF111RateLimitLostInParallel:
 
     def test_lifecycle_raises_fatal_not_rate_limit(self) -> None:
         """lifecycle.py:1169 raises FatalError, not RateLimitExhaustedError."""
-        from mozart.execution.runner.models import (
+        from marianne.execution.runner.models import (
             FatalError,
             RateLimitExhaustedError,
         )
@@ -451,7 +451,7 @@ class TestF111RateLimitLostInParallel:
         """RateLimitExhaustedError carries resume_after data that is lost."""
         from datetime import UTC, datetime, timedelta
 
-        from mozart.execution.runner.models import RateLimitExhaustedError
+        from marianne.execution.runner.models import RateLimitExhaustedError
 
         resume_at = datetime.now(UTC) + timedelta(seconds=3600)
         err = RateLimitExhaustedError(
@@ -499,7 +499,7 @@ class TestSheetTaskValidationContext:
         )
 
         with patch(
-            "mozart.execution.validation.engine.ValidationEngine"
+            "marianne.execution.validation.engine.ValidationEngine"
         ) as MockVE:
             mock_engine = MagicMock()
             mock_result = MagicMock()

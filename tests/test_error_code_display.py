@@ -14,14 +14,14 @@ TDD: Red first, then implement.
 
 from __future__ import annotations
 
-from mozart.cli.output import format_error_code_for_display, format_error_details
-from mozart.core.checkpoint import (
+from marianne.cli.output import format_error_code_for_display, format_error_details
+from marianne.core.checkpoint import (
     CheckpointErrorRecord,
     CheckpointState,
     JobStatus,
     SheetState,
 )
-from mozart.core.errors.codes import ErrorCategory, ErrorCode
+from marianne.core.errors.codes import ErrorCategory, ErrorCode
 
 
 class TestSheetStateErrorCode:

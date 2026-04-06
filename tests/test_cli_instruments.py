@@ -14,8 +14,8 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.core.config.instruments import (
+from marianne.cli import app
+from marianne.core.config.instruments import (
     CliCommand,
     CliOutputConfig,
     CliProfile,
@@ -62,7 +62,7 @@ def _no_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
         return False, None
 
     monkeypatch.setattr(
-        "mozart.daemon.detect.try_daemon_route",
+        "marianne.daemon.detect.try_daemon_route",
         _fake_route,
     )
 
@@ -81,7 +81,7 @@ class TestInstrumentsList:
             "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(app, ["instruments", "list"])
@@ -98,7 +98,7 @@ class TestInstrumentsList:
             "gemini-cli": _make_cli_profile("gemini-cli", "Gemini CLI", "gemini"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value=None):
             result = runner.invoke(app, ["instruments", "list"])
@@ -113,7 +113,7 @@ class TestInstrumentsList:
             "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(app, ["instruments", "list"])
@@ -127,7 +127,7 @@ class TestInstrumentsList:
             "codex-cli": _make_cli_profile("codex-cli", "Codex CLI", "codex"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value=None):
             result = runner.invoke(app, ["instruments", "list"])
@@ -143,7 +143,7 @@ class TestInstrumentsList:
             ),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/gemini"):
             result = runner.invoke(app, ["instruments", "list"])
@@ -159,7 +159,7 @@ class TestInstrumentsList:
             ),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(app, ["instruments", "list"])
@@ -171,7 +171,7 @@ class TestInstrumentsList:
     def test_list_empty_registry(self) -> None:
         """Empty registry shows a helpful message."""
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value={},
         ):
             result = runner.invoke(app, ["instruments", "list"])
@@ -190,7 +190,7 @@ class TestInstrumentsList:
             return "/usr/bin/claude" if exe == "claude" else None
 
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", side_effect=_selective_which):
             result = runner.invoke(app, ["instruments", "list"])
@@ -205,7 +205,7 @@ class TestInstrumentsList:
             "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(app, ["instruments", "list", "--json"])
@@ -225,7 +225,7 @@ class TestInstrumentsList:
             "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(app, ["instruments", "list"])
@@ -248,7 +248,7 @@ class TestInstrumentsCheck:
             "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(app, ["instruments", "check", "claude-code"])
@@ -263,7 +263,7 @@ class TestInstrumentsCheck:
             "codex-cli": _make_cli_profile("codex-cli", "Codex CLI", "codex"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value=None):
             result = runner.invoke(app, ["instruments", "check", "codex-cli"])
@@ -274,7 +274,7 @@ class TestInstrumentsCheck:
     def test_check_unknown_instrument(self) -> None:
         """Check errors for instruments not in the registry."""
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value={},
         ):
             result = runner.invoke(app, ["instruments", "check", "nonexistent"])
@@ -288,7 +288,7 @@ class TestInstrumentsCheck:
             "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(app, ["instruments", "check", "claude-code"])
@@ -304,7 +304,7 @@ class TestInstrumentsCheck:
             ),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/gemini"):
             result = runner.invoke(app, ["instruments", "check", "gemini-cli"])
@@ -318,7 +318,7 @@ class TestInstrumentsCheck:
             "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(
@@ -335,7 +335,7 @@ class TestInstrumentsCheck:
 
     def test_check_http_instrument_skips_binary(self) -> None:
         """HTTP instruments don't have a binary check — just show info."""
-        from mozart.core.config.instruments import HttpProfile
+        from marianne.core.config.instruments import HttpProfile
 
         http_profile = InstrumentProfile(
             name="anthropic-api",
@@ -351,7 +351,7 @@ class TestInstrumentsCheck:
         )
         profiles = {"anthropic-api": http_profile}
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ):
             result = runner.invoke(app, ["instruments", "check", "anthropic-api"])

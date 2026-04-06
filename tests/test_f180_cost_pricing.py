@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from mozart.backends.base import ExecutionResult
-from mozart.daemon.baton.musician import _estimate_cost
+from marianne.backends.base import ExecutionResult
+from marianne.daemon.baton.musician import _estimate_cost
 
 
 class TestEstimateCostWithProfilePricing:

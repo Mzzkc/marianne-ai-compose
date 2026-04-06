@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.daemon.task_utils import log_task_exception
+from marianne.daemon.task_utils import log_task_exception
 
 
 def _make_logger() -> MagicMock:

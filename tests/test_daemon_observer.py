@@ -12,9 +12,9 @@ import time
 from pathlib import Path
 import pytest
 
-from mozart.daemon.event_bus import EventBus
-from mozart.daemon.observer import JobObserver
-from mozart.daemon.types import ObserverEvent
+from marianne.daemon.event_bus import EventBus
+from marianne.daemon.observer import JobObserver
+from marianne.daemon.types import ObserverEvent
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────

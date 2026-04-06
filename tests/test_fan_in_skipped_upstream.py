@@ -14,9 +14,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.core.config.workspace import CrossSheetConfig
-from mozart.prompts.templating import SheetContext
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.config.workspace import CrossSheetConfig
+from marianne.prompts.templating import SheetContext
 
 
 def _make_checkpoint(

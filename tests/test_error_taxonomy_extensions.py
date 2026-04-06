@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from mozart.core.errors.codes import ErrorCode, RetryBehavior, Severity
-from mozart.core.errors.classifier import ErrorClassifier
+from marianne.core.errors.codes import ErrorCode, RetryBehavior, Severity
+from marianne.core.errors.classifier import ErrorClassifier
 
 
 # =============================================================================
@@ -204,35 +204,35 @@ class TestCliErrorConfigExpansion:
 
     def test_timeout_patterns_field_exists(self) -> None:
         """CliErrorConfig has timeout_patterns field (pre-existing)."""
-        from mozart.core.config.instruments import CliErrorConfig
+        from marianne.core.config.instruments import CliErrorConfig
 
         config = CliErrorConfig(timeout_patterns=["timed?.?out", "deadline exceeded"])
         assert config.timeout_patterns == ["timed?.?out", "deadline exceeded"]
 
     def test_crash_patterns_field_exists(self) -> None:
         """CliErrorConfig has crash_patterns field (new — F-105)."""
-        from mozart.core.config.instruments import CliErrorConfig
+        from marianne.core.config.instruments import CliErrorConfig
 
         config = CliErrorConfig(crash_patterns=["segfault", "core dumped"])
         assert config.crash_patterns == ["segfault", "core dumped"]
 
     def test_capacity_patterns_field_exists(self) -> None:
         """CliErrorConfig has capacity_patterns field (pre-existing)."""
-        from mozart.core.config.instruments import CliErrorConfig
+        from marianne.core.config.instruments import CliErrorConfig
 
         config = CliErrorConfig(capacity_patterns=["overloaded", "try again later"])
         assert config.capacity_patterns == ["overloaded", "try again later"]
 
     def test_stale_patterns_field_exists(self) -> None:
         """CliErrorConfig has stale_patterns field (new — F-105)."""
-        from mozart.core.config.instruments import CliErrorConfig
+        from marianne.core.config.instruments import CliErrorConfig
 
         config = CliErrorConfig(stale_patterns=["no output", "idle"])
         assert config.stale_patterns == ["no output", "idle"]
 
     def test_new_fields_default_to_empty(self) -> None:
         """All pattern fields default to empty lists (backward compatible)."""
-        from mozart.core.config.instruments import CliErrorConfig
+        from marianne.core.config.instruments import CliErrorConfig
 
         config = CliErrorConfig()
         assert config.timeout_patterns == []
@@ -242,7 +242,7 @@ class TestCliErrorConfigExpansion:
 
     def test_all_fields_coexist(self) -> None:
         """All fields — existing and new — work together."""
-        from mozart.core.config.instruments import CliErrorConfig
+        from marianne.core.config.instruments import CliErrorConfig
 
         config = CliErrorConfig(
             success_exit_codes=[0],

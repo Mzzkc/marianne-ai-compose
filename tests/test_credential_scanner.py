@@ -18,14 +18,14 @@ class TestRedactCredentials:
 
     def test_no_credentials_unchanged(self) -> None:
         """Text without credentials passes through unchanged."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "Hello, this is normal output with no secrets."
         assert redact_credentials(text) == text
 
     def test_anthropic_api_key_redacted(self) -> None:
         """Anthropic API keys (sk-ant-...) are redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "Using key sk-ant-api03-abcdefghijklmnop1234567890 for auth"
         result = redact_credentials(text)
@@ -36,7 +36,7 @@ class TestRedactCredentials:
 
     def test_openai_api_key_redacted(self) -> None:
         """OpenAI API keys (sk-...) are redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "export OPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012mno345"
         result = redact_credentials(text)
@@ -45,7 +45,7 @@ class TestRedactCredentials:
 
     def test_google_api_key_redacted(self) -> None:
         """Google API keys (AIza...) are redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "GOOGLE_API_KEY=AIzaSyA1B2C3D4E5F6G7H8I9J0KlMnOpQrSt"
         result = redact_credentials(text)
@@ -54,7 +54,7 @@ class TestRedactCredentials:
 
     def test_aws_access_key_redacted(self) -> None:
         """AWS access keys (AKIA...) are redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "aws_access_key_id = AKIAIOSFODNN7EXAMPLE"
         result = redact_credentials(text)
@@ -63,7 +63,7 @@ class TestRedactCredentials:
 
     def test_generic_bearer_token_redacted(self) -> None:
         """Bearer tokens in Authorization headers are redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWI'
         result = redact_credentials(text)
@@ -72,7 +72,7 @@ class TestRedactCredentials:
 
     def test_multiple_credentials_all_redacted(self) -> None:
         """Multiple different credential types in one text are all caught."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = (
             "Keys: sk-ant-api03-abcdefghijk1234567890 and AKIAIOSFODNN7EXAMPLE "
@@ -85,20 +85,20 @@ class TestRedactCredentials:
 
     def test_none_input_returns_none(self) -> None:
         """None input returns None (for optional stdout_tail)."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         assert redact_credentials(None) is None  # type: ignore[arg-type]
 
     def test_empty_string_returns_empty(self) -> None:
         """Empty string returns empty string."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         assert redact_credentials("") == ""
 
     @pytest.mark.adversarial
     def test_partial_key_not_false_positive(self) -> None:
         """Short strings that look like key prefixes but aren't full keys."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         # "sk-" alone is too short to be a key
         text = "Use sk-something for the field"
@@ -109,7 +109,7 @@ class TestRedactCredentials:
     @pytest.mark.adversarial
     def test_base64_in_code_not_false_positive(self) -> None:
         """Base64 in code that isn't a bearer token shouldn't be redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = 'data = base64.b64encode(b"hello")'
         result = redact_credentials(text)
@@ -119,7 +119,7 @@ class TestRedactCredentials:
     @pytest.mark.adversarial
     def test_large_text_performance(self) -> None:
         """Scanner handles large outputs (100KB) without excessive time."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "Normal output line\n" * 5000  # ~100KB
         text += "Hidden key: sk-ant-api03-secret123456789012345678\n"
@@ -133,7 +133,7 @@ class TestGitHubTokenRedaction:
 
     def test_github_pat_classic_redacted(self) -> None:
         """Classic GitHub PAT (ghp_) is redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "git clone https://ghp_ABCDEFghijklmnop1234567890abcdefghijklmn@github.com/repo"
         result = redact_credentials(text)
@@ -142,7 +142,7 @@ class TestGitHubTokenRedaction:
 
     def test_github_oauth_token_redacted(self) -> None:
         """GitHub OAuth token (gho_) is redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "GITHUB_TOKEN=gho_ABCDEFghijklmnop1234567890abcdefghijklmn"
         result = redact_credentials(text)
@@ -151,7 +151,7 @@ class TestGitHubTokenRedaction:
 
     def test_github_fine_grained_pat_redacted(self) -> None:
         """Fine-grained GitHub PAT (github_pat_) is redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "export GH_TOKEN=github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz1234567890"
         result = redact_credentials(text)
@@ -161,7 +161,7 @@ class TestGitHubTokenRedaction:
     @pytest.mark.adversarial
     def test_short_ghp_not_false_positive(self) -> None:
         """Short ghp_ prefix without sufficient chars is not redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "ghp_short is not a token"
         result = redact_credentials(text)
@@ -173,7 +173,7 @@ class TestSlackTokenRedaction:
 
     def test_slack_bot_token_redacted(self) -> None:
         """Slack bot token (xoxb-) is redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "SLACK_TOKEN=xoxb-123456789012-1234567890123-abcdefghijklmnopqrstuvwx"
         result = redact_credentials(text)
@@ -182,7 +182,7 @@ class TestSlackTokenRedaction:
 
     def test_slack_user_token_redacted(self) -> None:
         """Slack user token (xoxp-) is redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "token: xoxp-123456789012-1234567890123-1234567890123-abcdefghijklmnopqrstuvwxyz123456"
         result = redact_credentials(text)
@@ -191,7 +191,7 @@ class TestSlackTokenRedaction:
 
     def test_slack_app_token_redacted(self) -> None:
         """Slack app-level token (xapp-) is redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "SLACK_APP=xapp-1-A1234567890-1234567890123-abcdefghijklmnopqrstuvwx"
         result = redact_credentials(text)
@@ -204,7 +204,7 @@ class TestHuggingFaceTokenRedaction:
 
     def test_hf_token_redacted(self) -> None:
         """Hugging Face token (hf_) is redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "HF_TOKEN=hf_ABCDEFghijklmnopQRSTUV"
         result = redact_credentials(text)
@@ -214,7 +214,7 @@ class TestHuggingFaceTokenRedaction:
     @pytest.mark.adversarial
     def test_short_hf_not_false_positive(self) -> None:
         """Short hf_ prefix is not redacted."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "hf_short is not enough"
         result = redact_credentials(text)
@@ -226,7 +226,7 @@ class TestScanForCredentials:
 
     def test_detects_anthropic_key(self) -> None:
         """Detects Anthropic API key presence."""
-        from mozart.utils.credential_scanner import scan_for_credentials
+        from marianne.utils.credential_scanner import scan_for_credentials
 
         text = "Key: sk-ant-api03-abcdefghijk1234567890123456"
         found = scan_for_credentials(text)
@@ -235,14 +235,14 @@ class TestScanForCredentials:
 
     def test_clean_text_empty_result(self) -> None:
         """Clean text returns empty list."""
-        from mozart.utils.credential_scanner import scan_for_credentials
+        from marianne.utils.credential_scanner import scan_for_credentials
 
         found = scan_for_credentials("No credentials here")
         assert found == []
 
     def test_detects_github_token(self) -> None:
         """Detects GitHub PAT presence."""
-        from mozart.utils.credential_scanner import scan_for_credentials
+        from marianne.utils.credential_scanner import scan_for_credentials
 
         text = "ghp_ABCDEFghijklmnop1234567890abcdefghijklmn"
         found = scan_for_credentials(text)
@@ -251,7 +251,7 @@ class TestScanForCredentials:
 
     def test_detects_slack_token(self) -> None:
         """Detects Slack token presence."""
-        from mozart.utils.credential_scanner import scan_for_credentials
+        from marianne.utils.credential_scanner import scan_for_credentials
 
         text = "xoxb-123456789012-1234567890123-abcdefghijklmnopqrstuvwx"
         found = scan_for_credentials(text)
@@ -260,7 +260,7 @@ class TestScanForCredentials:
 
     def test_detects_hf_token(self) -> None:
         """Detects Hugging Face token presence."""
-        from mozart.utils.credential_scanner import scan_for_credentials
+        from marianne.utils.credential_scanner import scan_for_credentials
 
         text = "hf_ABCDEFghijklmnopQRSTUV"
         found = scan_for_credentials(text)

@@ -32,7 +32,7 @@ class TestCoordinatorClearConcurrency:
     @pytest.mark.asyncio
     async def test_clear_then_report_reactivates_limit(self) -> None:
         """A new report_rate_limit() after clear_limits() must re-establish the limit."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -48,7 +48,7 @@ class TestCoordinatorClearConcurrency:
     @pytest.mark.asyncio
     async def test_concurrent_clear_all_and_report(self) -> None:
         """Concurrent clear_limits() and report_rate_limit() must not corrupt state."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
 
@@ -76,7 +76,7 @@ class TestCoordinatorClearConcurrency:
     @pytest.mark.asyncio
     async def test_double_clear_same_instrument(self) -> None:
         """Clearing the same instrument twice must return 0 on second call."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -90,7 +90,7 @@ class TestCoordinatorClearConcurrency:
     @pytest.mark.asyncio
     async def test_clear_all_then_clear_specific_returns_zero(self) -> None:
         """After clear_limits(None), clear_limits('X') returns 0."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -104,7 +104,7 @@ class TestCoordinatorClearConcurrency:
     @pytest.mark.asyncio
     async def test_clear_does_not_affect_is_rate_limited_for_other(self) -> None:
         """Clearing one instrument must not affect another's rate limit status."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -120,7 +120,7 @@ class TestCoordinatorClearConcurrency:
     @pytest.mark.asyncio
     async def test_clear_with_empty_string_instrument(self) -> None:
         """Empty string instrument name is truthy — must not clear all."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -143,8 +143,8 @@ class TestManagerClearRateLimitsAdversarial:
     @pytest.mark.asyncio
     async def test_baton_adapter_exception_during_clear(self) -> None:
         """If baton adapter throws during clear, coordinator clear still succeeds."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -172,8 +172,8 @@ class TestManagerClearRateLimitsAdversarial:
     @pytest.mark.asyncio
     async def test_clear_none_instrument_with_baton_returning_zero(self) -> None:
         """When baton has no limits to clear, total is coordinator-only."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -196,8 +196,8 @@ class TestManagerClearRateLimitsAdversarial:
     @pytest.mark.asyncio
     async def test_clear_specific_instrument_both_have_limits(self) -> None:
         """Both coordinator and baton clearing the same instrument sums correctly."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -228,64 +228,64 @@ class TestReadPidAdversarial:
 
     def test_empty_pid_file(self, tmp_path: Path) -> None:
         """Empty PID file returns None (ValueError from int(''))."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("")
         assert _read_pid(pid_file) is None
 
     def test_whitespace_only_pid_file(self, tmp_path: Path) -> None:
         """Whitespace-only PID file returns None."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("   \n\t  ")
         assert _read_pid(pid_file) is None
 
     def test_non_numeric_pid_file(self, tmp_path: Path) -> None:
         """Non-numeric content returns None."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("not-a-pid")
         assert _read_pid(pid_file) is None
 
     def test_negative_pid(self, tmp_path: Path) -> None:
         """Negative PID is technically valid int — returns the value."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("-1")
         # int("-1") succeeds, so _read_pid returns -1
         assert _read_pid(pid_file) == -1
 
     def test_float_pid(self, tmp_path: Path) -> None:
         """Float PID string returns None (int('1.5') raises ValueError)."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("1.5")
         assert _read_pid(pid_file) is None
 
     def test_very_large_pid(self, tmp_path: Path) -> None:
         """Very large PID is valid int — returned as-is."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("999999999999")
         assert _read_pid(pid_file) == 999999999999
 
     def test_pid_with_trailing_newline(self, tmp_path: Path) -> None:
         """PID file with trailing newline is handled by strip()."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345\n")
         assert _read_pid(pid_file) == 12345
 
     def test_missing_pid_file(self, tmp_path: Path) -> None:
         """Missing PID file returns None (FileNotFoundError)."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
         pid_file = tmp_path / "nonexistent.pid"
         assert _read_pid(pid_file) is None
@@ -301,14 +301,14 @@ class TestPidAliveAdversarial:
         This is technically "alive" (no ProcessLookupError), but dangerous
         for stale detection purposes.
         """
-        from mozart.daemon.process import _pid_alive
+        from marianne.daemon.process import _pid_alive
 
         # PID 0 should return True (sends to own process group, no error)
         assert _pid_alive(0) is True
 
     def test_negative_pid(self) -> None:
         """Negative PID sends to process group — behavior varies by OS."""
-        from mozart.daemon.process import _pid_alive
+        from marianne.daemon.process import _pid_alive
 
         # os.kill(-1, 0) sends to all processes we can signal.
         # On WSL/Linux, this may raise PermissionError (mapped to True)
@@ -318,14 +318,14 @@ class TestPidAliveAdversarial:
 
     def test_very_large_pid_not_alive(self) -> None:
         """Very large PID (definitely not a real process) returns False."""
-        from mozart.daemon.process import _pid_alive
+        from marianne.daemon.process import _pid_alive
 
         # No process should have PID 2^30
         assert _pid_alive(1073741824) is False
 
     def test_own_pid_is_alive(self) -> None:
         """Our own PID is alive."""
-        from mozart.daemon.process import _pid_alive
+        from marianne.daemon.process import _pid_alive
 
         assert _pid_alive(os.getpid()) is True
 
@@ -335,9 +335,9 @@ class TestStalePidCleanup:
 
     def test_stale_pid_file_cleaned_up(self, tmp_path: Path) -> None:
         """When PID file references a dead process, it gets unlinked."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("999999999")  # Almost certainly dead
 
         pid = _read_pid(pid_file)
@@ -346,7 +346,7 @@ class TestStalePidCleanup:
         # The cleanup happens in start_conductor() itself, but we can
         # verify the building blocks work: _read_pid parses, _pid_alive
         # confirms dead, then unlink removes it.
-        from mozart.daemon.process import _pid_alive
+        from marianne.daemon.process import _pid_alive
 
         assert _pid_alive(pid) is False
         pid_file.unlink()
@@ -354,9 +354,9 @@ class TestStalePidCleanup:
 
     def test_pid_file_with_permissions_error_on_read(self, tmp_path: Path) -> None:
         """PID file that exists but can't be read returns None."""
-        from mozart.daemon.process import _read_pid
+        from marianne.daemon.process import _read_pid
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("12345")
         pid_file.chmod(0o000)
 
@@ -388,8 +388,8 @@ class TestResumeViaBatonNoReloadFallback:
     @pytest.mark.asyncio
     async def test_no_reload_with_none_snapshot_falls_back_to_disk(self) -> None:
         """When no_reload=True but config_snapshot is None, loads from disk."""
-        from mozart.core.checkpoint import CheckpointState, JobStatus
-        from mozart.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+        from marianne.core.checkpoint import CheckpointState, JobStatus
+        from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 
         mgr = MagicMock(spec=JobManager)
         mgr._job_meta = {
@@ -429,7 +429,7 @@ class TestResumeViaBatonNoReloadFallback:
         """When snapshot is invalid YAML/dict, must fallback to disk, not crash."""
         import inspect
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         source = inspect.getsource(JobManager._resume_via_baton)
 
@@ -441,7 +441,7 @@ class TestResumeViaBatonNoReloadFallback:
         """When snapshot workspace differs from provided workspace, it's overridden."""
         import inspect
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         source = inspect.getsource(JobManager._resume_via_baton)
 
@@ -461,7 +461,7 @@ class TestStaggerTimingBoundary:
     @pytest.mark.asyncio
     async def test_zero_stagger_no_sleep(self) -> None:
         """stagger_delay_ms=0 must not call asyncio.sleep()."""
-        from mozart.execution.parallel import ParallelExecutionConfig
+        from marianne.execution.parallel import ParallelExecutionConfig
 
         config = ParallelExecutionConfig(stagger_delay_ms=0)
 
@@ -475,7 +475,7 @@ class TestStaggerTimingBoundary:
     @pytest.mark.asyncio
     async def test_stagger_with_single_sheet(self) -> None:
         """Single sheet batch must not sleep regardless of stagger_delay_ms."""
-        from mozart.execution.parallel import ParallelExecutionConfig
+        from marianne.execution.parallel import ParallelExecutionConfig
 
         config = ParallelExecutionConfig(stagger_delay_ms=5000)
 
@@ -487,14 +487,14 @@ class TestStaggerTimingBoundary:
 
     def test_stagger_boundary_value_4999(self) -> None:
         """stagger_delay_ms=4999 (just under max 5000) is valid."""
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         config = ParallelConfig(stagger_delay_ms=4999)
         assert config.stagger_delay_ms == 4999
 
     def test_stagger_boundary_value_5000(self) -> None:
         """stagger_delay_ms=5000 (exact max) is valid."""
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         config = ParallelConfig(stagger_delay_ms=5000)
         assert config.stagger_delay_ms == 5000
@@ -503,7 +503,7 @@ class TestStaggerTimingBoundary:
         """stagger_delay_ms=5001 (over max) is rejected by Pydantic."""
         from pydantic import ValidationError
 
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         with pytest.raises(ValidationError):
             ParallelConfig(stagger_delay_ms=5001)
@@ -512,14 +512,14 @@ class TestStaggerTimingBoundary:
         """stagger_delay_ms=-1 is rejected by Pydantic."""
         from pydantic import ValidationError
 
-        from mozart.core.config.execution import ParallelConfig
+        from marianne.core.config.execution import ParallelConfig
 
         with pytest.raises(ValidationError):
             ParallelConfig(stagger_delay_ms=-1)
 
     def test_stagger_converts_to_seconds_correctly(self) -> None:
         """Milliseconds-to-seconds conversion is exact for typical values."""
-        from mozart.execution.parallel import ParallelExecutionConfig
+        from marianne.execution.parallel import ParallelExecutionConfig
 
         config = ParallelExecutionConfig(stagger_delay_ms=150)
         assert config.stagger_delay_ms / 1000.0 == 0.15
@@ -538,8 +538,8 @@ class TestF200Regression:
 
     def test_nonexistent_instrument_returns_zero_not_clear_all(self) -> None:
         """F-200: clear('nonexistent') must return 0, not clear all instruments."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import InstrumentState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import InstrumentState
 
         core = BatonCore()
         core._instruments = {
@@ -566,8 +566,8 @@ class TestF200Regression:
 
     def test_empty_string_instrument_returns_zero(self) -> None:
         """Empty string instrument name must not clear all."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import InstrumentState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import InstrumentState
 
         core = BatonCore()
         core._instruments = {
@@ -586,8 +586,8 @@ class TestF200Regression:
 
     def test_none_instrument_clears_all(self) -> None:
         """None instrument is the explicit 'clear all' signal."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import InstrumentState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import InstrumentState
 
         core = BatonCore()
         core._instruments = {
@@ -616,7 +616,7 @@ class TestCoordinatorBoundaryValues:
     @pytest.mark.asyncio
     async def test_report_zero_wait_then_clear(self) -> None:
         """Report with wait_seconds=0 then clear returns 1."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         # Zero wait is clamped to 0 — expires immediately, but the entry
@@ -631,7 +631,7 @@ class TestCoordinatorBoundaryValues:
     @pytest.mark.asyncio
     async def test_report_max_wait_then_clear(self) -> None:
         """Report with MAX_WAIT_SECONDS then clear returns 1."""
-        from mozart.daemon.rate_coordinator import (
+        from marianne.daemon.rate_coordinator import (
             MAX_WAIT_SECONDS,
             RateLimitCoordinator,
         )
@@ -649,7 +649,7 @@ class TestCoordinatorBoundaryValues:
     @pytest.mark.asyncio
     async def test_report_over_max_clamped(self) -> None:
         """Wait seconds exceeding MAX_WAIT_SECONDS must be clamped."""
-        from mozart.daemon.rate_coordinator import (
+        from marianne.daemon.rate_coordinator import (
             MAX_WAIT_SECONDS,
             RateLimitCoordinator,
         )
@@ -671,7 +671,7 @@ class TestCoordinatorBoundaryValues:
     @pytest.mark.asyncio
     async def test_multiple_instruments_clear_all_returns_correct_count(self) -> None:
         """clear_limits(None) with N instruments returns exactly N."""
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         instruments = [f"inst-{i}" for i in range(10)]
@@ -694,7 +694,7 @@ class TestCheckRunningJobsAdversarial:
 
     def test_ipc_connection_refused_returns_none(self) -> None:
         """When conductor is not running, _check_running_jobs returns None."""
-        from mozart.daemon.process import _check_running_jobs
+        from marianne.daemon.process import _check_running_jobs
 
         # Point to a socket that doesn't exist
         result = _check_running_jobs(
@@ -710,20 +710,20 @@ class TestCheckRunningJobsAdversarial:
         (stop_conductor) receives the raw exception. In practice, _resolve_socket_path
         only fails on truly broken configs, so this is minor. Documenting behavior.
         """
-        from mozart.daemon.process import _check_running_jobs
+        from marianne.daemon.process import _check_running_jobs
 
         with patch(
-            "mozart.daemon.detect._resolve_socket_path",
+            "marianne.daemon.detect._resolve_socket_path",
             side_effect=RuntimeError("resolve failed"),
         ), pytest.raises(RuntimeError, match="resolve failed"):
             _check_running_jobs(socket_path=None)
 
     def test_none_socket_path_uses_default_resolution(self) -> None:
         """socket_path=None resolves via _resolve_socket_path."""
-        from mozart.daemon.process import _check_running_jobs
+        from marianne.daemon.process import _check_running_jobs
 
         with patch(
-            "mozart.daemon.detect._resolve_socket_path",
+            "marianne.daemon.detect._resolve_socket_path",
             return_value="/tmp/nonexistent-test.sock",
         ) as mock_resolve:
             result = _check_running_jobs(socket_path=None)
@@ -743,8 +743,8 @@ class TestDualPathClearConsistency:
     @pytest.mark.asyncio
     async def test_coordinator_has_limit_baton_does_not(self) -> None:
         """Coordinator rate-limited, baton not → total = 1."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         await coord.report_rate_limit("claude-cli", 300.0, "j1", 1)
@@ -766,8 +766,8 @@ class TestDualPathClearConsistency:
     @pytest.mark.asyncio
     async def test_baton_has_limit_coordinator_does_not(self) -> None:
         """Baton rate-limited, coordinator not → total = baton count."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
         # No limit reported to coordinator
@@ -789,8 +789,8 @@ class TestDualPathClearConsistency:
     @pytest.mark.asyncio
     async def test_neither_has_limits(self) -> None:
         """Neither coordinator nor baton has limits → cleared=0."""
-        from mozart.daemon.manager import JobManager
-        from mozart.daemon.rate_coordinator import RateLimitCoordinator
+        from marianne.daemon.manager import JobManager
+        from marianne.daemon.rate_coordinator import RateLimitCoordinator
 
         coord = RateLimitCoordinator()
 
@@ -821,7 +821,7 @@ class TestStartConductorRace:
         """Advisory lock on PID file detects concurrent startup."""
         import fcntl
 
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("99999")
 
         # Hold lock on the PID file
@@ -847,7 +847,7 @@ class TestStartConductorRace:
         If _read_pid finds a dead PID and unlinks the file, the subsequent
         lock check (pid_file.exists()) should return False → skip lock.
         """
-        pid_file = tmp_path / "mozart.pid"
+        pid_file = tmp_path / "marianne.pid"
         pid_file.write_text("999999999")
 
         # Simulate stale PID cleanup

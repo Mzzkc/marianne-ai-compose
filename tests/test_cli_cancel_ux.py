@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, patch
 
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
@@ -27,7 +27,7 @@ class TestCancelNotFoundError:
     def test_not_found_suggests_list_command(self) -> None:
         """Cancel for nonexistent score should suggest 'mozart list'."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"cancelled": False}),
         ):
@@ -42,7 +42,7 @@ class TestCancelNotFoundError:
     def test_not_found_uses_output_error(self) -> None:
         """Cancel not-found should use output_error, not raw console.print."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"cancelled": False}),
         ):
@@ -59,7 +59,7 @@ class TestCancelNotFoundError:
     def test_not_found_json_mode(self) -> None:
         """Cancel not-found in JSON mode should return structured error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"cancelled": False}),
         ):
@@ -81,7 +81,7 @@ class TestCancelNotFoundError:
     def test_successful_cancel_still_works(self) -> None:
         """Successful cancel should still show green success message."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"cancelled": True}),
         ):
@@ -97,7 +97,7 @@ class TestCancelConductorDown:
     def test_conductor_down_uses_output_error(self) -> None:
         """Cancel with conductor down should use output_error with hints."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):

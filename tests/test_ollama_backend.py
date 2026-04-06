@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from mozart.backends.ollama import OllamaBackend, OllamaMessage
+from marianne.backends.ollama import OllamaBackend, OllamaMessage
 
 # =============================================================================
 # Fixtures
@@ -98,7 +98,7 @@ def sample_ollama_final_response():
 @pytest.fixture
 def sample_mcp_tools():
     """Sample MCP tools for testing translation."""
-    from mozart.bridge.mcp_proxy import MCPTool
+    from marianne.bridge.mcp_proxy import MCPTool
 
     return [
         MCPTool(
@@ -530,7 +530,7 @@ class TestAgenticLoop:
         sample_ollama_final_response,
     ):
         """Test agentic loop that executes a tool."""
-        from mozart.bridge.mcp_proxy import ContentBlock, MCPProxyService, ToolResult
+        from marianne.bridge.mcp_proxy import ContentBlock, MCPProxyService, ToolResult
 
         # Mock MCP proxy
         mock_proxy = AsyncMock(spec=MCPProxyService)
@@ -569,7 +569,7 @@ class TestAgenticLoop:
         sample_ollama_tool_response,
     ):
         """Test agentic loop respects max iterations."""
-        from mozart.bridge.mcp_proxy import ContentBlock, MCPProxyService, ToolResult
+        from marianne.bridge.mcp_proxy import ContentBlock, MCPProxyService, ToolResult
 
         # Set low max iterations
         ollama_backend.max_tool_iterations = 2
@@ -675,7 +675,7 @@ class TestBackendProperties:
 
     def test_from_config(self):
         """Test backend creation from config."""
-        from mozart.core.config import BackendConfig
+        from marianne.core.config import BackendConfig
 
         config = BackendConfig(
             type="ollama",

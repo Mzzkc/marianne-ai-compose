@@ -14,10 +14,10 @@ from typing import Any
 
 import pytest
 
-from mozart.daemon.exceptions import JobSubmissionError
-from mozart.daemon.ipc.handler import RequestHandler
-from mozart.daemon.ipc.protocol import JsonRpcError, JsonRpcRequest, JsonRpcResponse
-from mozart.daemon.ipc.server import DaemonServer
+from marianne.daemon.exceptions import JobSubmissionError
+from marianne.daemon.ipc.handler import RequestHandler
+from marianne.daemon.ipc.protocol import JsonRpcError, JsonRpcRequest, JsonRpcResponse
+from marianne.daemon.ipc.server import DaemonServer
 
 
 # ---------------------------------------------------------------------------

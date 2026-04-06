@@ -10,9 +10,9 @@ from textwrap import dedent
 
 import pytest
 
-from mozart.core.config import JobConfig
-from mozart.validation.base import ValidationIssue, ValidationSeverity
-from mozart.validation.checks.best_practices import (
+from marianne.core.config import JobConfig
+from marianne.validation.base import ValidationIssue, ValidationSeverity
+from marianne.validation.checks.best_practices import (
     FanOutWithoutDependenciesCheck,
     FanOutWithoutParallelCheck,
     FileExistsOnlyCheck,

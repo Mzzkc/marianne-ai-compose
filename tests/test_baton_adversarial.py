@@ -26,12 +26,12 @@ import time
 
 import pytest
 
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.dispatch import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.dispatch import (
     DispatchConfig,
     dispatch_ready,
 )
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.events import (
     CancelJob,
     EscalationNeeded,
     EscalationResolved,
@@ -47,17 +47,17 @@ from mozart.daemon.baton.events import (
     SheetSkipped,
     ShutdownRequested,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     BatonJobState,
     BatonSheetStatus,
     CircuitBreakerState,
     InstrumentState,
     SheetExecutionState,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     SheetExecutionState as RichSheetExecutionState,
 )
-from mozart.daemon.baton.timer import TimerWheel
+from marianne.daemon.baton.timer import TimerWheel
 
 # ===========================================================================
 # F-018: validation_pass_rate contract — the landmine

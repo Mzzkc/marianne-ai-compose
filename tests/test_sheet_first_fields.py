@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mozart.core.config.job import JobConfig
+from marianne.core.config.job import JobConfig
 
 
 # --- Helpers ---

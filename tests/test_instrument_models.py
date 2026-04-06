@@ -20,7 +20,7 @@ class TestModelCapacity:
 
     def test_valid_model(self):
         """Test a fully specified model capacity."""
-        from mozart.core.config.instruments import ModelCapacity
+        from marianne.core.config.instruments import ModelCapacity
 
         mc = ModelCapacity(
             name="gemini-2.5-pro",
@@ -37,7 +37,7 @@ class TestModelCapacity:
 
     def test_optional_max_output_tokens(self):
         """max_output_tokens is optional (None by default)."""
-        from mozart.core.config.instruments import ModelCapacity
+        from marianne.core.config.instruments import ModelCapacity
 
         mc = ModelCapacity(
             name="test-model",
@@ -49,7 +49,7 @@ class TestModelCapacity:
 
     def test_context_window_must_be_positive(self):
         """context_window must be >= 1."""
-        from mozart.core.config.instruments import ModelCapacity
+        from marianne.core.config.instruments import ModelCapacity
 
         with pytest.raises(ValidationError, match="context_window"):
             ModelCapacity(
@@ -61,7 +61,7 @@ class TestModelCapacity:
 
     def test_cost_must_be_non_negative(self):
         """Costs cannot be negative."""
-        from mozart.core.config.instruments import ModelCapacity
+        from marianne.core.config.instruments import ModelCapacity
 
         with pytest.raises(ValidationError, match="cost_per_1k_input"):
             ModelCapacity(
@@ -73,7 +73,7 @@ class TestModelCapacity:
 
     def test_max_output_tokens_must_be_positive_if_set(self):
         """max_output_tokens must be >= 1 when provided."""
-        from mozart.core.config.instruments import ModelCapacity
+        from marianne.core.config.instruments import ModelCapacity
 
         with pytest.raises(ValidationError, match="max_output_tokens"):
             ModelCapacity(
@@ -86,7 +86,7 @@ class TestModelCapacity:
 
     def test_free_model(self):
         """Zero cost is valid (local models, free tiers)."""
-        from mozart.core.config.instruments import ModelCapacity
+        from marianne.core.config.instruments import ModelCapacity
 
         mc = ModelCapacity(
             name="local-llama",
@@ -106,7 +106,7 @@ class TestCliCommand:
 
     def test_minimal_command(self):
         """Test minimal CLI command with just executable and prompt flag."""
-        from mozart.core.config.instruments import CliCommand
+        from marianne.core.config.instruments import CliCommand
 
         cmd = CliCommand(
             executable="claude",
@@ -122,7 +122,7 @@ class TestCliCommand:
 
     def test_full_command(self):
         """Test fully-specified CLI command."""
-        from mozart.core.config.instruments import CliCommand
+        from marianne.core.config.instruments import CliCommand
 
         cmd = CliCommand(
             executable="codex",
@@ -144,7 +144,7 @@ class TestCliCommand:
 
     def test_null_prompt_flag_for_positional(self):
         """prompt_flag=None means the prompt is a positional argument."""
-        from mozart.core.config.instruments import CliCommand
+        from marianne.core.config.instruments import CliCommand
 
         cmd = CliCommand(executable="cline", prompt_flag=None)
         assert cmd.prompt_flag is None
@@ -158,7 +158,7 @@ class TestCliOutputConfig:
 
     def test_text_format_defaults(self):
         """Text format has sensible defaults — no path extraction."""
-        from mozart.core.config.instruments import CliOutputConfig
+        from marianne.core.config.instruments import CliOutputConfig
 
         out = CliOutputConfig()
         assert out.format == "text"
@@ -167,7 +167,7 @@ class TestCliOutputConfig:
 
     def test_json_format_with_paths(self):
         """JSON format specifies dot-paths for extraction."""
-        from mozart.core.config.instruments import CliOutputConfig
+        from marianne.core.config.instruments import CliOutputConfig
 
         out = CliOutputConfig(
             format="json",
@@ -182,7 +182,7 @@ class TestCliOutputConfig:
 
     def test_jsonl_format_with_event_filtering(self):
         """JSONL format specifies event type and filter for completion."""
-        from mozart.core.config.instruments import CliOutputConfig
+        from marianne.core.config.instruments import CliOutputConfig
 
         out = CliOutputConfig(
             format="jsonl",
@@ -195,7 +195,7 @@ class TestCliOutputConfig:
 
     def test_invalid_format_rejected(self):
         """Only text, json, jsonl are valid formats."""
-        from mozart.core.config.instruments import CliOutputConfig
+        from marianne.core.config.instruments import CliOutputConfig
 
         with pytest.raises(ValidationError, match="format"):
             CliOutputConfig(format="xml")  # type: ignore[arg-type]
@@ -209,7 +209,7 @@ class TestCliErrorConfig:
 
     def test_defaults(self):
         """Default is exit code 0 = success, no patterns."""
-        from mozart.core.config.instruments import CliErrorConfig
+        from marianne.core.config.instruments import CliErrorConfig
 
         err = CliErrorConfig()
         assert err.success_exit_codes == [0]
@@ -218,7 +218,7 @@ class TestCliErrorConfig:
 
     def test_custom_patterns(self):
         """Custom regex patterns for rate limits and auth errors."""
-        from mozart.core.config.instruments import CliErrorConfig
+        from marianne.core.config.instruments import CliErrorConfig
 
         err = CliErrorConfig(
             success_exit_codes=[0, 1],
@@ -230,7 +230,7 @@ class TestCliErrorConfig:
 
     def test_rate_limit_event_fields(self):
         """Structured rate limit detection for JSONL instruments."""
-        from mozart.core.config.instruments import CliErrorConfig
+        from marianne.core.config.instruments import CliErrorConfig
 
         err = CliErrorConfig(
             rate_limit_event_type="error",
@@ -247,7 +247,7 @@ class TestCliProfile:
 
     def test_minimal_profile(self):
         """Minimal CLI profile with just a command and output config."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
@@ -263,7 +263,7 @@ class TestCliProfile:
 
     def test_full_profile(self):
         """Full CLI profile with all sub-models specified."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliErrorConfig,
             CliOutputConfig,
@@ -301,7 +301,7 @@ class TestCodeModeConfig:
 
     def test_code_mode_interface(self):
         """CodeModeInterface stores TypeScript interface definitions."""
-        from mozart.core.config.instruments import CodeModeInterface
+        from marianne.core.config.instruments import CodeModeInterface
 
         iface = CodeModeInterface(
             name="Workspace",
@@ -313,7 +313,7 @@ class TestCodeModeConfig:
 
     def test_code_mode_config_defaults(self):
         """CodeModeConfig has sensible defaults."""
-        from mozart.core.config.instruments import CodeModeConfig
+        from marianne.core.config.instruments import CodeModeConfig
 
         cfg = CodeModeConfig()
         assert cfg.runtime == "deno"
@@ -322,7 +322,7 @@ class TestCodeModeConfig:
 
     def test_code_mode_config_with_interfaces(self):
         """CodeModeConfig with declared interfaces."""
-        from mozart.core.config.instruments import CodeModeConfig, CodeModeInterface
+        from marianne.core.config.instruments import CodeModeConfig, CodeModeInterface
 
         cfg = CodeModeConfig(
             runtime="node_vm",
@@ -339,14 +339,14 @@ class TestCodeModeConfig:
 
     def test_invalid_runtime_rejected(self):
         """Only deno, node_vm, v8_isolate are valid runtimes."""
-        from mozart.core.config.instruments import CodeModeConfig
+        from marianne.core.config.instruments import CodeModeConfig
 
         with pytest.raises(ValidationError, match="runtime"):
             CodeModeConfig(runtime="python")  # type: ignore[arg-type]
 
     def test_max_execution_ms_bounds(self):
         """max_execution_ms must be >= 100."""
-        from mozart.core.config.instruments import CodeModeConfig
+        from marianne.core.config.instruments import CodeModeConfig
 
         with pytest.raises(ValidationError, match="max_execution_ms"):
             CodeModeConfig(max_execution_ms=50)
@@ -360,7 +360,7 @@ class TestHttpProfile:
 
     def test_minimal_http_profile(self):
         """HttpProfile exists as a stub with base fields."""
-        from mozart.core.config.instruments import HttpProfile
+        from marianne.core.config.instruments import HttpProfile
 
         hp = HttpProfile(
             base_url="http://localhost:11434",
@@ -373,7 +373,7 @@ class TestHttpProfile:
 
     def test_invalid_schema_family(self):
         """Only openai, anthropic, gemini are valid."""
-        from mozart.core.config.instruments import HttpProfile
+        from marianne.core.config.instruments import HttpProfile
 
         with pytest.raises(ValidationError, match="schema_family"):
             HttpProfile(
@@ -390,7 +390,7 @@ class TestInstrumentProfile:
 
     def test_minimal_cli_instrument(self):
         """Minimal CLI instrument with required fields only."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
@@ -418,7 +418,7 @@ class TestInstrumentProfile:
 
     def test_full_cli_instrument(self):
         """Full CLI instrument profile (modeled on Gemini CLI from spec)."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliErrorConfig,
             CliOutputConfig,
@@ -482,7 +482,7 @@ class TestInstrumentProfile:
 
     def test_cli_instrument_requires_cli_profile(self):
         """kind=cli without cli profile should fail validation."""
-        from mozart.core.config.instruments import InstrumentProfile
+        from marianne.core.config.instruments import InstrumentProfile
 
         with pytest.raises(ValidationError, match="cli"):
             InstrumentProfile(
@@ -494,7 +494,7 @@ class TestInstrumentProfile:
 
     def test_http_instrument_requires_http_profile(self):
         """kind=http without http profile should fail validation."""
-        from mozart.core.config.instruments import InstrumentProfile
+        from marianne.core.config.instruments import InstrumentProfile
 
         with pytest.raises(ValidationError, match="http"):
             InstrumentProfile(
@@ -506,7 +506,7 @@ class TestInstrumentProfile:
 
     def test_invalid_kind_rejected(self):
         """Only cli and http are valid kinds."""
-        from mozart.core.config.instruments import InstrumentProfile
+        from marianne.core.config.instruments import InstrumentProfile
 
         with pytest.raises(ValidationError, match="kind"):
             InstrumentProfile(
@@ -517,7 +517,7 @@ class TestInstrumentProfile:
 
     def test_timeout_must_be_positive(self):
         """default_timeout_seconds must be > 0."""
-        from mozart.core.config.instruments import InstrumentProfile
+        from marianne.core.config.instruments import InstrumentProfile
 
         with pytest.raises(ValidationError, match="default_timeout_seconds"):
             InstrumentProfile(
@@ -529,7 +529,7 @@ class TestInstrumentProfile:
 
     def test_capabilities_as_list_coerced_to_set(self):
         """YAML loads capabilities as a list; Pydantic coerces to set."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
@@ -551,7 +551,7 @@ class TestInstrumentProfile:
 
     def test_description_is_optional(self):
         """description defaults to None."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
@@ -571,7 +571,7 @@ class TestInstrumentProfile:
 
     def test_serialization_roundtrip(self):
         """Profile can be serialized to dict and reconstructed."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
@@ -615,7 +615,7 @@ class TestInstrumentModelsAdversarial:
     @pytest.mark.adversarial
     def test_empty_name_rejected(self):
         """Empty string name should fail (Pydantic min_length or custom validator)."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
@@ -636,7 +636,7 @@ class TestInstrumentModelsAdversarial:
     @pytest.mark.adversarial
     def test_empty_executable_rejected(self):
         """Empty executable should fail."""
-        from mozart.core.config.instruments import CliCommand
+        from marianne.core.config.instruments import CliCommand
 
         with pytest.raises(ValidationError, match="executable"):
             CliCommand(executable="", prompt_flag="-p")
@@ -644,7 +644,7 @@ class TestInstrumentModelsAdversarial:
     @pytest.mark.adversarial
     def test_huge_context_window_accepted(self):
         """Very large context windows should be accepted (future models)."""
-        from mozart.core.config.instruments import ModelCapacity
+        from marianne.core.config.instruments import ModelCapacity
 
         mc = ModelCapacity(
             name="future-model",
@@ -657,7 +657,7 @@ class TestInstrumentModelsAdversarial:
     @pytest.mark.adversarial
     def test_unicode_names_accepted(self):
         """Unicode instrument names should work (international users)."""
-        from mozart.core.config.instruments import (
+        from marianne.core.config.instruments import (
             CliCommand,
             CliOutputConfig,
             CliProfile,
@@ -678,7 +678,7 @@ class TestInstrumentModelsAdversarial:
     @pytest.mark.adversarial
     def test_extra_fields_rejected(self):
         """Unknown fields in YAML must raise errors (extra='forbid')."""
-        from mozart.core.config.instruments import ModelCapacity
+        from marianne.core.config.instruments import ModelCapacity
 
         # Composer directive: unknown fields are errors, not silent ignores.
         # Forward compat is handled by explicit schema versioning, not

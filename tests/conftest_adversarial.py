@@ -456,7 +456,7 @@ def strict_mock(spec_class: type, **kwargs: Any) -> Any:
     Example::
 
         from tests.conftest_adversarial import strict_mock
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         mock_state = strict_mock(CheckpointState)
         mock_state.job_id = "test-123"

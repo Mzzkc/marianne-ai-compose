@@ -17,11 +17,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.checkpoint import CheckpointState, SheetStatus
-from mozart.core.config import JobConfig
-from mozart.core.errors import ClassificationResult, ClassifiedError, ErrorCategory, ErrorCode
-from mozart.execution.runner.models import (
+from marianne.backends.base import ExecutionResult
+from marianne.core.checkpoint import CheckpointState, SheetStatus
+from marianne.core.config import JobConfig
+from marianne.core.errors import ClassificationResult, ClassifiedError, ErrorCategory, ErrorCode
+from marianne.execution.runner.models import (
     ExecutionFailureContext,
     FatalError,
     GracefulShutdownError,
@@ -107,11 +107,11 @@ class _MockMixin:
     def __init__(self, config: JobConfig) -> None:
         from rich.console import Console
 
-        from mozart.core.errors import ErrorClassifier
-        from mozart.core.logging import get_logger
-        from mozart.execution.preflight import PreflightChecker
-        from mozart.execution.retry_strategy import AdaptiveRetryStrategy, RetryStrategyConfig
-        from mozart.prompts.templating import PromptBuilder
+        from marianne.core.errors import ErrorClassifier
+        from marianne.core.logging import get_logger
+        from marianne.execution.preflight import PreflightChecker
+        from marianne.execution.retry_strategy import AdaptiveRetryStrategy, RetryStrategyConfig
+        from marianne.prompts.templating import PromptBuilder
 
         self.config = config
         self.backend = MagicMock()
@@ -204,9 +204,9 @@ class _MockMixin:
 
 
 # Dynamically compose the mixin for testing
-from mozart.execution.runner.context import ContextBuildingMixin
-from mozart.execution.runner.recovery import RecoveryMixin
-from mozart.execution.runner.sheet import SheetExecutionMixin
+from marianne.execution.runner.context import ContextBuildingMixin
+from marianne.execution.runner.recovery import RecoveryMixin
+from marianne.execution.runner.sheet import SheetExecutionMixin
 
 
 class _TestableSheetMixin(_MockMixin, SheetExecutionMixin, ContextBuildingMixin, RecoveryMixin):
@@ -737,7 +737,7 @@ class TestHandleEscalation:
 
     @pytest.mark.asyncio
     async def test_escalation_returns_response(self, mixin: _TestableSheetMixin):
-        from mozart.execution.escalation import EscalationResponse
+        from marianne.execution.escalation import EscalationResponse
 
         handler = AsyncMock()
         handler.escalate = AsyncMock(
@@ -771,7 +771,7 @@ class TestExecuteSheetWithRecovery:
         # Mock validation to pass
         mock_vr = _make_validation_result(all_passed=True)
         with patch(
-            "mozart.execution.runner.sheet.ValidationEngine"
+            "marianne.execution.runner.sheet.ValidationEngine"
         ) as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
@@ -789,7 +789,7 @@ class TestExecuteSheetWithRecovery:
         state = _make_state()
 
         # Mock preflight to fail
-        from mozart.execution.preflight import PreflightResult, PromptMetrics
+        from marianne.execution.preflight import PreflightResult, PromptMetrics
 
         failed_preflight = PreflightResult(
             errors=["workspace does not exist"],
@@ -802,7 +802,7 @@ class TestExecuteSheetWithRecovery:
         mixin.preflight_checker.check = MagicMock(return_value=failed_preflight)
 
         with patch(
-            "mozart.execution.runner.sheet.ValidationEngine"
+            "marianne.execution.runner.sheet.ValidationEngine"
         ), pytest.raises(FatalError, match="Preflight check failed"):
             await mixin._execute_sheet_with_recovery(state, sheet_num=1)
 
@@ -825,7 +825,7 @@ class TestExecuteSheetWithRecovery:
         )
 
         with patch(
-            "mozart.execution.runner.sheet.ValidationEngine"
+            "marianne.execution.runner.sheet.ValidationEngine"
         ) as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
@@ -847,7 +847,7 @@ class TestExecuteSheetWithRecovery:
         mock_vr = _make_validation_result(all_passed=True)
 
         with patch(
-            "mozart.execution.runner.sheet.ValidationEngine"
+            "marianne.execution.runner.sheet.ValidationEngine"
         ) as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
@@ -873,7 +873,7 @@ class TestExecuteSheetWithRecovery:
         pass_vr = _make_validation_result(all_passed=True)
 
         with patch(
-            "mozart.execution.runner.sheet.ValidationEngine"
+            "marianne.execution.runner.sheet.ValidationEngine"
         ) as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
@@ -960,7 +960,7 @@ class TestCircuitBreakerBlocking:
         mixin._circuit_breaker = cb
 
         mock_vr = _make_validation_result(all_passed=True)
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=mock_vr)
@@ -987,7 +987,7 @@ class TestCompletionModeFlow:
         # Second: all pass
         full_vr = _make_validation_result(all_passed=True)
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(side_effect=[partial_vr, full_vr])
@@ -1013,7 +1013,7 @@ class TestCompletionModeFlow:
             return_value=_make_execution_result(success=True, exit_code=0)
         )
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             # Return partial results for more iterations than max_retries + max_completion
@@ -1032,7 +1032,7 @@ class TestEscalationModeFlow:
     @pytest.mark.asyncio
     async def test_escalation_skip_marks_completed(self, mixin: _TestableSheetMixin):
         """Escalation with skip action -> sheet completed (with validation_passed=False)."""
-        from mozart.execution.escalation import EscalationResponse
+        from marianne.execution.escalation import EscalationResponse
 
         state = _make_state()
         mixin.config.learning.escalation_enabled = True
@@ -1051,7 +1051,7 @@ class TestEscalationModeFlow:
             return_value=_make_execution_result(success=True, exit_code=0)
         )
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=low_vr)
@@ -1065,7 +1065,7 @@ class TestEscalationModeFlow:
     @pytest.mark.asyncio
     async def test_escalation_abort_raises_fatal(self, mixin: _TestableSheetMixin):
         """Escalation with abort action -> FatalError raised."""
-        from mozart.execution.escalation import EscalationResponse
+        from marianne.execution.escalation import EscalationResponse
 
         state = _make_state()
         mixin.config.learning.escalation_enabled = True
@@ -1082,7 +1082,7 @@ class TestEscalationModeFlow:
             return_value=_make_execution_result(success=True, exit_code=0)
         )
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=low_vr)
@@ -1096,7 +1096,7 @@ class TestEscalationModeFlow:
     @pytest.mark.asyncio
     async def test_escalation_modify_prompt_retries(self, mixin: _TestableSheetMixin):
         """Escalation with modify_prompt -> retries with new prompt -> succeeds."""
-        from mozart.execution.escalation import EscalationResponse
+        from marianne.execution.escalation import EscalationResponse
 
         state = _make_state()
         mixin.config.learning.escalation_enabled = True
@@ -1119,7 +1119,7 @@ class TestEscalationModeFlow:
             return_value=_make_execution_result(success=True, exit_code=0)
         )
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(side_effect=[low_vr, pass_vr])
@@ -1136,7 +1136,7 @@ class TestAdaptiveRetryAbort:
     @pytest.mark.asyncio
     async def test_adaptive_strategy_aborts_early(self, mixin: _TestableSheetMixin):
         """Adaptive retry recommends stopping -> FatalError with abort reason."""
-        from mozart.execution.retry_strategy import RetryPattern, RetryRecommendation
+        from marianne.execution.retry_strategy import RetryPattern, RetryRecommendation
 
         state = _make_state()
 
@@ -1161,7 +1161,7 @@ class TestAdaptiveRetryAbort:
             all_passed=False, pass_pct=0.0, confidence=0.5,
         )
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=fail_vr)
@@ -1212,7 +1212,7 @@ class TestRateLimitHandling:
         rate_limit_class.primary = rate_limit_error
         mixin._classify_execution = MagicMock(return_value=rate_limit_class)
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(side_effect=[pass_vr])
@@ -1245,7 +1245,7 @@ class TestCrossWorkspaceRateLimit:
         mixin._global_learning_store = store
 
         mock_vr = _make_validation_result(all_passed=True)
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=mock_vr)
@@ -1293,7 +1293,7 @@ class TestNonRetriableError:
         fatal_class.all_errors = [fatal_error]
         mixin._classify_execution = MagicMock(return_value=fatal_class)
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=fail_vr)
@@ -1578,7 +1578,7 @@ class TestSheetStartedEvent:
 
         state = _make_state()
         mock_vr = _make_validation_result(all_passed=True)
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=mock_vr)
@@ -1608,7 +1608,7 @@ class TestSheetCompletedEvent:
 
         state = _make_state()
         mock_vr = _make_validation_result(all_passed=True)
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=mock_vr)
@@ -1663,7 +1663,7 @@ class TestSheetFailedEvent:
         fatal_class.all_errors = [fatal_error]
         mixin._classify_execution = MagicMock(return_value=fatal_class)
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=fail_vr)
@@ -1696,7 +1696,7 @@ class TestSheetFailedEvent:
         )
         fail_vr = _make_validation_result(all_passed=False, pass_pct=0.0, confidence=0.5)
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=fail_vr)
@@ -1733,7 +1733,7 @@ class TestSheetValidationPassedEvent:
         mock_vr.failed_count = 0
         mock_vr.pass_percentage = 100.0
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(return_value=mock_vr)
@@ -1772,7 +1772,7 @@ class TestSheetValidationFailedEvent:
         pass_vr.failed_count = 0
         pass_vr.pass_percentage = 100.0
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(side_effect=[fail_vr, pass_vr])
@@ -1810,7 +1810,7 @@ class TestSheetRetryingEvent:
         fail_vr = _make_validation_result(all_passed=False, pass_pct=0.0, confidence=0.5)
         pass_vr = _make_validation_result(all_passed=True)
 
-        with patch("mozart.execution.runner.sheet.ValidationEngine") as MockVE:
+        with patch("marianne.execution.runner.sheet.ValidationEngine") as MockVE:
             ve_instance = MockVE.return_value
             ve_instance.get_applicable_rules.return_value = []
             ve_instance.run_validations = AsyncMock(side_effect=[fail_vr, pass_vr])

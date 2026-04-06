@@ -14,18 +14,18 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import create_autospec, patch
 
-from mozart.backends.base import ExecutionResult
+from marianne.backends.base import ExecutionResult
 
 import pytest
 
-from mozart.healing.context import ErrorContext
-from mozart.healing.coordinator import HealingReport, SelfHealingCoordinator
-from mozart.healing.diagnosis import Diagnosis, DiagnosisEngine
-from mozart.healing.registry import RemedyRegistry, create_default_registry
-from mozart.healing.remedies.base import BaseRemedy, RemedyCategory, RemedyResult, RiskLevel
-from mozart.healing.remedies.diagnostics import DiagnoseAuthErrorRemedy, DiagnoseMissingCLIRemedy
-from mozart.healing.remedies.jinja import SuggestJinjaFixRemedy
-from mozart.healing.remedies.paths import (
+from marianne.healing.context import ErrorContext
+from marianne.healing.coordinator import HealingReport, SelfHealingCoordinator
+from marianne.healing.diagnosis import Diagnosis, DiagnosisEngine
+from marianne.healing.registry import RemedyRegistry, create_default_registry
+from marianne.healing.remedies.base import BaseRemedy, RemedyCategory, RemedyResult, RiskLevel
+from marianne.healing.remedies.diagnostics import DiagnoseAuthErrorRemedy, DiagnoseMissingCLIRemedy
+from marianne.healing.remedies.jinja import SuggestJinjaFixRemedy
+from marianne.healing.remedies.paths import (
     CreateMissingParentDirsRemedy,
     CreateMissingWorkspaceRemedy,
     FixPathSeparatorsRemedy,

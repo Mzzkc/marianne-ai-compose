@@ -20,8 +20,8 @@ from unittest.mock import patch
 
 import pytest
 
-from mozart.core.checkpoint import SheetState
-from mozart.execution.escalation import (
+from marianne.core.checkpoint import SheetState
+from marianne.execution.escalation import (
     CheckpointContext,
     CheckpointResponse,
     CheckpointTrigger,
@@ -30,8 +30,8 @@ from mozart.execution.escalation import (
     EscalationContext,
     HistoricalSuggestion,
 )
-from mozart.execution.validation import SheetValidationResult
-from mozart.learning.global_store import (
+from marianne.execution.validation import SheetValidationResult
+from marianne.learning.global_store import (
     EscalationDecisionRecord,
     GlobalLearningStore,
 )
@@ -869,8 +869,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test that _update_escalation_outcome returns early if global learning store is None."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         # Create a mock runner with no global learning store
         runner = MagicMock(spec=JobRunner)
@@ -897,8 +897,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test that _update_escalation_outcome returns early if no escalation_record_id."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         runner = MagicMock(spec=JobRunner)
         runner._global_learning_store = global_store
@@ -922,8 +922,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test that _update_escalation_outcome handles outcome_data being None."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         runner = MagicMock(spec=JobRunner)
         runner._global_learning_store = global_store
@@ -947,8 +947,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test that _update_escalation_outcome calls the store with correct parameters."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         # First, record an escalation decision to get a valid ID
         record_id = global_store.record_escalation_decision(
@@ -989,8 +989,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test that _update_escalation_outcome logs warning when record not found."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         runner = MagicMock(spec=JobRunner)
         runner._global_learning_store = global_store
@@ -1014,8 +1014,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test that _update_escalation_outcome logs warning on exception."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         # Create a mock store that raises an exception
         mock_store = MagicMock()
@@ -1052,8 +1052,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test escalation outcome updated to 'success' when sheet succeeds after retry."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         # Record escalation with retry action
         record_id = global_store.record_escalation_decision(
@@ -1090,8 +1090,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test escalation outcome updated to 'failed' when retries exhausted."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         record_id = global_store.record_escalation_decision(
             job_id="retry-failed-job",
@@ -1123,8 +1123,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test escalation outcome updated to 'skipped' when user skips."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         record_id = global_store.record_escalation_decision(
             job_id="skip-job",
@@ -1156,8 +1156,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """Test escalation outcome updated to 'aborted' when user aborts."""
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         record_id = global_store.record_escalation_decision(
             job_id="abort-job",
@@ -1193,8 +1193,8 @@ class TestRunnerEscalationOutcomeIntegration:
         """
         from unittest.mock import MagicMock
 
-        from mozart.core.checkpoint import SheetState, SheetStatus
-        from mozart.execution.runner import JobRunner
+        from marianne.core.checkpoint import SheetState, SheetStatus
+        from marianne.execution.runner import JobRunner
 
         # 1. Simulate escalation recording (what _handle_escalation does)
         record_id = global_store.record_escalation_decision(
@@ -1844,7 +1844,7 @@ class TestConsoleCheckpointHandler:
     @pytest.fixture
     def handler(self) -> "ConsoleCheckpointHandler":
         """Create a ConsoleCheckpointHandler for testing."""
-        from mozart.execution.escalation import ConsoleCheckpointHandler
+        from marianne.execution.escalation import ConsoleCheckpointHandler
         return ConsoleCheckpointHandler()
 
     @pytest.mark.asyncio
@@ -2106,7 +2106,7 @@ class TestCheckpointConfig:
 
     def test_checkpoint_config_defaults(self) -> None:
         """Test CheckpointConfig default values."""
-        from mozart.core.config import CheckpointConfig
+        from marianne.core.config import CheckpointConfig
 
         config = CheckpointConfig()
 
@@ -2115,7 +2115,7 @@ class TestCheckpointConfig:
 
     def test_checkpoint_config_with_triggers(self) -> None:
         """Test CheckpointConfig with triggers."""
-        from mozart.core.config import CheckpointConfig, CheckpointTriggerConfig
+        from marianne.core.config import CheckpointConfig, CheckpointTriggerConfig
 
         config = CheckpointConfig(
             enabled=True,
@@ -2139,7 +2139,7 @@ class TestCheckpointConfig:
 
     def test_checkpoint_trigger_config_validation(self) -> None:
         """Test CheckpointTriggerConfig validation."""
-        from mozart.core.config import CheckpointTriggerConfig
+        from marianne.core.config import CheckpointTriggerConfig
 
         trigger = CheckpointTriggerConfig(
             name="test",
@@ -2183,7 +2183,7 @@ class TestEscalationDecisionLogic:
         )
 
     def _make_sheet_state(self, attempt_count: int = 1) -> SheetState:
-        from mozart.core.checkpoint import SheetStatus
+        from marianne.core.checkpoint import SheetStatus
         return SheetState(
             sheet_num=1,
             status=SheetStatus.IN_PROGRESS,

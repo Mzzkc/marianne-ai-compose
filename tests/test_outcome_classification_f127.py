@@ -10,7 +10,7 @@ TDD: Tests written first, implementation follows.
 
 import pytest
 
-from mozart.execution.runner.sheet import SheetExecutionMixin
+from marianne.execution.runner.sheet import SheetExecutionMixin
 
 
 class TestClassifySuccessOutcomeCumulative:

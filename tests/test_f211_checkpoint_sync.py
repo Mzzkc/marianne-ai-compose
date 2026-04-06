@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from mozart.daemon.baton.adapter import BatonAdapter
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.adapter import BatonAdapter
+from marianne.daemon.baton.events import (
     BatonEvent,
     CancelJob,
     EscalationNeeded,
@@ -28,7 +28,7 @@ from mozart.daemon.baton.events import (
     SheetSkipped,
     ShutdownRequested,
 )
-from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
 
 # =============================================================================

@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import structlog
 
-from mozart.core.checkpoint import CheckpointState
-from mozart.state.base import StateBackend
+from marianne.core.checkpoint import CheckpointState
+from marianne.state.base import StateBackend
 
 
 class MockStateBackend(StateBackend):
@@ -77,7 +77,7 @@ def reset_output_level() -> Generator[None, None, None]:
     Prevents quiet/verbose mode from leaking between tests
     when typer callbacks set module-level state.
     """
-    from mozart.cli.helpers import OutputLevel, set_output_level
+    from marianne.cli.helpers import OutputLevel, set_output_level
 
     set_output_level(OutputLevel.NORMAL)
     yield
@@ -91,7 +91,7 @@ def reset_logging_state() -> Generator[None, None, None]:
     This ensures test isolation for logging configuration.
     """
     # Import helpers module directly for access to internal state
-    from mozart.cli import helpers as cli_helpers
+    from marianne.cli import helpers as cli_helpers
 
     # Store original state from the CliLoggingConfig dataclass
     cfg = cli_helpers._log_config
@@ -143,7 +143,7 @@ def no_daemon_detection() -> Generator[None, None, None]:
     tests mock ``try_daemon_route`` directly where needed.
     """
     with patch(
-        "mozart.dashboard.services.job_control.JobControlService.is_daemon_available",
+        "marianne.dashboard.services.job_control.JobControlService.is_daemon_available",
         new_callable=AsyncMock,
         return_value=False,
     ):

@@ -22,8 +22,8 @@ import pytest
 import typer
 import yaml
 
-from mozart.cli.commands.resume import _reconstruct_config
-from mozart.core.checkpoint import CheckpointState, JobStatus
+from marianne.cli.commands.resume import _reconstruct_config
+from marianne.core.checkpoint import CheckpointState, JobStatus
 
 
 def _make_state(
@@ -65,7 +65,7 @@ class TestResumeConfigLoadErrorHints:
 
         with (
             patch(
-                "mozart.cli.commands.resume.output_error"
+                "marianne.cli.commands.resume.output_error"
             ) as mock_error,
             pytest.raises(typer.Exit),
         ):
@@ -93,7 +93,7 @@ class TestResumeConfigLoadErrorHints:
 
         with (
             patch(
-                "mozart.cli.commands.resume.output_error"
+                "marianne.cli.commands.resume.output_error"
             ) as mock_error,
             pytest.raises(typer.Exit),
         ):
@@ -113,7 +113,7 @@ class TestResumeConfigLoadErrorHints:
 
         with (
             patch(
-                "mozart.cli.commands.resume.output_error"
+                "marianne.cli.commands.resume.output_error"
             ) as mock_error,
             pytest.raises(typer.Exit),
         ):

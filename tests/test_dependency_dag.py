@@ -11,7 +11,7 @@ Comprehensive tests for the DependencyDAG class including:
 
 import pytest
 
-from mozart.execution.dag import (
+from marianne.execution.dag import (
     CycleDetectedError,
     DependencyDAG,
     InvalidDependencyError,
@@ -570,7 +570,7 @@ class TestConfigIntegration:
 
     def test_sheet_config_accepts_dependencies(self) -> None:
         """SheetConfig accepts valid dependencies."""
-        from mozart.core.config import SheetConfig
+        from marianne.core.config import SheetConfig
 
         config = SheetConfig(
             size=1,
@@ -583,7 +583,7 @@ class TestConfigIntegration:
 
     def test_sheet_config_empty_dependencies(self) -> None:
         """SheetConfig with no dependencies uses empty dict."""
-        from mozart.core.config import SheetConfig
+        from marianne.core.config import SheetConfig
 
         config = SheetConfig(size=10, total_items=100)
 
@@ -593,7 +593,7 @@ class TestConfigIntegration:
         """SheetConfig rejects self-dependency at validation time."""
         from pydantic import ValidationError
 
-        from mozart.core.config import SheetConfig
+        from marianne.core.config import SheetConfig
 
         with pytest.raises(ValidationError) as exc_info:
             SheetConfig(
@@ -608,7 +608,7 @@ class TestConfigIntegration:
         """SheetConfig rejects non-integer dependencies."""
         from pydantic import ValidationError
 
-        from mozart.core.config import SheetConfig
+        from marianne.core.config import SheetConfig
 
         with pytest.raises(ValidationError):
             SheetConfig(
@@ -619,7 +619,7 @@ class TestConfigIntegration:
 
     def test_job_config_with_dependencies(self) -> None:
         """Full JobConfig with dependencies parses correctly."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config = JobConfig.from_yaml_string("""
 name: test-job
@@ -649,8 +649,8 @@ class TestRunnerIntegration:
         """JobRunner builds DAG when dependencies configured."""
         from unittest.mock import MagicMock
 
-        from mozart.core.config import JobConfig
-        from mozart.execution.runner import JobRunner
+        from marianne.core.config import JobConfig
+        from marianne.execution.runner import JobRunner
 
         config = JobConfig.from_yaml_string("""
 name: test-job
@@ -679,8 +679,8 @@ prompt:
         """JobRunner has no DAG when no dependencies configured."""
         from unittest.mock import MagicMock
 
-        from mozart.core.config import JobConfig
-        from mozart.execution.runner import JobRunner
+        from marianne.core.config import JobConfig
+        from marianne.execution.runner import JobRunner
 
         config = JobConfig.from_yaml_string("""
 name: test-job
@@ -702,7 +702,7 @@ prompt:
         """Out-of-range dependency is caught at config parse time."""
         from pydantic import ValidationError
 
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         # Out-of-range dependency (sheet 10 doesn't exist in a 3-sheet job)
         # is now caught by SheetConfig.validate_dependency_range at parse time.

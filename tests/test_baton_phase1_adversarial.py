@@ -28,14 +28,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.daemon.baton.adapter import (
+from marianne.daemon.baton.adapter import (
     BatonAdapter,
     baton_to_checkpoint_status,
     checkpoint_to_baton_status,
 )
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.dispatch import DispatchConfig, dispatch_ready
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.dispatch import DispatchConfig, dispatch_ready
+from marianne.daemon.baton.events import (
     CancelJob,
     DispatchRetry,
     EscalationNeeded,
@@ -52,7 +52,7 @@ from mozart.daemon.baton.events import (
     SheetSkipped,
     ShutdownRequested,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     BatonSheetStatus,
     SheetExecutionState,
 )
@@ -1503,7 +1503,7 @@ class TestObserverEventConversion:
 
     def test_all_event_types_convert_to_observer_event(self) -> None:
         """Every event type in the BatonEvent union must convert cleanly."""
-        from mozart.daemon.baton.events import to_observer_event
+        from marianne.daemon.baton.events import to_observer_event
 
         events = [
             SheetAttemptResult(job_id="j1", sheet_num=1, instrument_name="cli", attempt=1),

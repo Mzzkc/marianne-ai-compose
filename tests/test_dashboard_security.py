@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from mozart.dashboard.auth.security import (
+from marianne.dashboard.auth.security import (
     SecurityConfig,
     SecurityHeadersMiddleware,
     configure_cors,
@@ -307,7 +307,7 @@ class TestSecurityIntegration:
 
     def test_combined_middleware(self):
         """Test security headers and auth work together."""
-        from mozart.dashboard.auth import AuthConfig, AuthMiddleware, AuthMode
+        from marianne.dashboard.auth import AuthConfig, AuthMiddleware, AuthMode
 
         app = FastAPI()
 

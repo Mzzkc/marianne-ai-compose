@@ -18,7 +18,7 @@ from io import StringIO
 import pytest
 from rich.console import Console
 
-from mozart.core.checkpoint import (
+from marianne.core.checkpoint import (
     CheckpointState,
     JobStatus,
     SheetState,
@@ -90,7 +90,7 @@ class TestMovementGrouping:
 
     def test_three_movement_job_shows_movement_headers(self) -> None:
         """A 3-movement job with movement metadata shows grouped display."""
-        from mozart.cli.commands.status import _render_movement_grouped_details
+        from marianne.cli.commands.status import _render_movement_grouped_details
 
         sheets = {
             1: _make_sheet(1, SheetStatus.COMPLETED, movement=1),
@@ -109,7 +109,7 @@ class TestMovementGrouping:
 
     def test_voices_shown_as_sub_items(self) -> None:
         """Voices within a movement appear as indented sub-items."""
-        from mozart.cli.commands.status import _render_movement_grouped_details
+        from marianne.cli.commands.status import _render_movement_grouped_details
 
         sheets = {
             1: _make_sheet(1, SheetStatus.COMPLETED, movement=1),
@@ -131,7 +131,7 @@ class TestMovementGrouping:
 
     def test_completed_movement_shows_checkmark(self) -> None:
         """Completed movements display a completion indicator."""
-        from mozart.cli.commands.status import _render_movement_grouped_details
+        from marianne.cli.commands.status import _render_movement_grouped_details
 
         sheets = {
             1: _make_sheet(1, SheetStatus.COMPLETED, movement=1),
@@ -150,7 +150,7 @@ class TestMovementGrouping:
 
     def test_running_movement_shows_progress(self) -> None:
         """A movement with in-progress sheets shows running indicator."""
-        from mozart.cli.commands.status import _render_movement_grouped_details
+        from marianne.cli.commands.status import _render_movement_grouped_details
 
         sheets = {
             1: _make_sheet(1, SheetStatus.COMPLETED, movement=1),
@@ -171,7 +171,7 @@ class TestMovementGrouping:
 
     def test_instrument_shown_when_heterogeneous(self) -> None:
         """Instrument name shown when movements use different instruments."""
-        from mozart.cli.commands.status import _render_movement_grouped_details
+        from marianne.cli.commands.status import _render_movement_grouped_details
 
         sheets = {
             1: _make_sheet(
@@ -194,7 +194,7 @@ class TestMovementGrouping:
 
     def test_instrument_hidden_when_uniform(self) -> None:
         """Instrument name NOT shown when all movements use the same one."""
-        from mozart.cli.commands.status import _render_movement_grouped_details
+        from marianne.cli.commands.status import _render_movement_grouped_details
 
         sheets = {
             1: _make_sheet(
@@ -220,7 +220,7 @@ class TestMovementGrouping:
 
     def test_failed_movement_shows_error(self) -> None:
         """Failed movements show the error status clearly."""
-        from mozart.cli.commands.status import _render_movement_grouped_details
+        from marianne.cli.commands.status import _render_movement_grouped_details
 
         sheets = {
             1: _make_sheet(1, SheetStatus.COMPLETED, movement=1),
@@ -242,7 +242,7 @@ class TestMovementGrouping:
 
     def test_descriptions_from_config_snapshot(self) -> None:
         """Sheet descriptions from config_snapshot appear in grouped view."""
-        from mozart.cli.commands.status import _render_movement_grouped_details
+        from marianne.cli.commands.status import _render_movement_grouped_details
 
         sheets = {
             1: _make_sheet(1, SheetStatus.COMPLETED, movement=1),
@@ -270,7 +270,7 @@ class TestMovementGroupingIntegration:
 
     def test_has_movement_data_returns_true(self) -> None:
         """_has_movement_data returns True when sheets have movement populated."""
-        from mozart.cli.commands.status import _has_movement_data
+        from marianne.cli.commands.status import _has_movement_data
 
         sheets = {
             1: _make_sheet(1, movement=1),
@@ -281,7 +281,7 @@ class TestMovementGroupingIntegration:
 
     def test_has_movement_data_returns_false_for_legacy(self) -> None:
         """_has_movement_data returns False for legacy jobs without movement."""
-        from mozart.cli.commands.status import _has_movement_data
+        from marianne.cli.commands.status import _has_movement_data
 
         sheets = {
             1: _make_sheet(1),
@@ -292,7 +292,7 @@ class TestMovementGroupingIntegration:
 
     def test_large_score_with_movements_uses_grouped_not_summary(self) -> None:
         """A score with 100+ sheets but movement data uses grouped view."""
-        from mozart.cli.commands.status import _has_movement_data
+        from marianne.cli.commands.status import _has_movement_data
 
         sheets = {}
         for i in range(1, 101):
@@ -308,7 +308,7 @@ class TestMovementGroupedJSON:
 
     def test_json_includes_movements_array(self) -> None:
         """JSON output includes a movements array when movement data exists."""
-        from mozart.cli.commands.status import _build_movement_groups
+        from marianne.cli.commands.status import _build_movement_groups
 
         sheets = {
             1: _make_sheet(1, SheetStatus.COMPLETED, movement=1),
@@ -329,7 +329,7 @@ class TestMovementGroupedJSON:
 
     def test_movement_group_status_derived_correctly(self) -> None:
         """Each movement group has a derived status based on its sheets."""
-        from mozart.cli.commands.status import _build_movement_groups
+        from marianne.cli.commands.status import _build_movement_groups
 
         sheets = {
             1: _make_sheet(1, SheetStatus.COMPLETED, movement=1),

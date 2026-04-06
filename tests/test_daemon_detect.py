@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mozart.daemon.detect import (
+from marianne.daemon.detect import (
     _resolve_socket_path,
     is_daemon_available,
     try_daemon_route,
@@ -40,9 +40,9 @@ class TestResolveSocketPath:
 
 
 # The DaemonClient is imported INSIDE the function body via
-# `from mozart.daemon.ipc.client import DaemonClient`, so we patch it
+# `from marianne.daemon.ipc.client import DaemonClient`, so we patch it
 # at the source module.
-_CLIENT_PATH = "mozart.daemon.ipc.client.DaemonClient"
+_CLIENT_PATH = "marianne.daemon.ipc.client.DaemonClient"
 
 
 @pytest.mark.asyncio
@@ -187,7 +187,7 @@ class TestTryDaemonRoute:
         daemon IS running but slow.  This must raise DaemonError so
         callers show "conductor busy" instead of "conductor not running".
         """
-        from mozart.daemon.exceptions import DaemonError
+        from marianne.daemon.exceptions import DaemonError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value
@@ -223,7 +223,7 @@ class TestTryDaemonRoute:
         propagate as DaemonError so callers show "conductor error" instead
         of the misleading "conductor not running".
         """
-        from mozart.daemon.exceptions import DaemonError
+        from marianne.daemon.exceptions import DaemonError
 
         with patch(_CLIENT_PATH) as MockClient:
             client = MockClient.return_value

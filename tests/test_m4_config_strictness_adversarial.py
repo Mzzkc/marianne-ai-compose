@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from mozart.core.config.backend import (
+from marianne.core.config.backend import (
     BackendConfig,
     BridgeConfig,
     MCPServerConfig,
@@ -22,7 +22,7 @@ from mozart.core.config.backend import (
     RecursiveLightConfig,
     SheetBackendOverride,
 )
-from mozart.core.config.execution import (
+from marianne.core.config.execution import (
     CircuitBreakerConfig,
     CostLimitConfig,
     ParallelConfig,
@@ -33,7 +33,7 @@ from mozart.core.config.execution import (
     StaleDetectionConfig,
     ValidationRule,
 )
-from mozart.core.config.job import (
+from marianne.core.config.job import (
     InjectionItem,
     InstrumentDef,
     JobConfig,
@@ -41,7 +41,7 @@ from mozart.core.config.job import (
     PromptConfig,
     SheetConfig,
 )
-from mozart.core.config.learning import (
+from marianne.core.config.learning import (
     AutoApplyConfig,
     CheckpointConfig,
     CheckpointTriggerConfig,
@@ -51,15 +51,15 @@ from mozart.core.config.learning import (
     GroundingHookConfig,
     LearningConfig,
 )
-from mozart.core.config.orchestration import (
+from marianne.core.config.orchestration import (
     ConcertConfig,
     ConductorConfig,
     ConductorPreferences,
     NotificationConfig,
     PostSuccessHookConfig,
 )
-from mozart.core.config.spec import SpecCorpusConfig, SpecFragment
-from mozart.core.config.workspace import (
+from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
+from marianne.core.config.workspace import (
     AIReviewConfig,
     CrossSheetConfig,
     FeedbackConfig,
@@ -331,7 +331,7 @@ class TestLoadCheckpointDaemonRegistry:
         manager._registry = AsyncMock()
         manager._registry.load_checkpoint = AsyncMock(return_value=None)
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))
@@ -345,7 +345,7 @@ class TestLoadCheckpointDaemonRegistry:
         import json
         from unittest.mock import AsyncMock, MagicMock
 
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         state = CheckpointState(
             job_id="test-job",
@@ -359,7 +359,7 @@ class TestLoadCheckpointDaemonRegistry:
         manager._registry = AsyncMock()
         manager._registry.load_checkpoint = AsyncMock(return_value=checkpoint_json)
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))
@@ -377,7 +377,7 @@ class TestLoadCheckpointDaemonRegistry:
         manager._registry = AsyncMock()
         manager._registry.load_checkpoint = AsyncMock(return_value="{corrupt json!!")
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))
@@ -395,7 +395,7 @@ class TestLoadCheckpointDaemonRegistry:
             return_value='{"not_a_real_field": 123}'
         )
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))
@@ -427,7 +427,7 @@ class TestLoadCheckpointDaemonRegistry:
             # Registry says no checkpoint
             manager._registry.load_checkpoint = AsyncMock(return_value=None)
 
-            from mozart.daemon.manager import JobManager
+            from marianne.daemon.manager import JobManager
 
             result = asyncio.run(
                 JobManager._load_checkpoint(manager, "test-job", Path(tmp))
@@ -444,7 +444,7 @@ class TestLoadCheckpointDaemonRegistry:
         manager._registry = AsyncMock()
         manager._registry.load_checkpoint = AsyncMock(return_value="")
 
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         result = asyncio.run(
             JobManager._load_checkpoint(manager, "test-job", __import__("pathlib").Path("/tmp/ws"))

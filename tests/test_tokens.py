@@ -8,7 +8,7 @@ import math
 
 import pytest
 
-from mozart.core.tokens import (
+from marianne.core.tokens import (
     _CHARS_PER_TOKEN,
     _DEFAULT_EFFECTIVE_WINDOW,
     _INSTRUMENT_EFFECTIVE_WINDOWS,
@@ -330,7 +330,7 @@ class TestEstimatorReconciliation:
         Both preflight and tokens.py must produce identical estimates,
         confirming a single source of truth for token estimation.
         """
-        from mozart.execution.preflight import PromptMetrics
+        from marianne.execution.preflight import PromptMetrics
 
         text = "x" * 10_000
 
@@ -346,7 +346,7 @@ class TestEstimatorReconciliation:
 
     def test_single_source_of_truth_exists(self) -> None:
         """tokens.py exports estimate_tokens as the canonical estimator."""
-        from mozart.core.tokens import estimate_tokens as canonical
+        from marianne.core.tokens import estimate_tokens as canonical
         assert callable(canonical)
         # The function is deterministic
         assert canonical("test") == canonical("test")

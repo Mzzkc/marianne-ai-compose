@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import ValidationError
 
-from mozart.core.config import JobConfig, PostSuccessHookConfig
-from mozart.execution.hooks import (
+from marianne.core.config import JobConfig, PostSuccessHookConfig
+from marianne.execution.hooks import (
     ConcertContext,
     HookExecutor,
     HookResult,
@@ -882,8 +882,8 @@ class TestDetachedChildSurvival:
         executor = HookExecutor(config=config, workspace=tmp_path)
 
         try:
-            with patch("mozart.execution.hooks._try_daemon_submit", return_value=(False, None)), \
-                 patch("mozart.execution.hooks._subprocess.Popen", side_effect=capturing_popen):
+            with patch("marianne.execution.hooks._try_daemon_submit", return_value=(False, None)), \
+                 patch("marianne.execution.hooks._subprocess.Popen", side_effect=capturing_popen):
                 results = await executor.execute_hooks()
 
             # Hook should report success
@@ -949,8 +949,8 @@ class TestDetachedChildSurvival:
 
         try:
             # _try_daemon_submit returns (False, None) → daemon unavailable
-            with patch("mozart.execution.hooks._try_daemon_submit", return_value=(False, None)), \
-                 patch("mozart.execution.hooks._subprocess.Popen", side_effect=capturing_popen):
+            with patch("marianne.execution.hooks._try_daemon_submit", return_value=(False, None)), \
+                 patch("marianne.execution.hooks._subprocess.Popen", side_effect=capturing_popen):
                 results = await executor.execute_hooks()
 
             assert len(results) == 1
@@ -1009,8 +1009,8 @@ class TestDetachedChildSurvival:
 
         executor = HookExecutor(config=config, workspace=tmp_path)
 
-        with patch("mozart.execution.hooks._try_daemon_submit", return_value=(False, None)), \
-             patch("mozart.execution.hooks._subprocess.Popen", side_effect=dying_popen):
+        with patch("marianne.execution.hooks._try_daemon_submit", return_value=(False, None)), \
+             patch("marianne.execution.hooks._subprocess.Popen", side_effect=dying_popen):
             results = await executor.execute_hooks()
 
         assert len(results) == 1
@@ -1074,10 +1074,10 @@ class TestDaemonAwareChaining:
         )
 
         with patch(
-            "mozart.execution.hooks._try_daemon_submit",
+            "marianne.execution.hooks._try_daemon_submit",
             return_value=(True, "daemon-job-123"),
         ) as mock_submit, \
-             patch("mozart.execution.hooks._subprocess.Popen") as mock_popen:
+             patch("marianne.execution.hooks._subprocess.Popen") as mock_popen:
             results = await executor.execute_hooks()
 
         assert len(results) == 1
@@ -1112,10 +1112,10 @@ class TestDaemonAwareChaining:
 
         try:
             with patch(
-                "mozart.execution.hooks._try_daemon_submit",
+                "marianne.execution.hooks._try_daemon_submit",
                 return_value=(False, None),
             ), patch(
-                "mozart.execution.hooks._subprocess.Popen",
+                "marianne.execution.hooks._subprocess.Popen",
                 side_effect=capturing_popen,
             ):
                 results = await executor.execute_hooks()
@@ -1163,10 +1163,10 @@ class TestDaemonAwareChaining:
             # Simulate _try_daemon_submit returning failure (it catches
             # exceptions internally and returns (False, None))
             with patch(
-                "mozart.execution.hooks._try_daemon_submit",
+                "marianne.execution.hooks._try_daemon_submit",
                 return_value=(False, None),
             ), patch(
-                "mozart.execution.hooks._subprocess.Popen",
+                "marianne.execution.hooks._subprocess.Popen",
                 side_effect=capturing_popen,
             ):
                 results = await executor.execute_hooks()
@@ -1207,7 +1207,7 @@ class TestDaemonAwareChaining:
             return True, "daemon-job-depth"
 
         with patch(
-            "mozart.execution.hooks._try_daemon_submit",
+            "marianne.execution.hooks._try_daemon_submit",
             side_effect=capturing_submit,
         ):
             results = await executor.execute_hooks()
@@ -1231,7 +1231,7 @@ class TestDaemonAwareChaining:
         )
 
         with patch(
-            "mozart.execution.hooks._try_daemon_submit",
+            "marianne.execution.hooks._try_daemon_submit",
         ) as mock_submit:
             # Non-detached hook will try to run `mozart run ...` and likely
             # fail because mozart isn't in PATH — but _try_daemon_submit
@@ -1254,16 +1254,16 @@ class TestTryDaemonSubmitUnit:
     @pytest.mark.asyncio
     async def test_daemon_available_and_accepts(self) -> None:
         """When daemon is available and accepts, should return (True, job_id)."""
-        from mozart.daemon.types import JobResponse
-        from mozart.execution.hooks import _try_daemon_submit
+        from marianne.daemon.types import JobResponse
+        from marianne.execution.hooks import _try_daemon_submit
 
         mock_response = JobResponse(
             job_id="test-job-42", status="accepted", message="OK",
         )
 
         mock_is_available = AsyncMock(return_value=True)
-        with patch("mozart.daemon.detect.is_daemon_available", mock_is_available), \
-             patch("mozart.daemon.ipc.client.DaemonClient") as MockClient:
+        with patch("marianne.daemon.detect.is_daemon_available", mock_is_available), \
+             patch("marianne.daemon.ipc.client.DaemonClient") as MockClient:
             MockClient.return_value.submit_job = AsyncMock(return_value=mock_response)
             ok, job_id = await _try_daemon_submit(
                 job_path=Path("/config/test.yaml"),
@@ -1278,16 +1278,16 @@ class TestTryDaemonSubmitUnit:
     @pytest.mark.asyncio
     async def test_daemon_available_but_rejects(self) -> None:
         """When daemon rejects submission, should return (False, None)."""
-        from mozart.daemon.types import JobResponse
-        from mozart.execution.hooks import _try_daemon_submit
+        from marianne.daemon.types import JobResponse
+        from marianne.execution.hooks import _try_daemon_submit
 
         mock_response = JobResponse(
             job_id="", status="rejected", message="Under pressure",
         )
 
         mock_is_available = AsyncMock(return_value=True)
-        with patch("mozart.daemon.detect.is_daemon_available", mock_is_available), \
-             patch("mozart.daemon.ipc.client.DaemonClient") as MockClient:
+        with patch("marianne.daemon.detect.is_daemon_available", mock_is_available), \
+             patch("marianne.daemon.ipc.client.DaemonClient") as MockClient:
             MockClient.return_value.submit_job = AsyncMock(return_value=mock_response)
             ok, job_id = await _try_daemon_submit(
                 job_path=Path("/config/test.yaml"),
@@ -1302,10 +1302,10 @@ class TestTryDaemonSubmitUnit:
     @pytest.mark.asyncio
     async def test_daemon_unavailable(self) -> None:
         """When daemon is not available, should return (False, None) immediately."""
-        from mozart.execution.hooks import _try_daemon_submit
+        from marianne.execution.hooks import _try_daemon_submit
 
         mock_is_available = AsyncMock(return_value=False)
-        with patch("mozart.daemon.detect.is_daemon_available", mock_is_available):
+        with patch("marianne.daemon.detect.is_daemon_available", mock_is_available):
             ok, job_id = await _try_daemon_submit(
                 job_path=Path("/config/test.yaml"),
                 workspace=None,
@@ -1319,11 +1319,11 @@ class TestTryDaemonSubmitUnit:
     @pytest.mark.asyncio
     async def test_connection_error_falls_back(self) -> None:
         """Connection errors during submit should return (False, None)."""
-        from mozart.execution.hooks import _try_daemon_submit
+        from marianne.execution.hooks import _try_daemon_submit
 
         mock_is_available = AsyncMock(return_value=True)
-        with patch("mozart.daemon.detect.is_daemon_available", mock_is_available), \
-             patch("mozart.daemon.ipc.client.DaemonClient") as MockClient:
+        with patch("marianne.daemon.detect.is_daemon_available", mock_is_available), \
+             patch("marianne.daemon.ipc.client.DaemonClient") as MockClient:
             MockClient.return_value.submit_job = AsyncMock(
                 side_effect=ConnectionRefusedError("Socket gone"),
             )
@@ -1340,8 +1340,8 @@ class TestTryDaemonSubmitUnit:
     @pytest.mark.asyncio
     async def test_chain_depth_passed_to_job_request(self) -> None:
         """chain_depth argument should be included in the JobRequest."""
-        from mozart.daemon.types import JobResponse
-        from mozart.execution.hooks import _try_daemon_submit
+        from marianne.daemon.types import JobResponse
+        from marianne.execution.hooks import _try_daemon_submit
 
         mock_response = JobResponse(
             job_id="chained-42", status="accepted", message="OK",
@@ -1353,8 +1353,8 @@ class TestTryDaemonSubmitUnit:
             return mock_response
 
         mock_is_available = AsyncMock(return_value=True)
-        with patch("mozart.daemon.detect.is_daemon_available", mock_is_available), \
-             patch("mozart.daemon.ipc.client.DaemonClient") as MockClient:
+        with patch("marianne.daemon.detect.is_daemon_available", mock_is_available), \
+             patch("marianne.daemon.ipc.client.DaemonClient") as MockClient:
             MockClient.return_value.submit_job = AsyncMock(side_effect=capture_submit)
             await _try_daemon_submit(
                 job_path=Path("/config/test.yaml"),
@@ -1376,7 +1376,7 @@ class TestJobMetaChainDepth:
 
     def test_chain_depth_in_to_dict_when_set(self) -> None:
         """to_dict() should include chain_depth when it's not None."""
-        from mozart.daemon.manager import JobMeta
+        from marianne.daemon.manager import JobMeta
 
         meta = JobMeta(
             job_id="test-job",
@@ -1389,7 +1389,7 @@ class TestJobMetaChainDepth:
 
     def test_chain_depth_absent_in_to_dict_when_none(self) -> None:
         """to_dict() should NOT include chain_depth when it's None."""
-        from mozart.daemon.manager import JobMeta
+        from marianne.daemon.manager import JobMeta
 
         meta = JobMeta(
             job_id="test-job",
@@ -1401,7 +1401,7 @@ class TestJobMetaChainDepth:
 
     def test_chain_depth_in_job_request_model(self) -> None:
         """JobRequest should accept chain_depth and default to None."""
-        from mozart.daemon.types import JobRequest
+        from marianne.daemon.types import JobRequest
 
         # With chain_depth
         req = JobRequest(config_path=Path("/c.yaml"), chain_depth=7)
@@ -1413,7 +1413,7 @@ class TestJobMetaChainDepth:
 
     def test_chain_depth_in_job_submit_params(self) -> None:
         """JobSubmitParams TypedDict should accept chain_depth."""
-        from mozart.daemon.types import JobSubmitParams
+        from marianne.daemon.types import JobSubmitParams
 
         params: JobSubmitParams = {
             "config_path": "/config.yaml",
@@ -1423,7 +1423,7 @@ class TestJobMetaChainDepth:
 
     def test_job_request_round_trip_with_chain_depth(self) -> None:
         """JobRequest should serialize and deserialize chain_depth correctly."""
-        from mozart.daemon.types import JobRequest
+        from marianne.daemon.types import JobRequest
 
         req = JobRequest(
             config_path=Path("/config/test.yaml"),

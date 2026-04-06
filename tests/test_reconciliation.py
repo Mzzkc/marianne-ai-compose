@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState
-from mozart.core.config import JobConfig
+from marianne.core.checkpoint import CheckpointState
+from marianne.core.config import JobConfig
 
 
 class TestConfigStateMapping:
@@ -14,7 +14,7 @@ class TestConfigStateMapping:
 
     def test_mapping_covers_all_config_sections(self) -> None:
         """Every reconcilable JobConfig section must have a mapping entry."""
-        from mozart.execution.reconciliation import (
+        from marianne.execution.reconciliation import (
             CONFIG_STATE_MAPPING,
             METADATA_FIELDS,
         )
@@ -32,7 +32,7 @@ class TestConfigStateMapping:
 
     def test_mapped_fields_exist_on_checkpoint_state(self) -> None:
         """All fields referenced in mapping must exist on CheckpointState."""
-        from mozart.execution.reconciliation import CONFIG_STATE_MAPPING
+        from marianne.execution.reconciliation import CONFIG_STATE_MAPPING
 
         checkpoint_fields = set(CheckpointState.model_fields.keys())
         for section, fields in CONFIG_STATE_MAPPING.items():
@@ -67,7 +67,7 @@ class TestReconcileConfig:
 
     def test_no_changes_returns_empty_report(self) -> None:
         """Identical configs should produce empty report."""
-        from mozart.execution.reconciliation import reconcile_config
+        from marianne.execution.reconciliation import reconcile_config
 
         snapshot = self._make_snapshot()
         config = JobConfig.model_validate(snapshot)
@@ -80,7 +80,7 @@ class TestReconcileConfig:
 
     def test_cost_limits_change_resets_cost_state(self) -> None:
         """Changing cost_limits should reset cost tracking fields."""
-        from mozart.execution.reconciliation import reconcile_config
+        from marianne.execution.reconciliation import reconcile_config
 
         old_snapshot = self._make_snapshot(
             cost_limits={"max_cost_per_job": 10.0}
@@ -105,7 +105,7 @@ class TestReconcileConfig:
 
     def test_unchanged_section_not_reset(self) -> None:
         """Sections that didn't change should not reset state."""
-        from mozart.execution.reconciliation import reconcile_config
+        from marianne.execution.reconciliation import reconcile_config
 
         snapshot = self._make_snapshot()
         config = JobConfig.model_validate(snapshot)
@@ -121,7 +121,7 @@ class TestReconcileConfig:
 
     def test_rate_limit_change_resets_counters(self) -> None:
         """Changing rate_limit should reset rate limit tracking fields."""
-        from mozart.execution.reconciliation import reconcile_config
+        from marianne.execution.reconciliation import reconcile_config
 
         old_snapshot = self._make_snapshot(
             rate_limit={"wait_minutes": 30, "max_waits": 12}
@@ -149,7 +149,7 @@ class TestReconcileConfig:
         All sections appear as 'changed' but no checkpoint fields should need
         resetting because they are already at defaults.
         """
-        from mozart.execution.reconciliation import reconcile_config
+        from marianne.execution.reconciliation import reconcile_config
 
         snapshot = self._make_snapshot()
         config = JobConfig.model_validate(snapshot)

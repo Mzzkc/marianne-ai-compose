@@ -21,7 +21,7 @@ import jinja2
 import pytest
 import yaml
 
-from mozart.core.config import JobConfig
+from marianne.core.config import JobConfig
 
 
 SCORE_PATH = Path(__file__).parent.parent / "examples" / "issue-solver.yaml"

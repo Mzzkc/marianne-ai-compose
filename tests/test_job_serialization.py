@@ -10,7 +10,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from mozart.core.config import (
+from marianne.core.config import (
     InjectionCategory,
     InjectionItem,
     JobConfig,

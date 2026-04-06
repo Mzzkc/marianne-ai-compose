@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.checkpoint import SheetState, SheetStatus
+from marianne.core.checkpoint import SheetState, SheetStatus
 
 
 class TestSheetStatePatternFields:
@@ -217,7 +217,7 @@ class TestSheetOutcomePatternFields:
 
     def test_patterns_applied_field_exists(self):
         """Test SheetOutcome has patterns_applied field."""
-        from mozart.learning.outcomes import SheetOutcome
+        from marianne.learning.outcomes import SheetOutcome
 
         outcome = SheetOutcome(
             sheet_id="test_sheet_1",
@@ -236,7 +236,7 @@ class TestSheetOutcomePatternFields:
 
     def test_patterns_applied_default_empty(self):
         """Test patterns_applied defaults to empty list."""
-        from mozart.learning.outcomes import SheetOutcome
+        from marianne.learning.outcomes import SheetOutcome
 
         outcome = SheetOutcome(
             sheet_id="test_sheet_1",
@@ -258,7 +258,7 @@ class TestAggregatorPatternTracking:
 
     def test_aggregator_receives_patterns_applied(self):
         """Test that aggregator _record_pattern_applications uses patterns_applied."""
-        from mozart.learning.outcomes import SheetOutcome
+        from marianne.learning.outcomes import SheetOutcome
 
         # Create an outcome with patterns_applied
         outcome = SheetOutcome(
@@ -300,7 +300,7 @@ class TestPatternFeedbackEndToEnd:
 
     def test_full_feedback_data_flow(self, sample_sheet_state_with_patterns):
         """Test that pattern data flows from SheetState to SheetOutcome."""
-        from mozart.learning.outcomes import SheetOutcome
+        from marianne.learning.outcomes import SheetOutcome
 
         state = sample_sheet_state_with_patterns
 

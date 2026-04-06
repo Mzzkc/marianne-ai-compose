@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import typer
 
-from mozart.cli.commands import top as top_module
+from marianne.cli.commands import top as top_module
 
 
 class TestTopTuiMissingTextual:
@@ -39,12 +39,12 @@ class TestTopTuiMissingTextual:
             fromlist: object = (),
             level: int = 0,
         ) -> object:
-            if name == "mozart.tui.app":
+            if name == "marianne.tui.app":
                 raise ImportError("No module named 'textual'")
             return real_import(name, globals, locals, fromlist, level)  # type: ignore[arg-type]
 
         with (
-            patch("mozart.cli.commands.top.output_error") as mock_error,
+            patch("marianne.cli.commands.top.output_error") as mock_error,
             patch("builtins.__import__", side_effect=fake_import),
             pytest.raises(typer.Exit),
         ):
@@ -74,12 +74,12 @@ class TestTopHistoryTuiMissingTextual:
             fromlist: object = (),
             level: int = 0,
         ) -> object:
-            if name == "mozart.tui.app":
+            if name == "marianne.tui.app":
                 raise ImportError("No module named 'textual'")
             return real_import(name, globals, locals, fromlist, level)  # type: ignore[arg-type]
 
         with (
-            patch("mozart.cli.commands.top.output_error") as mock_error,
+            patch("marianne.cli.commands.top.output_error") as mock_error,
             patch("builtins.__import__", side_effect=fake_import),
             pytest.raises(typer.Exit),
         ):
@@ -100,7 +100,7 @@ class TestTopNoMonitorDatabase:
     def test_missing_db_uses_output_error(self, tmp_path: Path) -> None:
         """When the monitor database is missing, _get_storage() should
         use output_error() with a hint about running the conductor."""
-        from mozart.daemon.profiler.models import ProfilerConfig
+        from marianne.daemon.profiler.models import ProfilerConfig
 
         fake_config = MagicMock(spec=ProfilerConfig())
         fake_config.storage_path = MagicMock(spec=Path)
@@ -109,9 +109,9 @@ class TestTopNoMonitorDatabase:
         )
 
         with (
-            patch("mozart.cli.commands.top.output_error") as mock_error,
+            patch("marianne.cli.commands.top.output_error") as mock_error,
             patch(
-                "mozart.daemon.profiler.models.ProfilerConfig",
+                "marianne.daemon.profiler.models.ProfilerConfig",
                 return_value=fake_config,
             ),
             pytest.raises(typer.Exit),
@@ -130,7 +130,7 @@ class TestTopNoMonitorData:
 
     def test_no_jsonl_file_uses_output_error(self, tmp_path: Path) -> None:
         """When the JSONL file doesn't exist, should use output_error()."""
-        from mozart.daemon.profiler.models import ProfilerConfig
+        from marianne.daemon.profiler.models import ProfilerConfig
 
         fake_config = MagicMock(spec=ProfilerConfig())
         fake_config.jsonl_path = MagicMock(spec=Path)
@@ -139,9 +139,9 @@ class TestTopNoMonitorData:
         )
 
         with (
-            patch("mozart.cli.commands.top.output_error") as mock_error,
+            patch("marianne.cli.commands.top.output_error") as mock_error,
             patch(
-                "mozart.daemon.profiler.models.ProfilerConfig",
+                "marianne.daemon.profiler.models.ProfilerConfig",
                 return_value=fake_config,
             ),
             pytest.raises(typer.Exit),
@@ -166,9 +166,9 @@ class TestTopStraceNotAvailable:
     def test_strace_missing_uses_output_error(self) -> None:
         """When strace is not installed, error should use output_error()."""
         with (
-            patch("mozart.cli.commands.top.output_error") as mock_error,
+            patch("marianne.cli.commands.top.output_error") as mock_error,
             patch(
-                "mozart.daemon.profiler.strace_manager.StraceManager.is_available",
+                "marianne.daemon.profiler.strace_manager.StraceManager.is_available",
                 return_value=False,
             ),
             pytest.raises(typer.Exit),
@@ -190,21 +190,21 @@ class TestTopStraceAttachFailure:
         """When strace attach fails, error should use output_error()
         with diagnostic hints."""
         with (
-            patch("mozart.cli.commands.top.output_error") as mock_error,
+            patch("marianne.cli.commands.top.output_error") as mock_error,
             patch(
-                "mozart.daemon.profiler.strace_manager.StraceManager.is_available",
+                "marianne.daemon.profiler.strace_manager.StraceManager.is_available",
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.profiler.strace_manager.StraceManager.__init__",
+                "marianne.daemon.profiler.strace_manager.StraceManager.__init__",
                 return_value=None,
             ),
             patch(
-                "mozart.daemon.profiler.strace_manager.StraceManager.attach_full_trace",
+                "marianne.daemon.profiler.strace_manager.StraceManager.attach_full_trace",
                 new_callable=AsyncMock,
                 return_value=False,
             ),
-            patch("mozart.cli.commands.top.console"),
+            patch("marianne.cli.commands.top.console"),
             pytest.raises(typer.Exit),
         ):
             import asyncio

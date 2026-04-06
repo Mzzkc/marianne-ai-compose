@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mozart.daemon.config import DaemonConfig
-from mozart.daemon.profiles import (
+from marianne.daemon.config import DaemonConfig
+from marianne.daemon.profiles import (
     BUILTIN_PROFILES,
     deep_merge,
     get_profile,
@@ -218,7 +218,7 @@ class TestLoadConfigWithProfile:
 
     def test_load_config_no_file_no_profile(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Without config file or profile, returns defaults."""
-        from mozart.daemon.process import _load_config
+        from marianne.daemon.process import _load_config
 
         monkeypatch.setenv("HOME", str(tmp_path))
         config = _load_config(None, profile=None)
@@ -226,7 +226,7 @@ class TestLoadConfigWithProfile:
 
     def test_load_config_with_profile(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Profile without config file applies over defaults."""
-        from mozart.daemon.process import _load_config
+        from marianne.daemon.process import _load_config
 
         monkeypatch.setenv("HOME", str(tmp_path))
         config = _load_config(None, profile="dev")
@@ -235,7 +235,7 @@ class TestLoadConfigWithProfile:
 
     def test_load_config_file_and_profile(self, tmp_path: Path) -> None:
         """Config file + profile: profile wins on conflicts."""
-        from mozart.daemon.process import _load_config
+        from marianne.daemon.process import _load_config
 
         config_file = tmp_path / "conductor.yaml"
         config_file.write_text(yaml.dump({
@@ -253,7 +253,7 @@ class TestLoadConfigWithProfile:
 
     def test_load_config_unknown_profile_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Unknown profile name raises FileNotFoundError."""
-        from mozart.daemon.process import _load_config
+        from marianne.daemon.process import _load_config
 
         monkeypatch.setenv("HOME", str(tmp_path))
         with pytest.raises(FileNotFoundError, match="Unknown daemon profile"):

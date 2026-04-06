@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from mozart.learning.store import GlobalLearningStore
+from marianne.learning.store import GlobalLearningStore
 
 
 # ---------------------------------------------------------------------------

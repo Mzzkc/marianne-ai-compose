@@ -16,11 +16,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.errors.classifier import ErrorClassifier
-from mozart.core.errors.codes import ErrorCategory
-from mozart.execution.dag import DependencyDAG
-from mozart.execution.runner.models import (
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.errors.classifier import ErrorClassifier
+from marianne.core.errors.codes import ErrorCategory
+from marianne.execution.dag import DependencyDAG
+from marianne.execution.runner.models import (
     FatalError,
     RateLimitExhaustedError,
     RunSummary,
@@ -231,7 +231,7 @@ class TestConfigHashStaleDetection:
 
     def test_ss_001_config_hash_populated_on_new_state(self) -> None:
         """TEST-SS-001: config_hash is populated on new state creation."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         config_a = {"name": "test-job", "sheet": {"total_sheets": 5}}
         config_b = {"name": "test-job", "sheet": {"total_sheets": 10}}
@@ -245,7 +245,7 @@ class TestConfigHashStaleDetection:
 
     def test_ss_004_config_hash_is_content_based(self) -> None:
         """TEST-SS-004: Content-based, not mtime-based."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         config = {"name": "test-job", "workspace": "/tmp/ws"}
         hash_1 = LifecycleMixin._compute_config_hash(config)
@@ -254,7 +254,7 @@ class TestConfigHashStaleDetection:
 
     def test_ss_004_identical_configs_produce_same_hash(self) -> None:
         """TEST-SS-004: Two different dicts with same content → same hash."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         config1 = {"name": "job", "b": 2, "a": 1}
         config2 = {"a": 1, "name": "job", "b": 2}
@@ -269,7 +269,7 @@ class TestConfigHashStateLifecycle:
     async def test_ss_002_changed_score_detects_staleness(self) -> None:
         """TEST-SS-002: Re-run with changed score detects stale state."""
 
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         # Create a mock mixin with necessary attributes
         mixin = MagicMock(spec=LifecycleMixin)
@@ -296,7 +296,7 @@ class TestConfigHashStateLifecycle:
 
     async def test_ss_003_unchanged_score_reuses_state(self) -> None:
         """TEST-SS-003: Re-run with unchanged score reuses state."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         snapshot = {"name": "my-job", "sheet": {"total_sheets": 3}}
         hash_val = LifecycleMixin._compute_config_hash(snapshot)
@@ -322,7 +322,7 @@ class TestConfigHashStateLifecycle:
         who changed their config after a failure is trying to fix the problem.
         Resuming from stale state defeats the purpose.
         """
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         old_snapshot = {"name": "my-job", "sheet": {"total_sheets": 3}}
         new_snapshot = {"name": "my-job", "sheet": {"total_sheets": 5}}
@@ -347,7 +347,7 @@ class TestConfigHashStateLifecycle:
         When the config hasn't changed, a FAILED job should resume from
         where it left off, not restart. Only changed configs trigger restart.
         """
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         snapshot = {"name": "my-job", "sheet": {"total_sheets": 3}}
         hash_val = LifecycleMixin._compute_config_hash(snapshot)
@@ -389,7 +389,7 @@ class TestConfigHashStateLifecycle:
         The new state should have the updated config hash and reset
         last_completed_sheet to 0.
         """
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         old_snapshot = {"name": "my-job", "sheet": {"total_sheets": 3}}
         new_snapshot = {"name": "my-job", "sheet": {"total_sheets": 5}}
@@ -472,7 +472,7 @@ class TestRateLimitRecoveryRaises:
 
     def test_rl_001_quota_max_waits_raises_rate_limit_error(self) -> None:
         """TEST-RL-001: Quota max waits raises RateLimitExhaustedError."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         # Create a mock mixin
         mixin = MagicMock(spec=RecoveryMixin)
@@ -501,7 +501,7 @@ class TestRateLimitRecoveryRaises:
 
     def test_rl_001_rate_limit_max_waits_raises_rate_limit_error(self) -> None:
         """TEST-RL-001: Regular rate limit max waits raises RateLimitExhaustedError."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         mixin = MagicMock(spec=RecoveryMixin)
         mixin.config = MagicMock()
@@ -529,7 +529,7 @@ class TestRateLimitRecoveryRaises:
 
     def test_rl_001_below_max_waits_does_not_raise(self) -> None:
         """Below max_waits: no error raised, just console output."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         mixin = MagicMock(spec=RecoveryMixin)
         mixin.config = MagicMock()

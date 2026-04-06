@@ -16,9 +16,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.config import JobConfig
-from mozart.execution.runner import JobRunner
-from mozart.execution.runner.patterns import (
+from marianne.core.config import JobConfig
+from marianne.execution.runner import JobRunner
+from marianne.execution.runner.patterns import (
     PatternFeedbackContext,
     _deduplicate_patterns,
     _normalize_for_dedup,

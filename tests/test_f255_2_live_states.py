@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.daemon.manager import JobManager
+from marianne.daemon.manager import JobManager
 
 
 def _make_manager_with_baton() -> JobManager:
@@ -53,7 +53,7 @@ class TestBatonLiveStatesPopulation:
         CheckpointState entry for that job."""
         import asyncio
 
-        from mozart.core.checkpoint import CheckpointState, JobStatus
+        from marianne.core.checkpoint import CheckpointState, JobStatus
 
         manager = _make_manager_with_baton()
         # Create mock baton adapter
@@ -97,8 +97,8 @@ class TestBatonLiveStatesPopulation:
             sheet.description = f"Test sheet {i}"
             mock_sheets.append(sheet)
 
-        with patch("mozart.core.sheet.build_sheets", return_value=mock_sheets), \
-             patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={}):
+        with patch("marianne.core.sheet.build_sheets", return_value=mock_sheets), \
+             patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}):
             # Capture the state of _live_states after register_job
             original_register = mock_adapter.register_job
 
@@ -133,7 +133,7 @@ class TestBatonLiveStatesPopulation:
         for each sheet so _on_baton_state_sync can update them."""
         import asyncio
 
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         manager = _make_manager_with_baton()
         mock_adapter = MagicMock()
@@ -172,8 +172,8 @@ class TestBatonLiveStatesPopulation:
             sheet.description = f"Test sheet {i}"
             mock_sheets.append(sheet)
 
-        with patch("mozart.core.sheet.build_sheets", return_value=mock_sheets), \
-             patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={}):
+        with patch("marianne.core.sheet.build_sheets", return_value=mock_sheets), \
+             patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}):
             loop = asyncio.new_event_loop()
             try:
                 loop.run_until_complete(
@@ -193,7 +193,7 @@ class TestBatonLiveStatesPopulation:
 
     def test_baton_state_sync_updates_live_state(self) -> None:
         """_on_baton_state_sync updates sheet status in _live_states."""
-        from mozart.core.checkpoint import (
+        from marianne.core.checkpoint import (
             CheckpointState,
             SheetState,
             SheetStatus,
@@ -222,7 +222,7 @@ class TestBatonLiveStatesPopulation:
     def test_live_state_cleaned_on_deregister(self) -> None:
         """When the baton job completes, _live_states entry should persist
         for status queries (cleaned up elsewhere during full cleanup)."""
-        from mozart.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import CheckpointState
 
         manager = _make_manager_with_baton()
         state = CheckpointState(

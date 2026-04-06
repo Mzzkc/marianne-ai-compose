@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import typer
 
-from mozart.cli.commands.dashboard import dashboard, mcp
+from marianne.cli.commands.dashboard import dashboard, mcp
 
 # Build a minimal Typer app that registers the dashboard and mcp commands
 _app = typer.Typer()
@@ -62,9 +62,9 @@ class TestDashboardStateBackendSelection:
 
         with (
             patch.dict(sys.modules, {"uvicorn": mock_uvicorn}),
-            patch("mozart.state.SQLiteStateBackend", mock_sqlite_cls),
-            patch("mozart.state.JsonStateBackend", mock_json_cls),
-            patch("mozart.dashboard.create_app", mock_create_app),
+            patch("marianne.state.SQLiteStateBackend", mock_sqlite_cls),
+            patch("marianne.state.JsonStateBackend", mock_json_cls),
+            patch("marianne.dashboard.create_app", mock_create_app),
         ):
             runner.invoke(
                 _app, ["dashboard", "--workspace", str(tmp_path)]
@@ -82,9 +82,9 @@ class TestDashboardStateBackendSelection:
 
         with (
             patch.dict(sys.modules, {"uvicorn": mock_uvicorn}),
-            patch("mozart.state.SQLiteStateBackend", mock_sqlite_cls),
-            patch("mozart.state.JsonStateBackend", mock_json_cls),
-            patch("mozart.dashboard.create_app", mock_create_app),
+            patch("marianne.state.SQLiteStateBackend", mock_sqlite_cls),
+            patch("marianne.state.JsonStateBackend", mock_json_cls),
+            patch("marianne.dashboard.create_app", mock_create_app),
         ):
             runner.invoke(
                 _app, ["dashboard", "--workspace", str(tmp_path)]
@@ -105,9 +105,9 @@ class TestDashboardKeyboardInterrupt:
 
         with (
             patch.dict(sys.modules, {"uvicorn": mock_uvicorn}),
-            patch("mozart.state.SQLiteStateBackend"),
-            patch("mozart.state.JsonStateBackend"),
-            patch("mozart.dashboard.create_app", mock_create_app),
+            patch("marianne.state.SQLiteStateBackend"),
+            patch("marianne.state.JsonStateBackend"),
+            patch("marianne.dashboard.create_app", mock_create_app),
         ):
             result = runner.invoke(
                 _app, ["dashboard", "--workspace", str(tmp_path)]
@@ -123,7 +123,7 @@ class TestMcpCommand:
     def test_mcp_keyboard_interrupt_handled(self) -> None:
         """MCP command handles KeyboardInterrupt gracefully."""
         with patch(
-            "mozart.cli.commands.dashboard.asyncio.run",
+            "marianne.cli.commands.dashboard.asyncio.run",
             side_effect=KeyboardInterrupt,
         ):
             result = runner.invoke(_app, ["mcp"])
@@ -142,9 +142,9 @@ class TestDashboardCustomOptions:
 
         with (
             patch.dict(sys.modules, {"uvicorn": mock_uvicorn}),
-            patch("mozart.state.SQLiteStateBackend"),
-            patch("mozart.state.JsonStateBackend"),
-            patch("mozart.dashboard.create_app", mock_create_app),
+            patch("marianne.state.SQLiteStateBackend"),
+            patch("marianne.state.JsonStateBackend"),
+            patch("marianne.dashboard.create_app", mock_create_app),
         ):
             runner.invoke(
                 _app,

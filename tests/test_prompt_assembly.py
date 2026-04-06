@@ -25,10 +25,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from mozart.core.config import PromptConfig, ValidationRule
-from mozart.core.config.spec import SpecFragment
-from mozart.prompts.preamble import build_preamble
-from mozart.prompts.templating import (
+from marianne.core.config import PromptConfig, ValidationRule
+from marianne.core.config.spec import SpecFragment
+from marianne.prompts.preamble import build_preamble
+from marianne.prompts.templating import (
     PromptBuilder,
     SheetContext,
     _normalize_variable_keys,
@@ -734,7 +734,7 @@ class TestCompletionPrompt:
             failure_reason: str | None = None
             suggested_fix: str | None = None
 
-        from mozart.prompts.templating import CompletionContext
+        from marianne.prompts.templating import CompletionContext
 
         passed = [FakeValidationResult(
             rule=ValidationRule(

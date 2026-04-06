@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.dashboard.services.job_control import JobActionResult, JobStartResult, ProcessHealth
-from mozart.mcp.tools import ControlTools, JobTools
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.dashboard.services.job_control import JobActionResult, JobStartResult, ProcessHealth
+from marianne.mcp.tools import ControlTools, JobTools
+from marianne.state.json_backend import JsonStateBackend
 
 
 class TestJobToolsBasic:
@@ -50,7 +50,7 @@ class TestJobToolsBasic:
         assert len(result["content"]) == 1
         assert "Mozart MCP Job Listing" in result["content"][0]["text"]
 
-    @patch('mozart.mcp.tools.JobControlService')
+    @patch('marianne.mcp.tools.JobControlService')
     async def test_get_job_success(
         self, mock_service_class, mock_state_backend: Mock, temp_workspace,
     ):
@@ -144,7 +144,7 @@ class TestControlToolsBasic:
         assert "resume_job" in tool_names
         assert "cancel_job" in tool_names
 
-    @patch('mozart.mcp.tools.JobControlService')
+    @patch('marianne.mcp.tools.JobControlService')
     async def test_pause_job_success(
         self, mock_service_class, mock_state_backend: Mock, temp_workspace,
     ):
@@ -169,7 +169,7 @@ class TestControlToolsBasic:
         content_text = result["content"][0]["text"]
         assert "✓ Pause request sent to job: test-job-123" in content_text
 
-    @patch('mozart.mcp.tools.JobControlService')
+    @patch('marianne.mcp.tools.JobControlService')
     async def test_pause_job_failure(
         self, mock_service_class, mock_state_backend: Mock, temp_workspace,
     ):
@@ -219,7 +219,7 @@ class TestMCPCoverage:
         backend.load = AsyncMock()
         return backend
 
-    @patch('mozart.mcp.tools.JobControlService')
+    @patch('marianne.mcp.tools.JobControlService')
     async def test_start_job_with_workspace_param(
         self, mock_service_class, mock_state_backend, temp_workspace,
     ):
@@ -256,7 +256,7 @@ sheet:
         assert "✓ Mozart job started successfully!" in result["content"][0]["text"]
         assert "Self-healing: Enabled" in result["content"][0]["text"]
 
-    @patch('mozart.mcp.tools.JobControlService')
+    @patch('marianne.mcp.tools.JobControlService')
     async def test_resume_job_success(self, mock_service_class, mock_state_backend, temp_workspace):
         """Test successful resume_job operation."""
         resume_result = JobActionResult(
@@ -275,7 +275,7 @@ sheet:
 
         assert "✓ Job resumed successfully: test-job" in result["content"][0]["text"]
 
-    @patch('mozart.mcp.tools.JobControlService')
+    @patch('marianne.mcp.tools.JobControlService')
     async def test_cancel_job_success(self, mock_service_class, mock_state_backend, temp_workspace):
         """Test successful cancel_job operation."""
         cancel_result = JobActionResult(
@@ -295,7 +295,7 @@ sheet:
         assert "✓ Job cancelled successfully: test-job" in result["content"][0]["text"]
         assert "permanent and cannot be undone" in result["content"][0]["text"]
 
-    @patch('mozart.mcp.tools.JobControlService')
+    @patch('marianne.mcp.tools.JobControlService')
     async def test_service_exception_handling(
         self, mock_service_class, mock_state_backend, temp_workspace,
     ):
@@ -343,7 +343,7 @@ class TestMCPToolSchemaValidation:
         self, mock_state_backend, temp_workspace, tool_class_name, expected_count
     ):
         """Each tool class exposes the expected number of tools."""
-        from mozart.mcp import tools as mcp_tools
+        from marianne.mcp import tools as mcp_tools
 
         cls = getattr(mcp_tools, tool_class_name)
         if tool_class_name in ("JobTools", "ControlTools"):
@@ -364,7 +364,7 @@ class TestMCPToolSchemaValidation:
         self, mock_state_backend, temp_workspace, tool_class_name
     ):
         """Every tool must have name, description, and valid inputSchema."""
-        from mozart.mcp import tools as mcp_tools
+        from marianne.mcp import tools as mcp_tools
 
         cls = getattr(mcp_tools, tool_class_name)
         if tool_class_name in ("JobTools", "ControlTools"):
@@ -397,7 +397,7 @@ class TestMCPToolSchemaValidation:
         self, mock_state_backend, temp_workspace, tool_class_name
     ):
         """All 'required' params must be defined in 'properties'."""
-        from mozart.mcp import tools as mcp_tools
+        from marianne.mcp import tools as mcp_tools
 
         cls = getattr(mcp_tools, tool_class_name)
         if tool_class_name in ("JobTools", "ControlTools"):
@@ -426,7 +426,7 @@ class TestScoreToolsBasic:
 
     @pytest.fixture
     def score_tools(self, temp_workspace):
-        from mozart.mcp.tools import ScoreTools
+        from marianne.mcp.tools import ScoreTools
         return ScoreTools(temp_workspace)
 
     @pytest.mark.asyncio

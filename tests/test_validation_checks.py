@@ -12,28 +12,28 @@ from textwrap import dedent
 
 import pytest
 
-from mozart.core.config import JobConfig
-from mozart.validation import (
+from marianne.core.config import JobConfig
+from marianne.validation import (
     ValidationRunner,
     ValidationSeverity,
     create_default_checks,
 )
-from mozart.validation.base import ValidationIssue
-from mozart.validation.checks.config import (
+from marianne.validation.base import ValidationIssue
+from marianne.validation.checks.config import (
     RegexPatternCheck,
     TimeoutRangeCheck,
     ValidationTypeCheck,
 )
-from mozart.validation.checks.jinja import (
+from marianne.validation.checks.jinja import (
     JinjaSyntaxCheck,
     JinjaUndefinedVariableCheck,
 )
-from mozart.validation.checks.paths import (
+from marianne.validation.checks.paths import (
     TemplateFileExistsCheck,
     WorkingDirectoryCheck,
     WorkspaceParentExistsCheck,
 )
-from mozart.validation.reporter import ValidationReporter
+from marianne.validation.reporter import ValidationReporter
 
 # ============================================================================
 # Fixtures
@@ -637,7 +637,7 @@ class TestVersionReferenceCheck:
 
     def test_non_versioned_file_skipped(self, tmp_path: Path) -> None:
         """Non-versioned file names produce no issues."""
-        from mozart.validation.checks.config import VersionReferenceCheck
+        from marianne.validation.checks.config import VersionReferenceCheck
 
         yaml_content = dedent("""
             name: test-job
@@ -659,7 +659,7 @@ class TestVersionReferenceCheck:
 
     def test_v1_file_skipped(self, tmp_path: Path) -> None:
         """v1 files have no previous version to check against."""
-        from mozart.validation.checks.config import VersionReferenceCheck
+        from marianne.validation.checks.config import VersionReferenceCheck
 
         yaml_content = dedent("""
             name: evolution-v1
@@ -681,7 +681,7 @@ class TestVersionReferenceCheck:
 
     def test_detects_stale_name_reference(self, tmp_path: Path) -> None:
         """Detects when job name references previous version."""
-        from mozart.validation.checks.config import VersionReferenceCheck
+        from marianne.validation.checks.config import VersionReferenceCheck
 
         yaml_content = dedent("""
             name: evolution-v2
@@ -706,7 +706,7 @@ class TestVersionReferenceCheck:
 
     def test_detects_stale_workspace_reference(self, tmp_path: Path) -> None:
         """Detects when workspace path references previous version."""
-        from mozart.validation.checks.config import VersionReferenceCheck
+        from marianne.validation.checks.config import VersionReferenceCheck
 
         yaml_content = dedent("""
             name: evolution-v3
@@ -731,7 +731,7 @@ class TestVersionReferenceCheck:
 
     def test_clean_versioned_file_passes(self, tmp_path: Path) -> None:
         """Properly versioned file produces no issues."""
-        from mozart.validation.checks.config import VersionReferenceCheck
+        from marianne.validation.checks.config import VersionReferenceCheck
 
         yaml_content = dedent("""
             name: evolution-v3
@@ -763,7 +763,7 @@ class TestEmptyPatternCheck:
 
     def test_no_validations_passes(self, minimal_config: tuple[JobConfig, Path, str]) -> None:
         """Config with no validations produces no issues."""
-        from mozart.validation.checks.config import EmptyPatternCheck
+        from marianne.validation.checks.config import EmptyPatternCheck
 
         config, config_path, raw_yaml = minimal_config
         check = EmptyPatternCheck()
@@ -773,7 +773,7 @@ class TestEmptyPatternCheck:
 
     def test_non_empty_pattern_passes(self, tmp_path: Path) -> None:
         """Validation with non-empty pattern is fine."""
-        from mozart.validation.checks.config import EmptyPatternCheck
+        from marianne.validation.checks.config import EmptyPatternCheck
 
         yaml_content = dedent("""
             name: test-job
@@ -800,7 +800,7 @@ class TestEmptyPatternCheck:
 
     def test_detects_empty_pattern(self, tmp_path: Path) -> None:
         """Flags validation rules with empty/whitespace-only patterns."""
-        from mozart.validation.checks.config import EmptyPatternCheck
+        from marianne.validation.checks.config import EmptyPatternCheck
 
         yaml_content = dedent("""
             name: test-job
@@ -829,7 +829,7 @@ class TestEmptyPatternCheck:
 
     def test_ignores_file_exists_type(self, tmp_path: Path) -> None:
         """file_exists validations don't have patterns, so no issue."""
-        from mozart.validation.checks.config import EmptyPatternCheck
+        from marianne.validation.checks.config import EmptyPatternCheck
 
         yaml_content = dedent("""
             name: test-job
@@ -866,7 +866,7 @@ class TestPreludeCadenzaFileCheck:
         self, minimal_config: tuple[JobConfig, Path, str],
     ) -> None:
         """Config without prelude/cadenzas produces no issues."""
-        from mozart.validation.checks.paths import PreludeCadenzaFileCheck
+        from marianne.validation.checks.paths import PreludeCadenzaFileCheck
 
         config, config_path, raw_yaml = minimal_config
         check = PreludeCadenzaFileCheck()
@@ -876,7 +876,7 @@ class TestPreludeCadenzaFileCheck:
 
     def test_existing_prelude_file_passes(self, tmp_path: Path) -> None:
         """No warning when prelude file exists."""
-        from mozart.validation.checks.paths import PreludeCadenzaFileCheck
+        from marianne.validation.checks.paths import PreludeCadenzaFileCheck
 
         prelude_file = tmp_path / "context.md"
         prelude_file.write_text("Background context")
@@ -904,7 +904,7 @@ class TestPreludeCadenzaFileCheck:
 
     def test_catches_missing_prelude_file(self, tmp_path: Path) -> None:
         """Warning when prelude file doesn't exist."""
-        from mozart.validation.checks.paths import PreludeCadenzaFileCheck
+        from marianne.validation.checks.paths import PreludeCadenzaFileCheck
 
         yaml_content = dedent("""
             name: test-job
@@ -932,7 +932,7 @@ class TestPreludeCadenzaFileCheck:
 
     def test_catches_missing_cadenza_file(self, tmp_path: Path) -> None:
         """Warning when cadenza file doesn't exist."""
-        from mozart.validation.checks.paths import PreludeCadenzaFileCheck
+        from marianne.validation.checks.paths import PreludeCadenzaFileCheck
 
         yaml_content = dedent("""
             name: test-job
@@ -961,7 +961,7 @@ class TestPreludeCadenzaFileCheck:
 
     def test_skips_jinja_templated_paths(self, tmp_path: Path) -> None:
         """Paths with Jinja templates ({{ }}) are skipped."""
-        from mozart.validation.checks.paths import PreludeCadenzaFileCheck
+        from marianne.validation.checks.paths import PreludeCadenzaFileCheck
 
         yaml_content = dedent("""
             name: test-job
@@ -986,7 +986,7 @@ class TestPreludeCadenzaFileCheck:
 
     def test_multiple_missing_files_reported(self, tmp_path: Path) -> None:
         """Multiple missing files each produce a separate warning."""
-        from mozart.validation.checks.paths import PreludeCadenzaFileCheck
+        from marianne.validation.checks.paths import PreludeCadenzaFileCheck
 
         yaml_content = dedent("""
             name: test-job

@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mozart.daemon.config import DaemonConfig, SocketConfig
+from marianne.daemon.config import DaemonConfig, SocketConfig
 
 
 # =============================================================================
@@ -27,7 +27,7 @@ class TestClonePathResolution:
 
     def test_default_clone_paths(self) -> None:
         """Default clone uses /tmp/mozart-clone.* paths."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths(None)
         assert paths.socket == Path("/tmp/mozart-clone.sock")
@@ -37,7 +37,7 @@ class TestClonePathResolution:
 
     def test_named_clone_paths(self) -> None:
         """Named clones get unique paths based on clone name."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("test-1")
         assert paths.socket == Path("/tmp/mozart-clone-test-1.sock")
@@ -47,7 +47,7 @@ class TestClonePathResolution:
 
     def test_clone_paths_isolated_from_production(self) -> None:
         """Clone paths must never overlap with production paths."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         production = DaemonConfig()
         clone = resolve_clone_paths(None)
@@ -57,7 +57,7 @@ class TestClonePathResolution:
 
     def test_named_clones_isolated_from_each_other(self) -> None:
         """Different clone names produce different paths."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         clone_a = resolve_clone_paths("alpha")
         clone_b = resolve_clone_paths("beta")
@@ -68,7 +68,7 @@ class TestClonePathResolution:
 
     def test_clone_name_sanitization(self) -> None:
         """Clone names with special characters are sanitized."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("my test/clone")
         # Should not contain spaces or slashes in file paths
@@ -86,7 +86,7 @@ class TestCloneNameState:
 
     def test_default_is_none(self) -> None:
         """No clone by default."""
-        from mozart.daemon.clone import get_clone_name, set_clone_name
+        from marianne.daemon.clone import get_clone_name, set_clone_name
 
         # Reset state
         set_clone_name(None)
@@ -94,7 +94,7 @@ class TestCloneNameState:
 
     def test_set_and_get(self) -> None:
         """Clone name can be set and retrieved."""
-        from mozart.daemon.clone import get_clone_name, set_clone_name
+        from marianne.daemon.clone import get_clone_name, set_clone_name
 
         set_clone_name("test-clone")
         try:
@@ -104,7 +104,7 @@ class TestCloneNameState:
 
     def test_empty_string_treated_as_default(self) -> None:
         """Empty string clone name means default (unnamed) clone."""
-        from mozart.daemon.clone import get_clone_name, set_clone_name
+        from marianne.daemon.clone import get_clone_name, set_clone_name
 
         set_clone_name("")
         try:
@@ -124,8 +124,8 @@ class TestSocketPathOverride:
 
     def test_no_clone_returns_default(self) -> None:
         """Without clone, socket path is the standard production path."""
-        from mozart.daemon.clone import set_clone_name
-        from mozart.daemon.detect import _resolve_socket_path
+        from marianne.daemon.clone import set_clone_name
+        from marianne.daemon.detect import _resolve_socket_path
 
         set_clone_name(None)
         path = _resolve_socket_path(None)
@@ -133,8 +133,8 @@ class TestSocketPathOverride:
 
     def test_clone_overrides_socket_path(self) -> None:
         """With clone set, socket path is the clone's path."""
-        from mozart.daemon.clone import set_clone_name
-        from mozart.daemon.detect import _resolve_socket_path
+        from marianne.daemon.clone import set_clone_name
+        from marianne.daemon.detect import _resolve_socket_path
 
         set_clone_name("test-abc")
         try:
@@ -145,8 +145,8 @@ class TestSocketPathOverride:
 
     def test_explicit_path_overrides_clone(self) -> None:
         """An explicit socket_path parameter takes precedence over clone."""
-        from mozart.daemon.clone import set_clone_name
-        from mozart.daemon.detect import _resolve_socket_path
+        from marianne.daemon.clone import set_clone_name
+        from marianne.daemon.detect import _resolve_socket_path
 
         set_clone_name("test-abc")
         try:
@@ -167,7 +167,7 @@ class TestDaemonConfigFromClone:
 
     def test_clone_config_inherits_defaults(self) -> None:
         """Clone config inherits production defaults for non-path fields."""
-        from mozart.daemon.clone import build_clone_config
+        from marianne.daemon.clone import build_clone_config
 
         config = build_clone_config(None)
         production = DaemonConfig()
@@ -182,7 +182,7 @@ class TestDaemonConfigFromClone:
 
     def test_clone_config_from_existing(self) -> None:
         """Clone config can be built from an existing production config."""
-        from mozart.daemon.clone import build_clone_config
+        from marianne.daemon.clone import build_clone_config
 
         prod_config = DaemonConfig(max_concurrent_jobs=5)
         clone_config = build_clone_config(None, base_config=prod_config)
@@ -192,7 +192,7 @@ class TestDaemonConfigFromClone:
 
     def test_clone_config_isolates_state_db_no_base(self) -> None:
         """F-132 complement: build_clone_config(None) isolates state_db_path."""
-        from mozart.daemon.clone import build_clone_config
+        from marianne.daemon.clone import build_clone_config
 
         config = build_clone_config(None)
         production = DaemonConfig()
@@ -203,7 +203,7 @@ class TestDaemonConfigFromClone:
 
     def test_clone_config_isolates_state_db_with_base(self) -> None:
         """F-132: build_clone_config with base_config isolates state_db_path."""
-        from mozart.daemon.clone import build_clone_config
+        from marianne.daemon.clone import build_clone_config
 
         prod_config = DaemonConfig(max_concurrent_jobs=5)
         clone_config = build_clone_config(None, base_config=prod_config)
@@ -213,7 +213,7 @@ class TestDaemonConfigFromClone:
 
     def test_clone_config_isolates_log_file(self) -> None:
         """Clone log_file must be isolated from production."""
-        from mozart.daemon.clone import build_clone_config
+        from marianne.daemon.clone import build_clone_config
 
         config = build_clone_config("test-log")
         # log_file should contain the clone name
@@ -222,7 +222,7 @@ class TestDaemonConfigFromClone:
 
     def test_named_clone_state_db_unique(self) -> None:
         """Named clones get unique state_db_path per name."""
-        from mozart.daemon.clone import build_clone_config
+        from marianne.daemon.clone import build_clone_config
 
         clone_a = build_clone_config("alpha")
         clone_b = build_clone_config("beta")
@@ -240,20 +240,20 @@ class TestTryDaemonRouteWithClone:
     @pytest.mark.asyncio
     async def test_route_uses_clone_socket(self) -> None:
         """When clone is active, daemon route uses clone socket."""
-        from mozart.daemon.clone import set_clone_name
+        from marianne.daemon.clone import set_clone_name
 
         set_clone_name("route-test")
         try:
             # DaemonClient is imported inside try_daemon_route, so patch
             # at the module where it's actually imported
             with patch(
-                "mozart.daemon.ipc.client.DaemonClient",
+                "marianne.daemon.ipc.client.DaemonClient",
             ) as mock_client_cls:
                 mock_instance = AsyncMock()
                 mock_instance.is_daemon_running = AsyncMock(return_value=False)
                 mock_client_cls.return_value = mock_instance
 
-                from mozart.daemon.detect import try_daemon_route
+                from marianne.daemon.detect import try_daemon_route
 
                 routed, _ = await try_daemon_route("job.status", {"job_id": "test"})
 
@@ -277,25 +277,25 @@ class TestConductorStartWithClone:
         """start_conductor should accept a clone_name parameter."""
         import inspect
 
-        from mozart.daemon.process import start_conductor
+        from marianne.daemon.process import start_conductor
 
         sig = inspect.signature(start_conductor)
         assert "clone_name" in sig.parameters
 
     def test_start_with_clone_uses_clone_socket(self) -> None:
         """When clone_name is set, the daemon uses the clone socket path."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         clone_paths = resolve_clone_paths("start-test")
 
-        with patch("mozart.daemon.process._load_config") as mock_load, \
-             patch("mozart.daemon.process._read_pid", return_value=None), \
-             patch("mozart.daemon.process.DaemonProcess") as mock_daemon, \
-             patch("mozart.core.logging.configure_logging"), \
+        with patch("marianne.daemon.process._load_config") as mock_load, \
+             patch("marianne.daemon.process._read_pid", return_value=None), \
+             patch("marianne.daemon.process.DaemonProcess") as mock_daemon, \
+             patch("marianne.core.logging.configure_logging"), \
              patch("asyncio.run"):
             mock_load.return_value = DaemonConfig()
 
-            from mozart.daemon.process import start_conductor
+            from marianne.daemon.process import start_conductor
 
             start_conductor(clone_name="start-test", foreground=True)
 
@@ -306,15 +306,15 @@ class TestConductorStartWithClone:
 
     def test_start_with_clone_inherits_non_path_config(self) -> None:
         """Clone config should inherit non-path settings from base config."""
-        with patch("mozart.daemon.process._load_config") as mock_load, \
-             patch("mozart.daemon.process._read_pid", return_value=None), \
-             patch("mozart.daemon.process.DaemonProcess") as mock_daemon, \
-             patch("mozart.core.logging.configure_logging"), \
+        with patch("marianne.daemon.process._load_config") as mock_load, \
+             patch("marianne.daemon.process._read_pid", return_value=None), \
+             patch("marianne.daemon.process.DaemonProcess") as mock_daemon, \
+             patch("marianne.core.logging.configure_logging"), \
              patch("asyncio.run"):
             base_config = DaemonConfig(max_concurrent_jobs=7)
             mock_load.return_value = base_config
 
-            from mozart.daemon.process import start_conductor
+            from marianne.daemon.process import start_conductor
 
             start_conductor(clone_name="inherit-test", foreground=True)
 
@@ -328,14 +328,14 @@ class TestConductorStartWithClone:
             pid_file=Path("/tmp/test-prod-no-clone.pid"),
         )
 
-        with patch("mozart.daemon.process._load_config") as mock_load, \
-             patch("mozart.daemon.process._read_pid", return_value=None), \
-             patch("mozart.daemon.process.DaemonProcess") as mock_daemon, \
-             patch("mozart.core.logging.configure_logging"), \
+        with patch("marianne.daemon.process._load_config") as mock_load, \
+             patch("marianne.daemon.process._read_pid", return_value=None), \
+             patch("marianne.daemon.process.DaemonProcess") as mock_daemon, \
+             patch("marianne.core.logging.configure_logging"), \
              patch("asyncio.run"):
             mock_load.return_value = prod_config
 
-            from mozart.daemon.process import start_conductor
+            from marianne.daemon.process import start_conductor
 
             start_conductor(foreground=True)
 
@@ -345,19 +345,19 @@ class TestConductorStartWithClone:
 
     def test_start_clone_checks_clone_pid_not_production(self) -> None:
         """Clone start should check clone PID file, not production."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         clone_paths = resolve_clone_paths("pid-test")
 
-        with patch("mozart.daemon.process._load_config") as mock_load, \
-             patch("mozart.daemon.process._read_pid") as mock_read_pid, \
-             patch("mozart.daemon.process.DaemonProcess"), \
-             patch("mozart.core.logging.configure_logging"), \
+        with patch("marianne.daemon.process._load_config") as mock_load, \
+             patch("marianne.daemon.process._read_pid") as mock_read_pid, \
+             patch("marianne.daemon.process.DaemonProcess"), \
+             patch("marianne.core.logging.configure_logging"), \
              patch("asyncio.run"):
             mock_load.return_value = DaemonConfig()
             mock_read_pid.return_value = None
 
-            from mozart.daemon.process import start_conductor
+            from marianne.daemon.process import start_conductor
 
             start_conductor(clone_name="pid-test", foreground=True)
 
@@ -366,18 +366,18 @@ class TestConductorStartWithClone:
 
     def test_start_clone_uses_clone_log_file(self) -> None:
         """Clone conductor should log to clone-specific log file."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         clone_paths = resolve_clone_paths("log-test")
 
-        with patch("mozart.daemon.process._load_config") as mock_load, \
-             patch("mozart.daemon.process._read_pid", return_value=None), \
-             patch("mozart.daemon.process.DaemonProcess"), \
-             patch("mozart.core.logging.configure_logging") as mock_log, \
+        with patch("marianne.daemon.process._load_config") as mock_load, \
+             patch("marianne.daemon.process._read_pid", return_value=None), \
+             patch("marianne.daemon.process.DaemonProcess"), \
+             patch("marianne.core.logging.configure_logging") as mock_log, \
              patch("asyncio.run"):
             mock_load.return_value = DaemonConfig()
 
-            from mozart.daemon.process import start_conductor
+            from marianne.daemon.process import start_conductor
 
             start_conductor(clone_name="log-test", foreground=True)
 
@@ -399,14 +399,14 @@ class TestConductorStopWithClone:
 
     def test_stop_with_clone_redirects_pid_file(self) -> None:
         """Stop with clone active should use clone PID file."""
-        from mozart.daemon.clone import resolve_clone_paths, set_clone_name
+        from marianne.daemon.clone import resolve_clone_paths, set_clone_name
 
         set_clone_name("stop-test")
         try:
             clone_paths = resolve_clone_paths("stop-test")
-            with patch("mozart.daemon.process.stop_conductor") as mock_stop:
+            with patch("marianne.daemon.process.stop_conductor") as mock_stop:
                 # Simulate what conductor.py does
-                from mozart.daemon.clone import get_clone_name, is_clone_active
+                from marianne.daemon.clone import get_clone_name, is_clone_active
 
                 pid_file = None
                 if is_clone_active() and pid_file is None:
@@ -425,16 +425,16 @@ class TestConductorRestartWithClone:
 
     def test_restart_with_clone_stops_clone_pid(self) -> None:
         """Restart with clone should stop the clone, not production."""
-        from mozart.daemon.clone import resolve_clone_paths, set_clone_name
+        from marianne.daemon.clone import resolve_clone_paths, set_clone_name
 
         set_clone_name("restart-test")
         try:
             clone_paths = resolve_clone_paths("restart-test")
-            with patch("mozart.daemon.process.stop_conductor") as mock_stop, \
-                 patch("mozart.daemon.process.wait_for_conductor_exit", return_value=True), \
-                 patch("mozart.daemon.process.start_conductor") as mock_start:
+            with patch("marianne.daemon.process.stop_conductor") as mock_stop, \
+                 patch("marianne.daemon.process.wait_for_conductor_exit", return_value=True), \
+                 patch("marianne.daemon.process.start_conductor") as mock_start:
 
-                from mozart.daemon.clone import get_clone_name, is_clone_active
+                from marianne.daemon.clone import get_clone_name, is_clone_active
 
                 # Simulate restart with clone
                 pid_file = None
@@ -456,7 +456,7 @@ class TestConductorStatusWithClone:
 
     def test_status_with_clone_uses_clone_paths(self) -> None:
         """conductor-status with clone should check clone PID and socket."""
-        from mozart.daemon.clone import resolve_clone_paths, set_clone_name
+        from marianne.daemon.clone import resolve_clone_paths, set_clone_name
 
         set_clone_name("status-test")
         try:
@@ -479,7 +479,7 @@ class TestCloneNameAdversarial:
 
     def test_path_traversal_in_clone_name(self) -> None:
         """Clone name with path traversal characters should be sanitized."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("../../etc/passwd")
         # No path traversal in the resulting paths
@@ -489,7 +489,7 @@ class TestCloneNameAdversarial:
 
     def test_very_long_clone_name(self) -> None:
         """Very long clone names should not break file paths."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         long_name = "a" * 200
         paths = resolve_clone_paths(long_name)
@@ -499,14 +499,14 @@ class TestCloneNameAdversarial:
 
     def test_null_bytes_in_clone_name(self) -> None:
         """Null bytes in clone name should be stripped."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("test\x00evil")
         assert "\x00" not in str(paths.socket)
 
     def test_unicode_clone_name(self) -> None:
         """Unicode clone names should be sanitized to ASCII-safe."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("tëst-clöne")
         # Non-ASCII chars replaced with hyphens by sanitizer
@@ -514,7 +514,7 @@ class TestCloneNameAdversarial:
 
     def test_clone_isolation_invariant(self) -> None:
         """No clone should ever share a path with production."""
-        from mozart.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import resolve_clone_paths
 
         prod = DaemonConfig()
         for name in [None, "", "test", "../../etc", "a" * 200]:
@@ -533,12 +533,12 @@ class TestConfigCmdCloneAwareness:
 
     def test_try_live_config_uses_clone_socket(self) -> None:
         """_try_live_config uses clone socket when clone is active."""
-        from mozart.daemon.clone import set_clone_name
+        from marianne.daemon.clone import set_clone_name
 
         set_clone_name("cfg-test")
         try:
             with patch(
-                "mozart.daemon.ipc.client.DaemonClient",
+                "marianne.daemon.ipc.client.DaemonClient",
             ) as mock_client_cls:
                 mock_instance = AsyncMock()
                 mock_instance.config = AsyncMock(
@@ -546,7 +546,7 @@ class TestConfigCmdCloneAwareness:
                 )
                 mock_client_cls.return_value = mock_instance
 
-                from mozart.cli.commands.config_cmd import _try_live_config
+                from marianne.cli.commands.config_cmd import _try_live_config
 
                 _try_live_config()
 
@@ -558,12 +558,12 @@ class TestConfigCmdCloneAwareness:
 
     def test_try_live_config_uses_production_without_clone(self) -> None:
         """_try_live_config uses production socket when no clone is active."""
-        from mozart.daemon.clone import set_clone_name
-        from mozart.daemon.config import SocketConfig
+        from marianne.daemon.clone import set_clone_name
+        from marianne.daemon.config import SocketConfig
 
         set_clone_name(None)
         with patch(
-            "mozart.daemon.ipc.client.DaemonClient",
+            "marianne.daemon.ipc.client.DaemonClient",
         ) as mock_client_cls:
             mock_instance = AsyncMock()
             mock_instance.config = AsyncMock(
@@ -571,7 +571,7 @@ class TestConfigCmdCloneAwareness:
             )
             mock_client_cls.return_value = mock_instance
 
-            from mozart.cli.commands.config_cmd import _try_live_config
+            from marianne.cli.commands.config_cmd import _try_live_config
 
             _try_live_config()
 

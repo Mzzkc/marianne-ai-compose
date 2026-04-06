@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
 
 
 class TestLegacyRunnerInstrumentPopulation:
@@ -61,7 +61,7 @@ class TestBatonPathInstrumentPopulation:
         _live_states with instrument_names set from Sheet entities at creation
         time — no longer a post-register fixup.
         """
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         manager = MagicMock(spec=JobManager)
         manager._baton_adapter = MagicMock()
@@ -94,8 +94,8 @@ class TestBatonPathInstrumentPopulation:
         mock_request = MagicMock()
         mock_request.self_healing = False
 
-        with patch("mozart.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]):
-            with patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={}):
+        with patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]):
+            with patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}):
                 result = await JobManager._run_via_baton(
                     manager, "test-job", mock_config, mock_request,
                 )
@@ -110,7 +110,7 @@ class TestBatonPathInstrumentPopulation:
         """F-255.2: instrument_name comes from the Sheet entity, not a pre-existing
         live state. The live state is created fresh with instrument_name set from
         the Sheet entities at creation time."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         manager = MagicMock(spec=JobManager)
         manager._baton_adapter = MagicMock()
@@ -138,8 +138,8 @@ class TestBatonPathInstrumentPopulation:
         mock_request = MagicMock()
         mock_request.self_healing = False
 
-        with patch("mozart.core.sheet.build_sheets", return_value=[mock_sheet]):
-            with patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={}):
+        with patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet]):
+            with patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}):
                 await JobManager._run_via_baton(
                     manager, "test-job", mock_config, mock_request,
                 )

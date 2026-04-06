@@ -9,14 +9,14 @@ from typing import Any, Literal
 
 import pytest
 
-from mozart.core.checkpoint import (
+from marianne.core.checkpoint import (
     CheckpointState,
     JobStatus,
     SheetState,
     SheetStatus,
 )
-from mozart.schema.converters import deserialize_field, serialize_field
-from mozart.schema.registry import (
+from marianne.schema.converters import deserialize_field, serialize_field
+from marianne.schema.registry import (
     ColumnSource,
     TableMapping,
     generate_create_table,
@@ -118,7 +118,7 @@ class TestGetFieldSpecs:
         assert "circuit_breaker_history" in names
 
     def test_dataclass_model(self) -> None:
-        from mozart.learning.store.models import PatternRecord
+        from marianne.learning.store.models import PatternRecord
 
         specs = get_field_specs(PatternRecord)
         names = {s.name for s in specs}
@@ -128,7 +128,7 @@ class TestGetFieldSpecs:
         assert "success_factors" in names
 
     def test_dataclass_defaults(self) -> None:
-        from mozart.learning.store.models import PatternRecord
+        from marianne.learning.store.models import PatternRecord
 
         specs = get_field_specs(PatternRecord)
         by_name = {s.name: s for s in specs}

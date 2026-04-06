@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.execution.progress import (
+from marianne.execution.progress import (
     ExecutionProgress,
     ProgressTracker,
     StreamingOutputTracker,
@@ -327,21 +327,21 @@ class TestSheetStateProgressFields:
 
     def test_progress_snapshots_default(self) -> None:
         """Test progress_snapshots defaults to empty list."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         state = SheetState(sheet_num=1)
         assert state.progress_snapshots == []
 
     def test_last_activity_at_default(self) -> None:
         """Test last_activity_at defaults to None."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         state = SheetState(sheet_num=1)
         assert state.last_activity_at is None
 
     def test_progress_snapshots_serialization(self) -> None:
         """Test progress_snapshots serializes to JSON correctly."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         now = datetime.now(UTC)
         state = SheetState(
@@ -370,7 +370,7 @@ class TestClaudeCliBackendProgress:
     @pytest.mark.asyncio
     async def test_progress_callback_called(self) -> None:
         """Test that progress callback is called during execution."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         progress_updates: list[dict[str, Any]] = []
 
@@ -413,7 +413,7 @@ class TestClaudeCliBackendProgress:
     @pytest.mark.asyncio
     async def test_progress_includes_bytes_and_lines(self) -> None:
         """Test that progress updates include byte and line counts."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         progress_updates: list[dict[str, Any]] = []
 
@@ -462,7 +462,7 @@ class TestClaudeCliBackendProgress:
     @pytest.mark.asyncio
     async def test_no_callback_still_works(self) -> None:
         """Test that backend works without progress callback."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         with patch("shutil.which", return_value="/usr/bin/claude"):
             backend = ClaudeCliBackend()

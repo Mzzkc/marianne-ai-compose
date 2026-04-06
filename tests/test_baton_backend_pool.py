@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from mozart.core.config.instruments import (
+from marianne.core.config.instruments import (
     CliCommand,
     CliOutputConfig,
     CliProfile,
@@ -24,8 +24,8 @@ from mozart.core.config.instruments import (
     InstrumentProfile,
     ModelCapacity,
 )
-from mozart.daemon.baton.backend_pool import BackendPool, _create_backend_for_profile
-from mozart.instruments.registry import InstrumentRegistry
+from marianne.daemon.baton.backend_pool import BackendPool, _create_backend_for_profile
+from marianne.instruments.registry import InstrumentRegistry
 
 # =============================================================================
 # Fixtures
@@ -380,7 +380,7 @@ class TestCreateBackendForProfile:
     """The factory function creates the right backend type."""
 
     async def test_cli_profile_creates_plugin_cli_backend(self) -> None:
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_cli_profile()
         backend = _create_backend_for_profile(profile)

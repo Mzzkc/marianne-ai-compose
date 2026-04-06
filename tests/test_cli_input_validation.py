@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 import typer
 
-from mozart.cli.commands._shared import validate_job_id, validate_start_sheet
+from marianne.cli.commands._shared import validate_job_id, validate_start_sheet
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mozart.notifications import (
+from marianne.notifications import (
     DesktopNotifier,
     MockDesktopNotifier,
     MockSlackNotifier,
@@ -999,8 +999,8 @@ class TestCLINotificationIntegration:
 
     def test_create_notifiers_from_config_desktop(self):
         """Test creating desktop notifier from config."""
-        from mozart.cli import create_notifiers_from_config
-        from mozart.core.config import NotificationConfig
+        from marianne.cli import create_notifiers_from_config
+        from marianne.core.config import NotificationConfig
 
         configs = [
             NotificationConfig(
@@ -1015,8 +1015,8 @@ class TestCLINotificationIntegration:
 
     def test_create_notifiers_from_config_slack(self):
         """Test creating Slack notifier from config."""
-        from mozart.cli import create_notifiers_from_config
-        from mozart.core.config import NotificationConfig
+        from marianne.cli import create_notifiers_from_config
+        from marianne.core.config import NotificationConfig
 
         configs = [
             NotificationConfig(
@@ -1031,8 +1031,8 @@ class TestCLINotificationIntegration:
 
     def test_create_notifiers_from_config_webhook(self):
         """Test creating webhook notifier from config."""
-        from mozart.cli import create_notifiers_from_config
-        from mozart.core.config import NotificationConfig
+        from marianne.cli import create_notifiers_from_config
+        from marianne.core.config import NotificationConfig
 
         configs = [
             NotificationConfig(
@@ -1047,8 +1047,8 @@ class TestCLINotificationIntegration:
 
     def test_create_notifiers_from_config_multiple(self):
         """Test creating multiple notifiers from config."""
-        from mozart.cli import create_notifiers_from_config
-        from mozart.core.config import NotificationConfig
+        from marianne.cli import create_notifiers_from_config
+        from marianne.core.config import NotificationConfig
 
         configs = [
             NotificationConfig(type="desktop", on_events=["job_complete"]),
@@ -1068,8 +1068,8 @@ class TestCLINotificationIntegration:
 
     def test_create_notifiers_unknown_type_skipped(self):
         """Test unknown notification types are skipped."""
-        from mozart.cli import create_notifiers_from_config
-        from mozart.core.config import NotificationConfig
+        from marianne.cli import create_notifiers_from_config
+        from marianne.core.config import NotificationConfig
 
         configs = [
             NotificationConfig(

@@ -17,9 +17,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetStatus
-from mozart.execution.dag import DependencyDAG
-from mozart.execution.parallel import (
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
+from marianne.execution.dag import DependencyDAG
+from marianne.execution.parallel import (
     ParallelBatchResult,
     ParallelExecutionConfig,
     ParallelExecutionError,
@@ -394,7 +394,7 @@ class TestParallelConfigSchema:
 
     def test_job_config_with_parallel_disabled(self) -> None:
         """JobConfig defaults to parallel disabled."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config = JobConfig.from_yaml_string("""
 name: test-job
@@ -410,7 +410,7 @@ prompt:
 
     def test_job_config_with_parallel_enabled(self) -> None:
         """JobConfig accepts parallel config."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config = JobConfig.from_yaml_string("""
 name: test-job
@@ -433,7 +433,7 @@ prompt:
         """ParallelConfig validates max_concurrent range."""
         from pydantic import ValidationError
 
-        from mozart.core.config import ParallelConfig
+        from marianne.core.config import ParallelConfig
 
         # Valid range
         config = ParallelConfig(max_concurrent=1)
@@ -504,8 +504,8 @@ class TestRunnerParallelIntegration:
         """Runner creates parallel executor when enabled."""
         from unittest.mock import MagicMock
 
-        from mozart.core.config import JobConfig
-        from mozart.execution.runner import JobRunner
+        from marianne.core.config import JobConfig
+        from marianne.execution.runner import JobRunner
 
         config = JobConfig.from_yaml_string("""
 name: test-job
@@ -532,8 +532,8 @@ prompt:
         """Runner doesn't create executor when parallel disabled."""
         from unittest.mock import MagicMock
 
-        from mozart.core.config import JobConfig
-        from mozart.execution.runner import JobRunner
+        from marianne.core.config import JobConfig
+        from marianne.execution.runner import JobRunner
 
         config = JobConfig.from_yaml_string("""
 name: test-job
@@ -591,8 +591,8 @@ class TestParallelEdgeCases:
         """Single-sheet job works with parallel enabled."""
         from unittest.mock import MagicMock
 
-        from mozart.core.config import JobConfig
-        from mozart.execution.runner import JobRunner
+        from marianne.core.config import JobConfig
+        from marianne.execution.runner import JobRunner
 
         config = JobConfig.from_yaml_string("""
 name: test-job
@@ -674,7 +674,7 @@ class TestLockingStateBackend:
     @pytest.mark.asyncio
     async def test_concurrent_mark_sheet_status_serialized(self) -> None:
         """Concurrent mark_sheet_status calls should not interleave."""
-        from mozart.execution.parallel import _LockingStateBackend
+        from marianne.execution.parallel import _LockingStateBackend
 
         call_order: list[tuple[str, int]] = []
 
@@ -717,7 +717,7 @@ class TestLockingStateBackend:
     @pytest.mark.asyncio
     async def test_concurrent_save_and_load_serialized(self) -> None:
         """Concurrent save() and load() should not interleave (TOCTOU prevention)."""
-        from mozart.execution.parallel import _LockingStateBackend
+        from marianne.execution.parallel import _LockingStateBackend
 
         held_lock = False
         overlap_detected = False

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mozart.core.config import JobConfig
+from marianne.core.config import JobConfig
 
 
 def _minimal_config(

@@ -17,7 +17,7 @@ from unittest.mock import MagicMock
 
 from rich.console import Console
 
-from mozart.cli.output import (
+from marianne.cli.output import (
     StatusColors,
     create_diagnostic_panel,
     create_errors_table,
@@ -45,7 +45,7 @@ from mozart.cli.output import (
     print_job_status_header,
     print_timing_section,
 )
-from mozart.core.checkpoint import JobStatus, SheetStatus
+from marianne.core.checkpoint import JobStatus, SheetStatus
 
 
 def _render(renderable: object, width: int = 120) -> str:

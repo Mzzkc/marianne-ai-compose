@@ -19,8 +19,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.config.instruments import (
+from marianne.backends.base import ExecutionResult
+from marianne.core.config.instruments import (
     CliCommand,
     CliErrorConfig,
     CliOutputConfig,
@@ -119,7 +119,7 @@ class TestCommandConstruction:
 
     def test_basic_command_with_prompt_flag(self) -> None:
         """Prompt is passed via the configured flag."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(executable="gemini", prompt_flag="-p")
         backend = PluginCliBackend(profile)
@@ -132,7 +132,7 @@ class TestCommandConstruction:
 
     def test_positional_prompt_when_flag_is_none(self) -> None:
         """When prompt_flag is None, prompt is a positional argument."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(executable="codex", prompt_flag=None)
         backend = PluginCliBackend(profile)
@@ -143,7 +143,7 @@ class TestCommandConstruction:
 
     def test_auto_approve_flag_included(self) -> None:
         """Auto-approve flag is included when configured."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             executable="claude", auto_approve_flag="--dangerously-skip-permissions",
@@ -154,7 +154,7 @@ class TestCommandConstruction:
 
     def test_model_flag_uses_default_model(self) -> None:
         """Model flag passes the default model name."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             executable="gemini", model_flag="--model",
@@ -167,7 +167,7 @@ class TestCommandConstruction:
 
     def test_output_format_flag_with_value(self) -> None:
         """Output format flag includes both flag and value."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             output_format_flag="--output-format",
@@ -181,7 +181,7 @@ class TestCommandConstruction:
 
     def test_output_format_flag_boolean(self) -> None:
         """Boolean output format flag (no value) is just the flag."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             output_format_flag="--json",
@@ -193,7 +193,7 @@ class TestCommandConstruction:
 
     def test_extra_flags_appended(self) -> None:
         """Extra flags are always appended."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(extra_flags=["--verbose", "--no-cache"])
         backend = PluginCliBackend(profile)
@@ -203,7 +203,7 @@ class TestCommandConstruction:
 
     def test_timeout_flag_passed(self) -> None:
         """Timeout flag passes the timeout value."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(timeout_flag="--timeout")
         backend = PluginCliBackend(profile)
@@ -223,7 +223,7 @@ class TestOutputParsing:
 
     def test_text_mode_returns_stdout_as_result(self) -> None:
         """In text mode, stdout IS the result."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(output_format="text")
         backend = PluginCliBackend(profile)
@@ -233,7 +233,7 @@ class TestOutputParsing:
 
     def test_json_mode_extracts_via_result_path(self) -> None:
         """In JSON mode, result is extracted via dot-path."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             output_format="json",
@@ -247,7 +247,7 @@ class TestOutputParsing:
 
     def test_json_mode_extracts_tokens(self) -> None:
         """JSON mode extracts token counts via configured paths."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             output_format="json",
@@ -266,7 +266,7 @@ class TestOutputParsing:
 
     def test_json_mode_error_path(self) -> None:
         """JSON mode extracts error via error_path on failure."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             output_format="json",
@@ -281,7 +281,7 @@ class TestOutputParsing:
 
     def test_jsonl_mode_finds_completion_event(self) -> None:
         """JSONL mode finds the completion event by type."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             output_format="jsonl",
@@ -313,7 +313,7 @@ class TestErrorClassification:
         Non-zero success codes are normalized to 0 in the ExecutionResult
         because the result invariant requires success=True → exit_code in (0, None).
         """
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(success_exit_codes=[0, 42])
         backend = PluginCliBackend(profile)
@@ -324,7 +324,7 @@ class TestErrorClassification:
 
     def test_non_success_exit_code_is_failure(self) -> None:
         """Exit code NOT in success_exit_codes means failure."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(success_exit_codes=[0])
         backend = PluginCliBackend(profile)
@@ -333,7 +333,7 @@ class TestErrorClassification:
 
     def test_rate_limit_pattern_detected_in_stderr(self) -> None:
         """Rate limit patterns in stderr are detected."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             rate_limit_patterns=[r"rate.?limit", r"429"],
@@ -346,7 +346,7 @@ class TestErrorClassification:
 
     def test_rate_limit_pattern_detected_in_stdout(self) -> None:
         """Rate limit patterns in stdout are also detected."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             rate_limit_patterns=[r"429 Too Many Requests"],
@@ -359,7 +359,7 @@ class TestErrorClassification:
 
     def test_auth_error_pattern_sets_error_type(self) -> None:
         """Auth error patterns from the profile should set error_type='auth'."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             auth_error_patterns=[r"invalid.?api.?key", r"authentication failed"],
@@ -372,7 +372,7 @@ class TestErrorClassification:
 
     def test_timeout_pattern_sets_error_type(self) -> None:
         """Timeout patterns from the profile should set error_type='timeout'."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             timeout_patterns=[r"request timed out", r"deadline exceeded"],
@@ -385,7 +385,7 @@ class TestErrorClassification:
 
     def test_crash_pattern_sets_error_type(self) -> None:
         """Crash patterns from the profile should set error_type='crash'."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             crash_patterns=[r"segmentation fault", r"bus error"],
@@ -398,7 +398,7 @@ class TestErrorClassification:
 
     def test_stale_pattern_sets_error_type(self) -> None:
         """Stale patterns from the profile should set error_type='stale'."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             stale_patterns=[r"no output for \d+s", r"idle timeout"],
@@ -411,7 +411,7 @@ class TestErrorClassification:
 
     def test_capacity_pattern_sets_error_type(self) -> None:
         """Capacity patterns from the profile should set error_type='capacity'."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             capacity_patterns=[r"overloaded", r"capacity exceeded"],
@@ -424,7 +424,7 @@ class TestErrorClassification:
 
     def test_no_pattern_match_leaves_error_type_none(self) -> None:
         """When no patterns match, error_type should be None."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             auth_error_patterns=[r"invalid key"],
@@ -438,7 +438,7 @@ class TestErrorClassification:
 
     def test_success_does_not_classify_error_type(self) -> None:
         """Successful executions should not have error_type set."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             auth_error_patterns=[r"auth"],
@@ -452,7 +452,7 @@ class TestErrorClassification:
 
     def test_rate_limit_takes_priority_over_other_patterns(self) -> None:
         """Rate limiting should be detected even when other patterns match."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
             rate_limit_patterns=[r"rate.?limit"],
@@ -475,7 +475,7 @@ class TestBackendProperties:
 
     def test_name_returns_display_name(self) -> None:
         """The name property returns the profile's display_name."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile()
         backend = PluginCliBackend(profile)
@@ -483,7 +483,7 @@ class TestBackendProperties:
 
     def test_working_directory_propagates(self) -> None:
         """Working directory can be set and is used in command execution."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile()
         backend = PluginCliBackend(profile)
@@ -493,7 +493,7 @@ class TestBackendProperties:
 
     def test_preamble_prepended_to_prompt(self) -> None:
         """Preamble text is prepended to the prompt."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile()
         backend = PluginCliBackend(profile)
@@ -509,7 +509,7 @@ class TestBackendProperties:
 
     def test_prompt_extensions_appended(self) -> None:
         """Prompt extensions are appended to the prompt."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile()
         backend = PluginCliBackend(profile)
@@ -524,7 +524,7 @@ class TestBackendProperties:
 
     async def test_health_check_uses_executable(self) -> None:
         """Health check verifies the executable exists and runs."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         # Use 'echo' which always exists
         profile = _make_profile(executable="echo")
@@ -536,7 +536,7 @@ class TestBackendProperties:
 
     async def test_health_check_fails_for_missing_executable(self) -> None:
         """Health check returns False for missing executable."""
-        from mozart.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(executable="nonexistent-tool-xyz")
         backend = PluginCliBackend(profile)

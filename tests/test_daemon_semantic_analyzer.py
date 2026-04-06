@@ -9,13 +9,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.backends.base import Backend, ExecutionResult
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.daemon.config import SemanticLearningConfig
-from mozart.daemon.event_bus import EventBus
-from mozart.daemon.learning_hub import LearningHub
-from mozart.daemon.semantic_analyzer import SemanticAnalyzer
-from mozart.daemon.types import ObserverEvent
+from marianne.backends.base import Backend, ExecutionResult
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.daemon.config import SemanticLearningConfig
+from marianne.daemon.event_bus import EventBus
+from marianne.daemon.learning_hub import LearningHub
+from marianne.daemon.semantic_analyzer import SemanticAnalyzer
+from marianne.daemon.types import ObserverEvent
 
 # ─── Fixtures ────────────────────────────────────────────────────────
 

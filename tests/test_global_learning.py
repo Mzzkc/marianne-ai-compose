@@ -13,28 +13,28 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.checkpoint import SheetStatus
-from mozart.learning.aggregator import (
+from marianne.core.checkpoint import SheetStatus
+from marianne.learning.aggregator import (
     AggregationResult,
     EnhancedAggregationResult,
     EnhancedPatternAggregator,
     PatternAggregator,
 )
-from mozart.learning.global_store import (
+from marianne.learning.global_store import (
     EntropyResponseRecord,
     ExplorationBudgetRecord,
     GlobalLearningStore,
     PatternRecord,
     QuarantineStatus,
 )
-from mozart.learning.outcomes import SheetOutcome
-from mozart.learning.patterns import (
+from marianne.learning.outcomes import SheetOutcome
+from marianne.learning.patterns import (
     DetectedPattern,
     ExtractedPattern,
     OutputPatternExtractor,
     PatternType,
 )
-from mozart.learning.weighter import PatternWeighter
+from marianne.learning.weighter import PatternWeighter
 
 # =============================================================================
 # Fixtures
@@ -1262,7 +1262,7 @@ class TestErrorCodePatterns:
 
     def test_detect_error_code_patterns_empty_outcomes(self) -> None:
         """Test error code detection with empty outcomes."""
-        from mozart.learning.patterns import PatternDetector
+        from marianne.learning.patterns import PatternDetector
 
         detector = PatternDetector([])
         patterns = detector._detect_error_code_patterns()
@@ -1270,7 +1270,7 @@ class TestErrorCodePatterns:
 
     def test_detect_error_code_patterns_no_error_codes(self) -> None:
         """Test error code detection when outcomes have no error codes."""
-        from mozart.learning.patterns import PatternDetector
+        from marianne.learning.patterns import PatternDetector
 
         outcomes = [
             SheetOutcome(
@@ -1294,7 +1294,7 @@ class TestErrorCodePatterns:
 
     def test_detect_error_code_patterns_single_occurrence(self) -> None:
         """Test error code detection with single occurrence (not pattern)."""
-        from mozart.learning.patterns import PatternDetector
+        from marianne.learning.patterns import PatternDetector
 
         outcomes = [
             SheetOutcome(
@@ -1319,7 +1319,7 @@ class TestErrorCodePatterns:
 
     def test_detect_error_code_patterns_recurring(self) -> None:
         """Test error code detection with recurring error codes."""
-        from mozart.learning.patterns import PatternDetector
+        from marianne.learning.patterns import PatternDetector
 
         outcomes = [
             SheetOutcome(
@@ -1364,7 +1364,7 @@ class TestErrorCodePatterns:
 
     def test_detect_error_code_confidence_scaling(self) -> None:
         """Test that error code pattern confidence scales with frequency."""
-        from mozart.learning.patterns import PatternDetector
+        from marianne.learning.patterns import PatternDetector
 
         # Create 5 outcomes with same error code
         outcomes = []
@@ -1397,7 +1397,7 @@ class TestErrorCodePatterns:
 
     def test_error_patterns_in_detect_all(self) -> None:
         """Test that error code patterns are included in detect_all()."""
-        from mozart.learning.patterns import PatternDetector
+        from marianne.learning.patterns import PatternDetector
 
         outcomes = [
             SheetOutcome(
@@ -1691,7 +1691,7 @@ class TestFullDataCollectionPipeline:
     def test_import_verification(self) -> None:
         """Verify all learning module imports work correctly."""
         # Test all key imports
-        from mozart.learning import (
+        from marianne.learning import (
             aggregator,
             global_store,
             outcomes,
@@ -1838,7 +1838,7 @@ class TestGroundingPatternIntegration:
         """Test that grounding fields survive save/load cycle in JsonOutcomeStore."""
         import tempfile
 
-        from mozart.learning.outcomes import JsonOutcomeStore
+        from marianne.learning.outcomes import JsonOutcomeStore
 
         with tempfile.TemporaryDirectory() as tmp:
             store_path = Path(tmp) / "outcomes.json"
@@ -4626,7 +4626,7 @@ class TestPatternRelevanceScoring:
 
     def test_quarantined_pattern_score_penalty(self) -> None:
         """Test that quarantined patterns receive score penalty."""
-        from mozart.learning.patterns import PatternMatcher
+        from marianne.learning.patterns import PatternMatcher
 
         pattern = DetectedPattern(
             pattern_type=PatternType.VALIDATION_FAILURE,
@@ -4645,7 +4645,7 @@ class TestPatternRelevanceScoring:
 
     def test_validated_pattern_score_bonus(self) -> None:
         """Test that validated patterns receive score bonus."""
-        from mozart.learning.patterns import PatternMatcher
+        from marianne.learning.patterns import PatternMatcher
 
         regular_pattern = DetectedPattern(
             pattern_type=PatternType.VALIDATION_FAILURE,
@@ -4672,7 +4672,7 @@ class TestPatternRelevanceScoring:
 
     def test_high_trust_pattern_score_bonus(self) -> None:
         """Test that high trust patterns receive score bonus."""
-        from mozart.learning.patterns import PatternMatcher
+        from marianne.learning.patterns import PatternMatcher
 
         low_trust = DetectedPattern(
             pattern_type=PatternType.VALIDATION_FAILURE,
@@ -4772,7 +4772,7 @@ class TestSuccessFactors:
 
     def test_success_factors_creation(self) -> None:
         """Test SuccessFactors can be created with default values."""
-        from mozart.learning.global_store import SuccessFactors
+        from marianne.learning.global_store import SuccessFactors
 
         factors = SuccessFactors()
         assert factors.validation_types == []
@@ -4784,7 +4784,7 @@ class TestSuccessFactors:
 
     def test_success_factors_with_values(self) -> None:
         """Test SuccessFactors with specific values."""
-        from mozart.learning.global_store import SuccessFactors
+        from marianne.learning.global_store import SuccessFactors
 
         factors = SuccessFactors(
             validation_types=["file", "regex"],
@@ -4810,7 +4810,7 @@ class TestSuccessFactors:
 
     def test_success_factors_serialization(self) -> None:
         """Test SuccessFactors to_dict and from_dict."""
-        from mozart.learning.global_store import SuccessFactors
+        from marianne.learning.global_store import SuccessFactors
 
         original = SuccessFactors(
             validation_types=["file", "regex"],
@@ -4839,7 +4839,7 @@ class TestSuccessFactors:
 
     def test_success_factors_get_time_bucket(self) -> None:
         """Test time bucket calculation for different hours."""
-        from mozart.learning.global_store import SuccessFactors
+        from marianne.learning.global_store import SuccessFactors
 
         # Morning: 5-11
         assert SuccessFactors.get_time_bucket(5) == "morning"
@@ -4875,7 +4875,7 @@ class TestPatternSuccessFactorsIntegration:
         """Test PatternRecord has success_factors field."""
         from datetime import datetime
 
-        from mozart.learning.global_store import PatternRecord, SuccessFactors
+        from marianne.learning.global_store import PatternRecord, SuccessFactors
 
         now = datetime.now()
         factors = SuccessFactors(validation_types=["file"])
@@ -5106,7 +5106,7 @@ class TestPatternSuccessFactorsIntegration:
         self, global_store: GlobalLearningStore
     ) -> None:
         """Test success factors are persisted and retrieved from database."""
-        from mozart.learning.global_store import GlobalLearningStore
+        from marianne.learning.global_store import GlobalLearningStore
 
         # Create pattern with factors
         pattern_id = global_store.record_pattern(
@@ -5148,7 +5148,7 @@ class TestAutoApplyConfig:
 
     def test_auto_apply_config_defaults(self) -> None:
         """Test AutoApplyConfig has expected defaults."""
-        from mozart.core.config import AutoApplyConfig
+        from marianne.core.config import AutoApplyConfig
 
         config = AutoApplyConfig()
         assert config.enabled is False  # Opt-in only
@@ -5159,7 +5159,7 @@ class TestAutoApplyConfig:
 
     def test_auto_apply_config_custom_values(self) -> None:
         """Test AutoApplyConfig accepts custom values."""
-        from mozart.core.config import AutoApplyConfig
+        from marianne.core.config import AutoApplyConfig
 
         config = AutoApplyConfig(
             enabled=True,
@@ -5179,7 +5179,7 @@ class TestAutoApplyConfig:
         """Test AutoApplyConfig validates trust_threshold range."""
         from pydantic import ValidationError
 
-        from mozart.core.config import AutoApplyConfig
+        from marianne.core.config import AutoApplyConfig
 
         # Valid: 0.0 to 1.0
         AutoApplyConfig(trust_threshold=0.0)
@@ -5193,7 +5193,7 @@ class TestAutoApplyConfig:
 
     def test_learning_config_with_auto_apply(self) -> None:
         """Test LearningConfig can include auto_apply."""
-        from mozart.core.config import AutoApplyConfig, LearningConfig
+        from marianne.core.config import AutoApplyConfig, LearningConfig
 
         learning = LearningConfig(
             auto_apply=AutoApplyConfig(enabled=True, trust_threshold=0.8)
@@ -5205,7 +5205,7 @@ class TestAutoApplyConfig:
 
     def test_learning_config_auto_apply_none_by_default(self) -> None:
         """Test LearningConfig has auto_apply=None by default."""
-        from mozart.core.config import LearningConfig
+        from marianne.core.config import LearningConfig
 
         learning = LearningConfig()
         assert learning.auto_apply is None
@@ -6011,7 +6011,7 @@ class TestExplorationBudgetConfig:
 
     def test_default_config_values(self) -> None:
         """Test default configuration values."""
-        from mozart.core.config import ExplorationBudgetConfig
+        from marianne.core.config import ExplorationBudgetConfig
 
         config = ExplorationBudgetConfig()
 
@@ -6026,7 +6026,7 @@ class TestExplorationBudgetConfig:
         """Test config validation constraints."""
         from pydantic import ValidationError
 
-        from mozart.core.config import ExplorationBudgetConfig
+        from marianne.core.config import ExplorationBudgetConfig
 
         # Floor should be 0-1
         with pytest.raises(ValidationError):
@@ -6038,7 +6038,7 @@ class TestExplorationBudgetConfig:
 
     def test_config_serialization(self) -> None:
         """Test config serialization to dict/json."""
-        from mozart.core.config import ExplorationBudgetConfig
+        from marianne.core.config import ExplorationBudgetConfig
 
         config = ExplorationBudgetConfig(
             enabled=True,
@@ -6058,7 +6058,7 @@ class TestEntropyResponseConfig:
 
     def test_default_config_values(self) -> None:
         """Test default configuration values."""
-        from mozart.core.config import EntropyResponseConfig
+        from marianne.core.config import EntropyResponseConfig
 
         config = EntropyResponseConfig()
 
@@ -6073,7 +6073,7 @@ class TestEntropyResponseConfig:
         """Test config validation constraints."""
         from pydantic import ValidationError
 
-        from mozart.core.config import EntropyResponseConfig
+        from marianne.core.config import EntropyResponseConfig
 
         # Threshold should be 0-1
         with pytest.raises(ValidationError):
@@ -6085,7 +6085,7 @@ class TestEntropyResponseConfig:
 
     def test_config_serialization(self) -> None:
         """Test config serialization to dict/json."""
-        from mozart.core.config import EntropyResponseConfig
+        from marianne.core.config import EntropyResponseConfig
 
         config = EntropyResponseConfig(
             enabled=True,
@@ -6105,7 +6105,7 @@ class TestLearningConfigIntegration:
 
     def test_learning_config_has_budget_config(self) -> None:
         """Test that LearningConfig includes exploration_budget."""
-        from mozart.core.config import LearningConfig
+        from marianne.core.config import LearningConfig
 
         config = LearningConfig()
 
@@ -6115,7 +6115,7 @@ class TestLearningConfigIntegration:
 
     def test_learning_config_has_entropy_response_config(self) -> None:
         """Test that LearningConfig includes entropy_response."""
-        from mozart.core.config import LearningConfig
+        from marianne.core.config import LearningConfig
 
         config = LearningConfig()
 
@@ -6125,7 +6125,7 @@ class TestLearningConfigIntegration:
 
     def test_learning_config_nested_serialization(self) -> None:
         """Test that nested configs serialize correctly."""
-        from mozart.core.config import (
+        from marianne.core.config import (
             EntropyResponseConfig,
             ExplorationBudgetConfig,
             LearningConfig,

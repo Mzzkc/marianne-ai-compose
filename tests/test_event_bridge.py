@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from mozart.dashboard.services.event_bridge import DaemonEventBridge
+from marianne.dashboard.services.event_bridge import DaemonEventBridge
 
 # ============================================================================
 # Fixtures
@@ -312,7 +312,7 @@ async def test_all_events_handles_job_id_key_variants(
 
 def test_format_sse_produces_valid_wire_format() -> None:
     """_format_sse creates proper SSE wire format."""
-    from mozart.dashboard.routes.events import _format_sse
+    from marianne.dashboard.routes.events import _format_sse
 
     sse = {"event": "test.event", "data": '{"key": "value"}'}
     formatted = _format_sse(sse)
@@ -324,7 +324,7 @@ def test_format_sse_produces_valid_wire_format() -> None:
 
 def test_format_sse_default_event() -> None:
     """_format_sse uses 'message' as default event type."""
-    from mozart.dashboard.routes.events import _format_sse
+    from marianne.dashboard.routes.events import _format_sse
 
     formatted = _format_sse({"data": "{}"})
     assert "event: message\n" in formatted
@@ -332,7 +332,7 @@ def test_format_sse_default_event() -> None:
 
 def test_set_and_get_event_bridge() -> None:
     """set_event_bridge/get_event_bridge round-trips correctly."""
-    from mozart.dashboard.routes.events import get_event_bridge, set_event_bridge
+    from marianne.dashboard.routes.events import get_event_bridge, set_event_bridge
 
     client = AsyncMock()
     bridge = DaemonEventBridge(client=client)
@@ -345,7 +345,7 @@ def test_set_and_get_event_bridge() -> None:
 
 def test_get_event_bridge_raises_when_not_configured() -> None:
     """get_event_bridge raises RuntimeError before set_event_bridge."""
-    from mozart.dashboard.routes.events import get_event_bridge, set_event_bridge
+    from marianne.dashboard.routes.events import get_event_bridge, set_event_bridge
 
     set_event_bridge(None)  # type: ignore[arg-type]
     with pytest.raises(RuntimeError, match="DaemonEventBridge not configured"):

@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState
-from mozart.daemon.config import DaemonConfig
-from mozart.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+from marianne.core.checkpoint import CheckpointState
+from marianne.daemon.config import DaemonConfig
+from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
 
@@ -303,7 +303,7 @@ class TestBug4SubmitJobUsesLock:
             parse_events: list[tuple[str, str]] = []
             lock_events: list[tuple[str, str]] = []
 
-            from mozart.core.config import JobConfig
+            from marianne.core.config import JobConfig
             original_from_yaml = JobConfig.from_yaml
 
             def tracked_from_yaml(path, *args, **kwargs):
@@ -325,14 +325,14 @@ class TestBug4SubmitJobUsesLock:
 
             mgr._registry.register_job = slow_register
 
-            from mozart.daemon.types import JobRequest
+            from marianne.daemon.types import JobRequest
 
             # Omit workspace so submit_job must parse config to extract it.
             r1 = JobRequest(config_path=config_a)
             r2 = JobRequest(config_path=config_b)
 
             with patch(
-                "mozart.core.config.JobConfig.from_yaml",
+                "marianne.core.config.JobConfig.from_yaml",
                 side_effect=tracked_from_yaml,
             ):
                 resp1, resp2 = await asyncio.gather(
@@ -401,7 +401,7 @@ class TestBug5IsDaemonRunningShortCircuit:
     async def test_is_daemon_running_skips_connect_on_missing_path(
         self,
     ) -> None:
-        from mozart.daemon.ipc.client import DaemonClient
+        from marianne.daemon.ipc.client import DaemonClient
 
         # Simulate a stale socket: path exists, connection succeeds,
         # but no daemon handler is processing requests.
@@ -458,7 +458,7 @@ class TestBug6TryDaemonRouteValueErrorHandling:
     ) -> None:
         from pydantic import ValidationError
 
-        from mozart.daemon.detect import try_daemon_route
+        from marianne.daemon.detect import try_daemon_route
 
         # Simulate a Pydantic ValidationError (a subclass of ValueError)
         # from inside client.call() — e.g., when deserializing a daemon
@@ -478,7 +478,7 @@ class TestBug6TryDaemonRouteValueErrorHandling:
 
         with (
             patch(
-                "mozart.daemon.ipc.client.DaemonClient",
+                "marianne.daemon.ipc.client.DaemonClient",
             ) as MockClientClass,
         ):
             mock_client = MagicMock()

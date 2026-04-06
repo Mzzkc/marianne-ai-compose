@@ -17,9 +17,9 @@ from textwrap import dedent
 import pytest
 from rich.console import Console
 
-from mozart.core.config import JobConfig
-from mozart.validation.base import ValidationIssue, ValidationSeverity
-from mozart.validation.checks.best_practices import (
+from marianne.core.config import JobConfig
+from marianne.validation.base import ValidationIssue, ValidationSeverity
+from marianne.validation.checks.best_practices import (
     FanOutWithoutDependenciesCheck,
     FanOutWithoutParallelCheck,
     FileExistsOnlyCheck,
@@ -30,14 +30,14 @@ from mozart.validation.checks.best_practices import (
     NoValidationsCheck,
     VariableShadowingCheck,
 )
-from mozart.validation.checks.config import (
+from marianne.validation.checks.config import (
     EmptyPatternCheck,
     RegexPatternCheck,
     TimeoutRangeCheck,
     ValidationTypeCheck,
     VersionReferenceCheck,
 )
-from mozart.validation.rendering import (
+from marianne.validation.rendering import (
     ExpandedValidation,
     RenderingPreview,
     SheetPreview,
@@ -47,7 +47,7 @@ from mozart.validation.rendering import (
     _expand_path,
     generate_preview,
 )
-from mozart.validation.reporter import ValidationReporter
+from marianne.validation.reporter import ValidationReporter
 
 
 # ============================================================================
@@ -804,7 +804,7 @@ class TestResolveInjectionsPreview:
     """Test _resolve_injections_preview with real files."""
 
     def _make_ctx(self, tmp_path: Path) -> "SheetContext":
-        from mozart.prompts.templating import SheetContext
+        from marianne.prompts.templating import SheetContext
         return SheetContext(
             sheet_num=1,
             total_sheets=1,
@@ -816,12 +816,12 @@ class TestResolveInjectionsPreview:
     def _make_item(
         self, file: str, category: str = "context",
     ) -> "InjectionItem":
-        from mozart.core.config.job import InjectionItem
+        from marianne.core.config.job import InjectionItem
         return InjectionItem(**{"file": file, "as": category})
 
     def test_resolves_existing_file(self, tmp_path: Path) -> None:
         """Injection from an existing file is loaded into context."""
-        from mozart.validation.rendering import _resolve_injections_preview
+        from marianne.validation.rendering import _resolve_injections_preview
 
         prelude_file = tmp_path / "context.md"
         prelude_file.write_text("Background info")
@@ -835,7 +835,7 @@ class TestResolveInjectionsPreview:
 
     def test_missing_file_silently_skipped(self, tmp_path: Path) -> None:
         """Missing files are skipped without warnings."""
-        from mozart.validation.rendering import _resolve_injections_preview
+        from marianne.validation.rendering import _resolve_injections_preview
 
         ctx = self._make_ctx(tmp_path)
         items = [self._make_item(str(tmp_path / "nonexistent.md"), "context")]
@@ -846,7 +846,7 @@ class TestResolveInjectionsPreview:
 
     def test_jinja_error_in_file_path(self, tmp_path: Path) -> None:
         """Jinja error in injection file path produces a warning."""
-        from mozart.validation.rendering import _resolve_injections_preview
+        from marianne.validation.rendering import _resolve_injections_preview
 
         ctx = self._make_ctx(tmp_path)
         items = [self._make_item("{{ broken", "context")]
@@ -857,7 +857,7 @@ class TestResolveInjectionsPreview:
 
     def test_resolves_skill_injection(self, tmp_path: Path) -> None:
         """Skill injection category populates injected_skills."""
-        from mozart.validation.rendering import _resolve_injections_preview
+        from marianne.validation.rendering import _resolve_injections_preview
 
         skill_file = tmp_path / "skill.md"
         skill_file.write_text("Skill content")
@@ -870,7 +870,7 @@ class TestResolveInjectionsPreview:
 
     def test_resolves_tool_injection(self, tmp_path: Path) -> None:
         """Tool injection category populates injected_tools."""
-        from mozart.validation.rendering import _resolve_injections_preview
+        from marianne.validation.rendering import _resolve_injections_preview
 
         tool_file = tmp_path / "tool.md"
         tool_file.write_text("Tool content")
@@ -883,7 +883,7 @@ class TestResolveInjectionsPreview:
 
     def test_relative_path_resolution(self, tmp_path: Path) -> None:
         """Relative paths are resolved against workspace."""
-        from mozart.validation.rendering import _resolve_injections_preview
+        from marianne.validation.rendering import _resolve_injections_preview
 
         ws = tmp_path / "ws"
         ws.mkdir()
@@ -1193,17 +1193,17 @@ class TestHelpers:
     """Test _helpers.py functions."""
 
     def test_find_line_in_yaml_not_found(self) -> None:
-        from mozart.validation.checks._helpers import find_line_in_yaml
+        from marianne.validation.checks._helpers import find_line_in_yaml
         assert find_line_in_yaml("foo: bar\nbaz: qux", "nonexistent") is None
 
     def test_resolve_path_absolute(self, tmp_path: Path) -> None:
-        from mozart.validation.checks._helpers import resolve_path
+        from marianne.validation.checks._helpers import resolve_path
         abs_path = Path("/absolute/path")
         result = resolve_path(abs_path, tmp_path / "config.yaml")
         assert result == abs_path
 
     def test_resolve_path_relative(self, tmp_path: Path) -> None:
-        from mozart.validation.checks._helpers import resolve_path
+        from marianne.validation.checks._helpers import resolve_path
         rel_path = Path("relative/file.txt")
         config_path = tmp_path / "configs" / "config.yaml"
         config_path.parent.mkdir(parents=True, exist_ok=True)

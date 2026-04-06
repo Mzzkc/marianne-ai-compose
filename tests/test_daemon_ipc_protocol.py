@@ -7,13 +7,13 @@ Also includes tests for the IPC error codes and factory functions
 import pytest
 from pydantic import ValidationError
 
-from mozart.daemon.exceptions import (
+from marianne.daemon.exceptions import (
     DaemonAlreadyRunningError,
     DaemonError,
     JobSubmissionError,
     ResourceExhaustedError,
 )
-from mozart.daemon.ipc.errors import (
+from marianne.daemon.ipc.errors import (
     DAEMON_SHUTTING_DOWN,
     INTERNAL_ERROR,
     INVALID_PARAMS,
@@ -34,7 +34,7 @@ from mozart.daemon.ipc.errors import (
     parse_error,
     rpc_error_to_exception,
 )
-from mozart.daemon.ipc.protocol import (
+from marianne.daemon.ipc.protocol import (
     ErrorDetail,
     JsonRpcError,
     JsonRpcRequest,

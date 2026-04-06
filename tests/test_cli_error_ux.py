@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
@@ -117,12 +117,12 @@ class TestF110BackpressureUX:
         # Mock daemon as available but rejecting due to backpressure
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(
                     True,
@@ -151,12 +151,12 @@ class TestF110BackpressureUX:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(
                     True,
@@ -183,7 +183,7 @@ class TestF110BackpressureUX:
 
         # Daemon genuinely not available
         with patch(
-            "mozart.daemon.detect.is_daemon_available",
+            "marianne.daemon.detect.is_daemon_available",
             new_callable=AsyncMock,
             return_value=False,
         ):
@@ -229,7 +229,7 @@ class TestHintVsHintsAPIMismatch:
         config_path = self._make_config(tmp_path)
 
         with patch(
-            "mozart.daemon.detect.is_daemon_available",
+            "marianne.daemon.detect.is_daemon_available",
             new_callable=AsyncMock,
             return_value=False,
         ):
@@ -247,14 +247,14 @@ class TestHintVsHintsAPIMismatch:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=False,
             ),
             patch(
-                "mozart.cli.commands.run.output_error",
+                "marianne.cli.commands.run.output_error",
                 wraps=__import__(
-                    "mozart.cli.commands.run", fromlist=["output_error"]
+                    "marianne.cli.commands.run", fromlist=["output_error"]
                 ).output_error,
             ) as mock_error,
         ):

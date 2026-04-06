@@ -29,14 +29,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.checkpoint import SheetState, SheetStatus
-from mozart.execution.dag import DependencyDAG
-from mozart.execution.parallel import (
+from marianne.core.checkpoint import SheetState, SheetStatus
+from marianne.execution.dag import DependencyDAG
+from marianne.execution.parallel import (
     ParallelBatchResult,
     ParallelExecutionConfig,
     ParallelExecutor,
 )
-from mozart.execution.runner.models import FatalError, RateLimitExhaustedError
+from marianne.execution.runner.models import FatalError, RateLimitExhaustedError
 
 
 # =============================================================================
@@ -46,7 +46,7 @@ from mozart.execution.runner.models import FatalError, RateLimitExhaustedError
 
 def _make_state(total: int, statuses: dict[int, SheetStatus] | None = None):
     """Create a mock CheckpointState with the given sheets."""
-    from mozart.core.checkpoint import CheckpointState
+    from marianne.core.checkpoint import CheckpointState
 
     state = MagicMock(spec=CheckpointState)
     state.total_sheets = total
@@ -164,7 +164,7 @@ class TestF111RateLimitLostInParallel:
     @pytest.mark.adversarial
     async def test_lifecycle_can_extract_rate_limit_from_batch(self):
         """F-111 fix: lifecycle._find_rate_limit_in_batch extracts the exception."""
-        from mozart.execution.runner.lifecycle import LifecycleMixin
+        from marianne.execution.runner.lifecycle import LifecycleMixin
 
         result = ParallelBatchResult(
             sheets=[1, 2],
@@ -406,7 +406,7 @@ class TestF122IpcCloneBypass:
     def test_hooks_uses_resolve_socket_path(self):
         """hooks.py must use _resolve_socket_path for clone-aware routing."""
         import inspect
-        from mozart.execution import hooks
+        from marianne.execution import hooks
 
         source = inspect.getsource(hooks._try_daemon_submit)
         assert "_resolve_socket_path" in source, (
@@ -422,7 +422,7 @@ class TestF122IpcCloneBypass:
     def test_mcp_tools_uses_resolve_socket_path(self):
         """mcp/tools.py must use _resolve_socket_path for clone-aware routing."""
         import inspect
-        from mozart.mcp import tools
+        from marianne.mcp import tools
 
         source = inspect.getsource(tools.JobTools.__init__)
         assert "_resolve_socket_path" in source, (
@@ -438,7 +438,7 @@ class TestF122IpcCloneBypass:
     def test_dashboard_routes_uses_resolve_socket_path(self):
         """dashboard/routes/jobs.py must use _resolve_socket_path."""
         import inspect
-        from mozart.dashboard.routes import jobs
+        from marianne.dashboard.routes import jobs
 
         source = inspect.getsource(jobs)
         if "DaemonClient" in source:
@@ -455,7 +455,7 @@ class TestF122IpcCloneBypass:
     def test_dashboard_job_control_uses_resolve_socket_path(self):
         """dashboard/services/job_control.py must use _resolve_socket_path."""
         import inspect
-        from mozart.dashboard.services import job_control
+        from marianne.dashboard.services import job_control
 
         source = inspect.getsource(job_control)
         if "DaemonClient" in source:
@@ -535,9 +535,9 @@ class TestBatonStateEdgeCases:
     @pytest.mark.adversarial
     async def test_cost_limit_zero_allows_first_attempt(self):
         """cost_limit=0.0: first attempt runs, then job pauses."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         sheets = {1: SheetExecutionState(sheet_num=1, instrument_name="claude-cli")}
@@ -563,8 +563,8 @@ class TestBatonStateEdgeCases:
     @pytest.mark.adversarial
     async def test_deregister_during_fermata(self):
         """Deregistering a job in FERMATA should clean up without error."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
         baton = BatonCore()
         sheets = {1: SheetExecutionState(sheet_num=1, instrument_name="claude-cli")}
@@ -577,8 +577,8 @@ class TestBatonStateEdgeCases:
     @pytest.mark.adversarial
     async def test_attempt_result_for_unknown_job(self):
         """Attempt result for deregistered job should not crash."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import SheetAttemptResult
 
         baton = BatonCore()
         result = SheetAttemptResult(
@@ -593,9 +593,9 @@ class TestBatonStateEdgeCases:
     @pytest.mark.adversarial
     async def test_attempt_result_for_unknown_sheet(self):
         """Attempt result for unregistered sheet should not crash."""
-        from mozart.daemon.baton.core import BatonCore
-        from mozart.daemon.baton.events import SheetAttemptResult
-        from mozart.daemon.baton.state import SheetExecutionState
+        from marianne.daemon.baton.core import BatonCore
+        from marianne.daemon.baton.events import SheetAttemptResult
+        from marianne.daemon.baton.state import SheetExecutionState
 
         baton = BatonCore()
         sheets = {1: SheetExecutionState(sheet_num=1, instrument_name="claude-cli")}
@@ -622,7 +622,7 @@ class TestCrossSystemIntegration:
     @pytest.mark.adversarial
     def test_f098_rate_limit_in_stdout_with_json_stderr(self):
         """F-098 regression: rate limit in stdout WITH JSON errors in stderr."""
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.classifier import ErrorClassifier
 
         classifier = ErrorClassifier()
         result = classifier.classify_execution(
@@ -641,7 +641,7 @@ class TestCrossSystemIntegration:
         which only classify() receives. The E006 code path requires
         exit_reason='timeout' to be set by the caller.
         """
-        from mozart.core.errors.classifier import ErrorClassifier
+        from marianne.core.errors.classifier import ErrorClassifier
 
         classifier = ErrorClassifier()
 
@@ -671,7 +671,7 @@ class TestCrossSystemIntegration:
     @pytest.mark.adversarial
     def test_credential_redaction(self):
         """Verify credentials are redacted before storage."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         # Use tokens long enough to match the scanner's patterns
         # (GitHub PATs require 36+ chars after prefix)

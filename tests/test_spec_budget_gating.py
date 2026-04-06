@@ -19,16 +19,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from mozart.core.config.backend import BackendConfig
-from mozart.core.config.job import PromptConfig
-from mozart.core.config.spec import SpecCorpusConfig, SpecFragment
-from mozart.core.logging import get_logger
-from mozart.core.tokens import (
+from marianne.core.config.backend import BackendConfig
+from marianne.core.config.job import PromptConfig
+from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
+from marianne.core.logging import get_logger
+from marianne.core.tokens import (
     TokenBudgetTracker,
     estimate_tokens,
     get_effective_window_size,
 )
-from mozart.prompts.templating import PromptBuilder, SheetContext
+from marianne.prompts.templating import PromptBuilder, SheetContext
 
 # ─────────────────────────────────────────────────────────────────────
 # Helpers: Minimal mixin host for testing _apply_spec_budget_gating
@@ -89,7 +89,7 @@ class _BudgetGatingHost:
         sheet_num: int,
     ) -> list[Any]:
         """Delegate to the real implementation from SheetExecutionMixin."""
-        from mozart.execution.runner.sheet import SheetExecutionMixin
+        from marianne.execution.runner.sheet import SheetExecutionMixin
 
         # Bind the method to this instance so it uses our config/logger
         bound = SheetExecutionMixin._apply_spec_budget_gating.__get__(  # type: ignore[attr-defined]

@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, patch
 import yaml
 from typer.testing import CliRunner
 
-from mozart.cli import app
+from marianne.cli import app
 
 runner = CliRunner()
 
@@ -87,7 +87,7 @@ class TestLoggingConfigErrorHints:
 
     def test_logging_error_includes_hint(self) -> None:
         """output_error for logging config error should include hints."""
-        source = _get_module_source("mozart.cli.helpers")
+        source = _get_module_source("marianne.cli.helpers")
         _assert_output_error_has_hints(
             source, "Logging configuration error", "helpers.py logging error",
         )
@@ -109,7 +109,7 @@ class TestEscalationNotSupportedHints:
 
         captured, spy = _make_spy()
 
-        with patch("mozart.cli.commands.run.output_error", side_effect=spy):
+        with patch("marianne.cli.commands.run.output_error", side_effect=spy):
             runner.invoke(
                 app,
                 ["run", str(config_path), "--workspace", str(ws), "--escalation"],
@@ -131,10 +131,10 @@ class TestPauseDaemonErrorHints:
         """When pause fails due to conductor communication, hints guide recovery."""
         captured, spy = _make_spy()
 
-        with patch("mozart.daemon.detect.try_daemon_route",
+        with patch("marianne.daemon.detect.try_daemon_route",
                    new_callable=AsyncMock,
                    side_effect=OSError("Connection refused")), \
-             patch("mozart.cli.commands.pause.output_error", side_effect=spy):
+             patch("marianne.cli.commands.pause.output_error", side_effect=spy):
             runner.invoke(
                 app,
                 ["pause", "test-job", "--workspace", str(tmp_path)],
@@ -147,10 +147,10 @@ class TestPauseDaemonErrorHints:
         """When conductor says pause failed, hints explain possible reasons."""
         captured, spy = _make_spy()
 
-        with patch("mozart.daemon.detect.try_daemon_route",
+        with patch("marianne.daemon.detect.try_daemon_route",
                    new_callable=AsyncMock,
                    return_value=(True, {"paused": False, "error": "Job not found"})), \
-             patch("mozart.cli.commands.pause.output_error", side_effect=spy):
+             patch("marianne.cli.commands.pause.output_error", side_effect=spy):
             runner.invoke(
                 app,
                 ["pause", "test-job", "--workspace", str(tmp_path)],
@@ -161,7 +161,7 @@ class TestPauseDaemonErrorHints:
 
     def test_pause_status_check_error_has_hints(self) -> None:
         """When pause's internal status-check IPC call fails, hints guide recovery."""
-        source = _get_module_source("mozart.cli.commands.pause")
+        source = _get_module_source("marianne.cli.commands.pause")
         # The _check_pause_state function makes a try_daemon_route call
         # and has an output_error on failure — verify it has hints=
         func_idx = source.find("_check_pause_state")
@@ -175,14 +175,14 @@ class TestPauseDaemonErrorHints:
 
     def test_modify_daemon_error_has_hints(self) -> None:
         """When modify command's IPC call fails, hints guide recovery."""
-        source = _get_module_source("mozart.cli.commands.pause")
+        source = _get_module_source("marianne.cli.commands.pause")
         _assert_output_error_has_hints(
             source, "job.modify", "pause.py modify daemon error (line 616)",
         )
 
     def test_modify_rejected_has_hints(self) -> None:
         """When modify is rejected by conductor, hints explain what to try."""
-        source = _get_module_source("mozart.cli.commands.pause")
+        source = _get_module_source("marianne.cli.commands.pause")
         # Find the rejected handler
         idx = source.find('"rejected"')
         assert idx != -1, "rejected handler not found in pause.py"
@@ -205,7 +205,7 @@ class TestStatusWatchErrorHints:
 
     def test_watch_conductor_error_has_hints(self) -> None:
         """Verify the watch mode conductor error output_error call includes hints=."""
-        source = _get_module_source("mozart.cli.commands.status")
+        source = _get_module_source("marianne.cli.commands.status")
         _assert_output_error_has_hints(
             source, "Conductor error:", "status.py watch error (line 310)",
         )
@@ -223,10 +223,10 @@ class TestClearCommandErrorHints:
         """When clear command fails, tell the user what to check."""
         captured, spy = _make_spy()
 
-        with patch("mozart.daemon.detect.try_daemon_route",
+        with patch("marianne.daemon.detect.try_daemon_route",
                    new_callable=AsyncMock,
                    side_effect=Exception("Connection refused")), \
-             patch("mozart.cli.commands.status.output_error", side_effect=spy):
+             patch("marianne.cli.commands.status.output_error", side_effect=spy):
             runner.invoke(
                 app,
                 ["clear", "--yes"],
@@ -246,7 +246,7 @@ class TestClearInvalidStatusUsesOutputError:
 
     def test_invalid_status_uses_output_error(self) -> None:
         """Verify invalid status validation uses output_error with hints."""
-        source = _get_module_source("mozart.cli.commands.status")
+        source = _get_module_source("marianne.cli.commands.status")
         idx = source.find("Invalid status(es):")
         assert idx != -1, "Cannot find invalid status validation"
         # Look backward for the containing call — should be output_error, not console.print

@@ -11,15 +11,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mozart.cli.commands.status import (
+from marianne.cli.commands.status import (
     _format_uptime,
     _status_overview,
 )
-from mozart.core.checkpoint import SheetStatus
+from marianne.core.checkpoint import SheetStatus
 
 # The function imports try_daemon_route locally, so patch at the source module.
-_ROUTE_PATCH = "mozart.daemon.detect.try_daemon_route"
-_JSON_PATCH = "mozart.cli.commands.status.output_json"
+_ROUTE_PATCH = "marianne.daemon.detect.try_daemon_route"
+_JSON_PATCH = "marianne.cli.commands.status.output_json"
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +234,7 @@ class TestStatusArgOptional:
         """The status function's job_id parameter accepts None."""
         import inspect
 
-        from mozart.cli.commands.status import status
+        from marianne.cli.commands.status import status
 
         sig = inspect.signature(status)
         param = sig.parameters["job_id"]
@@ -250,14 +250,14 @@ class TestLargeScoreSummary:
 
     def test_threshold_exists(self) -> None:
         """The large score threshold is defined."""
-        from mozart.cli.commands.status import _LARGE_SCORE_THRESHOLD
+        from marianne.cli.commands.status import _LARGE_SCORE_THRESHOLD
 
         assert _LARGE_SCORE_THRESHOLD == 50
 
     def test_summary_renders_for_large_scores(self) -> None:
         """Scores with 50+ sheets use the summary view."""
-        from mozart.cli.commands.status import _render_sheet_details
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.cli.commands.status import _render_sheet_details
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         # Create a CheckpointState with 60 sheets
         sheets = {}
@@ -287,8 +287,8 @@ class TestLargeScoreSummary:
 
     def test_small_scores_use_full_table(self) -> None:
         """Scores below threshold get the full table."""
-        from mozart.cli.commands.status import _render_sheet_details
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.cli.commands.status import _render_sheet_details
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         sheets = {}
         for i in range(1, 10):
@@ -309,8 +309,8 @@ class TestLargeScoreSummary:
 
     def test_summary_counts_statuses(self) -> None:
         """Summary correctly counts sheets by display status."""
-        from mozart.cli.commands.status import _render_sheet_summary
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.cli.commands.status import _render_sheet_summary
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         sheets = {}
         for i in range(1, 101):

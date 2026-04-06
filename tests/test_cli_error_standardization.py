@@ -20,9 +20,9 @@ import pytest
 from rich.console import Console
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.cli.output import _sanitize_for_json, output_error
-from mozart.core.config.instruments import (
+from marianne.cli import app
+from marianne.cli.output import _sanitize_for_json, output_error
+from marianne.core.config.instruments import (
     CliCommand,
     CliOutputConfig,
     CliProfile,
@@ -99,7 +99,7 @@ def _no_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
         return False, None
 
     monkeypatch.setattr(
-        "mozart.daemon.detect.try_daemon_route",
+        "marianne.daemon.detect.try_daemon_route",
         _fake_route,
     )
 
@@ -118,7 +118,7 @@ class TestInstrumentsHttpStatus:
             "anthropic_api": _make_http_profile("anthropic_api", "Anthropic API"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ):
             result = runner.invoke(app, ["instruments", "list"])
@@ -134,7 +134,7 @@ class TestInstrumentsHttpStatus:
             "anthropic_api": _make_http_profile("anthropic_api", "Anthropic API"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(app, ["instruments", "list"])
@@ -150,7 +150,7 @@ class TestInstrumentsHttpStatus:
             "anthropic_api": _make_http_profile("anthropic_api", "Anthropic API"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ):
             result = runner.invoke(app, ["instruments", "list", "--json"])
@@ -169,7 +169,7 @@ class TestInstrumentsHttpStatus:
             "ollama": _make_http_profile("ollama", "Ollama"),
         }
         with patch(
-            "mozart.cli.commands.instruments._load_all_profiles",
+            "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ), patch("shutil.which", return_value="/usr/bin/claude"):
             result = runner.invoke(app, ["instruments", "list"])
@@ -325,7 +325,7 @@ class TestPauseErrorStandardization:
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Pause daemon route error (E501) now includes 'mozart list' hint."""
-        from mozart.daemon.exceptions import DaemonError
+        from marianne.daemon.exceptions import DaemonError
 
         async def _raise(
             method: str, params: dict, *, socket_path: Path | None = None,
@@ -333,7 +333,7 @@ class TestPauseErrorStandardization:
             raise DaemonError("Score 'ghost-test' not found")
 
         monkeypatch.setattr(
-            "mozart.daemon.detect.try_daemon_route", _raise,
+            "marianne.daemon.detect.try_daemon_route", _raise,
         )
         result = runner.invoke(app, ["pause", "ghost-test"])
         assert result.exit_code != 0
@@ -344,7 +344,7 @@ class TestPauseErrorStandardization:
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """JSON error from pause daemon route includes hints array."""
-        from mozart.daemon.exceptions import DaemonError
+        from marianne.daemon.exceptions import DaemonError
 
         async def _raise(
             method: str, params: dict, *, socket_path: Path | None = None,
@@ -352,7 +352,7 @@ class TestPauseErrorStandardization:
             raise DaemonError("Not found")
 
         monkeypatch.setattr(
-            "mozart.daemon.detect.try_daemon_route", _raise,
+            "marianne.daemon.detect.try_daemon_route", _raise,
         )
         result = runner.invoke(app, ["pause", "no-job", "--json"])
         assert result.exit_code != 0
@@ -440,7 +440,7 @@ class TestRecoverErrorStandardization:
         """Missing config snapshot error suggests re-running."""
         from datetime import UTC, datetime
 
-        from mozart.core.checkpoint import CheckpointState, JobStatus
+        from marianne.core.checkpoint import CheckpointState, JobStatus
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
@@ -525,7 +525,7 @@ class TestCancelErrorStandardization:
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Cancel daemon error uses output_error() format."""
-        from mozart.daemon.exceptions import DaemonError
+        from marianne.daemon.exceptions import DaemonError
 
         async def _raise(
             method: str, params: dict, *, socket_path: Path | None = None,
@@ -533,7 +533,7 @@ class TestCancelErrorStandardization:
             raise DaemonError("Connection failed")
 
         monkeypatch.setattr(
-            "mozart.daemon.detect.try_daemon_route", _raise,
+            "marianne.daemon.detect.try_daemon_route", _raise,
         )
         result = runner.invoke(app, ["cancel", "test-job"])
         assert result.exit_code != 0
@@ -544,7 +544,7 @@ class TestCancelErrorStandardization:
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Cancel daemon error in --json mode outputs structured JSON."""
-        from mozart.daemon.exceptions import DaemonError
+        from marianne.daemon.exceptions import DaemonError
 
         async def _raise(
             method: str, params: dict, *, socket_path: Path | None = None,
@@ -552,7 +552,7 @@ class TestCancelErrorStandardization:
             raise DaemonError("Not found")
 
         monkeypatch.setattr(
-            "mozart.daemon.detect.try_daemon_route", _raise,
+            "marianne.daemon.detect.try_daemon_route", _raise,
         )
         result = runner.invoke(app, ["cancel", "test-job", "--json"])
         assert result.exit_code != 0
@@ -585,7 +585,7 @@ class TestPauseRemainingStandardization:
         """Pausing a non-running job uses output_error() with hints."""
         from datetime import UTC, datetime
 
-        from mozart.core.checkpoint import CheckpointState, JobStatus
+        from marianne.core.checkpoint import CheckpointState, JobStatus
 
         workspace = tmp_path / "ws"
         workspace.mkdir()
@@ -621,7 +621,7 @@ class TestPauseRemainingStandardization:
             return True, None
 
         monkeypatch.setattr(
-            "mozart.daemon.detect.try_daemon_route", _fail,
+            "marianne.daemon.detect.try_daemon_route", _fail,
         )
         result = runner.invoke(app, ["pause", "test-job"])
         assert result.exit_code != 0
@@ -649,7 +649,7 @@ class TestResumeRemainingStandardization:
             return True, {"status": "rejected", "message": "Job is completed"}
 
         monkeypatch.setattr(
-            "mozart.daemon.detect.try_daemon_route", _reject,
+            "marianne.daemon.detect.try_daemon_route", _reject,
         )
         result = runner.invoke(app, ["resume", "test-job"])
         assert result.exit_code != 0

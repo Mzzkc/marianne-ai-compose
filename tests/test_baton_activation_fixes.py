@@ -25,9 +25,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.state import BatonSheetStatus
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.state import BatonSheetStatus
 
 
 # =========================================================================
@@ -65,7 +65,7 @@ class TestF152DispatchGuard:
     async def test_backend_acquire_failure_posts_attempt_result(self) -> None:
         """When BackendPool.acquire raises, a failure SheetAttemptResult
         should be posted to the baton inbox."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
 
@@ -99,7 +99,7 @@ class TestF152DispatchGuard:
     @pytest.mark.asyncio
     async def test_backend_acquire_runtime_error_posts_attempt_result(self) -> None:
         """RuntimeError from acquire also triggers the guard."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
 
@@ -128,7 +128,7 @@ class TestF152DispatchGuard:
     @pytest.mark.asyncio
     async def test_no_backend_pool_posts_attempt_result(self) -> None:
         """When no BackendPool is set, dispatch should post a failure result."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         # Intentionally NOT setting backend_pool
@@ -153,7 +153,7 @@ class TestF152DispatchGuard:
     @pytest.mark.asyncio
     async def test_sheet_not_found_posts_attempt_result(self) -> None:
         """When the sheet entity is missing, dispatch should post a failure result."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         mock_pool = MagicMock()
@@ -179,7 +179,7 @@ class TestF152DispatchGuard:
     @pytest.mark.asyncio
     async def test_failure_result_uses_correct_attempt_number(self) -> None:
         """The failure result should use the current attempt number from state."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         mock_pool = MagicMock()
@@ -207,7 +207,7 @@ class TestF152DispatchGuard:
 
     def test_has_completed_sheets_true(self) -> None:
         """has_completed_sheets returns True when at least one sheet completed."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -221,7 +221,7 @@ class TestF152DispatchGuard:
 
     def test_has_completed_sheets_false(self) -> None:
         """has_completed_sheets returns False when no sheet completed."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -235,7 +235,7 @@ class TestF152DispatchGuard:
 
     def test_has_completed_sheets_unknown_job(self) -> None:
         """has_completed_sheets returns False for unknown jobs."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         assert adapter.has_completed_sheets("nonexistent") is False
@@ -253,7 +253,7 @@ class TestF145CompletedNewWork:
     @pytest.mark.asyncio
     async def test_run_via_baton_sets_completed_new_work_on_success(self) -> None:
         """After baton reports all sheets completed, completed_new_work must be True."""
-        from mozart.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+        from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 
         manager = _make_mock_manager()
         adapter = manager._baton_adapter
@@ -275,8 +275,8 @@ class TestF145CompletedNewWork:
         )
         manager._job_meta["test-job"] = meta
 
-        with patch("mozart.core.sheet.build_sheets", return_value=[_make_sheet()]), \
-             patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
+        with patch("marianne.core.sheet.build_sheets", return_value=[_make_sheet()]), \
+             patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
             result = await manager._run_via_baton("test-job", mock_config, mock_request)
 
         assert result == DaemonJobStatus.COMPLETED
@@ -285,7 +285,7 @@ class TestF145CompletedNewWork:
     @pytest.mark.asyncio
     async def test_run_via_baton_no_completed_new_work_on_failure(self) -> None:
         """When baton reports failures, completed_new_work should not be set True."""
-        from mozart.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+        from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 
         manager = _make_mock_manager()
         adapter = manager._baton_adapter
@@ -306,8 +306,8 @@ class TestF145CompletedNewWork:
         )
         manager._job_meta["test-job"] = meta
 
-        with patch("mozart.core.sheet.build_sheets", return_value=[_make_sheet()]), \
-             patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
+        with patch("marianne.core.sheet.build_sheets", return_value=[_make_sheet()]), \
+             patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
             result = await manager._run_via_baton("test-job", mock_config, mock_request)
 
         assert result == DaemonJobStatus.FAILED
@@ -316,7 +316,7 @@ class TestF145CompletedNewWork:
     @pytest.mark.asyncio
     async def test_resume_via_baton_sets_completed_new_work_on_success(self) -> None:
         """Resume path must also set completed_new_work on success."""
-        from mozart.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+        from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 
         manager = _make_mock_manager()
         adapter = manager._baton_adapter
@@ -339,9 +339,9 @@ class TestF145CompletedNewWork:
         manager._load_checkpoint = AsyncMock(return_value=mock_checkpoint)
 
         mock_config = _make_mock_config()
-        with patch("mozart.core.config.JobConfig") as MockJobConfig, \
-             patch("mozart.core.sheet.build_sheets", return_value=[_make_sheet()]), \
-             patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
+        with patch("marianne.core.config.JobConfig") as MockJobConfig, \
+             patch("marianne.core.sheet.build_sheets", return_value=[_make_sheet()]), \
+             patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
             MockJobConfig.from_yaml.return_value = mock_config
             result = await manager._resume_via_baton("resume-job", Path("/tmp/ws"))
 
@@ -360,7 +360,7 @@ class TestF158PromptConfigWiring:
     @pytest.mark.asyncio
     async def test_run_via_baton_passes_prompt_config(self) -> None:
         """register_job should receive prompt_config from the job's config."""
-        from mozart.daemon.manager import DaemonJobStatus, JobMeta
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
 
         manager = _make_mock_manager()
         adapter = manager._baton_adapter
@@ -381,8 +381,8 @@ class TestF158PromptConfigWiring:
         )
         manager._job_meta["test-job"] = meta
 
-        with patch("mozart.core.sheet.build_sheets", return_value=[_make_sheet()]), \
-             patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
+        with patch("marianne.core.sheet.build_sheets", return_value=[_make_sheet()]), \
+             patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
             await manager._run_via_baton("test-job", mock_config, mock_request)
 
         adapter.register_job.assert_called_once()
@@ -394,7 +394,7 @@ class TestF158PromptConfigWiring:
     @pytest.mark.asyncio
     async def test_run_via_baton_passes_parallel_enabled(self) -> None:
         """register_job should receive parallel_enabled from the config."""
-        from mozart.daemon.manager import DaemonJobStatus, JobMeta
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
 
         manager = _make_mock_manager()
         adapter = manager._baton_adapter
@@ -415,8 +415,8 @@ class TestF158PromptConfigWiring:
         )
         manager._job_meta["test-job"] = meta
 
-        with patch("mozart.core.sheet.build_sheets", return_value=[_make_sheet()]), \
-             patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
+        with patch("marianne.core.sheet.build_sheets", return_value=[_make_sheet()]), \
+             patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
             await manager._run_via_baton("test-job", mock_config, mock_request)
 
         call_kwargs = adapter.register_job.call_args.kwargs
@@ -425,7 +425,7 @@ class TestF158PromptConfigWiring:
     @pytest.mark.asyncio
     async def test_resume_via_baton_passes_prompt_config(self) -> None:
         """Resume path must also pass prompt_config."""
-        from mozart.daemon.manager import DaemonJobStatus, JobMeta
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
 
         manager = _make_mock_manager()
         adapter = manager._baton_adapter
@@ -448,9 +448,9 @@ class TestF158PromptConfigWiring:
         manager._load_checkpoint = AsyncMock(return_value=mock_checkpoint)
 
         mock_config = _make_mock_config()
-        with patch("mozart.core.config.JobConfig") as MockJobConfig, \
-             patch("mozart.core.sheet.build_sheets", return_value=[_make_sheet()]), \
-             patch("mozart.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
+        with patch("marianne.core.config.JobConfig") as MockJobConfig, \
+             patch("marianne.core.sheet.build_sheets", return_value=[_make_sheet()]), \
+             patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={1: []}):
             MockJobConfig.from_yaml.return_value = mock_config
             await manager._resume_via_baton("resume-job", Path("/tmp/ws"))
 
@@ -466,7 +466,7 @@ class TestF158PromptConfigWiring:
 
 def _make_mock_manager() -> MagicMock:
     """Create a mock JobManager with the real _run_via_baton/_resume_via_baton."""
-    from mozart.daemon.baton.adapter import BatonAdapter
+    from marianne.daemon.baton.adapter import BatonAdapter
 
     manager = MagicMock()
     manager._baton_adapter = BatonAdapter()
@@ -476,7 +476,7 @@ def _make_mock_manager() -> MagicMock:
     manager._config.default_thinking_method = None
 
     # Bind the real methods we're testing
-    from mozart.daemon.manager import JobManager
+    from marianne.daemon.manager import JobManager
     manager._run_via_baton = JobManager._run_via_baton.__get__(manager)
     manager._resume_via_baton = JobManager._resume_via_baton.__get__(manager)
 
@@ -495,7 +495,7 @@ def _make_mock_config(parallel: bool = False) -> MagicMock:
     config.workspace = Path("/tmp/ws")
 
     # Prompt config — use a real PromptConfig
-    from mozart.core.config.job import PromptConfig
+    from marianne.core.config.job import PromptConfig
     config.prompt = PromptConfig(template="test prompt")
 
     # Parallel execution

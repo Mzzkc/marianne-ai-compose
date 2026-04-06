@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from mozart.core.errors.classifier import ErrorClassifier
-from mozart.core.errors.codes import ErrorCategory, ErrorCode
+from marianne.core.errors.classifier import ErrorClassifier
+from marianne.core.errors.codes import ErrorCategory, ErrorCode
 
 
 class TestRateLimitInStdout:

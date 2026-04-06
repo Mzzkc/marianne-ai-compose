@@ -10,8 +10,8 @@ being stored in CheckpointState, preventing credential leaks into:
 
 import pytest
 
-from mozart.core.checkpoint import SheetState
-from mozart.utils.credential_scanner import redact_credentials, scan_for_credentials
+from marianne.core.checkpoint import SheetState
+from marianne.utils.credential_scanner import redact_credentials, scan_for_credentials
 
 
 class TestRedactCredentials:

@@ -20,14 +20,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mozart.daemon.config import DaemonConfig, ResourceLimitConfig, SocketConfig
-from mozart.daemon.exceptions import DaemonNotRunningError, JobSubmissionError
-from mozart.daemon.ipc.client import DaemonClient
-from mozart.daemon.learning_hub import LearningHub
-from mozart.daemon.manager import JobManager
-from mozart.daemon.process import DaemonProcess
-from mozart.daemon.system_probe import SystemProbe
-from mozart.daemon.types import JobRequest, JobResponse
+from marianne.daemon.config import DaemonConfig, ResourceLimitConfig, SocketConfig
+from marianne.daemon.exceptions import DaemonNotRunningError, JobSubmissionError
+from marianne.daemon.ipc.client import DaemonClient
+from marianne.daemon.learning_hub import LearningHub
+from marianne.daemon.manager import JobManager
+from marianne.daemon.process import DaemonProcess
+from marianne.daemon.system_probe import SystemProbe
+from marianne.daemon.types import JobRequest, JobResponse
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -173,7 +173,7 @@ class TestDaemonLifecycle:
         This is the D022 regression test — ensures get_daemon_status() returns
         every field that DaemonStatus requires, so deserialization succeeds.
         """
-        from mozart.daemon.types import DaemonStatus
+        from marianne.daemon.types import DaemonStatus
 
         client, config = daemon
         status = await client.status()
@@ -261,11 +261,11 @@ class TestJobSubmission:
 
         # Patch JobService.start_job to avoid needing real Claude CLI
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             new_callable=AsyncMock,
         ) as mock_start:
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             mock_start.return_value = RunSummary(
                 job_id="test-daemon-job",
@@ -311,8 +311,8 @@ class TestJobSubmission:
         async def _slow_start(*args: Any, **kwargs: Any) -> Any:
             started.set()
             await hold.wait()
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             return RunSummary(
                 job_id="test-daemon-job",
@@ -322,7 +322,7 @@ class TestJobSubmission:
             )
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_slow_start,
         ):
             req = JobRequest(config_path=FIXTURE_CONFIG)
@@ -351,8 +351,8 @@ class TestJobSubmission:
         async def _slow_start(*args: Any, **kwargs: Any) -> Any:
             started.set()
             await hold.wait()
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             return RunSummary(
                 job_id="test-daemon-job",
@@ -362,7 +362,7 @@ class TestJobSubmission:
             )
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_slow_start,
         ):
             req = JobRequest(config_path=FIXTURE_CONFIG)
@@ -397,8 +397,8 @@ class TestJobSubmission:
         async def _slow_start(*args: Any, **kwargs: Any) -> Any:
             started.set()
             await hold.wait()
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             return RunSummary(
                 job_id="test-daemon-job",
@@ -408,7 +408,7 @@ class TestJobSubmission:
             )
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_slow_start,
         ):
             req = JobRequest(config_path=FIXTURE_CONFIG)
@@ -460,8 +460,8 @@ class TestConcurrentJobs:
                 await gate.wait()
             finally:
                 running_count -= 1
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             return RunSummary(
                 job_id="test", job_name="test", total_sheets=1,
@@ -469,7 +469,7 @@ class TestConcurrentJobs:
             )
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_tracked_start,
         ):
             # Submit 3 jobs with unique names (no dedup — same name is rejected)
@@ -520,8 +520,8 @@ class TestConcurrentJobs:
 
             # Jobs #1 and #3 succeed
             await asyncio.sleep(0.05)
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             return RunSummary(
                 job_id="test", job_name="test", total_sheets=1,
@@ -529,7 +529,7 @@ class TestConcurrentJobs:
             )
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_per_job_start,
         ):
             # Submit 3 jobs with unique names (no dedup)
@@ -585,8 +585,8 @@ class TestConcurrentJobs:
             nonlocal call_count
             call_count += 1
             await asyncio.sleep(0.1)
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             return RunSummary(
                 job_id="test", job_name="test", total_sheets=1,
@@ -594,7 +594,7 @@ class TestConcurrentJobs:
             )
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_fast_start,
         ):
             cfg1 = _make_unique_config(tmp_path, 0)
@@ -630,7 +630,7 @@ class TestErrorHandling:
             raise RuntimeError("Simulated backend crash")
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_failing_start,
         ):
             req = JobRequest(config_path=FIXTURE_CONFIG)
@@ -650,7 +650,7 @@ class TestErrorHandling:
     ):
         """Calling a non-existent RPC method raises DaemonError."""
         client, config = daemon
-        from mozart.daemon.exceptions import DaemonError
+        from marianne.daemon.exceptions import DaemonError
 
         with pytest.raises(DaemonError, match="Method not found"):
             await client.call("nonexistent.method")
@@ -912,7 +912,7 @@ class TestRealE2EExecution:
         successful 1-sheet Claude CLI execution.  The daemon, IPC, manager,
         service, runner, state backend, and checkpoint all run for real.
         """
-        from mozart.backends.base import ExecutionResult
+        from marianne.backends.base import ExecutionResult
 
         config = _make_daemon_config(tmp_path)
         dp = DaemonProcess(config)
@@ -932,7 +932,7 @@ class TestRealE2EExecution:
             patch.object(dp._pgroup, "cleanup_orphans", return_value=[]),
             # Patch at the lowest possible level — the actual CLI execution
             patch(
-                "mozart.backends.claude_cli.ClaudeCliBackend.execute",
+                "marianne.backends.claude_cli.ClaudeCliBackend.execute",
                 new_callable=AsyncMock,
                 return_value=mock_result,
             ),
@@ -1116,7 +1116,7 @@ class TestCrossJobLearning:
         After daemon boot, captures the manager reference from within
         the running daemon by patching _register_methods.
         """
-        from mozart.backends.base import ExecutionResult
+        from marianne.backends.base import ExecutionResult
 
         config = _make_daemon_config(tmp_path)
         dp = DaemonProcess(config)
@@ -1146,13 +1146,13 @@ class TestCrossJobLearning:
             patch.object(dp._pgroup, "kill_all_children"),
             patch.object(dp._pgroup, "cleanup_orphans", return_value=[]),
             patch(
-                "mozart.backends.claude_cli.ClaudeCliBackend.execute",
+                "marianne.backends.claude_cli.ClaudeCliBackend.execute",
                 new_callable=AsyncMock,
                 return_value=mock_result,
             ),
             # Redirect LearningHub to use test-local DB path
             patch(
-                "mozart.daemon.manager.LearningHub",
+                "marianne.daemon.manager.LearningHub",
                 side_effect=lambda db_path=None: LearningHub(db_path=learning_db),
             ),
             # Capture the manager reference
@@ -1456,8 +1456,8 @@ class TestMonitorCancellation:
         async def _long_running(*args: Any, **kwargs: Any) -> Any:
             started.set()
             await hold.wait()
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             return RunSummary(
                 job_id="test", job_name="test", total_sheets=1,
@@ -1465,7 +1465,7 @@ class TestMonitorCancellation:
             )
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_long_running,
         ):
             req = JobRequest(config_path=FIXTURE_CONFIG)
@@ -1519,8 +1519,8 @@ class TestMonitorCancellation:
         async def _long_running(*args: Any, **kwargs: Any) -> Any:
             started.set()
             await hold.wait()
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             return RunSummary(
                 job_id="test", job_name="test", total_sheets=1,
@@ -1528,7 +1528,7 @@ class TestMonitorCancellation:
             )
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_long_running,
         ):
             req = JobRequest(config_path=FIXTURE_CONFIG)
@@ -1583,8 +1583,8 @@ class TestMonitorCancellation:
             else:
                 started_b.set()
             await hold.wait()
-            from mozart.core.checkpoint import JobStatus
-            from mozart.execution.runner.models import RunSummary
+            from marianne.core.checkpoint import JobStatus
+            from marianne.execution.runner.models import RunSummary
 
             return RunSummary(
                 job_id="test", job_name="test", total_sheets=1,
@@ -1592,7 +1592,7 @@ class TestMonitorCancellation:
             )
 
         with patch(
-            "mozart.daemon.job_service.JobService.start_job",
+            "marianne.daemon.job_service.JobService.start_job",
             side_effect=_long_running,
         ):
             # Submit job A (older) — unique config names to avoid rejection

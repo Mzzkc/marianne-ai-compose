@@ -18,9 +18,9 @@ from unittest.mock import patch
 
 import pytest
 
-from mozart.core.config import JobConfig
-from mozart.validation.base import ValidationSeverity
-from mozart.validation.checks.config import InstrumentNameCheck
+from marianne.core.config import JobConfig
+from marianne.validation.base import ValidationSeverity
+from marianne.validation.checks.config import InstrumentNameCheck
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def _mock_profiles():
         "anthropic_api": None,
     }
     with patch(
-        "mozart.instruments.loader.load_all_profiles",
+        "marianne.instruments.loader.load_all_profiles",
         return_value=profiles,
     ):
         yield profiles
@@ -337,7 +337,7 @@ class TestInstrumentNameCheckProfileLoadFailure:
         config = JobConfig.from_yaml(config_path)
 
         with patch(
-            "mozart.instruments.loader.load_all_profiles",
+            "marianne.instruments.loader.load_all_profiles",
             side_effect=Exception("Profile load failed"),
         ):
             issues = check.check(config, config_path, yaml_text)

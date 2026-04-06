@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.dashboard.services.job_control import JobActionResult, JobStartResult, ProcessHealth
-from mozart.mcp.tools import ArtifactTools, ControlTools, JobTools
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.dashboard.services.job_control import JobActionResult, JobStartResult, ProcessHealth
+from marianne.mcp.tools import ArtifactTools, ControlTools, JobTools
+from marianne.state.json_backend import JsonStateBackend
 
 
 class TestJobTools:

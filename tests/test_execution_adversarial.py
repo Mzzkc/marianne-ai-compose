@@ -21,17 +21,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.backends.base import ExitReason, ExecutionResult
-from mozart.core.checkpoint import (
+from marianne.backends.base import ExitReason, ExecutionResult
+from marianne.core.checkpoint import (
     CheckpointState,
     SheetState,
     SheetStatus,
 )
-from mozart.core.config import JobConfig
-from mozart.core.errors import (
+from marianne.core.config import JobConfig
+from marianne.core.errors import (
     ErrorCode,
 )
-from mozart.execution.escalation import (
+from marianne.execution.escalation import (
     CheckpointContext,
     CheckpointResponse,
     CheckpointTrigger,
@@ -41,7 +41,7 @@ from mozart.execution.escalation import (
     EscalationResponse,
     HistoricalSuggestion,
 )
-from mozart.execution.runner.models import (
+from marianne.execution.runner.models import (
     FatalError,
     GracefulShutdownError,
     GroundingDecisionContext,
@@ -146,7 +146,7 @@ class TestBrokenBackendOutputs:
 
     async def test_empty_stdout_is_handled_in_cost_tracking(self, tmp_path: Path) -> None:
         """Cost estimation from empty output should produce minimal token count."""
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.execution.runner.cost import CostMixin
 
         config = _make_config(tmp_path)
         state = _make_checkpoint()
@@ -178,7 +178,7 @@ class TestBrokenBackendOutputs:
 
     async def test_very_large_stdout_in_cost_tracking(self, tmp_path: Path) -> None:
         """Backend returning very large output should not crash cost tracking."""
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.execution.runner.cost import CostMixin
 
         config = _make_config(tmp_path)
         state = _make_checkpoint()
@@ -259,7 +259,7 @@ class TestCostTrackingEdgeCases:
 
     async def test_cost_accumulation_with_exact_tokens(self, tmp_path: Path) -> None:
         """Exact token counts (API backend) should produce confidence=1.0."""
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.execution.runner.cost import CostMixin
 
         config = _make_config(tmp_path)
         state = _make_checkpoint()
@@ -289,7 +289,7 @@ class TestCostTrackingEdgeCases:
 
     def test_cost_limits_disabled_returns_false(self, tmp_path: Path) -> None:
         """When cost limits are disabled, _check_cost_limits returns (False, None)."""
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.execution.runner.cost import CostMixin
 
         config = _make_config(tmp_path, {"cost_limits": {"enabled": False}})
         state = _make_checkpoint()
@@ -311,7 +311,7 @@ class TestCostTrackingEdgeCases:
 
     def test_cost_limits_per_sheet_exceeded(self, tmp_path: Path) -> None:
         """Per-sheet cost limit triggers correctly."""
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.execution.runner.cost import CostMixin
 
         config = _make_config(tmp_path, {
             "cost_limits": {
@@ -339,7 +339,7 @@ class TestCostTrackingEdgeCases:
 
     def test_cost_limits_per_job_exceeded(self, tmp_path: Path) -> None:
         """Per-job cost limit triggers correctly."""
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.execution.runner.cost import CostMixin
 
         config = _make_config(tmp_path, {
             "cost_limits": {
@@ -368,7 +368,7 @@ class TestCostTrackingEdgeCases:
 
     async def test_very_large_token_counts_do_not_overflow(self, tmp_path: Path) -> None:
         """Very large token counts should produce finite cost."""
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.execution.runner.cost import CostMixin
 
         config = _make_config(tmp_path)
         state = _make_checkpoint()
@@ -598,7 +598,7 @@ class TestRecoveryEdgeCases:
 
     def test_resolve_wait_duration_with_zero(self, tmp_path: Path) -> None:
         """suggested_wait_seconds=0 should fall back to config."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         config = _make_config(tmp_path)
 
@@ -613,7 +613,7 @@ class TestRecoveryEdgeCases:
 
     def test_resolve_wait_duration_with_negative(self, tmp_path: Path) -> None:
         """Negative suggested_wait should fall back to config."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         config = _make_config(tmp_path)
 
@@ -627,7 +627,7 @@ class TestRecoveryEdgeCases:
 
     def test_resolve_wait_duration_with_positive(self, tmp_path: Path) -> None:
         """Positive suggested_wait should be used directly."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         config = _make_config(tmp_path)
 
@@ -641,7 +641,7 @@ class TestRecoveryEdgeCases:
 
     def test_resolve_wait_duration_with_none(self, tmp_path: Path) -> None:
         """None suggested_wait should fall back to config."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         config = _make_config(tmp_path)
 
@@ -655,7 +655,7 @@ class TestRecoveryEdgeCases:
 
     def test_retry_delay_exponential_backoff(self, tmp_path: Path) -> None:
         """Retry delay should grow exponentially and cap at max."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         config = _make_config(tmp_path, {
             "retry": {
@@ -681,7 +681,7 @@ class TestRecoveryEdgeCases:
 
     def test_retry_delay_with_jitter_is_bounded(self, tmp_path: Path) -> None:
         """With jitter enabled, delay should be between 50% and 150% of base."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         config = _make_config(tmp_path, {
             "retry": {
@@ -705,7 +705,7 @@ class TestRecoveryEdgeCases:
 
     def test_infer_active_sheet_num(self) -> None:
         """_infer_active_sheet_num returns last_completed + 1."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         state = _make_checkpoint(total_sheets=5)
         state.last_completed_sheet = 3
@@ -714,7 +714,7 @@ class TestRecoveryEdgeCases:
     @pytest.mark.asyncio
     async def test_rate_limit_max_waits_raises_fatal(self, tmp_path: Path) -> None:
         """Exceeding max rate limit waits should raise FatalError."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         config = _make_config(tmp_path, {
             "rate_limit": {"wait_minutes": 1, "max_waits": 2},
@@ -738,7 +738,7 @@ class TestRecoveryEdgeCases:
     @pytest.mark.asyncio
     async def test_quota_max_waits_raises_fatal(self, tmp_path: Path) -> None:
         """Exceeding max quota waits should raise FatalError."""
-        from mozart.execution.runner.recovery import RecoveryMixin
+        from marianne.execution.runner.recovery import RecoveryMixin
 
         config = _make_config(tmp_path, {
             "rate_limit": {"wait_minutes": 1, "max_quota_waits": 2},
@@ -1030,7 +1030,7 @@ class TestErrorClassificationAdversarial:
 
     def test_classify_with_adversarial_stdout(self, tmp_path: Path) -> None:
         """Classifier should handle adversarial strings in stdout without crash."""
-        from mozart.core.errors import ErrorClassifier
+        from marianne.core.errors import ErrorClassifier
 
         classifier = ErrorClassifier.from_config([])
 
@@ -1045,7 +1045,7 @@ class TestErrorClassificationAdversarial:
 
     def test_classify_with_adversarial_stderr(self, tmp_path: Path) -> None:
         """Classifier should handle adversarial strings in stderr without crash."""
-        from mozart.core.errors import ErrorClassifier
+        from marianne.core.errors import ErrorClassifier
 
         classifier = ErrorClassifier.from_config([])
 
@@ -1060,7 +1060,7 @@ class TestErrorClassificationAdversarial:
     @pytest.mark.parametrize("exit_code", [0, 1, -1, 127, 128, 137, 255, -9, -15])
     def test_classify_various_exit_codes(self, exit_code: int) -> None:
         """Classifier should handle all common exit codes."""
-        from mozart.core.errors import ErrorClassifier
+        from marianne.core.errors import ErrorClassifier
 
         classifier = ErrorClassifier.from_config([])
         result = classifier.classify_execution(
@@ -1073,7 +1073,7 @@ class TestErrorClassificationAdversarial:
 
     def test_classify_with_signal_exit(self) -> None:
         """Classifier should handle signal-based exits."""
-        from mozart.core.errors import ErrorClassifier
+        from marianne.core.errors import ErrorClassifier
 
         classifier = ErrorClassifier.from_config([])
         result = classifier.classify_execution(

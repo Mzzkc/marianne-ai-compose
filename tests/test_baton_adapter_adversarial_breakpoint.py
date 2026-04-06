@@ -27,9 +27,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.adapter import (
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.adapter import (
     BatonAdapter,
     _BATON_TO_CHECKPOINT,
     _CHECKPOINT_TO_BATON,
@@ -40,14 +40,14 @@ from mozart.daemon.baton.adapter import (
     sheets_to_execution_states,
     skipped_to_observer_event,
 )
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.events import (
     DispatchRetry,
     RateLimitExpired,
     SheetAttemptResult,
     SheetSkipped,
     ShutdownRequested,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     BatonSheetStatus,
 )
 
@@ -267,7 +267,7 @@ class TestRecoverJobEdgeCases:
 
         mock_config = MagicMock()
         with patch(
-            "mozart.daemon.baton.prompt.PromptRenderer"
+            "marianne.daemon.baton.prompt.PromptRenderer"
         ) as mock_renderer_cls:
             adapter.recover_job(
                 "j1", sheets, deps, cp, prompt_config=mock_config
@@ -329,7 +329,7 @@ class TestDispatchCallbackEdgeCases:
         state = adapter.baton.get_sheet_state("j1", 1)
         assert state is not None
 
-        with patch("mozart.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
+        with patch("marianne.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
             await adapter._dispatch_callback("j1", 1, state)
 
         # Task should exist
@@ -357,7 +357,7 @@ class TestDispatchCallbackEdgeCases:
         state.completion_attempts = 2
 
         with patch(
-            "mozart.daemon.baton.adapter.sheet_task", new_callable=AsyncMock
+            "marianne.daemon.baton.adapter.sheet_task", new_callable=AsyncMock
         ):
             await adapter._dispatch_callback("j1", 1, state)
             # Wait for spawned tasks
@@ -381,7 +381,7 @@ class TestDispatchCallbackEdgeCases:
         state.healing_attempts = 1
         state.completion_attempts = 0
 
-        with patch("mozart.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
+        with patch("marianne.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
             await adapter._dispatch_callback("j1", 1, state)
 
     @pytest.mark.asyncio
@@ -400,7 +400,7 @@ class TestDispatchCallbackEdgeCases:
         state.normal_attempts = 2
         state.completion_attempts = 3
 
-        with patch("mozart.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
+        with patch("marianne.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
             await adapter._dispatch_callback("j1", 1, state)
 
         # The attempt should be 2+3+1=6 — verified through the spawned task name
@@ -426,7 +426,7 @@ class TestDispatchCallbackEdgeCases:
         state = adapter.baton.get_sheet_state("j1", 1)
         assert state is not None
 
-        with patch("mozart.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
+        with patch("marianne.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
             await adapter._dispatch_callback("j1", 1, state)
 
         pool.acquire.assert_called_once()
@@ -453,7 +453,7 @@ class TestDispatchCallbackEdgeCases:
         state = adapter.baton.get_sheet_state("j1", 1)
         assert state is not None
 
-        with patch("mozart.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
+        with patch("marianne.daemon.baton.adapter.sheet_task", new_callable=AsyncMock):
             await adapter._dispatch_callback("j1", 1, state)
 
         pool.acquire.assert_called_once()
@@ -832,7 +832,7 @@ class TestDeregistrationCleanup:
         adapter = _make_adapter()
         sheets = [_make_sheet(num=1)]
 
-        with patch("mozart.daemon.baton.prompt.PromptRenderer"):
+        with patch("marianne.daemon.baton.prompt.PromptRenderer"):
             adapter.register_job(
                 "j1", sheets, {1: []},
                 prompt_config=MagicMock(),
@@ -1030,9 +1030,9 @@ class TestMusicianWrapperExceptionHandling:
         adapter.set_backend_pool(pool)
 
         with patch(
-            "mozart.daemon.baton.adapter.sheet_task", new_callable=AsyncMock
+            "marianne.daemon.baton.adapter.sheet_task", new_callable=AsyncMock
         ):
-            from mozart.daemon.baton.state import AttemptContext, AttemptMode
+            from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
             await adapter._musician_wrapper(
                 job_id="j1",
@@ -1056,11 +1056,11 @@ class TestMusicianWrapperExceptionHandling:
         adapter.set_backend_pool(pool)
 
         with patch(
-            "mozart.daemon.baton.adapter.sheet_task",
+            "marianne.daemon.baton.adapter.sheet_task",
             new_callable=AsyncMock,
             side_effect=RuntimeError("musician exploded"),
         ):
-            from mozart.daemon.baton.state import AttemptContext, AttemptMode
+            from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
             with pytest.raises(RuntimeError, match="musician exploded"):
                 await adapter._musician_wrapper(
@@ -1089,9 +1089,9 @@ class TestMusicianWrapperExceptionHandling:
         adapter.set_backend_pool(pool)
 
         with patch(
-            "mozart.daemon.baton.adapter.sheet_task", new_callable=AsyncMock
+            "marianne.daemon.baton.adapter.sheet_task", new_callable=AsyncMock
         ):
-            from mozart.daemon.baton.state import AttemptContext, AttemptMode
+            from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
             # Should NOT raise despite release failure
             await adapter._musician_wrapper(
@@ -1233,7 +1233,7 @@ class TestRegistrationEdgeCases:
         ]
 
         with patch(
-            "mozart.daemon.baton.prompt.PromptRenderer"
+            "marianne.daemon.baton.prompt.PromptRenderer"
         ) as mock_cls:
             adapter.register_job(
                 "j1", sheets, {1: [], 2: [], 3: []},

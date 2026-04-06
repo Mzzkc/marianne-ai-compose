@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from mozart.prompts.preamble import build_preamble
+from marianne.prompts.preamble import build_preamble
 
 
 class TestBuildPreamble:

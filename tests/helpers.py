@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from mozart.core.checkpoint import (
+from marianne.core.checkpoint import (
     CheckpointErrorRecord,
     ErrorType,
     SheetState,

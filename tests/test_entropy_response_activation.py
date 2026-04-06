@@ -17,11 +17,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.daemon.config import DaemonConfig, SemanticLearningConfig
-from mozart.daemon.health import HealthChecker
-from mozart.learning.patterns import PatternType
-from mozart.learning.store import GlobalLearningStore
-from mozart.learning.store.models import QuarantineStatus
+from marianne.daemon.config import DaemonConfig, SemanticLearningConfig
+from marianne.daemon.health import HealthChecker
+from marianne.learning.patterns import PatternType
+from marianne.learning.store import GlobalLearningStore
+from marianne.learning.store.models import QuarantineStatus
 
 
 @pytest.fixture
@@ -165,7 +165,7 @@ def test_entropy_response_boosts_exploration_budget(
     assert initial_budget.budget_value == 0.10
 
     # Trigger entropy response with 0.15 boost
-    from mozart.learning.store.budget import (
+    from marianne.learning.store.budget import (
         EntropyResponseConfig,
         EntropyTriggerContext,
     )
@@ -217,7 +217,7 @@ def test_entropy_response_revisits_quarantined_patterns(
         quarantined_ids.append(pattern_id)
 
     # Trigger entropy response with quarantine revisit
-    from mozart.learning.store.budget import (
+    from marianne.learning.store.budget import (
         EntropyResponseConfig,
         EntropyTriggerContext,
     )
@@ -262,7 +262,7 @@ def test_entropy_response_recorded_in_database(
     _create_homogeneous_patterns(learning_store, pattern_count=5, dominant_apps=100)
 
     # Trigger entropy response
-    from mozart.learning.store.budget import (
+    from marianne.learning.store.budget import (
         EntropyResponseConfig,
         EntropyTriggerContext,
     )
@@ -311,7 +311,7 @@ def test_cooldown_prevents_rapid_responses(
     assert needs_response1 is True, "First check should trigger response"
 
     # Trigger first response
-    from mozart.learning.store.budget import (
+    from marianne.learning.store.budget import (
         EntropyResponseConfig,
         EntropyTriggerContext,
     )
@@ -416,7 +416,7 @@ def test_entropy_increases_after_exploration_injection(
     assert initial_entropy.diversity_index == 0.0
 
     # Trigger entropy response
-    from mozart.learning.store.budget import (
+    from marianne.learning.store.budget import (
         EntropyResponseConfig,
         EntropyTriggerContext,
     )

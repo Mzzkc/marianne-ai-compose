@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.dashboard.services.job_control import JobControlService
-from mozart.dashboard.services.sse_manager import SSEEvent, SSEManager
-from mozart.state.memory import InMemoryStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.dashboard.services.job_control import JobControlService
+from marianne.dashboard.services.sse_manager import SSEEvent, SSEManager
+from marianne.state.memory import InMemoryStateBackend
 
 
 @pytest.fixture
@@ -240,7 +240,7 @@ prompt:
 
         with (
             patch("asyncio.create_subprocess_exec") as mock_subprocess,
-            patch("mozart.core.config.JobConfig.from_yaml_string") as mock_config,
+            patch("marianne.core.config.JobConfig.from_yaml_string") as mock_config,
         ):
             # Make subprocess succeed but config parsing fail
             mock_subprocess.return_value = mock_process

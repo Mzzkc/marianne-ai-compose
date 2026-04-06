@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.core.checkpoint import CheckpointState, JobStatus
+from marianne.cli import app
+from marianne.core.checkpoint import CheckpointState, JobStatus
 
 runner = CliRunner()
 
@@ -66,7 +66,7 @@ class TestMozartdRemoved:
         """daemon_app Typer instance should be removed from process.py."""
         import inspect
 
-        from mozart.daemon import process
+        from marianne.daemon import process
 
         source = inspect.getsource(process)
         assert "daemon_app" not in source, "daemon_app should be removed"
@@ -109,7 +109,7 @@ class TestStatusRoutesThruConductor:
     def test_status_shows_conductor_required_error(self):
         """Without conductor, mozart status shows clear error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):
@@ -125,7 +125,7 @@ class TestStatusRoutesThruConductor:
         state_dict = state.model_dump(mode="json")
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, state_dict),
         ):
@@ -139,7 +139,7 @@ class TestStatusRoutesThruConductor:
         state_dict = state.model_dump(mode="json")
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, state_dict),
         ):
@@ -156,13 +156,13 @@ class TestStatusRoutesThruConductor:
 
         with (
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 new_callable=AsyncMock,
                 return_value=(False, None),
             ),
             # Patch at the import location in status.py, not in helpers.py
             patch(
-                "mozart.cli.commands.status.require_job_state",
+                "marianne.cli.commands.status.require_job_state",
                 new_callable=AsyncMock,
                 return_value=(state, MagicMock()),
             ),
@@ -180,7 +180,7 @@ class TestPauseRoutesThruConductor:
     def test_pause_shows_conductor_required_error(self):
         """Without conductor, mozart pause shows clear error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):
@@ -193,7 +193,7 @@ class TestPauseRoutesThruConductor:
     def test_pause_succeeds_via_conductor(self):
         """Pause command works when conductor acknowledges."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"paused": True}),
         ):
@@ -205,7 +205,7 @@ class TestPauseRoutesThruConductor:
     def test_pause_failure_via_conductor(self):
         """Pause reports error when conductor rejects."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"paused": False, "error": "Job not running"}),
         ):
@@ -220,7 +220,7 @@ class TestResumeRoutesThruConductor:
     def test_resume_shows_conductor_required_error(self):
         """Without conductor, mozart resume shows clear error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):
@@ -233,7 +233,7 @@ class TestResumeRoutesThruConductor:
     def test_resume_succeeds_via_conductor(self):
         """Resume command works when conductor accepts."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(
                 True,
@@ -252,7 +252,7 @@ class TestErrorsRoutesThruConductor:
     def test_errors_shows_conductor_required_error(self):
         """Without conductor, mozart errors shows clear error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):
@@ -268,7 +268,7 @@ class TestErrorsRoutesThruConductor:
         state_dict = state.model_dump(mode="json")
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"state": state_dict}),
         ):
@@ -284,7 +284,7 @@ class TestDiagnoseRoutesThruConductor:
     def test_diagnose_shows_conductor_required_error(self):
         """Without conductor, mozart diagnose shows clear error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):
@@ -300,7 +300,7 @@ class TestDiagnoseRoutesThruConductor:
         state_dict = state.model_dump(mode="json")
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {"state": state_dict, "workspace": "/tmp/ws"}),
         ):
@@ -315,7 +315,7 @@ class TestHistoryRoutesThruConductor:
     def test_history_shows_conductor_required_error(self):
         """Without conductor, mozart history shows clear error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):
@@ -328,7 +328,7 @@ class TestHistoryRoutesThruConductor:
     def test_history_succeeds_via_conductor(self):
         """History command works via conductor."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, {
                 "job_id": "test-job",
@@ -347,7 +347,7 @@ class TestRecoverRoutesThruConductor:
     def test_recover_shows_conductor_required_error(self):
         """Without conductor, mozart recover shows clear error."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):
@@ -406,7 +406,7 @@ class TestRequireConductor:
 
     def test_require_conductor_passes_when_routed(self):
         """require_conductor does nothing when routed=True."""
-        from mozart.cli.helpers import require_conductor
+        from marianne.cli.helpers import require_conductor
 
         # Should not raise
         require_conductor(True)
@@ -415,7 +415,7 @@ class TestRequireConductor:
         """require_conductor raises typer.Exit(1) when routed=False."""
         import typer
 
-        from mozart.cli.helpers import require_conductor
+        from marianne.cli.helpers import require_conductor
 
         with pytest.raises(typer.Exit):
             require_conductor(False)
@@ -424,7 +424,7 @@ class TestRequireConductor:
         """require_conductor outputs JSON when json_output=True."""
         import typer
 
-        from mozart.cli.helpers import require_conductor
+        from marianne.cli.helpers import require_conductor
 
         with pytest.raises(typer.Exit):
             require_conductor(False, json_output=True)
@@ -439,8 +439,8 @@ class TestRPCMethodRegistration:
     @pytest.mark.asyncio
     async def test_all_phase2_methods_registered(self):
         """Phase 2 RPC methods (status, pause, resume) are registered."""
-        from mozart.daemon.config import DaemonConfig
-        from mozart.daemon.process import DaemonProcess
+        from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.process import DaemonProcess
 
         config = DaemonConfig()
         dp = DaemonProcess(config)
@@ -460,8 +460,8 @@ class TestRPCMethodRegistration:
     @pytest.mark.asyncio
     async def test_all_phase3_methods_registered(self):
         """Phase 3 RPC methods (errors, diagnose, history, recover) are registered."""
-        from mozart.daemon.config import DaemonConfig
-        from mozart.daemon.process import DaemonProcess
+        from marianne.daemon.config import DaemonConfig
+        from marianne.daemon.process import DaemonProcess
 
         config = DaemonConfig()
         dp = DaemonProcess(config)
@@ -488,7 +488,7 @@ class TestDaemonClientMethods:
 
     def test_client_has_all_methods(self):
         """DaemonClient should have convenience methods for all RPC operations."""
-        from mozart.daemon.ipc.client import DaemonClient
+        from marianne.daemon.ipc.client import DaemonClient
 
         client = DaemonClient(Path("/tmp/test.sock"))
 
@@ -520,7 +520,7 @@ class TestManagerEnrichments:
 
     def test_manager_has_diagnostic_methods(self):
         """JobManager should have diagnostic and recovery methods."""
-        from mozart.daemon.manager import JobManager
+        from marianne.daemon.manager import JobManager
 
         # Check method signatures exist
         assert hasattr(JobManager, "get_job_errors")
@@ -542,7 +542,7 @@ class TestConductorErrorMessages:
         """Error message should say 'mozart start', not 'mozartd start'."""
         import typer
 
-        from mozart.cli.helpers import require_conductor
+        from marianne.cli.helpers import require_conductor
 
         try:
             require_conductor(False)
@@ -557,7 +557,7 @@ class TestConductorErrorMessages:
     def test_list_jobs_error_mentions_mozart_start(self):
         """List command error should reference 'mozart start'."""
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):
@@ -576,10 +576,10 @@ class TestTryDaemonRouteSafety:
     @pytest.mark.asyncio
     async def test_connection_error_returns_false(self):
         """Connection errors return (False, None) — never raise."""
-        from mozart.daemon.detect import try_daemon_route
+        from marianne.daemon.detect import try_daemon_route
 
         with patch(
-            "mozart.daemon.ipc.client.DaemonClient.is_daemon_running",
+            "marianne.daemon.ipc.client.DaemonClient.is_daemon_running",
             new_callable=AsyncMock,
             side_effect=ConnectionRefusedError("refused"),
         ):
@@ -591,10 +591,10 @@ class TestTryDaemonRouteSafety:
     @pytest.mark.asyncio
     async def test_daemon_not_running_returns_false(self):
         """DaemonNotRunningError returns (False, None)."""
-        from mozart.daemon.detect import try_daemon_route
+        from marianne.daemon.detect import try_daemon_route
 
         with patch(
-            "mozart.daemon.ipc.client.DaemonClient.is_daemon_running",
+            "marianne.daemon.ipc.client.DaemonClient.is_daemon_running",
             new_callable=AsyncMock,
             return_value=False,
         ):
@@ -606,17 +606,17 @@ class TestTryDaemonRouteSafety:
     @pytest.mark.asyncio
     async def test_business_logic_error_reraises(self):
         """JobSubmissionError from conductor is re-raised (not swallowed)."""
-        from mozart.daemon.detect import try_daemon_route
-        from mozart.daemon.exceptions import JobSubmissionError
+        from marianne.daemon.detect import try_daemon_route
+        from marianne.daemon.exceptions import JobSubmissionError
 
         with (
             patch(
-                "mozart.daemon.ipc.client.DaemonClient.is_daemon_running",
+                "marianne.daemon.ipc.client.DaemonClient.is_daemon_running",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.ipc.client.DaemonClient.call",
+                "marianne.daemon.ipc.client.DaemonClient.call",
                 new_callable=AsyncMock,
                 side_effect=JobSubmissionError("Job not found"),
             ),pytest.raises(JobSubmissionError)
@@ -632,7 +632,7 @@ class TestFilesystemFallbacksPrivate:
 
     def test_private_helpers_exist(self):
         """Private filesystem fallback helpers still exist for debug override."""
-        from mozart.cli import helpers
+        from marianne.cli import helpers
 
         assert hasattr(helpers, "_find_job_workspace")
         assert hasattr(helpers, "_find_job_state_fs")
@@ -642,13 +642,13 @@ class TestFilesystemFallbacksPrivate:
 
     def test_public_api_has_require_conductor(self):
         """require_conductor is the new public conductor helper."""
-        from mozart.cli import helpers
+        from marianne.cli import helpers
 
         assert hasattr(helpers, "require_conductor")
 
     def test_no_public_find_job_state(self):
         """find_job_state/require_job_state should NOT be public anymore."""
-        from mozart.cli import helpers
+        from marianne.cli import helpers
 
         # These should only exist as private _-prefixed versions
         assert not hasattr(helpers, "find_job_state")

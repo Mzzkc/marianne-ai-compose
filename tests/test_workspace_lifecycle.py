@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from mozart.core.config import WorkspaceLifecycleConfig
-from mozart.workspace.lifecycle import WorkspaceArchiver
+from marianne.core.config import WorkspaceLifecycleConfig
+from marianne.workspace.lifecycle import WorkspaceArchiver
 
 
 @pytest.fixture
@@ -400,7 +400,7 @@ class TestConfigDefaults:
 
     def test_config_in_job_config(self, tmp_path: Path):
         """WorkspaceLifecycleConfig is accessible through JobConfig."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         config = JobConfig(
             name="test",
@@ -413,7 +413,7 @@ class TestConfigDefaults:
 
     def test_config_from_yaml(self, tmp_path: Path):
         """WorkspaceLifecycleConfig loads from YAML correctly."""
-        from mozart.core.config import JobConfig
+        from marianne.core.config import JobConfig
 
         yaml_content = """
 name: test-lifecycle

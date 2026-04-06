@@ -16,16 +16,16 @@ import time
 
 import pytest
 
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.events import (
     RateLimitExpired,
     RateLimitHit,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     BatonSheetStatus,
     SheetExecutionState,
 )
-from mozart.daemon.baton.timer import TimerWheel
+from marianne.daemon.baton.timer import TimerWheel
 
 
 # ---------------------------------------------------------------------------

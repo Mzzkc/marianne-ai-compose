@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 
-from mozart.daemon.profiler.models import (
+from marianne.daemon.profiler.models import (
     JobProgress,
     ProcessMetric,
     SystemSnapshot,
@@ -36,7 +36,7 @@ class TestTimelineFileEventRendering:
     def _render_entries(self, observer_events: list[dict[str, Any]]) -> list[tuple[float, str]]:
         """Build timeline entries from observer events using the actual
         rendering logic from TimelinePanel._render_timeline()."""
-        from mozart.tui.panels.timeline import _EVENT_COLORS
+        from marianne.tui.panels.timeline import _EVENT_COLORS
 
         entries: list[tuple[float, str]] = []
         for obs in observer_events:
@@ -144,7 +144,7 @@ class TestJobsPanelFileEventFiltering:
 
     def _build_panel_with_tree(self) -> Any:
         from textual.widgets import Static, Tree
-        from mozart.tui.panels.jobs import JobsPanel
+        from marianne.tui.panels.jobs import JobsPanel
 
         panel = JobsPanel()
         panel._empty_label = Static("[dim]No active jobs[/]", id="jobs-empty")
@@ -210,7 +210,7 @@ class TestJobsPanelFileEventFiltering:
 
     def test_update_data_preserves_events_when_none_passed(self) -> None:
         """When observer_file_events=None, existing events are preserved."""
-        from mozart.tui.panels.jobs import JobsPanel
+        from marianne.tui.panels.jobs import JobsPanel
         panel = JobsPanel()
         initial = [{"event": "observer.file_created", "job_id": "j1",
                      "data": {"path": "/f.txt"}}]
@@ -272,7 +272,7 @@ class TestSnapshotObserverSummary:
         ]
         jsonl.write_text("\n".join(json.dumps(r) for r in records) + "\n")
 
-        from mozart.daemon.snapshot import SnapshotManager
+        from marianne.daemon.snapshot import SnapshotManager
         SnapshotManager._capture_observer_summary(ws, snapshot_dir)
 
         summary_path = snapshot_dir / "observer-summary.json"
@@ -300,7 +300,7 @@ class TestSnapshotObserverSummary:
             "   \n"
         )
 
-        from mozart.daemon.snapshot import SnapshotManager
+        from marianne.daemon.snapshot import SnapshotManager
         SnapshotManager._capture_observer_summary(ws, snapshot_dir)
 
         summary = json.loads((snapshot_dir / "observer-summary.json").read_text())
@@ -316,7 +316,7 @@ class TestSnapshotObserverSummary:
         jsonl = ws / ".mozart-observer.jsonl"
         jsonl.write_text("not json\nalso not json\n")
 
-        from mozart.daemon.snapshot import SnapshotManager
+        from marianne.daemon.snapshot import SnapshotManager
         SnapshotManager._capture_observer_summary(ws, snapshot_dir)
 
         assert not (snapshot_dir / "observer-summary.json").exists()
@@ -340,7 +340,7 @@ class TestSnapshotConfigCapture:
         config.parent.mkdir()
         config.write_text("name: test-job\nsheets:\n  - prompt: hi\n")
 
-        from mozart.daemon.snapshot import SnapshotManager
+        from marianne.daemon.snapshot import SnapshotManager
         mgr = SnapshotManager(base_dir=tmp_path / "snapshots")
         result = mgr.capture("test-job", ws, config_path=config)
         assert result is not None
@@ -356,7 +356,7 @@ class TestSnapshotConfigCapture:
         config = ws / "my-job.yaml"
         config.write_text("sheets: []\n")
 
-        from mozart.daemon.snapshot import SnapshotManager
+        from marianne.daemon.snapshot import SnapshotManager
         mgr = SnapshotManager(base_dir=tmp_path / "snapshots")
         result = mgr.capture("test-job", ws, config_path=config)
         assert result is not None
@@ -379,7 +379,7 @@ class TestSnapshotCapturePatterns:
         (ws / "config.yaml").write_text("key: value")
         (ws / "override.yml").write_text("other: data")
 
-        from mozart.daemon.snapshot import SnapshotManager
+        from marianne.daemon.snapshot import SnapshotManager
         mgr = SnapshotManager(base_dir=tmp_path / "snapshots")
         result = mgr.capture("test-job", ws)
         assert result is not None
@@ -389,7 +389,7 @@ class TestSnapshotCapturePatterns:
 
     def test_capture_patterns_list(self) -> None:
         """Verify capture patterns include yaml/yml."""
-        from mozart.daemon.snapshot import _CAPTURE_PATTERNS
+        from marianne.daemon.snapshot import _CAPTURE_PATTERNS
         assert "*.yaml" in _CAPTURE_PATTERNS
         assert "*.yml" in _CAPTURE_PATTERNS
         assert ".mozart-observer.jsonl" in _CAPTURE_PATTERNS
@@ -405,7 +405,7 @@ class TestManagerSnapshotWiring:
 
     def test_manager_snapshot_call_includes_config_path(self) -> None:
         """The manager.py call to snapshot.capture() passes meta.config_path."""
-        from mozart.daemon.manager import JobMeta
+        from marianne.daemon.manager import JobMeta
 
         # Verify the JobMeta dataclass has config_path field
         meta = JobMeta(
@@ -418,7 +418,7 @@ class TestManagerSnapshotWiring:
     def test_snapshot_capture_signature_accepts_config_path(self) -> None:
         """SnapshotManager.capture() accepts config_path as a keyword arg."""
         import inspect
-        from mozart.daemon.snapshot import SnapshotManager
+        from marianne.daemon.snapshot import SnapshotManager
 
         sig = inspect.signature(SnapshotManager.capture)
         params = list(sig.parameters.keys())
@@ -445,8 +445,8 @@ class TestEndToEndObserverFlow:
         4. DetailPanel renders file activity
         """
         from textual.widgets import Static, Tree
-        from mozart.tui.panels.jobs import JobsPanel
-        from mozart.tui.panels.detail import DetailPanel
+        from marianne.tui.panels.jobs import JobsPanel
+        from marianne.tui.panels.detail import DetailPanel
 
         # Step 1: Simulated observer events (as returned by get_observer_events)
         all_observer = [
@@ -522,7 +522,7 @@ class TestEndToEndObserverFlow:
         config = tmp_path / "my-job.yaml"
         config.write_text("name: my-job\nsheets:\n  - prompt: test\n")
 
-        from mozart.daemon.snapshot import SnapshotManager
+        from marianne.daemon.snapshot import SnapshotManager
         mgr = SnapshotManager(base_dir=tmp_path / "snapshots")
         result = mgr.capture("my-job", ws, config_path=config)
 

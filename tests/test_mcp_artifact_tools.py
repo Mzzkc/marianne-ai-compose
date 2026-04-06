@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.mcp.tools import ArtifactTools
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.mcp.tools import ArtifactTools
+from marianne.state.json_backend import JsonStateBackend
 
 
 class TestArtifactTools:
@@ -641,14 +641,14 @@ class TestMakeErrorResponse:
     """Tests for the module-level _make_error_response helper."""
 
     def test_formats_exception_message(self) -> None:
-        from mozart.mcp.tools import _make_error_response
+        from marianne.mcp.tools import _make_error_response
 
         result = _make_error_response(ValueError("test error"))
         assert result["isError"] is True
         assert "test error" in result["content"][0]["text"]
 
     def test_includes_error_type(self) -> None:
-        from mozart.mcp.tools import _make_error_response
+        from marianne.mcp.tools import _make_error_response
 
         result = _make_error_response(PermissionError("access denied"))
         text = result["content"][0]["text"]

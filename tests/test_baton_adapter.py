@@ -20,12 +20,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.events import (
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.events import (
     SheetAttemptResult,
     SheetSkipped,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     BatonSheetStatus,
     SheetExecutionState,
 )
@@ -78,13 +78,13 @@ class TestBatonAdapterConstruction:
 
     def test_import(self) -> None:
         """BatonAdapter is importable from the baton package."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         assert BatonAdapter is not None
 
     def test_construction_minimal(self) -> None:
         """BatonAdapter can be constructed with minimal args."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         assert adapter is not None
@@ -93,7 +93,7 @@ class TestBatonAdapterConstruction:
 
     def test_construction_with_event_bus(self) -> None:
         """BatonAdapter accepts an optional EventBus."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         mock_bus = MagicMock()
         adapter = BatonAdapter(event_bus=mock_bus)
@@ -114,77 +114,77 @@ class TestStateSynchronization:
 
     def test_status_mapping_completed(self) -> None:
         """COMPLETED maps to SheetStatus.COMPLETED."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.COMPLETED)
         assert result == "completed"
 
     def test_status_mapping_failed(self) -> None:
         """FAILED maps to SheetStatus.FAILED."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.FAILED)
         assert result == "failed"
 
     def test_status_mapping_skipped(self) -> None:
         """SKIPPED maps to SheetStatus.SKIPPED."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.SKIPPED)
         assert result == "skipped"
 
     def test_status_mapping_pending(self) -> None:
         """PENDING maps to SheetStatus.PENDING."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.PENDING)
         assert result == "pending"
 
     def test_status_mapping_dispatched(self) -> None:
         """DISPATCHED maps to in_progress."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.DISPATCHED)
         assert result == "in_progress"
 
     def test_status_mapping_running(self) -> None:
         """RUNNING maps to in_progress."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.RUNNING)
         assert result == "in_progress"
 
     def test_status_mapping_waiting(self) -> None:
         """WAITING (rate limited) maps to in_progress."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.WAITING)
         assert result == "in_progress"
 
     def test_status_mapping_retry_scheduled(self) -> None:
         """RETRY_SCHEDULED maps to pending (awaiting retry)."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.RETRY_SCHEDULED)
         assert result == "pending"
 
     def test_status_mapping_fermata(self) -> None:
         """FERMATA maps to in_progress (escalation pause)."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.FERMATA)
         assert result == "in_progress"
 
     def test_status_mapping_cancelled(self) -> None:
         """CANCELLED maps to failed (no cancelled in CheckpointState)."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         result = baton_to_checkpoint_status(BatonSheetStatus.CANCELLED)
         assert result == "failed"
 
     def test_all_baton_statuses_mapped(self) -> None:
         """Every BatonSheetStatus value has a mapping."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         for status in BatonSheetStatus:
             result = baton_to_checkpoint_status(status)
@@ -192,35 +192,35 @@ class TestStateSynchronization:
 
     def test_checkpoint_to_baton_completed(self) -> None:
         """CheckpointState completed → BatonSheetStatus.COMPLETED."""
-        from mozart.daemon.baton.adapter import checkpoint_to_baton_status
+        from marianne.daemon.baton.adapter import checkpoint_to_baton_status
 
         result = checkpoint_to_baton_status("completed")
         assert result == BatonSheetStatus.COMPLETED
 
     def test_checkpoint_to_baton_failed(self) -> None:
         """CheckpointState failed → BatonSheetStatus.FAILED."""
-        from mozart.daemon.baton.adapter import checkpoint_to_baton_status
+        from marianne.daemon.baton.adapter import checkpoint_to_baton_status
 
         result = checkpoint_to_baton_status("failed")
         assert result == BatonSheetStatus.FAILED
 
     def test_checkpoint_to_baton_pending(self) -> None:
         """CheckpointState pending → BatonSheetStatus.PENDING."""
-        from mozart.daemon.baton.adapter import checkpoint_to_baton_status
+        from marianne.daemon.baton.adapter import checkpoint_to_baton_status
 
         result = checkpoint_to_baton_status("pending")
         assert result == BatonSheetStatus.PENDING
 
     def test_checkpoint_to_baton_in_progress(self) -> None:
         """CheckpointState in_progress → BatonSheetStatus.DISPATCHED."""
-        from mozart.daemon.baton.adapter import checkpoint_to_baton_status
+        from marianne.daemon.baton.adapter import checkpoint_to_baton_status
 
         result = checkpoint_to_baton_status("in_progress")
         assert result == BatonSheetStatus.DISPATCHED
 
     def test_checkpoint_to_baton_skipped(self) -> None:
         """CheckpointState skipped → BatonSheetStatus.SKIPPED."""
-        from mozart.daemon.baton.adapter import checkpoint_to_baton_status
+        from marianne.daemon.baton.adapter import checkpoint_to_baton_status
 
         result = checkpoint_to_baton_status("skipped")
         assert result == BatonSheetStatus.SKIPPED
@@ -236,7 +236,7 @@ class TestJobRegistration:
 
     def test_register_job_creates_sheet_states(self) -> None:
         """register_job converts Sheet list to SheetExecutionState dict."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2), _make_sheet(num=3)]
@@ -252,7 +252,7 @@ class TestJobRegistration:
 
     def test_register_job_with_dependencies(self) -> None:
         """Dependencies are passed through to the baton."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -268,7 +268,7 @@ class TestJobRegistration:
 
     def test_register_job_with_cost_limits(self) -> None:
         """Job-level cost limits are set on the baton."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -283,7 +283,7 @@ class TestJobRegistration:
 
     def test_register_job_stores_sheets(self) -> None:
         """Adapter stores the Sheet objects for prompt rendering."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1, prompt="my prompt")]
@@ -296,7 +296,7 @@ class TestJobRegistration:
 
     def test_register_job_with_retry_config(self) -> None:
         """Retry config values are propagated to SheetExecutionState."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -326,7 +326,7 @@ class TestDispatchCallback:
     @pytest.mark.asyncio
     async def test_dispatch_callback_spawns_musician(self) -> None:
         """Dispatch callback creates an asyncio task for the musician."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -361,7 +361,7 @@ class TestDispatchCallback:
     @pytest.mark.asyncio
     async def test_dispatch_releases_backend_on_completion(self) -> None:
         """Backend is released after musician finishes (success or failure)."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1)]
@@ -406,7 +406,7 @@ class TestEventBusIntegration:
 
     def test_observer_event_from_attempt_result(self) -> None:
         """SheetAttemptResult produces a sheet.completed observer event."""
-        from mozart.daemon.baton.adapter import attempt_result_to_observer_event
+        from marianne.daemon.baton.adapter import attempt_result_to_observer_event
 
         result = SheetAttemptResult(
             job_id="j1",
@@ -425,7 +425,7 @@ class TestEventBusIntegration:
 
     def test_observer_event_from_failed_result(self) -> None:
         """Failed SheetAttemptResult produces sheet.failed event."""
-        from mozart.daemon.baton.adapter import attempt_result_to_observer_event
+        from marianne.daemon.baton.adapter import attempt_result_to_observer_event
 
         result = SheetAttemptResult(
             job_id="j1",
@@ -441,7 +441,7 @@ class TestEventBusIntegration:
 
     def test_observer_event_from_rate_limited_result(self) -> None:
         """Rate-limited result produces rate_limit.active event."""
-        from mozart.daemon.baton.adapter import attempt_result_to_observer_event
+        from marianne.daemon.baton.adapter import attempt_result_to_observer_event
 
         result = SheetAttemptResult(
             job_id="j1",
@@ -457,7 +457,7 @@ class TestEventBusIntegration:
 
     def test_observer_event_from_sheet_skipped(self) -> None:
         """SheetSkipped produces sheet.skipped event."""
-        from mozart.daemon.baton.adapter import skipped_to_observer_event
+        from marianne.daemon.baton.adapter import skipped_to_observer_event
 
         skipped = SheetSkipped(
             job_id="j1",
@@ -480,7 +480,7 @@ class TestJobCompletionDetection:
 
     def test_is_job_complete_all_completed(self) -> None:
         """Job is complete when all sheets are in terminal state."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -496,7 +496,7 @@ class TestJobCompletionDetection:
 
     def test_is_job_complete_mixed_terminal(self) -> None:
         """Job is complete when sheets are completed/failed/skipped."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2), _make_sheet(num=3)]
@@ -516,7 +516,7 @@ class TestJobCompletionDetection:
 
     def test_is_job_not_complete_with_pending(self) -> None:
         """Job is NOT complete when sheets are still pending."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -540,7 +540,7 @@ class TestUseBatonFeatureFlag:
 
     def test_daemon_config_has_use_baton_field(self) -> None:
         """DaemonConfig has a use_baton field defaulting to True (D-027)."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()
         assert hasattr(config, "use_baton")
@@ -548,7 +548,7 @@ class TestUseBatonFeatureFlag:
 
     def test_daemon_config_use_baton_true(self) -> None:
         """use_baton can be set to True."""
-        from mozart.daemon.config import DaemonConfig
+        from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig(use_baton=True)
         assert config.use_baton is True
@@ -564,7 +564,7 @@ class TestSheetsToExecutionState:
 
     def test_sheets_to_execution_states(self) -> None:
         """sheets_to_execution_states creates correct mapping."""
-        from mozart.daemon.baton.adapter import sheets_to_execution_states
+        from marianne.daemon.baton.adapter import sheets_to_execution_states
 
         sheets = [
             _make_sheet(num=1, instrument="claude-code"),
@@ -580,7 +580,7 @@ class TestSheetsToExecutionState:
 
     def test_sheets_to_execution_states_with_retries(self) -> None:
         """Custom retry/completion limits are applied."""
-        from mozart.daemon.baton.adapter import sheets_to_execution_states
+        from marianne.daemon.baton.adapter import sheets_to_execution_states
 
         sheets = [_make_sheet(num=1)]
         states = sheets_to_execution_states(
@@ -601,7 +601,7 @@ class TestDependencyExtraction:
 
     def test_extract_dependencies_sequential(self) -> None:
         """Sequential stages produce a chain: 2→[1], 3→[2], etc."""
-        from mozart.daemon.baton.adapter import extract_dependencies
+        from marianne.daemon.baton.adapter import extract_dependencies
 
         # Mock a config with 3 sequential stages (no fan-out)
         mock_config = MagicMock()
@@ -628,7 +628,7 @@ class TestDependencyExtraction:
 
     def test_extract_dependencies_fan_out(self) -> None:
         """Fan-out sheets within the same stage have no internal deps."""
-        from mozart.daemon.baton.adapter import extract_dependencies
+        from marianne.daemon.baton.adapter import extract_dependencies
 
         # Mock: stage 1 has 3 fan-out sheets (sheet 1, 2, 3), stage 2 has 1 (sheet 4)
         mock_config = MagicMock()
@@ -662,7 +662,7 @@ class TestCompletionSignaling:
 
     def test_completion_event_created_on_register(self) -> None:
         """Registering a job creates a completion event."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheet = _make_sheet(num=1)
@@ -672,7 +672,7 @@ class TestCompletionSignaling:
 
     def test_completion_event_removed_on_deregister(self) -> None:
         """Deregistering a job removes the completion event."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheet = _make_sheet(num=1)
@@ -682,7 +682,7 @@ class TestCompletionSignaling:
 
     def test_check_completions_signals_when_all_terminal(self) -> None:
         """_check_completions signals when all sheets reach terminal state."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheet = _make_sheet(num=1)
@@ -699,7 +699,7 @@ class TestCompletionSignaling:
 
     def test_check_completions_reports_failure(self) -> None:
         """_check_completions reports failure when any sheet is FAILED."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -717,7 +717,7 @@ class TestCompletionSignaling:
 
     def test_check_completions_skips_non_terminal(self) -> None:
         """_check_completions doesn't signal if sheets are still running."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheets = [_make_sheet(num=1), _make_sheet(num=2)]
@@ -735,7 +735,7 @@ class TestCompletionSignaling:
     @pytest.mark.asyncio
     async def test_wait_for_completion_returns_on_signal(self) -> None:
         """wait_for_completion unblocks when the completion event is set."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheet = _make_sheet(num=1)
@@ -758,7 +758,7 @@ class TestCompletionSignaling:
     @pytest.mark.asyncio
     async def test_wait_for_completion_raises_on_unknown_job(self) -> None:
         """wait_for_completion raises KeyError for unknown jobs."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         with pytest.raises(KeyError, match="not registered"):
@@ -766,7 +766,7 @@ class TestCompletionSignaling:
 
     def test_check_completions_idempotent(self) -> None:
         """_check_completions doesn't signal twice for the same job."""
-        from mozart.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter = BatonAdapter()
         sheet = _make_sheet(num=1)

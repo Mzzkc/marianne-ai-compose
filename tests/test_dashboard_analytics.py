@@ -6,17 +6,17 @@ from datetime import UTC, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from mozart.core.checkpoint import (
+from marianne.core.checkpoint import (
     CheckpointErrorRecord,
     CheckpointState,
     JobStatus,
     SheetState,
     SheetStatus,
 )
-from mozart.dashboard.app import create_app
-from mozart.dashboard.routes.analytics import set_analytics
-from mozart.dashboard.services.analytics import DaemonAnalytics
-from mozart.state.base import StateBackend
+from marianne.dashboard.app import create_app
+from marianne.dashboard.routes.analytics import set_analytics
+from marianne.dashboard.services.analytics import DaemonAnalytics
+from marianne.state.base import StateBackend
 
 # ============================================================================
 # Fixtures
@@ -390,7 +390,7 @@ class TestCaching:
 @pytest.fixture
 def app_with_analytics(mock_backend: MockStateBackend) -> TestClient:
     """Create a test app with analytics routes wired up."""
-    from mozart.dashboard.routes.analytics import router as analytics_router
+    from marianne.dashboard.routes.analytics import router as analytics_router
 
     app = create_app(state_backend=mock_backend)
     analytics = DaemonAnalytics(mock_backend, cache_ttl=0.0)

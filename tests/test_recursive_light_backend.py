@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from mozart.backends.recursive_light import RecursiveLightBackend
+from marianne.backends.recursive_light import RecursiveLightBackend
 
 
 class TestInit:

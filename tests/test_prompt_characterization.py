@@ -26,10 +26,10 @@ from typing import Any
 
 import pytest
 
-from mozart.core.config import PromptConfig, ValidationRule
-from mozart.core.config.spec import SpecFragment
-from mozart.prompts.preamble import build_preamble
-from mozart.prompts.templating import PromptBuilder, SheetContext
+from marianne.core.config import PromptConfig, ValidationRule
+from marianne.core.config.spec import SpecFragment
+from marianne.prompts.preamble import build_preamble
+from marianne.prompts.templating import PromptBuilder, SheetContext
 
 
 # =============================================================================
@@ -300,7 +300,7 @@ class TestFailureHistoryCharacterization:
 
     def test_failure_history_header(self) -> None:
         """Failure history section has the correct header."""
-        from mozart.execution.validation import HistoricalFailure
+        from marianne.execution.validation import HistoricalFailure
 
         config = _make_config()
         builder = PromptBuilder(config)
@@ -344,7 +344,7 @@ class TestLearnedPatternsCharacterization:
 
     def test_patterns_after_failure_history(self) -> None:
         """Patterns appear AFTER failure history."""
-        from mozart.execution.validation import HistoricalFailure
+        from marianne.execution.validation import HistoricalFailure
 
         config = _make_config()
         builder = PromptBuilder(config)
@@ -464,7 +464,7 @@ class TestFullAssemblyOrder:
 
     def test_complete_assembly_order(self) -> None:
         """All layers appear in the correct order when everything is present."""
-        from mozart.execution.validation import HistoricalFailure
+        from marianne.execution.validation import HistoricalFailure
 
         config = _make_config(template="TEMPLATE_CONTENT")
         builder = PromptBuilder(config)
@@ -535,7 +535,7 @@ class TestCompletionModeCharacterization:
 
     def test_completion_prompt_structure(self) -> None:
         """Completion prompt has the expected sections."""
-        from mozart.execution.validation.models import ValidationResult
+        from marianne.execution.validation.models import ValidationResult
 
         config = _make_config(template="Build a thing")
         builder = PromptBuilder(config)
@@ -551,7 +551,7 @@ class TestCompletionModeCharacterization:
             failure_reason="File not found",
         )
 
-        from mozart.prompts.templating import CompletionContext
+        from marianne.prompts.templating import CompletionContext
 
         ctx = CompletionContext(
             sheet_num=1,

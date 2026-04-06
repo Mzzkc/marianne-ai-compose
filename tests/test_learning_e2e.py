@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.checkpoint import SheetStatus
-from mozart.learning.global_store import GlobalLearningStore
-from mozart.learning.outcomes import SheetOutcome
+from marianne.core.checkpoint import SheetStatus
+from marianne.learning.global_store import GlobalLearningStore
+from marianne.learning.outcomes import SheetOutcome
 
 
 @pytest.fixture
@@ -433,7 +433,7 @@ class TestSuccessFactorsE2E:
         self, store: GlobalLearningStore
     ) -> None:
         """Test that execution stats aggregate recorded outcomes."""
-        from mozart.learning.outcomes import SheetOutcome
+        from marianne.learning.outcomes import SheetOutcome
 
         # Record outcomes from simulated job execution
         for i in range(3):

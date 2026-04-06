@@ -11,7 +11,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.events import (
     BatonEvent,
     CancelJob,
     ConfigReloaded,
@@ -297,7 +297,7 @@ def test_event_is_immutable(event: BatonEvent) -> None:
 def test_union_type_covers_all_event_classes() -> None:
     """BatonEvent union type must include every event class defined in events.py."""
     # Get all event classes from the module
-    import mozart.daemon.baton.events as mod
+    import marianne.daemon.baton.events as mod
     from dataclasses import is_dataclass
 
     event_classes = {

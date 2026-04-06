@@ -16,10 +16,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from textual.widgets import Static
 
-from mozart.daemon.profiler.models import EventType, ProcessEvent
-from mozart.tui.panels.detail import DetailPanel
-from mozart.tui.panels.timeline import TimelinePanel
-from mozart.tui.reader import MonitorReader
+from marianne.daemon.profiler.models import EventType, ProcessEvent
+from marianne.tui.panels.detail import DetailPanel
+from marianne.tui.panels.timeline import TimelinePanel
+from marianne.tui.reader import MonitorReader
 
 # ---------------------------------------------------------------------------
 # Helpers

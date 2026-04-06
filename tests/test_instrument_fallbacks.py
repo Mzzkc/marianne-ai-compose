@@ -17,12 +17,12 @@ from unittest.mock import patch
 
 import pytest
 
-from mozart.core.checkpoint import SheetState
-from mozart.core.config import JobConfig
-from mozart.core.config.job import MovementDef, SheetConfig
-from mozart.core.sheet import Sheet, build_sheets
-from mozart.validation.base import ValidationSeverity
-from mozart.validation.checks.config import InstrumentFallbackCheck
+from marianne.core.checkpoint import SheetState
+from marianne.core.config import JobConfig
+from marianne.core.config.job import MovementDef, SheetConfig
+from marianne.core.sheet import Sheet, build_sheets
+from marianne.validation.base import ValidationSeverity
+from marianne.validation.checks.config import InstrumentFallbackCheck
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +54,7 @@ def _mock_profiles():
         "ollama": None,
     }
     with patch(
-        "mozart.instruments.loader.load_all_profiles",
+        "marianne.instruments.loader.load_all_profiles",
         return_value=profiles,
     ):
         yield profiles

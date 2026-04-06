@@ -12,13 +12,13 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from mozart.cli import app
-from mozart.cli.commands.diagnose import (
+from marianne.cli import app
+from marianne.cli.commands.diagnose import (
     _attach_log_contents,
     _build_diagnostic_report,
     _discover_log_files,
 )
-from mozart.core.checkpoint import (
+from marianne.core.checkpoint import (
     CheckpointState,
     ErrorRecord,
     JobStatus,
@@ -294,7 +294,7 @@ def _no_daemon_route(monkeypatch: pytest.MonkeyPatch) -> None:
         return False, None
 
     monkeypatch.setattr(
-        "mozart.daemon.detect.try_daemon_route", _fake_route,
+        "marianne.daemon.detect.try_daemon_route", _fake_route,
     )
 
 
@@ -726,12 +726,12 @@ class TestMaxOutputCaptureConfig:
     """Tests for configurable max_output_capture_bytes in BackendConfig."""
 
     def test_default_value(self) -> None:
-        from mozart.core.config import BackendConfig
+        from marianne.core.config import BackendConfig
         config = BackendConfig()
         assert config.max_output_capture_bytes == 51200
 
     def test_custom_value(self) -> None:
-        from mozart.core.config import BackendConfig
+        from marianne.core.config import BackendConfig
         config = BackendConfig(max_output_capture_bytes=20480)
         assert config.max_output_capture_bytes == 20480
 

@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.mcp.resources import ConfigResources
-from mozart.state.json_backend import JsonStateBackend
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.mcp.resources import ConfigResources
+from marianne.state.json_backend import JsonStateBackend
 
 
 class TestConfigResources:

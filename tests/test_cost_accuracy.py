@@ -18,8 +18,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.checkpoint import CheckpointState, SheetState
+from marianne.backends.base import ExecutionResult
+from marianne.core.checkpoint import CheckpointState, SheetState
 
 
 # ── ClaudeCliBackend JSON Token Extraction ─────────────────────────────
@@ -30,7 +30,7 @@ class TestClaudeCliBackendTokenExtraction:
 
     def _make_backend(self, output_format: str = "json") -> "ClaudeCliBackend":  # noqa: F821
         """Create a ClaudeCliBackend with the given output format."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         return ClaudeCliBackend(
             output_format=output_format,
@@ -218,14 +218,14 @@ class TestCostConfidenceDisplay:
 
     def test_low_confidence_cost_has_estimation_indicator(self) -> None:
         """When cost confidence < 0.9, display shows estimation indicator."""
-        from mozart.cli.commands.status import _render_cost_summary
+        from marianne.cli.commands.status import _render_cost_summary
 
         state = self._make_job_state(
             total_cost=0.17,
             cost_confidence=0.7,
         )
         console = MagicMock()
-        with patch("mozart.cli.commands.status.console", console):
+        with patch("marianne.cli.commands.status.console", console):
             _render_cost_summary(state)
 
         # Collect all print calls as strings
@@ -244,14 +244,14 @@ class TestCostConfidenceDisplay:
 
     def test_high_confidence_cost_no_estimation_indicator(self) -> None:
         """When cost confidence >= 0.9, display shows exact cost without indicator."""
-        from mozart.cli.commands.status import _render_cost_summary
+        from marianne.cli.commands.status import _render_cost_summary
 
         state = self._make_job_state(
             total_cost=5.00,
             cost_confidence=1.0,
         )
         console = MagicMock()
-        with patch("mozart.cli.commands.status.console", console):
+        with patch("marianne.cli.commands.status.console", console):
             _render_cost_summary(state)
 
         all_calls = [str(call) for call in console.print.call_args_list]
@@ -289,7 +289,7 @@ class TestCostConfidenceTracking:
     @pytest.mark.asyncio
     async def test_exact_tokens_give_full_confidence(self) -> None:
         """When both input and output tokens are provided, confidence is 1.0."""
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.execution.runner.cost import CostMixin
 
         mixin = MagicMock(spec=CostMixin)
         mixin.config = MagicMock()
@@ -317,7 +317,7 @@ class TestCostConfidenceTracking:
     @pytest.mark.asyncio
     async def test_character_estimation_gives_low_confidence(self) -> None:
         """When no token data is available, confidence is 0.7."""
-        from mozart.execution.runner.cost import CostMixin
+        from marianne.execution.runner.cost import CostMixin
 
         mixin = MagicMock(spec=CostMixin)
         mixin.config = MagicMock()
@@ -351,7 +351,7 @@ class TestBatonMusicianCostEstimation:
 
     def test_estimate_with_real_tokens(self) -> None:
         """When tokens are provided, cost should be calculated from them."""
-        from mozart.daemon.baton.musician import _estimate_cost
+        from marianne.daemon.baton.musician import _estimate_cost
 
         result = ExecutionResult(
             success=True, exit_code=0, stdout="test", stderr="",
@@ -365,7 +365,7 @@ class TestBatonMusicianCostEstimation:
 
     def test_estimate_with_zero_tokens_returns_zero(self) -> None:
         """When tokens are None (CLI backend), cost is $0.00."""
-        from mozart.daemon.baton.musician import _estimate_cost
+        from marianne.daemon.baton.musician import _estimate_cost
 
         result = ExecutionResult(
             success=True, exit_code=0, stdout="test output", stderr="",
@@ -377,7 +377,7 @@ class TestBatonMusicianCostEstimation:
 
     def test_estimate_with_partial_tokens(self) -> None:
         """When only output tokens are provided, input defaults to 0."""
-        from mozart.daemon.baton.musician import _estimate_cost
+        from marianne.daemon.baton.musician import _estimate_cost
 
         result = ExecutionResult(
             success=True, exit_code=0, stdout="test", stderr="",

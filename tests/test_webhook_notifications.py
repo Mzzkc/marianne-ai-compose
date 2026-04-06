@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from mozart.notifications.base import NotificationContext, NotificationEvent
-from mozart.notifications.webhook import (
+from marianne.notifications.base import NotificationContext, NotificationEvent
+from marianne.notifications.webhook import (
     MockWebhookNotifier,
     WebhookNotifier,
     _serialize_context,

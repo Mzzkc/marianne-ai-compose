@@ -13,9 +13,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mozart.core.config import PromptConfig, ValidationRule
-from mozart.execution.validation.models import ValidationResult
-from mozart.prompts.templating import (
+from marianne.core.config import PromptConfig, ValidationRule
+from marianne.execution.validation.models import ValidationResult
+from marianne.prompts.templating import (
     CompletionContext,
     PromptBuilder,
     SheetContext,

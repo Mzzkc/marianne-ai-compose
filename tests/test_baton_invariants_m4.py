@@ -41,14 +41,14 @@ def _run(coro: Coroutine[Any, Any, Any]) -> Any:
         raise RuntimeError("Cannot _run() inside a running event loop")
     return asyncio.run(coro)
 
-from mozart.daemon.baton.adapter import (
+from marianne.daemon.baton.adapter import (
     _BATON_TO_CHECKPOINT,
     _CHECKPOINT_TO_BATON,
     baton_to_checkpoint_status,
     checkpoint_to_baton_status,
 )
-from mozart.daemon.baton.core import BatonCore
-from mozart.daemon.baton.events import (
+from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.events import (
     CancelJob,
     EscalationNeeded,
     EscalationResolved,
@@ -56,7 +56,7 @@ from mozart.daemon.baton.events import (
     PauseJob,
     SheetAttemptResult,
 )
-from mozart.daemon.baton.state import (
+from marianne.daemon.baton.state import (
     _TERMINAL_BATON_STATUSES,
     AttemptContext,
     AttemptMode,
@@ -581,8 +581,8 @@ class TestPromptAssemblyStructure:
 
     def test_preamble_is_first_section(self) -> None:
         """The preamble (positional identity) is always the first section."""
-        from mozart.core.sheet import Sheet
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.core.sheet import Sheet
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = Sheet(
             num=3,
@@ -604,9 +604,9 @@ class TestPromptAssemblyStructure:
 
     def test_validations_after_template(self) -> None:
         """Validation requirements section appears after the template content."""
-        from mozart.core.config.execution import ValidationRule
-        from mozart.core.sheet import Sheet
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.core.config.execution import ValidationRule
+        from marianne.core.sheet import Sheet
+        from marianne.daemon.baton.musician import _build_prompt
 
         sheet = Sheet(
             num=1,
@@ -634,8 +634,8 @@ class TestPromptAssemblyStructure:
 
     def test_completion_suffix_is_last(self) -> None:
         """Completion mode suffix is always the last section."""
-        from mozart.core.sheet import Sheet
-        from mozart.daemon.baton.musician import _build_prompt
+        from marianne.core.sheet import Sheet
+        from marianne.daemon.baton.musician import _build_prompt
 
         suffix = "FINISH YOUR WORK. Focus on the remaining validations."
         sheet = Sheet(

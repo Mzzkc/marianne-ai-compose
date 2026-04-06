@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import IsolationMode
-from mozart.isolation.worktree import WorktreeResult
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config import IsolationMode
+from marianne.isolation.worktree import WorktreeResult
 
-_WORKTREE_MANAGER = "mozart.isolation.worktree.GitWorktreeManager"
+_WORKTREE_MANAGER = "marianne.isolation.worktree.GitWorktreeManager"
 
 _OK_RESULT = WorktreeResult(success=True, worktree=None, error=None)
 
@@ -38,7 +38,7 @@ def _make_mixin(
     working_directory: Path | None = None,
 ):
     """Build a minimal object that satisfies IsolationMixin type stubs."""
-    from mozart.execution.runner.isolation import IsolationMixin
+    from marianne.execution.runner.isolation import IsolationMixin
 
     class _Host(IsolationMixin):
         pass
@@ -368,7 +368,7 @@ class TestSetupFallback:
     @pytest.mark.asyncio
     async def test_not_git_repo_no_fallback_raises(self, tmp_path: Path) -> None:
         """Non-git repo + fallback_on_error=False -> raises FatalError."""
-        from mozart.execution.runner.models import FatalError
+        from marianne.execution.runner.models import FatalError
 
         host = _make_mixin(fallback_on_error=False, workspace=tmp_path)
         state = _make_state(worktree_path=None)

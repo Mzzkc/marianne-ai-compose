@@ -9,14 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, SheetState, SheetStatus
-from mozart.core.config import (
+from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
+from marianne.core.config import (
     CrossSheetConfig,
     JobConfig,
     PromptConfig,
     SheetConfig,
 )
-from mozart.prompts.templating import PromptBuilder, SheetContext
+from marianne.prompts.templating import PromptBuilder, SheetContext
 
 
 class TestCrossSheetConfig:

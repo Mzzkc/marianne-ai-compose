@@ -20,9 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from mozart.learning.store import GlobalLearningStore
-from mozart.learning.store.models import QuarantineStatus
-from mozart.learning.store.patterns_crud import PatternCrudMixin
+from marianne.learning.store import GlobalLearningStore
+from marianne.learning.store.models import QuarantineStatus
+from marianne.learning.store.patterns_crud import PatternCrudMixin
 
 # =============================================================================
 # Fixtures

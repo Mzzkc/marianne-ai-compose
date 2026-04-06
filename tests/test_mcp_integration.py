@@ -16,8 +16,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from mozart.mcp.server import MCPServer
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.mcp.server import MCPServer
 
 
 class TestMCPServerIntegration:
@@ -286,7 +286,7 @@ class TestMCPToolSchemas:
 
     async def test_job_tool_schemas(self):
         """Test job management tool schemas are valid."""
-        from mozart.mcp.tools import JobTools
+        from marianne.mcp.tools import JobTools
 
         tools = JobTools(Mock(), Path("/tmp"))
         tool_list = await tools.list_tools()
@@ -301,7 +301,7 @@ class TestMCPToolSchemas:
 
     async def test_score_tool_schemas(self):
         """Test score tools are hidden stubs (not listed but callable)."""
-        from mozart.mcp.tools import ScoreTools
+        from marianne.mcp.tools import ScoreTools
 
         tools = ScoreTools(Path("/tmp"))
         tool_list = await tools.list_tools()

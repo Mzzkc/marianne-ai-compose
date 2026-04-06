@@ -41,7 +41,7 @@ from pydantic import BaseModel, ValidationError
 # Import all config models for exhaustive testing
 # =============================================================================
 
-from mozart.core.config.backend import (
+from marianne.core.config.backend import (
     BackendConfig,
     BridgeConfig,
     MCPServerConfig,
@@ -49,7 +49,7 @@ from mozart.core.config.backend import (
     RecursiveLightConfig,
     SheetBackendOverride,
 )
-from mozart.core.config.execution import (
+from marianne.core.config.execution import (
     CircuitBreakerConfig,
     CostLimitConfig,
     ParallelConfig,
@@ -60,7 +60,7 @@ from mozart.core.config.execution import (
     StaleDetectionConfig,
     ValidationRule,
 )
-from mozart.core.config.instruments import (
+from marianne.core.config.instruments import (
     CliCommand,
     CliErrorConfig,
     CliOutputConfig,
@@ -71,7 +71,7 @@ from mozart.core.config.instruments import (
     InstrumentProfile,
     ModelCapacity,
 )
-from mozart.core.config.job import (
+from marianne.core.config.job import (
     InjectionItem,
     InstrumentDef,
     JobConfig,
@@ -79,7 +79,7 @@ from mozart.core.config.job import (
     PromptConfig,
     SheetConfig,
 )
-from mozart.core.config.learning import (
+from marianne.core.config.learning import (
     AutoApplyConfig,
     CheckpointConfig,
     CheckpointTriggerConfig,
@@ -89,15 +89,15 @@ from mozart.core.config.learning import (
     GroundingHookConfig,
     LearningConfig,
 )
-from mozart.core.config.orchestration import (
+from marianne.core.config.orchestration import (
     ConcertConfig,
     ConductorConfig,
     ConductorPreferences,
     NotificationConfig,
     PostSuccessHookConfig,
 )
-from mozart.core.config.spec import SpecCorpusConfig, SpecFragment
-from mozart.core.config.workspace import (
+from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
+from marianne.core.config.workspace import (
     AIReviewConfig,
     CrossSheetConfig,
     FeedbackConfig,
@@ -105,7 +105,7 @@ from mozart.core.config.workspace import (
     LogConfig,
     WorkspaceLifecycleConfig,
 )
-from mozart.daemon.ipc.errors import (
+from marianne.daemon.ipc.errors import (
     DAEMON_SHUTTING_DOWN,
     JOB_ALREADY_RUNNING,
     JOB_NOT_FOUND,
@@ -116,7 +116,7 @@ from mozart.daemon.ipc.errors import (
     _CODE_EXCEPTION_MAP,
     rpc_error_to_exception,
 )
-from mozart.daemon.exceptions import (
+from marianne.daemon.exceptions import (
     DaemonError,
     MethodNotFoundError,
 )
@@ -296,7 +296,7 @@ class TestConfigStrictnessTotality:
         in mozart.core.config and verifies each BaseModel subclass has
         extra='forbid' in its model_config.
         """
-        config_package = "mozart.core.config"
+        config_package = "marianne.core.config"
         module_names = [
             f"{config_package}.{name}"
             for name in [
@@ -408,7 +408,7 @@ class TestTokenExtractionDefensiveParsing:
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_always_returns_valid_tuple(self, stdout: str) -> None:
         """Any input produces a (int|None, int|None) tuple."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "json"
@@ -424,7 +424,7 @@ class TestTokenExtractionDefensiveParsing:
     @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_non_json_format_returns_none(self, stdout: str) -> None:
         """When output_format != 'json', always returns (None, None)."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "text"
@@ -439,7 +439,7 @@ class TestTokenExtractionDefensiveParsing:
     @settings(max_examples=50)
     def test_valid_json_preserves_values(self, input_tokens: int, output_tokens: int) -> None:
         """Well-formed JSON with integer tokens preserves exact values."""
-        from mozart.backends.claude_cli import ClaudeCliBackend
+        from marianne.backends.claude_cli import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "json"
@@ -470,7 +470,7 @@ class TestAutoFreshMonotonicity:
     @settings(max_examples=100)
     def test_monotonicity_in_mtime(self, completed_at: float, mtime_offset: float) -> None:
         """Increasing mtime relative to completed_at monotonically increases True likelihood."""
-        from mozart.daemon.manager import _should_auto_fresh, _MTIME_TOLERANCE_SECONDS
+        from marianne.daemon.manager import _should_auto_fresh, _MTIME_TOLERANCE_SECONDS
 
         # Simulate two mtimes
         mtime1 = completed_at + mtime_offset
@@ -498,14 +498,14 @@ class TestAutoFreshMonotonicity:
 
     def test_none_completed_at_always_false(self) -> None:
         """If completed_at is None, auto-fresh is always False."""
-        from mozart.daemon.manager import _should_auto_fresh
+        from marianne.daemon.manager import _should_auto_fresh
 
         mock_path = MagicMock(spec=Path)
         assert _should_auto_fresh(mock_path, None) is False
 
     def test_os_error_always_false(self) -> None:
         """If stat() raises OSError, auto-fresh is always False."""
-        from mozart.daemon.manager import _should_auto_fresh
+        from marianne.daemon.manager import _should_auto_fresh
 
         mock_path = MagicMock(spec=Path)
         mock_path.stat.side_effect = OSError("no such file")
@@ -763,7 +763,7 @@ class TestConfigFieldCountStability:
         """We know exactly how many config models exist."""
         # Count should match ALL_CONFIG_MODELS length
         # If this fails, a new model was added — update ALL_CONFIG_MODELS
-        config_package = "mozart.core.config"
+        config_package = "marianne.core.config"
         module_names = [
             f"{config_package}.{name}"
             for name in [

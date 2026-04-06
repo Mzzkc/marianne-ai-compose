@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mozart.daemon.output import (
+from marianne.daemon.output import (
     ConsoleOutput,
     NullOutput,
     OutputProtocol,
@@ -81,7 +81,7 @@ class TestNullOutput:
 class TestStructuredOutput:
     """Tests for StructuredOutput — structlog-based daemon output."""
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_instantiation_gets_logger(self, mock_get_logger: MagicMock):
         """Test StructuredOutput creates a structlog logger on init."""
         mock_logger = MagicMock()
@@ -91,7 +91,7 @@ class TestStructuredOutput:
         mock_get_logger.assert_called_with("daemon.output")
         assert output._logger is mock_logger
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_log_delegates_to_structlog(self, mock_get_logger: MagicMock):
         """Test log() calls the appropriate structlog level method."""
         mock_logger = MagicMock()
@@ -101,7 +101,7 @@ class TestStructuredOutput:
         output.log("info", "test message", key="value")
         mock_logger.info.assert_called_once_with("test message", key="value")
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_log_warning_level(self, mock_get_logger: MagicMock):
         """Test log() with warning level."""
         mock_logger = MagicMock()
@@ -111,7 +111,7 @@ class TestStructuredOutput:
         output.log("warning", "something bad")
         mock_logger.warning.assert_called_once_with("something bad")
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_log_error_level(self, mock_get_logger: MagicMock):
         """Test log() with error level."""
         mock_logger = MagicMock()
@@ -121,7 +121,7 @@ class TestStructuredOutput:
         output.log("error", "failure occurred", code=500)
         mock_logger.error.assert_called_once_with("failure occurred", code=500)
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_log_unknown_level_falls_back_to_info(self, mock_get_logger: MagicMock):
         """Test log() with unknown level falls back to info.
 
@@ -138,7 +138,7 @@ class TestStructuredOutput:
         output.log("exotic_level", "fallback test")
         mock_logger.info.assert_called_with("fallback test")
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_progress_logs_structured_event(self, mock_get_logger: MagicMock):
         """Test progress() logs a structured job.progress event."""
         mock_logger = MagicMock()
@@ -154,7 +154,7 @@ class TestStructuredOutput:
             eta_seconds=30.0,
         )
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_progress_without_eta(self, mock_get_logger: MagicMock):
         """Test progress() works without ETA."""
         mock_logger = MagicMock()
@@ -170,7 +170,7 @@ class TestStructuredOutput:
             eta_seconds=None,
         )
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_sheet_event_logs_structured(self, mock_get_logger: MagicMock):
         """Test sheet_event() logs a structured sheet.* event."""
         mock_logger = MagicMock()
@@ -185,7 +185,7 @@ class TestStructuredOutput:
             attempt=1,
         )
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_sheet_event_without_data(self, mock_get_logger: MagicMock):
         """Test sheet_event() works without data dict."""
         mock_logger = MagicMock()
@@ -199,7 +199,7 @@ class TestStructuredOutput:
             sheet_num=1,
         )
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_job_event_logs_structured(self, mock_get_logger: MagicMock):
         """Test job_event() logs a structured job.* event."""
         mock_logger = MagicMock()
@@ -213,7 +213,7 @@ class TestStructuredOutput:
             total_sheets=10,
         )
 
-    @patch("mozart.core.logging.get_logger")
+    @patch("marianne.core.logging.get_logger")
     def test_job_event_without_data(self, mock_get_logger: MagicMock):
         """Test job_event() works without data dict."""
         mock_logger = MagicMock()

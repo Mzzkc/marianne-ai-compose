@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from mozart.dashboard.auth.rate_limit import (
+from marianne.dashboard.auth.rate_limit import (
     RateLimitConfig,
     RateLimiter,
     RateLimitMiddleware,
@@ -98,14 +98,14 @@ class TestSlidingWindowCounter:
         base_time = 1000000.0
 
         # Use up limit at base_time
-        with patch("mozart.dashboard.auth.rate_limit.time.time", return_value=base_time):
+        with patch("marianne.dashboard.auth.rate_limit.time.time", return_value=base_time):
             counter.is_allowed("test-key")
             counter.is_allowed("test-key")
             allowed1, _, _ = counter.is_allowed("test-key")
         assert allowed1 is False
 
         # Advance time beyond 60s window
-        with patch("mozart.dashboard.auth.rate_limit.time.time", return_value=base_time + 61):
+        with patch("marianne.dashboard.auth.rate_limit.time.time", return_value=base_time + 61):
             allowed2, _, _ = counter.is_allowed("test-key")
         assert allowed2 is True
 

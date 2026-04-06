@@ -6,7 +6,7 @@ D-027 makes it the default, replacing the legacy monolithic runner.
 TDD: Tests define the contract. Implementation fulfills it.
 """
 
-from mozart.daemon.config import DaemonConfig
+from marianne.daemon.config import DaemonConfig
 
 
 class TestBatonDefault:

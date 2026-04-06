@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from mozart.learning.global_store import GlobalLearningStore
-from mozart.learning.store.models import QuarantineStatus
-from mozart.learning.store.patterns_lifecycle import (
+from marianne.learning.global_store import GlobalLearningStore
+from marianne.learning.store.models import QuarantineStatus
+from marianne.learning.store.patterns_lifecycle import (
     DEGRADATION_THRESHOLD,
     MIN_OCCURRENCES_FOR_PROMOTION,
     PROMOTION_EFFECTIVENESS_THRESHOLD,

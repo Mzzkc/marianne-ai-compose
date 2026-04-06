@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.cli.output import format_rate_limit_info
+from marianne.cli.output import format_rate_limit_info
 
 
 # =============================================================================
@@ -93,14 +93,14 @@ class TestQueryRateLimits:
     @pytest.mark.asyncio
     async def test_returns_backend_limits(self) -> None:
         """Successful IPC call returns rate limit data."""
-        from mozart.cli.helpers import query_rate_limits
+        from marianne.cli.helpers import query_rate_limits
 
         mock_result = {
             "backends": {"claude-cli": {"seconds_remaining": 120.0}},
             "active_limits": 1,
         }
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(True, mock_result),
         ):
@@ -111,10 +111,10 @@ class TestQueryRateLimits:
     @pytest.mark.asyncio
     async def test_returns_none_when_daemon_unavailable(self) -> None:
         """Daemon not running → returns None."""
-        from mozart.cli.helpers import query_rate_limits
+        from marianne.cli.helpers import query_rate_limits
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             return_value=(False, None),
         ):
@@ -124,10 +124,10 @@ class TestQueryRateLimits:
     @pytest.mark.asyncio
     async def test_returns_none_on_connection_error(self) -> None:
         """Connection error → returns None gracefully."""
-        from mozart.cli.helpers import query_rate_limits
+        from marianne.cli.helpers import query_rate_limits
 
         with patch(
-            "mozart.daemon.detect.try_daemon_route",
+            "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
             side_effect=ConnectionError("socket gone"),
         ):
@@ -146,7 +146,7 @@ class TestRunRejectionRateLimitInfo:
     @pytest.mark.asyncio
     async def test_rejection_shows_rate_limit_when_pressure(self) -> None:
         """When submission is rejected due to high pressure, show rate limits."""
-        from mozart.cli.commands.run import _try_daemon_submit
+        from marianne.cli.commands.run import _try_daemon_submit
 
         # Mock try_daemon_route to return rejection
         submit_result = {
@@ -172,16 +172,16 @@ class TestRunRejectionRateLimitInfo:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 side_effect=mock_route,
             ),
-            patch("mozart.cli.commands.run.output_error") as mock_error,
-            patch("mozart.cli.commands.run.console") as mock_console,
+            patch("marianne.cli.commands.run.output_error") as mock_error,
+            patch("marianne.cli.commands.run.console") as mock_console,
             pytest.raises((SystemExit, Exception)),
         ):
             await _try_daemon_submit(
@@ -206,7 +206,7 @@ class TestRunRejectionRateLimitInfo:
     @pytest.mark.asyncio
     async def test_rejection_no_rate_limits_no_extra_output(self) -> None:
         """When rejected for non-rate-limit reasons, no rate limit info shown."""
-        from mozart.cli.commands.run import _try_daemon_submit
+        from marianne.cli.commands.run import _try_daemon_submit
 
         submit_result = {
             "job_id": "test-job",
@@ -223,16 +223,16 @@ class TestRunRejectionRateLimitInfo:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 side_effect=mock_route,
             ),
-            patch("mozart.cli.commands.run.output_error"),
-            patch("mozart.cli.commands.run.console") as mock_console,
+            patch("marianne.cli.commands.run.output_error"),
+            patch("marianne.cli.commands.run.console") as mock_console,
             pytest.raises((SystemExit, Exception)),
         ):
             await _try_daemon_submit(
@@ -280,7 +280,7 @@ class TestStalePidFeedback:
 
     def test_stale_pid_detected_when_process_dead(self) -> None:
         """When PID file exists but process is dead, report as stale."""
-        from mozart.cli.helpers import check_pid_alive
+        from marianne.cli.helpers import check_pid_alive
 
         # PID that doesn't exist
         with patch("os.kill", side_effect=OSError("No such process")):
@@ -288,14 +288,14 @@ class TestStalePidFeedback:
 
     def test_live_pid_detected(self) -> None:
         """When PID file points to a running process, report as alive."""
-        from mozart.cli.helpers import check_pid_alive
+        from marianne.cli.helpers import check_pid_alive
 
         with patch("os.kill", return_value=None):
             assert check_pid_alive(1234) is True
 
     def test_permission_error_treated_as_alive(self) -> None:
         """PermissionError on kill -0 means process exists (different user)."""
-        from mozart.cli.helpers import check_pid_alive
+        from marianne.cli.helpers import check_pid_alive
 
         with patch("os.kill", side_effect=PermissionError("Operation not permitted")):
             assert check_pid_alive(1234) is True
@@ -307,7 +307,7 @@ class TestFreshRunFeedback:
     @pytest.mark.asyncio
     async def test_fresh_rejection_suggests_clear(self) -> None:
         """When --fresh fails due to stale registry, hint about clearing."""
-        from mozart.cli.commands.run import _try_daemon_submit
+        from marianne.cli.commands.run import _try_daemon_submit
 
         submit_result = {
             "job_id": "my-score",
@@ -324,16 +324,16 @@ class TestFreshRunFeedback:
 
         with (
             patch(
-                "mozart.daemon.detect.is_daemon_available",
+                "marianne.daemon.detect.is_daemon_available",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "mozart.daemon.detect.try_daemon_route",
+                "marianne.daemon.detect.try_daemon_route",
                 side_effect=mock_route,
             ),
-            patch("mozart.cli.commands.run.output_error") as mock_error,
-            patch("mozart.cli.commands.run.console"),
+            patch("marianne.cli.commands.run.output_error") as mock_error,
+            patch("marianne.cli.commands.run.console"),
             pytest.raises((SystemExit, Exception)),
         ):
             await _try_daemon_submit(

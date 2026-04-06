@@ -7,18 +7,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import JobConfig, ValidationRule
-from mozart.execution.preflight import PreflightResult, PromptMetrics
-from mozart.execution.runner import (
+from marianne.backends.base import ExecutionResult
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config import JobConfig, ValidationRule
+from marianne.execution.preflight import PreflightResult, PromptMetrics
+from marianne.execution.runner import (
     FatalError,
     GracefulShutdownError,
     JobRunner,
     RunSummary,
 )
-from mozart.execution.runner.models import RunnerContext
-from mozart.execution.validation import SheetValidationResult, ValidationResult
+from marianne.execution.runner.models import RunnerContext
+from marianne.execution.validation import SheetValidationResult, ValidationResult
 
 
 def make_mock_preflight_result() -> PreflightResult:
@@ -868,7 +868,7 @@ class TestRunnerLoggingIntegration:
 
         import structlog
 
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         # Reset structlog's caching
         structlog.reset_defaults()
@@ -880,7 +880,7 @@ class TestRunnerLoggingIntegration:
 
     def teardown_method(self) -> None:
         """Clear context after each test."""
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         clear_context()
 
@@ -901,7 +901,7 @@ class TestRunnerLoggingIntegration:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that job.started event is logged when run begins."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         configure_logging(
             level="INFO",
@@ -940,7 +940,7 @@ class TestRunnerLoggingIntegration:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that job.completed event is logged with summary data."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         configure_logging(
             level="INFO",
@@ -980,7 +980,7 @@ class TestRunnerLoggingIntegration:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that job.failed event is logged when job fails."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         configure_logging(
             level="ERROR",
@@ -1017,7 +1017,7 @@ class TestRunnerLoggingIntegration:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that sheet.started event is logged for each sheet."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         configure_logging(
             level="INFO",
@@ -1058,7 +1058,7 @@ class TestRunnerLoggingIntegration:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that sheet.retry event is logged when retry occurs."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         configure_logging(
             level="WARNING",
@@ -1130,10 +1130,10 @@ class TestRunnerLoggingIntegration:
         # Patch validation and preflight to pass
         with (
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.run_validations"
+                "marianne.execution.runner.sheet.ValidationEngine.run_validations"
             ) as mock_validation,
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
+                "marianne.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
             ),
             patch.object(
                 runner, "_run_preflight_checks", return_value=make_mock_preflight_result()
@@ -1159,7 +1159,7 @@ class TestRunnerLoggingIntegration:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that rate_limit.detected event is logged."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         configure_logging(
             level="WARNING",
@@ -1237,15 +1237,15 @@ class TestRunnerLoggingIntegration:
 
         with (
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.run_validations"
+                "marianne.execution.runner.sheet.ValidationEngine.run_validations"
             ) as mock_validation,
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
+                "marianne.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
             ),
             patch.object(
                 runner, "_run_preflight_checks", return_value=make_mock_preflight_result()
             ),
-            patch("mozart.execution.runner.base.asyncio.sleep", side_effect=fast_sleep),
+            patch("marianne.execution.runner.base.asyncio.sleep", side_effect=fast_sleep),
         ):
             mock_validation.side_effect = validation_side_effect
             sample_config.sheet.total_items = 10
@@ -1294,7 +1294,7 @@ class TestRunnerLoggingIntegration:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that sheet.completed includes validation_duration_seconds."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         configure_logging(
             level="INFO",
@@ -1311,10 +1311,10 @@ class TestRunnerLoggingIntegration:
         # Patch validation and preflight to pass
         with (
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.run_validations"
+                "marianne.execution.runner.sheet.ValidationEngine.run_validations"
             ) as mock_validation,
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
+                "marianne.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
             ),
             patch.object(
                 runner, "_run_preflight_checks", return_value=make_mock_preflight_result()
@@ -1369,7 +1369,7 @@ class TestRunnerLoggingIntegration:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that preflight warnings count is included in sheet.started log."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         # Use INFO level to capture sheet.started which includes preflight_warnings count
         configure_logging(
@@ -1403,10 +1403,10 @@ class TestRunnerLoggingIntegration:
         # Patch validation and preflight to return our warning result
         with (
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.run_validations"
+                "marianne.execution.runner.sheet.ValidationEngine.run_validations"
             ) as mock_validation,
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
+                "marianne.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
             ),
             patch.object(
                 runner, "_run_preflight_checks", return_value=preflight_with_warnings
@@ -1442,7 +1442,7 @@ class TestLoggingLevelFiltering:
 
         import structlog
 
-        from mozart.core.logging import clear_context
+        from marianne.core.logging import clear_context
 
         structlog.reset_defaults()
         structlog.configure(cache_logger_on_first_use=False)
@@ -1468,7 +1468,7 @@ class TestLoggingLevelFiltering:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that DEBUG level logs are not shown when level is INFO."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         configure_logging(
             level="INFO",
@@ -1509,7 +1509,7 @@ class TestLoggingLevelFiltering:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that WARNING level logs are shown when level is WARNING."""
-        from mozart.core.logging import configure_logging
+        from marianne.core.logging import configure_logging
 
         # Configure short rate limit wait
         sample_config.rate_limit.wait_minutes = 0.01
@@ -1584,15 +1584,15 @@ class TestLoggingLevelFiltering:
 
         with (
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.run_validations"
+                "marianne.execution.runner.sheet.ValidationEngine.run_validations"
             ) as mock_validation,
             patch(
-                "mozart.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
+                "marianne.execution.runner.sheet.ValidationEngine.snapshot_mtime_files"
             ),
             patch.object(
                 runner, "_run_preflight_checks", return_value=make_mock_preflight_result()
             ),
-            patch("mozart.execution.runner.base.asyncio.sleep", side_effect=fast_sleep),
+            patch("marianne.execution.runner.base.asyncio.sleep", side_effect=fast_sleep),
         ):
             mock_validation.side_effect = validation_side_effect
             sample_config.sheet.total_items = 10
@@ -1677,7 +1677,7 @@ class TestActiveBroadcastPolling:
         """Verify polling logs when patterns are discovered."""
         from datetime import datetime, timedelta
 
-        from mozart.learning.global_store import PatternDiscoveryEvent
+        from marianne.learning.global_store import PatternDiscoveryEvent
 
         now = datetime.now()
         discoveries = [
@@ -1846,8 +1846,8 @@ class TestCostTracking:
         cost_runner: JobRunner,
     ) -> None:
         """Test cost tracking with exact token counts from API."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.backends.base import ExecutionResult
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         result = ExecutionResult(
             success=True,
@@ -1879,8 +1879,8 @@ class TestCostTracking:
         cost_runner: JobRunner,
     ) -> None:
         """Test cost tracking with legacy tokens_used field."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.backends.base import ExecutionResult
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         result = ExecutionResult(
             success=True,
@@ -1908,8 +1908,8 @@ class TestCostTracking:
         cost_runner: JobRunner,
     ) -> None:
         """Test cost tracking with character-based estimation."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.backends.base import ExecutionResult
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         # 400 chars => ~100 tokens (4 chars per token)
         result = ExecutionResult(
@@ -1937,8 +1937,8 @@ class TestCostTracking:
         cost_runner: JobRunner,
     ) -> None:
         """Test that costs accumulate across multiple calls."""
-        from mozart.backends.base import ExecutionResult
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.backends.base import ExecutionResult
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         state = CheckpointState(
             job_id="test", job_name="Test", total_sheets=3
@@ -1969,7 +1969,7 @@ class TestCostTracking:
         cost_runner: JobRunner,
     ) -> None:
         """Test that cost limit check passes when within limits."""
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         sheet_state = SheetState(sheet_num=1)
         sheet_state.estimated_cost = 0.5  # Below max_cost_per_sheet (1.0)
@@ -1988,7 +1988,7 @@ class TestCostTracking:
         cost_runner: JobRunner,
     ) -> None:
         """Test that cost limit check fails when sheet limit exceeded."""
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         sheet_state = SheetState(sheet_num=1)
         sheet_state.estimated_cost = 1.5  # Above max_cost_per_sheet (1.0)
@@ -2007,7 +2007,7 @@ class TestCostTracking:
         cost_runner: JobRunner,
     ) -> None:
         """Test that cost limit check fails when job limit exceeded."""
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         sheet_state = SheetState(sheet_num=1)
         sheet_state.estimated_cost = 0.5
@@ -2028,7 +2028,7 @@ class TestCostTracking:
         mock_state_backend: MagicMock,
     ) -> None:
         """Test that cost limits always pass when disabled."""
-        from mozart.core.checkpoint import CheckpointState, SheetState
+        from marianne.core.checkpoint import CheckpointState, SheetState
 
         config = JobConfig.model_validate({
             "name": "test-job",
@@ -2099,8 +2099,8 @@ class TestCostUpdateEvent:
         mock_state_backend: MagicMock,
     ) -> None:
         """job.cost_update event fires from _track_cost with correct data."""
-        from mozart.core.checkpoint import CheckpointState, SheetState
-        from mozart.execution.runner.models import RunnerContext
+        from marianne.core.checkpoint import CheckpointState, SheetState
+        from marianne.execution.runner.models import RunnerContext
 
         events: list[tuple[str, int, str, dict]] = []
 
@@ -2149,8 +2149,8 @@ class TestCostUpdateEvent:
         mock_state_backend: MagicMock,
     ) -> None:
         """job.cost_update with no budget has budget_remaining=None."""
-        from mozart.core.checkpoint import CheckpointState, SheetState
-        from mozart.execution.runner.models import RunnerContext
+        from marianne.core.checkpoint import CheckpointState, SheetState
+        from marianne.execution.runner.models import RunnerContext
 
         config = JobConfig.model_validate({
             "name": "test-no-budget",
@@ -2197,7 +2197,7 @@ class TestClassifySuccessOutcome:
 
     def test_first_try_success(self) -> None:
         """Test classification when sheet succeeds on first attempt."""
-        from mozart.execution.runner.sheet import SheetExecutionMixin
+        from marianne.execution.runner.sheet import SheetExecutionMixin
 
         outcome, first = SheetExecutionMixin._classify_success_outcome(0, 0)
         assert outcome == "success_first_try"
@@ -2205,7 +2205,7 @@ class TestClassifySuccessOutcome:
 
     def test_success_after_retry(self) -> None:
         """Test classification when sheet succeeds after normal retries."""
-        from mozart.execution.runner.sheet import SheetExecutionMixin
+        from marianne.execution.runner.sheet import SheetExecutionMixin
 
         outcome, first = SheetExecutionMixin._classify_success_outcome(2, 0)
         assert outcome == "success_retry"
@@ -2213,7 +2213,7 @@ class TestClassifySuccessOutcome:
 
     def test_success_via_completion_mode(self) -> None:
         """Test classification when sheet succeeds via completion mode."""
-        from mozart.execution.runner.sheet import SheetExecutionMixin
+        from marianne.execution.runner.sheet import SheetExecutionMixin
 
         outcome, first = SheetExecutionMixin._classify_success_outcome(1, 3)
         assert outcome == "success_completion"
@@ -2221,7 +2221,7 @@ class TestClassifySuccessOutcome:
 
     def test_success_completion_without_retries(self) -> None:
         """Test classification when completion mode used without prior retries."""
-        from mozart.execution.runner.sheet import SheetExecutionMixin
+        from marianne.execution.runner.sheet import SheetExecutionMixin
 
         outcome, first = SheetExecutionMixin._classify_success_outcome(0, 1)
         assert outcome == "success_completion"
@@ -2267,7 +2267,7 @@ class TestDecideNextAction:
 
     def test_high_confidence_enters_completion(self, runner: JobRunner) -> None:
         """High confidence + majority passed should enter completion mode."""
-        from mozart.execution.runner.models import SheetExecutionMode
+        from marianne.execution.runner.models import SheetExecutionMode
 
         result = self._make_validation_result(pass_pct=80.0, confidence=0.9)
         mode, reason, hints = runner._decide_next_action(result, 0, 0)
@@ -2276,7 +2276,7 @@ class TestDecideNextAction:
 
     def test_high_confidence_completion_exhausted_falls_to_retry(self, runner: JobRunner) -> None:
         """High confidence but completion attempts exhausted should retry."""
-        from mozart.execution.runner.models import SheetExecutionMode
+        from marianne.execution.runner.models import SheetExecutionMode
 
         result = self._make_validation_result(pass_pct=80.0, confidence=0.9)
         max_completion = runner.config.retry.max_completion_attempts
@@ -2286,7 +2286,7 @@ class TestDecideNextAction:
 
     def test_low_confidence_no_escalation_retries(self, runner: JobRunner) -> None:
         """Low confidence without escalation handler should retry."""
-        from mozart.execution.runner.models import SheetExecutionMode
+        from marianne.execution.runner.models import SheetExecutionMode
 
         result = self._make_validation_result(pass_pct=30.0, confidence=0.1)
         runner.escalation_handler = None
@@ -2297,7 +2297,7 @@ class TestDecideNextAction:
 
     def test_medium_confidence_enters_completion_if_eligible(self, runner: JobRunner) -> None:
         """Medium confidence with eligible pass rate should enter completion."""
-        from mozart.execution.runner.models import SheetExecutionMode
+        from marianne.execution.runner.models import SheetExecutionMode
 
         threshold = runner.config.retry.completion_threshold_percent
         result = self._make_validation_result(
@@ -2310,7 +2310,7 @@ class TestDecideNextAction:
 
     def test_medium_confidence_retries_if_low_pass_rate(self, runner: JobRunner) -> None:
         """Medium confidence with low pass rate should retry."""
-        from mozart.execution.runner.models import SheetExecutionMode
+        from marianne.execution.runner.models import SheetExecutionMode
 
         result = self._make_validation_result(pass_pct=10.0, confidence=0.5)
         mode, reason, hints = runner._decide_next_action(result, 0, 0)
@@ -2452,7 +2452,7 @@ class TestUpdateEscalationOutcome:
 
     def test_noop_without_global_store(self, runner: JobRunner) -> None:
         """Should return silently when no global learning store."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         runner._global_learning_store = None
         sheet_state = SheetState(sheet_num=1)
@@ -2463,7 +2463,7 @@ class TestUpdateEscalationOutcome:
 
     def test_noop_without_escalation_record_id(self, runner: JobRunner) -> None:
         """Should return silently when no escalation_record_id in outcome_data."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         runner._global_learning_store = MagicMock()
         sheet_state = SheetState(sheet_num=1)
@@ -2473,7 +2473,7 @@ class TestUpdateEscalationOutcome:
 
     def test_records_outcome_when_store_and_id_present(self, runner: JobRunner) -> None:
         """Should call update_escalation_outcome with correct params."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         mock_store = MagicMock()
         mock_store.update_escalation_outcome.return_value = True
@@ -2490,7 +2490,7 @@ class TestUpdateEscalationOutcome:
 
     def test_handles_store_exception_gracefully(self, runner: JobRunner) -> None:
         """Should log warning and not crash if store raises."""
-        from mozart.core.checkpoint import SheetState
+        from marianne.core.checkpoint import SheetState
 
         mock_store = MagicMock()
         mock_store.update_escalation_outcome.side_effect = RuntimeError("DB error")

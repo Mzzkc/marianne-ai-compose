@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from src.mozart.dashboard.services.sse_manager import ClientConnection, SSEEvent, SSEManager
+from marianne.dashboard.services.sse_manager import ClientConnection, SSEEvent, SSEManager
 
 
 class TestSSEEvent:

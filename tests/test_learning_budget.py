@@ -26,12 +26,12 @@ from pathlib import Path
 
 import pytest
 
-from mozart.learning.store import GlobalLearningStore
-from mozart.learning.store.budget import (
+from marianne.learning.store import GlobalLearningStore
+from marianne.learning.store.budget import (
     EntropyResponseConfig,
     EntropyTriggerContext,
 )
-from mozart.learning.store.models import (
+from marianne.learning.store.models import (
     EntropyResponseRecord,
     ExplorationBudgetRecord,
     PatternEntropyMetrics,

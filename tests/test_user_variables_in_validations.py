@@ -19,8 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mozart.validation.rendering import _expand_path, generate_preview
-from mozart.core.config import JobConfig
+from marianne.validation.rendering import _expand_path, generate_preview
+from marianne.core.config import JobConfig
 
 
 class TestExpandPathWithUserVariables:

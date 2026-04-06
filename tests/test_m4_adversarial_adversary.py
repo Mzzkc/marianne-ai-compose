@@ -27,31 +27,31 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from mozart.core.config.backend import BackendConfig
-from mozart.core.config.execution import (
+from marianne.core.config.backend import BackendConfig
+from marianne.core.config.execution import (
     StaleDetectionConfig,
     ValidationRule,
 )
-from mozart.core.config.job import (
+from marianne.core.config.job import (
     InjectionCategory,
     InjectionItem,
     InstrumentDef,
     JobConfig,
     MovementDef,
 )
-from mozart.core.config.orchestration import (
+from marianne.core.config.orchestration import (
     ConcertConfig,
     NotificationConfig,
 )
-from mozart.core.config.workspace import CrossSheetConfig
-from mozart.daemon.baton.adapter import BatonAdapter
-from mozart.daemon.baton.events import SheetAttemptResult
-from mozart.daemon.baton.state import (
+from marianne.core.config.workspace import CrossSheetConfig
+from marianne.daemon.baton.adapter import BatonAdapter
+from marianne.daemon.baton.events import SheetAttemptResult
+from marianne.daemon.baton.state import (
     BatonJobState,
     BatonSheetStatus,
     SheetExecutionState,
 )
-from mozart.daemon.manager import _MTIME_TOLERANCE_SECONDS, _should_auto_fresh
+from marianne.daemon.manager import _MTIME_TOLERANCE_SECONDS, _should_auto_fresh
 
 # =============================================================================
 # Helpers
@@ -635,7 +635,7 @@ class TestCredentialRedactionDefensivePattern:
         The `or content` fallback does NOT leak because the replacement
         label is truthy.
         """
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         key = "sk-ant-api03" + "x" * 30
         result = redact_credentials(key)
@@ -648,7 +648,7 @@ class TestCredentialRedactionDefensivePattern:
 
     def test_redaction_returns_same_when_no_credentials(self) -> None:
         """Non-credential text passes through unchanged."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = "Hello, this is normal output."
         result = redact_credentials(text)
@@ -656,7 +656,7 @@ class TestCredentialRedactionDefensivePattern:
 
     def test_redaction_none_input_or_pattern(self) -> None:
         """None input: redact returns None, `or None` = None (safe)."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         result = redact_credentials(None)
         assert result is None
@@ -665,7 +665,7 @@ class TestCredentialRedactionDefensivePattern:
 
     def test_redaction_empty_string_or_pattern(self) -> None:
         """Empty string: `or ''` = '' (safe)."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         result = redact_credentials("")
         assert result == ""
@@ -674,7 +674,7 @@ class TestCredentialRedactionDefensivePattern:
 
     def test_multiple_credentials_all_redacted(self) -> None:
         """Multiple credentials in one string are all replaced."""
-        from mozart.utils.credential_scanner import redact_credentials
+        from marianne.utils.credential_scanner import redact_credentials
 
         text = (
             "Key1: sk-ant-api03" + "A" * 30
@@ -772,7 +772,7 @@ class TestBatonStateMappingEdges:
 
     def test_all_baton_statuses_map_to_checkpoint(self) -> None:
         """Every BatonSheetStatus has a mapping to a checkpoint status."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         for status in BatonSheetStatus:
             result = baton_to_checkpoint_status(status)
@@ -783,7 +783,7 @@ class TestBatonStateMappingEdges:
 
     def test_terminal_statuses_map_to_terminal(self) -> None:
         """Terminal baton statuses map to terminal checkpoint statuses."""
-        from mozart.daemon.baton.adapter import baton_to_checkpoint_status
+        from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
         terminal_baton = {
             BatonSheetStatus.COMPLETED,

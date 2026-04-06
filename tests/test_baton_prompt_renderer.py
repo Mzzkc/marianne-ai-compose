@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mozart.core.config.execution import ValidationRule
-from mozart.core.config.job import InjectionCategory, InjectionItem, PromptConfig
-from mozart.core.sheet import Sheet
-from mozart.daemon.baton.prompt import PromptRenderer, RenderedPrompt
-from mozart.daemon.baton.state import AttemptContext, AttemptMode
+from marianne.core.config.execution import ValidationRule
+from marianne.core.config.job import InjectionCategory, InjectionItem, PromptConfig
+from marianne.core.sheet import Sheet
+from marianne.daemon.baton.prompt import PromptRenderer, RenderedPrompt
+from marianne.daemon.baton.state import AttemptContext, AttemptMode
 
 
 # =========================================================================

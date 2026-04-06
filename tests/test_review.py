@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mozart.core.config import AIReviewConfig
-from mozart.review.scorer import (
+from marianne.core.config import AIReviewConfig
+from marianne.review.scorer import (
     AIReviewer,
     AIReviewResult,
     GitDiffProvider,

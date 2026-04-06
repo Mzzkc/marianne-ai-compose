@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from mozart.core.checkpoint import CheckpointState, JobStatus, SheetStatus
-from mozart.state.json_backend import JsonStateBackend, StateCorruptionError
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
+from marianne.state.json_backend import JsonStateBackend, StateCorruptionError
 
 
 # =============================================================================

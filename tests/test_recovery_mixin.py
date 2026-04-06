@@ -21,12 +21,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mozart.backends.base import ExecutionResult
-from mozart.core.checkpoint import CheckpointState, JobStatus
-from mozart.core.config import JobConfig
-from mozart.core.errors import ClassifiedError, ErrorCategory
-from mozart.core.errors.codes import ErrorCode
-from mozart.execution.runner import FatalError, JobRunner
+from marianne.backends.base import ExecutionResult
+from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.config import JobConfig
+from marianne.core.errors import ClassifiedError, ErrorCategory
+from marianne.core.errors.codes import ErrorCode
+from marianne.execution.runner import FatalError, JobRunner
 
 # =============================================================================
 # Fixtures
