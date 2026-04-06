@@ -239,6 +239,7 @@ def sheets_to_execution_states(
             instrument_name=sheet.instrument_name,
             max_retries=max_retries,
             max_completion=max_completion,
+            fallback_chain=list(sheet.instrument_fallbacks),
         )
     return states
 

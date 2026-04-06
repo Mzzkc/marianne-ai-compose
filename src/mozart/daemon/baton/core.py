@@ -39,6 +39,7 @@ from mozart.daemon.baton.events import (
     EscalationNeeded,
     EscalationResolved,
     EscalationTimeout,
+    InstrumentFallback,
     JobTimeout,
     PacingComplete,
     PauseJob,
@@ -443,9 +444,10 @@ class BatonCore:
         """Handle retry/completion budget exhaustion.
 
         The decision tree when budgets are exhausted:
-        1. Self-healing enabled → schedule a healing attempt
-        2. Escalation enabled → enter FERMATA (pause job, await decision)
-        3. Neither → FAILED (propagate to dependents)
+        1. Instrument fallback available → advance to next instrument
+        2. Self-healing enabled → schedule a healing attempt
+        3. Escalation enabled → enter FERMATA (pause job, await decision)
+        4. Neither → FAILED (propagate to dependents)
         """
         job = self._jobs.get(job_id)
         if job is None:
@@ -453,7 +455,28 @@ class BatonCore:
             self._state_dirty = True
             return
 
-        # Path 1: Self-healing — try to diagnose and fix
+        # Path 1: Instrument fallback — try the next instrument in the chain.
+        # Each fallback instrument gets a fresh retry budget.
+        if sheet.has_fallback_available:
+            from_instrument = sheet.instrument_name
+            to_instrument = sheet.advance_fallback("rate_limit_exhausted")
+            if to_instrument is not None:
+                # Re-queue for dispatch with the new instrument
+                sheet.status = BatonSheetStatus.PENDING
+                self._state_dirty = True
+                _logger.info(
+                    "baton.sheet.instrument_fallback",
+                    extra={
+                        "job_id": job_id,
+                        "sheet_num": sheet_num,
+                        "from_instrument": from_instrument,
+                        "to_instrument": to_instrument,
+                        "reason": "rate_limit_exhausted",
+                    },
+                )
+                return
+
+        # Path 2: Self-healing — try to diagnose and fix
         if (
             job.self_healing_enabled
             and sheet.healing_attempts < self._DEFAULT_MAX_HEALING
@@ -470,7 +493,7 @@ class BatonCore:
             )
             return
 
-        # Path 2: Escalation — pause for composer decision
+        # Path 3: Escalation — pause for composer decision
         if job.escalation_enabled:
             sheet.status = BatonSheetStatus.FERMATA
             job.paused = True
@@ -486,7 +509,7 @@ class BatonCore:
             )
             return
 
-        # Path 3: No recovery — fail
+        # Path 4: No recovery — fail
         sheet.status = BatonSheetStatus.FAILED
         self._state_dirty = True
         _logger.warning(
@@ -498,6 +521,63 @@ class BatonCore:
             },
         )
         self._propagate_failure_to_dependents(job_id, sheet_num)
+
+    def _check_and_fallback_unavailable(
+        self, sheet: SheetExecutionState, job_id: str
+    ) -> bool:
+        """Check if the sheet's current instrument is unavailable.
+
+        If the instrument is unavailable (circuit breaker OPEN, rate limited)
+        and a fallback is available, advance to the next instrument.
+
+        Returns True if a fallback occurred (sheet was re-queued), False
+        if no fallback was needed or the chain is exhausted.
+        """
+        inst = self._instruments.get(sheet.instrument_name)
+        if inst is None:
+            # Instrument not registered at all — try fallback
+            if sheet.has_fallback_available:
+                from_instrument = sheet.instrument_name
+                to_instrument = sheet.advance_fallback("unavailable")
+                if to_instrument is not None:
+                    sheet.status = BatonSheetStatus.PENDING
+                    self._state_dirty = True
+                    _logger.info(
+                        "baton.sheet.instrument_fallback",
+                        extra={
+                            "job_id": job_id,
+                            "sheet_num": sheet.sheet_num,
+                            "from_instrument": from_instrument,
+                            "to_instrument": to_instrument,
+                            "reason": "unavailable",
+                        },
+                    )
+                    return True
+            return False
+
+        if inst.is_available:
+            return False  # Instrument is fine, no fallback needed
+
+        # Instrument is unavailable — try fallback
+        if sheet.has_fallback_available:
+            from_instrument = sheet.instrument_name
+            to_instrument = sheet.advance_fallback("unavailable")
+            if to_instrument is not None:
+                sheet.status = BatonSheetStatus.PENDING
+                self._state_dirty = True
+                _logger.info(
+                    "baton.sheet.instrument_fallback",
+                    extra={
+                        "job_id": job_id,
+                        "sheet_num": sheet.sheet_num,
+                        "from_instrument": from_instrument,
+                        "to_instrument": to_instrument,
+                        "reason": "unavailable",
+                    },
+                )
+                return True
+
+        return False
 
     # =========================================================================
     # Sheet Registry
@@ -742,6 +822,14 @@ class BatonCore:
                         "baton.event.unimplemented",
                         extra={"event_type": "ResourceAnomaly"},
                     )
+
+                # === Instrument fallback events ===
+                case InstrumentFallback():
+                    # InstrumentFallback events are emitted by the baton
+                    # itself, not received from external sources. They pass
+                    # through the event bus for observability (dashboard,
+                    # learning hub, notifications). No handler needed.
+                    pass
 
                 # === Internal events ===
                 case DispatchRetry():

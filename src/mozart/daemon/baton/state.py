@@ -221,6 +221,70 @@ class SheetExecutionState:
     total_duration_seconds: float = 0.0
     """Cumulative execution duration across all attempts."""
 
+    # --- Instrument fallback fields ---
+
+    fallback_chain: list[str] = field(default_factory=list)
+    """Resolved fallback instrument chain from the Sheet entity.
+
+    Empty list means no fallbacks configured. Entries are instrument names
+    resolved at registration time from the Sheet's instrument_fallbacks.
+    """
+
+    current_instrument_index: int = 0
+    """Position in the instrument chain.
+
+    0 = primary instrument (instrument_name at registration time).
+    1 = first fallback (fallback_chain[0]).
+    N = Nth fallback (fallback_chain[N-1]).
+    """
+
+    fallback_attempts: dict[str, int] = field(default_factory=dict)
+    """Retry count per instrument in the chain. Key is instrument name."""
+
+    fallback_history: list[dict[str, str]] = field(default_factory=list)
+    """Records each fallback transition: {from, to, reason, timestamp}."""
+
+    @property
+    def has_fallback_available(self) -> bool:
+        """Whether there is another instrument in the fallback chain to try."""
+        return self.current_instrument_index < len(self.fallback_chain)
+
+    def advance_fallback(self, reason: str) -> str | None:
+        """Advance to the next instrument in the fallback chain.
+
+        Records the transition in fallback_history, switches instrument_name,
+        resets retry budget (normal_attempts and completion_attempts), and
+        increments current_instrument_index.
+
+        Returns the new instrument name, or None if the chain is exhausted.
+        """
+        if not self.has_fallback_available:
+            return None
+
+        from_instrument = self.instrument_name
+        # Save attempts spent on the current instrument
+        self.fallback_attempts[from_instrument] = self.normal_attempts
+
+        to_instrument = self.fallback_chain[self.current_instrument_index]
+        self.current_instrument_index += 1
+        self.instrument_name = to_instrument
+
+        # Fresh retry budget for the new instrument
+        self.normal_attempts = 0
+        self.completion_attempts = 0
+
+        # Record the transition
+        import datetime
+
+        self.fallback_history.append({
+            "from": from_instrument,
+            "to": to_instrument,
+            "reason": reason,
+            "timestamp": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+        })
+
+        return to_instrument
+
     def record_attempt(self, result: SheetAttemptResult) -> None:
         """Record an attempt result and update tracking state.
 
@@ -274,6 +338,10 @@ class SheetExecutionState:
             "total_cost_usd": self.total_cost_usd,
             "total_duration_seconds": self.total_duration_seconds,
             "next_retry_at": self.next_retry_at,
+            "fallback_chain": self.fallback_chain,
+            "current_instrument_index": self.current_instrument_index,
+            "fallback_attempts": self.fallback_attempts,
+            "fallback_history": self.fallback_history,
         }
 
     @classmethod
@@ -292,6 +360,10 @@ class SheetExecutionState:
         state.total_cost_usd = data.get("total_cost_usd", 0.0)
         state.total_duration_seconds = data.get("total_duration_seconds", 0.0)
         state.next_retry_at = data.get("next_retry_at")
+        state.fallback_chain = data.get("fallback_chain", [])
+        state.current_instrument_index = data.get("current_instrument_index", 0)
+        state.fallback_attempts = data.get("fallback_attempts", {})
+        state.fallback_history = data.get("fallback_history", [])
         return state
 
 

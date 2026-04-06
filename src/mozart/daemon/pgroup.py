@@ -191,6 +191,21 @@ class ProcessGroupManager:
             import psutil
 
             current = psutil.Process(os.getpid())
+            my_pid = os.getpid()
+
+            # Probe dead backends ONCE before iterating children.
+            # If we probe per-child and remove dead PIDs from the set,
+            # only the first orphan sees them — subsequent orphans find
+            # an empty set and survive (F-483).
+            dead_backends: set[int] = set()
+            if self._tracked_backend_pids:
+                for bpid in self._tracked_backend_pids:
+                    try:
+                        os.kill(bpid, 0)
+                    except OSError:
+                        dead_backends.add(bpid)
+                self._tracked_backend_pids -= dead_backends
+
             for child in current.children(recursive=True):
                 try:
                     if not child.is_running():
@@ -215,30 +230,20 @@ class ProcessGroupManager:
                     # If a tracked backend PID is dead but its children
                     # survive (reparented to init/systemd), those children
                     # are orphans. Works for ANY tool server on any system.
-                    my_pid = os.getpid()
                     child_ppid = child.ppid()
                     is_orphan = child_ppid != my_pid and child_ppid != 0
 
-                    if is_orphan and self._tracked_backend_pids:
-                        dead_backends = set()
-                        for bpid in self._tracked_backend_pids:
-                            try:
-                                os.kill(bpid, 0)
-                            except OSError:
-                                dead_backends.add(bpid)
-                        self._tracked_backend_pids -= dead_backends
-
-                        if dead_backends:
-                            cmdline = " ".join(child.cmdline()).lower()
-                            child.kill()
-                            orphans.append(child.pid)
-                            _logger.warning(
-                                "pgroup.killed_orphan",
-                                pid=child.pid,
-                                ppid=child_ppid,
-                                cmdline_snippet=cmdline[:120],
-                                dead_backend_pids=list(dead_backends),
-                            )
+                    if is_orphan and dead_backends:
+                        cmdline = " ".join(child.cmdline()).lower()
+                        child.kill()
+                        orphans.append(child.pid)
+                        _logger.warning(
+                            "pgroup.killed_orphan",
+                            pid=child.pid,
+                            ppid=child_ppid,
+                            cmdline_snippet=cmdline[:120],
+                            dead_backend_pids=list(dead_backends),
+                        )
 
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
@@ -278,6 +283,20 @@ class ProcessGroupManager:
         try:
             import psutil
 
+            # Probe dead backends ONCE before iterating processes (F-483).
+            dead_backends: set[int] = set()
+            if self._tracked_backend_pids:
+                for bpid in self._tracked_backend_pids:
+                    try:
+                        os.kill(bpid, 0)
+                    except OSError:
+                        dead_backends.add(bpid)
+                self._tracked_backend_pids -= dead_backends
+
+            if not dead_backends:
+                # No dead backends — nothing to clean up
+                return killed
+
             for proc in psutil.process_iter(["pid", "ppid", "cmdline", "uids"]):
                 try:
                     info = proc.info
@@ -293,29 +312,16 @@ class ProcessGroupManager:
                     if ppid not in (0, 1):
                         continue
 
-                    # If we have dead tracked backends, any orphan
-                    # reparented to init is suspect — kill it.
-                    if not self._tracked_backend_pids:
-                        continue
-                    dead_backends = set()
-                    for bpid in self._tracked_backend_pids:
-                        try:
-                            os.kill(bpid, 0)
-                        except OSError:
-                            dead_backends.add(bpid)
-                    self._tracked_backend_pids -= dead_backends
-
-                    if dead_backends:
-                        cmdline_parts = info.get("cmdline")
-                        cmdline = " ".join(cmdline_parts).lower() if cmdline_parts else ""
-                        proc.kill()
-                        killed.append(info["pid"])
-                        _logger.warning(
-                            "pgroup.reaped_orphaned_backend_child",
-                            pid=info["pid"],
-                            cmdline_snippet=cmdline[:120],
-                            dead_backend_pids=list(dead_backends),
-                        )
+                    cmdline_parts = info.get("cmdline")
+                    cmdline = " ".join(cmdline_parts).lower() if cmdline_parts else ""
+                    proc.kill()
+                    killed.append(info["pid"])
+                    _logger.warning(
+                        "pgroup.reaped_orphaned_backend_child",
+                        pid=info["pid"],
+                        cmdline_snippet=cmdline[:120],
+                        dead_backend_pids=list(dead_backends),
+                    )
 
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     continue
@@ -372,6 +378,19 @@ class ProcessGroupManager:
         my_pid = os.getpid()
         proc_path = "/proc"
 
+        # Probe dead backends ONCE before iterating /proc (F-483).
+        dead_backends: set[int] = set()
+        if self._tracked_backend_pids:
+            for bpid in self._tracked_backend_pids:
+                try:
+                    os.kill(bpid, 0)
+                except OSError:
+                    dead_backends.add(bpid)
+            self._tracked_backend_pids -= dead_backends
+
+        if not dead_backends:
+            return killed
+
         try:
             entries = os.listdir(proc_path)
         except OSError:
@@ -400,31 +419,19 @@ class ProcessGroupManager:
                 if ppid not in (0, 1):
                     continue
 
-                # Kill if we have dead tracked backends
-                if not self._tracked_backend_pids:
-                    continue
-                dead_backends = set()
-                for bpid in self._tracked_backend_pids:
-                    try:
-                        os.kill(bpid, 0)
-                    except OSError:
-                        dead_backends.add(bpid)
-                self._tracked_backend_pids -= dead_backends
-
-                if dead_backends:
-                    with open(f"{proc_path}/{pid}/cmdline") as f:
-                        cmdline = f.read().replace("\0", " ").lower()
-                    try:
-                        os.kill(pid, signal.SIGKILL)
-                        killed.append(pid)
-                        _logger.warning(
-                            "pgroup.reaped_orphaned_backend_child",
-                            pid=pid,
-                            cmdline_snippet=cmdline[:120],
-                            dead_backend_pids=list(dead_backends),
-                        )
-                    except (OSError, ProcessLookupError):
-                        pass
+                with open(f"{proc_path}/{pid}/cmdline") as f:
+                    cmdline = f.read().replace("\0", " ").lower()
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                    killed.append(pid)
+                    _logger.warning(
+                        "pgroup.reaped_orphaned_backend_child",
+                        pid=pid,
+                        cmdline_snippet=cmdline[:120],
+                        dead_backend_pids=list(dead_backends),
+                    )
+                except (OSError, ProcessLookupError):
+                    pass
 
             except (OSError, ValueError):
                 continue

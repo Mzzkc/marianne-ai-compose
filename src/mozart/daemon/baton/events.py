@@ -365,6 +365,35 @@ class ResourceAnomaly:
 
 
 # =============================================================================
+# Instrument Fallback Events — fallback chain transitions
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class InstrumentFallback:
+    """A sheet's instrument was switched to a fallback.
+
+    Emitted when the baton moves a sheet from one instrument to the next
+    in its fallback chain. Reasons:
+
+    - ``"unavailable"`` — instrument not installed, binary missing, circuit
+      breaker open. Immediate fallback at dispatch time.
+    - ``"rate_limit_exhausted"`` — all retries on the current instrument
+      hit rate limits with no recovery. Fallback after retry exhaustion.
+
+    This is an INFO-level event. Fallback is the system working correctly,
+    not failing. Each fallback instrument gets a fresh retry budget.
+    """
+
+    job_id: str
+    sheet_num: int
+    from_instrument: str
+    to_instrument: str
+    reason: str  # "unavailable" | "rate_limit_exhausted"
+    timestamp: float = field(default_factory=time.time)
+
+
+# =============================================================================
 # Internal Events — dispatch coordination
 # =============================================================================
 
@@ -404,6 +433,7 @@ BatonEvent = (
     | ShutdownRequested
     | ProcessExited
     | ResourceAnomaly
+    | InstrumentFallback
     | DispatchRetry
 )
 
@@ -616,6 +646,19 @@ def to_observer_event(event: BatonEvent) -> dict[str, Any]:
                     "severity": event.severity,
                     "metric": event.metric,
                     "value": event.value,
+                },
+                "timestamp": event.timestamp,
+            }
+
+        case InstrumentFallback():
+            return {
+                "job_id": event.job_id,
+                "sheet_num": event.sheet_num,
+                "event": "baton.instrument.fallback",
+                "data": {
+                    "from_instrument": event.from_instrument,
+                    "to_instrument": event.to_instrument,
+                    "reason": event.reason,
                 },
                 "timestamp": event.timestamp,
             }

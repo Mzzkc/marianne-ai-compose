@@ -146,8 +146,6 @@ def _tui_mode(*, filter_job: str | None, interval: float) -> None:
         app.run()
     except RuntimeError as e:
         if "cannot join thread before it is started" in str(e):
-            from mozart.cli.output import output_error
-
             output_error(
                 "TUI monitor failed to start due to severe system resource contention.",
                 hints=[
