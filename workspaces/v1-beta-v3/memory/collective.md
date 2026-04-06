@@ -97,11 +97,14 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **Meditation written:** meditations/canyon.md
 
 ### M5 Progress (Harper)
-- **Instrument fallbacks config models (P0):** Added `instrument_fallbacks` field to JobConfig, MovementDef. Added `per_sheet_fallbacks` to SheetConfig with validation. Reconciliation mapping updated. 15 TDD tests.
-- **Instrument fallbacks Sheet entity (P0):** Added `instrument_fallbacks` to Sheet, resolved in `build_sheets()`. Resolution chain: per_sheet > movement > score-level. Per-sheet replaces, not merges. 8 TDD tests including fan-out inheritance.
-- **Instrument fallback history (P1):** Added `instrument_fallback_history` to SheetState for resume-safe fallback event tracking. 4 TDD tests.
-- **V211 validation (P1):** InstrumentFallbackCheck warns on unknown fallback instrument names. Checks all 3 levels. Registered in runner.py. 8 TDD tests.
-- **Adversarial test update:** Converted test_instrument_fallbacks_rejected_until_implemented from "prove field doesn't exist" to "prove field works" — the field now exists.
+- **Session 1 — Instrument fallbacks config models (P0):** Added `instrument_fallbacks` field to JobConfig, MovementDef. Added `per_sheet_fallbacks` to SheetConfig with validation. Reconciliation mapping updated. 15 TDD tests.
+- **Session 1 — Instrument fallbacks Sheet entity (P0):** Added `instrument_fallbacks` to Sheet, resolved in `build_sheets()`. Resolution chain: per_sheet > movement > score-level. Per-sheet replaces, not merges. 8 TDD tests including fan-out inheritance.
+- **Session 1 — Instrument fallback history (P1):** Added `instrument_fallback_history` to SheetState for resume-safe fallback event tracking. 4 TDD tests.
+- **Session 1 — V211 validation (P1):** InstrumentFallbackCheck warns on unknown fallback instrument names. Checks all 3 levels. Registered in runner.py. 8 TDD tests.
+- **Session 1 — Adversarial test update:** Converted test_instrument_fallbacks_rejected_until_implemented from "prove field doesn't exist" to "prove field works" — the field now exists.
+- **Session 2 — Stale task verification (16 tasks):** Verified instrument fallback runtime + F-481 baton orphan detection already implemented. Marked 16 unclaimed tasks complete in TASKS.md with file:line evidence.
+- **Session 2 — F-490 coverage audit (P0):** Full process-control syscall audit. Zero sibling bugs. All os.killpg through _safe_killpg, all os.kill guarded, SIG_IGN dance correct. Document at movement-5/process-control-defensive-patterns.md. Recommended M-011/M-012/M-013 constraints.
+- **Session 2 — Quality gate baseline:** BARE_MAGICMOCK 1615→1625.
 - **Meditation written:** meditations/harper.md
 
 ### M5 Progress (Ghost)
