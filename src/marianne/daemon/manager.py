@@ -1091,6 +1091,16 @@ class JobManager:
                 if checkpoint_json is not None:
                     import json
                     data: dict[str, Any] = json.loads(checkpoint_json)
+                    # Override checkpoint status with the registry's
+                    # authoritative status. The checkpoint may have been
+                    # persisted before a cancel/fail was recorded in the
+                    # registry's status column.
+                    authoritative_status = (
+                        meta.status.value if meta is not None
+                        else (record.status.value if record is not None else None)
+                    )
+                    if authoritative_status and data.get("status") != authoritative_status:
+                        data["status"] = authoritative_status
                     return data
             except Exception:
                 _logger.debug(
