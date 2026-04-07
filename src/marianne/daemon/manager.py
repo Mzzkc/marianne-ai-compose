@@ -485,33 +485,29 @@ class JobManager:
     # ─── Helpers ───────────────────────────────────────────────────────
 
     @staticmethod
+    @staticmethod
     def _classify_orphan(orphan: JobRecord) -> DaemonJobStatus:
         """Determine the correct recovery status for an orphaned job.
 
-        Checks the job's checkpoint file to see if it was paused at the time
-        the daemon died. Jobs that were paused should stay paused (resumable)
-        rather than being marked as failed.
+        Checks the registry checkpoint (not workspace files) to see if
+        the job was paused when the daemon died. Jobs that were paused
+        should stay paused (resumable) rather than being marked as failed.
+
+        The conductor's registry is the single source of truth — workspace
+        state files are not read during orphan recovery.
         """
         import json
 
-        try:
-            workspace = Path(orphan.workspace)
-            # Check for checkpoint file in workspace
-            safe_id = "".join(
-                c if c.isalnum() or c in "-_" else "_" for c in orphan.job_id
-            )
-            state_file = workspace / f"{safe_id}.json"
-            if state_file.exists():
-                data = json.loads(state_file.read_text(encoding="utf-8"))
+        if orphan.checkpoint_json:
+            try:
+                data = json.loads(orphan.checkpoint_json)
                 if data.get("status") == "paused":
                     return DaemonJobStatus.PAUSED
-        except (OSError, json.JSONDecodeError, ValueError):
-            _logger.warning(
-                "manager.orphan_classify_failed",
-                job_id=orphan.job_id,
-                workspace=orphan.workspace,
-                exc_info=True,
-            )
+            except (json.JSONDecodeError, ValueError):
+                _logger.warning(
+                    "manager.orphan_classify_failed",
+                    job_id=orphan.job_id,
+                )
         return DaemonJobStatus.FAILED
 
     def _on_baton_state_sync(
