@@ -619,6 +619,26 @@ class JobManager:
                 sheet_state.status = status
                 live.updated_at = utc_now()
 
+        # Persist to registry on terminal sheet transitions so progress
+        # survives daemon restart. Fire-and-forget like the legacy runner's
+        # _on_state_published path. Only persist on completed/failed/skipped
+        # to avoid excessive writes on every dispatch/start transition.
+        if status in (
+            SheetStatus.COMPLETED, SheetStatus.FAILED, SheetStatus.SKIPPED,
+        ):
+            try:
+                checkpoint_json = live.model_dump_json()
+                asyncio.get_event_loop().create_task(
+                    self._registry.save_checkpoint(job_id, checkpoint_json),
+                    name=f"baton-checkpoint-{job_id}",
+                )
+            except Exception:
+                _logger.warning(
+                    "baton.state_sync.persist_failed",
+                    job_id=job_id,
+                    sheet_num=sheet_num,
+                )
+
     async def _recover_baton_orphans(self) -> None:
         """Recover paused orphan jobs through the baton after restart.
 
@@ -1305,17 +1325,28 @@ class JobManager:
             )
 
     async def list_jobs(self) -> list[dict[str, Any]]:
-        """List all jobs from the persistent registry.
+        """List all jobs with live progress data.
 
-        In-memory ``_job_meta`` is authoritative for active jobs (has
-        live status). The registry fills in historical jobs.
+        In-memory ``_job_meta`` is authoritative for active jobs.
+        Live state from ``_live_states`` enriches active entries with
+        sheet-level progress so ``mzt list`` shows completion counts.
+        The registry fills in historical jobs.
         """
         seen: set[str] = set()
         result: list[dict[str, Any]] = []
 
-        # Active jobs first (in-memory is most current)
+        # Active jobs first — enrich with live progress
         for meta in self._job_meta.values():
-            result.append(meta.to_dict())
+            entry = meta.to_dict()
+            live = self._live_states.get(meta.job_id)
+            if live is not None:
+                completed = sum(
+                    1 for s in live.sheets.values()
+                    if s.status.value == "completed"
+                )
+                entry["progress_completed"] = completed
+                entry["progress_total"] = len(live.sheets)
+            result.append(entry)
             seen.add(meta.job_id)
 
         # Historical jobs from registry
@@ -2123,10 +2154,14 @@ class JobManager:
 
         initial_sheets: dict[int, SheetState] = {}
         for sheet in sheets:
+            # Extract model from instrument_config safely (may be mock in tests)
+            model = None
+            if isinstance(sheet.instrument_config, dict):
+                model = sheet.instrument_config.get("model")
             initial_sheets[sheet.num] = SheetState(
                 sheet_num=sheet.num,
                 instrument_name=sheet.instrument_name,  # F-151
-                instrument_model=sheet.instrument_config.get("model"),
+                instrument_model=model if isinstance(model, str) else None,
             )
         initial_state = CheckpointState(
             job_id=job_id,
