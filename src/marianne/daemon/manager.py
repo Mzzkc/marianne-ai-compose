@@ -2320,6 +2320,8 @@ class JobManager:
         # creates a PromptRenderer for the full 9-layer prompt assembly.
         # Without this, baton musicians get raw templates instead of
         # rendered prompts with preamble, injections, and validations.
+        # Phase 2: pass the SheetState objects from _live_states so the
+        # baton writes directly to them. No sync layer needed.
         adapter.register_job(
             job_id,
             sheets,
@@ -2332,6 +2334,7 @@ class JobManager:
             parallel_enabled=config.parallel.enabled,
             cross_sheet=config.cross_sheet,  # F-210
             pacing_seconds=float(config.pause_between_sheets_seconds),
+            live_sheets=initial_state.sheets,
         )
 
         try:
@@ -2479,6 +2482,8 @@ class JobManager:
 
         # Recover job with checkpoint state
         # F-158: Pass prompt_config and parallel_enabled (same as _run_via_baton)
+        # Phase 2: pass checkpoint.sheets so the baton writes to the same
+        # SheetState objects as _live_states. No sync layer needed.
         self._baton_adapter.recover_job(
             job_id,
             sheets,
@@ -2490,6 +2495,7 @@ class JobManager:
             parallel_enabled=config.parallel.enabled,
             cross_sheet=config.cross_sheet,  # F-210
             pacing_seconds=float(config.pause_between_sheets_seconds),
+            live_sheets=checkpoint.sheets,
         )
 
         # Reconcile live state with baton's view: recover_job resets

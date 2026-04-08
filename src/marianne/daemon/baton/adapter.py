@@ -384,11 +384,17 @@ class BatonAdapter:
         parallel_enabled: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
         pacing_seconds: float = 0.0,
+        live_sheets: dict[int, SheetExecutionState] | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
         Converts Sheet entities to SheetExecutionState and registers
         them with the baton's sheet registry.
+
+        Phase 2: when ``live_sheets`` is provided, uses those SheetState
+        objects directly instead of creating new ones. This ensures the
+        baton writes to the same objects that live in ``_live_states``,
+        eliminating the need for a sync layer.
 
         Args:
             job_id: Unique job identifier (conductor job_id).
@@ -431,12 +437,25 @@ class BatonAdapter:
         # Create completion event for this job
         self._completion_events[job_id] = asyncio.Event()
 
-        # Convert to execution states
-        states = sheets_to_execution_states(
-            sheets,
-            max_retries=max_retries,
-            max_completion=max_completion,
-        )
+        # Phase 2: use live_sheets (shared with _live_states) when provided.
+        # This makes the baton write directly to the same SheetState objects
+        # the manager serves via get_job_status — no sync layer needed.
+        if live_sheets is not None:
+            # Enrich existing SheetState objects with baton scheduling fields
+            for sheet in sheets:
+                s = live_sheets.get(sheet.num)
+                if s is not None:
+                    s.max_retries = max_retries
+                    s.max_completion = max_completion
+                    s.fallback_chain = list(sheet.instrument_fallbacks)
+                    s.sheet_timeout_seconds = sheet.timeout_seconds
+            states = live_sheets
+        else:
+            states = sheets_to_execution_states(
+                sheets,
+                max_retries=max_retries,
+                max_completion=max_completion,
+            )
 
         # Register with baton
         self._baton.register_job(
@@ -516,6 +535,7 @@ class BatonAdapter:
         parallel_enabled: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
         pacing_seconds: float = 0.0,
+        live_sheets: dict[int, SheetExecutionState] | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -601,14 +621,22 @@ class BatonAdapter:
                 normal_attempts = 0
                 completion_attempts = 0
 
-            raw_model = sheet.instrument_config.get("model")
-            state = SheetExecutionState(
-                sheet_num=sheet.num,
-                instrument_name=sheet.instrument_name,
-                model=str(raw_model) if raw_model is not None else None,
-                max_retries=max_retries,
-                max_completion=max_completion,
-            )
+            # Phase 2: update the live SheetState in-place when available,
+            # so the baton operates on the same objects as _live_states.
+            if live_sheets is not None and sheet.num in live_sheets:
+                state = live_sheets[sheet.num]
+            else:
+                raw_model = sheet.instrument_config.get("model")
+                state = SheetExecutionState(
+                    sheet_num=sheet.num,
+                    instrument_name=sheet.instrument_name,
+                    model=str(raw_model) if raw_model is not None else None,
+                )
+
+            state.max_retries = max_retries
+            state.max_completion = max_completion
+            state.fallback_chain = list(sheet.instrument_fallbacks)
+            state.sheet_timeout_seconds = sheet.timeout_seconds
             state.status = baton_status
             state.normal_attempts = normal_attempts
             state.completion_attempts = completion_attempts
