@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.scheduler module.
+"""Tests for marianne.daemon.scheduler module.
 
 Covers GlobalSheetScheduler: priority ordering, fair-share enforcement,
 DAG-aware enqueue/dequeue, concurrency limits, rate-limited backend
@@ -811,7 +811,7 @@ class TestDuplicateRegisterJob:
 class TestFailedSheetDependents:
     """Tests that success=False in mark_complete still enqueues dependents.
 
-    Mozart's DAG scheduler enqueues dependents regardless of success/failure
+    Marianne's DAG scheduler enqueues dependents regardless of success/failure
     because the caller (JobManager) decides retry policy, not the scheduler.
     """
 

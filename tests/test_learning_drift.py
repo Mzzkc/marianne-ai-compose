@@ -1,4 +1,4 @@
-"""Tests for the DriftMixin in mozart.learning.store.drift.
+"""Tests for the DriftMixin in marianne.learning.store.drift.
 
 Covers:
   1. calculate_effectiveness_drift() - with enough/insufficient data

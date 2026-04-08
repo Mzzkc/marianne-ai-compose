@@ -1,4 +1,4 @@
-"""Tests for mozart learning-export CLI command."""
+"""Tests for mzt learning-export CLI command."""
 from __future__ import annotations
 
 import json

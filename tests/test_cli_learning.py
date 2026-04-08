@@ -5,7 +5,7 @@ learning-activity, patterns-list, patterns-why, patterns-budget,
 patterns-entropy, entropy-status, learning-drift, learning-epistemic-drift.
 
 All commands use deferred imports (inside function body), so we patch
-at the source module: mozart.learning.global_store.get_global_store
+at the source module: marianne.learning.global_store.get_global_store
 
 GH#82 — Extended coverage for Q003 (budget), Q004 (entropy), Q005 (drift),
 Q006 (patterns) covering history mode, JSON output, color thresholds, and

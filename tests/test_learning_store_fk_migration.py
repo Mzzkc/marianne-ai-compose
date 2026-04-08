@@ -24,7 +24,7 @@ def temp_db(tmp_path: Path) -> Path:
 def _create_legacy_db(db_path: Path) -> None:
     """Create a database with the legacy FK-constrained schema.
 
-    Simulates what older Mozart versions created, matching the actual
+    Simulates what older Marianne versions created, matching the actual
     schema found in production databases (issue #129).
     """
     conn = sqlite3.connect(str(db_path))

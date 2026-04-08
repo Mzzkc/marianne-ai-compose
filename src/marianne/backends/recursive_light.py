@@ -1,6 +1,6 @@
 """Recursive Light backend using HTTP API.
 
-Connects Mozart to Recursive Light Framework for TDF-aligned
+Connects Marianne to Recursive Light Framework for TDF-aligned
 judgment and confidence scoring via HTTP API bridge.
 
 Phase 3: Language Bridge implementation.
@@ -37,7 +37,7 @@ class RecursiveLightBackend(HttpxClientMixin, Backend):
 
     Attributes:
         rl_endpoint: Base URL for the Recursive Light API.
-        user_id: Unique identifier for this Mozart instance.
+        user_id: Unique identifier for this Marianne instance.
         timeout: Request timeout in seconds.
     """
 
@@ -52,7 +52,7 @@ class RecursiveLightBackend(HttpxClientMixin, Backend):
         Args:
             rl_endpoint: Base URL for the Recursive Light API server.
                 Defaults to localhost:8080 for local development.
-            user_id: Unique identifier for this Mozart instance.
+            user_id: Unique identifier for this Marianne instance.
                 Generates a UUID if not provided.
             timeout: Request timeout in seconds. Defaults to 30.0.
         """
@@ -67,7 +67,7 @@ class RecursiveLightBackend(HttpxClientMixin, Backend):
             self.timeout,
             headers={
                 "Content-Type": "application/json",
-                "X-Mozart-User-ID": self.user_id,
+                "X-Marianne-User-ID": self.user_id,
             },
         )
 

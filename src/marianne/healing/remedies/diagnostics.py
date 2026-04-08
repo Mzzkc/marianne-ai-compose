@@ -202,7 +202,7 @@ class DiagnoseAuthErrorRemedy(BaseRemedy):
             lines.extend([
                 "Rate limit information:",
                 "",
-                "- Mozart will automatically wait and retry",
+                "- Marianne will automatically wait and retry",
                 "- Default wait time is configured in job settings",
                 "- Consider reducing request frequency",
                 "- Check your API tier limits at console.anthropic.com",

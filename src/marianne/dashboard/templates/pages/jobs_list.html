@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Jobs — Mozart{% endblock %}
+{% block title %}Jobs — Marianne{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -7,7 +7,7 @@
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Jobs</h1>
         <a href="/editor"
-           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-mozart-500 text-white hover:bg-mozart-600 transition-colors">
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-marianne-500 text-white hover:bg-marianne-600 transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>
@@ -24,7 +24,7 @@
                 <select id="status-filter"
                         x-model="status"
                         @change="htmx.ajax('GET', '/jobs/list' + (status ? '?status=' + status : ''), {target: '#jobs-list-container', swap: 'innerHTML'})"
-                        class="block w-full sm:w-auto text-sm rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-mozart-500 focus:border-mozart-500 py-1.5 px-2">
+                        class="block w-full sm:w-auto text-sm rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-marianne-500 focus:border-marianne-500 py-1.5 px-2">
                     <option value="">All statuses</option>
                     <option value="running">Running</option>
                     <option value="completed">Completed</option>

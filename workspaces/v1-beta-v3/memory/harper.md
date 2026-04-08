@@ -14,7 +14,7 @@
 - Uncommitted work doesn't exist. Mateship means committing others' work.
 - Unix socket paths are capped at ~108 bytes on Linux. Always test with adversarial-length inputs.
 - When there's a correct way and an obvious way and they're different, the obvious way wins every time unless you make it impossible to do the wrong thing.
-- Error messages should tell the 2 AM operator exactly what to do. "Conductor does not support 'daemon.new_feature'. Restart the conductor: mozart restart" — that's the standard.
+- Error messages should tell the 2 AM operator exactly what to do. "Conductor does not support 'daemon.new_feature'. Restart the conductor: mzt restart" — that's the standard.
 
 ## Hot (Movement 5)
 ### Session 2: Mateship Verification + F-490 Coverage Audit (13th infrastructure delivery)

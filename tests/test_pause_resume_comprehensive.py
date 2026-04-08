@@ -106,7 +106,7 @@ class TestRunnerPauseSignalDetection:
         )
 
         # Create pause signal file
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Should return True when pause signal file exists
@@ -128,7 +128,7 @@ class TestRunnerPauseSignalDetection:
         )
 
         # Create pause signal file
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
         assert pause_signal_file.exists()
 
@@ -172,7 +172,7 @@ class TestRunnerPauseHandling:
         )
 
         # Create pause signal file
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Mock console for output verification
@@ -247,7 +247,7 @@ class TestJobControlServicePauseOperations:
         assert result.status == JobStatus.RUNNING.value  # Still running until signal processed
 
         # Verify signal file was created
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         assert pause_signal_file.exists()
 
     async def test_pause_nonexistent_job(self, job_control_service):
@@ -299,7 +299,7 @@ class TestJobControlServicePauseOperations:
         await state_backend.save(state)
 
         # Create leftover pause signal file
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Mock get_job_pid to return valid PID (process alive)
@@ -336,7 +336,7 @@ class TestJobControlServicePauseOperations:
         await state_backend.save(state)
 
         # Create leftover pause signal file
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Mock get_job_pid to return None (process dead)
@@ -407,7 +407,7 @@ class TestPauseResumeIntegrationFlow:
         assert pause_result.status == JobStatus.RUNNING.value  # Still running
 
         # Verify pause signal file exists
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         assert pause_signal_file.exists()
 
         # Phase 2: Simulate runner detecting pause and handling it
@@ -467,7 +467,7 @@ class TestPauseResumeIntegrationFlow:
         await state_backend.save(state)
 
         # Create leftover pause signal
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Mock process creation for restart
@@ -528,7 +528,7 @@ class TestPauseResumeErrorCases:
         await state_backend.save(state)
 
         # Create pause signal file
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Mock get_job_pid to return living process
@@ -587,7 +587,7 @@ class TestPauseResumeErrorCases:
         assert all(r.success for r in results)
 
         # Only one signal file should exist
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         assert pause_signal_file.exists()
 
 

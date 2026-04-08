@@ -100,7 +100,7 @@ instruments:
     config:
       timeout_seconds: 1800
 
-# Movement declarations — names appear in `mozart status` output.
+# Movement declarations — names appear in `mzt status` output.
 # Per-movement instruments route cheap work to fast models and expensive
 # work to deep reasoning models. In a multi-provider deployment, replace
 # fast-scanner with gemini-cli/Haiku and deep-analyst with Opus.

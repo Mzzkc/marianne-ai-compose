@@ -30,8 +30,8 @@
 # DISAGREE — because that's where the interesting thinking lives.
 #
 # Usage:
-#   mozart validate examples/thinking-lab.yaml
-#   mozart run examples/thinking-lab.yaml
+#   mzt validate examples/thinking-lab.yaml
+#   mzt run examples/thinking-lab.yaml
 #
 # To change the question, edit the `question` variable below.
 
@@ -44,7 +44,7 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 1800
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Framing"

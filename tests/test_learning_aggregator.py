@@ -1,4 +1,4 @@
-"""Comprehensive tests for mozart.learning.aggregator module.
+"""Comprehensive tests for marianne.learning.aggregator module.
 
 Tests the pattern aggregation system that merges outcomes into the global
 learning store:

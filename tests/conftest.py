@@ -1,4 +1,4 @@
-"""Pytest fixtures for Mozart tests."""
+"""Pytest fixtures for Marianne tests."""
 
 import logging
 from collections.abc import Generator
@@ -139,7 +139,7 @@ def no_daemon_detection() -> Generator[None, None, None]:
     it globally ensures dashboard API tests always take the subprocess path.
 
     Note: CLI commands that use ``try_daemon_route()`` from
-    ``mozart.daemon.detect`` are NOT affected by this fixture -- those
+    ``marianne.daemon.detect`` are NOT affected by this fixture -- those
     tests mock ``try_daemon_route`` directly where needed.
     """
     with patch(

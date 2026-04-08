@@ -1,9 +1,9 @@
-"""Completion snapshot manager for the Mozart daemon.
+"""Completion snapshot manager for the Marianne daemon.
 
 Captures durable snapshots of workspace artifacts at job completion
 and manages TTL-based cleanup to prevent unbounded storage growth.
 
-Snapshots are stored under ``~/.mozart/snapshots/{job_id}/{timestamp}/``
+Snapshots are stored under ``~/.marianne/snapshots/{job_id}/{timestamp}/``
 and include key artifacts: state JSON, logs, and validation results.
 """
 
@@ -24,9 +24,9 @@ _CAPTURE_PATTERNS = [
     "*.json",                   # State files (e.g., {job_id}.json)
     "*.yaml",                   # Job config files
     "*.yml",                    # Job config files (alt extension)
-    "mozart.log",               # Job execution log
+    "marianne.log",               # Job execution log
     "*.log",                    # Any additional log files
-    ".mozart-observer.jsonl",   # Observer event timeline
+    ".marianne-observer.jsonl",   # Observer event timeline
 ]
 
 
@@ -38,13 +38,13 @@ class SnapshotManager:
 
     Usage::
 
-        manager = SnapshotManager(base_dir=Path("~/.mozart/snapshots"))
+        manager = SnapshotManager(base_dir=Path("~/.marianne/snapshots"))
         path = manager.capture("my-job", Path("/workspace"))
         manager.cleanup(max_age_hours=168)
     """
 
     def __init__(self, base_dir: Path | None = None) -> None:
-        self._base_dir = (base_dir or Path("~/.mozart/snapshots")).expanduser()
+        self._base_dir = (base_dir or Path("~/.marianne/snapshots")).expanduser()
 
     @property
     def base_dir(self) -> Path:
@@ -281,14 +281,14 @@ class SnapshotManager:
     def _capture_observer_summary(workspace: Path, snapshot_dir: Path) -> None:
         """Generate a summary of observer activity from the JSONL timeline.
 
-        Reads ``.mozart-observer.jsonl`` line-by-line, counts events by type
+        Reads ``.marianne-observer.jsonl`` line-by-line, counts events by type
         (files created/modified/deleted, processes spawned/exited), and writes
         ``observer-summary.json`` to the snapshot directory.
 
         If the JSONL file does not exist or is unreadable, the method silently
         returns without creating the summary file.
         """
-        jsonl_path = workspace / ".mozart-observer.jsonl"
+        jsonl_path = workspace / ".marianne-observer.jsonl"
         if not jsonl_path.is_file():
             return
 

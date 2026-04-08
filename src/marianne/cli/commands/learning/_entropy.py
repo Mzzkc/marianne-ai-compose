@@ -55,11 +55,11 @@ def patterns_entropy(
     - Low entropy (H -> 0): Single pattern dominates (collapse risk)
 
     Examples:
-        mozart patterns-entropy               # Show current entropy metrics
-        mozart patterns-entropy --threshold 0.3  # Alert on low diversity
-        mozart patterns-entropy --history     # View entropy trend over time
-        mozart patterns-entropy --record      # Record snapshot for trend analysis
-        mozart patterns-entropy --json        # JSON output for scripting
+        mzt patterns-entropy               # Show current entropy metrics
+        mzt patterns-entropy --threshold 0.3  # Alert on low diversity
+        mzt patterns-entropy --history     # View entropy trend over time
+        mzt patterns-entropy --record      # Record snapshot for trend analysis
+        mzt patterns-entropy --json        # JSON output for scripting
     """
     from marianne.learning.global_store import get_global_store
 
@@ -238,10 +238,10 @@ def entropy_status(
     - Revisits quarantined patterns for potential revalidation
 
     Examples:
-        mozart entropy-status               # Show current entropy response status
-        mozart entropy-status --history     # View response history
-        mozart entropy-status --check       # Check if response is needed now
-        mozart entropy-status --json        # JSON output for scripting
+        marianne entropy-status               # Show current entropy response status
+        marianne entropy-status --history     # View response history
+        marianne entropy-status --check       # Check if response is needed now
+        marianne entropy-status --json        # JSON output for scripting
     """
     from marianne.learning.global_store import get_global_store
 

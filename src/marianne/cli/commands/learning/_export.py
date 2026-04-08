@@ -293,9 +293,9 @@ def learning_export(
     evolution-history, error-landscape.
 
     Examples:
-        mozart learning-export --output-dir ./workspace/learning
-        mozart learning-export --format json --since 60
-        mozart learning-export --min-effectiveness 0.6 --no-include-pending
+        mzt learning-export --output-dir ./workspace/learning
+        mzt learning-export --format json --since 60
+        mzt learning-export --min-effectiveness 0.6 --no-include-pending
     """
     from marianne.learning.global_store import get_global_store
     from marianne.learning.patterns import PatternType
@@ -542,7 +542,7 @@ def learning_record_evolution(
     """Record an evolution cycle in the trajectory table.
 
     Examples:
-        mozart learning-record-evolution --cycle 26 \\
+        mzt learning-record-evolution --cycle 26 \\
             --evolutions-completed 2 \\
             --issue-classes "infrastructure_activation,testing_depth" \\
             --implementation-loc 150 --test-loc 200

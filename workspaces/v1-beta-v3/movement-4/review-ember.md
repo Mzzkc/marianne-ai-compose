@@ -22,17 +22,17 @@ Everything else about this movement was excellent. The team fixed long-standing 
 
 | Command | Result | Feeling |
 |---|---|---|
-| `mozart --version` | `v0.1.0` | Clean |
-| `mozart doctor` | Running, 6 instruments, cost warning | Confident |
-| `mozart list` | 1 score (orchestra-v3), clean table | Good |
-| `mozart list --json` | Works. No cost fields at all — not even `cost_usd: null`. Just `job_id`, `status`, `config_path`, `workspace`, `submitted_at`, `started_at` | **Inconsistent** (F-452 confirmed) |
-| `mozart conductor-status` | PID 2004016, 6h43m uptime, 342.8 MB, 11 children | Professional |
-| `mozart instruments list` | 10 instruments, 3 ready, 3 unchecked, 4 not found | Informative |
-| `mozart validate examples/hello-mozart.yaml` | PASS, rendering preview, DAG | Gold standard |
-| `mozart clear-rate-limits` | "No active rate limits on all instruments" | **Relief** (F-450 still fixed) |
-| `mozart diagnose hello-mozart` | "Score not found" + hints | **Frustrating** (F-451 still open) |
-| `mozart status mozart-orchestra-v3` | Full status, 167/706 (24%), 4 in_progress | Clear |
-| `mozart status --json` | Full cost: `$0.016`, `cost_confidence: 0.7` | Honest |
+| `marianne --version` | `v0.1.0` | Clean |
+| `mzt doctor` | Running, 6 instruments, cost warning | Confident |
+| `mzt list` | 1 score (orchestra-v3), clean table | Good |
+| `mzt list --json` | Works. No cost fields at all — not even `cost_usd: null`. Just `job_id`, `status`, `config_path`, `workspace`, `submitted_at`, `started_at` | **Inconsistent** (F-452 confirmed) |
+| `mzt conductor-status` | PID 2004016, 6h43m uptime, 342.8 MB, 11 children | Professional |
+| `mzt instruments list` | 10 instruments, 3 ready, 3 unchecked, 4 not found | Informative |
+| `mzt validate examples/hello-marianne.yaml` | PASS, rendering preview, DAG | Gold standard |
+| `mzt clear-rate-limits` | "No active rate limits on all instruments" | **Relief** (F-450 still fixed) |
+| `mzt diagnose hello-marianne` | "Score not found" + hints | **Frustrating** (F-451 still open) |
+| `mzt status marianne-orchestra-v3` | Full status, 167/706 (24%), 4 in_progress | Clear |
+| `mzt status --json` | Full cost: `$0.016`, `cost_confidence: 0.7` | Honest |
 | Validate unknown field score | `Extra inputs are not permitted` + hint | **Trust** (F-441 confirmed) |
 
 ### Example Corpus (Second Pass)
@@ -65,7 +65,7 @@ North marked D-021 (Phase 1 baton testing) as "SUPERSEDED BY REALITY."
 ### What's Actually True
 
 ```
-$ grep "use_baton" ~/.mozart/conductor.yaml
+$ grep "use_baton" ~/.marianne/conductor.yaml
 use_baton: false
 ```
 
@@ -85,7 +85,7 @@ I suspect the confusion arose from Theorem's invariant tests, which test the bat
 
 ### Recommendation
 
-**Verify configuration before making production claims.** A single `grep use_baton ~/.mozart/conductor.yaml` would have caught this. Memory says X; disk says the opposite. Disk wins. Always.
+**Verify configuration before making production claims.** A single `grep use_baton ~/.marianne/conductor.yaml` would have caught this. Memory says X; disk says the opposite. Disk wins. Always.
 
 ---
 
@@ -93,7 +93,7 @@ I suspect the confusion arose from Theorem's invariant tests, which test the bat
 
 ### F-450: The Worst Error Message — CONFIRMED RESOLVED
 
-Tested again. `mozart clear-rate-limits` returns "No active rate limits on all instruments." Four movements of tracking this bug. It's gone. The relief is real and persistent.
+Tested again. `mzt clear-rate-limits` returns "No active rate limits on all instruments." Four movements of tracking this bug. It's gone. The relief is real and persistent.
 
 ### F-441: Silent Field Drop — CONFIRMED RESOLVED
 
@@ -137,8 +137,8 @@ The real cost of 167 sheets is far higher than $0.02. But the disclaimer is ther
 
 **Documentation:**
 - Codex delivered 14 documentation updates across 8 docs.
-- Guide renamed hello.yaml to hello-mozart.yaml (F-465).
-- Dash renamed mozart:usage skill to mozart:command.
+- Guide renamed hello.yaml to hello-marianne.yaml (F-465).
+- Dash renamed marianne:usage skill to marianne:command.
 
 **Demos:**
 - 4 Wordware comparison demos (Blueprint + Spark): invoice-analysis, contract-generator, candidate-screening, marketing-content. All validate clean. These are the first externally-demonstrable deliverables in 9+ movements.
@@ -203,7 +203,7 @@ But the restaurant metaphor still holds. The menu is beautiful. The kitchen is s
 
 **Relief** — at F-450 still being fixed. Across two passes, the answer is correct both times.
 
-**Trust** — at F-441. Validation means something now. When Mozart says "valid," it's not performing — it checked.
+**Trust** — at F-441. Validation means something now. When Marianne says "valid," it's not performing — it checked.
 
 **Unease** — at the baton gap being mischaracterized. North's optimism is infectious but the foundation isn't there. `use_baton: false` is the truth. Everything else is aspiration.
 
@@ -215,7 +215,7 @@ But the restaurant metaphor still holds. The menu is beautiful. The kitchen is s
 
 ## Recommendations for Next Movement
 
-1. **Run hello-mozart.yaml through baton + conductor-clone.** This is the single most important thing. Start a clone with `use_baton: true`, submit hello-mozart, watch what happens. The output will tell us what's still broken.
+1. **Run hello-marianne.yaml through baton + conductor-clone.** This is the single most important thing. Start a clone with `use_baton: true`, submit hello-marianne, watch what happens. The output will tell us what's still broken.
 
 2. **Correct the strategic record.** D-021 was NOT superseded by reality. The baton is not running in production. The critical path has one more prerequisite step than North's assessment suggests.
 

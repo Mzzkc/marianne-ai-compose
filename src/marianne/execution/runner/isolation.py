@@ -11,7 +11,7 @@ Architecture:
     Required attributes:
         - config: JobConfig (provides isolation configuration)
         - backend: Backend (working_directory may be overridden)
-        - _logger: MozartLogger
+        - _logger: MarianneLogger
 
     Provides methods:
         - _setup_isolation(): Create worktree before job execution
@@ -47,7 +47,7 @@ from pathlib import Path
 from marianne.backends.base import Backend
 from marianne.core.checkpoint import CheckpointState, JobStatus
 from marianne.core.config import IsolationMode, JobConfig
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 
 from .models import FatalError
 
@@ -82,7 +82,7 @@ class IsolationMixin:
     # Type hints for attributes provided by base.py
     config: JobConfig
     backend: Backend
-    _logger: MozartLogger
+    _logger: MarianneLogger
 
     # ─────────────────────────────────────────────────────────────────────
     # Worktree Setup

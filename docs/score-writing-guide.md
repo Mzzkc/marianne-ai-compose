@@ -1,11 +1,11 @@
 # Score Writing Guide
 
-A Mozart **score** is a YAML configuration file that orchestrates multi-stage
+A Marianne **score** is a YAML configuration file that orchestrates multi-stage
 AI execution — the same way a musical score orchestrates instruments through
 a composition. Each score defines what work to do, which instrument to use,
-how to validate outputs, and how to recover from failures. Mozart supports
+how to validate outputs, and how to recover from failures. Marianne supports
 multiple instruments (Claude CLI, Gemini CLI, Codex CLI, Aider, Goose, and
-more) — run `mozart instruments list` to see what's available.
+more) — run `mzt instruments list` to see what's available.
 
 This guide covers everything you need to author your own scores, from minimal
 examples to complex parallel fan-out workflows.
@@ -46,11 +46,11 @@ A score is a YAML file that defines:
 4. **How to validate** — Rules that verify each sheet's output
 5. **How to recover** — Retry logic, rate limit handling, and partial completion
 
-Mozart reads the score, divides the work into **sheets** (numbered stages),
+Marianne reads the score, divides the work into **sheets** (numbered stages),
 executes each sheet by sending a rendered prompt to the instrument, validates
 the output, and retries on failure. Sheets can run sequentially, in parallel
 based on a dependency DAG, or as fan-out instances of the same logical stage
-(called **movements** and **voices** in Mozart's orchestral vocabulary).
+(called **movements** and **voices** in Marianne's orchestral vocabulary).
 
 ### Minimal Example
 
@@ -58,7 +58,7 @@ The simplest possible score (`examples/simple-sheet.yaml`):
 
 ```yaml
 name: "simple-sheet"
-description: "Minimal example showing core Mozart features"
+description: "Minimal example showing core Marianne features"
 workspace: "../workspaces/simple-workspace"
 
 instrument: claude-code
@@ -88,7 +88,7 @@ after each sheet.
 
 ## The 6 Score Archetypes
 
-Every Mozart score follows one of these patterns. Real examples are provided
+Every Marianne score follows one of these patterns. Real examples are provided
 from the `examples/` directory.
 
 ### 1. Linear Pipeline
@@ -220,7 +220,7 @@ code review, dependency-aware execution, and automated issue resolution.
 
 **Example:** `examples/issue-fixer.yaml` — Picks one open GitHub issue,
 investigates it, and either fixes it directly or generates a subordinate
-Mozart score for complex fixes. Self-chains to the next issue.
+Marianne score for complex fixes. Self-chains to the next issue.
 
 ```yaml
 instrument: claude-code
@@ -272,7 +272,7 @@ marked with **(required)**.
 | `description` | str | `null` | Human-readable description of what this score does. |
 | `workspace` | Path | `./workspace` | Output directory. Resolved to absolute path at parse time. |
 | `state_backend` | `"json"` \| `"sqlite"` | `"sqlite"` | Storage backend for checkpoint state. |
-| `state_path` | Path | `null` | Custom state file path. Default: `{workspace}/.mozart-state.{ext}` |
+| `state_path` | Path | `null` | Custom state file path. Default: `{workspace}/.marianne-state.{ext}` |
 | `pause_between_sheets_seconds` | int | `2` | Seconds to wait between sheets (rate limit courtesy). |
 | `instruments` | dict[str, InstrumentDef] | `{}` | Named instrument definitions local to this score. See [Multi-Instrument Scores](#multi-instrument-scores). |
 | `movements` | dict[int, MovementDef] | `{}` | Movement declarations with names, instruments, and voice counts. See [Multi-Instrument Scores](#multi-instrument-scores). |
@@ -281,7 +281,7 @@ marked with **(required)**.
 ### `instrument` (recommended) or `backend`
 
 Controls which AI instrument executes sheets. You can use `instrument:` (a named
-instrument from `mozart instruments list`) or `backend:` (the original syntax).
+instrument from `mzt instruments list`) or `backend:` (the original syntax).
 Both work — use `instrument:` for new scores.
 
 ```yaml
@@ -293,7 +293,7 @@ backend:
   type: claude_cli
 ```
 
-Run `mozart instruments list` to see all available instruments.
+Run `mzt instruments list` to see all available instruments.
 
 ### `instrument_config`
 
@@ -314,7 +314,7 @@ For the Anthropic API instrument:
 ```yaml
 instrument: anthropic_api
 instrument_config:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   api_key_env: ANTHROPIC_API_KEY
   max_tokens: 4096
   timeout_seconds: 120
@@ -322,7 +322,7 @@ instrument_config:
 
 ### Multi-Instrument Scores
 
-Mozart can assign different instruments to different parts of a score — use a
+Marianne can assign different instruments to different parts of a score — use a
 powerful instrument for complex reasoning and a fast one for routine work. The
 `instruments:`, `movements:`, `sheet.per_sheet_instruments`, and
 `sheet.instrument_map` fields work together for this. See
@@ -340,7 +340,7 @@ Use `instrument:` + `instrument_config:` for new scores.
 | `skip_permissions` | bool | `true` | Skip permission prompts for unattended execution. Maps to `--dangerously-skip-permissions`. |
 | `disable_mcp` | bool | `true` | Disable MCP server loading for faster execution (~2x speedup). |
 | `output_format` | `"json"` \| `"text"` \| `"stream-json"` | `"text"` | Claude CLI output format. |
-| `cli_model` | str | `null` | Model override. Example: `"claude-sonnet-4-20250514"`. |
+| `cli_model` | str | `null` | Model override. Example: `"claude-sonnet-4-5-20250929"`. |
 | `timeout_seconds` | float | `1800.0` | Maximum time per sheet execution (30 minutes default). |
 | `timeout_overrides` | dict[int, float] | `{}` | Per-sheet timeout overrides. Example: `{7: 28800}` gives sheet 7 eight hours. |
 | `allowed_tools` | list[str] | `null` | Restrict Claude to specific tools. Example: `[Read, Grep, Glob]`. |
@@ -353,9 +353,9 @@ Use `instrument:` + `instrument_config:` for new scores.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `model` | str | `"claude-sonnet-4-20250514"` | Anthropic API model ID. |
+| `model` | str | `"claude-sonnet-4-5-20250929"` | Anthropic API model ID. |
 | `api_key_env` | str | `"ANTHROPIC_API_KEY"` | Environment variable for API key. |
-| `max_tokens` | int | `8192` | Maximum tokens for API response. |
+| `max_tokens` | int | `16384` | Maximum tokens for API response. |
 | `temperature` | float | `0.7` | Sampling temperature (0-1). |
 
 ### `sheet`
@@ -376,7 +376,7 @@ Defines how work is divided into sheets.
 | `per_sheet_instruments` | dict[int, str] | `{}` | Per-sheet instrument overrides. See [Multi-Instrument Scores](#multi-instrument-scores). |
 | `per_sheet_instrument_config` | dict[int, dict] | `{}` | Per-sheet instrument config overrides. |
 | `instrument_map` | dict[str, list[int]] | `{}` | Batch instrument assignment. See [Multi-Instrument Scores](#multi-instrument-scores). |
-| `descriptions` | dict[int, str] | `{}` | Human-readable labels for sheets, displayed in `mozart status`. |
+| `descriptions` | dict[int, str] | `{}` | Human-readable labels for sheets, displayed in `mzt status`. |
 | `spec_tags` | dict[int, list[str]] | `{}` | Per-sheet spec corpus tag filters. Only matching fragments are injected. |
 | `prompt_extensions` | dict[int, list[str]] | `{}` | Per-sheet additional prompt directives (inline text or file paths). |
 
@@ -414,7 +414,7 @@ Controls retry behavior and partial completion recovery.
 | `max_delay_seconds` | float | `3600.0` | Maximum delay (1 hour). |
 | `exponential_base` | float | `2.0` | Backoff multiplier. |
 | `jitter` | bool | `true` | Add randomness to delays. |
-| `max_completion_attempts` | int | `3` | Completion prompt attempts before full retry. |
+| `max_completion_attempts` | int | `5` | Completion prompt attempts before full retry. |
 | `completion_delay_seconds` | float | `5.0` | Delay between completion attempts. |
 | `completion_threshold_percent` | float | `50.0` | Minimum pass % to trigger completion mode. |
 
@@ -456,8 +456,8 @@ List of rules checked after each sheet execution. See [Validation Types](#valida
 
 ## Template Variables Reference
 
-Mozart uses [Jinja2](https://jinja.palletsprojects.com/) for prompt templating.
-Templates have access to both core variables (computed by Mozart) and
+Marianne uses [Jinja2](https://jinja.palletsprojects.com/) for prompt templating.
+Templates have access to both core variables (computed by Marianne) and
 user-defined variables (from `prompt.variables`).
 
 ### Core Variables
@@ -487,7 +487,7 @@ to identity values (`stage` = `sheet_num`, `instance` = 1, `fan_count` = 1).
 
 The aliases `movement`, `voice`, `voice_count`, and `total_movements` are
 equivalent to their originals — use whichever reads better in your score.
-Mozart's mental model draws from orchestral music: a score has movements
+Marianne's mental model draws from orchestral music: a score has movements
 (sequential phases) and voices (parallel instances within a movement).
 
 **Example usage in templates:**
@@ -547,7 +547,7 @@ Defined in `prompt.variables` and available in templates by name.
 ```yaml
 prompt:
   variables:
-    project_name: "Mozart AI Compose"
+    project_name: "Marianne AI Compose"
     review_types:
       1: "Architecture"
       2: "Test Coverage"
@@ -1090,11 +1090,11 @@ emerged from real scores:
 
 | Pattern | What It Does | Example Scores |
 |---------|-------------|----------------|
-| **Adversarial** | Independent critiques of the same position | [dialectic.yaml](https://github.com/Mzzkc/mozart-score-playspace/blob/main/scores/dialectic.yaml), [parallel-research.yaml](examples/parallel-research-fanout.yaml) |
-| **Perspectival** | Same question, different analytical frameworks | [thinking-lab.yaml](https://github.com/Mzzkc/mozart-score-playspace/blob/main/scores/thinking-lab.yaml) |
-| **Functional** | Same goal, different planning domains | [dinner-party.yaml](https://github.com/Mzzkc/mozart-score-playspace/blob/main/scores/dinner-party.yaml) |
-| **Graduated** | Same content, different difficulty levels | [skill-builder.yaml](https://github.com/Mzzkc/mozart-score-playspace/blob/main/scores/skill-builder.yaml) |
-| **Generative** | Same seed, different creative lenses | [worldbuilder.yaml](https://github.com/Mzzkc/mozart-score-playspace/blob/main/scores/worldbuilder.yaml) |
+| **Adversarial** | Independent critiques of the same position | [dialectic.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/dialectic.yaml), [parallel-research.yaml](examples/parallel-research-fanout.yaml) |
+| **Perspectival** | Same question, different analytical frameworks | [thinking-lab.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/thinking-lab.yaml) |
+| **Functional** | Same goal, different planning domains | [dinner-party.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/dinner-party.yaml) |
+| **Graduated** | Same content, different difficulty levels | [skill-builder.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/skill-builder.yaml) |
+| **Generative** | Same seed, different creative lenses | [worldbuilder.yaml](https://github.com/Mzzkc/marianne-score-playspace/blob/main/scores/worldbuilder.yaml) |
 | **Expert** | Same codebase, different review specializations | [quality-continuous.yaml](examples/quality-continuous.yaml) |
 
 The synthesis stage that follows fan-out is where emergence happens. Independent
@@ -1104,13 +1104,13 @@ adversarial finds hidden agreements, perspectival finds blind spots, generative
 finds unexpected coherence.
 
 > For creative examples with real output, see the
-> [Mozart Score Playspace](https://github.com/Mzzkc/mozart-score-playspace).
+> [Marianne Score Playspace](https://github.com/Mzzkc/marianne-score-playspace).
 
 ---
 
 ## Movements and Multi-Instrument Scores
 
-Mozart scores can use multiple instruments in a single score. Different movements or
+Marianne scores can use multiple instruments in a single score. Different movements or
 individual sheets can each use the instrument best suited to their task — a planning
 phase on a deep-reasoning model, parallel implementation on a fast code model, review
 on a different provider entirely.
@@ -1150,7 +1150,7 @@ sheet:
     3: [2]
 ```
 
-Movement names appear in `mozart status` output, making large scores readable:
+Movement names appear in `mzt status` output, making large scores readable:
 
 ```
 multi-instrument-pipeline: RUNNING (2/3 movements)
@@ -1196,7 +1196,7 @@ movements:
     instrument: deep-thinker
 ```
 
-Each alias has a `profile:` (the registered instrument name from `mozart instruments list`)
+Each alias has a `profile:` (the registered instrument name from `mzt instruments list`)
 and an optional `config:` (overrides merged with the profile's defaults).
 
 ### Per-Sheet Instrument Assignment
@@ -1241,7 +1241,7 @@ difference justifies the complexity.
 
 ### Instrument Fallbacks
 
-When an instrument hits rate limits or becomes unavailable, Mozart can automatically
+When an instrument hits rate limits or becomes unavailable, Marianne can automatically
 try fallback instruments in order. Specify fallback chains at the score, movement,
 or per-sheet level:
 
@@ -1274,7 +1274,7 @@ Per-sheet fallbacks **replace** inherited chains rather than merging with them.
 If sheet 4 specifies `[aider]`, it will only fall back to aider — not to the
 movement-level or score-level chain.
 
-`mozart validate` warns (V211) when a fallback name doesn't match a known instrument
+`mzt validate` warns (V211) when a fallback name doesn't match a known instrument
 profile or score alias.
 
 ---
@@ -1321,7 +1321,7 @@ the same care you'd give a database schema.
 
 Validations run after each sheet execution. If any validation fails, the sheet
 is retried (up to `retry.max_retries`). When more than
-`completion_threshold_percent` of validations pass, Mozart enters **completion
+`completion_threshold_percent` of validations pass, Marianne enters **completion
 mode** — sending a focused prompt that tells Claude what passed and what
 still needs to be done.
 
@@ -1682,7 +1682,7 @@ Synthesize from the {{ previous_outputs | length - skipped_upstream | length }} 
 
 The prelude/cadenza system provides first-class file injection into sheet
 prompts. Instead of manually reading files in your template or relying on
-`cross_sheet`, you declare what files to inject and Mozart handles the rest —
+`cross_sheet`, you declare what files to inject and Marianne handles the rest —
 reading files at execution time and placing content at the right position
 in the prompt.
 
@@ -1761,7 +1761,7 @@ directives that apply across the score.
 
 ### Validation
 
-`mozart validate` checks static prelude/cadenza file paths (V108 warning)
+`mzt validate` checks static prelude/cadenza file paths (V108 warning)
 but skips Jinja-templated paths that can't be resolved before execution.
 
 ---
@@ -1771,14 +1771,14 @@ but skips Jinja-templated paths that can't be resolved before execution.
 The specification corpus lets you inject project-level context — goals, conventions,
 constraints, quality standards — into every agent prompt automatically. Instead of
 copying the same context into every score's prelude, you maintain it once in a
-directory and Mozart injects relevant fragments per sheet.
+directory and Marianne injects relevant fragments per sheet.
 
 ### Setting Up a Spec Corpus
 
 Create a directory with YAML or Markdown spec files:
 
 ```
-.mozart/spec/
+.marianne/spec/
 ├── intent.yaml        # Goals, trade-offs, decision authority
 ├── conventions.yaml   # Code patterns, naming, testing rules
 ├── constraints.yaml   # Must-do and must-not rules
@@ -1810,11 +1810,11 @@ Add the `spec:` section to your score:
 
 ```yaml
 spec:
-  spec_dir: ".mozart/spec"        # Path to spec directory (relative to project root)
+  spec_dir: ".marianne/spec"        # Path to spec directory (relative to project root)
   include_claude_md: false        # Also inject CLAUDE.md as a fragment
 ```
 
-When `spec_dir` is set, Mozart loads all YAML and Markdown files from that
+When `spec_dir` is set, Marianne loads all YAML and Markdown files from that
 directory at score start and injects their content into agent prompts as an
 "Injected Context" section.
 
@@ -1834,7 +1834,7 @@ sheet:
     4: [code, testing]           # Review sheet gets both
 
 spec:
-  spec_dir: ".mozart/spec"
+  spec_dir: ".marianne/spec"
 ```
 
 Fragments match if they have **at least one tag** in common with the filter
@@ -1878,7 +1878,7 @@ grounding:
 ### How Grounding Works
 
 1. A sheet executes and standard validations pass.
-2. Mozart runs each grounding hook against the sheet's output.
+2. Marianne runs each grounding hook against the sheet's output.
 3. If a hook fails:
    - `fail_on_grounding_failure: true` → sheet fails (retries apply).
    - `escalate_on_failure: true` → escalates to composer (fermata).
@@ -1932,7 +1932,7 @@ on_success:
 
 | Type | Description | Required Fields |
 |------|-------------|-----------------|
-| `run_job` | Chain to another Mozart score | `job_path` |
+| `run_job` | Chain to another Marianne score | `job_path` |
 | `run_command` | Execute a shell command | `command` |
 | `run_script` | Execute a script file | `command` |
 
@@ -1997,7 +1997,7 @@ conductor:
 Validate your score's YAML structure and field values:
 
 ```bash
-mozart validate my-score.yaml
+mzt validate my-score.yaml
 ```
 
 Exit codes:
@@ -2008,7 +2008,7 @@ Exit codes:
 For JSON output (CI/CD integration):
 
 ```bash
-mozart validate my-score.yaml --json
+mzt validate my-score.yaml --json
 ```
 
 ### Dry Run
@@ -2016,7 +2016,7 @@ mozart validate my-score.yaml --json
 Simulate execution without actually running Claude:
 
 ```bash
-mozart run my-score.yaml --dry-run
+mzt run my-score.yaml --dry-run
 ```
 
 Dry run works **without** a running daemon and shows:
@@ -2030,14 +2030,14 @@ For long-running scores, use `setsid` to create an independent session:
 
 ```bash
 # CORRECT: setsid creates independent session group
-setsid mozart run my-score.yaml > workspace/mozart.log 2>&1 &
+setsid mzt run my-score.yaml > workspace/marianne.log 2>&1 &
 
 # Monitor progress
-mozart status my-score --watch
-tail -f workspace/mozart.log
+mzt status my-score --watch
+tail -f workspace/marianne.log
 ```
 
-**Never** wrap Mozart with `timeout` — Mozart handles its own internal
+**Never** wrap Marianne with `timeout` — Marianne handles its own internal
 timeouts. External `timeout` causes `SIGKILL`, which corrupts state files.
 
 ### Validate All Examples
@@ -2047,7 +2047,7 @@ Verify all bundled examples are valid:
 ```bash
 for f in examples/*.yaml; do
   echo -n "$f: "
-  mozart validate "$f" 2>&1 | tail -1
+  mzt validate "$f" 2>&1 | tail -1
 done
 ```
 
@@ -2165,7 +2165,7 @@ done
 
 ## Migrating from `backend:` to `instrument:`
 
-Mozart's original `backend:` syntax still works, but `instrument:` is the
+Marianne's original `backend:` syntax still works, but `instrument:` is the
 recommended syntax for new scores. The migration is straightforward.
 
 ### Quick Reference
@@ -2231,14 +2231,14 @@ instrument_config:
 - **Multi-instrument scores.** `instrument:` supports per-sheet and per-movement
   assignment. `backend:` does not.
 - **Plugin instruments.** Custom CLI tools can be added as YAML profiles in
-  `~/.mozart/instruments/` or `.mozart/instruments/`.
-- **Validation.** `mozart validate` warns when an instrument name is not recognized
+  `~/.marianne/instruments/` or `.marianne/instruments/`.
+- **Validation.** `mzt validate` warns when an instrument name is not recognized
   (V210). No equivalent exists for `backend.type` — typos fail silently at runtime.
 - **Named aliases.** The `instruments:` key lets you declare reusable instrument
   configurations referenced by name across your score.
 
 ### Compatibility
 
-Both `backend:` and `instrument:` cannot be used in the same score — `mozart validate`
+Both `backend:` and `instrument:` cannot be used in the same score — `mzt validate`
 rejects this as an error. The `backend:` syntax continues to work unchanged for
 all existing scores. No deprecation warnings are emitted.

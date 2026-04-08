@@ -46,7 +46,7 @@ class TestTemplateRendering:
         """Variables from config are available in templates."""
         config = PromptConfig(
             template="Hello {{ name }}, sheet {{ sheet_num }} of {{ total_sheets }}",
-            variables={"name": "Mozart"},
+            variables={"name": "Marianne"},
         )
         builder = PromptBuilder(config)
         ctx = SheetContext(
@@ -54,7 +54,7 @@ class TestTemplateRendering:
             workspace=Path("/workspace"),
         )
         prompt = builder.build_sheet_prompt(ctx)
-        assert "Hello Mozart" in prompt
+        assert "Hello Marianne" in prompt
         assert "sheet 3 of 10" in prompt
 
     def test_conditional_template(self) -> None:
@@ -313,8 +313,8 @@ class TestPreambleConstruction:
             sheet_num=3, total_sheets=10,
             workspace=Path("/workspaces/my-job"),
         )
-        assert "<mozart-preamble>" in preamble
-        assert "</mozart-preamble>" in preamble
+        assert "<marianne-preamble>" in preamble
+        assert "</marianne-preamble>" in preamble
         assert "sheet 3 of 10" in preamble
         assert "/workspaces/my-job" in preamble
         assert "RETRY" not in preamble

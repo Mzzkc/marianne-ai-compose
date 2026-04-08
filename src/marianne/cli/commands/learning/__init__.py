@@ -1,4 +1,4 @@
-"""Learning and pattern management commands for Mozart CLI.
+"""Learning and pattern management commands for Marianne CLI.
 
 This package implements commands for monitoring and managing the learning system.
 Originally a single 1673-line file, now split into focused modules:

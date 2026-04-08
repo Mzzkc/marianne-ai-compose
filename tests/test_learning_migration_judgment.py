@@ -112,7 +112,7 @@ class TestOutcomeMigrator:
                 },
             ]
         }
-        outcomes_file = tmp_path / ".mozart-outcomes.json"
+        outcomes_file = tmp_path / ".marianne-outcomes.json"
         outcomes_file.write_text(json.dumps(outcomes_data))
 
         migrator = OutcomeMigrator(mock_store)
@@ -126,7 +126,7 @@ class TestOutcomeMigrator:
         """Workspace with empty outcomes list should import zero."""
         from marianne.learning.migration import OutcomeMigrator
 
-        outcomes_file = tmp_path / ".mozart-outcomes.json"
+        outcomes_file = tmp_path / ".marianne-outcomes.json"
         outcomes_file.write_text(json.dumps({"outcomes": []}))
 
         migrator = OutcomeMigrator(mock_store)
@@ -148,7 +148,7 @@ class TestOutcomeMigrator:
                 }
             ]
         }
-        outcomes_file = tmp_path / ".mozart-outcomes.json"
+        outcomes_file = tmp_path / ".marianne-outcomes.json"
         outcomes_file.write_text(json.dumps(outcomes_data))
 
         migrator = OutcomeMigrator(mock_store)
@@ -169,7 +169,7 @@ class TestOutcomeMigrator:
         # Create workspace with outcomes
         workspace = tmp_path / "my-workspace"
         workspace.mkdir()
-        outcomes_file = workspace / ".mozart-outcomes.json"
+        outcomes_file = workspace / ".marianne-outcomes.json"
         outcomes_file.write_text(json.dumps({
             "outcomes": [
                 {"sheet_id": "s1", "final_status": "completed", "timestamp": "2024-01-15T10:00:00"},
@@ -179,7 +179,7 @@ class TestOutcomeMigrator:
         migrator = OutcomeMigrator(mock_store)
         # Use non-matching scan pattern (empty list is falsy → falls back to defaults)
         result = migrator.migrate_all(
-            scan_patterns=[str(tmp_path / "nonexistent-*/.mozart-outcomes.json")],
+            scan_patterns=[str(tmp_path / "nonexistent-*/.marianne-outcomes.json")],
             additional_paths=[outcomes_file],
         )
 
@@ -196,7 +196,7 @@ class TestOutcomeMigrator:
         # Create outcomes
         workspace = tmp_path / "ws"
         workspace.mkdir()
-        outcomes_file = workspace / ".mozart-outcomes.json"
+        outcomes_file = workspace / ".marianne-outcomes.json"
         outcomes_file.write_text(json.dumps({
             "outcomes": [
                 {"sheet_id": "s1", "final_status": "completed", "timestamp": "2024-01-15T10:00:00"},
@@ -207,7 +207,7 @@ class TestOutcomeMigrator:
         # Use a non-matching scan pattern to avoid scanning real workspaces
         # (empty list is falsy, so it falls back to DEFAULT_SCAN_PATTERNS)
         result = migrator.migrate_all(
-            scan_patterns=[str(tmp_path / "nonexistent-*/.mozart-outcomes.json")],
+            scan_patterns=[str(tmp_path / "nonexistent-*/.marianne-outcomes.json")],
             additional_paths=[outcomes_file],
         )
 
@@ -325,7 +325,7 @@ class TestMigrationConvenienceFunctions:
         # Use a non-matching pattern to avoid scanning real workspaces
         result = migrate_existing_outcomes(
             mock_store,
-            scan_patterns=[str(tmp_path / "nonexistent-pattern-*/.mozart-outcomes.json")],
+            scan_patterns=[str(tmp_path / "nonexistent-pattern-*/.marianne-outcomes.json")],
         )
         assert result.workspaces_found == 0
 

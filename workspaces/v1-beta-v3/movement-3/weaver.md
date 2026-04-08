@@ -22,7 +22,7 @@ This is the most dangerous kind of gap: it makes tests pass while the product si
 
 ### F-210: Cross-Sheet Context Missing from Baton Path (P1 — BLOCKER)
 
-**The problem:** The legacy runner populates `SheetContext.previous_outputs` and `SheetContext.previous_files` via `_populate_cross_sheet_context()` at `src/mozart/execution/runner/context.py:171-221`. Each sheet gets access to previous sheets' stdout output and captured files. The baton's PromptRenderer (`src/mozart/daemon/baton/prompt.py`) and musician `_build_prompt()` (`src/mozart/daemon/baton/musician.py:208-288`) have zero awareness of cross-sheet context. The field exists on `SheetExecutionState` at `src/mozart/daemon/baton/state.py:161-163` but is never populated.
+**The problem:** The legacy runner populates `SheetContext.previous_outputs` and `SheetContext.previous_files` via `_populate_cross_sheet_context()` at `src/marianne/execution/runner/context.py:171-221`. Each sheet gets access to previous sheets' stdout output and captured files. The baton's PromptRenderer (`src/marianne/daemon/baton/prompt.py`) and musician `_build_prompt()` (`src/marianne/daemon/baton/musician.py:208-288`) have zero awareness of cross-sheet context. The field exists on `SheetExecutionState` at `src/marianne/daemon/baton/state.py:161-163` but is never populated.
 
 **Impact:** 24/34 example scores use cross-sheet context. Any score where sheet N's template references previous sheet output will render with empty context under the baton. This is the **most significant functional gap** between baton and legacy paths.
 
@@ -81,7 +81,7 @@ F-210 fix (cross-sheet context) ──→ Phase 1 testing (--conductor-clone)
 | Resume improvements | #93, #103, #122 | Bug fixes, can be done independently |
 | Wordware comparison demos | Composer notes | Can design without baton, execute later |
 | Rosetta Score update | Composer notes | Primitives list + proof criteria |
-| Skill rename | Composer notes | mozart:usage → mozart:command |
+| Skill rename | Composer notes | marianne:usage → marianne:command |
 | Gemini CLI assignments | TDF analysis | generate-v3.py changes |
 
 ### Dependency Map
@@ -136,7 +136,7 @@ Checked all M3 teammate work. Key observations:
 ## Recommendations
 
 1. **Assign F-210 to Foundation or Canyon.** They have the deepest baton knowledge. Estimated ~100-200 lines.
-2. **After F-210, Phase 1 testing must happen outside the orchestra.** The conductor running this orchestra cannot be used for testing. Someone (composer or a standalone session) must run `mozart start --conductor-clone && mozart run hello.yaml --conductor-clone` with `use_baton: true`.
+2. **After F-210, Phase 1 testing must happen outside the orchestra.** The conductor running this orchestra cannot be used for testing. Someone (composer or a standalone session) must run `mzt start --conductor-clone && mzt run hello.yaml --conductor-clone` with `use_baton: true`.
 3. **Demo needs a deadline.** 8 movements of "assigned but no progress" means the assignment is ineffective. The composer should either do it directly or assign it with a hard deadline.
 4. **Accept participation narrowing.** 16/32 is sufficient for the remaining work. The serial path needs 1-2 musicians, not 32.
 

@@ -1,4 +1,4 @@
-"""Tests for mozart.cli.commands._shared module.
+"""Tests for marianne.cli.commands._shared module.
 
 Covers create_backend, setup_learning, setup_notifications, setup_escalation,
 setup_grounding, setup_all, SetupComponents, display_run_summary,

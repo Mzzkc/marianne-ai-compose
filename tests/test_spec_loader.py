@@ -1,4 +1,4 @@
-"""Tests for mozart.spec.loader — SpecCorpusLoader.
+"""Tests for marianne.spec.loader — SpecCorpusLoader.
 
 TDD: These tests define the contract for the SpecCorpusLoader, which reads
 YAML and Markdown spec files from a directory and produces SpecFragment
@@ -674,13 +674,13 @@ class TestSpecLoaderAdversarial:
 
 
 class TestRealSpecCorpus:
-    """Integration tests against the actual Mozart spec corpus if it exists."""
+    """Integration tests against the actual Marianne spec corpus if it exists."""
 
     def test_load_actual_spec_corpus(self) -> None:
-        """Load the actual .mozart/spec/ directory if it exists."""
-        spec_dir = Path("/home/emzi/Projects/mozart-ai-compose/.mozart/spec")
+        """Load the actual .marianne/spec/ directory if it exists."""
+        spec_dir = Path("/home/emzi/Projects/marianne-ai-compose/.marianne/spec")
         if not spec_dir.exists():
-            pytest.skip("No .mozart/spec/ directory in project")
+            pytest.skip("No .marianne/spec/ directory in project")
 
         fragments = SpecCorpusLoader.load(spec_dir)
         # The real corpus has 5 YAML files

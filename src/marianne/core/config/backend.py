@@ -29,7 +29,7 @@ class RecursiveLightConfig(BaseModel):
     )
     user_id: str | None = Field(
         default=None,
-        description="Unique identifier for this Mozart instance (generates UUID if not set)",
+        description="Unique identifier for this Marianne instance (generates UUID if not set)",
     )
     timeout: float = Field(
         default=30.0,
@@ -165,7 +165,7 @@ class MCPServerConfig(BaseModel):
 
 
 class BridgeConfig(BaseModel):
-    """Configuration for the Mozart-Ollama bridge.
+    """Configuration for the Marianne-Ollama bridge.
 
     The bridge enables Ollama models to use MCP tools through a proxy service.
     It provides context optimization and optional hybrid routing to Claude.
@@ -331,7 +331,7 @@ class BackendConfig(BaseModel):
     working_directory: Path | None = Field(
         default=None,
         description="Working directory for execution. "
-        "If None, uses the directory containing the Mozart config file.",
+        "If None, uses the directory containing the Mzt config file.",
     )
     timeout_seconds: float = Field(
         default=1800.0,

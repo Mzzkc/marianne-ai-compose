@@ -1,9 +1,9 @@
 """Generic webhook notification implementation using httpx.
 
-Provides configurable HTTP webhook notifications for Mozart job events.
+Provides configurable HTTP webhook notifications for Marianne job events.
 Supports custom headers, retries, and flexible JSON payloads.
 
-Phase 5 of Mozart implementation: Missing README features.
+Phase 5 of Marianne implementation: Missing README features.
 """
 
 import asyncio
@@ -55,7 +55,7 @@ class WebhookNotifier:
 
     Example usage:
         notifier = WebhookNotifier(
-            url="https://example.com/webhooks/mozart",
+            url="https://example.com/webhooks/marianne",
             headers={"Authorization": "Bearer token123"},
             events={NotificationEvent.JOB_COMPLETE, NotificationEvent.JOB_FAILED},
         )
@@ -67,7 +67,7 @@ class WebhookNotifier:
             on_events: [job_complete, job_failed]
             config:
               url: https://example.com/webhook
-              url_env: MOZART_WEBHOOK_URL  # Alternative to url
+              url_env: MZT_WEBHOOK_URL  # Alternative to url
               headers:
                 Authorization: "Bearer ${WEBHOOK_TOKEN}"
                 X-Custom-Header: "value"
@@ -97,7 +97,7 @@ class WebhookNotifier:
             timeout: HTTP request timeout in seconds.
             max_retries: Maximum retry attempts on failure (0 = no retries).
             retry_delay: Delay between retries in seconds.
-            include_metadata: Include Mozart metadata in payload (version, source).
+            include_metadata: Include Marianne metadata in payload (version, source).
         """
         # Get URL from param or environment
         self._url = url
@@ -166,7 +166,7 @@ class WebhookNotifier:
                 - timeout: Request timeout in seconds
                 - max_retries: Retry attempts on failure
                 - retry_delay: Delay between retries
-                - include_metadata: Include Mozart metadata
+                - include_metadata: Include Marianne metadata
 
         Returns:
             Configured WebhookNotifier instance.
@@ -240,7 +240,7 @@ class WebhookNotifier:
 
         if self._include_metadata:
             payload["metadata"] = {
-                "source": "mozart-ai-compose",
+                "source": "marianne-ai-compose",
                 "version": "1.0.0",
             }
 

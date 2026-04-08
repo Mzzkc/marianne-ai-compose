@@ -1,4 +1,4 @@
-"""Tests for mozart.execution.circuit_breaker module."""
+"""Tests for marianne.execution.circuit_breaker module."""
 
 import asyncio
 

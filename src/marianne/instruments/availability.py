@@ -2,8 +2,8 @@
 
 Checks whether a named instrument is available for execution.
 Used by:
-- ``mozart doctor`` — instrument health checks
-- ``mozart validate`` — warn on unavailable instruments
+- ``mzt doctor`` — instrument health checks
+- ``mzt validate`` — warn on unavailable instruments
 - Baton dispatch path — pre-flight before execution
 
 The check is simple:

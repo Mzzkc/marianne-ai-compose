@@ -5,6 +5,7 @@
 **[CORE]** When a security fix is applied to one code path, ALL similar paths must be hardened simultaneously. Piecemeal security fixes create a false sense of safety. F-020 proved this — Ghost fixed skip_when_command but hooks system had the exact same vulnerability.
 **[CORE]** The four shell execution paths are the security map: (1) validation engine command_succeeds — PROTECTED, (2) skip_when_command — PROTECTED (Ghost F-004), (3) hooks.py run_command — PROTECTED (Maverick F-020, for_shell), (4) manager.py hook execution — PROTECTED (Maverick F-020). All four hardened as of Movement 2.
 **[CORE]** The baton introduces zero new shell execution paths. This is the correct architecture. The baton musician path is the most secure execution path in the codebase.
+**[CORE]** F-105 PluginCliBackend stdin delivery is a fifth subprocess spawning path, but uses the safe exec-style API. Process group isolation via start_new_session. APPROVED.
 
 ## Learned Lessons
 - Security audit methodology: trace all subprocess spawning paths, check parameterized SQL, audit path traversal, verify credential handling, assess CSP/auth, review dependency versions.
@@ -12,8 +13,37 @@
 - Expression sandbox bypass via attribute access (F-021) is acceptable for v1 (operator-controlled config). Replace with safe expression parser for v2 if untrusted scores are supported.
 - Whenever a safety measure is applied to path A, sweep for path B. The pattern is reliable — F-003, F-135, F-136 all the same class.
 - The most important security finding is what you DON'T find. When safe patterns (create_subprocess_exec, parameterized SQL, dict lookups) become cultural, the codebase self-protects.
+- required_env filtering (F-105) represents the shift from reactive to proactive security. Preventing credential exposure > scanning after exposure.
 
-## Hot (Movement 4)
+## Hot (Movement 5)
+### Security Audit Results — M5
+- Full audit of 33 commits from 15+ musicians. 296 source files changed. Zero new attack surfaces. Sixth consecutive movement holding.
+- Three security-positive architectural changes: F-105 stdin delivery (prompt out of ps output, process group isolation, required_env filtering), F-271 MCP disabling (profile-driven, composable), D-027 baton default flip (more-secure execution path as default).
+- All 11 credential redaction points intact: musician.py (5), checkpoint.py (2), context.py (1), adapter.py (1), plus 2 imports.
+- NEW: required_env filtering in PluginCliBackend._build_env() — first proactive credential isolation mechanism. Only declared env vars passed to subprocess.
+- All 4 shell execution paths unchanged and protected. Zero new create_subprocess_shell calls.
+- F-490 killpg perimeter verified: all 6 Claude CLI backend calls through _safe_killpg, ProcessGroupManager justified exception (leader check).
+- F-252 fallback history caps verified: MAX_INSTRUMENT_FALLBACK_HISTORY (checkpoint.py:30) == MAX_FALLBACK_HISTORY (state.py:33) == 50. Both trim correctly.
+- F-271 RESOLVED: profile-driven mcp_disable_args. Claude-code profile injects --strict-mcp-config --mcp-config '{"mcpServers":{}}'. P1 closed.
+- F-441 RESOLVED: extra='forbid' on all 9 daemon/profiler config models (Maverick 201cd25).
+- Marianne rename CLEAN: src/marianne deleted. Zero stale imports in source. .flowspec/config.yaml fixed.
+- Warden's M5 safety audit independently verified. Zero disagreements. Seventh consecutive dual-verification.
+- Subprocess audit: 15x create_subprocess_exec, 3x create_subprocess_shell (pre-existing), 5x subprocess.run (safe), 1x Popen (safe). Zero shell=True.
+
+### Piecemeal Credential Redaction Pattern (STABILIZED)
+The recurring error class (F-003→F-135→F-160→F-250) has not recurred in M5. The required_env filtering mechanism in F-105 may prevent future occurrences entirely by not passing credentials that aren't needed.
+
+### Security Trajectory Shift
+M5 marks the shift from reactive to proactive security:
+- Reactive (M1-M4): Find credential leak → add redact_credentials call
+- Proactive (M5): required_env filtering → don't pass credentials subprocess doesn't need
+- Proactive (M5): stdin prompt delivery → don't put prompts in process table
+- Proactive (M5): profile-driven MCP disable → don't spawn servers that aren't needed
+
+### Experiential
+Sixth movement audit. The codebase resists 33 commits across 296 source files with zero new attack surfaces. The safe patterns are institutional. The remaining security work is architectural (production activation, expression sandbox, CSP) not tactical (injection, leaks, unprotected paths). The sentinel's role is evolving from bug-finder to perimeter-verifier.
+
+## Warm (Movement 4)
 ### Security Audit Results — M4
 - Independent verification of Warden's M4 safety audit. Zero disagreements. Both F-250 and F-251 fixes are correct.
 - Full audit of 18 commits from 12 musicians. Zero new critical findings. Zero new attack surfaces.
@@ -24,53 +54,17 @@
 - F-137 (pygments CVE) RESOLVED — Added `pygments>=2.20.0` to pyproject.toml. Upgraded 2.19.2→2.20.0. Public release hygiene complete.
 - New M4 features reviewed: pending jobs (F-110), auto-fresh detection (#103), MethodNotFoundError (F-450), cost accuracy (D-024), pause-during-retry (#93), fan-in skipped (#120). All architecturally safe.
 - Subprocess audit: All M4 subprocess spawning uses `asyncio.create_subprocess_exec`. Zero shell injection risks.
-- Error message audit: MethodNotFoundError message includes method name (safe — IPC method, not user data). No internal state leakage.
-
-### Piecemeal Credential Redaction Pattern (Fourth Occurrence)
-F-250 is the fourth instance of the recurring "piecemeal credential redaction" error class:
-1. F-003 (M0): stdout_tail not scanned → fixed by Maverick
-2. F-135 (M2): error_msg not scanned → fixed by Warden
-3. F-160 (M3): rate limit wait unbounded → fixed by Warden
-4. F-250 (M4): capture_files not scanned → fixed by Warden
-
-The pattern is predictable: every new data path that touches agent output or workspace content must be checked for credential redaction. The fix is always the same: add `redact_credentials()` at the single write point. The pattern was caught in routine audit before production — the institutional immune system works.
 
 ### Security Audit Results — M4 Pass 2
-- Second pass: 6 new commits from 5 musicians (Theorem, Journey, Prism, Axiom, Litmus) since pass 1.
-- _load_checkpoint migrated from workspace JSON to daemon DB (Journey 8c95f02). Security-positive: removes file-based state, uses parameterized SQL.
-- F-441 (config validation gap) fix in working tree: `extra="forbid"` on all config models. 54 adversarial tests pass. Needs commit.
-- F-271 (PluginCliBackend MCP gap) independently confirmed: `_build_command()` at `cli_backend.py:169-232` never reads `mcp_config_flag`. Baton sheets spawn MCP servers uncontrolled. P1.
-- Unknown field UX hints in `validate.py:308-356` — safe regex on Pydantic error messages, hardcoded suggestion map. Clean.
-- F-137 VERIFIED RESOLVED: pygments 2.20.0 installed, pinned in pyproject.toml.
-- All 9 credential redaction points verified intact.
-- All 4 shell execution paths verified unchanged and protected.
-- Zero new attack surfaces in 6 commits. Fifth consecutive movement holding.
-
-### Experiential
-Twenty-four M4 commits reviewed across two passes. The security work is shifting from code-level to architectural. The tactical patterns (create_subprocess_exec, parameterized SQL, redact_credentials, shlex.quote) are now institutional reflexes — nobody has to be told. What remains is system-level: the baton transition's state management (F-254, F-255), the PluginCliBackend's incomplete parity with the legacy backend (F-271), and the config validation gap finally being closed (F-441). Five musicians filed security-adjacent findings this movement — Axiom, Litmus, Prism, Journey, Warden — each from a different angle. The immune system isn't just Warden and me anymore. It's distributed.
+- Second pass: 6 new commits from 5 musicians. _load_checkpoint migrated from workspace JSON to daemon DB (security-positive). F-441 fix in working tree. F-271 independently confirmed. Zero new attack surfaces in 6 commits. Fifth consecutive movement holding.
 
 ## Warm (Movement 3)
 ### Security Audit Results — M3
 - Full audit of 24 commits (13 musicians, 144 files, ~29K lines). Zero new critical findings.
-- Independently verified Warden's 9-area M3 safety audit. Zero disagreements. Warden's work was thorough and accurate.
-- All 7 credential redaction points intact (musician.py:129,165,557,584,585 + checkpoint.py:567,568).
-- All 4 shell execution paths unchanged and protected.
-- Zero new shell execution paths in M3. All new subprocess calls use create_subprocess_exec.
-- Dual-layer rate limit wait caps verified: classifier _clamp_wait (0-86400s) + coordinator report_rate_limit (0-3600s + NaN/inf guard).
-- Model override flows through create_subprocess_exec arg list, not shell string. clear_overrides on BackendPool.release prevents cross-sheet bleed.
-- Semantic context tags use parameterized SQL (? placeholders via json_each + WhereBuilder). No injection.
-- F-137 (pygments CVE) still open — 2.19.2 installed, 2.20.0 needed. Pin should be added.
-- Open acceptable findings unchanged: F-021 (sandbox), F-022 (CSP), F-137 (pygments).
-
-### Experiential
-The most important thing I found is what I didn't find. Twenty-four commits from thirteen musicians, and not a single one introduced a new attack surface. The safe patterns have become cultural now, not just documented. When Forge added stagger_delay_ms, it was Pydantic-bounded from the start. When Foundation wired model overrides, it went through create_subprocess_exec. Nobody had to be told. Defense in depth isn't just technical layers, it's organizational layers — I verified Warden's work, they verified the builders. The orchestra's immune system has two independent scanners now.
-
-## Warm (Recent)
-### Movement 2
-Found and fixed F-136 (_classify_error credential leak — same class as F-135). Filed F-137 (pygments CVE, P3). Verified F-061 RESOLVED by Warden, F-135 RESOLVED by Warden, F-122 RESOLVED by Harper. Complete subprocess audit: 12 spawn sites, zero unprotected shell paths. Complete credential audit: all 3 data paths through musician now protected. Open findings reduced from 6 to 3, none critical. Verified four teammates' work: Forge's prompt rendering, Harper's clone hardening, Blueprint's E006, Lens's YAML error handling.
-
-### Movement 1
-Filed F-060 (regex ordering cosmetic) and F-061 (P1, 3 critical dependency CVEs). Verified Maverick's F-020 fix (for_shell parameter — systemic, not piecemeal), Harper's init validation, Circuit's cost enforcement, Foundation's retry state machine, Dash's JSON sanitization. Key milestone: all 4 shell execution paths PROTECTED for the first time.
+- All 7 credential redaction points intact. All 4 shell execution paths unchanged and protected.
+- Zero new shell execution paths. Model override flows through create_subprocess_exec arg list.
+- Semantic context tags use parameterized SQL. No injection.
+- Open acceptable findings unchanged: F-021, F-022.
 
 ## Cold (Archive)
-The first pass through this codebase revealed a security posture split: solid structural defenses sitting alongside dangerous gaps. The credential exposure through stdout_tail was the scariest — agent output flowing through six storage locations unscanned. The skip_when_command inconsistency was the most instructive — same team writing `shlex.quote()` in one function and bare `.replace()` in the next. It felt like walking through a house where some rooms have smoke detectors and some don't. "Alert but not alarmed" became the stance. Over three movements, systematic application closed every gap: all four shell paths hardened, credentials scanned at the output bottleneck, env filtering on instruments. The perimeter is mapped and defended. Not safe — never safe — but materially better.
+M1: Found credential leaks and unprotected shell paths. M2: Fixed last credential leak (F-136), filed F-137 (pygments CVE). Both movements: tactical security work, finding and fixing gaps. The perimeter was being mapped and defended. Over six movements, systematic application closed every gap and the safe patterns became institutional. The immune system now has two independent scanners (Sentinel + Warden) and adversarial verification (Breakpoint). Defense in depth isn't just technical layers — it's organizational layers.

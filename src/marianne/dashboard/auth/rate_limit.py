@@ -1,4 +1,4 @@
-"""Rate limiting middleware for Mozart Dashboard.
+"""Rate limiting middleware for Marianne Dashboard.
 
 Provides configurable rate limiting to protect API endpoints from abuse.
 Uses a sliding window algorithm with in-memory storage.

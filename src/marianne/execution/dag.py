@@ -1,7 +1,7 @@
 """Dependency DAG for sheet execution ordering.
 
 This module implements a Directed Acyclic Graph (DAG) for managing sheet
-dependencies in Mozart jobs. It enables:
+dependencies in Marianne jobs. It enables:
 - Explicit dependency declarations between sheets
 - Topological sorting for valid execution order
 - Cycle detection to prevent infinite loops

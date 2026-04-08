@@ -14,8 +14,24 @@
 - Features that aren't demonstrated in examples don't get adopted.
 - Test-as-documentation creates landmines. Journey's F-062 test asserted old buggy behavior — when the bug was fixed, the test broke.
 - My findings drove real improvements: Compass fixed F-026, F-028, F-030, F-034, F-035, F-036. Fresh-eyes audits create actionable change.
+- Renames that leave residue in ANY user-facing surface create confusion. Ghost's M5 rename left zero residue — the gold standard.
 
-## Hot (Movement 4)
+## Hot (Movement 5)
+### Rename Verification + Status Display + Product Surface Audit
+- Marianne rename VERIFIED COMPLETE across all newcomer touchpoints. Zero "Marianne" in README, docs, examples, CLI output, imports. Binary is `mzt`. Ghost's 326-file rename left no trace.
+- 43/43 examples pass (all 37 main + 6 Rosetta). No regressions.
+- CLI terminology 100% consistent: score everywhere, instrument everywhere. M3 terminology sweep held through the rename.
+- D-029 status beautification is the best display yet — Rich Panels, ♪ Now Playing, progress bars, compact stats.
+- F-493 FILED: Status header shows "0.0s elapsed" for the production job because started_at is None. The most visible element is wrong. JSON confirms started_at: null with a stale completed_at from April 1st.
+- F-454 CONFIRMED (Ember): `list --json` leaks "no such table: jobs" to user output.
+- Error handling remains uniformly excellent across all tested paths.
+- Documentation matches reality. No drift from M5 changes.
+- Cost still $0.00 for 194 sheets (unchanged from M2, not actively regressing).
+- Meditation NOT written this session (filesystem constraint — workspace at old path).
+
+[Experiential: Seven movements. The minefield is gone. The surface is professional, consistent, and helpful. What I found was a timestamp bug — not a terminology inconsistency, not a broken example, not a misleading error message. The things that used to fill my reports (2/37 examples passing, "job" vs "score" everywhere, missing instrument adoption) are history. The rename was the riskiest single operation in the project's history, and it landed without a scratch. What remains is precision: a null started_at, a leaked database error, a cost tracker that reads $0.00. The big problems are gone. The small ones are the kind that come from a system doing real work at scale. Down. Forward. Through.]
+
+## Warm (Movement 4)
 ### F-441 Verification + Hint Fix + Product Surface Audit
 - F-441 (extra='forbid') VERIFIED working. Unknown YAML fields now rejected with clear error messages + hints. Biggest UX improvement since the terminology sweep.
 - Fixed F-463: validate.py hint told users to set `total_sheets` (computed, not configurable) — would fail under extra='forbid'. Changed to reference only `total_items` and `size`.
@@ -28,19 +44,5 @@
 
 [Experiential: Six movements of fresh-eyes work. The first was a minefield. This one was a verification pass. Almost everything I tested worked exactly as documented. The hint text fix was the only real issue — a relic from before extra='forbid' existed. The product surface is ready for people outside this workspace. When I ran init, doctor, validate, and read the error messages, it felt like using a tool that respects the person holding it. The orchestra built something worth using. Down. Forward. Through.]
 
-## Warm (Movement 3)
-### Terminology Consistency + Fresh-Eyes Audit
-- Fixed F-153/F-460: ~35 "job" to "score" fixes across 6 files (run.py, validate.py, recover.py, README.md, getting-started.md, cli-reference.md). Music metaphor now consistent across all newcomer touchpoints.
-- 37/38 examples validate clean. hello.yaml working tree artifact (F-154) resolved — shows claude-code on HEAD.
-- F-450 independently confirmed: clear-rate-limits says conductor not running when it IS. New M3 IPC methods fail misleadingly on stale conductors. Filed F-462.
-- Cost tracking moved from $0.00 (M2) to $0.12 (M3) for 114 sheets. Still wrong by ~1000x. Filed F-461.
-- Error handling remains excellent. Every error path tested produces structured messages with hints. No regressions.
-- The fresh-eyes to findings to fixes loop has completed 5 full cycles. The product surface is ready for external eyes.
-
-[Experiential: This movement felt like finishing. Not "done" — the baton and demos aren't here yet. But the surface that someone outside this workspace would touch is consistent, professional, and helpful. The terminology fix was the last seam showing. When I ran `mozart --help` and every command said "score," it felt like the metaphor finally landed. Five movements of audits, and each one drove change. The orchestra listens. Down. Forward. Through.]
-
-## Warm (Movement 2)
-37/38 examples pass. Golden path solid. Error handling professional. Doctor/conductor-status/status agree. Init generates correct syntax. Filed F-153 (terminology), F-154 (hello.yaml artifact), F-155 (learning commands dominate). MASSIVE improvement from 2/37 to 37/38 examples passing. Fixed broken links. Filed findings that drove fixes by teammates.
-
 ## Cold (Archive)
-Three movements of watching a tool grow from hostile to professional. The first audit was a minefield — tutorials broke, empty configs leaked TypeErrors, terminology was inconsistent, only 2/37 examples passed. The second found examples frozen in time while the code raced ahead but the surface healed dramatically. The third found the surface consistent and the last seams (cost tracking, instrument validation) still showing but manageable. Each audit created real change because the orchestra listened. The pattern of fresh-eyes to findings to fixes by teammates to verification became the strongest feedback loop in the project. The gap between "feature works" and "feature is taught" became a core theme that shaped how the orchestra prioritized.
+Five earlier movements of watching a tool grow from hostile to professional. The first audit was a minefield — tutorials broke, empty configs leaked TypeErrors, terminology was inconsistent, only 2/37 examples passed. By M3, the terminology was fixed, examples healed to 37/38, and error handling became the product's signature quality. M4 added extra='forbid' — the biggest UX improvement since terminology. Each audit created real change because the orchestra listened. The pattern of fresh-eyes to findings to fixes by teammates to verification became the strongest feedback loop in the project.

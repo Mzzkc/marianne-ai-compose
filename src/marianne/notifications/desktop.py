@@ -1,9 +1,9 @@
 """Desktop notification implementation using plyer.
 
-Provides cross-platform desktop notifications for Mozart job events.
+Provides cross-platform desktop notifications for Marianne job events.
 Uses the plyer library for platform-independent notification support.
 
-Phase 5 of Mozart implementation: Missing README features.
+Phase 5 of Marianne implementation: Missing README features.
 """
 
 from typing import Any
@@ -52,7 +52,7 @@ class DesktopNotifier:
     Example usage:
         notifier = DesktopNotifier(
             events={NotificationEvent.JOB_COMPLETE, NotificationEvent.JOB_FAILED},
-            app_name="Mozart",
+            app_name="Marianne",
         )
         await notifier.send(context)
 
@@ -62,13 +62,13 @@ class DesktopNotifier:
             on_events: [job_complete, job_failed]
             config:
               timeout: 10
-              app_name: "Mozart AI"
+              app_name: "Marianne AI"
     """
 
     def __init__(
         self,
         events: set[NotificationEvent] | None = None,
-        app_name: str = "Mozart AI Compose",
+        app_name: str = "Marianne AI Compose",
         timeout: int = 10,
     ) -> None:
         """Initialize the desktop notifier.
@@ -122,7 +122,7 @@ class DesktopNotifier:
 
         return cls(
             events=events if events else None,
-            app_name=config.get("app_name", "Mozart AI Compose"),
+            app_name=config.get("app_name", "Marianne AI Compose"),
             timeout=config.get("timeout", 10),
         )
 

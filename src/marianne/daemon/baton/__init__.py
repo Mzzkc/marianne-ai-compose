@@ -1,4 +1,4 @@
-"""The Baton — Mozart's event-driven execution heart.
+"""The Baton — Marianne's event-driven execution heart.
 
 The baton is the conductor's primary tool. It doesn't decide what to play —
 the score does. It doesn't decide how to play — the musicians do. The baton

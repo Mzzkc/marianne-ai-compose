@@ -106,7 +106,7 @@ Committed uncommitted validate.py changes and 22 untracked tests from another mu
 ## Bug Found: F-200 (Pass 1)
 
 **Severity:** P2 (operational correctness)
-**File:** `src/mozart/daemon/baton/core.py:271-275`
+**File:** `src/marianne/daemon/baton/core.py:271-275`
 **Status:** Fixed (commit bd325bc)
 
 ### Root Cause
@@ -179,7 +179,7 @@ All checks passed!
 ## Bug Found: F-201 (Pass 4)
 
 **Severity:** P3 (edge case of F-200)
-**File:** `src/mozart/daemon/baton/core.py:271`
+**File:** `src/marianne/daemon/baton/core.py:271`
 **Status:** Fixed (this commit)
 
 ### Root Cause

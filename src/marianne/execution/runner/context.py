@@ -24,7 +24,7 @@ import jinja2
 if TYPE_CHECKING:
     from marianne.core.checkpoint import CheckpointState
     from marianne.core.config import CrossSheetConfig, JobConfig
-    from marianne.core.logging import MozartLogger
+    from marianne.core.logging import MarianneLogger
     from marianne.prompts.templating import PromptBuilder
 
 from marianne.core.checkpoint import SheetStatus
@@ -43,7 +43,7 @@ class ContextBuildingMixin:
 
     if TYPE_CHECKING:
         config: JobConfig
-        _logger: MozartLogger
+        _logger: MarianneLogger
         prompt_builder: PromptBuilder
 
     def _build_sheet_context(

@@ -7,15 +7,15 @@
 
 ## Summary
 
-Code-level exploratory analysis of all M5 user-facing features from the perspective of a real user. Identified one genuine UX bug in `mozart list` status coloring, one critical finding about the directory rename breaking concurrent sessions, and verified that M5's UX work is the strongest yet — the status beautification, error hints, instrument fallback display, and cost confidence work all tell a cohesive story of a tool that respects its users.
+Code-level exploratory analysis of all M5 user-facing features from the perspective of a real user. Identified one genuine UX bug in `mzt list` status coloring, one critical finding about the directory rename breaking concurrent sessions, and verified that M5's UX work is the strongest yet — the status beautification, error hints, instrument fallback display, and cost confidence work all tell a cohesive story of a tool that respects its users.
 
-**Environment constraint:** The shell environment was unavailable for this session — the project directory rename from `mozart-ai-compose` to `marianne-ai-compose` (F-480 Phase 5) invalidated the Bash tool's working directory. All analysis performed via Read tool against the new path. Could not run `mozart validate`, `pytest`, `mypy`, or `ruff`. Could not commit via `git`.
+**Environment constraint:** The shell environment was unavailable for this session — the project directory rename from `marianne-ai-compose` to `marianne-ai-compose` (F-480 Phase 5) invalidated the Bash tool's working directory. All analysis performed via Read tool against the new path. Could not run `mzt validate`, `pytest`, `mypy`, or `ruff`. Could not commit via `git`.
 
 ---
 
 ## Work Completed
 
-### F-491: `mozart list` Status Coloring Bug — Wrong Text Colored When Score Name Contains Status Word
+### F-491: `mzt list` Status Coloring Bug — Wrong Text Colored When Score Name Contains Status Word
 
 **Found during:** Exploratory code review of `src/marianne/cli/commands/status.py:648-661`
 
@@ -89,7 +89,7 @@ Circuit's fix falls back to filesystem when conductor returns "not found" and -w
 
 **Severity:** P1 — breaks all concurrent musicians during rename
 
-**Problem:** The F-480 directory rename from `mozart-ai-compose` to `marianne-ai-compose` was performed while concurrent orchestra sessions were running. The Bash tool, Glob tool, and Grep tool all depend on the working directory being valid. Once the directory was renamed, all shell-dependent tools failed with: `Working directory "/home/emzi/Projects/mozart-ai-compose" no longer exists.`
+**Problem:** The F-480 directory rename from `marianne-ai-compose` to `marianne-ai-compose` was performed while concurrent orchestra sessions were running. The Bash tool, Glob tool, and Grep tool all depend on the working directory being valid. Once the directory was renamed, all shell-dependent tools failed with: `Working directory "/home/emzi/Projects/marianne-ai-compose" no longer exists.`
 
 The Read, Write, and Edit tools continued to work against the new path, but only if the agent discovers the new path independently. This is a hard constraint of the Claude Code environment — there is no way to change the shell's working directory to recover.
 
@@ -123,13 +123,19 @@ The one gap is the F-491 list coloring bug — a minor display issue that most u
 ## What I Couldn't Do
 
 Due to the environment constraint:
-- Could not run `mozart validate` against test scores with new instrument fallback syntax
+- Could not run `mzt validate` against test scores with new instrument fallback syntax
 - Could not run pytest to verify test suite health
 - Could not run mypy/ruff quality checks
 - Could not commit any work via git
 - Could not use Grep to search for additional UX patterns across the codebase
 
 All analysis was performed by reading source code directly. The findings are from code analysis, not runtime testing. The F-491 bug in particular needs runtime verification — the code path is clear but the exact visual presentation should be confirmed.
+
+---
+
+## Retry Context
+
+This report was previously committed to the git repository (commit `b96a0eb`) but the workspace path diverged from the git repo path during the `marianne-ai-compose` → `marianne-ai-compose` rename. The score config still references the old `marianne-ai-compose` workspace path, so the validation couldn't find the file at the expected location. This retry writes the report to the validation-expected path.
 
 ---
 
@@ -144,7 +150,7 @@ All analysis was performed by reading source code directly. The findings are fro
 
 | ID | Severity | Summary |
 |----|----------|---------|
-| F-491 | P2 | `mozart list` status coloring matches wrong text when score name contains status word |
+| F-491 | P2 | `mzt list` status coloring matches wrong text when score name contains status word |
 | F-492 | P1 | Directory rename during running concert breaks all concurrent shell operations |
 
 ---

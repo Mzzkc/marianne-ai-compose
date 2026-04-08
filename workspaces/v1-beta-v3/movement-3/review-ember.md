@@ -12,19 +12,19 @@
 
 **Movement 3 built the finest infrastructure nobody can see.**
 
-I ran every command. The surface is immaculate — 38/38 examples validate, error messages teach, `mozart doctor` is welcoming, `mozart status` with no args is exactly right, the init flow scaffolds a real working score. The documentation is now honest and complete (Guide's three passes, Compass's README overhaul, Newcomer's terminology sweep). The quality gate is green: 10,981 tests, mypy clean, ruff clean, flowspec clean.
+I ran every command. The surface is immaculate — 38/38 examples validate, error messages teach, `mzt doctor` is welcoming, `mzt status` with no args is exactly right, the init flow scaffolds a real working score. The documentation is now honest and complete (Guide's three passes, Compass's README overhaul, Newcomer's terminology sweep). The quality gate is green: 10,981 tests, mypy clean, ruff clean, flowspec clean.
 
-And yet the product still can't show me what it does. The baton — the entire execution model that makes Mozart a conductor rather than a script runner — has mathematically proven correctness (148 invariant tests, 258 adversarial tests, 67 Phase 1 adversarial tests, all passing) and zero seconds of real execution. The intelligence layer (F-009/F-144) has its first real fix after 7+ movements, and I can't watch it learn because I can't run a baton job. The cost display now shows $0.17 for an operation that has consumed hundreds of dollars of Claude Opus time, and that number is close enough to be trusted and wrong enough to burn someone.
+And yet the product still can't show me what it does. The baton — the entire execution model that makes Marianne a conductor rather than a script runner — has mathematically proven correctness (148 invariant tests, 258 adversarial tests, 67 Phase 1 adversarial tests, all passing) and zero seconds of real execution. The intelligence layer (F-009/F-144) has its first real fix after 7+ movements, and I can't watch it learn because I can't run a baton job. The cost display now shows $0.17 for an operation that has consumed hundreds of dollars of Claude Opus time, and that number is close enough to be trusted and wrong enough to burn someone.
 
 The second half of M3 — 16 commits after my first review — was review, documentation, and adversarial testing. No new UX bugs. No regressions. The surface held. What changed: F-210 was discovered (Weaver), confirmed by everyone who looked (Axiom, Prism, North), and is now the single blocker for everything that matters next.
 
 **Three experiential findings that matter:**
 
-1. **F-450 is still live and still misleading.** Verified on HEAD. `mozart clear-rate-limits` says "Conductor is not running" when the conductor IS running. The hints say "Start the conductor: mozart start" — but the conductor is already started. This is the single worst error message in the product. It tells the user to do something they've already done. The root cause (IPC method not registered on the running conductor because the code is newer than the running daemon) is understandable — but the user doesn't see root causes. They see "start the conductor" and think they broke something.
+1. **F-450 is still live and still misleading.** Verified on HEAD. `mzt clear-rate-limits` says "Conductor is not running" when the conductor IS running. The hints say "Start the conductor: mzt start" — but the conductor is already started. This is the single worst error message in the product. It tells the user to do something they've already done. The root cause (IPC method not registered on the running conductor because the code is newer than the running daemon) is understandable — but the user doesn't see root causes. They see "start the conductor" and think they broke something.
 
-2. **The cost fiction is now dangerous.** `$0.17` for 125 completed sheets, each running Claude Opus for 4-8 minutes. The JSON status reports 17,078 input tokens and 8,539 output tokens — 137 input tokens per sheet average. That's one paragraph. Each sheet sends 10,000-200,000 tokens of prompt context. The system tracks what Mozart's CLI sends to the backend binary, not what the backend binary sends to the LLM. The real cost is hidden two layers deep. This was $0.00 in M1, $0.00 in M2, $0.12 in early M3, and $0.17 now. The lie got more convincing. A user who trusts `cost_limits.max_cost_per_job: 50` as a budget guardrail will overshoot by 100x before the limiter notices.
+2. **The cost fiction is now dangerous.** `$0.17` for 125 completed sheets, each running Claude Opus for 4-8 minutes. The JSON status reports 17,078 input tokens and 8,539 output tokens — 137 input tokens per sheet average. That's one paragraph. Each sheet sends 10,000-200,000 tokens of prompt context. The system tracks what Marianne's CLI sends to the backend binary, not what the backend binary sends to the LLM. The real cost is hidden two layers deep. This was $0.00 in M1, $0.00 in M2, $0.12 in early M3, and $0.17 now. The lie got more convincing. A user who trusts `cost_limits.max_cost_per_job: 50` as a budget guardrail will overshoot by 100x before the limiter notices.
 
-3. **The gap between "verified" and "experienced" is the widest it's ever been.** 148 invariant proofs say the baton is correct. 325+ adversarial tests say it can't be broken. 21 litmus tests say the intelligence layer works. Zero humans have watched it run. I can review the error messages, the CLI, the examples, the docs — all excellent. I cannot review the thing that makes Mozart worth using. The next thing I need to see is a baton running hello.yaml through a conductor clone. Until that happens, my reviews are auditing the packaging of something I've never tasted.
+3. **The gap between "verified" and "experienced" is the widest it's ever been.** 148 invariant proofs say the baton is correct. 325+ adversarial tests say it can't be broken. 21 litmus tests say the intelligence layer works. Zero humans have watched it run. I can review the error messages, the CLI, the examples, the docs — all excellent. I cannot review the thing that makes Marianne worth using. The next thing I need to see is a baton running hello.yaml through a conductor clone. Until that happens, my reviews are auditing the packaging of something I've never tasted.
 
 ---
 
@@ -34,10 +34,10 @@ The second half of M3 — 16 commits after my first review — was review, docum
 
 | Command | Output | Correct? |
 |---|---|---|
-| `mozart --version` | Mozart AI Compose v0.1.0 | YES |
-| `mozart doctor` | Running (pid 1277279), 6 instruments ready/unchecked, cost warning | YES |
-| `mozart status` | RUNNING, 4 active (1 running + 3 paused), 2 recent | YES |
-| `mozart conductor-status` | (implied running from doctor) | YES |
+| `marianne --version` | Marianne AI Compose v0.1.0 | YES |
+| `mzt doctor` | Running (pid 1277279), 6 instruments ready/unchecked, cost warning | YES |
+| `mzt status` | RUNNING, 4 active (1 running + 3 paused), 2 recent | YES |
+| `mzt conductor-status` | (implied running from doctor) | YES |
 
 Conductor consistency: 8 consecutive movements of stable detection. Ghost's two-phase detection is institutional infrastructure.
 
@@ -54,12 +54,12 @@ No regressions from M2. Spark's 7 modernized fan-out examples + Guide's 10 remai
 ### F-450 Reproduction (IPC Method Mismatch)
 
 ```
-$ mozart clear-rate-limits
-Error: Mozart conductor is not running
+$ mzt clear-rate-limits
+Error: Marianne conductor is not running
 
 Hints:
-  - Start the conductor: mozart start
-  - Check status: mozart conductor-status
+  - Start the conductor: mzt start
+  - Check status: mzt conductor-status
 ```
 
 Conductor IS running (PID 1277279, 36+ hours uptime). The error is wrong. The hint is wrong. Root cause: `clear_rate_limits` IPC method was added in M3 (Harper, ae31ca8) but the running conductor was started before that code was installed. The IPC "Method not found" error at `detect.py:170-174` returns the same signal as "conductor unreachable." The user can't tell the difference.
@@ -87,15 +87,15 @@ Conductor IS running (PID 1277279, 36+ hours uptime). The error is wrong. The hi
 
 ### Things I Can See and Touch
 
-1. **No-args `mozart status`** — Perfect. Shows all scores, their state, uptime. This is the `git status` equivalent and it's exactly right. Information density without clutter.
+1. **No-args `mzt status`** — Perfect. Shows all scores, their state, uptime. This is the `git status` equivalent and it's exactly right. Information density without clutter.
 
 2. **Error messages with context-aware hints** — Journey's `_schema_error_hints()` (commit be03302) is the best UX work this movement. `prompt: "hello"` now says "The 'prompt' field must be a mapping, not a string" and shows the correct syntax. This is teaching, not scolding.
 
 3. **Documentation accuracy** — Guide (3 cadences, 4 commits), Compass (README overhaul), Codex (M3 feature docs), Newcomer (terminology audit). The docs now match the product. Every command in the README exists. Every example in the README validates. The narrative from README to getting-started to hello.yaml to examples is coherent.
 
-4. **Init experience** — `mozart init --path /tmp/test --name test` scaffolds a working score with correct instrument config, validates clean, and shows next steps. The starter score teaches good patterns.
+4. **Init experience** — `mzt init --path /tmp/test --name test` scaffolds a working score with correct instrument config, validates clean, and shows next steps. The starter score teaches good patterns.
 
-5. **Stop safety guard** — Ghost → Circuit (04ab102). Running `mozart stop` with active jobs now warns you and asks for confirmation. This prevents the "oops I killed the orchestra" moment. Can't verify experientially (won't run it with 4 active scores), but the code path is tested (10 TDD tests).
+5. **Stop safety guard** — Ghost → Circuit (04ab102). Running `mzt stop` with active jobs now warns you and asks for confirmation. This prevents the "oops I killed the orchestra" moment. Can't verify experientially (won't run it with 4 active scores), but the code path is tested (10 TDD tests).
 
 ### Things I Know Exist But Cannot See
 
@@ -118,8 +118,8 @@ Conductor IS running (PID 1277279, 36+ hours uptime). The error is wrong. The hi
 Weaver found it (38ddcdf). Axiom confirmed it. Prism confirmed it. North confirmed it. I confirmed it:
 
 ```
-$ grep -r 'cross_sheet\|previous_outputs' src/mozart/daemon/baton/
-src/mozart/daemon/baton/state.py:161:    previous_outputs: dict[int, str] = field(default_factory=dict)
+$ grep -r 'cross_sheet\|previous_outputs' src/marianne/daemon/baton/
+src/marianne/daemon/baton/state.py:161:    previous_outputs: dict[int, str] = field(default_factory=dict)
 ```
 
 One hit. A field definition. Never written. The baton's prompt rendering will happily give every sheet an empty `previous_outputs` dict while the legacy runner populates it from actual sheet output. 24 of 34 examples use `cross_sheet: auto_capture_stdout: true`.
@@ -166,7 +166,7 @@ Movement 3 was a consolidation movement and it consolidated masterfully. The qua
 
 But the audience seats are empty.
 
-The product I can experience — the CLI, the docs, the examples, the error messages — is professional, coherent, and genuinely impressive. The product I cannot experience — the baton, the intelligence layer, the prompt assembly, multi-instrument orchestration — is the entire value proposition of Mozart. One YAML file, multiple instruments, coordinated intelligence. That's the pitch. And I can't see it happen.
+The product I can experience — the CLI, the docs, the examples, the error messages — is professional, coherent, and genuinely impressive. The product I cannot experience — the baton, the intelligence layer, the prompt assembly, multi-instrument orchestration — is the entire value proposition of Marianne. One YAML file, multiple instruments, coordinated intelligence. That's the pitch. And I can't see it happen.
 
 **The feeling:** I'm reviewing a restaurant by reading the menu and inspecting the kitchen. The menu is beautifully typeset. The kitchen is spotless. The equipment is tested and maintained to extraordinary standards. But no meal has been served. The chef has never cooked a dish. I can tell you the kitchen is well-designed. I cannot tell you if the food is good.
 

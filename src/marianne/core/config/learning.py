@@ -134,7 +134,7 @@ class EntropyResponseConfig(BaseModel):
 class AutoApplyConfig(BaseModel):
     """Configuration for autonomous pattern application.
 
-    v22 Evolution: Trust-Aware Autonomous Application - enables Mozart to
+    v22 Evolution: Trust-Aware Autonomous Application - enables Marianne to
     autonomously apply high-trust patterns without human confirmation.
 
     Uses existing trust scoring (v19) to identify patterns safe for autonomous
@@ -209,7 +209,7 @@ class LearningConfig(BaseModel):
     )
     outcome_store_path: Path | None = Field(
         default=None,
-        description="Path for outcome store (default: workspace/.mozart-outcomes.json)",
+        description="Path for outcome store (default: workspace/.marianne-outcomes.json)",
     )
     min_confidence_threshold: float = Field(
         default=0.3,

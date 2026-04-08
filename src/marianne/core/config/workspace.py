@@ -32,7 +32,7 @@ class IsolationConfig(BaseModel):
         isolation:
           enabled: true
           mode: worktree
-          branch_prefix: mozart
+          branch_prefix: marianne
           cleanup_on_success: true
     """
 
@@ -58,7 +58,7 @@ class IsolationConfig(BaseModel):
     )
 
     branch_prefix: str = Field(
-        default="mozart",
+        default="marianne",
         description="Prefix for worktree branch names. "
         "Branch format: {prefix}/{job-id}",
         pattern=r"^[a-zA-Z][a-zA-Z0-9_-]*$",  # Valid git ref prefix
@@ -110,7 +110,7 @@ class WorkspaceLifecycleConfig(BaseModel):
     Controls how workspace files are handled across job iterations,
     particularly for self-chaining jobs that reuse the same workspace.
 
-    When archive_on_fresh is True and --fresh is used, Mozart moves
+    When archive_on_fresh is True and --fresh is used, Marianne moves
     non-essential workspace files to a numbered archive subdirectory
     before clearing state. This prevents stale file_exists and
     command_succeeds validations from passing on previous iteration's
@@ -123,7 +123,7 @@ class WorkspaceLifecycleConfig(BaseModel):
           max_archives: 10
           preserve_patterns:
             - ".iteration"
-            - ".mozart-*"
+            - ".marianne-*"
             - ".coverage"
             - "archive/**"
             - ".worktrees/**"
@@ -154,7 +154,7 @@ class WorkspaceLifecycleConfig(BaseModel):
     preserve_patterns: list[str] = Field(
         default=[
             ".iteration",
-            ".mozart-*",
+            ".marianne-*",
             ".coverage",
             "archive/**",
             ".worktrees/**",
@@ -320,7 +320,7 @@ class CrossSheetConfig(BaseModel):
 class FeedbackConfig(BaseModel):
     """Configuration for developer feedback collection (GH#15).
 
-    When enabled, Mozart extracts structured feedback from agent output
+    When enabled, Marianne extracts structured feedback from agent output
     after each sheet execution. Feedback is stored in SheetState.agent_feedback.
 
     Example YAML:

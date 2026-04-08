@@ -1,6 +1,6 @@
-"""Validate command for Mozart CLI.
+"""Validate command for Marianne CLI.
 
-This module implements the `mozart validate` command for comprehensive
+This module implements the `mzt validate` command for comprehensive
 configuration validation before score execution.
 
 ★ Insight ─────────────────────────────────────
@@ -100,7 +100,7 @@ def validate(
         output_error(
             f"Score must be a YAML mapping (key-value pairs), got: {got_type}",
             hints=[
-                "A Mozart score needs key-value fields like: name: my-score",
+                "A Marianne score needs key-value fields like: name: my-score",
                 "Check that your file isn't plain text, a list, or empty.",
                 "See: docs/score-writing-guide.md",
             ],
@@ -314,7 +314,7 @@ _KNOWN_TYPOS: dict[str, str] = {
     "backend_type": "instrument (or backend.type)",
     "max_retries": "retry.max_retries",
     "timeout": "stale_detection.idle_timeout_seconds",
-    "preamble": "prompt.template (preamble is set automatically by Mozart)",
+    "preamble": "prompt.template (preamble is set automatically by Marianne)",
     "task": "prompt.template",
     "stager_delay_ms": "parallel.stagger_delay_ms",
     "stagger_delay": "parallel.stagger_delay_ms",
@@ -342,7 +342,7 @@ def _unknown_field_hints(error_msg: str) -> list[str]:
 
     if not unknown_fields:
         return [
-            "Your score contains field(s) that Mozart doesn't recognize.",
+            "Your score contains field(s) that Marianne doesn't recognize.",
             "Check for typos in field names.",
             "See: docs/score-writing-guide.md for valid fields.",
         ]

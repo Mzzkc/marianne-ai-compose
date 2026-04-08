@@ -5,7 +5,7 @@ musician.py:156 constructs error_msg from exception text WITHOUT credential
 redaction. This error_msg is:
 1. Logged at ERROR level (persists to log files)
 2. Stored in SheetAttemptResult.error_message (persists to state DB)
-3. Visible in `mozart diagnose` and `mozart errors` output
+3. Visible in `mzt diagnose` and `mzt errors` output
 4. Indexed by the learning store for pattern matching
 
 The musician DOES redact stdout_tail/stderr_tail (line 573) — this gap

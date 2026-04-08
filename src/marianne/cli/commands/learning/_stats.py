@@ -32,8 +32,8 @@ def learning_stats(
     execution counts, pattern counts, and effectiveness metrics.
 
     Examples:
-        mozart learning-stats         # Human-readable summary
-        mozart learning-stats --json  # JSON output for scripting
+        mzt learning-stats         # Human-readable summary
+        mzt learning-stats --json  # JSON output for scripting
     """
     from marianne.learning.global_store import get_global_store
     from marianne.learning.migration import check_migration_status
@@ -101,7 +101,7 @@ def learning_stats(
 
     if migration.get("needs_migration"):
         console.print(
-            "\n[yellow]⚠ Migration needed:[/yellow] Run 'mozart aggregate-patterns' "
+            "\n[yellow]⚠ Migration needed:[/yellow] Run 'marianne aggregate-patterns' "
             "to import workspace-local outcomes"
         )
 
@@ -118,9 +118,9 @@ def learning_insights(
     - Success predictors (factors that correlate with success)
 
     Examples:
-        mozart learning-insights
-        mozart learning-insights --pattern-type output_pattern
-        mozart learning-insights --limit 20
+        mzt learning-insights
+        mzt learning-insights --pattern-type output_pattern
+        mzt learning-insights --limit 20
     """
     from marianne.learning.global_store import GlobalLearningStore
 
@@ -173,9 +173,9 @@ def learning_activity(
     """View recent learning activity and pattern applications.
 
     Examples:
-        mozart learning-activity           # Last 24 hours of activity
-        mozart learning-activity -h 48     # Last 48 hours
-        mozart learning-activity --json    # JSON output
+        mzt learning-activity           # Last 24 hours of activity
+        mzt learning-activity -h 48     # Last 48 hours
+        mzt learning-activity --json    # JSON output
     """
     from marianne.learning.global_store import get_global_store
 

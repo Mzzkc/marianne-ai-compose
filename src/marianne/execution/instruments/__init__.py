@@ -1,4 +1,4 @@
-"""Instrument execution backends for Mozart.
+"""Instrument execution backends for Marianne.
 
 This package contains config-driven backends that execute prompts through
 CLI instruments defined by InstrumentProfile YAML files.

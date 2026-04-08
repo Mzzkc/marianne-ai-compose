@@ -34,9 +34,9 @@
 #        Categorize: corroborated / uncorroborated / contradicted
 #
 # Usage:
-#   mozart start
-#   mozart run examples/rosetta/source-triangulation.yaml
-#   mozart status claim-verify
+#   mzt start
+#   mzt run examples/rosetta/source-triangulation.yaml
+#   mzt status claim-verify
 #   cat workspaces/claim-verify/03-triangulation.md
 #
 # Output:

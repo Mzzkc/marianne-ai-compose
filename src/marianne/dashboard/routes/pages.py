@@ -1,4 +1,4 @@
-"""Page routes for the Mozart Dashboard.
+"""Page routes for the Marianne Dashboard.
 
 Handles HTML page rendering (non-API endpoints).
 """

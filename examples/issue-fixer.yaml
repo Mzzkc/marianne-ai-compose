@@ -2,16 +2,16 @@
 # ║              AUTOMATED ISSUE FIXER                                          ║
 # ║                                                                              ║
 # ║  Picks one open GitHub issue, investigates it, plans a fix, and either      ║
-# ║  fixes it directly (simple) or generates & runs a dedicated Mozart score    ║
+# ║  fixes it directly (simple) or generates & runs a dedicated Marianne score    ║
 # ║  (complex). Self-chains to fix the next issue.                              ║
 # ║                                                                              ║
 # ║  Usage:                                                                      ║
 # ║    cd /path/to/your/project                                                  ║
-# ║    setsid mozart run examples/issue-fixer.yaml > .bugfix-workspace/mozart.log 2>&1 &  ║
+# ║    setsid mzt run examples/issue-fixer.yaml > .bugfix-workspace/marianne.log 2>&1 &  ║
 # ║                                                                              ║
 # ║  Prerequisites:                                                              ║
 # ║    - gh CLI authenticated (gh auth login)                                    ║
-# ║    - Open issues with 'bug' or 'mozart-quality' labels                      ║
+# ║    - Open issues with 'bug' or 'marianne-quality' labels                      ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: "issue-fixer"
@@ -27,7 +27,7 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 2400  # 40 min default for most sheets (investigation, review, commit)
   timeout_overrides:
-    7: 28800  # 8 hr for monitoring sheet (watches spawned Mozart jobs to completion)
+    7: 28800  # 8 hr for monitoring sheet (watches spawned Marianne jobs to completion)
 
 cross_sheet:
   auto_capture_stdout: true
@@ -55,7 +55,7 @@ prompt:
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     **Step 0: Track iteration**
-    (Previous iteration outputs are archived automatically by Mozart's
+    (Previous iteration outputs are archived automatically by Marianne's
     workspace_lifecycle.archive_on_fresh feature when --fresh is used.)
     ```bash
     mkdir -p {{ workspace }}
@@ -75,19 +75,19 @@ prompt:
     ```bash
     # Get open bugs and quality issues, ordered by priority
     gh issue list --state open --label "bug" --json number,title,body,labels,createdAt --limit 20
-    gh issue list --state open --label "mozart-quality" --json number,title,body,labels,createdAt --limit 10
+    gh issue list --state open --label "marianne-quality" --json number,title,body,labels,createdAt --limit 10
     ```
 
     **Step 2: Prioritize and select ONE issue**
 
-    If there are NO open issues with the 'bug' or 'mozart-quality' labels, write
+    If there are NO open issues with the 'bug' or 'marianne-quality' labels, write
     your output file with:
     ```markdown
     # No Open Issues Remain
 
     NO_ISSUES_REMAINING
 
-    All issues with 'bug' or 'mozart-quality' labels have been resolved.
+    All issues with 'bug' or 'marianne-quality' labels have been resolved.
     The issue fixer has completed its work.
     ```
     Then stop — do not attempt further steps.
@@ -108,7 +108,7 @@ prompt:
     picking the same one:
     ```bash
     ITER=$(cat {{ workspace }}/.iteration 2>/dev/null || echo "?")
-    gh issue comment $ISSUE_NUM --body "Mozart Issue Fixer: investigating this issue (iteration $ITER)"
+    gh issue comment $ISSUE_NUM --body "Marianne Issue Fixer: investigating this issue (iteration $ITER)"
     ```
 
     **Step 4: Write selection rationale**
@@ -342,10 +342,10 @@ prompt:
     PATH B — SCORE COMPOSITION (VERDICT: COMPLEX)
     ─────────────────────────────────────────────────────────────────────────────
 
-    If the verdict is COMPLEX, you must write a Mozart score to orchestrate the fix.
+    If the verdict is COMPLEX, you must write a Marianne score to orchestrate the fix.
 
     **Step 1: Study existing scores**
-    Read these files to understand Mozart score patterns and best practices:
+    Read these files to understand Marianne score patterns and best practices:
     ```bash
     ls examples/*.yaml
     cat examples/quality-continuous.yaml | head -100  # Structure and conventions
@@ -472,7 +472,7 @@ prompt:
 
     Then validate the score:
     ```bash
-    mozart validate {{ workspace }}/04-generated-score.yaml 2>&1
+    mzt validate {{ workspace }}/04-generated-score.yaml 2>&1
     ```
 
     **Output to:** {{ workspace }}/05-review.md
@@ -495,7 +495,7 @@ prompt:
     [Any concerns that couldn't be addressed]
 
     ## Validation Results (complex path only)
-    [mozart validate output]
+    [mzt validate output]
     ```
 
     {% elif sheet_num == 6 %}
@@ -549,24 +549,24 @@ prompt:
 
     1. Verify the reviewed score is valid:
        ```bash
-       mozart validate {{ workspace }}/04-generated-score.yaml
+       mzt validate {{ workspace }}/04-generated-score.yaml
        ```
 
     2. Launch the inner score with setsid for persistence:
        ```bash
        INNER_WS="{{ workspace }}/inner-run"
        mkdir -p "$INNER_WS"
-       setsid mozart run {{ workspace }}/04-generated-score.yaml \
-         > "$INNER_WS/mozart.log" 2>&1 &
-       MOZART_PID=$!
-       echo "$MOZART_PID" > {{ workspace }}/inner-pid.txt
-       echo "Launched inner score with PID $MOZART_PID"
+       setsid mzt run {{ workspace }}/04-generated-score.yaml \
+         > "$INNER_WS/marianne.log" 2>&1 &
+       MZT_PID=$!
+       echo "$MZT_PID" > {{ workspace }}/inner-pid.txt
+       echo "Launched inner score with PID $MZT_PID"
        ```
 
     3. Wait 30 seconds and verify it started:
        ```bash
        sleep 30
-       mozart status $(cat {{ workspace }}/04-generated-score.yaml | grep '^name:' | awk '{print $2}' | tr -d '"') \
+       mzt status $(cat {{ workspace }}/04-generated-score.yaml | grep '^name:' | awk '{print $2}' | tr -d '"') \
          --workspace {{ workspace }}/inner-run 2>&1
        ```
 
@@ -583,7 +583,7 @@ prompt:
     **PID:** [process ID]
 
     ## Initial Status
-    [mozart status output]
+    [mzt status output]
     ```
 
     {% elif sheet_num == 7 %}
@@ -630,18 +630,18 @@ prompt:
 
     ```bash
     # Check status
-    mozart status "$INNER_NAME" --workspace "$INNER_WS" 2>&1
+    mzt status "$INNER_NAME" --workspace "$INNER_WS" 2>&1
 
     # Check recent log output
-    tail -30 "$INNER_WS/mozart.log" 2>/dev/null
+    tail -30 "$INNER_WS/marianne.log" 2>/dev/null
     ```
 
     **What to watch for:**
     - **Sheet failures:** Check which validation failed and why
     - **Timeouts:** If a sheet times out, check if it made partial progress
-    - **Rate limits:** Note them but don't intervene (Mozart handles these)
+    - **Rate limits:** Note them but don't intervene (Marianne handles these)
     - **Stuck processes:** If no log output for 10+ minutes on an active sheet,
-      investigate with `mozart diagnose`
+      investigate with `mzt diagnose`
 
     **When to intervene:**
     - If the inner score fails completely and won't recover, document why
@@ -651,7 +651,7 @@ prompt:
 
     **When the inner score completes:**
     ```bash
-    mozart status "$INNER_NAME" --workspace "$INNER_WS" 2>&1
+    mzt status "$INNER_NAME" --workspace "$INNER_WS" 2>&1
     # Verify: Status should be COMPLETED
     # Check: What sheets passed/failed
     # Verify: Tests pass in the project directory
@@ -685,7 +685,7 @@ prompt:
     [pytest output]
 
     ## Issues Encountered
-    [Any Mozart bugs, unexpected behaviors, or problems during monitoring]
+    [Any Marianne bugs, unexpected behaviors, or problems during monitoring]
     ```
 
     {% elif sheet_num == 8 %}
@@ -750,7 +750,7 @@ prompt:
 
     Fixes #$ISSUE_NUM
 
-    Co-Authored-By: Mozart AI Compose <noreply@mozart.ai>"
+    Co-Authored-By: Marianne AI Compose <noreply@marianne.ai>"
 
     echo "Committed fix for issue $ISSUE_NUM"
     ```
@@ -779,7 +779,7 @@ prompt:
 
     **Changes:** $(git diff --stat HEAD~1)
 
-    *Closed automatically by Mozart Issue Fixer (iteration $(cat {{ workspace }}/.iteration))*"
+    *Closed automatically by Marianne Issue Fixer (iteration $(cat {{ workspace }}/.iteration))*"
     ```
 
     **Step 5: Remove the "investigating" comment claim (cleanup)**
@@ -845,7 +845,7 @@ prompt:
       ──────────────────────────────────────────────────────────────────────────
 
       After completing your primary task, append this section to your output file.
-      Be honest and specific — this feedback directly improves Mozart.
+      Be honest and specific — this feedback directly improves Marianne.
 
       ### Sheet Feedback
       | Metric | Rating (1-5) | Notes |
@@ -855,14 +855,14 @@ prompt:
       | Task actionability | | Could you act without guessing? |
       | Prompt efficiency | | Was the prompt concise or bloated? |
 
-      **Mozart issues encountered:**
+      **Marianne issues encountered:**
       List any bugs, errors, unexpected behaviors, or workspace problems:
       - [description + evidence, or "None"]
 
       **Suggestions for this sheet:**
       - [How to improve the prompt, workflow, or tooling]
 
-      If you encountered any Mozart system bugs (not code bugs you're fixing),
+      If you encountered any Marianne system bugs (not code bugs you're fixing),
       also append them to feedback-log.md in your output directory (same location
       as your main output file) with:
       - Sheet number and timestamp

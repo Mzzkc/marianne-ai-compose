@@ -29,8 +29,8 @@
 # ║    Stage 10: Commit & Push                                                ║
 # ║                                                                            ║
 # ║  Usage:                                                                    ║
-# ║    cd ~/Projects/mozart-ai-compose                                         ║
-# ║    mozart run examples/phase3-wiring.yaml                                  ║
+# ║    cd ~/Projects/marianne-ai-compose                                         ║
+# ║    mzt run examples/phase3-wiring.yaml                                  ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: "phase3-wiring"
@@ -88,28 +88,28 @@ prompt:
     ║  "You can't rewire what you don't understand"                               ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
-    Trace the full execution path from `mozart run` through daemon to sheet
+    Trace the full execution path from `mzt run` through daemon to sheet
     execution. Document every component, method, and data flow involved.
 
     **Step 1: Trace the current monolithic path**
     Read these files in order and document the call chain:
-    1. `src/mozart/cli/commands/run.py` — CLI entry, daemon detection
-    2. `src/mozart/daemon/detect.py` — how CLI finds the daemon
-    3. `src/mozart/daemon/ipc/client.py` — how CLI submits to daemon
-    4. `src/mozart/daemon/ipc/handler.py` — how daemon receives requests
-    5. `src/mozart/daemon/manager.py` — `submit_job()` → `_run_job_task()`
-    6. `src/mozart/daemon/job_service.py` — `start_job()`, component creation
-    7. `src/mozart/execution/runner/__init__.py` — JobRunner mixin composition
-    8. `src/mozart/execution/runner/lifecycle.py` — THE LOOP (`run()`, `_execute_sequential_mode()`)
-    9. `src/mozart/execution/runner/sheet.py` — per-sheet state machine
-    10. `src/mozart/execution/runner/recovery.py` — retry, self-healing
-    11. `src/mozart/execution/runner/patterns.py` — pattern injection/feedback
+    1. `src/marianne/cli/commands/run.py` — CLI entry, daemon detection
+    2. `src/marianne/daemon/detect.py` — how CLI finds the daemon
+    3. `src/marianne/daemon/ipc/client.py` — how CLI submits to daemon
+    4. `src/marianne/daemon/ipc/handler.py` — how daemon receives requests
+    5. `src/marianne/daemon/manager.py` — `submit_job()` → `_run_job_task()`
+    6. `src/marianne/daemon/job_service.py` — `start_job()`, component creation
+    7. `src/marianne/execution/runner/__init__.py` — JobRunner mixin composition
+    8. `src/marianne/execution/runner/lifecycle.py` — THE LOOP (`run()`, `_execute_sequential_mode()`)
+    9. `src/marianne/execution/runner/sheet.py` — per-sheet state machine
+    10. `src/marianne/execution/runner/recovery.py` — retry, self-healing
+    11. `src/marianne/execution/runner/patterns.py` — pattern injection/feedback
 
     **Step 2: Trace the Phase 3 infrastructure (built but not wired)**
     Read these files and document their public API:
-    1. `src/mozart/daemon/scheduler.py` — `register_job()`, `next_sheet()`, `mark_complete()`, `deregister_job()`
-    2. `src/mozart/daemon/rate_coordinator.py` — `report_rate_limit()`, `is_rate_limited()`
-    3. `src/mozart/daemon/backpressure.py` — `can_start_sheet()`
+    1. `src/marianne/daemon/scheduler.py` — `register_job()`, `next_sheet()`, `mark_complete()`, `deregister_job()`
+    2. `src/marianne/daemon/rate_coordinator.py` — `report_rate_limit()`, `is_rate_limited()`
+    3. `src/marianne/daemon/backpressure.py` — `can_start_sheet()`
 
     **Step 3: Identify the clean cut**
     Document precisely:
@@ -258,7 +258,7 @@ prompt:
     in the score — take your time and get it right.
 
     **Implementation rules:**
-    1. Create `src/mozart/execution/sheet_executor.py` — new file
+    1. Create `src/marianne/execution/sheet_executor.py` — new file
     2. Extract shared logic from Runner mixins into callable functions where
        possible, rather than duplicating. If extraction is too invasive for
        this stage, document what to extract later and use delegation.
@@ -281,7 +281,7 @@ prompt:
     **After implementing, verify:**
     ```bash
     # Type check the new file
-    mypy src/mozart/execution/sheet_executor.py --ignore-missing-imports
+    mypy src/marianne/execution/sheet_executor.py --ignore-missing-imports
 
     # Ensure existing tests still pass (no breakage)
     pytest -x -q --tb=short
@@ -361,13 +361,13 @@ prompt:
 
     **What to implement:**
 
-    1. **Add `scheduler_mode` to DaemonConfig** (`src/mozart/daemon/config.py`):
+    1. **Add `scheduler_mode` to DaemonConfig** (`src/marianne/daemon/config.py`):
        ```python
        scheduler_mode: Literal["off", "shadow", "active"] = "off"
        ```
        Default is "off" — existing behavior unchanged.
 
-    2. **Shadow observer in JobManager** (`src/mozart/daemon/manager.py`):
+    2. **Shadow observer in JobManager** (`src/marianne/daemon/manager.py`):
        In `_run_job_task()`, when `scheduler_mode == "shadow"`:
        - Parse sheets from config (same way the scheduler will)
        - Call `self._scheduler.register_job(job_id, sheets, deps)`
@@ -497,21 +497,21 @@ prompt:
 
     **What to implement:**
 
-    1. **IPC handler updates** (`src/mozart/daemon/ipc/handler.py`):
+    1. **IPC handler updates** (`src/marianne/daemon/ipc/handler.py`):
        - Add `scheduler.stats` RPC method exposing `SchedulerStats`
        - Add `scheduler.mode` RPC method showing current mode
 
-    2. **Manager updates** (`src/mozart/daemon/manager.py`):
+    2. **Manager updates** (`src/marianne/daemon/manager.py`):
        - Ensure `_run_job_task` correctly routes based on scheduler_mode
        - Ensure job cancellation calls `deregister_job()`
        - Ensure shutdown deregisters all active jobs
        - Update `_on_task_done` to handle scheduler-driven task completion
 
-    3. **Health check updates** (`src/mozart/daemon/health.py`):
+    3. **Health check updates** (`src/marianne/daemon/health.py`):
        - Include scheduler stats in health response
        - Report scheduler mode in readiness check
 
-    4. **Registry updates** (`src/mozart/daemon/registry.py`) if needed:
+    4. **Registry updates** (`src/marianne/daemon/registry.py`) if needed:
        - Ensure registry correctly tracks scheduler-driven jobs
 
     5. **Update existing TODO comments:**
@@ -603,23 +603,23 @@ prompt:
 
     **Step 2: Type checking**
     ```bash
-    mypy src/mozart/ --ignore-missing-imports 2>&1 | tail -20
+    mypy src/marianne/ --ignore-missing-imports 2>&1 | tail -20
     ```
     Fix any type errors in new/modified files.
 
     **Step 3: Lint check**
     ```bash
-    ruff check src/mozart/ 2>&1 | tail -20
+    ruff check src/marianne/ 2>&1 | tail -20
     ```
     Fix any lint issues in new/modified files.
 
     **Step 4: Documentation audit**
     Verify that all modified files have accurate docstrings:
-    - `src/mozart/execution/sheet_executor.py` — new file, needs module docstring
-    - `src/mozart/daemon/scheduler.py` — update "not yet wired" language
-    - `src/mozart/daemon/rate_coordinator.py` — update "not yet wired" language
-    - `src/mozart/daemon/manager.py` — update TODO comments
-    - `src/mozart/daemon/config.py` — document scheduler_mode field
+    - `src/marianne/execution/sheet_executor.py` — new file, needs module docstring
+    - `src/marianne/daemon/scheduler.py` — update "not yet wired" language
+    - `src/marianne/daemon/rate_coordinator.py` — update "not yet wired" language
+    - `src/marianne/daemon/manager.py` — update TODO comments
+    - `src/marianne/daemon/config.py` — document scheduler_mode field
     - Any other modified files
 
     **Step 5: Verify backward compatibility**
@@ -694,13 +694,13 @@ prompt:
 
     Stage ONLY source and test files — not workspace artifacts:
     ```bash
-    git add src/mozart/execution/sheet_executor.py
-    git add src/mozart/daemon/config.py
-    git add src/mozart/daemon/manager.py
-    git add src/mozart/daemon/scheduler.py
-    git add src/mozart/daemon/rate_coordinator.py
-    git add src/mozart/daemon/ipc/handler.py
-    git add src/mozart/daemon/health.py
+    git add src/marianne/execution/sheet_executor.py
+    git add src/marianne/daemon/config.py
+    git add src/marianne/daemon/manager.py
+    git add src/marianne/daemon/scheduler.py
+    git add src/marianne/daemon/rate_coordinator.py
+    git add src/marianne/daemon/ipc/handler.py
+    git add src/marianne/daemon/health.py
     git add tests/test_sheet_executor.py
     git add tests/test_scheduler_integration.py
     # Add any other modified source/test files shown by git status
@@ -765,7 +765,7 @@ prompt:
       ║  Default: "off" — zero impact on existing behavior                    ║
       ╚══════════════════════════════════════════════════════════════════════════╝
 
-      **Project:** Mozart AI Compose (~/Projects/mozart-ai-compose)
+      **Project:** Marianne AI Compose (~/Projects/marianne-ai-compose)
       **Language:** Python 3.11+, async/await, Pydantic v2, structlog
       **Test framework:** pytest (4190+ existing tests must continue passing)
 
@@ -839,7 +839,7 @@ validations:
     condition: "stage >= 3"
 
   - type: command_succeeds
-    command: "test -f src/mozart/execution/sheet_executor.py && echo 'exists' || echo 'missing'"
+    command: "test -f src/marianne/execution/sheet_executor.py && echo 'exists' || echo 'missing'"
     description: "SheetExecutor source file must exist"
     condition: "stage >= 3"
 

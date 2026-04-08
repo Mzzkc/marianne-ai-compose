@@ -1,6 +1,6 @@
-"""Tests for ``mozart stop`` safety guard (#94).
+"""Tests for ``mzt stop`` safety guard (#94).
 
-When jobs are actively running, ``mozart stop`` must warn the user and
+When jobs are actively running, ``mzt stop`` must warn the user and
 ask for confirmation before proceeding.  The ``--force`` flag skips
 the safety check entirely.  If the IPC probe fails (conductor
 unresponsive), stop proceeds without blocking.

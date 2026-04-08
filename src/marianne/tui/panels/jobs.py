@@ -1,4 +1,4 @@
-"""Job-centric process tree panel for the Mozart Monitor TUI.
+"""Job-centric process tree panel for the Marianne Monitor TUI.
 
 Renders a tree of jobs with their sheets and running processes,
 including inline metrics (CPU, MEM, age) and syscall summaries.

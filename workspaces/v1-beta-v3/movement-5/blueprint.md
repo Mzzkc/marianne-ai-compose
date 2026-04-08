@@ -8,7 +8,7 @@ Five deliverables, all rooted in making contracts explicit: a docstring fix, a d
 
 ### 1. F-430: ValidationRule.sheet Docstring Fix (P3 → RESOLVED)
 
-**File:** `src/mozart/core/config/execution.py:494-501`
+**File:** `src/marianne/core/config/execution.py:494-501`
 
 The `sheet` field docstring claimed "If both sheet and condition are set, the sheet filter takes precedence." The code at `_sheet_to_condition()` (line 506) does the opposite: `if self.sheet is not None and self.condition is None:` — meaning condition takes precedence. The docstring lied.
 

@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.ipc.server and handler — async Unix socket server.
+"""Tests for marianne.daemon.ipc.server and handler — async Unix socket server.
 
 Uses real Unix sockets (via tmp_path) instead of mocks to validate actual
 I/O behavior. The RequestHandler is wired with simple test handlers.

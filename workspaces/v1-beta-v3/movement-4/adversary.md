@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-Sixth adversarial pass across the Mozart codebase. 55 new tests targeting the M4 changes — primarily the F-441 config strictness fix (`extra='forbid'` on all 51 config models), the F-211 checkpoint sync dedup cache, pending job lifecycle, cross-sheet context, and auto-fresh detection. Two architectural findings filed (F-470, F-471). Zero code-level bugs in the F-441 implementation. The strictness change is the most impactful defensive fix since the terminal guard pattern.
+Sixth adversarial pass across the Marianne codebase. 55 new tests targeting the M4 changes — primarily the F-441 config strictness fix (`extra='forbid'` on all 51 config models), the F-211 checkpoint sync dedup cache, pending job lifecycle, cross-sheet context, and auto-fresh detection. Two architectural findings filed (F-470, F-471). Zero code-level bugs in the F-441 implementation. The strictness change is the most impactful defensive fix since the terminal guard pattern.
 
 Total adversarial tests across all movements: **387** (332 + 55).
 
@@ -139,7 +139,7 @@ Written to `meditations/adversary.md` — *The Locksmith's Meditation*. On the r
 
 ## Assessment
 
-The F-441 strictness fix is the single most impactful defensive change since the terminal state guard pattern in M1. Before F-441, any typo in a score was silently accepted — `instrument_fallbacks: [gemini-cli]` passed validation while doing nothing. Now it produces a clear, actionable error. This closes the trust gap between what users write and what Mozart executes.
+The F-441 strictness fix is the single most impactful defensive change since the terminal state guard pattern in M1. Before F-441, any typo in a score was silently accepted — `instrument_fallbacks: [gemini-cli]` passed validation while doing nothing. Now it produces a clear, actionable error. This closes the trust gap between what users write and what Marianne executes.
 
 The bugs I found this movement (F-470, F-471) are lifecycle management issues, not logic bugs. The _synced_status leak is the quietest kind of failure — correct behavior that accumulates silently over time. The pending jobs gap is an architectural oversight in a feature that was designed for responsiveness (don't reject during rate limits) but didn't account for persistence (what happens when the daemon restarts). Both are P2 — not urgent, but real for production use.
 

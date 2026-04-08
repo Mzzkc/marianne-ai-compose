@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.observer module.
+"""Tests for marianne.daemon.observer module.
 
 Covers JobObserver lifecycle, filesystem event detection, process tree
 monitoring, and graceful stop.

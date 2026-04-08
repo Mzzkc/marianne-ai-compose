@@ -31,8 +31,8 @@ Three findings resolved, one mitigated, 14 TDD tests written, 7 existing tests u
 - `python -m pytest tests/test_daemon_backpressure.py tests/test_f149_cross_instrument_rejection.py` → 67 passed.
 
 **Files changed:**
-- `src/mozart/daemon/backpressure.py:163-212` — `should_accept_job()` and `rejection_reason()` rewritten
-- `src/mozart/daemon/manager.py:595-606` — rate_limit→PENDING path removed
+- `src/marianne/daemon/backpressure.py:163-212` — `should_accept_job()` and `rejection_reason()` rewritten
+- `src/marianne/daemon/manager.py:595-606` — rate_limit→PENDING path removed
 - `tests/test_f149_cross_instrument_rejection.py` — NEW, 10 tests
 - `tests/test_daemon_backpressure.py` — 3 tests updated
 - `tests/test_rate_limit_pending.py` — 2 tests updated
@@ -53,7 +53,7 @@ Three findings resolved, one mitigated, 14 TDD tests written, 7 existing tests u
 - `python -m pytest tests/test_f451_diagnose_workspace_fallback.py` → 4 passed.
 
 **Files changed:**
-- `src/mozart/cli/commands/diagnose.py:657-753` — workspace fallback, -w unhidden, hint updated
+- `src/marianne/cli/commands/diagnose.py:657-753` — workspace fallback, -w unhidden, hint updated
 - `tests/test_f451_diagnose_workspace_fallback.py` — NEW, 4 tests
 
 ### F-471 MITIGATED (P2): Pending Jobs Lost on Restart
@@ -90,3 +90,88 @@ ruff check src/ — all checks passed
 **Scope separation solves composition bugs.** The fix wasn't to add complexity (instrument-aware checking at every level). It was to simplify — to recognize that job-level gating and sheet-level dispatch are different concerns operating at different scopes. Resource pressure is system-wide; rate limits are per-instrument. Once the scopes were separated, the bug disappeared and the code got simpler.
 
 **The gap between commands.** F-451 is a UX observability gap. `status -w` finds the job. `diagnose` can't. The user's natural debugging path breaks. This class of bug — inconsistency between related commands — is easy to miss because each command works correctly in isolation. You only find it by walking the user's path.
+
+---
+
+## Session 2 — Instrument Fallback Observability Pipeline
+
+**Date:** 2026-04-06
+
+### Summary
+
+Identified and closed a systems-level gap in the instrument fallback pipeline: InstrumentFallback events were defined, handlers existed, but events were never emitted to the EventBus. The dashboard, learning hub, and notification system were blind to fallback transitions. Fixed with a clean event collection + drain + publish pipeline. Added fallback indicators to `mzt status` display. Wrote 31 TDD tests including 15 adversarial cases.
+
+### Instrument Fallback Event Emission (P1)
+
+**Gap found:** `_check_and_fallback_unavailable()` (`core.py:540-616`) and `_handle_exhaustion()` (`core.py:473-500`) both logged fallback transitions at INFO but never created `InstrumentFallback` events. The event type existed in `events.py:373-393`. The observer conversion existed in `events.py:653-664`. The handler existed in the event loop (`core.py:827-832`, passthrough). But nothing connected them — the EventBus never received fallback notifications.
+
+**Fix — three-layer pipeline:**
+1. **Core collection:** `BatonCore._fallback_events: list[InstrumentFallback]` collects events during event processing. Three emission points: two in `_check_and_fallback_unavailable()` (unregistered instrument, unavailable instrument) and one in `_handle_exhaustion()` (rate_limit_exhausted fallback). `drain_fallback_events()` returns and clears.
+2. **Adapter publishing:** `BatonAdapter._publish_fallback_events()` drains events from core, converts via `to_observer_event()`, publishes to EventBus. Called after each event cycle in the main loop (`adapter.py:1573`).
+3. **Error isolation:** Each publish is individually try/except'd — a failed publish doesn't block subsequent events or the event loop.
+
+**Evidence:**
+- `tests/test_fallback_event_emission.py`: 11 TDD tests — unavailable fallback emits event, circuit breaker fallback emits event, no event when available, exhaustion fallback emits event, no event on exhaustion without chain, drain clears list, multiple events, dispatch-time fallback, adapter publishes to EventBus, no publish without bus, drain without bus.
+- All 11 pass. All 37 existing fallback tests pass (test_instrument_fallback_baton, test_dispatch_fallback_wiring, test_check_instrument_available, test_f151_status_display).
+
+**Files changed:**
+- `src/marianne/daemon/baton/core.py:133-136` — `_fallback_events` list added to `__init__`
+- `src/marianne/daemon/baton/core.py:155-162` — `drain_fallback_events()` method
+- `src/marianne/daemon/baton/core.py:558-564, 597-603, 479-485` — event emission at three fallback points
+- `src/marianne/daemon/baton/adapter.py:1331-1363` — `_publish_fallback_events()`
+- `src/marianne/daemon/baton/adapter.py:1573` — wired into main loop
+- `tests/test_fallback_event_emission.py` — NEW, 11 tests
+
+### Fallback Indicator in Status Display (P1)
+
+**Implementation:** `format_instrument_with_fallback()` at `status.py:83-100` formats the instrument column with a fallback indicator when `SheetState.instrument_fallback_history` is non-empty. Shows the last transition: `gemini-cli (was claude-code: rate_limit_exhausted)`.
+
+`create_sheet_details_table()` gains `has_fallbacks` parameter — when True, the Instrument column uses `min_width=14, no_wrap=False` instead of the fixed `width=14, no_wrap=True`, allowing the longer fallback text to display.
+
+**Evidence:**
+- `tests/test_fallback_status_indicator.py`: 5 TDD tests — no fallback shows plain name, single fallback shows indicator, multiple fallbacks shows last transition, empty list is plain, empty instrument returns empty string.
+
+**Files changed:**
+- `src/marianne/cli/commands/status.py:83-100` — `format_instrument_with_fallback()`
+- `src/marianne/cli/commands/status.py:1060-1062` — `has_fallbacks` detection
+- `src/marianne/cli/commands/status.py:1094` — wired into sheet row building
+- `src/marianne/cli/output.py:413-417` — `has_fallbacks` parameter
+- `tests/test_fallback_status_indicator.py` — NEW, 5 tests
+
+### Adversarial Fallback Tests (P1)
+
+15 adversarial tests in `tests/test_fallback_adversarial.py` covering:
+
+| Test Class | Tests | What it Proves |
+|---|---|---|
+| TestEmptyFallbackChain | 2 | Empty chain → normal failure, no loops |
+| TestAllFallbacksExhausted | 2 | Full chain walk then FAILED; cascading unavailability |
+| TestDuplicateInstrumentsInChain | 1 | Same instrument twice gets fresh retry budget |
+| TestRateLimitVsUnavailableReason | 2 | Correct reason string at each trigger point |
+| TestSerializationRoundtrip | 2 | Fallback state survives to_dict/from_dict |
+| TestAdvanceFallbackEdgeCases | 4 | Exhausted returns None, reset budget, history, attempts |
+| TestObserverEventFormat | 2 | Observer conversion correct, frozen immutability |
+
+### TASKS.md Updated
+
+Marked adversarial tests task as complete with detailed notes. All 12 fallback spec tasks now resolved.
+
+---
+
+## Quality Verification (Session 2)
+
+```
+pytest (targeted: 120 tests across 9 files) — all pass
+mypy src/ — clean
+ruff check src/ — all checks passed
+```
+
+Commit: `0a43895`
+
+---
+
+## Patterns Observed (Session 2)
+
+**The invisible disconnect.** The fallback event pipeline had all the pieces: event type, handler, observer conversion, EventBus integration. But nobody connected the generation side to the consumption side. Each piece was written by a different musician in a different movement. Each piece was correct in isolation. The composition was never verified end-to-end. This is the same class as F-065, F-149, D-024 — correct subsystems composing into incorrect behavior at system boundaries.
+
+**Event-driven architectures need event-auditing.** When you have an event type and a handler but no test that verifies the event actually flows through the system, you have documentation masquerading as infrastructure. The 11 tests I wrote verify not just that events are created, but that they flow from core → adapter → EventBus. The flow is the system, not the types.

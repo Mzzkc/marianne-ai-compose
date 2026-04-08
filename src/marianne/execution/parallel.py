@@ -1,6 +1,6 @@
-"""Parallel sheet execution for Mozart jobs (v17 evolution).
+"""Parallel sheet execution for Marianne jobs (v17 evolution).
 
-This module provides parallel execution of sheets within a Mozart job,
+This module provides parallel execution of sheets within a Marianne job,
 using the dependency DAG to determine which sheets can run concurrently.
 
 Key features:

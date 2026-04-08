@@ -1,14 +1,14 @@
 """Migration support for workspace-local outcomes to global store.
 
 This module implements the migration strategy from Movement III design:
-- Import existing .mozart-outcomes.json on first use or explicit command
+- Import existing .marianne-outcomes.json on first use or explicit command
 - Scan common workspace locations
 - Run pattern detection on imported data
 - Preserve workspace-local files (non-destructive)
 
 Migration Flow:
 1. On GlobalLearningStore initialization, check if empty
-2. Scan common workspace locations for .mozart-outcomes.json
+2. Scan common workspace locations for .marianne-outcomes.json
 3. For each found, import outcomes to executions table
 4. Run pattern detection on imported data
 5. Log migration summary to user
@@ -26,7 +26,7 @@ from marianne.learning.outcomes import SheetOutcome
 
 
 class _OutcomeDict(TypedDict, total=False):
-    """Structure of outcome entries in .mozart-outcomes.json.
+    """Structure of outcome entries in .marianne-outcomes.json.
 
     All fields are optional (total=False) because legacy files may have
     incomplete data or use different key names.
@@ -82,19 +82,19 @@ class MigrationResult:
 
 # Default locations to scan for workspace-local outcomes
 DEFAULT_SCAN_PATTERNS = [
-    "~/.mozart/*/.mozart-outcomes.json",
-    "./*-workspace/.mozart-outcomes.json",
-    "./workspace/.mozart-outcomes.json",
-    "./.mozart-outcomes.json",
-    "./evolution-workspace*/.mozart-outcomes.json",
-    "./global-learning-workspace/.mozart-outcomes.json",
+    "~/.marianne/*/.marianne-outcomes.json",
+    "./*-workspace/.marianne-outcomes.json",
+    "./workspace/.marianne-outcomes.json",
+    "./.marianne-outcomes.json",
+    "./evolution-workspace*/.marianne-outcomes.json",
+    "./global-learning-workspace/.marianne-outcomes.json",
 ]
 
 
 class OutcomeMigrator:
     """Migrates workspace-local outcomes to the global store.
 
-    This migrator scans for existing .mozart-outcomes.json files and
+    This migrator scans for existing .marianne-outcomes.json files and
     imports their contents into the global SQLite database, enabling
     cross-workspace learning from historical data.
 
@@ -134,7 +134,7 @@ class OutcomeMigrator:
         """Migrate all discoverable workspace-local outcomes.
 
         Scans standard locations plus any additional paths for
-        .mozart-outcomes.json files and imports them.
+        .marianne-outcomes.json files and imports them.
 
         Args:
             scan_patterns: Glob patterns to scan (defaults to standard locations).
@@ -154,7 +154,7 @@ class OutcomeMigrator:
             expanded = Path(pattern).expanduser()
             if "*" in str(expanded):
                 # It's a glob pattern - find the first non-glob parent
-                # e.g., "./*-workspace/.mozart-outcomes.json" -> glob from "."
+                # e.g., "./*-workspace/.marianne-outcomes.json" -> glob from "."
                 pattern_str = str(expanded)
                 parts = pattern_str.split("/")
                 base_parts: list[str] = []
@@ -230,7 +230,7 @@ class OutcomeMigrator:
         result = MigrationResult()
 
         # Look for outcome file in workspace
-        outcome_file = workspace_path / ".mozart-outcomes.json"
+        outcome_file = workspace_path / ".marianne-outcomes.json"
         if not outcome_file.exists():
             result.errors.append(f"No outcomes file found in {workspace_path}")
             return result
@@ -259,7 +259,7 @@ class OutcomeMigrator:
         """Migrate a single outcome file.
 
         Args:
-            outcome_file: Path to .mozart-outcomes.json file.
+            outcome_file: Path to .marianne-outcomes.json file.
 
         Returns:
             Number of outcomes imported.
@@ -319,7 +319,7 @@ class OutcomeMigrator:
         """Parse an outcome from JSON data.
 
         Args:
-            data: Dictionary from .mozart-outcomes.json.
+            data: Dictionary from .marianne-outcomes.json.
 
         Returns:
             SheetOutcome object, or None if parsing fails.

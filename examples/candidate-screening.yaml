@@ -1,6 +1,6 @@
 # candidate-screening.yaml — AI Candidate Screening Pipeline
 #
-# A Mozart score that screens job candidates against requirements.
+# A Marianne score that screens job candidates against requirements.
 # Demonstrates structured analysis with parallel evaluation and synthesis:
 #
 #   Movement 1: Parse the job requirements into weighted criteria
@@ -8,14 +8,14 @@
 #               Each voice analyzes one candidate against all criteria
 #   Movement 3: Comparative ranking with recommendations
 #
-# This is a Wordware comparison demo — showing how Mozart handles
+# This is a Wordware comparison demo — showing how Marianne handles
 # structured data extraction and multi-candidate parallel evaluation
 # that would require complex prompt chaining in other tools.
 #
 # Usage:
-#   mozart start
-#   mozart run examples/candidate-screening.yaml
-#   mozart status candidate-screen
+#   mzt start
+#   mzt run examples/candidate-screening.yaml
+#   mzt status candidate-screen
 #   cat workspaces/candidate-screen/03-ranking.md
 #
 # Output:
@@ -276,15 +276,45 @@ validations:
   - type: file_exists
     path: "{workspace}/01-criteria.json"
     sheet: 1
+    description: "Evaluation rubric exists"
+  - type: content_contains
+    path: "{workspace}/01-criteria.json"
+    pattern: "scoring_guide"
+    sheet: 1
+    description: "Rubric includes per-criterion scoring guidance"
   - type: file_exists
     path: "{workspace}/02-eval-candidate-1.json"
     sheet: 2
+    description: "Alex Chen evaluation exists"
+  - type: content_contains
+    path: "{workspace}/02-eval-candidate-1.json"
+    pattern: "weighted_total"
+    sheet: 2
+    description: "Alex Chen evaluation includes weighted score"
   - type: file_exists
     path: "{workspace}/02-eval-candidate-2.json"
     sheet: 3
+    description: "Priya Sharma evaluation exists"
+  - type: content_contains
+    path: "{workspace}/02-eval-candidate-2.json"
+    pattern: "weighted_total"
+    sheet: 3
+    description: "Priya Sharma evaluation includes weighted score"
   - type: file_exists
     path: "{workspace}/02-eval-candidate-3.json"
     sheet: 4
+    description: "Marcus Johnson evaluation exists"
+  - type: content_contains
+    path: "{workspace}/02-eval-candidate-3.json"
+    pattern: "weighted_total"
+    sheet: 4
+    description: "Marcus Johnson evaluation includes weighted score"
   - type: file_exists
     path: "{workspace}/03-ranking.md"
     sheet: 5
+    description: "Comparative ranking exists"
+  - type: content_contains
+    path: "{workspace}/03-ranking.md"
+    pattern: "Recommendation"
+    sheet: 5
+    description: "Ranking includes final hiring recommendation"

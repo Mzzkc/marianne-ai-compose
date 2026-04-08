@@ -757,7 +757,7 @@ class TestResumeErrorMessages:
 
     @pytest.mark.asyncio
     async def test_pending_job_uses_output_error(self, tmp_path: Path) -> None:
-        """Pending job shows warning with hint to use 'mozart run'."""
+        """Pending job shows warning with hint to use 'mzt run'."""
         from marianne.cli.commands.resume import _find_job_state
 
         state = CheckpointState(
@@ -782,7 +782,7 @@ class TestResumeErrorMessages:
         call_kwargs = mock_err.call_args
         assert "not been started" in call_kwargs[0][0]
         assert call_kwargs[1]["severity"] == "warning"
-        assert any("mozart run" in h for h in call_kwargs[1]["hints"])
+        assert any("mzt run" in h for h in call_kwargs[1]["hints"])
 
 
 # =============================================================================
@@ -794,12 +794,12 @@ class TestResumeErrorMessages:
 class TestResumeRejectedHints:
     """Resume command should provide appropriate hints based on failure reason.
 
-    F-073: 'not found' errors should suggest 'mozart list', not 'diagnose'.
+    F-073: 'not found' errors should suggest 'mzt list', not 'diagnose'.
     Known-but-unresumable scores should suggest 'diagnose'.
     """
 
     async def test_not_found_suggests_list(self) -> None:
-        """When resume is rejected with 'not found', suggest 'mozart list'."""
+        """When resume is rejected with 'not found', suggest 'mzt list'."""
         from marianne.cli.commands.resume import _resume_job
 
         result_dict = {
@@ -825,8 +825,8 @@ class TestResumeRejectedHints:
         call_args = mock_err.call_args
         hints = call_args[1].get("hints", [])
         hint_text = " ".join(str(h) for h in hints)
-        # Should suggest 'mozart list'
-        assert "mozart list" in hint_text
+        # Should suggest 'mzt list'
+        assert "mzt list" in hint_text
         # "not found" should NOT have 'diagnose' as a hint
         assert "diagnose" not in hint_text
 

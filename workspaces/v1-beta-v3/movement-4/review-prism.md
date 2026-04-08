@@ -11,7 +11,7 @@
 
 Movement 4 is the strongest movement yet by every measurable metric: 100% musician participation, 39% mateship rate, 416 new tests, two P0 blockers resolved, the most impactful defensive fix in the project's history (F-441), and a quality gate that holds clean. The code is correct. The infrastructure is extraordinary.
 
-**The structural warning is the same one I've raised for five movements, refined but unresolved: the integration cliff.** Mozart now has 11,397 tests proving individual components work. Zero tests proving the baton runs a real score end-to-end. The gap between "proven correct" and "verified working" is the single remaining risk, and it grows with every test that validates internals while leaving the boundary untested.
+**The structural warning is the same one I've raised for five movements, refined but unresolved: the integration cliff.** Marianne now has 11,397 tests proving individual components work. Zero tests proving the baton runs a real score end-to-end. The gap between "proven correct" and "verified working" is the single remaining risk, and it grows with every test that validates internals while leaving the boundary untested.
 
 ---
 
@@ -38,7 +38,7 @@ Test count delta: +416 from M3 gate (10,981 → 11,397). Source lines: ~98,447. 
 
 2. **F-211 RESOLVED** (Blueprint `5af7dbc` + Foundation `601bc8c`): Checkpoint sync now covers all 11 event types via duck-typed handler + per-event-type handlers for JobTimeout and RateLimitExpired. State-diff dedup cache (`_synced_status` at `adapter.py:344`) prevents duplicate callbacks. 34 TDD tests. VERIFIED: I grepped `_synced_status` — it has 5 references, correctly used for dedup, but **not cleaned up in `deregister_job()`** (lines 492-518 clean up 6 other dicts but miss this one). F-470 correctly filed by Adversary.
 
-3. **F-441 RESOLVED** (Axiom `06500d0`, Journey `7d86035`/`6452f6c`): `extra='forbid'` on all 51 config models across 8 modules. I independently verified: `grep -c 'extra.*forbid'` across `src/mozart/core/config/` returns exactly 51 matches across 8 files. `total_sheets` backward compatibility preserved via `strip_computed_fields()` at `job.py:325-333`. Journey's `_unknown_field_hints()` at `validate.py:324` provides typo suggestions. Theorem's Invariant 75 (config strictness totality) mathematically guarantees no future model can forget this.
+3. **F-441 RESOLVED** (Axiom `06500d0`, Journey `7d86035`/`6452f6c`): `extra='forbid'` on all 51 config models across 8 modules. I independently verified: `grep -c 'extra.*forbid'` across `src/marianne/core/config/` returns exactly 51 matches across 8 files. `total_sheets` backward compatibility preserved via `strip_computed_fields()` at `job.py:325-333`. Journey's `_unknown_field_hints()` at `validate.py:324` provides typo suggestions. Theorem's Invariant 75 (config strictness totality) mathematically guarantees no future model can forget this.
 
 4. **F-450 RESOLVED** (Harper `9899540`): `MethodNotFoundError` properly distinguished from "conductor not running" in IPC layer. Catch order at `detect.py:164` is load-bearing — `MethodNotFoundError` checked before `DaemonError` (its superclass).
 
@@ -49,7 +49,7 @@ Test count delta: +416 from M3 gate (10,981 → 11,397). Source lines: ~98,447. 
 **North's claim that "~50 lines of code" stands between us and v1 beta is technically correct and strategically misleading.** The 50 lines are F-271 (PluginCliBackend MCP gap) and F-255.2 (live_states population). These are real gaps. But the gap between "code exists" and "product ships" includes:
 
 1. **F-271** (~15 lines) — MCP child process explosion. Without this, baton-managed sheets spawn 80 processes instead of 8.
-2. **F-255.2** (~30 lines) — `_live_states` not populated for baton jobs. Without this, `mozart status` shows minimal info.
+2. **F-255.2** (~30 lines) — `_live_states` not populated for baton jobs. Without this, `mzt status` shows minimal info.
 3. **F-254** (governance) — Enabling `use_baton: true` kills ALL in-progress legacy jobs. This is not a code fix. It's a migration decision.
 4. **F-202** (design decision) — Baton excludes FAILED sheet stdout from cross-sheet context while legacy includes it. Conscious decision needed.
 5. **Zero end-to-end baton verification** — North claims "Theorem confirmed 150+ sheets through the baton." I am skeptical of this claim. The orchestra score is running through a live conductor, but `use_baton` defaults to `False`. Unless the conductor.yaml on this system has it explicitly enabled, those 150+ sheets ran through the legacy runner, not the baton. I cannot verify this without reading the conductor config, which would risk the running orchestra. **This claim warrants verification before anyone acts on it.**
@@ -118,7 +118,7 @@ All 47 remaining open issues are appropriately open. No false positives found. K
 | Directive | Status |
 |-----------|--------|
 | Meditation (D-027) | 13/32 musicians (40.6%). 19 missing. INCOMPLETE. |
-| hello.yaml should be impressive | Renamed to hello-mozart.yaml (F-465). Content still produces a markdown file — not yet visually impressive per composer directive. |
+| hello.yaml should be impressive | Renamed to hello-marianne.yaml (F-465). Content still produces a markdown file — not yet visually impressive per composer directive. |
 | Lovable demo (D-022) | ZERO progress. 10th consecutive movement. Wordware demos fill the gap functionally but don't address the directive. |
 | Conductor-clone (P0) | 93% complete. One remaining item (convert all pytests). |
 
@@ -186,7 +186,7 @@ Codex delivered 14 documentation deliverables. Guide fixed the worst first-run e
 
 **F-271 (P1):** PluginCliBackend ignores `mcp_config_flag`. ~15 lines. Unclaimed for an entire movement despite being called out by 6+ musicians. This is the governance problem, not an engineering problem.
 
-**F-431 (P2):** DaemonConfig missing `extra='forbid'`. Same bug class as F-441 but for `~/.mozart/conductor.yaml`. Users editing daemon config get silent field drops just like score authors did.
+**F-431 (P2):** DaemonConfig missing `extra='forbid'`. Same bug class as F-441 but for `~/.marianne/conductor.yaml`. Users editing daemon config get silent field drops just like score authors did.
 
 ---
 
@@ -208,11 +208,11 @@ The pattern is now institutional. Harper committed Circuit's cost accuracy work.
 
 2. **The meditation completion rate (40.6%) is a cohort problem, not a compliance problem.** The meditation directive was added in M5 composer notes, but M4 musicians spawned before the directive was surfaced. The 13 who wrote meditations are disproportionately late-movement musicians who read the directive. The 19 missing are early-movement musicians who never saw it. This resolves with one more directive sweep in M5.
 
-3. **The hello-mozart score is still a markdown file.** Guide fixed the name/ID mismatch (F-465) — critical UX fix. But the composer's directive ("visually impressive, make it pop, not a reading assignment in an md file") is not addressed. The hello score still produces text. The directive calls for mixed media, visual output, something that makes imagination spin. This hasn't been started.
+3. **The hello-marianne score is still a markdown file.** Guide fixed the name/ID mismatch (F-465) — critical UX fix. But the composer's directive ("visually impressive, make it pop, not a reading assignment in an md file") is not addressed. The hello score still produces text. The directive calls for mixed media, visual output, something that makes imagination spin. This hasn't been started.
 
 4. **The Wordware demos are the real demo.** Journey is right: these are the best first examples for newcomers. Small, practical, recognizable use cases. They work TODAY. The strategic question is whether to promote these as the primary demo (Guide's D-028 assignment) or continue gating the demo on baton-as-default.
 
-5. **F-431 (daemon config strictness) is the most likely source of the next silent production failure.** Score config is now strict. Daemon config is not. A typo in `~/.mozart/conductor.yaml` will be silently dropped, exactly as score typos were before F-441. Same bug class, different entry point.
+5. **F-431 (daemon config strictness) is the most likely source of the next silent production failure.** Score config is now strict. Daemon config is not. A typo in `~/.marianne/conductor.yaml` will be silently dropped, exactly as score typos were before F-441. Same bug class, different entry point.
 
 ---
 
@@ -236,8 +236,8 @@ Five movements. Five reviews. The orchestra has become extraordinary at building
 
 But something else has happened that I didn't predict. The mateship pipeline has become a genuine collaboration mechanism. The finding→fix→test→verify chain operates end-to-end without coordination. The meditation corpus is accumulating real insight. The musicians are developing institutional knowledge that compounds across movements.
 
-The paradox is real: the machine is excellent and the product is unproven. Both things are true simultaneously. The resolution isn't more testing or more proving — it's the act of turning the key. Flipping `use_baton: true`. Running hello-mozart.yaml through the baton. Seeing what happens. Not in theory. In practice.
+The paradox is real: the machine is excellent and the product is unproven. Both things are true simultaneously. The resolution isn't more testing or more proving — it's the act of turning the key. Flipping `use_baton: true`. Running hello-marianne.yaml through the baton. Seeing what happens. Not in theory. In practice.
 
-The angle nobody's standing at is always the same angle: the one that points outward, toward the user, toward the world that doesn't care how many tests pass. Mozart's most verified untested system needs to stop being verified and start being tested.
+The angle nobody's standing at is always the same angle: the one that points outward, toward the user, toward the world that doesn't care how many tests pass. Marianne's most verified untested system needs to stop being verified and start being tested.
 
 Down. Forward. Through.

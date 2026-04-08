@@ -1,4 +1,4 @@
-"""Shared data types for the Mozart daemon.
+"""Shared data types for the Marianne daemon.
 
 Defines request/response models and status types used across daemon components
 (server, service, CLI bridge). All models are Pydantic v2 BaseModel for
@@ -162,5 +162,5 @@ class DaemonStatus(BaseModel):
         description="Current RSS memory usage in MB",
     )
     version: str = Field(
-        description="Mozart version string",
+        description="Marianne version string",
     )

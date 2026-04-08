@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Mozart AI Compose will be documented in this file.
+All notable changes to Marianne AI Compose will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### Daemon Mode (mozartd) — 2026-02-11
-- **Daemon service** (`mozartd start/stop/status`) — Long-running process that manages multiple concurrent jobs
+#### Daemon Mode (marianned) — 2026-02-11
+- **Daemon service** (`marianned start/stop/status`) — Long-running process that manages multiple concurrent jobs
 - **IPC layer** — Unix domain socket with JSON-RPC 2.0 protocol for client-daemon communication
 - **Job manager** — Tracks job lifecycle, handles submission/cancellation
 - **Resource monitor** — Tracks CPU/memory/process usage with configurable limits
@@ -19,14 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rate limit coordinator** — Shares rate limit state across concurrent jobs (built and tested, not yet wired)
 - **Backpressure controller** — Adaptive load management to prevent resource exhaustion; gates job submission based on memory pressure
 - **Learning hub** — Centralizes pattern learning across all daemon-managed jobs
-- **`mozart config`** — New command with subcommands: `show`, `set`, `path`, `init` for daemon configuration management
-- **`mozart list`** — Now routes through daemon; shows active jobs by default, `--all` for everything, `--limit` defaults to 20
+- **`mzt config`** — New command with subcommands: `show`, `set`, `path`, `init` for daemon configuration management
+- **`mzt list`** — Now routes through daemon; shows active jobs by default, `--all` for everything, `--limit` defaults to 20
 - **Systemd integration** — Service file and installation scripts for production deployment
 - **Dashboard wiring** — Dashboard routes through daemon when available
 - **MCP wiring** — MCP server routes through daemon for coordinated execution
 
 #### MCP Server — 2026-01-24
-- **`mozart mcp`** — Start MCP (Model Context Protocol) server for external AI agent integration
+- **`mzt mcp`** — Start MCP (Model Context Protocol) server for external AI agent integration
 - **Job management tools** — Run, status, pause, resume, cancel via MCP
 - **Artifact browsing** — List and read workspace files through MCP
 - **Log streaming** — Access job logs through MCP tools
@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Template system** — Browse, filter, download, and use configuration templates
 - **Config validation** — Three-phase YAML validation (syntax, schema, extended checks)
 - **Daemon status** — Dashboard can detect and report daemon health
-- **Authentication system** — Three modes: `disabled`, `api_key`, `localhost_only` (via `MOZART_AUTH_MODE`)
+- **Authentication system** — Three modes: `disabled`, `api_key`, `localhost_only` (via `MZT_AUTH_MODE`)
 
 #### Fan-Out & Parallel Execution — 2026-02-09
 - **Parameterized stage instantiation** — Eliminates manual sheet duplication for parallel workflows
@@ -52,14 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Self-Healing & Enhanced Validation — 2026-01-05 to 2026-01-15
 - **`--self-healing` flag** — Automatic diagnosis and remediation when retries are exhausted
 - **`--yes` flag** — Auto-confirm suggested fixes with self-healing
-- **Enhanced `mozart validate`** — Comprehensive pre-execution checks beyond schema validation (V001-V103 codes)
+- **Enhanced `mzt validate`** — Comprehensive pre-execution checks beyond schema validation (V001-V103 codes)
 - **Built-in remedies** — Automatic workspace creation, path fixes, suggested Jinja fixes, diagnostic guidance
 - **Staged validation** — Fail-fast behavior for ordered validation checks
 - **Compound conditions** — Support for `and` conditions in validation rules
 
 #### Pause/Modify Workflow — 2026-01-13
-- **`mozart pause`** — Gracefully pause running jobs at next sheet boundary
-- **`mozart modify`** — Combine pause + config update + optional resume in one command
+- **`mzt pause`** — Gracefully pause running jobs at next sheet boundary
+- **`mzt modify`** — Combine pause + config update + optional resume in one command
 - **Auto-reload config on resume** — Config automatically reloads from the original YAML file on resume (cached snapshot is fallback). Use `--no-reload` for deterministic replay from cache
 
 #### Learning System Enhancements — 2025-12-27 to 2026-02-04
@@ -83,10 +83,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`isolation` config section** — Opt-in via YAML configuration
 
 #### Additional Commands — Various dates
-- **`mozart errors`** — Color-coded error listing grouped by sheet (red=permanent, yellow=transient, blue=rate limit)
-- **`mozart diagnose`** — Comprehensive diagnostic reports with `--include-logs` for inline log content
-- **`mozart history`** — SQLite-based execution history with sheet/attempt filtering
-- **`mozart recover`** — Re-validate failed sheets without re-executing them
+- **`mzt errors`** — Color-coded error listing grouped by sheet (red=permanent, yellow=transient, blue=rate limit)
+- **`mzt diagnose`** — Comprehensive diagnostic reports with `--include-logs` for inline log content
+- **`mzt history`** — SQLite-based execution history with sheet/attempt filtering
+- **`mzt recover`** — Re-validate failed sheets without re-executing them
 - **`--fresh` flag** — Delete existing state for clean re-runs and self-chaining jobs
 - **`--watch` mode** — Continuous status monitoring with configurable refresh interval
 - **`--escalation` flag** — Human-in-the-loop escalation for low-confidence sheets
@@ -101,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Config modularization** — Single `config.py` restructured into `config/` package (6 modules)
 - **Error modularization** — Single `errors.py` restructured into `errors/` package (5 modules)
 - **26+ registered commands** — Up from 7 in v0.1.0
-- **Default active-only listing** — `mozart list` shows only active jobs by default
+- **Default active-only listing** — `mzt list` shows only active jobs by default
 
 #### Examples
 - **`docs-generator.yaml`** — Documentation generation orchestration
@@ -131,8 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **"Batch" → "Sheet" terminology** — All config keys, template variables, CLI flags, and internal references renamed from `batch` to `sheet`
-- **`mozart list` default behavior** — Shows active jobs only (queued, running, paused); use `--all` for everything
-- **`mozart list` requires daemon** — Routes through `mozartd`; use `mozart status` for direct file-based status
+- **`mzt list` default behavior** — Shows active jobs only (queued, running, paused); use `--all` for everything
+- **`mzt list` requires daemon** — Routes through `marianned`; use `mzt status` for direct file-based status
 - **Default JSON output format** — Backends default to JSON output to prevent streaming mode errors
 
 ### Fixed
@@ -156,12 +156,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rate Limit Handling** - Automatic detection and wait with configurable thresholds
 
 #### CLI Commands
-- `mozart run` - Execute jobs with progress tracking and ETA
-- `mozart status` - View detailed job status with sheet breakdown
-- `mozart resume` - Continue paused or failed jobs from checkpoint
-- `mozart list` - List all jobs with filtering by status
-- `mozart validate` - Validate configuration files before running
-- `mozart dashboard` - Start web dashboard for monitoring
+- `mzt run` - Execute jobs with progress tracking and ETA
+- `mzt status` - View detailed job status with sheet breakdown
+- `mzt resume` - Continue paused or failed jobs from checkpoint
+- `mzt list` - List all jobs with filtering by status
+- `mzt validate` - Validate configuration files before running
+- `mzt dashboard` - Start web dashboard for monitoring
 
 #### State Management
 - **JSON Backend** - File-based state storage for simplicity
@@ -210,7 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Architecture
 
 ```
-mozart/
+marianne/
 ├── core/           # Domain models, config, errors
 ├── backends/       # Claude CLI, API, and Ollama backends
 ├── execution/      # Runner, validation, retry logic
@@ -219,7 +219,7 @@ mozart/
 ├── notifications/  # Desktop, Slack, webhook
 ├── dashboard/      # FastAPI web interface + auth
 ├── learning/       # Pattern learning and analysis
-├── daemon/         # mozartd service (IPC, scheduling, monitoring)
+├── daemon/         # marianned service (IPC, scheduling, monitoring)
 ├── healing/        # Self-healing and diagnostic remedies
 ├── validation/     # Enhanced pre-execution validation
 ├── isolation/      # Worktree isolation for parallel jobs
@@ -229,4 +229,4 @@ mozart/
 
 ---
 
-*Mozart AI Compose - Orchestration for the AI Age*
+*Marianne AI Compose - Orchestration for the AI Age*

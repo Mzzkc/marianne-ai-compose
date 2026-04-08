@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from marianne.healing.context import ErrorContext
 
 
-# Known Jinja template variables in Mozart configs
+# Known Jinja template variables in Mzt configs
 KNOWN_VARIABLES = [
     "sheet_num",
     "total_sheets",

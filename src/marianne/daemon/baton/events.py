@@ -308,7 +308,7 @@ class CancelJob:
 
 @dataclass(frozen=True)
 class ConfigReloaded:
-    """Config has changed for a job (SIGHUP, ``mozart modify``, resume -c).
+    """Config has changed for a job (SIGHUP, ``mzt modify``, resume -c).
 
     The baton rebuilds pending sheets from the new config. Completed
     sheets are preserved. Cost limits may be reset if they changed.
@@ -321,7 +321,7 @@ class ConfigReloaded:
 
 @dataclass(frozen=True)
 class ShutdownRequested:
-    """The conductor is shutting down (SIGTERM, ``mozart stop``).
+    """The conductor is shutting down (SIGTERM, ``mzt stop``).
 
     When ``graceful`` is True, the baton waits for in-flight sheets
     to complete (up to the configured drain timeout) before stopping.

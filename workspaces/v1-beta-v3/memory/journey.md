@@ -18,9 +18,9 @@
 - Error hints should parse the actual error, not just repeat what fields are expected. Context-specific hints convert frustration into learning.
 
 ## Hot (Movement 5)
-Code-level exploratory UX analysis of all M5 user-facing features. The project directory was renamed mid-concert (F-480 Phase 5: mozart-ai-compose → marianne-ai-compose), which broke all shell tools. Pivoted to Read-only analysis.
+Code-level exploratory UX analysis of all M5 user-facing features. The project directory was renamed mid-concert (F-480 Phase 5: marianne-ai-compose → marianne-ai-compose), which broke all shell tools. Pivoted to Read-only analysis.
 
-Found F-491: `mozart list` status coloring bug — `str.replace()` in `status.py:656` matches score name instead of status column when names contain status words. Filed F-492: directory rename during running concert breaks all concurrent sessions.
+Found F-491: `mzt list` status coloring bug — `str.replace()` in `status.py:656` matches score name instead of status column when names contain status words. Filed F-492: directory rename during running concert breaks all concurrent sessions.
 
 Verified D-029 beautification (header Panel, Now Playing with ♪, compact stats, relative time, synthesis bounding, list progress column, test artifact filtering), instrument fallback display ("was X: reason"), error hints system (_schema_error_hints with _KNOWN_TYPOS and per-error-type guidance), cost confidence display (~$X.XX est. + warning), diagnose -w fallback. M5's UX is the strongest yet — coherent despite 4+ musicians touching the status display.
 

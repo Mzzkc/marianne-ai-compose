@@ -106,7 +106,7 @@ class CircuitBreakerConfig(BaseModel):
     - HALF_OPEN (testing): Single request allowed to test recovery
 
     Evolution #8: Cross-Workspace Circuit Breaker adds coordination between
-    parallel Mozart jobs via the global learning store. When one job hits a
+    parallel Marianne jobs via the global learning store. When one job hits a
     rate limit, other jobs will honor that limit and wait.
 
     Example:

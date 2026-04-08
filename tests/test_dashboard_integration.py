@@ -1,4 +1,4 @@
-"""Integration tests for Mozart Dashboard.
+"""Integration tests for Marianne Dashboard.
 
 Tests full workflows combining multiple services and components.
 """
@@ -54,7 +54,7 @@ def client(app):
 
 @pytest.fixture
 def sample_config_content():
-    """Sample Mozart YAML config for testing."""
+    """Sample Marianne YAML config for testing."""
     return """
 name: "test-integration-job"
 description: "Integration test job"

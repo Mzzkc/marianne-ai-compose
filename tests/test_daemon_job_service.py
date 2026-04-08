@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.job_service module."""
+"""Tests for marianne.daemon.job_service module."""
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -139,7 +139,7 @@ class TestPauseJob:
             result = await job_service.pause_job("test-job", workspace)
 
         assert result is True
-        signal_file = workspace / ".mozart-pause-test-job"
+        signal_file = workspace / ".marianne-pause-test-job"
         assert signal_file.exists()
 
     @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""Async Unix domain socket client for Mozart daemon IPC.
+"""Async Unix domain socket client for Marianne daemon IPC.
 
 Provides ``DaemonClient`` with two call patterns:
 
@@ -34,7 +34,7 @@ _MAX_MESSAGE_BYTES = 16_777_216  # 16 MiB — same as server.MAX_MESSAGE_BYTES
 
 
 class DaemonClient:
-    """Async client for the Mozart daemon Unix socket IPC.
+    """Async client for the Marianne daemon Unix socket IPC.
 
     Parameters
     ----------

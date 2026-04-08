@@ -1,8 +1,8 @@
 """Exploratory tests for the instrument plugin system — user perspective.
 
-Sarah just saw the Mozart demo. She wants to use Gemini CLI because she
+Sarah just saw the Marianne demo. She wants to use Gemini CLI because she
 already has a Google API key. She doesn't want to write Python. She wants
-to point Mozart at a YAML profile and go.
+to point Marianne at a YAML profile and go.
 
 These tests simulate the full user journey: discovering instruments,
 loading profiles, creating backends, building scores with `instrument:`
@@ -31,7 +31,7 @@ from marianne.instruments.registry import InstrumentRegistry, register_native_in
 # =============================================================================
 # Story 1: Discovering Instruments
 #
-# Sarah runs `mozart instruments list` (conceptually). What does she see?
+# Sarah runs `mzt instruments list` (conceptually). What does she see?
 # Does the built-in profile loading work? Are the 6 shipped profiles valid?
 # =============================================================================
 

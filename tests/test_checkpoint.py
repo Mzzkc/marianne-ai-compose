@@ -1,4 +1,4 @@
-"""Tests for mozart.core.checkpoint module."""
+"""Tests for marianne.core.checkpoint module."""
 
 from datetime import datetime
 

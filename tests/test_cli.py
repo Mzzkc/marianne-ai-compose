@@ -1,4 +1,4 @@
-"""Tests for Mozart CLI commands."""
+"""Tests for Marianne CLI commands."""
 
 import asyncio
 import json
@@ -43,7 +43,7 @@ class TestVersionCommand:
         """Test that --version prints version info."""
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "Mozart AI Compose" in result.stdout
+        assert "Marianne AI Compose" in result.stdout
 
 
 class TestValidateCommand:
@@ -75,7 +75,7 @@ class TestValidateCommand:
 class TestListCommand:
     """Tests for the list command.
 
-    ``mozart list`` queries the daemon's persistent registry via
+    ``mzt list`` queries the daemon's persistent registry via
     ``try_daemon_route("job.list", {})``.  All tests mock this route.
     """
 
@@ -668,7 +668,7 @@ class TestFindJobState:
     def test_find_job_state_sqlite_priority(
         self, tmp_path: Path, paused_state: CheckpointState
     ) -> None:
-        """Test _find_job_state prefers SQLite backend when workspace has .mozart-state.db."""
+        """Test _find_job_state prefers SQLite backend when workspace has .marianne-state.db."""
         from marianne.cli.commands.resume import _find_job_state
 
         # Create both a JSON and SQLite state file
@@ -676,7 +676,7 @@ class TestFindJobState:
         state_file.write_text(json.dumps(paused_state.model_dump(mode="json"), default=str))
 
         # Create a SQLite backend with the same job
-        sqlite_path = tmp_path / ".mozart-state.db"
+        sqlite_path = tmp_path / ".marianne-state.db"
         sqlite_backend = SQLiteStateBackend(sqlite_path)
         asyncio.run(sqlite_backend.save(paused_state))
 
@@ -997,7 +997,7 @@ class TestDashboardCommand:
             )
 
             assert result.exit_code == 0
-            assert "Mozart Dashboard" in result.stdout
+            assert "Marianne Dashboard" in result.stdout
             assert "http://127.0.0.1:8000" in result.stdout
             assert "Docs:" in result.stdout
 
@@ -1034,7 +1034,7 @@ class TestDashboardCommand:
         import sys
 
         # Create a mock SQLite database file
-        sqlite_path = tmp_path / ".mozart-state.db"
+        sqlite_path = tmp_path / ".marianne-state.db"
         sqlite_path.touch()
 
         mock_uvicorn = AsyncMock()
@@ -1090,7 +1090,7 @@ class TestDashboardCommand:
 
             assert result.exit_code == 0
             # Verify the startup panel shows correct info
-            assert "Mozart Dashboard" in result.stdout
+            assert "Marianne Dashboard" in result.stdout
             assert "http://127.0.0.1:9000" in result.stdout
             assert "Starting Server" in result.stdout
 
@@ -1122,7 +1122,7 @@ class TestVerboseAndQuietFlags:
         """Test --version uses -V (capital) shorthand."""
         result = runner.invoke(app, ["-V"])
         assert result.exit_code == 0
-        assert "Mozart AI Compose" in result.stdout
+        assert "Marianne AI Compose" in result.stdout
 
 
 class TestRunCommandJsonOutput:
@@ -1299,30 +1299,30 @@ class TestLoggingOptions:
         assert "No active scores" in result.stdout
 
     def test_log_level_env_var(self, sample_yaml_config: Path) -> None:
-        """Test MOZART_LOG_LEVEL environment variable."""
+        """Test MZT_LOG_LEVEL environment variable."""
         result = runner.invoke(
             app,
             ["run", str(sample_yaml_config), "--dry-run"],
-            env={"MOZART_LOG_LEVEL": "DEBUG"},
+            env={"MZT_LOG_LEVEL": "DEBUG"},
         )
         assert result.exit_code == 0
 
     def test_log_file_env_var(self, tmp_path: Path, sample_yaml_config: Path) -> None:
-        """Test MOZART_LOG_FILE environment variable."""
+        """Test MZT_LOG_FILE environment variable."""
         log_file = tmp_path / "env_test.log"
         result = runner.invoke(
             app,
             ["run", str(sample_yaml_config), "--dry-run"],
-            env={"MOZART_LOG_FILE": str(log_file)},
+            env={"MZT_LOG_FILE": str(log_file)},
         )
         assert result.exit_code == 0
 
     def test_log_format_env_var(self, sample_yaml_config: Path) -> None:
-        """Test MOZART_LOG_FORMAT environment variable."""
+        """Test MZT_LOG_FORMAT environment variable."""
         result = runner.invoke(
             app,
             ["run", str(sample_yaml_config), "--dry-run"],
-            env={"MOZART_LOG_FORMAT": "json"},
+            env={"MZT_LOG_FORMAT": "json"},
         )
         assert result.exit_code == 0
 
@@ -1334,7 +1334,7 @@ class TestLoggingOptions:
         result = runner.invoke(
             app,
             ["--log-level", "DEBUG", "run", str(sample_yaml_config), "--dry-run"],
-            env={"MOZART_LOG_LEVEL": "WARNING"},
+            env={"MZT_LOG_LEVEL": "WARNING"},
         )
         assert result.exit_code == 0
 
@@ -1857,7 +1857,7 @@ class TestEnhancedStatusCommand:
         )
         assert result.exit_code == 0
         assert "Recent Errors" in result.stdout
-        assert "mozart errors" in result.stdout  # Hint to use errors command
+        assert "mzt errors" in result.stdout  # Hint to use errors command
 
     def test_status_shows_last_activity(self, tmp_path: Path) -> None:
         """Test status command shows last activity timestamp."""

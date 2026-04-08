@@ -1,4 +1,4 @@
-"""Tests for mozart pause and modify CLI commands.
+"""Tests for mzt pause and modify CLI commands.
 
 Comprehensive tests covering:
 - Pause command signal file creation
@@ -302,13 +302,13 @@ class TestCreatePauseSignal:
         """Test signal file creation."""
         signal_path = _create_pause_signal(temp_workspace, "my-job")
         assert signal_path.exists()
-        assert signal_path.name == ".mozart-pause-my-job"
+        assert signal_path.name == ".marianne-pause-my-job"
 
     def test_signal_file_idempotent(self, temp_workspace: Path) -> None:
         """Test creating signal file twice is idempotent."""
         _create_pause_signal(temp_workspace, "my-job")
         _create_pause_signal(temp_workspace, "my-job")
-        signal_path = temp_workspace / ".mozart-pause-my-job"
+        signal_path = temp_workspace / ".marianne-pause-my-job"
         assert signal_path.exists()
 
     def test_permission_error_propagates(self, tmp_path: Path) -> None:
@@ -399,13 +399,13 @@ class TestWaitForPauseAck:
 
 
 class TestPauseCommand:
-    """Tests for `mozart pause` command."""
+    """Tests for `mzt pause` command."""
 
     def test_pause_help(self) -> None:
         """Test pause command shows help."""
         result = runner.invoke(app, ["pause", "--help"])
         assert result.exit_code == 0
-        assert "Pause a running Mozart score" in result.output
+        assert "Pause a running Marianne score" in result.output
         # --workspace is a hidden debug option, not shown in help
         assert "--wait" in result.output
         assert "--timeout" in result.output
@@ -426,7 +426,7 @@ class TestPauseCommand:
         assert "Pause signal sent" in result.output
 
         # Verify signal file was created
-        signal_file = workspace / f".mozart-pause-{state.job_id}"
+        signal_file = workspace / f".marianne-pause-{state.job_id}"
         assert signal_file.exists()
 
     def test_pause_nonexistent_job(self, temp_workspace: Path) -> None:
@@ -544,7 +544,7 @@ class TestPauseCommand:
         ])
 
         assert result.exit_code == 0
-        assert f"mozart resume {state.job_id}" in result.output
+        assert f"mzt resume {state.job_id}" in result.output
 
     def test_pause_permission_error(
         self, running_job_state: tuple[CheckpointState, Path]
@@ -615,7 +615,7 @@ class TestPauseCommand:
 
 
 class TestModifyCommand:
-    """Tests for `mozart modify` command."""
+    """Tests for `mzt modify` command."""
 
     def test_modify_help(self) -> None:
         """Test modify command shows help."""
@@ -696,7 +696,7 @@ class TestModifyCommand:
         assert "Pause signal sent" in result.output
 
         # Verify signal file was created
-        signal_file = workspace / f".mozart-pause-{state.job_id}"
+        signal_file = workspace / f".marianne-pause-{state.job_id}"
         assert signal_file.exists()
 
     def test_modify_nonexistent_job(
@@ -815,7 +815,7 @@ class TestModifyCommand:
         ])
 
         assert result.exit_code == 0
-        assert f"mozart resume {state.job_id}" in result.output
+        assert f"mzt resume {state.job_id}" in result.output
 
     def test_modify_with_resume_flag(
         self,
@@ -895,7 +895,7 @@ class TestPauseModifyIntegration:
         assert pause_result.exit_code == 0
 
         # Verify signal file exists
-        signal_file = workspace / f".mozart-pause-{state.job_id}"
+        signal_file = workspace / f".marianne-pause-{state.job_id}"
         assert signal_file.exists()
 
         # Step 2: Manually clean up signal (as runner would do)
@@ -932,7 +932,7 @@ class TestPauseModifyIntegration:
         assert result.exit_code == 0
         assert "Pause signal sent" in result.output
         assert "Config validated" in result.output
-        assert f"mozart resume {state.job_id}" in result.output
+        assert f"mzt resume {state.job_id}" in result.output
 
     def test_multiple_pause_signals_idempotent(
         self,
@@ -956,7 +956,7 @@ class TestPauseModifyIntegration:
         assert result2.exit_code == 0
 
         # Only one signal file should exist
-        signal_files = list(workspace.glob(".mozart-pause-*"))
+        signal_files = list(workspace.glob(".marianne-pause-*"))
         assert len(signal_files) == 1
 
     def test_concurrent_pause_via_dashboard_and_cli(
@@ -967,7 +967,7 @@ class TestPauseModifyIntegration:
         state, workspace = running_job_state
 
         # Simulate dashboard creating signal
-        signal_file = workspace / f".mozart-pause-{state.job_id}"
+        signal_file = workspace / f".marianne-pause-{state.job_id}"
         signal_file.touch()
 
         # CLI pause should still succeed (idempotent)
@@ -1009,7 +1009,7 @@ class TestPauseEdgeCases:
         ])
 
         assert result.exit_code == 0
-        signal_file = temp_workspace / f".mozart-pause-{job_id}"
+        signal_file = temp_workspace / f".marianne-pause-{job_id}"
         assert signal_file.exists()
 
     def test_pause_json_short_flag(
@@ -1240,7 +1240,7 @@ class TestPauseJsonEdgeCases:
     def test_pause_pending_job_json_has_hints(
         self, pending_job_state: tuple[CheckpointState, Path],
     ) -> None:
-        """JSON output for pending job includes 'use mozart run' hint."""
+        """JSON output for pending job includes 'use mzt run' hint."""
         state, workspace = pending_job_state
 
         result = runner.invoke(app, [

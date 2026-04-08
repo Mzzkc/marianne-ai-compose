@@ -1,7 +1,7 @@
-/* Mozart Dashboard — Alpine.js Application */
+/* Marianne Dashboard — Alpine.js Application */
 
 document.addEventListener('alpine:init', () => {
-    Alpine.data('mozartApp', () => ({
+    Alpine.data('marianneApp', () => ({
         darkMode: localStorage.getItem('darkMode') === 'true' ||
                   (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches),
         mobileMenu: false,

@@ -1,13 +1,13 @@
 # Example: Self-Improvement Job
-# Template for using Mozart to improve a codebase incrementally
+# Template for using Marianne to improve a codebase incrementally
 #
-# This pattern was used by Mozart to improve itself - each sheet
+# This pattern was used by Marianne to improve itself - each sheet
 # implements one task, with validations ensuring quality gates.
 #
 # Usage:
-#   mozart run examples/self-improvement.yaml
-#   mozart status self-improvement
-#   mozart resume self-improvement
+#   mzt run examples/self-improvement.yaml
+#   mzt status self-improvement
+#   mzt resume self-improvement
 
 name: "self-improvement"
 description: "Incremental codebase improvement with quality gates"

@@ -1,14 +1,14 @@
-# Mozart CLI Reference
+# Marianne CLI Reference
 
-Complete reference for all Mozart CLI commands and options. Mozart provides a single entry point:
+Complete reference for all Marianne CLI commands and options. Marianne provides a single entry point:
 
-- **`mozart`** — Job orchestration CLI (run, monitor, diagnose, learn, conductor management)
+- **`marianne`** — Job orchestration CLI (run, monitor, diagnose, learn, conductor management)
 
 ---
 
 ## Global Options
 
-These options apply to all `mozart` commands:
+These options apply to all `marianne` commands:
 
 | Option | Short | Description | Env Var |
 |--------|-------|-------------|---------|
@@ -16,9 +16,9 @@ These options apply to all `mozart` commands:
 | `--verbose` | `-v` | Show detailed output with additional information | |
 | `--quiet` | `-q` | Show minimal output (errors only) | |
 | `--conductor-clone` | | Route all daemon interactions to a clone conductor (see below) | |
-| `--log-level` | `-L` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | `MOZART_LOG_LEVEL` |
-| `--log-file` | | Path for log file output | `MOZART_LOG_FILE` |
-| `--log-format` | | Log format: `json`, `console`, or `both` | `MOZART_LOG_FORMAT` |
+| `--log-level` | `-L` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | `MZT_LOG_LEVEL` |
+| `--log-file` | | Path for log file output | `MZT_LOG_FILE` |
+| `--log-format` | | Log format: `json`, `console`, or `both` | `MZT_LOG_FORMAT` |
 | `--help` | | Show help message | |
 
 ### Conductor Clones
@@ -30,27 +30,27 @@ risking your production conductor.
 
 ```bash
 # Start a default clone conductor
-mozart --conductor-clone start
+marianne --conductor-clone start
 
 # Submit a score to the clone
-mozart --conductor-clone run my-score.yaml
+marianne --conductor-clone run my-score.yaml
 
 # Check clone status
-mozart --conductor-clone status
+marianne --conductor-clone status
 
 # Named clones for parallel testing
-mozart --conductor-clone=staging start
-mozart --conductor-clone=staging run staging-test.yaml
-mozart --conductor-clone=staging conductor-status
+marianne --conductor-clone=staging start
+marianne --conductor-clone=staging run staging-test.yaml
+marianne --conductor-clone=staging conductor-status
 
 # Stop the clone when done
-mozart --conductor-clone stop
+marianne --conductor-clone stop
 ```
 
 **Key behaviors:**
-- The clone inherits your production `~/.mozart/conductor.yaml` config unless overridden.
-- Clone paths: `/tmp/mozart-clone.sock` (socket), `/tmp/mozart-clone.pid` (PID file).
-- Named clones use the name in the path: `/tmp/mozart-clone-staging.sock`.
+- The clone inherits your production `~/.marianne/conductor.yaml` config unless overridden.
+- Clone paths: `/tmp/marianne-clone.sock` (socket), `/tmp/marianne-clone.pid` (PID file).
+- Named clones use the name in the path: `/tmp/marianne-clone-staging.sock`.
 - Clone names are sanitized (64 character limit, safe characters only).
 - Commands that don't interact with the conductor (`validate`, `--help`) ignore this flag.
 
@@ -58,12 +58,12 @@ mozart --conductor-clone stop
 
 ## Core Commands
 
-### `mozart run`
+### `mzt run`
 
 Run a score from a YAML configuration file.
 
 ```
-Usage: mozart run [OPTIONS] CONFIG_FILE
+Usage: mzt run [OPTIONS] CONFIG_FILE
 ```
 
 #### Arguments
@@ -87,7 +87,7 @@ Usage: mozart run [OPTIONS] CONFIG_FILE
 
 #### Auto-Fresh Detection
 
-When you re-run a completed score after editing the YAML file, Mozart
+When you re-run a completed score after editing the YAML file, Marianne
 automatically detects the change and starts fresh — no `--fresh` flag needed.
 The conductor compares the score file's modification time against the
 previous run's completion time. If the score is newer, it starts a fresh
@@ -104,7 +104,7 @@ limits do not cause job rejection — they are per-instrument concerns handled
 at the sheet dispatch level by the baton. A rate limit on one instrument
 does not block scores targeting different instruments.
 
-If the system is under resource pressure, `mozart run` exits with an error:
+If the system is under resource pressure, `mzt run` exits with an error:
 
 ```
 Error: System under high pressure — try again later.
@@ -113,23 +113,23 @@ Error: System under high pressure — try again later.
 #### Examples
 
 ```bash
-# Basic run (requires running conductor: mozart start)
-mozart run job.yaml
+# Basic run (requires running conductor: mzt start)
+mzt run job.yaml
 
 # Dry run to preview (works without conductor)
-mozart run job.yaml --dry-run
+mzt run job.yaml --dry-run
 
 # Custom workspace
-mozart run job.yaml --workspace ./output
+mzt run job.yaml --workspace ./output
 
 # Start from sheet 3
-mozart run job.yaml --start-sheet 3
+mzt run job.yaml --start-sheet 3
 
 # With self-healing enabled
-mozart run job.yaml --self-healing --yes
+mzt run job.yaml --self-healing --yes
 
 # Fresh start (ignores existing state)
-mozart run job.yaml --fresh
+mzt run job.yaml --fresh
 ```
 
 #### Exit Codes
@@ -141,15 +141,15 @@ mozart run job.yaml --fresh
 
 ---
 
-### `mozart resume`
+### `mzt resume`
 
 Resume a paused or failed score.
 
 ```
-Usage: mozart resume [OPTIONS] JOB_ID
+Usage: mzt resume [OPTIONS] JOB_ID
 ```
 
-Loads the score state and continues execution from where it left off. By default, Mozart auto-reloads the config from the original YAML file if it still exists on disk. Falls back to the cached `config_snapshot` when the file is gone. Use `--no-reload` to force using the cached snapshot.
+Loads the score state and continues execution from where it left off. By default, Marianne auto-reloads the config from the original YAML file if it still exists on disk. Falls back to the cached `config_snapshot` when the file is gone. Use `--no-reload` to force using the cached snapshot.
 
 #### Arguments
 
@@ -173,19 +173,19 @@ Loads the score state and continues execution from where it left off. By default
 
 ```bash
 # Resume paused score
-mozart resume my-job
+mzt resume my-job
 
 # Resume with explicit config
-mozart resume my-job --config job.yaml
+mzt resume my-job --config job.yaml
 
 # Resume with explicit config file (overrides auto-reload)
-mozart resume my-job --config updated.yaml
+mzt resume my-job --config updated.yaml
 
 # Resume using cached snapshot (skip auto-reload)
-mozart resume my-job --no-reload
+mzt resume my-job --no-reload
 
 # Force restart completed score
-mozart resume my-job --force
+mzt resume my-job --force
 ```
 
 #### Resumable States
@@ -200,15 +200,15 @@ mozart resume my-job --force
 
 ---
 
-### `mozart pause`
+### `mzt pause`
 
-Pause a running Mozart score gracefully.
+Pause a running Marianne score gracefully.
 
 ```
-Usage: mozart pause [OPTIONS] JOB_ID
+Usage: mzt pause [OPTIONS] JOB_ID
 ```
 
-Creates a pause signal that the job detects at the next sheet boundary. The job saves its state and can be resumed with `mozart resume`.
+Creates a pause signal that the job detects at the next sheet boundary. The job saves its state and can be resumed with `mzt resume`.
 
 #### Arguments
 
@@ -229,20 +229,20 @@ Creates a pause signal that the job detects at the next sheet boundary. The job 
 
 ```bash
 # Pause a running job
-mozart pause my-job
+mzt pause my-job
 
 # Pause and wait for acknowledgment
-mozart pause my-job --wait --timeout 30
+mzt pause my-job --wait --timeout 30
 ```
 
 ---
 
-### `mozart modify`
+### `mzt modify`
 
 Modify a job's configuration and optionally resume execution.
 
 ```
-Usage: mozart modify [OPTIONS] JOB_ID
+Usage: mzt modify [OPTIONS] JOB_ID
 ```
 
 Convenience command that combines pause + config validation. If the job is running, it will be paused first. Use `--resume` to immediately resume with the new configuration.
@@ -268,23 +268,23 @@ Convenience command that combines pause + config validation. If the job is runni
 
 ```bash
 # Modify config (pauses job if running)
-mozart modify my-job --config updated.yaml
+mzt modify my-job --config updated.yaml
 
 # Modify and immediately resume
-mozart modify my-job -c new-config.yaml --resume
+mzt modify my-job -c new-config.yaml --resume
 
 # Modify, wait for pause, then resume
-mozart modify my-job -c updated.yaml --resume --wait
+mzt modify my-job -c updated.yaml --resume --wait
 ```
 
 ---
 
-### `mozart status`
+### `mzt status`
 
 Show score status. With no arguments, shows an overview of all active scores. With a score ID, shows detailed status for that specific score.
 
 ```
-Usage: mozart status [OPTIONS] [SCORE_ID]
+Usage: mzt status [OPTIONS] [SCORE_ID]
 ```
 
 #### Arguments
@@ -302,7 +302,7 @@ Usage: mozart status [OPTIONS] [SCORE_ID]
 | `--interval` | `-i` | 5 | Refresh interval in seconds for `--watch` mode |
 | `--workspace` | `-w` | | *(hidden)* Debug override: bypass conductor and read job state from filesystem |
 
-> **Note:** `mozart status` routes through the conductor by default. The `--workspace` flag is a hidden debug override for direct filesystem access when the conductor is unavailable.
+> **Note:** `mzt status` routes through the conductor by default. The `--workspace` flag is a hidden debug override for direct filesystem access when the conductor is unavailable.
 
 #### Overview Mode (No Arguments)
 
@@ -312,14 +312,14 @@ When called without a score ID, shows a conductor overview:
 - **Active scores** — all running, queued, and paused scores with elapsed time
 - **Recent scores** — the 5 most recently completed or failed scores
 
-This is the natural first command after `mozart run` — like `git status` showing your working tree.
+This is the natural first command after `mzt run` — like `git status` showing your working tree.
 
 ```bash
 # Show overview of all scores
-mozart status
+mzt status
 
 # Overview as JSON
-mozart status --json
+mzt status --json
 ```
 
 #### Per-Score Mode
@@ -330,22 +330,22 @@ When given a score ID, shows detailed status for that score:
 - Progress bar with sheet counts
 - Per-sheet details with validation results
 - Cost tracking with confidence indicators (see below)
-- Error summaries with `mozart diagnose` suggestion on failure
+- Error summaries with `mzt diagnose` suggestion on failure
 
 For large scores (50+ sheets), a compact summary is shown instead of the full sheet table: counts by status, then only interesting sheets (running, failed, validation-failed) capped at 20 entries. Small scores retain the full detail table.
 
 ```bash
 # Detailed status for a specific score
-mozart status my-score
+mzt status my-score
 
 # JSON output
-mozart status my-score --json
+mzt status my-score --json
 
 # Continuous monitoring
-mozart status my-score --watch
+mzt status my-score --watch
 
 # Watch with custom interval
-mozart status my-score --watch --interval 10
+mzt status my-score --watch --interval 10
 ```
 
 #### Output
@@ -359,7 +359,7 @@ Standard per-score output includes:
 - Sheet details table (or compact summary for 50+ sheets)
 - **Instrument column** — when any sheet has an assigned instrument name, the table includes an Instrument column showing which instrument each sheet uses. For large scores (50+ sheets), the summary view shows an instrument breakdown with counts.
 - **Cost summary** — always shown, including total cost, token counts, and cost limit status. When an instrument returns structured token data (JSON output), costs are precise. When tokens are estimated from output character count, the display shows `~$X.XX (est.)` with a warning that actual costs may be 10-100x higher. Use JSON output format on your instrument for accurate cost tracking.
-- Suggestion to run `mozart diagnose` on failure
+- Suggestion to run `mzt diagnose` on failure
 
 JSON output structure:
 ```json
@@ -381,17 +381,17 @@ JSON output structure:
 
 ---
 
-### `mozart list`
+### `mzt list`
 
 List scores from the conductor.
 
 ```
-Usage: mozart list [OPTIONS]
+Usage: mzt list [OPTIONS]
 ```
 
 By default shows only active jobs (queued, running, paused). Use `--all` to include completed, failed, and cancelled jobs.
 
-> **Note:** This command requires a running Mozart conductor (`mozart start`). Use `mozart status <job-id>` for checking individual jobs.
+> **Note:** This command requires a running Marianne conductor (`mzt start`). Use `mzt status <job-id>` for checking individual jobs.
 
 #### Options
 
@@ -406,29 +406,29 @@ By default shows only active jobs (queued, running, paused). Use `--all` to incl
 
 ```bash
 # List active jobs (default)
-mozart list
+mzt list
 
 # List all jobs including completed
-mozart list --all
+mzt list --all
 
 # Filter by status
-mozart list --status failed
+mzt list --status failed
 
 # JSON output for scripting
-mozart list --json
+mzt list --json
 
 # Limit results
-mozart list --limit 10
+mzt list --limit 10
 ```
 
 ---
 
-### `mozart validate`
+### `mzt validate`
 
 Validate a score configuration file.
 
 ```
-Usage: mozart validate [OPTIONS] CONFIG_FILE
+Usage: mzt validate [OPTIONS] CONFIG_FILE
 ```
 
 Performs comprehensive validation including YAML syntax, Pydantic schema validation, Jinja template syntax checking, path existence verification, regex pattern compilation, and configuration completeness checks.
@@ -501,26 +501,26 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 
 ```bash
 # Basic validation
-mozart validate job.yaml
+mzt validate job.yaml
 
 # Detailed output
-mozart validate job.yaml --verbose
+mzt validate job.yaml --verbose
 
 # JSON output for CI/CD
-mozart validate job.yaml --json
+mzt validate job.yaml --json
 ```
 
 ---
 
-### `mozart init`
+### `mzt init`
 
-Scaffold a new Mozart project with a starter score.
+Scaffold a new Marianne project with a starter score.
 
 ```
-Usage: mozart init [OPTIONS] [SCORE_NAME]
+Usage: mzt init [OPTIONS] [SCORE_NAME]
 ```
 
-Creates a starter score YAML and `.mozart/` project directory. The generated
+Creates a starter score YAML and `.marianne/` project directory. The generated
 score includes comments explaining every field — edit it with your task, then
 run it.
 
@@ -543,19 +543,19 @@ run it.
 
 ```bash
 # Initialize current directory with default name
-mozart init
+mzt init
 
 # Initialize with a custom name (positional — like git init)
-mozart init data-pipeline
+mzt init data-pipeline
 
 # Initialize with a custom name (flag)
-mozart init --name data-pipeline
+mzt init --name data-pipeline
 
 # Initialize in a specific directory
-mozart init --path ./my-project
+mzt init --path ./my-project
 
 # Machine-readable output
-mozart init --json
+mzt init --json
 ```
 
 #### What It Creates
@@ -563,19 +563,19 @@ mozart init --json
 ```
 ./
 ├── my-score.yaml        # Starter score — edit with your task
-└── .mozart/             # Project configuration directory
+└── .marianne/             # Project configuration directory
 ```
 
-**Next steps** after init: edit the score YAML, then `mozart start && mozart run my-score.yaml`.
+**Next steps** after init: edit the score YAML, then `mzt start && mzt run my-score.yaml`.
 
 ---
 
-### `mozart cancel`
+### `mzt cancel`
 
 Cancel a running score immediately.
 
 ```
-Usage: mozart cancel [OPTIONS] SCORE_ID
+Usage: mzt cancel [OPTIONS] SCORE_ID
 ```
 
 Unlike `pause`, this does not wait for a sheet boundary. The score's task is
@@ -598,22 +598,22 @@ CANCELLED.
 
 ```bash
 # Cancel a running score
-mozart cancel my-job
+mzt cancel my-job
 
 # Cancel with JSON output
-mozart cancel my-job --json
+mzt cancel my-job --json
 ```
 
-**Tip:** Use `mozart pause` for graceful stops that wait for the current sheet to finish. Use `cancel` when the score must stop now.
+**Tip:** Use `mzt pause` for graceful stops that wait for the current sheet to finish. Use `cancel` when the score must stop now.
 
 ---
 
-### `mozart clear`
+### `mzt clear`
 
 Clear terminal scores from the conductor registry.
 
 ```
-Usage: mozart clear [OPTIONS]
+Usage: mzt clear [OPTIONS]
 ```
 
 Removes completed, failed, and/or cancelled scores from the conductor's
@@ -632,32 +632,32 @@ tracking. Running and queued scores are never cleared.
 
 ```bash
 # Clear all terminal scores
-mozart clear
+mzt clear
 
 # Clear a specific score
-mozart clear --job conductor-fix
+mzt clear --job conductor-fix
 
 # Clear only failed scores
-mozart clear --status failed
+mzt clear --status failed
 
 # Clear failed + cancelled scores
-mozart clear --status failed -s cancelled
+mzt clear --status failed -s cancelled
 
 # Clear scores older than 1 hour, skip confirmation
-mozart clear --older-than 3600 -y
+mzt clear --older-than 3600 -y
 ```
 
 ---
 
-### `mozart logs`
+### `mzt logs`
 
 Show or tail log files for a job.
 
 ```
-Usage: mozart logs [OPTIONS] [JOB_ID]
+Usage: mzt logs [OPTIONS] [JOB_ID]
 ```
 
-Displays log entries from Mozart log files. Supports both current log files and compressed rotated logs (`.gz`).
+Displays log entries from Marianne log files. Supports both current log files and compressed rotated logs (`.gz`).
 
 #### Arguments
 
@@ -680,29 +680,29 @@ Displays log entries from Mozart log files. Supports both current log files and 
 
 ```bash
 # Show recent logs
-mozart logs
+mzt logs
 
 # Filter by job
-mozart logs my-job
+mzt logs my-job
 
 # Follow logs in real-time
-mozart logs --follow
+mzt logs --follow
 
 # Show last 100 lines of errors only
-mozart logs --lines 100 --level ERROR
+mzt logs --lines 100 --level ERROR
 
 # Use specific log file
-mozart logs --file ./workspace/logs/mozart.log
+mzt logs --file ./workspace/logs/marianne.log
 ```
 
 ---
 
-### `mozart errors`
+### `mzt errors`
 
 List all errors for a job with detailed information.
 
 ```
-Usage: mozart errors [OPTIONS] JOB_ID
+Usage: mzt errors [OPTIONS] JOB_ID
 ```
 
 Displays errors grouped by sheet, with color-coding by error type:
@@ -731,29 +731,29 @@ Displays errors grouped by sheet, with color-coding by error type:
 
 ```bash
 # Show all errors
-mozart errors my-job
+mzt errors my-job
 
 # Errors for specific sheet
-mozart errors my-job --sheet 3
+mzt errors my-job --sheet 3
 
 # Only transient errors
-mozart errors my-job --type transient
+mzt errors my-job --type transient
 
 # Filter by error code
-mozart errors my-job --code E001
+mzt errors my-job --code E001
 
 # Verbose with stdout/stderr details
-mozart errors my-job --verbose
+mzt errors my-job --verbose
 ```
 
 ---
 
-### `mozart diagnose`
+### `mzt diagnose`
 
 Generate a comprehensive diagnostic report for a job.
 
 ```
-Usage: mozart diagnose [OPTIONS] JOB_ID
+Usage: mzt diagnose [OPTIONS] JOB_ID
 ```
 
 The diagnostic report includes:
@@ -775,7 +775,7 @@ The diagnostic report includes:
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--workspace` | `-w` | | Workspace directory. When the conductor doesn't recognize a score ID, Mozart falls back to reading state directly from this workspace directory. Useful for diagnosing scores from stopped conductors or clone conductors. |
+| `--workspace` | `-w` | | Workspace directory. When the conductor doesn't recognize a score ID, Marianne falls back to reading state directly from this workspace directory. Useful for diagnosing scores from stopped conductors or clone conductors. |
 | `--json` | `-j` | false | Output diagnostic report as JSON |
 | `--include-logs` | | false | Inline the last 50 lines from each sheet/hook log file |
 
@@ -783,29 +783,29 @@ The diagnostic report includes:
 
 ```bash
 # Full diagnostic report
-mozart diagnose my-job
+mzt diagnose my-job
 
 # Machine-readable
-mozart diagnose my-job --json
+mzt diagnose my-job --json
 
 # Include inline log content
-mozart diagnose my-job --include-logs
+mzt diagnose my-job --include-logs
 
 # Diagnose from workspace (when conductor doesn't know the score)
-mozart diagnose my-job -w ./workspaces/my-job
+mzt diagnose my-job -w ./workspaces/my-job
 ```
 
 ---
 
-### `mozart doctor`
+### `mzt doctor`
 
-Check Mozart environment health.
+Check Marianne environment health.
 
 ```
-Usage: mozart doctor [OPTIONS]
+Usage: mzt doctor [OPTIONS]
 ```
 
-Validates that your environment is ready to run Mozart scores. Checks Python version, Mozart installation, conductor status, available instruments, and safety configuration. This command works without a running conductor — it is designed to be the first thing you run after installation.
+Validates that your environment is ready to run Marianne scores. Checks Python version, Marianne installation, conductor status, available instruments, and safety configuration. This command works without a running conductor — it is designed to be the first thing you run after installation.
 
 #### Options
 
@@ -818,7 +818,7 @@ Validates that your environment is ready to run Mozart scores. Checks Python ver
 | Check | What It Verifies |
 |-------|-----------------|
 | Python | Version 3.11+ installed |
-| Mozart | Mozart package installed, version displayed |
+| Marianne | Marianne package installed, version displayed |
 | Conductor | Whether the conductor daemon is running (PID file + process check) |
 | Instruments | Each registered instrument's binary availability on PATH |
 | Safety | Whether cost limits are configured |
@@ -829,19 +829,19 @@ For instruments, CLI instruments are checked by looking for the executable on PA
 
 ```bash
 # Check environment
-mozart doctor
+mzt doctor
 
 # JSON output for scripting
-mozart doctor --json
+mzt doctor --json
 ```
 
 #### Sample Output
 
 ```
-Mozart Doctor
+Marianne Doctor
 
   ✓ Python 3.12                   installed
-  ✓ Mozart v1.0.0                 installed
+  ✓ Marianne v1.0.0                 installed
   ✓ Conductor                     running (pid 12345)
 
   Instruments:
@@ -852,17 +852,17 @@ Mozart Doctor
   Safety:
   ⚠ No cost limits configured     Recommend: cost_limits.max_cost_per_job
 
-1 warning. Mozart is ready.
+1 warning. Marianne is ready.
 ```
 
 ---
 
-### `mozart history`
+### `mzt history`
 
 Show execution history for a job.
 
 ```
-Usage: mozart history [OPTIONS] JOB_ID
+Usage: mzt history [OPTIONS] JOB_ID
 ```
 
 Displays a table of past execution attempts from the SQLite state backend, including sheet number, attempt number, exit code, duration, and timestamp.
@@ -888,26 +888,26 @@ Displays a table of past execution attempts from the SQLite state backend, inclu
 
 ```bash
 # Show all history
-mozart history my-job
+mzt history my-job
 
 # History for specific sheet
-mozart history my-job --sheet 3
+mzt history my-job --sheet 3
 
 # Show more records
-mozart history my-job --limit 100
+mzt history my-job --limit 100
 
 # JSON output
-mozart history my-job --json
+mzt history my-job --json
 ```
 
 ---
 
-### `mozart recover`
+### `mzt recover`
 
 Recover sheets that completed work but were incorrectly marked as failed.
 
 ```
-Usage: mozart recover [OPTIONS] JOB_ID
+Usage: mzt recover [OPTIONS] JOB_ID
 ```
 
 Runs validations for failed sheets without re-executing them. If validations pass, the sheet is marked as complete. This is useful when:
@@ -933,26 +933,26 @@ Runs validations for failed sheets without re-executing them. If validations pas
 
 ```bash
 # Recover all failed sheets
-mozart recover my-job
+mzt recover my-job
 
 # Recover specific sheet
-mozart recover my-job --sheet 6
+mzt recover my-job --sheet 6
 
 # Check without modifying (dry run)
-mozart recover my-job --dry-run
+mzt recover my-job --dry-run
 ```
 
 ---
 
-### `mozart dashboard`
+### `mzt dashboard`
 
 Start the web dashboard.
 
 ```
-Usage: mozart dashboard [OPTIONS]
+Usage: mzt dashboard [OPTIONS]
 ```
 
-Launches the Mozart dashboard API server for job monitoring and control.
+Launches the Marianne dashboard API server for job monitoring and control.
 
 #### Options
 
@@ -967,16 +967,16 @@ Launches the Mozart dashboard API server for job monitoring and control.
 
 ```bash
 # Start with defaults (localhost:8000)
-mozart dashboard
+mzt dashboard
 
 # Custom port
-mozart dashboard --port 3000
+mzt dashboard --port 3000
 
 # Allow external connections
-mozart dashboard --host 0.0.0.0
+mzt dashboard --host 0.0.0.0
 
 # Development mode with auto-reload
-mozart dashboard --reload
+mzt dashboard --reload
 ```
 
 #### Dashboard API Endpoints
@@ -1040,17 +1040,17 @@ mozart dashboard --reload
 
 ---
 
-### `mozart mcp`
+### `mzt mcp`
 
-Start the Mozart MCP (Model Context Protocol) server.
+Start the Marianne MCP (Model Context Protocol) server.
 
 ```
-Usage: mozart mcp [OPTIONS]
+Usage: mzt mcp [OPTIONS]
 ```
 
-Launches an MCP server that exposes Mozart's job management capabilities as tools for external AI agents. Provides job management tools, artifact browsing, log streaming, and configuration access.
+Launches an MCP server that exposes Marianne's job management capabilities as tools for external AI agents. Provides job management tools, artifact browsing, log streaming, and configuration access.
 
-When the Mozart conductor is running, the MCP server routes operations through it for coordinated execution.
+When the Marianne conductor is running, the MCP server routes operations through it for coordinated execution.
 
 #### Options
 
@@ -1064,25 +1064,25 @@ When the Mozart conductor is running, the MCP server routes operations through i
 
 ```bash
 # Start on default port
-mozart mcp
+mzt mcp
 
 # Custom port
-mozart mcp --port 8002
+mzt mcp --port 8002
 
 # Specific workspace
-mozart mcp --workspace ./projects
+mzt mcp --workspace ./projects
 ```
 
 See [MCP Integration Guide](MCP-INTEGRATION.md) for Claude Desktop setup and available tools.
 
 ---
 
-### `mozart top`
+### `mzt top`
 
 Real-time system monitor — like htop for your conductor.
 
 ```
-Usage: mozart top [OPTIONS]
+Usage: mzt top [OPTIONS]
 ```
 
 Shows a job-centric process tree, resource metrics, event timeline, anomaly
@@ -1109,55 +1109,55 @@ detection, and learning insights. Four operating modes:
 
 ```bash
 # Live TUI monitor
-mozart top
+mzt top
 
 # Filter to a specific score
-mozart top --job my-pipeline
+mzt top --job my-pipeline
 
 # JSON output for scripting
-mozart top --json
+mzt top --json
 
 # Replay the last hour of data
-mozart top --history 1h
+mzt top --history 1h
 
 # Faster refresh rate
-mozart top --interval 0.5
+mzt top --interval 0.5
 ```
 
 ---
 
-### `mozart config`
+### `mzt config`
 
 Manage conductor configuration.
 
 ```
-Usage: mozart config COMMAND [OPTIONS]
+Usage: mzt config COMMAND [OPTIONS]
 ```
 
 #### Subcommands
 
-##### `mozart config show`
+##### `mzt config show`
 
 Display current daemon configuration as a table. When the conductor is running, displays the **live in-memory config** (reflecting any SIGHUP reloads) with `[live]` source indicators. Falls back to disk-based display when the conductor is not running.
 
 ```bash
-mozart config show
-mozart config show --config /etc/mozart/daemon.yaml
+mzt config show
+mzt config show --config /etc/marianne/daemon.yaml
 ```
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--config` | `-c` | Path to daemon config file (default: `~/.mozart/daemon.yaml`). Ignored when live config is available from a running conductor. |
+| `--config` | `-c` | Path to daemon config file (default: `~/.marianne/daemon.yaml`). Ignored when live config is available from a running conductor. |
 
-##### `mozart config set`
+##### `mzt config set`
 
 Update a conductor configuration value. Values are validated against the DaemonConfig schema before saving. Use dot notation for nested keys.
 
 ```bash
-mozart config set max_concurrent_jobs 10
-mozart config set socket.path /tmp/custom.sock
-mozart config set resource_limits.max_memory_mb 4096
-mozart config set log_level debug
+mzt config set max_concurrent_jobs 10
+mzt config set socket.path /tmp/custom.sock
+mzt config set resource_limits.max_memory_mb 4096
+mzt config set log_level debug
 ```
 
 | Argument | Required | Description |
@@ -1167,59 +1167,59 @@ mozart config set log_level debug
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--config` | `-c` | Path to daemon config file (default: `~/.mozart/daemon.yaml`) |
+| `--config` | `-c` | Path to daemon config file (default: `~/.marianne/daemon.yaml`) |
 
-##### `mozart config path`
+##### `mzt config path`
 
 Show the conductor config file location and whether it exists.
 
 ```bash
-mozart config path
+mzt config path
 ```
 
-##### `mozart config init`
+##### `mzt config init`
 
 Create a default conductor config file with all default values and descriptive comments. Refuses to overwrite unless `--force` is given.
 
 ```bash
-mozart config init
-mozart config init --force
-mozart config init --config /etc/mozart/daemon.yaml
+mzt config init
+mzt config init --force
+mzt config init --config /etc/marianne/daemon.yaml
 ```
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--config` | `-c` | Path to create config file (default: `~/.mozart/daemon.yaml`) |
+| `--config` | `-c` | Path to create config file (default: `~/.marianne/daemon.yaml`) |
 | `--force` | `-f` | Overwrite existing config file |
 
-##### `mozart config check`
+##### `mzt config check`
 
 Validate a daemon config file against the `DaemonConfig` schema without starting the conductor. Exits 0 if valid, 1 if invalid or the file cannot be loaded.
 
 ```bash
-mozart config check
-mozart config check --config /path/to/custom.yaml
+mzt config check
+mzt config check --config /path/to/custom.yaml
 ```
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--config` | `-c` | Path to daemon config file to validate (default: `~/.mozart/daemon.yaml`) |
+| `--config` | `-c` | Path to daemon config file to validate (default: `~/.marianne/daemon.yaml`) |
 
 ---
 
 ## Instrument Commands
 
-These commands manage and inspect available instruments — the AI tools Mozart can use to execute scores. Instruments include CLI tools (Claude Code, Gemini CLI, Codex CLI, Aider, Goose) and HTTP APIs (Anthropic API, Ollama).
+These commands manage and inspect available instruments — the AI tools Marianne can use to execute scores. Instruments include CLI tools (Claude Code, Gemini CLI, Codex CLI, Aider, Goose) and HTTP APIs (Anthropic API, Ollama).
 
-### `mozart instruments list`
+### `mzt instruments list`
 
 List all available instruments and their readiness status.
 
 ```
-Usage: mozart instruments list [OPTIONS]
+Usage: mzt instruments list [OPTIONS]
 ```
 
-Shows every registered instrument: native backends (built into Mozart), built-in profiles (shipped as YAML), organization profiles (`~/.mozart/instruments/`), and venue profiles (`.mozart/instruments/`). Later profiles override earlier ones on name collision.
+Shows every registered instrument: native backends (built into Marianne), built-in profiles (shipped as YAML), organization profiles (`~/.marianne/instruments/`), and venue profiles (`.marianne/instruments/`). Later profiles override earlier ones on name collision.
 
 #### Options
 
@@ -1231,10 +1231,10 @@ Shows every registered instrument: native backends (built into Mozart), built-in
 
 ```bash
 # List all instruments
-mozart instruments list
+mzt instruments list
 
 # JSON output
-mozart instruments list --json
+mzt instruments list --json
 ```
 
 #### Sample Output
@@ -1259,12 +1259,12 @@ mozart instruments list --json
 
 ---
 
-### `mozart instruments check`
+### `mzt instruments check`
 
 Check readiness and configuration of a specific instrument.
 
 ```
-Usage: mozart instruments check [OPTIONS] NAME
+Usage: mzt instruments check [OPTIONS] NAME
 ```
 
 Provides detailed information about a single instrument: binary location, capabilities, available models with pricing, and overall readiness.
@@ -1285,10 +1285,10 @@ Provides detailed information about a single instrument: binary location, capabi
 
 ```bash
 # Check a specific instrument
-mozart instruments check gemini-cli
+mzt instruments check gemini-cli
 
 # JSON output
-mozart instruments check claude-code --json
+mzt instruments check claude-code --json
 ```
 
 #### Sample Output
@@ -1311,14 +1311,14 @@ gemini-cli is ready.
 
 ## Learning Commands
 
-These commands inspect and analyze Mozart's learning system — patterns learned from job executions that inform future runs.
+These commands inspect and analyze Marianne's learning system — patterns learned from job executions that inform future runs.
 
-### `mozart patterns-list`
+### `mzt patterns-list`
 
 View global learning patterns.
 
 ```
-Usage: mozart patterns-list [OPTIONS]
+Usage: mzt patterns-list [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1332,20 +1332,20 @@ Usage: mozart patterns-list [OPTIONS]
 | `--low-trust` | | false | Show only patterns with trust <= 0.3 |
 
 ```bash
-mozart patterns-list
-mozart patterns-list --high-trust
-mozart patterns-list --quarantined
-mozart patterns-list --min-priority 0.5 --json
+mzt patterns-list
+mzt patterns-list --high-trust
+mzt patterns-list --quarantined
+mzt patterns-list --min-priority 0.5 --json
 ```
 
 ---
 
-### `mozart patterns-why`
+### `mzt patterns-why`
 
 Analyze WHY patterns succeed with metacognitive insights. Shows success factors — the context conditions that contribute to pattern effectiveness.
 
 ```
-Usage: mozart patterns-why [OPTIONS] [PATTERN_ID]
+Usage: mzt patterns-why [OPTIONS] [PATTERN_ID]
 ```
 
 | Argument | Required | Description |
@@ -1359,19 +1359,19 @@ Usage: mozart patterns-why [OPTIONS] [PATTERN_ID]
 | `--json` | `-j` | false | Output as JSON |
 
 ```bash
-mozart patterns-why
-mozart patterns-why abc123
-mozart patterns-why --min-obs 3
+mzt patterns-why
+mzt patterns-why abc123
+mzt patterns-why --min-obs 3
 ```
 
 ---
 
-### `mozart patterns-entropy`
+### `mzt patterns-entropy`
 
 Monitor pattern population diversity using Shannon entropy.
 
 ```
-Usage: mozart patterns-entropy [OPTIONS]
+Usage: mzt patterns-entropy [OPTIONS]
 ```
 
 Shannon entropy measures how evenly patterns are used:
@@ -1387,20 +1387,20 @@ Shannon entropy measures how evenly patterns are used:
 | `--record` | `-r` | false | Record current entropy to history |
 
 ```bash
-mozart patterns-entropy
-mozart patterns-entropy --threshold 0.3
-mozart patterns-entropy --history
-mozart patterns-entropy --record
+mzt patterns-entropy
+mzt patterns-entropy --threshold 0.3
+mzt patterns-entropy --history
+mzt patterns-entropy --record
 ```
 
 ---
 
-### `mozart patterns-budget`
+### `mzt patterns-budget`
 
 Display exploration budget status and history. The budget adjusts based on pattern entropy: low entropy boosts the budget to inject diversity; healthy entropy decays toward floor (default 5%).
 
 ```
-Usage: mozart patterns-budget [OPTIONS]
+Usage: mzt patterns-budget [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1411,18 +1411,18 @@ Usage: mozart patterns-budget [OPTIONS]
 | `--json` | | false | Output as JSON |
 
 ```bash
-mozart patterns-budget
-mozart patterns-budget --history
+mzt patterns-budget
+mzt patterns-budget --history
 ```
 
 ---
 
-### `mozart learning-stats`
+### `mzt learning-stats`
 
 View global learning statistics. Shows summary including execution counts, pattern counts, and effectiveness metrics.
 
 ```
-Usage: mozart learning-stats [OPTIONS]
+Usage: mzt learning-stats [OPTIONS]
 ```
 
 | Option | Short | Description |
@@ -1430,18 +1430,18 @@ Usage: mozart learning-stats [OPTIONS]
 | `--json` | `-j` | Output as JSON |
 
 ```bash
-mozart learning-stats
-mozart learning-stats --json
+mzt learning-stats
+mzt learning-stats --json
 ```
 
 ---
 
-### `mozart learning-insights`
+### `mzt learning-insights`
 
 Show actionable insights from learning data including output patterns, error code patterns, and success predictors.
 
 ```
-Usage: mozart learning-insights [OPTIONS]
+Usage: mzt learning-insights [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1450,19 +1450,19 @@ Usage: mozart learning-insights [OPTIONS]
 | `--pattern-type` | | | Filter by type |
 
 ```bash
-mozart learning-insights
-mozart learning-insights --pattern-type output_pattern
-mozart learning-insights --limit 20
+mzt learning-insights
+mzt learning-insights --pattern-type output_pattern
+mzt learning-insights --limit 20
 ```
 
 ---
 
-### `mozart learning-drift`
+### `mzt learning-drift`
 
 Detect patterns with effectiveness drift. Drift is calculated by comparing pattern effectiveness in the last N applications vs the previous N.
 
 ```
-Usage: mozart learning-drift [OPTIONS]
+Usage: mzt learning-drift [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1474,19 +1474,19 @@ Usage: mozart learning-drift [OPTIONS]
 | `--summary` | `-s` | false | Show only summary statistics |
 
 ```bash
-mozart learning-drift
-mozart learning-drift --threshold 0.15
-mozart learning-drift --summary
+mzt learning-drift
+mzt learning-drift --threshold 0.15
+mzt learning-drift --summary
 ```
 
 ---
 
-### `mozart learning-epistemic-drift`
+### `mzt learning-epistemic-drift`
 
 Detect patterns with epistemic drift (belief/confidence changes). Epistemic drift tracks confidence changes over time, complementing effectiveness drift as a leading indicator of pattern health.
 
 ```
-Usage: mozart learning-epistemic-drift [OPTIONS]
+Usage: mzt learning-epistemic-drift [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1498,19 +1498,19 @@ Usage: mozart learning-epistemic-drift [OPTIONS]
 | `--summary` | `-s` | false | Show only summary statistics |
 
 ```bash
-mozart learning-epistemic-drift
-mozart learning-epistemic-drift --threshold 0.1
-mozart learning-epistemic-drift --summary
+mzt learning-epistemic-drift
+mzt learning-epistemic-drift --threshold 0.1
+mzt learning-epistemic-drift --summary
 ```
 
 ---
 
-### `mozart learning-activity`
+### `mzt learning-activity`
 
 View recent learning activity and pattern applications.
 
 ```
-Usage: mozart learning-activity [OPTIONS]
+Usage: mzt learning-activity [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1519,18 +1519,18 @@ Usage: mozart learning-activity [OPTIONS]
 | `--json` | `-j` | false | Output as JSON |
 
 ```bash
-mozart learning-activity
-mozart learning-activity --hours 48
+mzt learning-activity
+mzt learning-activity --hours 48
 ```
 
 ---
 
-### `mozart entropy-status`
+### `marianne entropy-status`
 
 Display entropy response status and history. When pattern entropy drops below threshold, the system automatically boosts exploration budget and revisits quarantined patterns.
 
 ```
-Usage: mozart entropy-status [OPTIONS]
+Usage: marianne entropy-status [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1542,21 +1542,21 @@ Usage: mozart entropy-status [OPTIONS]
 | `--check` | `-c` | false | Check if entropy response is needed (dry-run) |
 
 ```bash
-mozart entropy-status
-mozart entropy-status --history
-mozart entropy-status --check
+marianne entropy-status
+marianne entropy-status --history
+marianne entropy-status --check
 ```
 
 ---
 
 ## Conductor Commands
 
-### `mozart start`
+### `mzt start`
 
-Start the Mozart conductor.
+Start the Marianne conductor.
 
 ```
-Usage: mozart start [OPTIONS]
+Usage: mzt start [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1568,51 +1568,51 @@ Usage: mozart start [OPTIONS]
 
 ```bash
 # Start in background (production)
-mozart start
+mzt start
 
 # Start in foreground (development)
-mozart start --foreground
+mzt start --foreground
 
 # Custom config
-mozart start --config /etc/mozart/daemon.yaml
+mzt start --config /etc/marianne/daemon.yaml
 
 # Debug logging
-mozart start --log-level debug
+mzt start --log-level debug
 ```
 
 ---
 
-### `mozart stop`
+### `mzt stop`
 
 Stop the running conductor. If jobs are actively running, warns and asks for confirmation before proceeding — stopping the conductor while jobs run orphans active agents and may corrupt job state.
 
 ```
-Usage: mozart stop [OPTIONS]
+Usage: mzt stop [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--pid-file` | | `/tmp/mozart.pid` | Path to PID file |
+| `--pid-file` | | `/tmp/marianne.pid` | Path to PID file |
 | `--force` | | false | Skip safety check, send SIGKILL instead of SIGTERM |
 
-**Safety guard:** When jobs are running, `mozart stop` probes the conductor via IPC to check for active jobs. If any are found, it warns with the job count and asks for confirmation. The `--force` flag bypasses this check entirely and sends SIGKILL.
+**Safety guard:** When jobs are running, `mzt stop` probes the conductor via IPC to check for active jobs. If any are found, it warns with the job count and asks for confirmation. The `--force` flag bypasses this check entirely and sends SIGKILL.
 
 ```bash
 # Normal stop (warns if jobs running)
-mozart stop
+mzt stop
 
 # Force stop (SIGKILL, no safety check)
-mozart stop --force
+mzt stop --force
 ```
 
 ---
 
-### `mozart restart`
+### `mzt restart`
 
 Restart the conductor (stop + start).
 
 ```
-Usage: mozart restart [OPTIONS]
+Usage: mzt restart [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1620,43 +1620,43 @@ Usage: mozart restart [OPTIONS]
 | `--config` | `-c` | | Path to conductor config file |
 | `--foreground` | `-f` | false | Run in foreground (for development) |
 | `--log-level` | `-l` | `info` | Logging level |
-| `--pid-file` | | `/tmp/mozart.pid` | Path to PID file |
+| `--pid-file` | | `/tmp/marianne.pid` | Path to PID file |
 | `--profile` | `-p` | | Daemon operational profile: `dev`, `intensive`, `minimal`. Overrides config file defaults. |
 
 ```bash
-mozart restart
-mozart restart --foreground
+mzt restart
+mzt restart --foreground
 ```
 
 ---
 
-### `mozart conductor-status`
+### `mzt conductor-status`
 
 Check conductor status via health probes.
 
 ```
-Usage: mozart conductor-status [OPTIONS]
+Usage: mzt conductor-status [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--pid-file` | | `/tmp/mozart.pid` | Path to PID file |
-| `--socket` | | `/tmp/mozart.sock` | Path to Unix socket |
+| `--pid-file` | | `/tmp/marianne.pid` | Path to PID file |
+| `--socket` | | `/tmp/marianne.sock` | Path to Unix socket |
 
 ```bash
-mozart conductor-status
+mzt conductor-status
 ```
 
 ---
 
-### `mozart clear-rate-limits`
+### `mzt clear-rate-limits`
 
 Clear stale rate limits on instruments. When a backend rate limit expires but the conductor still has it cached, sheets may stay blocked unnecessarily. This command clears the cached limit so dispatch resumes immediately.
 
 Clears both the rate limit coordinator (used by the scheduler) and the baton's per-instrument state (used by the dispatch loop).
 
 ```
-Usage: mozart clear-rate-limits [OPTIONS]
+Usage: mzt clear-rate-limits [OPTIONS]
 ```
 
 | Option | Short | Default | Description |
@@ -1666,13 +1666,13 @@ Usage: mozart clear-rate-limits [OPTIONS]
 
 ```bash
 # Clear all rate limits
-mozart clear-rate-limits
+mzt clear-rate-limits
 
 # Clear rate limit for a specific instrument
-mozart clear-rate-limits -i claude-cli
+mzt clear-rate-limits -i claude-cli
 
 # JSON output for scripting
-mozart clear-rate-limits --json
+mzt clear-rate-limits --json
 ```
 
 **When to use:**
@@ -1702,7 +1702,7 @@ prompt:
     Stage {{ sheet_num }}: Process item {{ sheet_num }} of {{ total_sheets }}.
 validations:
   - type: file_exists
-    path: "{{ workspace }}/output-{{ sheet_num }}.md"
+    path: "{workspace}/output-{sheet_num}.md"
 ```
 
 ### Full Example
@@ -1712,7 +1712,7 @@ name: "full-example"
 description: "Comprehensive job example"
 workspace: "./my-workspace"
 
-# Use instrument: for new scores. Run `mozart instruments list` for options.
+# Use instrument: for new scores. Run `mzt instruments list` for options.
 instrument: claude-code
 instrument_config:
   timeout_seconds: 1800
@@ -1740,14 +1740,14 @@ rate_limit:
 
 validations:
   - type: file_exists
-    path: "{{ workspace }}/output-{{ sheet_num }}.md"
+    path: "{workspace}/output-{sheet_num}.md"
   - type: content_contains
-    path: "{{ workspace }}/output-{{ sheet_num }}.md"
+    path: "{workspace}/output-{sheet_num}.md"
     pattern: "## Summary"
   - type: file_modified
-    path: "{{ workspace }}/output-{{ sheet_num }}.md"
+    path: "{workspace}/output-{sheet_num}.md"
   - type: command_succeeds
-    command: "wc -w {{ workspace }}/output-{{ sheet_num }}.md | awk '$1 >= 500'"
+    command: "wc -w {workspace}/output-{sheet_num}.md | awk '$1 >= 500'"
 
 notifications:
   - type: desktop
@@ -1777,7 +1777,7 @@ Core variables available in all prompt templates (from `SheetContext.to_dict()`)
 
 ### Instruments
 
-Run `mozart instruments list` to see all available instruments. Built-in instruments:
+Run `mzt instruments list` to see all available instruments. Built-in instruments:
 
 | Instrument | Kind | Description |
 |------------|------|-------------|
@@ -1803,8 +1803,8 @@ are still supported. New scores should use `instrument:` instead.
 
 ### Error Codes
 
-Mozart classifies every execution failure into a structured error code. Use
-`mozart errors <job> --code E001` to filter by code. The error code determines
+Marianne classifies every execution failure into a structured error code. Use
+`mzt errors <job> --code E001` to filter by code. The error code determines
 retry behavior, delay timing, and severity.
 
 **E0xx — Execution Errors** (process-level failures)
@@ -1874,15 +1874,15 @@ execution time.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MOZART_LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | |
-| `MOZART_LOG_FILE` | Path for log file output | |
-| `MOZART_LOG_FORMAT` | Log format: `json`, `console`, or `both` | |
-| `MOZART_AUTH_MODE` | Dashboard auth: `disabled`, `api_key`, `localhost_only` | `localhost_only` |
-| `MOZART_API_KEYS` | Comma-separated API keys for dashboard auth | |
-| `MOZART_LOCALHOST_BYPASS` | Allow localhost to bypass API key auth | `true` |
-| `MOZART_CORS_ORIGINS` | Comma-separated allowed CORS origins | `http://localhost:8080,http://127.0.0.1:8080` |
-| `MOZART_CORS_CREDENTIALS` | Allow credentials in CORS requests | `true` |
-| `MOZART_DEV` | Enable development mode (permissive CORS) | |
+| `MZT_LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | |
+| `MZT_LOG_FILE` | Path for log file output | |
+| `MZT_LOG_FORMAT` | Log format: `json`, `console`, or `both` | |
+| `MZT_AUTH_MODE` | Dashboard auth: `disabled`, `api_key`, `localhost_only` | `localhost_only` |
+| `MZT_API_KEYS` | Comma-separated API keys for dashboard auth | |
+| `MZT_LOCALHOST_BYPASS` | Allow localhost to bypass API key auth | `true` |
+| `MZT_CORS_ORIGINS` | Comma-separated allowed CORS origins | `http://localhost:8080,http://127.0.0.1:8080` |
+| `MZT_CORS_CREDENTIALS` | Allow credentials in CORS requests | `true` |
+| `MZT_DEV` | Enable development mode (permissive CORS) | |
 | `ANTHROPIC_API_KEY` | API key for Anthropic API backend | |
 
 ---
@@ -1893,7 +1893,7 @@ execution time.
 
 Use `-v` for detailed output:
 ```bash
-mozart -v run job.yaml
+marianne -v run job.yaml
 ```
 
 Shows:
@@ -1906,7 +1906,7 @@ Shows:
 
 Use `-q` for minimal output:
 ```bash
-mozart -q run job.yaml
+marianne -q run job.yaml
 ```
 
 Shows only:
@@ -1918,10 +1918,10 @@ Shows only:
 Combine `--json` with `jq` for scripting:
 ```bash
 # Get job status
-mozart status my-job --json | jq '.status'
+mzt status my-job --json | jq '.status'
 
 # Get failed sheet numbers
-mozart status my-job --json | jq '.sheets | to_entries[] | select(.value.status == "failed") | .key'
+mzt status my-job --json | jq '.sheets | to_entries[] | select(.value.status == "failed") | .key'
 ```
 
 ### Keyboard Shortcuts
@@ -1939,17 +1939,17 @@ When a job fails, follow this order:
 
 ```bash
 # 1. Check current status (routes through conductor)
-mozart status my-job
+mzt status my-job
 
 # 2. Get full diagnostic report
-mozart diagnose my-job
+mzt diagnose my-job
 
 # 3. View error history
-mozart errors my-job --verbose
+mzt errors my-job --verbose
 
 # 4. Check logs
-mozart logs my-job --level ERROR
+mzt logs my-job --level ERROR
 
 # 5. Try recovery (re-validate without re-execute)
-mozart recover my-job --dry-run
+mzt recover my-job --dry-run
 ```

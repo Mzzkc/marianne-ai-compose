@@ -15,7 +15,7 @@ This is my second review of movement 3. The first (`633345c`) covered the mid-mo
 
 **Three faces turned away from the presenters:**
 
-1. **F-210 is the real blocker, not the resolved P0s.** Everyone celebrated fixing F-152, F-145, and F-158. Those were the visible blockers. Weaver's integration audit found the invisible one: zero `cross_sheet` references exist in the baton package. 24/34 examples use `cross_sheet: auto_capture_stdout: true`. The baton path produces functionally different prompts — templates referencing `{{ previous_outputs }}` render with empty dicts. I confirmed: `grep -r 'cross_sheet' src/mozart/daemon/baton/` returns zero results. The baton will pass tests (they mock context) while degrading real output. This is the most dangerous class of bug: tests say yes, reality says no.
+1. **F-210 is the real blocker, not the resolved P0s.** Everyone celebrated fixing F-152, F-145, and F-158. Those were the visible blockers. Weaver's integration audit found the invisible one: zero `cross_sheet` references exist in the baton package. 24/34 examples use `cross_sheet: auto_capture_stdout: true`. The baton path produces functionally different prompts — templates referencing `{{ previous_outputs }}` render with empty dicts. I confirmed: `grep -r 'cross_sheet' src/marianne/daemon/baton/` returns zero results. The baton will pass tests (they mock context) while degrading real output. This is the most dangerous class of bug: tests say yes, reality says no.
 
 2. **The demo deficit is no longer a gap — it's a pattern.** Eight movements. Zero demo progress. The composer's P0 directives for Lovable and Wordware are the oldest unfulfilled obligations in the project. The README, docs, and examples are pristine. The example corpus validates 33/34. The error messages teach. The CLI is coherent. Nobody outside this repository has seen any of it. The infrastructure serves an audience that doesn't know it exists.
 
@@ -30,7 +30,7 @@ This is my second review of movement 3. The first (`633345c`) covered the mid-mo
 | pytest | **GREEN** | `python -m pytest tests/ --co` | 10,986 tests collected |
 | mypy | **GREEN** | `python -m mypy src/` | "Success: no issues found in 256 source files" |
 | ruff | **GREEN** | `python -m ruff check src/` | "All checks passed!" |
-| Examples | **GREEN** | `mozart validate` each | 33/34 pass (iterative-dev-loop-config.yaml is a generator config, expected) |
+| Examples | **GREEN** | `mzt validate` each | 33/34 pass (iterative-dev-loop-config.yaml is a generator config, expected) |
 
 Working tree:
 ```
@@ -132,7 +132,7 @@ Spark (M3) modernized 7 fan-out examples with `movements:` declarations. Guide (
 
 | Work | Musician | Verified |
 |------|----------|----------|
-| README overhaul — 30 commands in 8 groups | Compass | YES — matches `mozart --help` |
+| README overhaul — 30 commands in 8 groups | Compass | YES — matches `marianne --help` |
 | Getting-started tutorial — terminology + validate output | Guide | YES — "my-first-score" throughout |
 | Score-writing guide — 10 terminology fixes | Guide | YES — code refs preserved, user text fixed |
 | Configuration reference — 6 terminology fixes | Guide | YES |
@@ -229,7 +229,7 @@ Traced the full chain: CLI (`resume.py:312` → `config_path` in IPC params) →
 
 ### 3. Does F-210 really block Phase 1?
 
-Yes. Confirmed: `grep -r 'cross_sheet' src/mozart/daemon/baton/` → zero results. The baton package has no awareness of cross-sheet context. `state.py:161` has `previous_outputs: dict[int, str]` as a field on `SheetExecutionState` but it's never populated. 24/34 examples use `cross_sheet: auto_capture_stdout: true`. Phase 1 testing without this fix would produce output where inter-sheet references resolve to empty dicts — functionally broken but syntactically valid.
+Yes. Confirmed: `grep -r 'cross_sheet' src/marianne/daemon/baton/` → zero results. The baton package has no awareness of cross-sheet context. `state.py:161` has `previous_outputs: dict[int, str]` as a field on `SheetExecutionState` but it's never populated. 24/34 examples use `cross_sheet: auto_capture_stdout: true`. Phase 1 testing without this fix would produce output where inter-sheet references resolve to empty dicts — functionally broken but syntactically valid.
 
 ### 4. Could the adapter encapsulation violation cause bugs?
 

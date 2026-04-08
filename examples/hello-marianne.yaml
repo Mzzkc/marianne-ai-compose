@@ -1,4 +1,4 @@
-# hello-mozart.yaml — Your First Mozart Score
+# hello-marianne.yaml — Your First Marianne Score
 #
 # This score creates a short interactive fiction experience in three
 # movements. Movement 1 generates the world. Movement 2 writes three
@@ -11,13 +11,13 @@
 # orchestrated AI can produce.
 #
 # Usage:
-#   mozart start                        # Start the conductor
-#   mozart run examples/hello-mozart.yaml  # Run the score
-#   mozart status hello-mozart           # Watch progress
-#   open workspaces/hello-mozart/the-sky-library.html  # Read the result
+#   mzt start                        # Start the conductor
+#   mzt run examples/hello-marianne.yaml  # Run the score
+#   mzt status hello-marianne           # Watch progress
+#   open workspaces/hello-marianne/the-sky-library.html  # Read the result
 #
 # Output:
-#   workspaces/hello-mozart/
+#   workspaces/hello-marianne/
 #     01-world.md              — The setting (raw material)
 #     02-character-1.md        — First vignette (raw material)
 #     02-character-2.md        — Second vignette (raw material)
@@ -26,16 +26,16 @@
 #
 # Time: ~5 minutes  |  Cost: varies by instrument and model  |  Sheets: 5
 
-name: hello-mozart
-description: "Three movements, three characters, one world — your first Mozart score"
+name: hello-marianne
+description: "Three movements, three characters, one world — your first Marianne score"
 
-workspace: ../workspaces/hello-mozart
+workspace: ../workspaces/hello-marianne
 
 instrument: claude-code
 instrument_config:
   timeout_seconds: 600
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "The World"
@@ -214,19 +214,19 @@ prompt:
     - The colophon at the bottom should be visually distinct (smaller, italicized)
       and include this text:
 
-      "This story was composed by Mozart AI Compose — an orchestration system
+      "This story was composed by Marianne AI Compose — an orchestration system
       that coordinates AI agents through declarative YAML scores. The world
       was written first. Three character vignettes were generated in parallel,
       each reading the shared world but not each other. This finale read
       everything and wove the threads together.
-      Score: hello-mozart.yaml | Movements: 3 | Voices: 5"
+      Score: hello-marianne.yaml | Movements: 3 | Voices: 5"
 
     ### Technical Requirements
     - Valid HTML5. `<!DOCTYPE html>` at the top.
     - `<html lang="en">` with proper `<head>` including meta charset and viewport.
     - All content and styling in one file — no external dependencies.
     - Must render correctly in Chrome, Firefox, Safari.
-    - Page title: "The Sky Library — A Mozart Composition"
+    - Page title: "The Sky Library — A Marianne Composition"
 
     Save ONLY the HTML file to: {{ workspace }}/the-sky-library.html
 
@@ -258,6 +258,6 @@ validations:
 
   - type: content_contains
     path: "{workspace}/the-sky-library.html"
-    pattern: "Mozart AI Compose"
+    pattern: "Marianne AI Compose"
     condition: "stage == 3"
     description: "HTML contains colophon"

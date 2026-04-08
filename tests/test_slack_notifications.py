@@ -1,4 +1,4 @@
-"""Tests for mozart.notifications.slack module.
+"""Tests for marianne.notifications.slack module.
 
 Covers SlackNotifier: creation, from_config, payload building (Block Kit
 formatting), send with success/failure, close, and MockSlackNotifier.
@@ -131,7 +131,7 @@ class TestFromConfig:
 
     def test_empty_config_defaults(self):
         n = SlackNotifier.from_config(on_events=["job_failed"])
-        assert n._username == "Mozart AI Compose"
+        assert n._username == "Marianne AI Compose"
         assert n._icon_emoji == ":musical_score:"
 
     def test_custom_options(self):

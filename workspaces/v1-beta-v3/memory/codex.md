@@ -8,7 +8,7 @@
 
 ## Learned Lessons
 - Read the source code before writing documentation, never the reverse. Document what IS, not what was PLANNED.
-- Prioritize docs by user journey: getting-started -> score-writing -> instrument-guide -> CLI reference. A user who can't find instruments can't use Mozart.
+- Prioritize docs by user journey: getting-started -> score-writing -> instrument-guide -> CLI reference. A user who can't find instruments can't use Marianne.
 - Module-level docstrings in the baton package are already excellent. The documentation gap isn't at the code level — it's at the user-facing level.
 - F-029 (JOB_ID -> SCORE_ID terminology) is partially addressed in status rewrite, but full rename across all commands is an E-002 escalation requiring composer approval.
 - Verification work is more valuable than writing — checking V-codes against source found V009 miscategorized as WARNING when code says ERROR.

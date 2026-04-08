@@ -1,6 +1,6 @@
-"""Mozart Ollama Bridge components.
+"""Marianne Ollama Bridge components.
 
-This package provides integration between Mozart and local Ollama models
+This package provides integration between Marianne and local Ollama models
 with MCP tool support. The main components are:
 
 - MCPProxyService: Manages MCP server subprocesses for tool execution

@@ -1,4 +1,4 @@
-"""Comprehensive tests for mozart.execution.validation.engine.ValidationEngine.
+"""Comprehensive tests for marianne.execution.validation.engine.ValidationEngine.
 
 Covers initialization, path expansion, display paths, file reading with
 encoding fallback, missing field results, validate_sheet (run_validations),

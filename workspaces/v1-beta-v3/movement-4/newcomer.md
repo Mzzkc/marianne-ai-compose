@@ -40,7 +40,7 @@ This is a significant UX improvement. Previously, score authors could write `ins
 
 Fixed to: "Add a 'sheet' section with total_items and size."
 
-**File:** `src/mozart/cli/commands/validate.py:295`
+**File:** `src/marianne/cli/commands/validate.py:295`
 
 ### 4. CLI UX Audit
 
@@ -48,12 +48,12 @@ Tested all major user-facing commands as a newcomer would encounter them:
 
 | Command | Grade | Notes |
 |---------|-------|-------|
-| `mozart --help` | A | Panel grouping excellent. Learning section still 12 commands (F-155 from M2, tracked) |
-| `mozart doctor` | A | Clear status, instrument readiness, safety warnings |
-| `mozart status` | A | Clean overview with active/recent, conductor uptime |
-| `mozart instruments list` | A | Table with readiness indicators, clear not-found markers |
-| `mozart validate <file>` | A | Good error messages with hints, docs pointers |
-| `mozart init <name>` | A | Generates working starter score, good next-steps output |
+| `marianne --help` | A | Panel grouping excellent. Learning section still 12 commands (F-155 from M2, tracked) |
+| `mzt doctor` | A | Clear status, instrument readiness, safety warnings |
+| `mzt status` | A | Clean overview with active/recent, conductor uptime |
+| `mzt instruments list` | A | Table with readiness indicators, clear not-found markers |
+| `mzt validate <file>` | A | Good error messages with hints, docs pointers |
+| `mzt init <name>` | A | Generates working starter score, good next-steps output |
 | Empty file error | A | "Score must be a YAML mapping... got: empty file" with hints |
 | Non-existent file | A | Click validation catches it cleanly |
 | Unknown fields | A | Clear "Extra inputs are not permitted" with field names |

@@ -87,7 +87,7 @@
 
 11. **Documentation fully updated (Codex + Guide):** 14 documentation deliverables across 8 docs. All 5 major M4 features documented (auto-fresh, pending jobs, cost confidence, skipped_upstream, MethodNotFoundError).
 
-12. **hello.yaml → hello-mozart.yaml rename (Guide):** Score ID now matches name field. 8 files updated.
+12. **hello.yaml → hello-marianne.yaml rename (Guide):** Score ID now matches name field. 8 files updated.
 
 13. **2 new Rosetta examples + Rosetta Score primitives updated (Spark):** source-triangulation.yaml, shipyard-sequence.yaml. Primitives list now reflects all M1-M4 capabilities.
 

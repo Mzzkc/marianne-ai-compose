@@ -3,7 +3,7 @@
 TDD tests for the conductor-clone functionality that allows running
 isolated conductor instances alongside the production conductor.
 
-This enables safe testing of Mozart CLI commands and daemon features
+This enables safe testing of Marianne CLI commands and daemon features
 without risking the production conductor (#145, composer P0 directive).
 """
 
@@ -26,13 +26,13 @@ class TestClonePathResolution:
     """Test that clone names produce correct isolated paths."""
 
     def test_default_clone_paths(self) -> None:
-        """Default clone uses /tmp/mozart-clone.* paths."""
+        """Default clone uses /tmp/marianne-clone.* paths."""
         from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths(None)
-        assert paths.socket == Path("/tmp/mozart-clone.sock")
-        assert paths.pid_file == Path("/tmp/mozart-clone.pid")
-        assert paths.log_file == Path("/tmp/mozart-clone.log")
+        assert paths.socket == Path("/tmp/marianne-clone.sock")
+        assert paths.pid_file == Path("/tmp/marianne-clone.pid")
+        assert paths.log_file == Path("/tmp/marianne-clone.log")
         assert "clone" in str(paths.state_db)
 
     def test_named_clone_paths(self) -> None:
@@ -40,9 +40,9 @@ class TestClonePathResolution:
         from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("test-1")
-        assert paths.socket == Path("/tmp/mozart-clone-test-1.sock")
-        assert paths.pid_file == Path("/tmp/mozart-clone-test-1.pid")
-        assert paths.log_file == Path("/tmp/mozart-clone-test-1.log")
+        assert paths.socket == Path("/tmp/marianne-clone-test-1.sock")
+        assert paths.pid_file == Path("/tmp/marianne-clone-test-1.pid")
+        assert paths.log_file == Path("/tmp/marianne-clone-test-1.log")
         assert "clone-test-1" in str(paths.state_db)
 
     def test_clone_paths_isolated_from_production(self) -> None:

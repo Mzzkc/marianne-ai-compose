@@ -1,4 +1,4 @@
-"""Tests for mozart.review module."""
+"""Tests for marianne.review module."""
 
 import json
 from pathlib import Path

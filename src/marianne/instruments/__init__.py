@@ -1,9 +1,9 @@
 """Instrument plugin system.
 
 Provides the infrastructure for config-driven instruments — CLI tools
-and HTTP APIs that Mozart can use as backends without writing Python code.
+and HTTP APIs that Marianne can use as backends without writing Python code.
 
-An instrument profile is a YAML file that describes everything Mozart
+An instrument profile is a YAML file that describes everything Marianne
 needs: CLI flags, output parsing, error detection, and model metadata.
 Adding a new instrument is writing ~30 lines of YAML, not ~300 lines
 of Python.

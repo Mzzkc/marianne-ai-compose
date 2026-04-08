@@ -1,4 +1,4 @@
-"""Textual TUI application for ``mozart top`` — real-time system monitor.
+"""Textual TUI application for ``mzt top`` — real-time system monitor.
 
 Provides ``MonitorApp``, a Textual ``App`` subclass with a job-centric layout
 matching the design document: header bar, jobs panel, event timeline, and
@@ -45,14 +45,14 @@ class SectionLabel(Static):
 
 
 class MonitorApp(App[None]):
-    """Real-time Mozart system monitor TUI.
+    """Real-time Marianne system monitor TUI.
 
     Reads data from ``MonitorReader`` and renders a job-centric layout
     with live-updating metrics, event timeline, and drill-down detail.
     """
 
-    TITLE = "Mozart Monitor"
-    SUB_TITLE = "mozart top"
+    TITLE = "Marianne Monitor"
+    SUB_TITLE = "mzt top"
 
     CSS = """
     Screen {

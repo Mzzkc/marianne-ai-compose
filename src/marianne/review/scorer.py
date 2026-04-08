@@ -1,4 +1,4 @@
-"""AI-powered code review scorer for Mozart.
+"""AI-powered code review scorer for Marianne.
 
 Provides automated quality assessment of code changes after batch execution.
 The reviewer analyzes git diffs and produces a quality score (0-100) with
@@ -28,7 +28,7 @@ _logger = get_logger("review.scorer")
 
 # Default review prompt template
 DEFAULT_REVIEW_PROMPT = """
-You are a code reviewer for Mozart AI Compose. Review the following git diff
+You are a code reviewer for Marianne AI Compose. Review the following git diff
 and provide a quality score from 0-100.
 
 ## Git Diff
@@ -206,7 +206,7 @@ class GitDiffProvider:
 class AIReviewer:
     """Performs AI-powered code review using a backend.
 
-    Uses the same backend as Mozart execution to send the diff
+    Uses the same backend as Marianne execution to send the diff
     for review and parse the scoring response.
     """
 

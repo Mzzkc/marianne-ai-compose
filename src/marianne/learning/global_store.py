@@ -2,7 +2,7 @@
 
 This module provides backward-compatible imports for the GlobalLearningStore class
 and all related models. The implementation has been modularized into the
-`mozart.learning.store` package.
+`marianne.learning.store` package.
 
 The original monolithic implementation (~5136 LOC) has been split into focused
 mixins for better maintainability:

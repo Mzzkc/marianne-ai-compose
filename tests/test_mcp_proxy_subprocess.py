@@ -294,12 +294,12 @@ class TestRealEnvironmentPassing:
 
     async def test_env_vars_passed_to_subprocess(self, make_config):
         config = make_config(
-            env={"MOZART_TEST_VAR": "test_value_42"}
+            env={"MZT_TEST_VAR": "test_value_42"}
         )
 
         async with MCPProxyService([config]) as proxy:
             result = await proxy.execute_tool(
-                "env_check", {"var_name": "MOZART_TEST_VAR"}
+                "env_check", {"var_name": "MZT_TEST_VAR"}
             )
             assert result.content[0].text == "test_value_42"
 

@@ -1,0 +1,711 @@
+# rosetta-prove.yaml
+#
+# Pattern proof engine — the other half of the Rosetta concert.
+#
+# Takes patterns from the Rosetta corpus and proves them by composing
+# production-grade demonstration scores that reach past the terminal.
+# A proof score doesn't write reports — it deploys infrastructure,
+# launches products, processes real data, integrates real services.
+#
+# Each iteration:
+#   1. Selects an unproven pattern from the corpus
+#   2. Decomposes a real problem across all TDF domains
+#   3. Designs a score architecture using the TDF composition process
+#   4. Composes the YAML score
+#   5. Three adversarial reviewers attack it
+#   6. Revises and validates
+#
+# The proof is written to examples/rosetta/ and the score self-chains
+# to prove the next pattern.
+#
+# Concert chain: rosetta-discover → [split corpus] → rosetta-prove (x1-5)
+#
+# Patterns this score uses:
+#   - Pipeline (6 sequential stages)
+#   - Reconnaissance Pull (stage 1: survey before commitment)
+#   - Decision Propagation (stages 1-3 produce constraint briefs for stage 4)
+#   - Commissioning Cascade (stage 5-6: multi-scope validation)
+#   - Fan-out + Synthesis (stage 5: 3 adversarial reviewers)
+#
+#   Stage 1: Pattern Selection (1 sheet)
+#        Survey corpus index + existing proofs. Select pattern + problem.
+#                    v
+#   Stage 2: Problem Decomposition (1 sheet)
+#        Full TDF decomposition. Every step, instrument, validation.
+#                    v
+#   Stage 3: Score Architecture (1 sheet)
+#        Forces → generators → patterns → stage structure.
+#                    v
+#   Stage 4: Score Composition (1 sheet)
+#        Write the YAML. Architecture constrains.
+#                    |
+#           +--------+--------+
+#           v        v        v
+#   Stage 5: Adversarial Review x3 (3 sheets, parallel)
+#           |        |        |
+#           +--------+--------+
+#                    v
+#   Stage 6: Revision + Validation (1 sheet)
+#                    |
+#              [on_success: self-chain to prove next pattern]
+
+name: rosetta-prove
+workspace: /home/emzi/Projects/marianne-ai-compose/workspaces/rosetta-prove
+description: "Prove orchestration patterns with production-grade demonstration scores"
+
+instrument: claude-code
+instrument_config:
+  timeout_seconds: 7200
+instrument_fallbacks: [gemini-cli]
+
+concert:
+  enabled: true
+  max_chain_depth: 5
+  cooldown_between_jobs_seconds: 60
+  inherit_workspace: false
+
+workspace_lifecycle:
+  archive_on_fresh: true
+  max_archives: 5
+
+sheet:
+  size: 1
+  total_items: 6
+  fan_out:
+    5: 3
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+  # Every stage gets the corpus index, forces, and composition DAG as context —
+  # agents need the full pattern vocabulary and composition edges at all times.
+  prelude:
+    - file: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus/INDEX.md"
+      as: context
+    - file: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus/forces.md"
+      as: context
+    - file: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus/selection-guide.md"
+      as: context
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 60
+
+rate_limit:
+  wait_minutes: 60
+  max_waits: 24
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 3600
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 8000
+  lookback_sheets: 4
+
+prompt:
+  variables:
+    # Corpus locations
+    corpus_index: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus/INDEX.md"
+    corpus_patterns_dir: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus/patterns"
+    corpus_forces: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus/forces.md"
+    corpus_selection_guide: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus/selection-guide.md"
+
+    # Existing proof scores — avoid duplicating
+    proof_scores_dir: "/home/emzi/Projects/marianne-ai-compose/examples/rosetta"
+
+    # Where new proof scores land
+    proof_output_dir: "/home/emzi/Projects/marianne-ai-compose/examples/rosetta"
+
+    # The instrument universe — what agents can reach for beyond LLMs
+    instrument_categories: |
+      Any CLI tool, API client, or scriptable interface is a mzt instrument.
+      This list is not exhaustive — it's a starting point to break you out of
+      "everything is an LLM" thinking. The real world has thousands of tools.
+      Reach for them.
+
+      **AI Agents:** claude-code, gemini-cli, aider, codex-cli, goose, cline
+      **Creative — Visual:** DALL-E API, Midjourney API, Stable Diffusion, Flux, Leonardo.ai, Canva API, Figma API, ImageMagick, ffmpeg (thumbnails, composites)
+      **Creative — Audio:** ElevenLabs (voice synthesis), Bark (TTS), Whisper (transcription), ffmpeg (audio processing), sox, Spotify API (metadata)
+      **Creative — Video:** Runway, Sora, ffmpeg (editing, encoding, format conversion), yt-dlp (research)
+      **Creative — 3D:** Meshy, Tripo, Blender CLI, OpenSCAD
+      **Creative — Text:** LaTeX (typesetting), Pandoc (format conversion), Calibre (ebook), mdbook/mkdocs/docusaurus (doc sites), Hugo/Jekyll (static sites), Asciidoctor
+      **Financial:** Stripe CLI (payments, subscriptions, invoicing), Plaid (banking), Wise API (international transfers), currency APIs, crypto APIs, QuickBooks API, invoice generators
+      **Communication:** Twilio (SMS, voice, video), SendGrid/Mailgun (email), Slack API, Discord webhooks, Telegram Bot API, Matrix/Element, XMPP, RSS feed generators, Mailchimp API
+      **Social/Publishing:** GitHub CLI (repos, issues, PRs, releases, pages), npm publish, PyPI upload, crates.io, Docker Hub, Twitter/X API, LinkedIn API, Reddit API, Medium API, dev.to API, WordPress API, Ghost API
+      **Data — Collection:** curl, wget, scrapy, Playwright (browser automation), Puppeteer, public APIs (weather, census, financial, academic), web scraping frameworks, RSS/Atom parsers
+      **Data — Processing:** pandas (via Python scripts), jq, csvkit, sqlite3, DuckDB CLI, Apache Arrow, sed/awk (stream processing), sort/uniq/cut (Unix pipes)
+      **Data — Storage:** SQLite, PostgreSQL (psql), MySQL, Redis CLI, MongoDB (mongosh), S3 CLI (aws s3), MinIO, Elasticsearch
+      **Data — Analysis:** R (Rscript), Jupyter (papermill), Matplotlib/Seaborn (via Python), gnuplot, Wolfram Alpha API, statistical APIs
+      **Infrastructure — Cloud:** AWS CLI, gcloud, az (Azure), Terraform, Pulumi, CloudFormation, Ansible, Chef, Puppet
+      **Infrastructure — Containers:** Docker, docker-compose, Podman, Kubernetes (kubectl, helm), k3s, Buildpacks
+      **Infrastructure — Networking:** nginx configs, Caddy, HAProxy, Cloudflare CLI (wrangler), DNS APIs (Route53, Cloudflare), Let's Encrypt (certbot)
+      **Infrastructure — Deployment:** Vercel CLI, Netlify CLI, Fly.io (flyctl), Railway, Render, Heroku, Deno Deploy, Cloudflare Workers (wrangler)
+      **Monitoring/Observability:** Datadog, Grafana API, Prometheus, PagerDuty, OpsGenie, Sentry, LogDNA, New Relic, healthcheck.io, UptimeRobot API
+      **Security:** Bandit, Semgrep, Trivy, Snyk CLI, OWASP ZAP, nmap, OpenSSL, age (encryption), GPG, HashiCorp Vault
+      **Testing/Validation:** pytest, npm test, jest, mocha, cargo test, go test, curl + jq (API testing), Postman/Newman CLI, k6 (load testing), Lighthouse CLI (web perf), Pa11y (accessibility), linkchecker
+      **Project Management:** GitHub Issues/Projects, Linear API, Jira CLI, Notion API, Trello API, Asana API, Todoist API
+      **Document/Knowledge:** Notion API, Confluence API, Google Docs API, Airtable API, Coda API
+      **Geographic/Mapping:** Google Maps API, OpenStreetMap/Nominatim, Mapbox, geopy, geojson tools
+      **Scientific:** Biopython, RDKit (chemistry), BLAST (genomics), ArXiv API, Semantic Scholar API, PubMed API, NASA APIs, USGS APIs
+      **Legal:** CourtListener API, legal document parsers, contract analysis tools, regulatory APIs
+      **Education:** LMS APIs (Canvas, Moodle), quiz generators, Anki deck builders, curriculum formatters
+      **Physical/IoT:** MQTT clients, serial interfaces (pyserial), GPIO (RPi.GPIO), OPC-UA, Zigbee/Z-Wave controllers, Home Assistant API, ESPHome
+      **Hardware/Manufacturing:** G-code generators (3D printing), CNC tool path generators, pick-and-place machine interfaces, OPC-UA (industrial automation)
+      **Translation/Localization:** DeepL API, Google Translate API, i18n tooling (gettext, ICU), locale formatters
+      **Calendar/Scheduling:** Google Calendar API, Calendly API, iCal generators, cron formatters
+
+      Every one of these is wrappable as a mzt instrument profile (YAML + executable).
+      The proof score must use at least 3 categories. The LLM is the coordinator, not the worker.
+      Default to CLI instruments for deterministic work. Justify every stage that uses an LLM.
+
+    # Adversarial reviewer voices
+    reviewers:
+      1:
+        name: "the-practitioner"
+        title: "The Practitioner"
+        attack: |
+          You compose and RUN Marianne scores. For this proof score:
+
+          Can I run it? Does every referenced instrument binary exist
+          on a standard system? Does every validation actually test what
+          its description claims — or is it cosmetic? Would I get a
+          WORKING artifact at the end that I could point someone at and
+          say "use this"? If the output is just markdown files in a
+          directory, it fails.
+
+          Check every `command_succeeds` — would the command actually
+          succeed on a fresh workspace? Check every instrument — is it
+          a real tool or a placeholder? Does the score produce something
+          that EXISTS IN THE WORLD after execution, or just on disk?
+      2:
+        name: "the-skeptic"
+        title: "The Skeptic"
+        attack: |
+          Strip the pattern labels from every stage comment. Look only
+          at the actual stage structure, dependencies, fan-out, and
+          instrument assignments.
+
+          Is this genuinely the claimed pattern composition, or is it a
+          sequential pipeline with pattern names in the comments? Does
+          the force analysis in the architecture doc actually generate
+          the pattern selection, or was the analysis written after the
+          structure was already decided?
+
+          Count the distinct instrument categories. If everything resolves
+          to claude-code with a CLI wrapper, the instrument diversity is
+          fake. Count the TDF domains. If every stage is COMP with
+          SCI/CULT/EXP mentioned only in prose, the cross-domain claim
+          is decorative.
+
+          Are the validations testing OUTCOMES (did the deployed service
+          respond?) or PROCESS (did the file appear)?
+      3:
+        name: "the-newcomer"
+        title: "The Newcomer"
+        attack: |
+          I just installed Marianne. I cloned this repo. I ran
+          `mzt run examples/rosetta/this-score.yaml`.
+
+          Did I get what the header comment promised? Which API keys
+          do I need? Are they documented in the header or do I discover
+          them when stage 3 fails? Can I point this score at MY project
+          by changing one variable, or is it hardcoded to a specific
+          problem?
+
+          Would running this score and reading its output teach me
+          something about pattern composition I didn't know before?
+          Or would I just see "another AI pipeline"?
+
+          Is this score GENERIC — usable by someone who isn't the
+          author — or is it a personal tool wearing a demo costume?
+
+  template: |
+    {# ── Macros ─────────────────────────────────────────────── #}
+    {% macro output_spec(filename, min_words) %}
+
+    ---
+    **Output:** Save to `{{ workspace }}/{{ filename }}`
+    **Length:** {{ min_words }}+ words
+    {% endmacro %}
+
+    {% macro quality_bar(level) %}
+    {% if level == "high" %}
+    Be thorough. Cite specifics. No hedging.
+    {% elif level == "adversarial" %}
+    Be rigorous and unforgiving. Find every weakness. Name it.
+    {% endif %}
+    {% endmacro %}
+
+    {% if stage == 1 %}
+    # Pattern Selection + Reconnaissance
+
+    You are selecting a pattern to PROVE — not describe, PROVE. A proof
+    score is a runnable Marianne composition that produces something someone
+    USES. Not reports. Not analysis. Deployed services, running applications,
+    processed real data, configured real infrastructure.
+
+    The corpus index, forces, and selection guide are already in your context
+    (injected as prelude). Use them.
+
+    ## Read Existing Proof Scores
+
+    Scan `{{ proof_scores_dir }}/` for .yaml files. Read their header comments.
+    These patterns are ALREADY PROVEN — do not re-prove them:
+    - What pattern does each prove?
+    - What problem domain does it target?
+    - What instruments does it use?
+    - Does it produce something that exists in the world, or just files?
+
+    ## Select a Pattern Composition
+
+    Choose a PRIMARY pattern and 1-3 COMPOSING patterns. Your selection MUST:
+
+    1. **Cross at least 3 TDF domains** — COMP is the easiest and most
+       overrepresented. Weight AGAINST it. The best proofs lead with
+       non-computational domains:
+
+       - **SCI:** Run experiments. Analyze real datasets. Pull from public APIs
+         (census, weather, financial, academic). Test hypotheses. Replicate
+         studies. Validate claims against evidence. Survey literature. Mine
+         patents. Compare treatments. Measure outcomes statistically.
+       - **CULT:** Design brands. Create visual identities. Write in specific
+         voices for specific audiences. Understand cultural context. Localize
+         for markets. Build curricula that teach. Design experiences that
+         delight. Curate collections. Produce editorial content. Plan events.
+         Design rituals and ceremonies. Build community spaces. Create
+         narratives that resonate with real humans and their real lives.
+       - **COMP:** Build, deploy, integrate, automate. This domain is the
+         easiest for AI agents and the least impressive alone. Use it as
+         infrastructure for the other domains, not as the point.
+       - **EXP:** What does someone feel? First impressions. Friction points.
+         Joy of discovery. The moment something clicks. Accessibility. The
+         experience of a patient receiving a diagnosis. A student understanding
+         a concept. A farmer seeing crop predictions. A musician hearing a
+         composition. Experience is the domain most absent from AI output.
+       - **META:** What are you not seeing? What assumption baked into your
+         training data is wrong here? What would a domain expert challenge?
+         What does this problem look like from a perspective you don't have?
+
+    2. **Require at least 3 instrument categories** from:
+       {{ instrument_categories }}
+
+    3. **Produce an artifact someone USES** — not files. Not reports. Things
+       that exist in the world and affect it:
+       - A running service answering real requests
+       - A published package installable from a registry
+       - A configured integration between real systems
+       - A dataset published to a real platform
+       - A campaign deployed across real channels
+       - A curriculum deliverable to real students
+       - A monitoring system that pages real humans
+       - An analysis that changes a real decision
+       - A storefront processing real transactions
+       - A translation shipped to real users in a real market
+       - A research synthesis publishable in a real venue
+       - Music, art, or writing submitted to a real platform
+       - Infrastructure provisioned in a real cloud account
+       - A physical device configured and responding
+       Think beyond software. What would make someone say
+       "wait, an AI *orchestration* did all of this?"
+
+    4. **Not duplicate existing proofs** — different pattern, different category.
+
+    ## Output
+
+    Write `{{ workspace }}/01-selection.md` containing:
+    - PRIMARY pattern (name + file path from index)
+    - COMPOSING patterns (names + why they compose naturally)
+    - Problem category and specific problem
+    - One-paragraph thesis: WHY this pattern+problem pairing demonstrates
+      orchestration power that no single agent could achieve
+    - Which TDF domains are crossed and how
+    - Which instrument categories are needed
+
+    {{ output_spec("01-selection.md", 800) }}
+    {{ quality_bar("high") }}
+
+    {% elif stage == 2 %}
+    # Problem Decomposition
+
+    Read `{{ workspace }}/01-selection.md` for the selected patterns and problem.
+
+    Read the selected pattern files from `{{ corpus_patterns_dir }}/` —
+    understand the core dynamic, failure modes, and composition relationships.
+
+    ## Decompose Across All Five TDF Domains
+
+    You MUST answer each — not as a checkbox, but as genuine analysis:
+
+    **SCI:** What data, research, or evidence is needed? From where specifically?
+    How is it validated? What would a scientist demand as proof this works?
+
+    **CULT:** Who is this for? What do they value? What aesthetic, brand, or
+    voice matters? What would make someone choose this over doing it manually?
+
+    **COMP:** What systems, integrations, APIs, infrastructure get built or
+    configured? What are the moving parts? What depends on what?
+
+    **EXP:** What does someone touch, see, feel when they use the output?
+    What's the first-contact experience? Where is the friction?
+
+    **META:** What will break? What assumption is hiding? What question
+    about this problem isn't being asked? What would the skeptic say?
+
+    ## Enumerate Every Step
+
+    From zero to working artifact. Every step must have:
+    - **Action:** what happens
+    - **Instrument:** which tool does it (name the specific CLI/API)
+    - **Input:** what it reads
+    - **Output:** what it produces
+    - **Validation:** how you KNOW it worked (not "file exists" — what proves the artifact functions?)
+
+    If you can't name the instrument, you haven't decomposed far enough.
+    If the validation is just file existence, you haven't thought hard enough.
+
+    {{ output_spec("02-decomposition.md", 1500) }}
+    {{ quality_bar("high") }}
+
+    {% elif stage == 3 %}
+    # Score Architecture Design
+
+    Read `{{ workspace }}/01-selection.md` and `{{ workspace }}/02-decomposition.md`.
+
+    Read `{{ corpus_forces }}` for the 10 forces and 11 generators.
+
+    ## Follow the TDF Composition Process
+
+    This is not optional. The structure derives from the forces, not from intuition.
+
+    **Step 1: Identify active forces**
+
+    Which of the 10 forces are active in this problem? Cite evidence from
+    the decomposition. Rate each: HIGH / MEDIUM / LOW / INACTIVE.
+
+    **Step 2: Map forces to generators**
+
+    For each active force, which of the 11 generators does it activate? Why?
+
+    **Step 3: Let generators select patterns**
+
+    For each activated generator, which pattern does it select? WHY this
+    pattern over alternatives? Name the alternative you rejected and why.
+
+    **Step 4: Derive the stage structure**
+
+    Compose the selected patterns into a stage map. For each stage:
+    which pattern governs it, what fan-out (if any), what dependencies,
+    what instrument. The structure should follow from the patterns, not
+    from intuition about "what seems right."
+
+    **Step 5: Instrument assignments**
+
+    For EVERY stage: which instrument and WHY. Justify any stage that uses
+    an LLM — could a CLI tool do it cheaper? The default should be CLI
+    for deterministic work, LLM only for judgment.
+
+    **Step 6: Validation strategy**
+
+    For EVERY stage: what validation proves the OUTCOME, not the PROCESS?
+    `file_exists` is never sufficient alone. What command proves the
+    artifact WORKS?
+
+    Write the architecture as a structured document. NOT YAML yet.
+
+    {{ output_spec("03-architecture.md", 1500) }}
+    {{ quality_bar("high") }}
+
+    {% elif stage == 4 %}
+    # Score Composition
+
+    Read all previous stages:
+    - `{{ workspace }}/01-selection.md` (what patterns, what problem)
+    - `{{ workspace }}/02-decomposition.md` (every step, every instrument)
+    - `{{ workspace }}/03-architecture.md` (stage structure, forces, generators)
+
+    The architecture CONSTRAINS you. Reference it explicitly.
+
+    ## Write the Score YAML
+
+    For each stage in your score:
+    - Name the pattern governing this stage (in a comment)
+    - Name the instrument and why (in a comment)
+    - Write validations that The Practitioner would accept
+
+    ## Mandatory Requirements
+
+    - At least one non-AI instrument stage (The Tool Chain)
+    - At least one `command_succeeds` validation testing a RUNNING artifact
+    - Macros for repeated prompt/validation blocks
+    - Proper syntax: `{{ '{{' }} var {{ '}}' }}` in templates, `{var}` in validations
+    - Staged fail-fast validations (Commissioning Cascade)
+    - Header comment: patterns used, problem solved, what it produces, instruments
+    - GENERIC: workspace path is the only project-specific input
+    - The output directory contains something a human opens and USES
+
+    ## Write to Both Locations
+
+    1. `{{ workspace }}/04-proof-score.yaml` (workspace copy)
+    2. `{{ proof_output_dir }}/[pattern-name-slug].yaml` (permanent — name after the primary pattern)
+
+    Also write composition notes explaining WHY the YAML looks the way it does.
+
+    {{ output_spec("04-composition-notes.md", 800) }}
+    {{ quality_bar("high") }}
+
+    {% elif stage == 5 %}
+    {% set reviewer = reviewers[instance] %}
+
+    # Adversarial Review: {{ reviewer.title }}
+
+    Read the proof score at `{{ workspace }}/04-proof-score.yaml`.
+    Read the composition notes at `{{ workspace }}/04-composition-notes.md`.
+    Read the architecture at `{{ workspace }}/03-architecture.md`.
+    Read the decomposition at `{{ workspace }}/02-decomposition.md`.
+
+    ## Do Not Trust This Score
+
+    {{ reviewer.attack }}
+
+    Also compare against existing proofs in `{{ proof_scores_dir }}/` — is this
+    better than what exists, or is it repeating the same territory?
+
+    ## Produce
+
+    - **Problems Found** — stage by stage
+    - **Instrument Reality Check** — do these tools exist? Are they configured?
+    - **Validation Reality Check** — would these validations actually catch failure?
+    - **Pattern Authenticity** — strip the labels, does the structure match?
+    - **TDF Depth** — how many domains does this genuinely cross?
+    - **Verdict** — ready / needs revision / fundamentally flawed
+
+    {{ output_spec("05-review-" ~ instance ~ ".md", 800) }}
+    {{ quality_bar("adversarial") }}
+
+    {% elif stage == 6 %}
+    # Revision + Validation
+
+    Read the proof score and all reviews:
+    - `{{ workspace }}/04-proof-score.yaml`
+    {% for i in range(1, 4) %}
+    - `{{ workspace }}/05-review-{{ i }}.md`
+    {% endfor %}
+
+    ## Revise
+
+    Fix what the reviewers killed. Strengthen what they flagged.
+    If a reviewer said "this validation doesn't test what it claims" — fix it.
+    If a reviewer said "this is just Claude with comments" — make it real.
+
+    ## Validate
+
+    Run `mzt validate` against your revised score:
+    ```
+    mzt validate "{{ workspace }}/06-final-score.yaml" 2>&1
+    ```
+
+    ## Write Final Output
+
+    1. `{{ workspace }}/06-final-score.yaml` (revised score)
+    2. `{{ proof_output_dir }}/[pattern-name-slug].yaml` (overwrite the stage 4 copy)
+    3. `{{ workspace }}/06-proof-notes.md` — document:
+       - The TDF composition derivation (forces → generators → patterns)
+       - What the score produces when run
+       - What instruments it uses and why
+       - What it proves about orchestration
+
+    {{ output_spec("06-proof-notes.md", 500) }}
+    {{ quality_bar("high") }}
+
+    {% endif %}
+
+validations:
+  # ── Stage 1: Pattern Selection ──
+  - type: file_exists
+    path: "{workspace}/01-selection.md"
+    condition: "sheet_num == 1"
+    stage: 1
+    description: "Pattern selection document created"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/01-selection.md") -ge 600'
+    condition: "sheet_num == 1"
+    stage: 2
+    description: "Selection is substantive"
+  - type: content_regex
+    path: "{workspace}/01-selection.md"
+    pattern: "(?i)PRIMARY.*pattern"
+    condition: "sheet_num == 1"
+    stage: 2
+    description: "Selection names a primary pattern"
+  - type: content_regex
+    path: "{workspace}/01-selection.md"
+    pattern: "(?mi)^.*\\bSCI\\b"
+    condition: "sheet_num == 1"
+    stage: 2
+    description: "Selection addresses SCI domain"
+  - type: content_regex
+    path: "{workspace}/01-selection.md"
+    pattern: "(?mi)^.*\\b(CULT|EXP)\\b"
+    condition: "sheet_num == 1"
+    stage: 2
+    description: "Selection addresses CULT or EXP domain"
+
+  # ── Stage 2: Decomposition ──
+  - type: file_exists
+    path: "{workspace}/02-decomposition.md"
+    condition: "sheet_num == 2"
+    stage: 1
+    description: "Decomposition document created"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/02-decomposition.md") -ge 1200'
+    condition: "sheet_num == 2"
+    stage: 2
+    description: "Decomposition is thorough"
+  - type: content_regex
+    path: "{workspace}/02-decomposition.md"
+    pattern: "(?m)\\*\\*SCI:\\*\\*"
+    condition: "sheet_num == 2"
+    stage: 2
+    description: "Decomposition has SCI section"
+  - type: content_regex
+    path: "{workspace}/02-decomposition.md"
+    pattern: "(?m)\\*\\*CULT:\\*\\*"
+    condition: "sheet_num == 2"
+    stage: 2
+    description: "Decomposition has CULT section"
+  - type: content_regex
+    path: "{workspace}/02-decomposition.md"
+    pattern: "(?m)\\*\\*EXP:\\*\\*"
+    condition: "sheet_num == 2"
+    stage: 2
+    description: "Decomposition has EXP section"
+  - type: content_regex
+    path: "{workspace}/02-decomposition.md"
+    pattern: "(?i)instrument.*:"
+    condition: "sheet_num == 2"
+    stage: 2
+    description: "Decomposition specifies instruments per step"
+
+  # ── Stage 3: Architecture ──
+  - type: file_exists
+    path: "{workspace}/03-architecture.md"
+    condition: "sheet_num == 3"
+    stage: 1
+    description: "Architecture document created"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/03-architecture.md") -ge 1200'
+    condition: "sheet_num == 3"
+    stage: 2
+    description: "Architecture is thorough"
+  - type: content_regex
+    path: "{workspace}/03-architecture.md"
+    pattern: "(?i)step 1.*force"
+    condition: "sheet_num == 3"
+    stage: 2
+    description: "Architecture includes force identification step"
+  - type: content_regex
+    path: "{workspace}/03-architecture.md"
+    pattern: "(?i)step.*generator"
+    condition: "sheet_num == 3"
+    stage: 2
+    description: "Architecture includes generator mapping step"
+  - type: content_regex
+    path: "{workspace}/03-architecture.md"
+    pattern: "(?i)instrument"
+    condition: "sheet_num == 3"
+    stage: 2
+    description: "Architecture includes instrument assignments"
+
+  # ── Stage 4: Score Composition ──
+  - type: file_exists
+    path: "{workspace}/04-proof-score.yaml"
+    condition: "sheet_num == 4"
+    stage: 1
+    description: "Proof score YAML created"
+  - type: file_exists
+    path: "{workspace}/04-composition-notes.md"
+    condition: "sheet_num == 4"
+    stage: 1
+    description: "Composition notes created"
+  - type: content_regex
+    path: "{workspace}/04-proof-score.yaml"
+    pattern: "(?i)(name:|workspace:|sheet:|prompt:)"
+    condition: "sheet_num == 4"
+    stage: 2
+    description: "Score has valid Marianne structure"
+  - type: content_regex
+    path: "{workspace}/04-proof-score.yaml"
+    pattern: "(?i)command_succeeds"
+    condition: "sheet_num == 4"
+    stage: 2
+    description: "Score has command-based validations (not just file_exists)"
+  - type: command_succeeds
+    command: 'mzt validate "{workspace}/04-proof-score.yaml"'
+    condition: "sheet_num == 4"
+    stage: 3
+    timeout_seconds: 60
+    description: "Score passes Marianne validation"
+
+  # ── Stage 5: Reviews ──
+  - type: file_exists
+    path: "{workspace}/05-review-{instance}.md"
+    condition: "sheet_num >= 5 and sheet_num <= 7"
+    stage: 1
+    description: "Review document created"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/05-review-{instance}.md") -ge 600'
+    condition: "sheet_num >= 5 and sheet_num <= 7"
+    stage: 2
+    description: "Review is substantive"
+  - type: content_regex
+    path: "{workspace}/05-review-{instance}.md"
+    pattern: "(?i)(verdict|ready|needs revision|flawed)"
+    condition: "sheet_num >= 5 and sheet_num <= 7"
+    stage: 2
+    description: "Review includes verdict"
+
+  # ── Stage 6: Final ──
+  - type: file_exists
+    path: "{workspace}/06-final-score.yaml"
+    condition: "sheet_num == 8"
+    stage: 1
+    description: "Final revised score created"
+  - type: file_exists
+    path: "{workspace}/06-proof-notes.md"
+    condition: "sheet_num == 8"
+    stage: 1
+    description: "Proof notes created"
+  - type: command_succeeds
+    command: 'mzt validate "{workspace}/06-final-score.yaml"'
+    condition: "sheet_num == 8"
+    stage: 2
+    timeout_seconds: 60
+    description: "Final score passes Marianne validation"
+  - type: command_succeeds
+    command: 'test $(find /home/emzi/Projects/marianne-ai-compose/examples/rosetta/ -name "*.yaml" -newer "{workspace}/04-proof-score.yaml" | wc -l) -ge 1'
+    condition: "sheet_num == 8"
+    stage: 2
+    description: "Revised proof score was written to examples/rosetta/"
+
+# Self-chain to prove next pattern
+on_success:
+  - type: run_job
+    job_path: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-prove.yaml"
+    detached: true
+    fresh: true
+    inherit_learning: true
+    description: "Prove next pattern from the corpus"
+
+notifications:
+  - type: desktop
+    on_events:
+      - job_complete
+      - job_failed

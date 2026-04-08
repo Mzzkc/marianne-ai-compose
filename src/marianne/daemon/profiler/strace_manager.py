@@ -1,4 +1,4 @@
-"""Strace management for the Mozart daemon profiler.
+"""Strace management for the Marianne daemon profiler.
 
 Attaches ``strace -c`` to child processes to collect per-syscall count and
 time-percentage summaries.  Also supports on-demand full trace via
@@ -164,7 +164,7 @@ class StraceManager:
     async def attach_full_trace(self, pid: int, output_file: Path) -> bool:
         """Attach a full strace (``strace -f -t -p PID -o file``).
 
-        This is the on-demand deep-trace triggered by ``mozart top --trace PID``.
+        This is the on-demand deep-trace triggered by ``mzt top --trace PID``.
 
         Args:
             pid: Target process PID.

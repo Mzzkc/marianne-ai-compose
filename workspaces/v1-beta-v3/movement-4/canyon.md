@@ -17,11 +17,11 @@ F-210 is resolved. The baton path now replicates the legacy runner's cross-sheet
 
 ### The Problem
 
-The baton path was built to replace the legacy runner but never replicated its cross-sheet context pipeline (`src/mozart/execution/runner/context.py:171-221`). The legacy runner populates `SheetContext.previous_outputs` from CheckpointState and `previous_files` from workspace file patterns. The baton path had:
+The baton path was built to replace the legacy runner but never replicated its cross-sheet context pipeline (`src/marianne/execution/runner/context.py:171-221`). The legacy runner populates `SheetContext.previous_outputs` from CheckpointState and `previous_files` from workspace file patterns. The baton path had:
 
 - `AttemptContext.previous_outputs` declared but never populated (`state.py:161`)
 - No `previous_files` field on `AttemptContext` at all
-- Zero `cross_sheet` references in the entire baton package (`grep -r 'cross_sheet' src/mozart/daemon/baton/` → 0 results before this fix)
+- Zero `cross_sheet` references in the entire baton package (`grep -r 'cross_sheet' src/marianne/daemon/baton/` → 0 results before this fix)
 - `PromptRenderer._build_context()` created `SheetContext` without any cross-sheet data
 
 Impact: 24 of 34 example scores use `cross_sheet: auto_capture_stdout: true`. Every one of those scores would produce functionally different (worse) prompts under the baton. Confirmed independently by Weaver, Prism, Axiom, Adversary, and Ember across M3.
@@ -32,18 +32,18 @@ Architecture: adapter collects context from completed sheets at dispatch time, p
 
 **Files changed (5):**
 
-1. **`src/mozart/daemon/baton/state.py:164-166`** — Added `previous_files: dict[str, str]` to `AttemptContext`. Now matches `SheetContext`'s interface. Both `previous_outputs` and `previous_files` flow from adapter → AttemptContext → PromptRenderer → SheetContext → template.
+1. **`src/marianne/daemon/baton/state.py:164-166`** — Added `previous_files: dict[str, str]` to `AttemptContext`. Now matches `SheetContext`'s interface. Both `previous_outputs` and `previous_files` flow from adapter → AttemptContext → PromptRenderer → SheetContext → template.
 
-2. **`src/mozart/daemon/baton/adapter.py`** — Three additions:
+2. **`src/marianne/daemon/baton/adapter.py`** — Three additions:
    - `_job_cross_sheet: dict[str, CrossSheetConfig]` storage in `__init__`
    - `cross_sheet` parameter on both `register_job()` and `recover_job()`, with cleanup in `deregister_job()`
    - `_collect_cross_sheet_context(job_id, sheet_num)` — the main collection method. Reads completed sheets' `stdout_tail` from `SheetExecutionState.attempt_results` (baton's own state, not CheckpointState). Reads workspace files from `capture_files` glob patterns. Respects `lookback_sheets`, `max_output_chars`, truncation rules. Returns `(previous_outputs, previous_files)` tuple.
    - `_get_completed_stdout(state)` — static helper that walks `attempt_results` in reverse to find the last successful attempt's stdout.
    - Wired into `_dispatch_callback()` at the AttemptContext construction point (before musician spawn).
 
-3. **`src/mozart/daemon/baton/prompt.py:146-195`** — `_build_context()` now accepts optional `AttemptContext` and copies `previous_outputs`/`previous_files` to `SheetContext`. `render()` passes `attempt_context` through.
+3. **`src/marianne/daemon/baton/prompt.py:146-195`** — `_build_context()` now accepts optional `AttemptContext` and copies `previous_outputs`/`previous_files` to `SheetContext`. `render()` passes `attempt_context` through.
 
-4. **`src/mozart/daemon/manager.py:1817,1962`** — Both `_run_via_baton` and `_resume_via_baton` now pass `config.cross_sheet` to the adapter.
+4. **`src/marianne/daemon/manager.py:1817,1962`** — Both `_run_via_baton` and `_resume_via_baton` now pass `config.cross_sheet` to the adapter.
 
 5. **`tests/test_f210_cross_sheet_baton.py`** — 21 TDD tests across 4 test classes:
    - `TestAttemptContextPreviousFiles` (3 tests): field exists, populated, backward-compatible

@@ -1,4 +1,4 @@
-"""Tests for mozart.execution.runner.models and related error models."""
+"""Tests for marianne.execution.runner.models and related error models."""
 
 from __future__ import annotations
 

@@ -73,7 +73,7 @@ def _make_state(
     status: JobStatus = JobStatus.COMPLETED,
     worktree_path: str | None = "/tmp/worktrees/test-job",
     worktree_locked: bool = True,
-    worktree_branch: str | None = "mozart/test-job",
+    worktree_branch: str | None = "marianne/test-job",
     worktree_base_commit: str | None = "abc123",
 ) -> CheckpointState:
     """Build a minimal CheckpointState for cleanup tests."""
@@ -334,7 +334,7 @@ class TestSetupFallback:
 
         wt_info = MagicMock()
         wt_info.path = tmp_path / "new-wt"
-        wt_info.branch = "mozart/test-job"
+        wt_info.branch = "marianne/test-job"
         wt_info.commit = "def456"
         wt_info.locked = True
 

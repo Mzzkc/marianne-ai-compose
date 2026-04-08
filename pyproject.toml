@@ -1,5 +1,5 @@
 [project]
-name = "mozart-ai-compose"
+name = "marianne-ai-compose"
 version = "0.1.0"
 description = "Orchestration tool for Claude AI sessions"
 readme = "README.md"
@@ -71,7 +71,7 @@ dev = [
 ]
 
 [project.scripts]
-mozart = "marianne.cli:app"
+mzt = "marianne.cli:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -110,7 +110,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 timeout = 30  # Safety net: kill any test that runs >30s (prevents orphaned processes)
 addopts = "-q --tb=short"
-# Coverage: run explicitly with `pytest --cov=mozart --cov-report=term-missing:skip-covered --cov-report=json:coverage.json --no-cov-on-fail`
+# Coverage: run explicitly with `pytest --cov=marianne --cov-report=term-missing:skip-covered --cov-report=json:coverage.json --no-cov-on-fail`
 markers = [
     "adversarial: tests with adversarial/garbage inputs",
     "smoke: basic smoke tests for critical paths",

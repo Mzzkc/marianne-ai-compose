@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.learning_hub module.
+"""Tests for marianne.daemon.learning_hub module.
 
 Covers LearningHub: start/stop lifecycle, store property access,
 persistence loop behavior, and multi-job shared store semantics.

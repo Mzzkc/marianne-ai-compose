@@ -1,6 +1,6 @@
 """Isolation module for parallel job execution.
 
-This module provides worktree-based isolation for Mozart jobs, enabling
+This module provides worktree-based isolation for Marianne jobs, enabling
 multiple jobs to execute in parallel without interfering with each other's
 file modifications.
 

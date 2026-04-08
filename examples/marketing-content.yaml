@@ -1,6 +1,6 @@
 # marketing-content.yaml — Multi-Channel Marketing Content
 #
-# A Mozart score that generates coordinated marketing content across
+# A Marianne score that generates coordinated marketing content across
 # multiple channels from a single creative brief.
 #
 #   Movement 1: Analyze the brief and create a content strategy
@@ -12,13 +12,13 @@
 #   Movement 3: Brand consistency audit and final content package
 #
 # This is a Wordware comparison demo — where other tools would
-# require separate prompts for each channel, Mozart generates
+# require separate prompts for each channel, Marianne generates
 # coordinated content in parallel and then audits for consistency.
 #
 # Usage:
-#   mozart start
-#   mozart run examples/marketing-content.yaml
-#   mozart status marketing-content
+#   mzt start
+#   mzt run examples/marketing-content.yaml
+#   mzt status marketing-content
 #   ls workspaces/marketing-content/
 #
 # Output:
@@ -64,7 +64,7 @@ parallel:
 
 cross_sheet:
   auto_capture_stdout: true
-  max_output_chars: 5000
+  max_output_chars: 6000
   lookback_sheets: 5
 
 retry:
@@ -300,18 +300,53 @@ validations:
   - type: file_exists
     path: "{workspace}/01-strategy.md"
     sheet: 1
+    description: "Content strategy exists"
+  - type: content_contains
+    path: "{workspace}/01-strategy.md"
+    pattern: "Key Messages"
+    sheet: 1
+    description: "Strategy defines key messages for content creators"
   - type: file_exists
     path: "{workspace}/02-blog-post.md"
     sheet: 2
+    description: "Blog post exists"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/02-blog-post.md") -ge 1000'
+    sheet: 2
+    description: "Blog post has substantive length (1000+ words)"
   - type: file_exists
     path: "{workspace}/02-social-media.md"
     sheet: 3
+    description: "Social media package exists"
+  - type: content_contains
+    path: "{workspace}/02-social-media.md"
+    pattern: "LinkedIn"
+    sheet: 3
+    description: "Social package covers LinkedIn channel"
   - type: file_exists
     path: "{workspace}/02-email-sequence.md"
     sheet: 4
+    description: "Email nurture sequence exists"
+  - type: content_regex
+    path: "{workspace}/02-email-sequence.md"
+    pattern: "(?i)subject.*line"
+    sheet: 4
+    description: "Emails include subject lines"
   - type: file_exists
     path: "{workspace}/02-landing-page.md"
     sheet: 5
+    description: "Landing page copy exists"
+  - type: content_contains
+    path: "{workspace}/02-landing-page.md"
+    pattern: "FAQ"
+    sheet: 5
+    description: "Landing page includes FAQ section"
   - type: file_exists
     path: "{workspace}/03-content-package.md"
     sheet: 6
+    description: "Brand audit report exists"
+  - type: content_contains
+    path: "{workspace}/03-content-package.md"
+    pattern: "Recommended Edits"
+    sheet: 6
+    description: "Audit includes specific revision recommendations"

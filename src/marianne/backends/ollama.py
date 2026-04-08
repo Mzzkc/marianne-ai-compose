@@ -1,6 +1,6 @@
 """Ollama backend for local model execution with MCP tool support.
 
-Enables Mozart to use local Ollama models with translated MCP tool schemas.
+Enables Marianne to use local Ollama models with translated MCP tool schemas.
 Implements the Backend protocol with an agentic loop for multi-turn tool calling.
 
 Architecture Decision: ADR-001 specifies MCPProxyService as in-process subprocess

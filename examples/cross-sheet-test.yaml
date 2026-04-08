@@ -36,7 +36,7 @@ prompt:
     {% if sheet_num == 1 %}
     # Sheet 1: Discovery
 
-    Find 3 interesting facts about Mozart (the composer).
+    Find 3 interesting facts about Marianne (the composer).
     Write them to {{ workspace }}/sheet-1-result.md
 
     {% elif sheet_num == 2 %}
@@ -55,7 +55,7 @@ prompt:
     {% endif %}
 
     Based on the facts discovered in Sheet 1, write a brief analysis
-    of Mozart's most significant contribution to music.
+    of Marianne's most significant contribution to music.
     Write to {{ workspace }}/sheet-2-result.md
 
     {% elif sheet_num == 3 %}

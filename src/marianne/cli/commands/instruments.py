@@ -1,4 +1,4 @@
-"""Instrument management commands — ``mozart instruments list|check``.
+"""Instrument management commands — ``mzt instruments list|check``.
 
 These commands let users discover available instruments, check their
 readiness, and diagnose configuration issues. They build on the
@@ -23,7 +23,7 @@ from marianne.core.config.instruments import InstrumentProfile
 from marianne.instruments.loader import load_all_profiles
 
 # ---------------------------------------------------------------------------
-# Typer app for ``mozart instruments`` subcommand
+# Typer app for ``mzt instruments`` subcommand
 # ---------------------------------------------------------------------------
 
 instruments_app = typer.Typer(
@@ -88,8 +88,8 @@ def list_instruments(
         else:
             console.print(
                 "[dim]No instruments configured.[/dim]\n"
-                "Add instrument profiles to ~/.mozart/instruments/ "
-                "or .mozart/instruments/"
+                "Add instrument profiles to ~/.marianne/instruments/ "
+                "or .marianne/instruments/"
             )
         return
 
@@ -193,8 +193,8 @@ def check_instrument(
                 f"Unknown instrument: '{name}'",
                 error_code="INSTR-001",
                 hints=[
-                    "Run 'mozart instruments list' to see available instruments",
-                    "Add profiles to ~/.mozart/instruments/ or .mozart/instruments/",
+                    "Run 'mzt instruments list' to see available instruments",
+                    "Add profiles to ~/.marianne/instruments/ or .marianne/instruments/",
                 ],
             )
         raise typer.Exit(1)
@@ -259,7 +259,7 @@ def _check_rich(profile: InstrumentProfile) -> None:
             f"{profile.name} is not ready.",
             hints=[
                 f"Check that '{profile.name}' is installed and in your PATH.",
-                "Run 'mozart doctor' for a full environment check.",
+                "Run 'mzt doctor' for a full environment check.",
             ],
         )
         raise typer.Exit(1)

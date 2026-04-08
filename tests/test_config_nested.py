@@ -1,4 +1,4 @@
-"""Integration tests for nested config models in mozart.core.config.
+"""Integration tests for nested config models in marianne.core.config.
 
 These tests verify that Pydantic correctly parses nested configuration structures
 that are commonly used in job YAML files. This catches issues with field types,
@@ -45,7 +45,7 @@ class TestIsolationConfig:
         config = IsolationConfig()
         assert config.enabled is False
         assert config.mode == IsolationMode.WORKTREE
-        assert config.branch_prefix == "mozart"
+        assert config.branch_prefix == "marianne"
         assert config.cleanup_on_success is True
         assert config.cleanup_on_failure is False
         assert config.lock_during_execution is True
@@ -112,9 +112,9 @@ class TestLogConfig:
 
     def test_both_format_with_file(self):
         """Test both format requires file path."""
-        config = LogConfig(format="both", file_path=Path("/var/log/mozart.json"))
+        config = LogConfig(format="both", file_path=Path("/var/log/marianne.json"))
         assert config.format == "both"
-        assert config.file_path == Path("/var/log/mozart.json")
+        assert config.file_path == Path("/var/log/marianne.json")
 
     def test_invalid_level(self):
         """Test validation rejects invalid log level."""

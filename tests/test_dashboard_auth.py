@@ -1,4 +1,4 @@
-"""Tests for Mozart Dashboard authentication module."""
+"""Tests for Marianne Dashboard authentication module."""
 
 from unittest.mock import MagicMock, patch
 
@@ -44,9 +44,9 @@ class TestAuthConfig:
     def test_from_env_api_key_mode(self):
         """Test config from environment with API key mode."""
         env = {
-            "MOZART_AUTH_MODE": "api_key",
-            "MOZART_API_KEYS": "key1,key2,key3",
-            "MOZART_LOCALHOST_BYPASS": "false",
+            "MZT_AUTH_MODE": "api_key",
+            "MZT_API_KEYS": "key1,key2,key3",
+            "MZT_LOCALHOST_BYPASS": "false",
         }
         with patch.dict("os.environ", env, clear=True):
             config = AuthConfig.from_env()
@@ -61,7 +61,7 @@ class TestAuthConfig:
 
     def test_from_env_disabled_mode(self):
         """Test config with disabled authentication."""
-        env = {"MOZART_AUTH_MODE": "disabled"}
+        env = {"MZT_AUTH_MODE": "disabled"}
         with patch.dict("os.environ", env, clear=True):
             config = AuthConfig.from_env()
 
@@ -69,7 +69,7 @@ class TestAuthConfig:
 
     def test_from_env_empty_api_keys(self):
         """Test config with empty API keys string."""
-        env = {"MOZART_API_KEYS": ""}
+        env = {"MZT_API_KEYS": ""}
         with patch.dict("os.environ", env, clear=True):
             config = AuthConfig.from_env()
 
@@ -314,7 +314,7 @@ class TestRequireApiKeyDependency:
 
     def test_dependency_allows_localhost(self, app_with_dependency):
         """Test dependency allows localhost without key."""
-        with patch.dict("os.environ", {"MOZART_LOCALHOST_BYPASS": "true"}):
+        with patch.dict("os.environ", {"MZT_LOCALHOST_BYPASS": "true"}):
             client = TestClient(app_with_dependency)
             response = client.get("/protected")
 
@@ -325,8 +325,8 @@ class TestRequireApiKeyDependency:
     def test_dependency_requires_key_no_bypass(self, app_with_dependency):
         """Test dependency requires key when bypass disabled."""
         env = {
-            "MOZART_LOCALHOST_BYPASS": "false",
-            "MOZART_API_KEYS": "valid-key",
+            "MZT_LOCALHOST_BYPASS": "false",
+            "MZT_API_KEYS": "valid-key",
         }
         with patch.dict("os.environ", env, clear=True):
             client = TestClient(app_with_dependency)
@@ -723,10 +723,10 @@ class TestSecurityConfig:
         assert len(config.cors_origins) > 0
 
     def test_from_env(self) -> None:
-        """from_env reads MOZART_CORS_ORIGINS."""
+        """from_env reads MZT_CORS_ORIGINS."""
         with patch.dict(
             os.environ,
-            {"MOZART_CORS_ORIGINS": "https://app.example.com,https://api.example.com"},
+            {"MZT_CORS_ORIGINS": "https://app.example.com,https://api.example.com"},
         ):
             config = SecurityConfig.from_env()
             assert "https://app.example.com" in config.cors_origins

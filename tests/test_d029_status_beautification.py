@@ -1,9 +1,9 @@
 """TDD tests for D-029: Status display beautification.
 
 Tests the beautified display functions for:
-- `mozart status` (relative time, musical context, "Now Playing")
-- `mozart list` (progress info, status grouping, clean layout)
-- `mozart conductor-status` (paneled resource context, job summary)
+- `mzt status` (relative time, musical context, "Now Playing")
+- `mzt list` (progress info, status grouping, clean layout)
+- `mzt conductor-status` (paneled resource context, job summary)
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ class TestStatusRichBeautification:
         """The header panel should show the score name prominently."""
         from marianne.cli.commands.status import _output_status_rich
 
-        job = _make_job(job_name="Mozart Orchestra v3")
+        job = _make_job(job_name="Marianne Orchestra v3")
         with patch("marianne.cli.commands.status.console") as mock_console:
             _output_status_rich(job)
             # Check that a Panel was printed containing the job name
@@ -190,9 +190,9 @@ class TestStatusRichBeautification:
                 for arg in args:
                     # Check Panel renderable content
                     if hasattr(arg, "renderable"):
-                        if "Mozart Orchestra v3" in str(arg.renderable):
+                        if "Marianne Orchestra v3" in str(arg.renderable):
                             panel_found = True
-                    elif "Mozart Orchestra v3" in str(arg):
+                    elif "Marianne Orchestra v3" in str(arg):
                         panel_found = True
             assert panel_found, "Panel should contain job name"
 
@@ -286,7 +286,7 @@ class TestStatusRichBeautification:
 
 
 class TestListBeautification:
-    """Tests for the beautified mozart list display."""
+    """Tests for the beautified mzt list display."""
 
     def test_list_shows_progress_for_running_jobs(self) -> None:
         """Running jobs in list should show progress percentage."""

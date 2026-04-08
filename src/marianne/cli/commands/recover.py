@@ -1,6 +1,6 @@
-"""Recover command for Mozart CLI.
+"""Recover command for Marianne CLI.
 
-This module implements the hidden `mozart recover` command for recovering
+This module implements the hidden `mzt recover` command for recovering
 sheets that completed work but were incorrectly marked as failed.
 
 ★ Insight ─────────────────────────────────────
@@ -67,9 +67,9 @@ def recover(
     - You want to check if a failed sheet actually succeeded
 
     Examples:
-        mozart recover my-job                    # Recover all failed sheets
-        mozart recover my-job --sheet 6         # Recover specific sheet
-        mozart recover my-job --dry-run         # Check without modifying
+        mzt recover my-job                    # Recover all failed sheets
+        mzt recover my-job --sheet 6         # Recover specific sheet
+        mzt recover my-job --dry-run         # Check without modifying
     """
     from ._shared import validate_job_id
 
@@ -104,13 +104,13 @@ async def _recover_job(
     except JobSubmissionError as err:
         output_error(
             f"Score not found: {job_id}",
-            hints=["Run 'mozart list' to see available scores."],
+            hints=["Run 'mzt list' to see available scores."],
         )
         raise typer.Exit(1) from err
     except DaemonError as err:
         output_error(
             str(err),
-            hints=["Restart the conductor: mozart restart"],
+            hints=["Restart the conductor: mzt restart"],
         )
         raise typer.Exit(1) from None
 
@@ -132,7 +132,7 @@ async def _recover_job(
     if state is None:
         output_error(
             f"Score not found: {job_id}",
-            hints=["Run 'mozart list' to see available scores."],
+            hints=["Run 'mzt list' to see available scores."],
         )
         raise typer.Exit(1)
 
@@ -140,7 +140,7 @@ async def _recover_job(
     if not state.config_snapshot:
         output_error(
             "No config snapshot in state — cannot run validations",
-            hints=["The score may need to be re-run with 'mozart run'."],
+            hints=["The score may need to be re-run with 'mzt run'."],
         )
         raise typer.Exit(1)
 

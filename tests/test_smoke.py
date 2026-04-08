@@ -349,7 +349,7 @@ class TestGlobalFlags:
         """Test --version flag shows version and exits."""
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "Mozart AI Compose" in result.stdout
+        assert "Marianne AI Compose" in result.stdout
 
 
 # =============================================================================

@@ -205,7 +205,7 @@ class TestRajEdgeCases:
 # =============================================================================
 # Story: The Init-to-Validate Pipeline
 #
-# A user runs `mozart init`, then immediately validates the generated
+# A user runs `mzt init`, then immediately validates the generated
 # score. This should always work — the init output should validate clean.
 # =============================================================================
 

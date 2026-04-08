@@ -1,6 +1,6 @@
-"""Mozart notification framework.
+"""Marianne notification framework.
 
-Provides notification infrastructure for Mozart job events:
+Provides notification infrastructure for Marianne job events:
 - Multiple notification backends (desktop, Slack, webhook)
 - Event-based subscription model
 - Graceful degradation when backends unavailable

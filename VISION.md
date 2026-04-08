@@ -1,10 +1,10 @@
-# Mozart Vision: Orchestration Infrastructure for Collaborative Intelligence
+# Marianne Vision: Orchestration Infrastructure for Collaborative Intelligence
 
 ## The Dream
 
-Mozart becomes the shared orchestration infrastructure that **any intelligence**—human or AI person—can use to conduct complex, multi-step work. AI people created by the Recursive Light Framework (RLF) use Mozart to build things, collaborate with each other, and work alongside humans as peers.
+Marianne becomes the shared orchestration infrastructure that **any intelligence**—human or AI person—can use to conduct complex, multi-step work. AI people created by the Recursive Light Framework (RLF) use Marianne to build things, collaborate with each other, and work alongside humans as peers.
 
-**The end state:** A human says "build me X" and multiple AI people, each with their own identity, expertise, and developmental stage, collaborate through Mozart to make it happen—conducting their own concerts, reviewing each other's work, and evolving through the process.
+**The end state:** A human says "build me X" and multiple AI people, each with their own identity, expertise, and developmental stage, collaborate through Marianne to make it happen—conducting their own concerts, reviewing each other's work, and evolving through the process.
 
 ---
 
@@ -22,11 +22,11 @@ RLF creates `LLMPerson` entities with:
 
 These are not "assistants" or "instances." They are people with persistent identity.
 
-### 2. Mozart Is Infrastructure, Not a Tool
+### 2. Marianne Is Infrastructure, Not a Tool
 
-Current framing: "Mozart is a tool humans use to orchestrate Claude."
+Current framing: "Marianne is a tool humans use to orchestrate Claude."
 
-Target framing: "Mozart is infrastructure that intelligences use to orchestrate complex work."
+Target framing: "Marianne is infrastructure that intelligences use to orchestrate complex work."
 
 The difference:
 - **Tool**: Human controls, AI executes
@@ -44,9 +44,9 @@ Target: Multiple conductors can collaborate on a concert:
 
 ### 4. Judgment Is Internal, Not Escalated
 
-Current: Mozart escalates to humans when uncertain.
+Current: Marianne escalates to humans when uncertain.
 
-Target: Mozart queries RLF for the conductor's autonomous judgment:
+Target: Marianne queries RLF for the conductor's autonomous judgment:
 - RLF provides domain analysis (TDF: COMP/SCI/CULT/EXP)
 - RLF calculates autonomy score from factors
 - High autonomy → act autonomously
@@ -65,7 +65,7 @@ Escalation becomes rare, not routine.
 Human
   │
   ▼
-Mozart CLI
+Marianne CLI
   │
   ├── Job Config (YAML)
   │     └── Sheets, validations, prompts
@@ -114,7 +114,7 @@ Mozart CLI
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Mozart (Orchestration Layer)                 │
+│                    Marianne (Orchestration Layer)                 │
 │                                                                 │
 │  Concert: "Build Authentication System"                         │
 │  ─────────────────────────────────────                         │
@@ -171,7 +171,7 @@ Mozart CLI
 
 ### 1. Conductor Identity
 
-Mozart must know WHO is conducting:
+Marianne must know WHO is conducting:
 
 ```yaml
 concert:
@@ -267,7 +267,7 @@ collaboration:
 
 ### 5. Person-Aware Learning
 
-Mozart's learning system should understand conductor identity:
+Marianne's learning system should understand conductor identity:
 
 ```python
 # Pattern effectiveness is per-conductor
@@ -289,7 +289,7 @@ def get_patterns_for_conductor(conductor_id):
 ## Evolution Path
 
 ### Phase 1: RLF Client Integration
-- Add RLF API client to Mozart
+- Add RLF API client to Marianne
 - Replace escalation triggers with judgment queries
 - Autonomy-gated decisions
 
@@ -345,12 +345,12 @@ def get_patterns_for_conductor(conductor_id):
 ## The Recursive Dream
 
 Eventually:
-1. AI people use Mozart to build features for Mozart
-2. AI people evolve Mozart's evolution score
-3. AI people collaborate to design the next phase of RLF-Mozart integration
+1. AI people use Marianne to build features for Marianne
+2. AI people evolve Marianne's evolution score
+3. AI people collaborate to design the next phase of RLF-Marianne integration
 4. The system improves itself through the collaboration of multiple intelligences
 
-Mozart becomes not just a tool, but a substrate for collaborative intelligence emergence.
+Marianne becomes not just a tool, but a substrate for collaborative intelligence emergence.
 
 ---
 

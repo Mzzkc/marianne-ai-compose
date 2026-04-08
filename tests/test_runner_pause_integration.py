@@ -93,7 +93,7 @@ class TestJobRunnerPauseDetection:
         runner, state, _ = runner_with_mocks
 
         # Create pause signal file
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Should return True when pause signal file exists
@@ -104,7 +104,7 @@ class TestJobRunnerPauseDetection:
         runner, state, _ = runner_with_mocks
 
         # Create pause signal file
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
         assert pause_signal_file.exists()
 
@@ -140,7 +140,7 @@ class TestJobRunnerPauseHandling:
         runner, state, state_backend = runner_with_mocks
 
         # Create pause signal file
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Mock console for output verification
@@ -197,7 +197,7 @@ class TestSequentialExecutionPauseIntegration:
         mock_execute_sheet.return_value = None
 
         # Create pause signal after first sheet
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
 
         def create_pause_signal_after_first_sheet(*args):
             """Create pause signal after first sheet execution."""
@@ -252,7 +252,7 @@ class TestParallelExecutionPauseIntegration:
         runner.console = MagicMock()
 
         # Create pause signal
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Should detect pause signal and raise GracefulShutdownError
@@ -291,7 +291,7 @@ class TestJobControlServicePauseSignaling:
         assert result.status == JobStatus.RUNNING.value  # Still running until signal processed
 
         # Verify signal file was created
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         assert pause_signal_file.exists()
 
     async def test_pause_job_nonexistent_job(self, job_control_service):
@@ -337,7 +337,7 @@ class TestJobControlServicePauseSignaling:
         state.pid = 12345  # Mock PID
         await state_backend.save(state)
 
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Mock get_job_pid to return valid PID
@@ -391,7 +391,7 @@ class TestPauseResumeIntegrationFlow:
             assert pause_result.success
 
             # Verify pause signal file exists
-            pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+            pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
             assert pause_signal_file.exists()
 
             # Phase 2: Simulate runner detecting pause and handling it
@@ -444,7 +444,7 @@ class TestPauseResumeIntegrationFlow:
         await state_backend.save(state)
 
         # Create leftover pause signal
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
 
         # Mock process creation for restart

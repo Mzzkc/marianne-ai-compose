@@ -189,7 +189,7 @@ def create_state_backend(
     from marianne.state import JsonStateBackend, SQLiteStateBackend
 
     if backend_type == "sqlite":
-        return SQLiteStateBackend(workspace / ".mozart-state.db")
+        return SQLiteStateBackend(workspace / ".marianne-state.db")
     else:
         return JsonStateBackend(workspace)
 

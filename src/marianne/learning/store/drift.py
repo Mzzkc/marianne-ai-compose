@@ -22,7 +22,7 @@ from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import Any, Literal
 
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 
 # Import logger from base module for consistency across all mixins
 from .base import _logger
@@ -49,7 +49,7 @@ class DriftMixin:
     """
 
     # Annotations for attributes provided by the composed class (GlobalLearningStoreBase)
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
 
     # =========================================================================
@@ -738,7 +738,7 @@ class DriftMixin:
     ) -> str:
         """Record an evolution cycle entry to the trajectory.
 
-        v16 Evolution: Evolution Trajectory Tracking - enables Mozart to track
+        v16 Evolution: Evolution Trajectory Tracking - enables Marianne to track
         its own evolution history for recursive self-improvement analysis.
 
         Accepts either individual keyword args (backward compatible) or
@@ -832,7 +832,7 @@ class DriftMixin:
         """Retrieve evolution trajectory history.
 
         v16 Evolution: Evolution Trajectory Tracking - enables analysis of
-        Mozart's evolution history over time.
+        Marianne's evolution history over time.
 
         Args:
             start_cycle: Optional minimum cycle number to include.
@@ -889,7 +889,7 @@ class DriftMixin:
         """Identify recurring issue classes across evolution cycles.
 
         v16 Evolution: Evolution Trajectory Tracking - enables identification
-        of patterns in what types of issues Mozart addresses repeatedly.
+        of patterns in what types of issues Marianne addresses repeatedly.
 
         Args:
             min_occurrences: Minimum number of occurrences to consider recurring.

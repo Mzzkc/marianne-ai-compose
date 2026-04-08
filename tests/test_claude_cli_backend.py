@@ -1,4 +1,4 @@
-"""Tests for mozart.backends.claude_cli module.
+"""Tests for marianne.backends.claude_cli module.
 
 Covers ClaudeCliBackend: initialization, from_config, _build_command,
 _inject_preamble_and_extensions, set_preamble, _parse_returncode,
@@ -201,11 +201,11 @@ class TestBuildCommand:
 
     def test_preamble_not_in_command_arg(self, backend: ClaudeCliBackend):
         """Preamble is passed via stdin, not embedded in the command (#108)."""
-        backend.set_preamble("<mozart-preamble>Test</mozart-preamble>")
+        backend.set_preamble("<marianne-preamble>Test</marianne-preamble>")
         cmd = backend._build_command("Do the task")
         p_idx = cmd.index("-p")
         assert cmd[p_idx + 1] == "-"
-        assert "mozart-preamble" not in " ".join(cmd)
+        assert "marianne-preamble" not in " ".join(cmd)
         assert "Do the task" not in " ".join(cmd)
 
 
@@ -216,9 +216,9 @@ class TestInjectPreambleAndExtensions:
     """Tests for ClaudeCliBackend._inject_preamble_and_extensions()."""
 
     def test_preamble_prepended(self, backend: ClaudeCliBackend):
-        backend.set_preamble("<mozart-preamble>Context info</mozart-preamble>")
+        backend.set_preamble("<marianne-preamble>Context info</marianne-preamble>")
         result = backend._inject_preamble_and_extensions("My prompt")
-        assert result.startswith("<mozart-preamble>")
+        assert result.startswith("<marianne-preamble>")
         assert "My prompt" in result
 
     def test_no_preamble_returns_prompt_unchanged(self, backend: ClaudeCliBackend):
@@ -233,7 +233,7 @@ class TestInjectPreambleAndExtensions:
         assert "My prompt" in result
 
     def test_preamble_and_extensions_order(self, backend: ClaudeCliBackend):
-        backend.set_preamble("<mozart-preamble>Preamble</mozart-preamble>")
+        backend.set_preamble("<marianne-preamble>Preamble</marianne-preamble>")
         backend.set_prompt_extensions(["Extension"])
         result = backend._inject_preamble_and_extensions("My prompt")
         assert result.index("Preamble") < result.index("My prompt") < result.index("Extension")

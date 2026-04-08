@@ -1,4 +1,4 @@
-"""Pydantic v2 models for the Mozart system profiler.
+"""Pydantic v2 models for the Marianne system profiler.
 
 Defines configuration, per-process metrics, GPU metrics, system snapshots,
 process lifecycle events, anomalies, and resource estimates used by the
@@ -352,18 +352,18 @@ class ProfilerConfig(BaseModel):
     )
     strace_full_on_demand: bool = Field(
         default=True,
-        description="Allow full strace (-f) via mozart top --trace PID",
+        description="Allow full strace (-f) via mzt top --trace PID",
     )
     gpu_enabled: bool = Field(
         default=False,
         description="Attempt GPU probing (graceful skip if unavailable)",
     )
     storage_path: Path = Field(
-        default=Path("~/.mozart/monitor.db"),
+        default=Path("~/.marianne/monitor.db"),
         description="SQLite database path for time-series storage",
     )
     jsonl_path: Path = Field(
-        default=Path("~/.mozart/monitor.jsonl"),
+        default=Path("~/.marianne/monitor.jsonl"),
         description="JSONL streaming log path",
     )
     jsonl_max_bytes: int = Field(

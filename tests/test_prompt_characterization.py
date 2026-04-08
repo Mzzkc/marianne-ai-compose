@@ -91,8 +91,8 @@ class TestPreambleCharacterization:
             sheet_num=3, total_sheets=10,
             workspace=Path("/tmp/ws"), retry_count=0,
         )
-        assert result.startswith("<mozart-preamble>")
-        assert result.endswith("</mozart-preamble>")
+        assert result.startswith("<marianne-preamble>")
+        assert result.endswith("</marianne-preamble>")
         assert "sheet 3 of 10" in result
         assert "/tmp/ws" in result
         assert "validation requirements" in result
@@ -113,7 +113,7 @@ class TestPreambleCharacterization:
             sheet_num=1, total_sheets=5,
             workspace=Path("/tmp/ws"), retry_count=2,
         )
-        assert "<mozart-preamble>" in result
+        assert "<marianne-preamble>" in result
         # Should mention this is a retry
         assert "retry" in result.lower() or "attempt" in result.lower()
 

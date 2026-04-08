@@ -751,7 +751,7 @@ class TestHookErrorPaths:
     async def test_chain_depth_below_limit_proceeds(self, tmp_path: Path) -> None:
         """run_job should proceed past the depth check when below limit.
 
-        Rather than actually spawning mozart (which may not be in PATH or may
+        Rather than actually spawning marianne (which may not be in PATH or may
         take too long), we test that the depth check logic is correct by
         directly calling _execute_run_job and verifying the error is NOT
         about depth limit.
@@ -793,7 +793,7 @@ class TestHookErrorPaths:
         result = await executor._execute_run_job(hook)
 
         # Should NOT fail due to depth limit (may fail for other reasons
-        # like mozart not being in PATH, but NOT depth limit)
+        # like marianne not being in PATH, but NOT depth limit)
         if not result.success and result.error_message:
             assert "depth limit" not in result.error_message.lower()
 
@@ -867,14 +867,14 @@ class TestDetachedChildSurvival:
             ],
         })
 
-        # Patch Popen to spawn a real `sleep 30` instead of `mozart run ...`
-        # (mozart may not be in PATH in test environments). We capture the
+        # Patch Popen to spawn a real `sleep 30` instead of `mzt run ...`
+        # (marianne may not be in PATH in test environments). We capture the
         # real Popen object to check liveness afterward.
         spawned_pids: list[int] = []
         original_popen = _subprocess.Popen
 
         def capturing_popen(cmd, **kwargs):
-            # Replace the mozart command with sleep
+            # Replace the marianne command with sleep
             proc = original_popen(["sleep", "30"], **kwargs)
             spawned_pids.append(proc.pid)
             return proc
@@ -1233,14 +1233,14 @@ class TestDaemonAwareChaining:
         with patch(
             "marianne.execution.hooks._try_daemon_submit",
         ) as mock_submit:
-            # Non-detached hook will try to run `mozart run ...` and likely
-            # fail because mozart isn't in PATH — but _try_daemon_submit
+            # Non-detached hook will try to run `mzt run ...` and likely
+            # fail because marianne isn't in PATH — but _try_daemon_submit
             # should NOT be called at all.
             results = await executor.execute_hooks()
 
         mock_submit.assert_not_called()
         assert len(results) == 1
-        # The hook may fail (mozart not in PATH) but that's fine — we're
+        # The hook may fail (marianne not in PATH) but that's fine — we're
         # testing that daemon path was not attempted
 
 

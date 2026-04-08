@@ -17,8 +17,8 @@ Two safety gaps found and fixed. Both are the same error class I've been trackin
 If an agent writes a file containing an API key (e.g., `.env`, config.json), and that file matches a `capture_files` glob pattern, the credential flows unredacted into the next sheet's prompt.
 
 **Fix:** Added `redact_credentials()` call before truncation on both paths:
-- Legacy runner: `src/mozart/execution/runner/context.py:295` (module-level import)
-- Baton adapter: `src/mozart/daemon/baton/adapter.py:772` (lazy import, matching existing pattern)
+- Legacy runner: `src/marianne/execution/runner/context.py:295` (module-level import)
+- Baton adapter: `src/marianne/daemon/baton/adapter.py:772` (lazy import, matching existing pattern)
 
 Redaction happens before truncation — this ensures credentials near the truncation boundary can't survive as partial matches.
 
@@ -81,8 +81,8 @@ Every new data path that touches agent output must be checked for credential red
 
 | File | Change |
 |------|--------|
-| `src/mozart/execution/runner/context.py:33,295` | Import + apply `redact_credentials()` to capture_files content |
-| `src/mozart/daemon/baton/adapter.py:730,772` | [SKIPPED] placeholder + `redact_credentials()` to capture_files content |
+| `src/marianne/execution/runner/context.py:33,295` | Import + apply `redact_credentials()` to capture_files content |
+| `src/marianne/daemon/baton/adapter.py:730,772` | [SKIPPED] placeholder + `redact_credentials()` to capture_files content |
 | `tests/test_cross_sheet_safety.py` | New: 10 TDD tests (8 credential, 4 skipped placeholder, 2 passing controls) |
 | `tests/test_f210_cross_sheet_baton.py:350` | Updated assertion: `test_skipped_sheets_excluded` → `test_skipped_sheets_get_placeholder` |
 
@@ -92,10 +92,10 @@ Every new data path that touches agent output must be checked for credential red
 $ python -m pytest tests/test_cross_sheet_safety.py -v
 10 passed in 0.68s
 
-$ python -m mypy src/mozart/execution/runner/context.py src/mozart/daemon/baton/adapter.py --no-error-summary
+$ python -m mypy src/marianne/execution/runner/context.py src/marianne/daemon/baton/adapter.py --no-error-summary
 (clean)
 
-$ python -m ruff check src/mozart/execution/runner/context.py src/mozart/daemon/baton/adapter.py
+$ python -m ruff check src/marianne/execution/runner/context.py src/marianne/daemon/baton/adapter.py
 All checks passed!
 ```
 

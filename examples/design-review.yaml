@@ -7,7 +7,7 @@
 # Usage:
 #   1. Set `doc` to the path of the design document to review
 #   2. Set `workspace` to where you want outputs
-#   3. mozart run examples/design-review.yaml
+#   3. mzt run examples/design-review.yaml
 #
 # Execution Flow (4 movements, 9 sheets):
 #
@@ -37,7 +37,7 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 1200
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Comprehension"
@@ -85,7 +85,7 @@ prompt:
     # Optional: project context to inform the review.
     # If empty, the review is purely about the document itself.
     project_context: >-
-      Mozart AI Compose — an orchestration system where declarative YAML
+      Marianne AI Compose — an orchestration system where declarative YAML
       scores become multi-stage AI agent executions. Musical metaphor is
       load-bearing: scores, sheets, concerts, conductor, musicians,
       instruments, techniques, venues, librettos.

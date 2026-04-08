@@ -2,7 +2,7 @@
 
 Generates previews of how sheets will be rendered at execution time,
 including expanded prompts, validation paths, and fan-out metadata.
-Used by ``mozart validate`` to show what each sheet will look like
+Used by ``mzt validate`` to show what each sheet will look like
 before actually running the job.
 """
 

@@ -1,4 +1,4 @@
-"""Aggregated statistics engine for the Mozart Dashboard.
+"""Aggregated statistics engine for the Marianne Dashboard.
 
 Computes dashboard-wide analytics from daemon job data via
 ``DaemonStateAdapter``.  All methods use a TTL-based cache to avoid

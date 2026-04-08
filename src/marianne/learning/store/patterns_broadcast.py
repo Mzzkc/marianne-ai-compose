@@ -17,7 +17,7 @@ from contextlib import AbstractContextManager
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 from marianne.learning.store.base import GlobalLearningStoreBase, _logger
 from marianne.learning.store.models import PatternDiscoveryEvent
 
@@ -37,7 +37,7 @@ class PatternBroadcastMixin(_BroadcastBase):
     - _row_to_discovery_event(): For row conversion (from PatternQueryMixin)
     """
 
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
 
     def record_pattern_discovery(

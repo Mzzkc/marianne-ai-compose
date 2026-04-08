@@ -158,7 +158,7 @@ class TestTemplateFileLoading:
         sheet = _make_sheet(num=2)
         prompt = _build_prompt(sheet, _make_context(), total_sheets=10, total_movements=1)
         assert len(prompt) > 0
-        assert "mozart-preamble" in prompt.lower()
+        assert "marianne-preamble" in prompt.lower()
 
 
 # =============================================================================
@@ -170,7 +170,7 @@ class TestPreamble:
     def test_preamble_included(self) -> None:
         sheet = _make_sheet(num=3, prompt_template="Do the work", workspace=Path("/tmp/ws"))
         prompt = _build_prompt(sheet, _make_context(), total_sheets=10, total_movements=3)
-        assert "<mozart-preamble>" in prompt
+        assert "<marianne-preamble>" in prompt
         assert "sheet 3 of 10" in prompt.lower()
         assert "/tmp/ws" in prompt
 
@@ -188,7 +188,7 @@ class TestPreamble:
     def test_preamble_before_template(self) -> None:
         sheet = _make_sheet(prompt_template="THE_TEMPLATE_CONTENT")
         prompt = _build_prompt(sheet, _make_context(), total_sheets=5, total_movements=1)
-        preamble_idx = prompt.find("<mozart-preamble>")
+        preamble_idx = prompt.find("<marianne-preamble>")
         template_idx = prompt.find("THE_TEMPLATE_CONTENT")
         assert preamble_idx >= 0
         assert template_idx >= 0

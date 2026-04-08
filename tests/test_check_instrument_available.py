@@ -1,8 +1,8 @@
 """TDD tests for check_instrument_available() utility.
 
 Standalone availability check for instruments — used by:
-- mozart doctor (instrument health checks)
-- mozart validate (warn on unavailable instruments)
+- mzt doctor (instrument health checks)
+- mzt validate (warn on unavailable instruments)
 - Baton dispatch path (pre-flight before execution)
 
 Tests:

@@ -5,7 +5,7 @@ who make real mistakes and need real guidance — not generic "check your score"
 messages.
 
 Journey's principle: the bugs that make users quietly abandon your product
-aren't crashes — they're confusion. These tests prove Mozart doesn't confuse.
+aren't crashes — they're confusion. These tests prove Marianne doesn't confuse.
 """
 
 from __future__ import annotations
@@ -21,12 +21,12 @@ from marianne.core.config.job import JobConfig
 
 
 class TestSarahFirstScoreTypos:
-    """Sarah is writing her first Mozart score. She's read the README,
+    """Sarah is writing her first Marianne score. She's read the README,
     skimmed the guide, and is typing fast. Her mistakes are plausible
     near-misses from working memory, not random gibberish."""
 
     def test_retries_instead_of_retry(self) -> None:
-        """Sarah writes 'retries:' because that's English. Mozart should
+        """Sarah writes 'retries:' because that's English. Marianne should
         tell her the correct field name, not just 'Extra inputs not permitted'."""
         score = {
             "name": "sarah-first-score",
@@ -216,7 +216,7 @@ class TestSchemaErrorHintsForUnknownFields:
     extra='forbid' rejects unknown fields.
 
     The current fallback hint says "Ensure your score has name, sheet, prompt"
-    which is useless when the user HAS those fields but also added one Mozart
+    which is useless when the user HAS those fields but also added one Marianne
     doesn't recognize."""
 
     def test_extra_forbidden_gets_specific_hint(self) -> None:
@@ -341,7 +341,7 @@ instrument: claude-code
 
 
 class TestAlexInstrumentTypos:
-    """Alex just installed Mozart and is writing their first score from memory
+    """Alex just installed Marianne and is writing their first score from memory
     after reading the README. 'instrument' has two common transposition typos."""
 
     def test_insturment_instead_of_instrument(self) -> None:

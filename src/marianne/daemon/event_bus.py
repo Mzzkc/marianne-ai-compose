@@ -1,4 +1,4 @@
-"""Async pub/sub event bus for the Mozart daemon.
+"""Async pub/sub event bus for the Marianne daemon.
 
 Routes ObserverEvents from the runner and observer to downstream consumers
 (SSE dashboard, learning hub, future webhooks). Each subscriber gets a

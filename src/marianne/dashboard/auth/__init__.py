@@ -1,4 +1,4 @@
-"""Mozart Dashboard Authentication Module.
+"""Marianne Dashboard Authentication Module.
 
 Provides authentication middleware and utilities for the dashboard API.
 Supports API key authentication with optional localhost bypass for development.
@@ -59,19 +59,19 @@ class AuthConfig:
         """Create config from environment variables.
 
         Environment variables:
-            MOZART_AUTH_MODE: disabled, api_key, or localhost_only
-            MOZART_API_KEYS: Comma-separated API keys
-            MOZART_LOCALHOST_BYPASS: true/false
+            MZT_AUTH_MODE: disabled, api_key, or localhost_only
+            MZT_API_KEYS: Comma-separated API keys
+            MZT_LOCALHOST_BYPASS: true/false
         """
-        mode_str = os.getenv("MOZART_AUTH_MODE", "localhost_only")
+        mode_str = os.getenv("MZT_AUTH_MODE", "localhost_only")
         mode = AuthMode(mode_str.lower())
 
-        api_keys_str = os.getenv("MOZART_API_KEYS", "")
+        api_keys_str = os.getenv("MZT_API_KEYS", "")
         raw_keys = [k.strip() for k in api_keys_str.split(",") if k.strip()]
         # Hash keys immediately so plaintext is never stored in the config object
         hashed_keys = [hash_api_key(k) for k in raw_keys]
 
-        localhost_bypass = os.getenv("MOZART_LOCALHOST_BYPASS", "true").lower() == "true"
+        localhost_bypass = os.getenv("MZT_LOCALHOST_BYPASS", "true").lower() == "true"
 
         return cls(
             mode=mode,

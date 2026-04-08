@@ -18,7 +18,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 
-from marianne.core.logging import MozartLogger, get_logger
+from marianne.core.logging import MarianneLogger, get_logger
 
 from .models import RateLimitEvent
 
@@ -38,7 +38,7 @@ class RateLimitMixin:
     """
 
     # Annotations for attributes provided by the composed class (GlobalLearningStoreBase)
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
     hash_job: Callable[..., str]  # GlobalLearningStoreBase.hash_job(job_name, config_hash)
 

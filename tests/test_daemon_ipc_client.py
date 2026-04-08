@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.ipc.client — async Unix socket client.
+"""Tests for marianne.daemon.ipc.client — async Unix socket client.
 
 Tests both the client in isolation (socket doesn't exist) and integrated
 with a real DaemonServer (using tmp_path for the socket).

@@ -698,7 +698,7 @@ class TestCheckRunningJobsAdversarial:
 
         # Point to a socket that doesn't exist
         result = _check_running_jobs(
-            socket_path=Path("/tmp/nonexistent-mozart-adversarial-test.sock"),
+            socket_path=Path("/tmp/nonexistent-marianne-adversarial-test.sock"),
         )
         assert result is None
 

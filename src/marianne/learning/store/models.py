@@ -486,9 +486,9 @@ class EvolutionEntryInput:
 
 @dataclass
 class EvolutionTrajectoryEntry:
-    """A record of a single evolution cycle in Mozart's self-improvement trajectory.
+    """A record of a single evolution cycle in Marianne's self-improvement trajectory.
 
-    v16 Evolution: Evolution Trajectory Tracking - enables Mozart to track its
+    v16 Evolution: Evolution Trajectory Tracking - enables Marianne to track its
     own evolution history, identifying recurring issue classes and measuring
     improvement over time.
     """

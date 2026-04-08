@@ -23,7 +23,7 @@
                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors"
                     onclick="window.location='/jobs/{{ job.job_id }}/details'">
                     <td class="px-4 py-2.5">
-                        <a href="/jobs/{{ job.job_id }}/details" class="text-mozart-600 dark:text-mozart-400 hover:underline font-medium">
+                        <a href="/jobs/{{ job.job_id }}/details" class="text-marianne-600 dark:text-marianne-400 hover:underline font-medium">
                             {{ job.job_name }}
                         </a>
                         <div class="text-xs text-gray-400 font-mono mt-0.5">{{ job.job_id[:12] }}</div>
@@ -37,7 +37,7 @@
                                 <div class="h-1.5 rounded-full transition-all duration-300
                                     {% if job.status.value == 'failed' %}bg-red-500
                                     {% elif job.status.value == 'completed' %}bg-green-500
-                                    {% else %}bg-mozart-500
+                                    {% else %}bg-marianne-500
                                     {% endif %}"
                                     style="width: {{ job.progress_percent }}%"></div>
                             </div>

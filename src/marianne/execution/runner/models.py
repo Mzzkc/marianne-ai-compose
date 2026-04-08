@@ -605,7 +605,7 @@ class RunnerContext:
 
     When set, the runner checks this event at sheet boundaries (via
     _check_pause_signal) instead of polling the filesystem for a
-    `.mozart-pause-{job_id}` file.  This enables workspace-independent
+    `.marianne-pause-{job_id}` file.  This enables workspace-independent
     job control — the daemon can pause a job without needing to know
     or write to its workspace directory.
     """

@@ -1,4 +1,4 @@
-"""Detail drill-down panel for the Mozart Monitor TUI.
+"""Detail drill-down panel for the Marianne Monitor TUI.
 
 Shows expanded information for the currently selected item:
 processes, completed sheets, or anomalies.

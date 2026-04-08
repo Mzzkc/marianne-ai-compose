@@ -1,18 +1,18 @@
 """Conductor clone support — isolated conductor instances for safe testing.
 
-When --conductor-clone is passed to any Mozart CLI command, all daemon
+When --conductor-clone is passed to any Marianne CLI command, all daemon
 interactions are routed to a clone conductor instead of the production
 one. The clone has its own socket, PID file, state DB, and log file.
 
-This enables safe testing of Mozart CLI commands and daemon features
+This enables safe testing of Marianne CLI commands and daemon features
 without risking the production conductor. The production conductor
 continues running undisturbed.
 
 Usage:
-    mozart start --conductor-clone              # Start default clone
-    mozart start --conductor-clone=staging      # Start named clone
-    mozart run score.yaml --conductor-clone     # Submit to default clone
-    mozart status --conductor-clone=staging     # Query named clone
+    mzt start --conductor-clone              # Start default clone
+    mzt start --conductor-clone=staging      # Start named clone
+    mzt run score.yaml --conductor-clone     # Submit to default clone
+    mzt status --conductor-clone=staging     # Query named clone
 
 Architecture:
     - A module-level _clone_name stores the active clone (set by CLI callback)
@@ -74,9 +74,9 @@ def _sanitize_name(name: str | None) -> str:
     # Do NOT strip leading/trailing hyphens — stripping is cosmetic but
     # makes the function lossy, causing path collisions between distinct
     # names (e.g., '0' and '_0' both sanitize to '0'). Hyphens in the
-    # middle of path components like /tmp/mozart-clone--test.sock are safe.
+    # middle of path components like /tmp/marianne-clone--test.sock are safe.
     # Truncate to stay within Unix socket path limits (~108 chars).
-    # /tmp/mozart-clone-{name}.sock = 21 + len(name) + 5 = 26 + len(name)
+    # /tmp/marianne-clone-{name}.sock = 21 + len(name) + 5 = 26 + len(name)
     # Cap at 64 chars to leave headroom.
     if len(sanitized) > 64:
         sanitized = sanitized[:64]
@@ -102,18 +102,18 @@ def resolve_clone_paths(name: str | None) -> ClonePaths:
     Returns:
         ClonePaths with socket, PID, state DB, and log paths.
         All paths are in /tmp for socket/PID (matching production convention)
-        and ~/.mozart for state DB/log.
+        and ~/.marianne for state DB/log.
     """
     suffix = _sanitize_name(name)
     tag = f"-{suffix}" if suffix else ""
 
-    mozart_dir = Path.home() / ".mozart"
+    marianne_dir = Path.home() / ".marianne"
 
     return ClonePaths(
-        socket=Path(f"/tmp/mozart-clone{tag}.sock"),
-        pid_file=Path(f"/tmp/mozart-clone{tag}.pid"),
-        state_db=mozart_dir / f"clone{tag}-state.db",
-        log_file=Path(f"/tmp/mozart-clone{tag}.log"),
+        socket=Path(f"/tmp/marianne-clone{tag}.sock"),
+        pid_file=Path(f"/tmp/marianne-clone{tag}.pid"),
+        state_db=marianne_dir / f"clone{tag}-state.db",
+        log_file=Path(f"/tmp/marianne-clone{tag}.log"),
     )
 
 

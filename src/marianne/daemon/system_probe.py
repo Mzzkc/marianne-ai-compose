@@ -1,4 +1,4 @@
-"""Consolidated system probes for the Mozart daemon.
+"""Consolidated system probes for the Marianne daemon.
 
 Provides a single ``SystemProbe`` class that encapsulates the
 "try psutil → fallback to /proc" pattern used across the daemon for:

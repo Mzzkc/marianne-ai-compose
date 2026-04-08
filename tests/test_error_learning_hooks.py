@@ -1,4 +1,4 @@
-"""Tests for mozart.learning.error_hooks module.
+"""Tests for marianne.learning.error_hooks module.
 
 Tests cover:
 - ErrorLearningConfig dataclass defaults and customization

@@ -1,6 +1,6 @@
-"""Tests for ``mozart doctor`` command.
+"""Tests for ``mzt doctor`` command.
 
-Validates environment health checks: Python version, Mozart version,
+Validates environment health checks: Python version, Marianne version,
 conductor status, instrument availability, and safety warnings.
 
 TDD: These tests define the contract for the doctor command.
@@ -50,14 +50,14 @@ class TestDoctorCommandExists:
             result = runner.invoke(app, ["doctor"])
             assert "Python" in result.stdout
 
-    def test_doctor_shows_mozart_version(self) -> None:
-        """Doctor should display the Mozart version."""
+    def test_doctor_shows_marianne_version(self) -> None:
+        """Doctor should display the Marianne version."""
         with patch(
             "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("not running", None),
         ):
             result = runner.invoke(app, ["doctor"])
-            assert "Mozart" in result.stdout
+            assert "Marianne" in result.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +172,7 @@ class TestDoctorJsonOutput:
             assert result.exit_code == 0
             data = json.loads(result.stdout)
             assert "python_version" in data
-            assert "mozart_version" in data
+            assert "marianne_version" in data
             assert "conductor" in data
             assert "instruments" in data
 

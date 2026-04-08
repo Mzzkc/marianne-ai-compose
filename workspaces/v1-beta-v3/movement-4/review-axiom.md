@@ -35,11 +35,11 @@ ValidationError: Extra inputs are not permitted
 1
 ```
 
-**All 51 models in `src/mozart/core/config/` have `extra="forbid"`.** Verified by `grep -rc 'extra="forbid"' src/mozart/core/config/` → 51. Journey's schema error hints (`validate.py:308-356`) provide actionable "did you mean X?" suggestions. Theorem's property-based tests (Invariant 75) guarantee F-441 cannot recur — any new model without `extra="forbid"` fails the static scan. Adversary's 20 tests across 14 model families found zero bugs.
+**All 51 models in `src/marianne/core/config/` have `extra="forbid"`.** Verified by `grep -rc 'extra="forbid"' src/marianne/core/config/` → 51. Journey's schema error hints (`validate.py:308-356`) provide actionable "did you mean X?" suggestions. Theorem's property-based tests (Invariant 75) guarantee F-441 cannot recur — any new model without `extra="forbid"` fails the static scan. Adversary's 20 tests across 14 model families found zero bugs.
 
 **The validator ordering is correct:** `strip_computed_fields` (model_validator `mode="before"`) runs before Pydantic's `extra="forbid"` check. Old scores with `total_sheets` are silently cleaned; genuinely unknown fields are rejected. This is surgical.
 
-**Boundary gap (Prism F-431):** Daemon config models in `daemon/config.py` are NOT covered. Confirmed: `grep -r 'extra="forbid"' src/mozart/daemon/config.py` → 0 results. This means `~/.mozart/conductor.yaml` still silently drops unknown fields. Not blocking for score config (the issue #156 scope), but a real gap for daemon operators. F-431 is correctly filed and open.
+**Boundary gap (Prism F-431):** Daemon config models in `daemon/config.py` are NOT covered. Confirmed: `grep -r 'extra="forbid"' src/marianne/daemon/config.py` → 0 results. This means `~/.marianne/conductor.yaml` still silently drops unknown fields. Not blocking for score config (the issue #156 scope), but a real gap for daemon operators. F-431 is correctly filed and open.
 
 ### F-210: Cross-Sheet Context in Baton Path
 
@@ -67,13 +67,13 @@ ValidationError: Extra inputs are not permitted
 
 **Claimed:** `MethodNotFoundError` now distinguished from "conductor not running."
 
-**Verified by Ember:** `mozart clear-rate-limits` on a running conductor now correctly says "No active rate limits" instead of "conductor not running." Harper implemented `MethodNotFoundError` as a distinct exception class in `ipc/errors.py:25-35` with proper mapping in `detect.py:156-167`. Breakpoint's 8 adversarial tests verify the round-trip. Theorem proved bijectivity of the error code → exception mapping.
+**Verified by Ember:** `mzt clear-rate-limits` on a running conductor now correctly says "No active rate limits" instead of "conductor not running." Harper implemented `MethodNotFoundError` as a distinct exception class in `ipc/errors.py:25-35` with proper mapping in `detect.py:156-167`. Breakpoint's 8 adversarial tests verify the round-trip. Theorem proved bijectivity of the error code → exception mapping.
 
 ### F-110: Pending Job Queue
 
 **Claimed:** Backpressure pending jobs fully wired.
 
-**Verified from reports:** Lens found 3 critical gaps in the unnamed musician's original implementation: (1) `_start_pending_jobs()` never called — pending jobs would queue forever, (2) pending jobs invisible in `mozart list` — no `JobMeta` created, (3) cancel path didn't handle pending. All three fixed. 23 TDD tests. Spark committed as mateship. Breakpoint's 3 adversarial tests cover workspace=None orphans, cancellation cleanup, and dynamic backpressure. **However:** F-471 (pending jobs lost on restart) remains open — `_pending_jobs` is in-memory only.
+**Verified from reports:** Lens found 3 critical gaps in the unnamed musician's original implementation: (1) `_start_pending_jobs()` never called — pending jobs would queue forever, (2) pending jobs invisible in `mzt list` — no `JobMeta` created, (3) cancel path didn't handle pending. All three fixed. 23 TDD tests. Spark committed as mateship. Breakpoint's 3 adversarial tests cover workspace=None orphans, cancellation cleanup, and dynamic backpressure. **However:** F-471 (pending jobs lost on restart) remains open — `_pending_jobs` is in-memory only.
 
 ### Bug Fixes (#122, #93, #103, #120, #128)
 
@@ -111,7 +111,7 @@ Codex delivered 14 documentation deliverables across 8 docs. Guide fixed F-465 (
 | P0: conductor-clone | 14/15 tasks done | Only "convert ALL pytests" remains |
 | P0: read design specs | Followed by Canyon, Foundation, Blueprint | F-210 fix references wiring analysis |
 | P0: pytest/mypy/ruff | 11,397 / clean / clean | Quality gate GREEN |
-| P0: music metaphor | Maintained | hello-mozart.yaml rename, terminology fixes |
+| P0: music metaphor | Maintained | hello-marianne.yaml rename, terminology fixes |
 | P0: commit on main | 93 commits on main | Zero uncommitted source code |
 | P0: documentation | 14 deliverables, 8 docs | Codex + Guide |
 | P0: don't kill conductor | Followed | No destructive commands run |
@@ -131,7 +131,7 @@ Cross-referencing TASKS.md claims against committed code:
 - **D-023 Wordware demos:** Blueprint (3) + Spark (1). All 4 validate clean. COMPLETE.
 - **D-024 cost accuracy:** Circuit (committed by Harper). 17 TDD tests. COMPLETE.
 - **F-110 pending jobs:** Dash/Lens (architecture) → Spark (mateship commit). 23 tests. COMPLETE.
-- **F-465 rename:** Guide (`bf74c23`). 8 files updated. `examples/hello.yaml` → `examples/hello-mozart.yaml`. Verified: old file does not exist, new file validates clean. COMPLETE.
+- **F-465 rename:** Guide (`bf74c23`). 8 files updated. `examples/hello.yaml` → `examples/hello-marianne.yaml`. Verified: old file does not exist, new file validates clean. COMPLETE.
 
 No task was claimed but not delivered. The mateship pipeline operated at scale — 39% of commits were mateship pickups (all-time high per Tempo).
 
@@ -169,7 +169,7 @@ No task was claimed but not delivered. The mateship pipeline operated at scale �
 **Verification performed:**
 1. Reproducer from issue → `ValidationError: Extra inputs are not permitted` (CORRECT)
 2. Backward compat: `total_sheets` → silently stripped, config valid (CORRECT)
-3. `mozart validate examples/hello-mozart.yaml` → `✓ Configuration valid` (CORRECT)
+3. `mzt validate examples/hello-marianne.yaml` → `✓ Configuration valid` (CORRECT)
 4. 54 config strictness adversarial tests → all pass
 5. 24 property-based tests → all pass
 6. All 44 example scores validate clean

@@ -8,7 +8,7 @@ import pytest
 
 @pytest.mark.skip(reason="Live daemon integration script — requires running conductor, not a unit test")
 async def test_stream():
-    socket_path = Path("/tmp/mozart.sock")
+    socket_path = Path("/tmp/marianne.sock")
     if not socket_path.exists():
         print(f"Socket not found at {socket_path}")
         return

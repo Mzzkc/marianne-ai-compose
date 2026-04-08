@@ -1,4 +1,4 @@
-"""Tests for Mozart CLI diagnose command and its internal helpers.
+"""Tests for Marianne CLI diagnose command and its internal helpers.
 
 FIX-30: The diagnose module (912 LOC) was previously untested. This file
 tests the pure-function report builder, the CLI entry points via CliRunner,
@@ -299,7 +299,7 @@ def _no_daemon_route(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class TestDiagnoseCommand:
-    """Tests for `mozart diagnose` via CliRunner."""
+    """Tests for `mzt diagnose` via CliRunner."""
 
     def test_diagnose_rich_output(self, tmp_path: Path) -> None:
         job = _make_job()
@@ -402,7 +402,7 @@ class TestDiagnoseCommand:
 
 
 class TestErrorsCommand:
-    """Tests for `mozart errors` via CliRunner."""
+    """Tests for `mzt errors` via CliRunner."""
 
     def test_errors_no_errors(self, tmp_path: Path) -> None:
         job = _make_job()
@@ -560,7 +560,7 @@ class TestErrorsCommand:
 
 
 class TestLogsCommand:
-    """Basic tests for `mozart logs` (limited scope — no running jobs)."""
+    """Basic tests for `mzt logs` (limited scope — no running jobs)."""
 
     def test_logs_no_log_file(self, tmp_path: Path) -> None:
         result = runner.invoke(
@@ -573,7 +573,7 @@ class TestLogsCommand:
         # Create a dummy log file so it doesn't exit early on missing file
         log_dir = tmp_path / "logs"
         log_dir.mkdir()
-        log_file = log_dir / "mozart.log"
+        log_file = log_dir / "marianne.log"
         log_file.write_text('{"event": "test", "level": "INFO"}\n')
 
         result = runner.invoke(

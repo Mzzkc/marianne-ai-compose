@@ -20,7 +20,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import datetime
 
-from marianne.core.logging import MozartLogger, get_logger
+from marianne.core.logging import MarianneLogger, get_logger
 
 from .base import WhereBuilder
 from .models import EscalationDecisionRecord
@@ -33,7 +33,7 @@ class EscalationMixin:
 
     This mixin provides methods for recording and querying escalation decisions.
     When a sheet triggers escalation and receives a response, the decision is
-    recorded so Mozart can learn from it and potentially suggest similar actions
+    recorded so Marianne can learn from it and potentially suggest similar actions
     for future escalations with similar contexts.
 
     Requires the following from the composed class:
@@ -42,7 +42,7 @@ class EscalationMixin:
     """
 
     # Annotations for attributes provided by the composed class (GlobalLearningStoreBase)
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
     hash_job: Callable[..., str]  # GlobalLearningStoreBase.hash_job(job_name, config_hash)
 
@@ -62,7 +62,7 @@ class EscalationMixin:
 
         When a sheet triggers escalation and receives a response from
         a human or AI handler, this method records the decision so that
-        Mozart can learn from it and potentially suggest similar actions
+        Marianne can learn from it and potentially suggest similar actions
         for future escalations with similar contexts.
 
         Evolution v11: Escalation Learning Loop - closes the loop between

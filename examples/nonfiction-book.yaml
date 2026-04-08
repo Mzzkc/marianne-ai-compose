@@ -1,7 +1,7 @@
 # Example: Non-Fiction Book Authoring (Snowflake Method)
 # Orchestrate book writing from premise through polished manuscript with consistency validation
 #
-# This example demonstrates Mozart's capabilities BEYOND software development:
+# This example demonstrates Marianne's capabilities BEYOND software development:
 # - Progressive elaboration (Snowflake Method)
 # - Creative workflow with quality gates
 # - Consistency validation across components
@@ -17,11 +17,11 @@
 # Usage:
 #   # 1. Customize variables in prompt.variables section
 #   # 2. Validate configuration
-#   mozart validate examples/nonfiction-book.yaml
+#   mzt validate examples/nonfiction-book.yaml
 #   # 3. Run the authoring pipeline
-#   mozart run examples/nonfiction-book.yaml
+#   mzt run examples/nonfiction-book.yaml
 #   # 4. Monitor progress
-#   mozart status nonfiction-book
+#   mzt status nonfiction-book
 #
 # Estimated time: 6-12 hours depending on chapter count
 # Outputs: Complete manuscript with supporting materials in workspace/

@@ -344,7 +344,7 @@ class TestStreamRoutesExtended:
         # Create a workspace with a log file so valid requests don't 404
         workspace = temp_state_dir / "test-workspace"
         workspace.mkdir()
-        log_file = workspace / "mozart.log"
+        log_file = workspace / "marianne.log"
         log_file.write_text("line1\nline2\nline3\n")
 
         # Use COMPLETED so the log stream terminates (follow mode exits for finished jobs)
@@ -381,7 +381,7 @@ class TestStreamRoutesExtended:
         """Test log download when no log file exists."""
         workspace = temp_state_dir / "test-workspace"
         workspace.mkdir()
-        # No mozart.log file created
+        # No marianne.log file created
 
         job_state = CheckpointState(
             job_id="test-123",
@@ -405,7 +405,7 @@ class TestStreamRoutesExtended:
         """Test getting log info when no log file exists."""
         workspace = temp_state_dir / "test-workspace"
         workspace.mkdir()
-        # No mozart.log file created
+        # No marianne.log file created
 
         job_state = CheckpointState(
             job_id="test-123",

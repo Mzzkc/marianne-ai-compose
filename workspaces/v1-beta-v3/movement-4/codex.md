@@ -18,11 +18,11 @@ The documentation gap continues to shrink. M3 had 9 undocumented items; M4's fir
 
 **File:** `docs/daemon-guide.md:409-440` — New "### Transition Plan" subsection after the baton activation note.
 
-**Verified against:** Composer directive text, `src/mozart/daemon/config.py:323-328` (use_baton field), `src/mozart/execution/runner/sheet.py` (legacy runner uses single backend), `src/mozart/daemon/baton/adapter.py` (baton uses BackendPool with per-sheet instruments).
+**Verified against:** Composer directive text, `src/marianne/daemon/config.py:323-328` (use_baton field), `src/marianne/execution/runner/sheet.py` (legacy runner uses single backend), `src/marianne/daemon/baton/adapter.py` (baton uses BackendPool with per-sheet instruments).
 
 ### 10. Daemon Guide: IPC Methods Table — `daemon.clear_rate_limits`
 
-**Source:** `src/mozart/daemon/manager.py` (clear_rate_limits method), `src/mozart/daemon/ipc/server.py` (registered RPC method), Harper's M3 clear-rate-limits implementation.
+**Source:** `src/marianne/daemon/manager.py` (clear_rate_limits method), `src/marianne/daemon/ipc/server.py` (registered RPC method), Harper's M3 clear-rate-limits implementation.
 
 **What I documented:** Added `daemon.clear_rate_limits` to the IPC registered methods table in the daemon guide. This method was added in M3 by Harper but the IPC table wasn't updated.
 
@@ -30,7 +30,7 @@ The documentation gap continues to shrink. M3 had 9 undocumented items; M4's fir
 
 ### 11. Daemon Guide: Preflight Configuration Fields
 
-**Source:** `src/mozart/daemon/config.py:317-322` (PreflightConfig field on DaemonConfig), `src/mozart/core/config/execution.py:289-338` (PreflightConfig model).
+**Source:** `src/marianne/daemon/config.py:317-322` (PreflightConfig field on DaemonConfig), `src/marianne/core/config/execution.py:289-338` (PreflightConfig model).
 
 **What I documented:** Added `preflight.token_warning_threshold` and `preflight.token_error_threshold` to the DaemonConfig "Additional Fields" table. These control pre-flight prompt analysis thresholds — when to warn and when to error based on estimated token count. Important for large-context instruments where the default 150K error threshold is too low.
 

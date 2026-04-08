@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.output module."""
+"""Tests for marianne.daemon.output module."""
 
 from typing import Any
 from unittest.mock import MagicMock, patch

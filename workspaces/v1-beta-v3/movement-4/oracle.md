@@ -10,7 +10,7 @@
 
 | Metric | M3 End | M4 Current | Delta | Trend |
 |--------|--------|------------|-------|-------|
-| Source lines (src/mozart/) | 97,424 | 98,247 | +823 (+0.8%) | Decelerating (M1: 2.7%, M2: 0.8%, M3: 0.9%, M4: 0.8%) |
+| Source lines (src/marianne/) | 97,424 | 98,247 | +823 (+0.8%) | Decelerating (M1: 2.7%, M2: 0.8%, M3: 0.9%, M4: 0.8%) |
 | Test files | 315 | 327 | +12 (+3.8%) | Healthy |
 | Tests collected | 10,981 | *pending run* | — | — |
 | M4 commits | — | 18 | — | M4 in progress |
@@ -219,7 +219,7 @@ For the first time in 8+ movements, there is concrete demo progress:
 - **Wordware comparison demos:** 4 complete (contract-generator, candidate-screening, marketing-content, invoice-analysis). All validate clean. D-023 COMPLETE. These run on the legacy runner TODAY — no baton required.
 - **Lovable demo:** Still at zero. Blocked on baton Phase 2 (default).
 
-The Wordware demos are the first user-facing product that demonstrates Mozart's value. They exist. They validate. They can be shown to anyone. This is a significant milestone even though the Lovable demo remains blocked.
+The Wordware demos are the first user-facing product that demonstrates Marianne's value. They exist. They validate. They can be shown to anyone. This is a significant milestone even though the Lovable demo remains blocked.
 
 ### P0 Blockers Resolved This Movement
 
@@ -276,7 +276,7 @@ The warm tier growth rate (182 → 3,185 in one movement) suggests exponential e
 The Wordware demos are the immediate opportunity. They require no engineering work — they exist and validate. The impact:
 
 - **Today:** 4 comparison demos exist. Zero users have seen them.
-- **If shared this week:** Direct comparison against $30M Wordware. Mozart's open-source YAML vs Wordware's proprietary IDE. The demos are simple enough to understand, complex enough to be impressive.
+- **If shared this week:** Direct comparison against $30M Wordware. Marianne's open-source YAML vs Wordware's proprietary IDE. The demos are simple enough to understand, complex enough to be impressive.
 - **Risk:** The demos run on the legacy runner. If someone tries them with the baton path, they'll get degraded output (cross-sheet context was just fixed, prompt assembly quality is unverified).
 
 ---
@@ -306,7 +306,7 @@ The Wordware demos are the immediate opportunity. They require no engineering wo
 - **Found by:** Oracle, Movement 4
 - **Severity:** P2 (medium)
 - **Status:** Open — cross-references F-097
-- **Description:** The p99 execution duration has been 30.2-30.5 minutes across M2, M3, and M4. This exactly matches the `idle_timeout_seconds: 1800` stale detection threshold. The composer's F-097 directive to increase `idle_timeout_seconds` from 1800 to 7200 remains unimplemented. The regeneration of `mozart-orchestra-v3.yaml` with updated timeouts is also unclaimed.
+- **Description:** The p99 execution duration has been 30.2-30.5 minutes across M2, M3, and M4. This exactly matches the `idle_timeout_seconds: 1800` stale detection threshold. The composer's F-097 directive to increase `idle_timeout_seconds` from 1800 to 7200 remains unimplemented. The regeneration of `marianne-orchestra-v3.yaml` with updated timeouts is also unclaimed.
 - **Impact:** Agents doing deep work (long prompts, complex reasoning, large outputs) are killed at 30 minutes regardless of whether they're actually stale. This affects the top 1% of executions. For the orchestra's 706 sheets, this means ~7 sheets per movement are potentially being killed mid-work.
 - **Action:** The TASKS.md timeout items under "Composer-Assigned Tasking" remain unclaimed. Someone needs to update `generate-v3.py` and regenerate the score. This is a 10-minute task that has been open since M1.
 
@@ -348,7 +348,7 @@ But the resource anomaly pipeline remains flat. 5,315 patterns sitting at 0.5000
 
 The critical path advanced exactly one step this movement. F-210 resolved. Phase 1 testing unblocked but not started. This is the fourth consecutive movement where the serial path advances by exactly one step in a parallel movement. The orchestra's format optimizes for breadth; the critical path demands depth. Prism said this in M3 and it remains the central tension.
 
-The Wordware demos are the bright spot. For the first time since I started tracking, there are concrete deliverables that a non-orchestra human could look at and understand what Mozart does. Four demos. All validate. The demo drought is partially broken. It's not the Lovable demo, but it's something.
+The Wordware demos are the bright spot. For the first time since I started tracking, there are concrete deliverables that a non-orchestra human could look at and understand what Marianne does. Four demos. All validate. The demo drought is partially broken. It's not the Lovable demo, but it's something.
 
 The mateship rate at 39% feels like the orchestra has found its natural rhythm. Not building in isolation, not coordinating through meetings, but flowing work through a pipeline where whoever can do it next, does. The finding-fix-verify chain is automatic now. That's institutional behavior — the orchestra equivalent of muscle memory.
 
@@ -360,7 +360,7 @@ What concerns me: the 20 musicians who haven't committed in M4 yet. If this patt
 
 1. **P0: Dedicate one musician to Phase 1 baton testing for an entire movement.** Foundation is the best candidate — built the baton, deepest context. The serial critical path will not advance faster than one step per movement until someone commits a full session to it.
 
-2. **P0: Ship the Wordware demos.** They exist. They validate. They demonstrate Mozart's value proposition against a $30M competitor. The gap between "exists in examples/" and "visible to anyone" is the gap between building and shipping.
+2. **P0: Ship the Wordware demos.** They exist. They validate. They demonstrate Marianne's value proposition against a $30M competitor. The gap between "exists in examples/" and "visible to anyone" is the gap between building and shipping.
 
 3. **P1: Investigate resource anomaly pattern application (F-300).** 17.6% of the pattern corpus is dark. The semantic pipeline is alive; the resource pipeline may need the same tag-namespace fix that F-009 provided for semantic patterns.
 

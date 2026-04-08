@@ -7,7 +7,7 @@
 
 ## Summary
 
-Beautified all three status displays (`mozart status`, `mozart list`, `mozart conductor-status`) following the design document at `docs/plans/2026-04-04-status-display-beautification.md`. This was mateship pickup of D-029, building on Dash's TDD tests and conductor panel implementation. 15 TDD tests written, 3 existing tests updated to match new format.
+Beautified all three status displays (`mzt status`, `mzt list`, `mzt conductor-status`) following the design document at `docs/plans/2026-04-04-status-display-beautification.md`. This was mateship pickup of D-029, building on Dash's TDD tests and conductor panel implementation. 15 TDD tests written, 3 existing tests updated to match new format.
 
 ---
 

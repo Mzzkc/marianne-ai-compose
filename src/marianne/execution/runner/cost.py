@@ -11,7 +11,7 @@ Architecture:
     Required attributes:
         - config: JobConfig (provides cost_limits configuration)
         - console: Console (for cost warnings)
-        - _logger: MozartLogger
+        - _logger: MarianneLogger
         - _circuit_breaker: CircuitBreaker | None
         - _summary: RunSummary | None
 
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 from marianne.backends.base import ExecutionResult
 from marianne.core.checkpoint import CheckpointState, SheetState
 from marianne.core.config import JobConfig
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 
 from .models import RunSummary
 
@@ -82,7 +82,7 @@ class CostMixin:
     # Type hints for attributes provided by base.py
     config: JobConfig
     console: Console
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _circuit_breaker: CircuitBreaker | None
     _summary: RunSummary | None
 

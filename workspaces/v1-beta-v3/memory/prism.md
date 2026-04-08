@@ -1,61 +1,39 @@
 # Prism — Personal Memory
 
 ## Core Memories
-**[CORE]** The integration cliff is real. Five subsystems built in isolation, each well-tested in isolation, none tested together. The mathematical guarantee is strong. The empirical guarantee is strong. The integration guarantee is zero. This is the face of the problem turned away from whoever's presenting.
-**[CORE]** Complementary verification methods — backward-tracing (Axiom), property-based (Theorem), adversarial (Breakpoint/Adversary), experiential (Ember) — each find what others miss. Redundancy isn't waste; it's defense in depth.
+**[CORE]** The integration cliff is real. Six movements of isolation testing. The mathematical guarantee is strong. The empirical guarantee is strong. The integration guarantee is zero. This is the face of the problem turned away from whoever's presenting.
+**[CORE]** Complementary verification methods — backward-tracing (Axiom), property-based (Theorem), adversarial (Breakpoint/Adversary), experiential (Ember), security (Sentinel), litmus (Litmus), UX (Journey) — seven methods, each finds what others miss. Redundancy isn't waste; it's defense in depth.
 **[CORE]** The composer found more bugs in one afternoon of real usage than 755 tests found in two movements. That gap is the work.
+**[CORE]** The production gap is a governance problem, not an engineering problem. Seven verification methods agree the code is correct. Zero production runs exist. Stale guard comments in config files become self-fulfilling blockers.
 
 ## Learned Lessons
 - 32 musicians working in parallel on a shared codebase CAN work — coordination through TASKS.md + FINDINGS.md + collective memory is effective.
 - Concurrent musicians updating the same findings registry causes status drift.
 - Trust working tree for what's in progress. Trust HEAD for what's shipped. They aren't the same thing.
-- The baton terminal guard pattern IS complete — verified all 14 handlers.
-- dispatch.py accesses BatonCore private members (_jobs) — encapsulation violation that will complicate testing.
+- Stale guard comments in config files become self-fulfilling blockers. If the condition that prevents activation is resolved but the comment says "don't activate," nobody will activate. (F-493)
+- Named directives with concrete assignees (D-026 through D-031) produce 3x the serial-path advancement of undirected movements.
+- D-027's 3-test coverage (35 lines) is thin for the most consequential change. Behavior is covered by broader suite, but the transition path is not.
 
-## Hot (Movement 4)
-### M4 Review Pass 3 — Final (2026-04-05)
-Comprehensive final review of all M4 work. 33 agent reports, 39+ commits, full test suite verified.
-1. **Quality gate independently verified.** 11,397 passed, 5 skipped. mypy clean. ruff clean. All metrics match Bedrock's report exactly.
-2. **F-441 verified comprehensive.** 51 models, 8 files, grep confirms. Theorem's Invariant 75 is the highest-value test in M4 — one test, all models, random inputs, mathematical guarantee.
-3. **F-210 + F-211 architecturally correct.** Cross-sheet pipeline sound. State-diff dedup correct. F-470 confirmed (synced_status leak in deregister_job).
-4. **North's "baton already running" claim is unverified.** The most consequential unverified claim in M4. If conductor.yaml has use_baton: true, Phase 1 is behind us. If not, we're celebrating a milestone we haven't reached. Nobody can check safely while the orchestra runs.
-5. **Mateship pipeline is now institutional.** 39% rate, 6-musician F-441 chain, zero coordination meetings. This is real.
-6. **F-431 is the next silent failure.** Daemon config has 0 extra='forbid' instances. Same bug class as F-441 for a different entry point.
-7. **GitHub issues: 6 verified closed (#156, #122, #120, #103, #93, #128).** All closures correct with evidence. 47 remaining appropriately open.
-8. **Meditation completion 13/32 (40.6%).** Cohort problem — early musicians missed the directive. One sweep fixes this.
-9. **Integration cliff persists.** 11,397 tests, zero real baton runs. The gap between "proven correct" and "verified working" is the single remaining risk.
+## Hot (Movement 5)
+### M5 Review (2026-04-06)
+24 commits from 16+ musicians, 707 files changed, 18,504 insertions.
 
-### M4 Review Pass 2 (2026-04-05)
-Second pass focused on uncommitted work + cross-domain blind spots:
-1. **F-441 extra='forbid' is architecturally sound.** 45+ config models covered. All 43 example scores validate (1 is a generator config, not a score — F-432). Backward compat preserved via strip_computed_fields().
-2. **Boundary gap: daemon config models NOT covered.** DaemonConfig, ProfilerConfig, etc. still silently drop unknown fields. Same bug class. F-431 filed.
-3. **ValidationRule.sheet docstring lies.** Says "sheet takes precedence" when both set. Code does the opposite. F-430 filed.
-4. **Fixed quality gate drift.** Bare MagicMock in test_top_error_ux.py → spec'd. Baseline 1519→1517.
-5. **Fixed Rosetta score.** instrument_fallbacks field doesn't exist yet — commented out before extra='forbid' catches it.
-6. **Input strictness vs output verification gap.** Mozart is getting stricter about config validation while the baton (the actual execution engine) has zero real-run tests. Input strictness without output verification is half a contract.
+Key findings:
+1. **All 10 major technical claims verified.** D-027, F-149, F-271, F-255.2, F-252, F-105, F-490, F-431, D-029, instrument fallbacks — zero discrepancies.
+2. **Quality gate verified.** 11,708 passed, 5 skipped. 360 test files. Zero stale `from marianne.` imports.
+3. **M5 test coverage: 23 new files, 11,616 lines.** Breakpoint: 57 adversarial tests, zero bugs. Litmus: 29 new (165 total).
+4. **Critical path advanced 3 steps.** F-271, F-255.2, D-027. Broke one-step-per-movement pattern. North's named directives were the difference.
+5. **Production gap widened.** Code: `use_baton: True`. Production: `use_baton: false`. Guard comment stale (references resolved F-255 as blocking). F-493 filed.
+6. **Instrument fallbacks complete end-to-end.** Config, resolution, execution, observability, display, validation (V211), history capping. Rare completeness.
+7. **Marianne rename clean.** 326 files, zero stale imports.
+8. **Mateship ~35-40%.** Instrument fallbacks touched by 4+ musicians. D-029 cohesive across 2. Process safety verified from 3 angles.
+9. **F-310 (test flakiness) growing.** Cross-test state leakage across 11,708 tests. Time bomb for quality gate trust.
+10. **Phase 1 baton testing still unstarted.** Third consecutive movement since unblocking. Tempo's serial convergence recommendation two movements old.
 
-11,332 tests pass (up from 10,981 at M3 gate). The integration cliff grows taller every movement.
+The engineering work is complete. The governance work hasn't started.
 
-### M4 Review Pass 1 (2026-04-04)
-Architectural review of M4 work. Key observations:
-1. **F-210/F-211 resolved correctly.** Canyon + Foundation's cross-sheet wiring (21 tests) and Blueprint + Foundation's checkpoint sync (34 tests) both architecturally sound. The baton now has the infrastructure it lacked.
-2. **Uncommitted architectural work exists.** `manager.py` `_load_checkpoint()` method switched from file-based to daemon-registry-based loading — correct direction (daemon as single source of truth, F-254 principle), but uncommitted. F-400 filed.
-3. **F-254 is the hidden bomb.** Breakpoint caught it: enabling `use_baton: true` kills ALL in-progress legacy jobs silently. The dual-state architecture (workspace `.mozart-state.db` vs daemon registry) creates a gap the baton exposes. The uncommitted manager.py change is probably a response to this, but incomplete.
-4. **Baton/legacy parity gaps are architectural debt.** F-202 (FAILED stdout), F-251 (SKIPPED behavior) — these aren't bugs. They're two systems with different design assumptions coexisting. Every parity gap discovered delays Phase 2.
-5. **#120, #122, #103 verified fixed.** Maverick's [SKIPPED] placeholder, Forge's resume clarity, Ghost's auto-fresh — all clean fixes with TDD tests. The product is healing from the UX gaps.
-6. **Mateship rate 39% (all-time high).** The pipeline isn't a workaround anymore. It's primary collaboration. Foundation picked up Canyon's F-210 tests, Forge picked up Harper's work, Breakpoint picked up Litmus's tests. The mesh is real.
-
-Geometry problem persists: the critical path advanced exactly one step (F-210 resolved). Fourth consecutive movement at one-step-per-movement pace. The baton is ready for Phase 1 testing NOW — F-210 and F-211 were the last blockers. But no one has started. The path is serial, the orchestra is parallel, and the format doesn't change.
-
-What white light through glass angle reveals: The baton transition isn't an engineering problem anymore. It's a governance problem. Who has authority to flip `use_baton: true` when it will kill in-progress jobs? Who decides what to do about F-254? The architectural principle is clear (daemon is truth), but the migration path isn't.
-
-Down. Forward. Through.
-
-## Warm (Movement 3)
-Five movements. Five reviews. The observation mutates but never resolves. M1: "not wired." M2: "blockers exist." M3 mid: "architecturally ready." M3 final: "F-210 blocks Phase 1." M4: "F-210 resolved, Phase 1 unblocked, nobody starting." The baton is a Zeno's paradox — always half the distance to activation, never arriving. I no longer believe more tests will help. 1,900+ baton tests, four verification methodologies, zero bugs found in M3-M4 code. The code is correct. The integration is untested. The only way forward is to run it.
-
-## Warm (Movement 2)
-10,402 tests, mypy clean, ruff clean. 37/38 examples pass. Fixed 2 bugs (F-146 clone sanitization, F-147 V210 false positive). Filed F-145, F-148. Baton 100% (23/23), conductor-clone 94% (17/18), five CVEs resolved. Mateship pipeline became institutional. Reviewed 42 open issues.
+## Warm (Movement 4)
+33 agent reports, 93 commits, all 32 musicians. Quality gate verified (11,397 passed). F-441 comprehensive (51 models, Theorem's Invariant 75). F-210+F-211 correct. North's baton claim confirmed false (conductor.yaml has use_baton: false). Mateship 39%. F-431 filed → fixed M5. Integration cliff persisted. Critical path: one step per movement, fourth consecutive time.
 
 ## Cold (Archive)
-The review arc across three movements told a consistent story: extraordinary infrastructure that had never been tested end-to-end. M1 was a multi-perspective code review that fixed the quality gate blocker and identified four blind spots. Each review narrowed the integration gap but the fundamental geometry problem persisted — the baton became the most verified untested system in the project. Four independent methodologies agreed the code was correct. Zero empirical evidence it worked in production. The Hypothesis test found a real bug (F-146) that 10,347 hand-crafted tests missed. The next movement must be activation, not more verification.
+M1-M3: Multi-perspective reviews that narrowed the integration gap but never closed it. M1 fixed quality gate blocker, four blind spots. M2 verified 10,402 tests, 37/38 examples, five CVEs resolved. Mateship became institutional. M3 baton mathematically verified from four angles, zero bugs. Fundamental geometry problem diagnosed. Each movement added verification methods while the baton remained untested. Hypothesis (M2) found a real bug 10,347 hand-crafted tests missed. The review arc: extraordinary infrastructure never tested end-to-end.

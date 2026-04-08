@@ -1,4 +1,4 @@
-"""Tests for Mozart Dashboard API."""
+"""Tests for Marianne Dashboard API."""
 
 import tempfile
 from datetime import UTC, datetime
@@ -131,7 +131,7 @@ class TestHealthCheck:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["service"] == "mozart-dashboard"
+        assert data["service"] == "marianne-dashboard"
         assert "version" in data
 
     def test_health_check_includes_version(self, app: TestClient) -> None:
@@ -390,7 +390,7 @@ class TestOpenAPI:
         response = app.get("/openapi.json")
         assert response.status_code == 200
         schema = response.json()
-        assert schema["info"]["title"] == "Mozart Dashboard"
+        assert schema["info"]["title"] == "Marianne Dashboard"
         assert "paths" in schema
 
     def test_docs_accessible(self, app: TestClient) -> None:
@@ -412,7 +412,7 @@ class TestAppFactory:
         """App can be created with explicit backend."""
         app = create_app(state_backend=state_backend)
         assert app is not None
-        assert app.title == "Mozart Dashboard"
+        assert app.title == "Marianne Dashboard"
 
     def test_create_app_with_state_dir(self, temp_state_dir: Path) -> None:
         """App can be created with state directory."""

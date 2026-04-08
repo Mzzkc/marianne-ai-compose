@@ -16,7 +16,7 @@ collected rate limit data will inform cross-job scheduling decisions.
 
 When any job hits a rate limit, ALL jobs using that backend are notified
 to back off.  Much faster than the SQLite cross-process approach in
-``mozart.learning.store.rate_limits`` since everything is in-process.
+``marianne.learning.store.rate_limits`` since everything is in-process.
 
 Satisfies the ``RateLimitChecker`` protocol defined in ``scheduler.py``
 so the ``GlobalSheetScheduler`` can query limits before dispatching.

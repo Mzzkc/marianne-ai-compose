@@ -1,4 +1,4 @@
-"""Tests for the ExecutionMixin in mozart.learning.store.executions.
+"""Tests for the ExecutionMixin in marianne.learning.store.executions.
 
 Tests the execution recording, querying, statistics, similarity matching,
 workspace clustering, and helper methods provided by the ExecutionMixin.

@@ -75,7 +75,7 @@ class JobControlService:
         self._daemon_client = DaemonClient(_resolve_socket_path(None))
 
     async def is_daemon_available(self) -> bool:
-        """Check if the Mozart conductor is running and reachable."""
+        """Check if the Marianne conductor is running and reachable."""
         try:
             return await self._daemon_client.is_daemon_running()
         except (ConnectionRefusedError, FileNotFoundError, OSError):
@@ -93,7 +93,7 @@ class JobControlService:
         start_sheet: int = 1,
         self_healing: bool = False,
     ) -> JobStartResult:
-        """Start a new Mozart job execution.
+        """Start a new Marianne job execution.
 
         Tries the daemon first if available, then falls back to subprocess.
 
@@ -417,7 +417,7 @@ class JobControlService:
         # Create pause signal file in job's workspace
         try:
             workspace_path = self._get_job_workspace(state)
-            pause_signal_file = workspace_path / f".mozart-pause-{job_id}"
+            pause_signal_file = workspace_path / f".marianne-pause-{job_id}"
 
             # Create the pause signal file
             pause_signal_file.touch()
@@ -495,7 +495,7 @@ class JobControlService:
         try:
             # Clean up pause signal files (non-blocking - failure shouldn't block resume)
             workspace_path = self._get_job_workspace(state)
-            pause_signal_file = workspace_path / f".mozart-pause-{job_id}"
+            pause_signal_file = workspace_path / f".marianne-pause-{job_id}"
             signal_cleaned = False
             if pause_signal_file.exists():
                 try:
@@ -526,7 +526,7 @@ class JobControlService:
         except ProcessLookupError:
             # Process is dead - clean up signals and attempt restart
             workspace_path = self._get_job_workspace(state)
-            pause_signal_file = workspace_path / f".mozart-pause-{job_id}"
+            pause_signal_file = workspace_path / f".marianne-pause-{job_id}"
             if pause_signal_file.exists():
                 try:
                     pause_signal_file.unlink()
@@ -641,7 +641,7 @@ class JobControlService:
         # Clean up any pause signal files
         try:
             workspace_path = self._get_job_workspace(state)
-            pause_signal_file = workspace_path / f".mozart-pause-{job_id}"
+            pause_signal_file = workspace_path / f".marianne-pause-{job_id}"
             if pause_signal_file.exists():
                 pause_signal_file.unlink()
         except OSError:
@@ -855,7 +855,7 @@ class JobControlService:
         """Detect and recover jobs in zombie state.
 
         Scans all tracked jobs, detects zombie states using CheckpointState.is_zombie(),
-        and marks them for recovery. This integrates with Mozart's built-in zombie
+        and marks them for recovery. This integrates with Marianne's built-in zombie
         detection system.
 
         Returns:
@@ -910,14 +910,14 @@ class JobControlService:
         try:
             # Clean up any pause signal files before restart
             workspace_path = self._get_job_workspace(state)
-            pause_signal_file = workspace_path / f".mozart-pause-{job_id}"
+            pause_signal_file = workspace_path / f".marianne-pause-{job_id}"
             if pause_signal_file.exists():
                 try:
                     pause_signal_file.unlink()
                 except OSError:
                     logger.debug("Failed to clean pause signal on restart", exc_info=True)
 
-            # Use mozart resume command with parameterized arguments
+            # Use mzt resume command with parameterized arguments
             cmd_args = [sys.executable, "-m", "marianne.cli", "resume", job_id]
 
             # Add workspace if available in state

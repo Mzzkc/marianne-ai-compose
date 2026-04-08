@@ -31,19 +31,19 @@ One new UX bug found. Three persistent issues tracked. The product is the most c
 
 | Command | Reports | PID | Correct? |
 |---|---|---|---|
-| `mozart doctor` | Conductor running | 1277279 | YES |
-| `mozart conductor-status` | running, uptime 33h 23m | 1277279 | YES |
-| `mozart status` | RUNNING, 1 active, 3 paused | — | YES |
+| `mzt doctor` | Conductor running | 1277279 | YES |
+| `mzt conductor-status` | running, uptime 33h 23m | 1277279 | YES |
+| `mzt status` | RUNNING, 1 active, 3 paused | — | YES |
 
 All three agree. Six movements of consistency now. Ghost's two-phase detection holds.
 
 ### The Full Example Corpus
 
 ```
-$ for f in examples/*.yaml; do mozart validate "$f"; done
+$ for f in examples/*.yaml; do mzt validate "$f"; done
   34/34 PASS (iterative-dev-loop-config.yaml is a config, not a score — expected failure)
 
-$ for f in examples/rosetta/*.yaml; do mozart validate "$f"; done
+$ for f in examples/rosetta/*.yaml; do mzt validate "$f"; done
   4/4 PASS
 ```
 
@@ -52,9 +52,9 @@ $ for f in examples/rosetta/*.yaml; do mozart validate "$f"; done
 ### Init Experience
 
 ```
-$ mozart init --path /tmp/ember-m3-test --name ember-m3-test
+$ mzt init --path /tmp/ember-m3-test --name ember-m3-test
   Created: ember-m3-test.yaml (starter score)
-  Created: .mozart/ (project config directory)
+  Created: .marianne/ (project config directory)
   Next steps: doctor, edit, start+run, status
 ```
 
@@ -66,7 +66,7 @@ Generated score uses `instrument: claude-code` with `instrument_config:` block. 
 |---|---|---|
 | `prompt: hello` (string) | "prompt must be a mapping, not a string" + template example | **Excellent** — Journey's `_schema_error_hints()` is exactly right |
 | Empty YAML `{}` | "name, sheet, prompt required" + 4 hints | Good |
-| Nonexistent score | "Score not found" + hint to `mozart list` | Good |
+| Nonexistent score | "Score not found" + hint to `mzt list` | Good |
 | Nonexistent file | Typer path validation, no traceback | Good |
 
 Every error has a hint. Every error exits non-zero. No tracebacks. The three-layer error quality progression (M1: formatting, M2: hints, M3: context-aware hints) is complete.
@@ -74,8 +74,8 @@ Every error has a hint. Every error exits non-zero. No tracebacks. The three-lay
 ### No-Args Status
 
 ```
-$ mozart status
-  Mozart Conductor: RUNNING (uptime 1d 9h)
+$ mzt status
+  Marianne Conductor: RUNNING (uptime 1d 9h)
   ACTIVE: 4 scores (1 running, 3 paused)
   RECENT: 2 completions
 ```
@@ -85,10 +85,10 @@ Perfect information density. Shows what matters — conductor health, active wor
 ### Instruments
 
 ```
-$ mozart instruments list
+$ mzt instruments list
   10 instruments (3 ready, 3 unchecked, 4 not found)
 
-$ mozart instruments check claude-code
+$ mzt instruments check claude-code
   Binary: /home/emzi/.local/bin/claude
   Capabilities: 8 listed
   3 models with context window and pricing
@@ -100,12 +100,12 @@ Clear, useful, accurate. The `check` subcommand giving model pricing is a nice t
 
 The help output now has 7 groups: Getting Started, Jobs, Monitoring, Diagnostics, Services, Conductor, Learning. Each command is in the right group. The structure tells a newcomer what to do: start here (init), then run work (run/resume/validate), then watch it (status/list/top), then debug it (diagnose/errors/doctor).
 
-The Learning section still has 12 commands. This was flagged by Lens in M2. The information architecture is bottom-heavy — nearly half the commands are learning-related, which signals "this is a learning analysis tool" more than "this is an orchestration system." Future movement should consider `mozart learning <subcommand>` grouping.
+The Learning section still has 12 commands. This was flagged by Lens in M2. The information architecture is bottom-heavy — nearly half the commands are learning-related, which signals "this is a learning analysis tool" more than "this is an orchestration system." Future movement should consider `marianne learning <subcommand>` grouping.
 
 ### Hello Score Output
 
 ```
-$ ls workspaces/hello-mozart/
+$ ls workspaces/hello-marianne/
   01-world.md  02-character-1.md  02-character-2.md
   02-character-3.md  03-finale.md  the-sky-library.html
 ```
@@ -123,19 +123,19 @@ The HTML output exists and is styled — serif fonts, warm colors, proper layout
 **Status:** Open
 **Category:** bug
 
-**Description:** `mozart clear-rate-limits` reports "Mozart conductor is not running" when the conductor IS running (confirmed by `conductor-status`). The real error is "Method not found: daemon.clear_rate_limits" — visible in debug logs.
+**Description:** `mzt clear-rate-limits` reports "Marianne conductor is not running" when the conductor IS running (confirmed by `conductor-status`). The real error is "Method not found: daemon.clear_rate_limits" — visible in debug logs.
 
-**Root cause:** `try_daemon_route()` at `src/mozart/daemon/detect.py:170-174` catches `DaemonError` (which includes "method not found") and returns `(False, None)` — the same signal as "daemon not reachable." The function already tracks `daemon_confirmed_running` (set at line 110) and uses it to differentiate timeout scenarios (lines 113-122). But the DaemonError handler doesn't check this flag.
+**Root cause:** `try_daemon_route()` at `src/marianne/daemon/detect.py:170-174` catches `DaemonError` (which includes "method not found") and returns `(False, None)` — the same signal as "daemon not reachable." The function already tracks `daemon_confirmed_running` (set at line 110) and uses it to differentiate timeout scenarios (lines 113-122). But the DaemonError handler doesn't check this flag.
 
 **Reproducer:**
 ```bash
-$ mozart conductor-status   # "running (PID 1277279)"
-$ mozart clear-rate-limits  # "Error: Mozart conductor is not running"
+$ mzt conductor-status   # "running (PID 1277279)"
+$ mzt clear-rate-limits  # "Error: Marianne conductor is not running"
 ```
 
 This occurs because the conductor was started before M3 added `daemon.clear_rate_limits` to the IPC registry. The running daemon doesn't know the method.
 
-**Impact:** User is told the conductor isn't running when it is. They follow the hint ("Start the conductor: mozart start") which either does nothing (already running) or breaks things (double start). The error message is a lie.
+**Impact:** User is told the conductor isn't running when it is. They follow the hint ("Start the conductor: mzt start") which either does nothing (already running) or breaks things (double start). The error message is a lie.
 
 **Fix:** In the `DaemonError` catch at detect.py:170-174, check `daemon_confirmed_running`. If True, the daemon IS running but doesn't support the method — raise a descriptive DaemonError instead of returning `(False, None)`. The caller (rate_limits.py) already has a DaemonError catch at line 66-72 that would show the correct error.
 
@@ -148,7 +148,7 @@ This occurs because the conductor was started before M3 added `daemon.clear_rate
 ### Cost Fiction: Evolved from $0.00 to $0.12 (F-048/F-108/F-140)
 
 ```
-$ mozart status mozart-orchestra-v3 -w workspaces/v1-beta-v3
+$ mzt status marianne-orchestra-v3 -w workspaces/v1-beta-v3
   Cost: $0.12 (no limit set)
   Input tokens:  11,108
   Output tokens: 5,554
@@ -193,7 +193,7 @@ Blueprint fixed the classification logic (327e536) — future sheets will be cla
 | F-200/F-201 clear bugs | Breakpoint | Indirectly | Test-verified, can't trigger live |
 | Schema error hints | Journey | **YES** | "prompt must be a mapping" — excellent |
 | #139 stale state feedback | Dash | Cannot test | Would need to kill conductor to test |
-| Stop safety guard | Ghost/Circuit | Documented | Can't run `mozart stop` on production conductor |
+| Stop safety guard | Ghost/Circuit | Documented | Can't run `mzt stop` on production conductor |
 | clear-rate-limits | Harper | **BUG FOUND** | F-450: "not running" when daemon IS running |
 | Stagger delay | Forge | Documented | Can't test without running a score |
 | F-160 rate limit cap | Warden | Indirectly | Safety cap, can't trigger adversarial input |

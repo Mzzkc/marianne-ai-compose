@@ -17,7 +17,7 @@ from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import Any, Protocol
 
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 from marianne.learning.store.base import WhereBuilder
 from marianne.learning.store.models import (
     PatternDiscoveryEvent,
@@ -35,7 +35,7 @@ class PatternQueryProtocol(Protocol):
     these methods will exist at runtime through mixin composition.
     """
 
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
 
     def get_patterns(
@@ -66,7 +66,7 @@ class PatternQueryMixin:
     - _get_connection(): Context manager yielding sqlite3.Connection
     """
 
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
 
     def get_patterns(

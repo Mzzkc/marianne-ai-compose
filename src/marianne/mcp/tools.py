@@ -1,6 +1,6 @@
-"""Mozart MCP Tools - Tool implementations for Mozart job management.
+"""Marianne MCP Tools - Tool implementations for Marianne job management.
 
-This module implements MCP tools that expose Mozart's job management capabilities
+This module implements MCP tools that expose Marianne's job management capabilities
 to external AI agents. Tools are organized by category:
 
 - JobTools: Job lifecycle management (list, get, start)
@@ -36,9 +36,9 @@ def _make_error_response(error: Exception) -> dict[str, Any]:
 
 
 class JobTools:
-    """Mozart job lifecycle management tools.
+    """Marianne job lifecycle management tools.
 
-    Provides MCP tools for running, monitoring, and querying Mozart jobs.
+    Provides MCP tools for running, monitoring, and querying Marianne jobs.
     Tools require explicit user consent due to file system and process execution.
 
     Routes through the conductor when available, falling back to
@@ -56,7 +56,7 @@ class JobTools:
         return [
             {
                 "name": "list_jobs",
-                "description": "List all Mozart jobs with their current status",
+                "description": "List all Marianne jobs with their current status",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -81,13 +81,13 @@ class JobTools:
             },
             {
                 "name": "get_job",
-                "description": "Get detailed information about a specific Mozart job",
+                "description": "Get detailed information about a specific Marianne job",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "job_id": {
                             "type": "string",
-                            "description": "Mozart job ID to retrieve"
+                            "description": "Marianne job ID to retrieve"
                         }
                     },
                     "required": ["job_id"]
@@ -95,13 +95,13 @@ class JobTools:
             },
             {
                 "name": "start_job",
-                "description": "Start a new Mozart job from a configuration file",
+                "description": "Start a new Marianne job from a configuration file",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "config_path": {
                             "type": "string",
-                            "description": "Path to the Mozart job configuration file (.yaml)"
+                            "description": "Path to the Marianne job configuration file (.yaml)"
                         },
                         "workspace": {
                             "type": "string",
@@ -164,7 +164,7 @@ class JobTools:
                 # Apply limit
                 jobs = jobs[:limit]
 
-                result = "Mozart MCP Job Listing (via daemon)\n"
+                result = "Marianne MCP Job Listing (via daemon)\n"
                 result += "=" * 40 + "\n\n"
 
                 if not jobs:
@@ -189,18 +189,18 @@ class JobTools:
             logger.warning("daemon_list_jobs_failed", exc_info=True)
 
         # Fallback: daemon not available
-        result = "Mozart MCP Job Listing\n"
+        result = "Marianne MCP Job Listing\n"
         result += "=" * 40 + "\n\n"
 
         if status_filter:
             result += f"Filter: {status_filter}\n"
         result += f"Limit: {limit}\n\n"
 
-        result += "Note: Full job listing requires the Mozart conductor.\n"
+        result += "Note: Full job listing requires the Marianne conductor.\n"
         result += "Start the conductor for comprehensive job tracking:\n"
-        result += "  mozart start\n\n"
+        result += "  mzt start\n\n"
         result += "Without conductor, use get_job with a specific job ID,\n"
-        result += "or the Mozart CLI: mozart list [--status running]\n"
+        result += "or the Marianne CLI: mzt list [--status running]\n"
 
         return {
             "content": [{"type": "text", "text": result}]
@@ -219,7 +219,7 @@ class JobTools:
         health = await self.job_control.verify_process_health(job_id)
 
         # Format detailed job information
-        result = f"Mozart Job Details: {job_id}\n"
+        result = f"Marianne Job Details: {job_id}\n"
         result += "=" * (23 + len(job_id)) + "\n\n"
 
         # Basic job information
@@ -267,7 +267,7 @@ class JobTools:
         }
 
     async def _start_job(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Start a new Mozart job."""
+        """Start a new Marianne job."""
         config_path = Path(args["config_path"])
         workspace = Path(args["workspace"]) if args.get("workspace") else None
         start_sheet = args.get("start_sheet", 1)
@@ -286,7 +286,7 @@ class JobTools:
             )
 
             via = "daemon" if result.via_daemon else "subprocess"
-            response_text = "✓ Mozart job started successfully!\n\n"
+            response_text = "✓ Marianne job started successfully!\n\n"
             response_text += f"Job ID: {result.job_id}\n"
             response_text += f"Job Name: {result.job_name}\n"
             response_text += f"Status: {result.status}\n"
@@ -319,9 +319,9 @@ class JobTools:
 
 
 class ControlTools:
-    """Mozart job control tools.
+    """Marianne job control tools.
 
-    Provides MCP tools for controlling running Mozart jobs (pause, resume, cancel).
+    Provides MCP tools for controlling running Marianne jobs (pause, resume, cancel).
     These tools interact with job processes and require user consent.
 
     Routes through the conductor when available via JobControlService,
@@ -337,13 +337,13 @@ class ControlTools:
         return [
             {
                 "name": "pause_job",
-                "description": "Pause a running Mozart job gracefully at sheet boundary",
+                "description": "Pause a running Marianne job gracefully at sheet boundary",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "job_id": {
                             "type": "string",
-                            "description": "Mozart job ID to pause"
+                            "description": "Marianne job ID to pause"
                         }
                     },
                     "required": ["job_id"]
@@ -351,13 +351,13 @@ class ControlTools:
             },
             {
                 "name": "resume_job",
-                "description": "Resume a paused Mozart job",
+                "description": "Resume a paused Marianne job",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "job_id": {
                             "type": "string",
-                            "description": "Mozart job ID to resume"
+                            "description": "Marianne job ID to resume"
                         }
                     },
                     "required": ["job_id"]
@@ -365,13 +365,13 @@ class ControlTools:
             },
             {
                 "name": "cancel_job",
-                "description": "Cancel a running Mozart job permanently",
+                "description": "Cancel a running Marianne job permanently",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "job_id": {
                             "type": "string",
-                            "description": "Mozart job ID to cancel"
+                            "description": "Marianne job ID to cancel"
                         }
                     },
                     "required": ["job_id"]
@@ -483,8 +483,8 @@ class ControlTools:
 # Artifact tool schemas — extracted from ArtifactTools.list_tools() for readability.
 # Each constant defines the MCP tool specification (name, description, inputSchema).
 _ARTIFACT_LIST_SCHEMA: dict[str, Any] = {
-    "name": "mozart_artifact_list",
-    "description": "List files in a Mozart workspace",
+    "name": "marianne_artifact_list",
+    "description": "List files in a Marianne workspace",
     "inputSchema": {
         "type": "object",
         "properties": {
@@ -508,7 +508,7 @@ _ARTIFACT_LIST_SCHEMA: dict[str, Any] = {
 }
 
 _ARTIFACT_READ_SCHEMA: dict[str, Any] = {
-    "name": "mozart_artifact_read",
+    "name": "marianne_artifact_read",
     "description": "Read content of a file in the workspace",
     "inputSchema": {
         "type": "object",
@@ -538,14 +538,14 @@ _ARTIFACT_READ_SCHEMA: dict[str, Any] = {
 }
 
 _ARTIFACT_GET_LOGS_SCHEMA: dict[str, Any] = {
-    "name": "mozart_artifact_get_logs",
-    "description": "Get logs from a Mozart job execution",
+    "name": "marianne_artifact_get_logs",
+    "description": "Get logs from a Marianne job execution",
     "inputSchema": {
         "type": "object",
         "properties": {
             "job_id": {
                 "type": "string",
-                "description": "Mozart job ID",
+                "description": "Marianne job ID",
             },
             "workspace": {
                 "type": "string",
@@ -570,14 +570,14 @@ _ARTIFACT_GET_LOGS_SCHEMA: dict[str, Any] = {
 }
 
 _ARTIFACT_LIST_ARTIFACTS_SCHEMA: dict[str, Any] = {
-    "name": "mozart_artifact_list_artifacts",
-    "description": "List all artifacts created by a Mozart job",
+    "name": "marianne_artifact_list_artifacts",
+    "description": "List all artifacts created by a Marianne job",
     "inputSchema": {
         "type": "object",
         "properties": {
             "job_id": {
                 "type": "string",
-                "description": "Mozart job ID",
+                "description": "Marianne job ID",
             },
             "workspace": {
                 "type": "string",
@@ -600,14 +600,14 @@ _ARTIFACT_LIST_ARTIFACTS_SCHEMA: dict[str, Any] = {
 }
 
 _ARTIFACT_GET_ARTIFACT_SCHEMA: dict[str, Any] = {
-    "name": "mozart_artifact_get_artifact",
-    "description": "Get a specific artifact from a Mozart job",
+    "name": "marianne_artifact_get_artifact",
+    "description": "Get a specific artifact from a Marianne job",
     "inputSchema": {
         "type": "object",
         "properties": {
             "job_id": {
                 "type": "string",
-                "description": "Mozart job ID",
+                "description": "Marianne job ID",
             },
             "artifact_path": {
                 "type": "string",
@@ -638,7 +638,7 @@ _ARTIFACT_TOOL_SCHEMAS: list[dict[str, Any]] = [
 
 
 class ArtifactTools:
-    """Mozart artifact and workspace management tools.
+    """Marianne artifact and workspace management tools.
 
     Provides MCP tools for browsing workspace files and accessing job artifacts.
     File system access is restricted to designated workspace directories.
@@ -662,11 +662,11 @@ class ArtifactTools:
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute an artifact management tool."""
         dispatch = {
-            "mozart_artifact_list": self._list_files,
-            "mozart_artifact_read": self._read_file,
-            "mozart_artifact_get_logs": self._get_logs,
-            "mozart_artifact_list_artifacts": self._list_artifacts,
-            "mozart_artifact_get_artifact": self._get_artifact,
+            "marianne_artifact_list": self._list_files,
+            "marianne_artifact_read": self._read_file,
+            "marianne_artifact_get_logs": self._get_logs,
+            "marianne_artifact_list_artifacts": self._list_artifacts,
+            "marianne_artifact_get_artifact": self._get_artifact,
         }
         handler = dispatch.get(name)
         if handler is None:
@@ -808,7 +808,7 @@ class ArtifactTools:
         }
 
     async def _get_logs(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get logs from a Mozart job execution."""
+        """Get logs from a Marianne job execution."""
         job_id = args["job_id"]
         workspace = args.get("workspace")
         lines = args.get("lines", 100)
@@ -823,15 +823,15 @@ class ArtifactTools:
         # Look for log files in common locations
         log_files = []
 
-        # Primary log file (Mozart typically uses job-name.log)
+        # Primary log file (Marianne typically uses job-name.log)
         primary_log = workspace_path / f"{job_id}.log"
         if primary_log.exists():
             log_files.append(("Primary", primary_log))
 
-        # Mozart.log (general log)
-        mozart_log = workspace_path / "mozart.log"
-        if mozart_log.exists():
-            log_files.append(("Mozart", mozart_log))
+        # Marianne.log (general log)
+        marianne_log = workspace_path / "marianne.log"
+        if marianne_log.exists():
+            log_files.append(("Marianne", marianne_log))
 
         # Output logs from runner
         runner_log = workspace_path / "runner.log"
@@ -850,7 +850,7 @@ class ArtifactTools:
             )
 
         parts = [
-            f"📋 Logs for Mozart Job: {job_id}\n",
+            f"📋 Logs for Marianne Job: {job_id}\n",
             f"Workspace: {workspace_path}\n",
             f"Lines requested: {lines}, Level filter: {level}\n",
             "=" * 60 + "\n\n",
@@ -904,7 +904,7 @@ class ArtifactTools:
         }
 
     async def _list_artifacts(self, args: dict[str, Any]) -> dict[str, Any]:
-        """List all artifacts created by a Mozart job."""
+        """List all artifacts created by a Marianne job."""
         job_id = args["job_id"]
         workspace = args.get("workspace")
         sheet_filter = args.get("sheet_filter")
@@ -922,7 +922,7 @@ class ArtifactTools:
         # Security: Ensure workspace is within allowed root
         workspace_path, _ = self._validate_workspace_path(workspace_path, workspace_path)
 
-        result = f"🎯 Artifacts for Mozart Job: {job_id}\n"
+        result = f"🎯 Artifacts for Marianne Job: {job_id}\n"
         result += f"Workspace: {workspace_path}\n"
         if sheet_filter:
             result += f"Sheet filter: {sheet_filter}\n"
@@ -995,7 +995,7 @@ class ArtifactTools:
         }
 
     async def _get_artifact(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get a specific artifact from a Mozart job."""
+        """Get a specific artifact from a Marianne job."""
         job_id = args["job_id"]
         artifact_path = args["artifact_path"]
         workspace = args.get("workspace")
@@ -1029,7 +1029,7 @@ class ArtifactTools:
         modified = datetime.fromtimestamp(stat.st_mtime)
         created = datetime.fromtimestamp(stat.st_ctime)
 
-        result = f"🎯 Mozart Job Artifact: {job_id}\n"
+        result = f"🎯 Marianne Job Artifact: {job_id}\n"
         result += f"Artifact: {artifact_path}\n"
         result += f"Size: {self._format_size(file_size)}\n"
         result += f"Modified: {modified.strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -1085,10 +1085,10 @@ class ArtifactTools:
         ]
 
         for ws in possible_workspaces:
-            # Look for state files or other Mozart artifacts
+            # Look for state files or other Marianne artifacts
             if (ws / f"{job_id}.json").exists():
                 return str(ws)
-            if (ws / "mozart.log").exists():
+            if (ws / "marianne.log").exists():
                 return str(ws)
             if any(ws.glob("*.json")):  # Any state file
                 return str(ws)
@@ -1113,10 +1113,10 @@ class ArtifactTools:
 
 
 class ScoreTools:
-    """Mozart code quality score tools.
+    """Marianne code quality score tools.
 
     Provides MCP tools for validating and generating quality scores for code changes
-    using Mozart's AI-powered review system. Tools analyze git diffs and provide
+    using Marianne's AI-powered review system. Tools analyze git diffs and provide
     detailed feedback on code quality, test coverage, security, and documentation.
     """
 
@@ -1175,7 +1175,7 @@ class ScoreTools:
         result_text += "=" * 60 + "\n\n"
 
         result_text += "⚠️  STUB IMPLEMENTATION\n"
-        result_text += "This tool requires integration with Mozart's AIReviewer.\n"
+        result_text += "This tool requires integration with Marianne's AIReviewer.\n"
         result_text += "The validate_score tool would:\n\n"
         result_text += "1. Initialize AIReviewer with backend configuration\n"
         result_text += "2. Get git diff using GitDiffProvider\n"
@@ -1187,7 +1187,7 @@ class ScoreTools:
         result_text += "• Test Coverage (25%): New code tested, edge cases\n"
         result_text += "• Security (25%): No secrets, validation, safe error handling\n"
         result_text += "• Documentation (20%): APIs documented, complex logic explained\n\n"
-        result_text += "To enable scoring, configure AI backend in Mozart config."
+        result_text += "To enable scoring, configure AI backend in Mzt config."
 
         return {
             "content": [{"type": "text", "text": result_text}]
@@ -1220,7 +1220,7 @@ class ScoreTools:
         result_text += "=" * 60 + "\n\n"
 
         result_text += "⚠️  STUB IMPLEMENTATION\n"
-        result_text += "This tool requires integration with Mozart's AIReviewer.\n"
+        result_text += "This tool requires integration with Marianne's AIReviewer.\n"
         result_text += "The generate_score tool would:\n\n"
         result_text += "1. Initialize AIReviewer with backend configuration\n"
         result_text += "2. Get git diff using GitDiffProvider\n"
@@ -1248,7 +1248,7 @@ class ScoreTools:
         result_text += '  "summary": "High quality code with minor documentation gaps"\n'
         result_text += "}\n"
         result_text += "```\n\n"
-        result_text += "To enable scoring, configure AI backend in Mozart config."
+        result_text += "To enable scoring, configure AI backend in Mzt config."
 
         return {
             "content": [{"type": "text", "text": result_text}]

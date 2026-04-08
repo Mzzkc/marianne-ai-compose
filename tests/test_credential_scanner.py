@@ -1,4 +1,4 @@
-"""Tests for mozart.utils.credential_scanner — output credential redaction.
+"""Tests for marianne.utils.credential_scanner — output credential redaction.
 
 TDD: Tests written BEFORE implementation. The scanner detects and redacts
 API key patterns in agent output before storage in CheckpointState,

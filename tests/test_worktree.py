@@ -1,4 +1,4 @@
-"""Tests for mozart.isolation.worktree module.
+"""Tests for marianne.isolation.worktree module.
 
 These tests verify the GitWorktreeManager implementation for creating,
 managing, and cleaning up git worktrees for parallel job isolation.
@@ -90,13 +90,13 @@ class TestWorktreeInfo:
         """Test WorktreeInfo can be created with required fields."""
         info = WorktreeInfo(
             path=tmp_path / "worktree",
-            branch="mozart/test-job",
+            branch="marianne/test-job",
             commit="abc1234",
             locked=True,
             job_id="test-job",
         )
         assert info.path == tmp_path / "worktree"
-        assert info.branch == "mozart/test-job"
+        assert info.branch == "marianne/test-job"
         assert info.commit == "abc1234"
         assert info.locked is True
         assert info.job_id == "test-job"
@@ -207,7 +207,7 @@ class TestCreateWorktree:
 
         # Verify worktree was created
         assert result.worktree.path.exists()
-        assert result.worktree.branch == "mozart/test-job"
+        assert result.worktree.branch == "marianne/test-job"
         assert result.worktree.job_id == "test-job"
 
     @pytest.mark.asyncio
@@ -270,7 +270,7 @@ class TestCreateWorktree:
         """Test creation fails when branch already exists."""
         # Create a branch first
         subprocess.run(
-            ["git", "branch", "mozart/existing-job"],
+            ["git", "branch", "marianne/existing-job"],
             cwd=temp_git_repo,
             check=True,
             capture_output=True,
@@ -586,7 +586,7 @@ class TestListWorktrees:
     ) -> None:
         """Test listing worktrees when none exist (except main)."""
         # With prefix filter, should be empty
-        worktrees = await manager.list_worktrees(prefix_filter="mozart")
+        worktrees = await manager.list_worktrees(prefix_filter="marianne")
         assert len(worktrees) == 0
 
     @pytest.mark.asyncio
@@ -597,7 +597,7 @@ class TestListWorktrees:
         await manager.create_worktree(job_id="list-test-1", lock=False)
         await manager.create_worktree(job_id="list-test-2", lock=False)
 
-        worktrees = await manager.list_worktrees(prefix_filter="mozart")
+        worktrees = await manager.list_worktrees(prefix_filter="marianne")
         assert len(worktrees) == 2
 
         job_ids = {wt.job_id for wt in worktrees}
@@ -609,12 +609,12 @@ class TestListWorktrees:
         self, manager: GitWorktreeManager, temp_git_repo: Path
     ) -> None:
         """Test filtering worktrees by branch prefix."""
-        await manager.create_worktree(job_id="mozart-1", branch_prefix="mozart", lock=False)
+        await manager.create_worktree(job_id="marianne-1", branch_prefix="marianne", lock=False)
         await manager.create_worktree(job_id="other-1", branch_prefix="other", lock=False)
 
-        mozart_worktrees = await manager.list_worktrees(prefix_filter="mozart")
-        assert len(mozart_worktrees) == 1
-        assert mozart_worktrees[0].job_id == "mozart-1"
+        marianne_worktrees = await manager.list_worktrees(prefix_filter="marianne")
+        assert len(marianne_worktrees) == 1
+        assert marianne_worktrees[0].job_id == "marianne-1"
 
         other_worktrees = await manager.list_worktrees(prefix_filter="other")
         assert len(other_worktrees) == 1
@@ -639,7 +639,7 @@ class TestGetWorktreeInfo:
         info = await manager.get_worktree_info(worktree_path)
         assert info is not None
         assert info.job_id == "info-test"
-        assert info.branch == "mozart/info-test"
+        assert info.branch == "marianne/info-test"
 
     @pytest.mark.asyncio
     async def test_get_nonexistent(
@@ -690,8 +690,8 @@ class TestPruneOrphaned:
         """Test pruning respects prefix filter."""
         await manager.create_worktree(job_id="keep-1", branch_prefix="other", lock=False)
 
-        # Only prune mozart/* - should find nothing
-        orphaned = await manager.prune_orphaned(prefix_filter="mozart")
+        # Only prune marianne/* - should find nothing
+        orphaned = await manager.prune_orphaned(prefix_filter="marianne")
         assert orphaned == []
 
 
@@ -703,7 +703,7 @@ class TestExtractJobId:
 
     def test_extract_with_prefix(self, manager: GitWorktreeManager) -> None:
         """Test extracting job ID from branch with prefix."""
-        assert manager._extract_job_id("mozart/job-123") == "job-123"
+        assert manager._extract_job_id("marianne/job-123") == "job-123"
         assert manager._extract_job_id("custom/my-job") == "my-job"
 
     def test_extract_without_prefix(self, manager: GitWorktreeManager) -> None:
@@ -713,7 +713,7 @@ class TestExtractJobId:
 
     def test_extract_nested_prefix(self, manager: GitWorktreeManager) -> None:
         """Test extracting job ID from branch with nested slashes."""
-        assert manager._extract_job_id("mozart/feature/sub") == "feature/sub"
+        assert manager._extract_job_id("marianne/feature/sub") == "feature/sub"
 
 
 # --- IsolationConfig Tests ---
@@ -729,7 +729,7 @@ class TestIsolationConfig:
         config = IsolationConfig()
         assert config.enabled is False
         assert config.mode == IsolationMode.WORKTREE
-        assert config.branch_prefix == "mozart"
+        assert config.branch_prefix == "marianne"
         assert config.cleanup_on_success is True
         assert config.cleanup_on_failure is False
         assert config.fallback_on_error is True
@@ -765,7 +765,7 @@ class TestIsolationConfig:
         from marianne.core.config import IsolationConfig
 
         # Valid prefixes
-        IsolationConfig(branch_prefix="mozart")
+        IsolationConfig(branch_prefix="marianne")
         IsolationConfig(branch_prefix="my-prefix")
         IsolationConfig(branch_prefix="prefix_123")
 

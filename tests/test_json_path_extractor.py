@@ -1,4 +1,4 @@
-"""Tests for mozart.utils.json_path — lightweight JSON dot-path extractor.
+"""Tests for marianne.utils.json_path — lightweight JSON dot-path extractor.
 
 Used by the instrument plugin system to extract result text, error messages,
 and token counts from CLI instrument output (JSON/JSONL formats).

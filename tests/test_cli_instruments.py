@@ -1,8 +1,8 @@
-"""Tests for ``mozart instruments`` CLI commands.
+"""Tests for ``mzt instruments`` CLI commands.
 
 Tests cover:
-- ``mozart instruments list`` — table output, JSON output, empty state, mixed readiness
-- ``mozart instruments check <name>`` — binary found, not found, unknown instrument
+- ``mzt instruments list`` — table output, JSON output, empty state, mixed readiness
+- ``mzt instruments check <name>`` — binary found, not found, unknown instrument
 """
 
 from __future__ import annotations
@@ -68,12 +68,12 @@ def _no_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# mozart instruments list
+# mzt instruments list
 # ---------------------------------------------------------------------------
 
 
 class TestInstrumentsList:
-    """Tests for the ``mozart instruments list`` command."""
+    """Tests for the ``mzt instruments list`` command."""
 
     def test_list_shows_table_header(self) -> None:
         """Output contains the expected table columns."""
@@ -235,12 +235,12 @@ class TestInstrumentsList:
 
 
 # ---------------------------------------------------------------------------
-# mozart instruments check
+# mzt instruments check
 # ---------------------------------------------------------------------------
 
 
 class TestInstrumentsCheck:
-    """Tests for the ``mozart instruments check <name>`` command."""
+    """Tests for the ``mzt instruments check <name>`` command."""
 
     def test_check_binary_found(self) -> None:
         """Check passes when binary is found on PATH."""

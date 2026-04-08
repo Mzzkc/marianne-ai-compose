@@ -1,4 +1,4 @@
-"""Tests for Mozart JobRunner with graceful shutdown and progress tracking."""
+"""Tests for Marianne JobRunner with graceful shutdown and progress tracking."""
 
 import asyncio
 import sqlite3

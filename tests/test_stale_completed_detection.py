@@ -1,6 +1,6 @@
-"""Test that mozart run detects changed score files on re-run (#103).
+"""Test that mzt run detects changed score files on re-run (#103).
 
-Bug: When a score file is modified after a completed run, `mozart run`
+Bug: When a score file is modified after a completed run, `mzt run`
 picks up the previous run's completed state instead of starting fresh.
 The user has to know to pass `--fresh` to get a new run.
 

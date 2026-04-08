@@ -2,7 +2,7 @@
 
 Tests that the CLI surfaces rate limit time-remaining information to users:
 - In rejection messages when backpressure rejects a submission
-- In `mozart status` output when rate limits are active
+- In `mzt status` output when rate limits are active
 - In formatting helpers that translate seconds into human-readable durations
 
 Red first, then green.

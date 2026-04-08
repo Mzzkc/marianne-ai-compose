@@ -53,11 +53,11 @@ def learning_drift(
     last N applications vs the previous N applications.
 
     Examples:
-        mozart learning-drift                # Show drifting patterns
-        mozart learning-drift -t 0.15        # Lower threshold (more sensitive)
-        mozart learning-drift -w 10          # Larger comparison window
-        mozart learning-drift --summary      # Just show summary stats
-        mozart learning-drift --json         # JSON output for scripting
+        mzt learning-drift                # Show drifting patterns
+        mzt learning-drift -t 0.15        # Lower threshold (more sensitive)
+        mzt learning-drift -w 10          # Larger comparison window
+        mzt learning-drift --summary      # Just show summary stats
+        mzt learning-drift --json         # JSON output for scripting
     """
     from marianne.learning.global_store import get_global_store
 
@@ -195,10 +195,10 @@ def learning_epistemic_drift(
     effectiveness drift as a leading indicator of pattern health.
 
     Examples:
-        mozart learning-epistemic-drift            # Show patterns with belief drift
-        mozart learning-epistemic-drift -t 0.1    # Lower threshold (more sensitive)
-        mozart learning-epistemic-drift --summary # Just show summary stats
-        mozart learning-epistemic-drift --json    # JSON output for scripting
+        mzt learning-epistemic-drift            # Show patterns with belief drift
+        mzt learning-epistemic-drift -t 0.1    # Lower threshold (more sensitive)
+        mzt learning-epistemic-drift --summary # Just show summary stats
+        mzt learning-epistemic-drift --json    # JSON output for scripting
     """
     from marianne.learning.global_store import get_global_store
 

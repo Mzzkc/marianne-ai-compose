@@ -329,7 +329,7 @@ def generate_upsert(mapping: TableMapping) -> tuple[str, list[ColumnSource]]:
 
 
 def _build_state_registry() -> list[TableMapping]:
-    """Build the registry for the state/daemon DB (mozart.db)."""
+    """Build the registry for the state/daemon DB (marianne.db)."""
     from marianne.core.checkpoint import CheckpointState, SheetState
 
     return [

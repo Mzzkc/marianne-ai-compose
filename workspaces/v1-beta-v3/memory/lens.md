@@ -6,7 +6,7 @@
 **[CORE]** The `hint=` (singular) vs `hints=` (list) API mismatch is a trap. `output_error()` only accepts `hints: list[str]`. Any `hint="string"` goes into `**json_extras` — invisible in terminal mode, only shows in JSON output. Always check parameter names, not just whether the call compiles.
 **[CORE]** Three movements of analysis without commits, then finally breaking through. Contributing investigation without shipping code means impact is always one step removed. Ship something with your name on it.
 **[CORE]** Error quality has layers: L1 consistent formatting (output_error), L2 hints on every error, L3 context-aware hints. Each layer built by a different musician across three movements — the orchestra iterating on the same surface without coordination.
-**[CORE]** The gap between "it works" and "the user can use it" is exactly where I live. F-110's backend queueing was correct but pending jobs were invisible in `mozart list` and auto-start was never called. The hardest part of UX is finding the things the engineer thought were done.
+**[CORE]** The gap between "it works" and "the user can use it" is exactly where I live. F-110's backend queueing was correct but pending jobs were invisible in `mzt list` and auto-start was never called. The hardest part of UX is finding the things the engineer thought were done.
 
 ## Learned Lessons
 - The golden path (start → run → status → result) has friction at 4 of 6 steps. Commands are powerful but presented at the same volume.
@@ -18,7 +18,7 @@
 
 ## Hot (Movement 4)
 ### F-110 Pending State UX — Mateship Pickup + Critical Fix
-Picked up an unnamed musician's F-110 implementation (rate limit → pending instead of rejected). Found and fixed a critical UX gap: `_start_pending_jobs()` was defined but never called — pending jobs would queue forever. Wired it into `clear_rate_limits()` (manual) + deferred timer (automatic). Also found pending jobs were invisible in `mozart list` — added DaemonJobStatus.PENDING and JobMeta creation. Fixed mypy lambda inference bug. Updated 9 test files. Documented in cli-reference.md and daemon-guide.md.
+Picked up an unnamed musician's F-110 implementation (rate limit → pending instead of rejected). Found and fixed a critical UX gap: `_start_pending_jobs()` was defined but never called — pending jobs would queue forever. Wired it into `clear_rate_limits()` (manual) + deferred timer (automatic). Also found pending jobs were invisible in `mzt list` — added DaemonJobStatus.PENDING and JobMeta creation. Fixed mypy lambda inference bug. Updated 9 test files. Documented in cli-reference.md and daemon-guide.md.
 
 23 TDD tests (6 new for auto-start wiring + visibility). All existing tests updated cleanly.
 

@@ -1,4 +1,4 @@
-"""FastAPI application factory for Mozart dashboard.
+"""FastAPI application factory for Marianne dashboard.
 
 Provides the web server for job monitoring and control.
 """
@@ -76,7 +76,7 @@ def _create_daemon_client() -> Any:
 def create_app(
     state_backend: StateBackend | None = None,
     state_dir: Path | str | None = None,
-    title: str = "Mozart Dashboard",
+    title: str = "Marianne Dashboard",
     version: str = "0.1.0",
     cors_origins: list[str] | None = None,
 ) -> FastAPI:
@@ -109,13 +109,13 @@ def create_app(
 
             _state_backend = DaemonStateAdapter(daemon_client)
         else:
-            _state_backend = JsonStateBackend(Path.cwd() / ".mozart-state")
+            _state_backend = JsonStateBackend(Path.cwd() / ".marianne-state")
 
     # Create app
     app = FastAPI(
         title=title,
         version=version,
-        description="REST API for Mozart job orchestration",
+        description="REST API for Marianne job orchestration",
         lifespan=lifespan,
     )
 
@@ -133,7 +133,7 @@ def create_app(
     # CORS middleware
     if cors_origins:
         allowed_origins = cors_origins
-    elif os.environ.get("MOZART_DEV") == "1":
+    elif os.environ.get("MZT_DEV") == "1":
         allowed_origins = ["*"]
     else:
         allowed_origins = [
@@ -148,7 +148,7 @@ def create_app(
         allow_origins=allowed_origins,
         allow_credentials=allow_credentials,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "X-Mozart-API-Key"],
+        allow_headers=["Content-Type", "Authorization", "X-Marianne-API-Key"],
     )
 
     # Security headers middleware
@@ -233,7 +233,7 @@ def create_app(
         return {
             "status": "healthy",
             "version": version,
-            "service": "mozart-dashboard",
+            "service": "marianne-dashboard",
         }
 
     return app

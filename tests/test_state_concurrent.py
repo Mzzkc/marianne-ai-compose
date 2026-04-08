@@ -1,4 +1,4 @@
-"""Concurrent state access tests for Mozart state backends.
+"""Concurrent state access tests for Marianne state backends.
 
 Tests cover:
 - Atomic file operations (temp + rename pattern)

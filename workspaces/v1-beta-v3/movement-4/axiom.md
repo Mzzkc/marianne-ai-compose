@@ -40,7 +40,7 @@ Ran 4 empirical tests to confirm the fix works end-to-end:
 
 All 37 example scores validated against strict models:
 - **36/37 pass** (including all 6 rosetta examples)
-- **1 failure:** `examples/iterative-dev-loop-config.yaml` — this is a generator config for `scripts/generate-iterative-dev-loop.py`, not a Mozart score. Uses `spec_dir`, `cycles` (non-score fields). Pre-existing issue, not caused by F-441.
+- **1 failure:** `examples/iterative-dev-loop-config.yaml` — this is a generator config for `scripts/generate-iterative-dev-loop.py`, not a Marianne score. Uses `spec_dir`, `cycles` (non-score fields). Pre-existing issue, not caused by F-441.
 
 ---
 
@@ -154,9 +154,9 @@ F-441 is now **functionally resolved** in the working tree. The complete fix inc
 - `812fb69` Litmus: 18 new litmus tests
 
 **Files verified:**
-- All 8 `src/mozart/core/config/*.py` modules — 51 models, 51 have `extra='forbid'`
-- `src/mozart/cli/commands/validate.py:309-353` — `_KNOWN_TYPOS` + `_unknown_field_hints()`
-- `src/mozart/core/config/job.py:332-333` — `strip_computed_fields()` validator
+- All 8 `src/marianne/core/config/*.py` modules — 51 models, 51 have `extra='forbid'`
+- `src/marianne/cli/commands/validate.py:309-353` — `_KNOWN_TYPOS` + `_unknown_field_hints()`
+- `src/marianne/core/config/job.py:332-333` — `strip_computed_fields()` validator
 
 **Commands run:**
 ```bash
@@ -166,8 +166,8 @@ for f in examples/*.yaml; do python3 -c "..." done  # 37 example scores validate
 python -m mypy src/ --no-error-summary  # Clean
 python -m ruff check src/  # Clean
 python -m pytest tests/test_*config*.py tests/test_*job*.py ...  # 4,300+ pass
-gh issue close 128 --repo Mzzkc/mozart-ai-compose --comment "..."
-gh issue close 93 --repo Mzzkc/mozart-ai-compose --comment "..."
+gh issue close 128 --repo Mzzkc/marianne-ai-compose --comment "..."
+gh issue close 93 --repo Mzzkc/marianne-ai-compose --comment "..."
 ```
 
 ---

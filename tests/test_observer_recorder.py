@@ -118,7 +118,7 @@ class TestJSONLPersistence:
     def test_register_opens_jsonl(self, tmp_path: Path) -> None:
         recorder = self._make_recorder()
         recorder.register_job("job-1", tmp_path)
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         assert jsonl_path.exists()
 
     def test_unregister_closes_file(self, tmp_path: Path) -> None:
@@ -140,7 +140,7 @@ class TestJSONLPersistence:
         recorder._write_event("job-1", event)
         recorder.flush("job-1")
 
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         lines = jsonl_path.read_text().strip().split("\n")
         assert len(lines) == 1
         parsed = json.loads(lines[0])
@@ -159,7 +159,7 @@ class TestJSONLPersistence:
         recorder._write_event("job-1", event)
         recorder.flush("job-1")
 
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         content = jsonl_path.read_text().strip()
         assert content == ""
 
@@ -170,7 +170,7 @@ class TestJSONLPersistence:
     def test_disabled_persistence_skips_file(self, tmp_path: Path) -> None:
         recorder = self._make_recorder(persist_events=False)
         recorder.register_job("job-1", tmp_path)
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         assert not jsonl_path.exists()
 
     # --- Expert review edge case tests ---
@@ -204,7 +204,7 @@ class TestJSONLPersistence:
         recorder._write_event("job-1", event)
         recorder.flush("job-1")
 
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         lines = jsonl_path.read_text().strip().split("\n")
         assert len(lines) == 1
         parsed = json.loads(lines[0])
@@ -285,7 +285,7 @@ class TestCoalescing:
             recorder._handle_event(event)
 
         recorder.flush("job-1")
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         lines = [ln for ln in jsonl_path.read_text().strip().split("\n") if ln]
         # Should produce 1 coalesced event, not 5
         assert len(lines) == 1
@@ -306,7 +306,7 @@ class TestCoalescing:
             recorder._handle_event(event)
 
         recorder.flush("job-1")
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         lines = [ln for ln in jsonl_path.read_text().strip().split("\n") if ln]
         assert len(lines) == 3
 
@@ -326,7 +326,7 @@ class TestCoalescing:
             recorder._handle_event(event)
 
         recorder.flush("job-1")
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         lines = [ln for ln in jsonl_path.read_text().strip().split("\n") if ln]
         assert len(lines) == 3
 
@@ -346,7 +346,7 @@ class TestCoalescing:
             recorder._handle_event(event)
 
         recorder.flush("job-1")
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         lines = [ln for ln in jsonl_path.read_text().strip().split("\n") if ln]
         assert len(lines) == 3  # No coalescing
 
@@ -377,7 +377,7 @@ class TestCoalescing:
         })
 
         recorder.flush("job-1")
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         lines = [ln for ln in jsonl_path.read_text().strip().split("\n") if ln]
         # Both events should be written: first flushed when window expired,
         # second flushed by explicit flush()
@@ -417,7 +417,7 @@ class TestCoalescing:
             })
 
         recorder.flush("job-1")
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         lines = [ln for ln in jsonl_path.read_text().strip().split("\n") if ln]
         assert len(lines) == 3  # file_created always written
 
@@ -454,7 +454,7 @@ class TestSizeCap:
         await asyncio.sleep(0.1)
         recorder.flush("job-1")
 
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         size = jsonl_path.stat().st_size
         assert size <= 4096
 
@@ -485,7 +485,7 @@ class TestSizeCap:
         await asyncio.sleep(0.1)
         recorder.flush("job-1")
 
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         lines = [ln for ln in jsonl_path.read_text().strip().split("\n") if ln]
         assert len(lines) > 0, "Should have surviving events"
         # Every line must parse as valid JSON
@@ -632,7 +632,7 @@ class TestLifecycle:
         })
 
         # The event should be in coalesce buffer, not yet in JSONL
-        jsonl_path = tmp_path / ".mozart-observer.jsonl"
+        jsonl_path = tmp_path / ".marianne-observer.jsonl"
         assert jsonl_path.read_text().strip() == ""
 
         # Wait for the periodic flush to fire (window=0.2s, so wait a bit longer)

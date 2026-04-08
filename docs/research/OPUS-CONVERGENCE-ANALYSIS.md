@@ -3,21 +3,21 @@
 > **Internal Reference** — This is a meta-analysis document, not user documentation.
 
 **Date:** 2026-01-16
-**Analysis:** Patterns to converge between Mozart Opus (v20, 20 cycles) and RLF Opus (v15, 15 cycles)
+**Analysis:** Patterns to converge between Marianne Opus (v20, 20 cycles) and RLF Opus (v15, 15 cycles)
 
 ---
 
 ## Executive Summary
 
 Two independent self-improving opus scores have evolved in parallel:
-- **Mozart Opus** (v20): Orchestration framework evolution, 9-movement structure
+- **Marianne Opus** (v20): Orchestration framework evolution, 9-movement structure
 - **RLF Opus** (v15): HTTP API wiring evolution, 5-sheet structure
 
 Both have independently discovered similar patterns, validating their utility. This document identifies patterns to converge, creating stronger scores on both sides.
 
 ---
 
-## Patterns FROM RLF → Mozart
+## Patterns FROM RLF → Marianne
 
 ### 1. Proactive Discovery Mode ⭐ HIGH VALUE
 
@@ -36,9 +36,9 @@ proactive_mode:
     D: "Documentation Audit - review ONE public API doc"
 ```
 
-**Why Mozart needs this:**
-- Mozart has no mechanism to prevent idle cycles
-- When no high-CV candidates emerge, Mozart should still improve
+**Why Marianne needs this:**
+- Marianne has no mechanism to prevent idle cycles
+- When no high-CV candidates emerge, Marianne should still improve
 - Proactive discovery provides bounded, safe improvement work
 
 **Integration approach:**
@@ -70,8 +70,8 @@ variance_tiers:
     task_types: ["embedded logic", "auth/branching"]
 ```
 
-**Why Mozart needs this:**
-- Mozart tracks LOC accuracy but doesn't set expectations by task type
+**Why Marianne needs this:**
+- Marianne tracks LOC accuracy but doesn't set expectations by task type
 - Creates unrealistic pressure for high accuracy on complex tasks
 - Tier-based approach acknowledges irreducible variance
 
@@ -95,8 +95,8 @@ task_type_cv_modifiers:
   true_integration: -0.05     # Cascading changes
 ```
 
-**Why Mozart needs this:**
-- Mozart calculates CV without task type adjustment
+**Why Marianne needs this:**
+- Marianne calculates CV without task type adjustment
 - Documentation improvements have artificially low CV
 - Maintenance work gets undervalued relative to features
 
@@ -129,8 +129,8 @@ task_type_loc_multipliers:
     test: "× 2.0"
 ```
 
-**Why Mozart needs this:**
-- Mozart applies multipliers inconsistently
+**Why Marianne needs this:**
+- Marianne applies multipliers inconsistently
 - Proactive/maintenance work is systematically overestimated
 - Clear multipliers enable accurate planning
 
@@ -157,8 +157,8 @@ stable_deferral:
     - product_decision_made
 ```
 
-**Why Mozart needs this:**
-- Mozart re-evaluates deferred candidates every cycle
+**Why Marianne needs this:**
+- Marianne re-evaluates deferred candidates every cycle
 - Wastes discovery effort on perpetually low-priority items
 - Stable deferrals should be marked as CLOSED
 
@@ -187,8 +187,8 @@ test_coverage_multiplier:
     # Recursive/nested enum variants
 ```
 
-**Why Mozart needs this:**
-- Mozart's test LOC formulas miss enum complexity
+**Why Marianne needs this:**
+- Marianne's test LOC formulas miss enum complexity
 - Multi-variant types need per-variant test coverage
 - Systematic underestimation when enums involved
 
@@ -213,10 +213,10 @@ LOC_ACCURACY_TREND:
   # ...
 ```
 
-**Why Mozart might benefit:**
+**Why Marianne might benefit:**
 - Visualizes LOC model evolution over time
 - Identifies regression points in estimation accuracy
-- Mozart tracks accuracy but doesn't plot trend
+- Marianne tracks accuracy but doesn't plot trend
 
 **Integration approach:**
 - Add trend section to opus header
@@ -225,11 +225,11 @@ LOC_ACCURACY_TREND:
 
 ---
 
-## Patterns FROM Mozart → RLF
+## Patterns FROM Marianne → RLF
 
 ### 1. Pattern Trust Scoring ⭐ HIGH VALUE
 
-**Mozart Pattern:**
+**Marianne Pattern:**
 ```yaml
 pattern_trust:
   formula: "base + quarantine_penalty + validation_bonus + age_factor + effectiveness_modifier"
@@ -250,7 +250,7 @@ pattern_trust:
 
 ### 2. Synergy Pair Validation ⭐ HIGH VALUE
 
-**Mozart Pattern:**
+**Marianne Pattern:**
 ```yaml
 synergy_pair:
   criteria: "Both candidates address same problem space"
@@ -272,8 +272,8 @@ synergy_pair:
 
 ### 3. TDF Quadruplet Analysis ⭐ MEDIUM VALUE
 
-**Mozart Pattern:**
-- Mozart uses full TDF (COMP, SCI, CULT, EXP, META)
+**Marianne Pattern:**
+- Marianne uses full TDF (COMP, SCI, CULT, EXP, META)
 - Boundary analysis between all domain pairs
 - Recognition level assessment (P0-P5)
 
@@ -288,7 +288,7 @@ synergy_pair:
 
 Both opus scores independently discovered these patterns, validating their importance:
 
-1. **Coverage Gates** (Mozart: ≥80% new code, RLF: >70% coverage)
+1. **Coverage Gates** (Marianne: ≥80% new code, RLF: >70% coverage)
 2. **Code Review During Implementation** (both track early catch ratio)
 3. **Evaluation Cycles** (both allow cycles without implementation)
 4. **Multi-Tier LOC Estimation** (both use multipliers for complexity)
@@ -300,29 +300,29 @@ Both opus scores independently discovered these patterns, validating their impor
 
 | Pattern | From | To | Priority | Complexity | Value |
 |---------|------|----|---------:|------------|-------|
-| Proactive Discovery Mode | RLF | Mozart | 1 | Medium | High |
-| Variance Tier Model | RLF | Mozart | 2 | Low | High |
-| Task Type CV Modifiers | RLF | Mozart | 3 | Low | Medium |
-| Task Type LOC Multipliers | RLF | Mozart | 4 | Low | Medium |
-| Stable Deferral Threshold | RLF | Mozart | 5 | Low | Medium |
-| Test Coverage (Enum) | RLF | Mozart | 6 | Medium | Medium |
-| Pattern Trust Scoring | Mozart | RLF | 7 | High | High |
-| Synergy Pair Validation | Mozart | RLF | 8 | Medium | High |
-| TDF Quadruplet | Mozart | RLF | 9 | High | Medium |
+| Proactive Discovery Mode | RLF | Marianne | 1 | Medium | High |
+| Variance Tier Model | RLF | Marianne | 2 | Low | High |
+| Task Type CV Modifiers | RLF | Marianne | 3 | Low | Medium |
+| Task Type LOC Multipliers | RLF | Marianne | 4 | Low | Medium |
+| Stable Deferral Threshold | RLF | Marianne | 5 | Low | Medium |
+| Test Coverage (Enum) | RLF | Marianne | 6 | Medium | Medium |
+| Pattern Trust Scoring | Marianne | RLF | 7 | High | High |
+| Synergy Pair Validation | Marianne | RLF | 8 | Medium | High |
+| TDF Quadruplet | Marianne | RLF | 9 | High | Medium |
 
 ---
 
 ## Recommended Convergence Strategy
 
 ### Phase 1: Quick Wins (v21)
-- Add Task Type CV Modifiers to Mozart
-- Add Variance Tier Model to Mozart
-- Add Stable Deferral Threshold to Mozart
+- Add Task Type CV Modifiers to Marianne
+- Add Variance Tier Model to Marianne
+- Add Stable Deferral Threshold to Marianne
 
 ### Phase 2: Structural (v22)
-- Add Proactive Discovery Mode to Mozart
-- Add Task Type LOC Multipliers to Mozart
-- Add Test Coverage (Enum) Multiplier to Mozart
+- Add Proactive Discovery Mode to Marianne
+- Add Task Type LOC Multipliers to Marianne
+- Add Test Coverage (Enum) Multiplier to Marianne
 
 ### Phase 3: Cross-Pollination (v23+)
 - Port Pattern Trust Scoring to RLF
@@ -333,6 +333,6 @@ Both opus scores independently discovered these patterns, validating their impor
 
 ## Next Steps
 
-1. Create `mozart-opus-convergence.yaml` score to implement convergence
+1. Create `marianne-opus-convergence.yaml` score to implement convergence
 2. Create `score-creation-skill.md` documenting patterns from both
 3. Update example scores with lessons learned

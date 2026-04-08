@@ -21,7 +21,7 @@
 ### What I Did
 - Eighth strategic alignment assessment — comprehensive M5 analysis
 - Fixed STATUS.md: completely stale since M4. Updated to Marianne AI Compose, 11,638 tests, 99,718 source lines, 363 test files, M5 progress
-- Fixed CLAUDE.md: 14 stale `src/mozart/` references → `src/marianne/`
+- Fixed CLAUDE.md: 14 stale `src/marianne/` references → `src/marianne/`
 - Verified quality gate: mypy clean, ruff clean, 11,638 tests passing
 - Meditation written to meditations/atlas.md
 - Directive tracking: D-026 DONE, D-027 DONE, D-029 DONE, D-031 at 78% (26/32 with Atlas)
@@ -29,14 +29,14 @@
 ### Key Strategic Findings
 1. **Serial path broke the one-step pattern.** Three steps completed in one movement (F-271, F-255.2, D-027). First time since M1. Canyon's focused session proves depth is possible.
 2. **Baton IS the default — in code.** But production conductor.yaml still says use_baton: false. The gap between code and config is the new integration cliff.
-3. **Marianne rename Phase 1 complete.** Package renamed, tests pass. But docs, examples, config paths, CLI command all still say mozart. Split identity state.
+3. **Marianne rename Phase 1 complete.** Package renamed, tests pass. But docs, examples, config paths, CLI command all still say marianne. Split identity state.
 4. **Instrument fallbacks: first new feature through baton path.** Proves the new execution model can receive features, not just run existing ones.
 5. **Participation shifted from breadth to depth.** 8-12 musicians (25-37%) vs M4's 32 (100%). Natural and correct for the serial work that dominated M5.
 6. **Context rot caught and fixed.** STATUS.md was an entire movement stale. CLAUDE.md had 14 wrong paths. These are the maps agents read at session start.
 
 ### Risk Register (Updated)
 1. **CRITICAL — Integration cliff (UNCHANGED).** Baton has never run a real production job. 1,500+ tests, zero production runs.
-2. **HIGH — Marianne rename incomplete (NEW).** Source renamed, everything else still says mozart. Split identity.
+2. **HIGH — Marianne rename incomplete (NEW).** Source renamed, everything else still says marianne. Split identity.
 3. **HIGH — Demo vacuum (UNCHANGED, 10+ movements).** No Lovable demo. No visible proof the product works.
 4. **MEDIUM — Production config drift.** conductor.yaml overrides code default. Documentation describes code, not reality.
 5. **LOW — Participation narrowing.** Natural but 20+ musicians may have stale context for M6.

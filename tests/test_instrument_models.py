@@ -1,4 +1,4 @@
-"""Tests for mozart.core.config.instruments — Instrument Plugin System data models.
+"""Tests for marianne.core.config.instruments — Instrument Plugin System data models.
 
 TDD: These tests define the contract for InstrumentProfile, ModelCapacity,
 CliProfile, and related sub-models. Implementation follows.

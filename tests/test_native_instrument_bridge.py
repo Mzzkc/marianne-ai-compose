@@ -1,6 +1,6 @@
 """Tests for the native instrument bridge.
 
-The bridge registers Mozart's 4 existing backends (claude_cli, anthropic_api,
+The bridge registers Marianne's 4 existing backends (claude_cli, anthropic_api,
 ollama, recursive_light) as named instruments in the InstrumentRegistry, so
 they can be resolved by the same name-based lookup used for plugin instruments.
 

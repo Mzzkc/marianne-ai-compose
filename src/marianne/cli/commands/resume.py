@@ -1,6 +1,6 @@
-"""Resume command for Mozart CLI.
+"""Resume command for Marianne CLI.
 
-This module implements the `mozart resume` command which continues
+This module implements the `mzt resume` command which continues
 execution of paused or failed jobs.
 
 ★ Insight ─────────────────────────────────────
@@ -98,7 +98,7 @@ def resume(
         False,
         "--no-reload",
         help="Use cached config snapshot instead of auto-reloading from YAML file. "
-        "By default, Mozart reloads from the original config path if the file exists.",
+        "By default, Marianne reloads from the original config path if the file exists.",
     ),
     self_healing: bool = typer.Option(
         False,
@@ -116,13 +116,13 @@ def resume(
     """Resume a paused or failed score.
 
     Loads the score state and continues execution from where it left off.
-    By default, Mozart auto-reloads config from the original YAML file
+    By default, Marianne auto-reloads config from the original YAML file
     if it still exists on disk. Use --no-reload to use the cached snapshot.
 
     Examples:
-        mozart resume my-job
-        mozart resume my-job --config job.yaml
-        mozart resume my-job --no-reload  # Use cached config snapshot
+        mzt resume my-job
+        mzt resume my-job --config job.yaml
+        mzt resume my-job --no-reload  # Use cached config snapshot
     """
     from ._shared import validate_job_id
 
@@ -174,7 +174,7 @@ async def _find_job_state(
             output_error(
                 f"Score '{job_id}' has not been started yet",
                 severity="warning",
-                hints=["Use 'mozart run' to start the score."],
+                hints=["Use 'mzt run' to start the score."],
             )
             raise typer.Exit(1)
 
@@ -215,7 +215,7 @@ def _reconstruct_config(
             output_error(
                 f"Error loading config file: {e}",
                 hints=[
-                    f"Check the file with: mozart validate {config_file}",
+                    f"Check the file with: mzt validate {config_file}",
                     "Ensure the YAML syntax is valid and all required fields are present.",
                 ],
             )
@@ -317,7 +317,7 @@ async def _resume_job(
         # Business logic error from conductor (e.g., job not found)
         output_error(
             str(exc),
-            hints=["Run 'mozart list' to see available scores."],
+            hints=["Run 'mzt list' to see available scores."],
         )
         raise typer.Exit(1) from None
 
@@ -340,18 +340,18 @@ async def _resume_job(
                 if message:
                     console.print(f"[dim]{message}[/dim]")
                 console.print(
-                    f"\nMonitor progress: [bold]mozart status {job_id}[/bold]"
+                    f"\nMonitor progress: [bold]mzt status {job_id}[/bold]"
                 )
                 return
             else:
                 # Distinguish "not found" from "not resumable" for hints
                 is_not_found = "not found" in (message or "").lower()
                 hints = (
-                    ["Run 'mozart list' to see available scores."]
+                    ["Run 'mzt list' to see available scores."]
                     if is_not_found
                     else [
-                        f"Run 'mozart diagnose {job_id}' for details.",
-                        "Run 'mozart list' to see available scores.",
+                        f"Run 'mzt diagnose {job_id}' for details.",
+                        "Run 'mzt list' to see available scores.",
                     ]
                 )
                 output_error(
@@ -552,7 +552,7 @@ async def _resume_job_direct(ctx: ResumeContext) -> None:
         output_error(
             f"Fatal error: {e}",
             hints=[
-                f"Run 'mozart diagnose {ctx.job_id}' for a detailed failure report.",
+                f"Run 'mzt diagnose {ctx.job_id}' for a detailed failure report.",
             ],
         )
 

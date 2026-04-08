@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.manager module.
+"""Tests for marianne.daemon.manager module.
 
 Covers JobManager submit/cancel/shutdown, concurrency limit enforcement,
 duplicate handling, _on_task_done cleanup, pause/resume, and job history

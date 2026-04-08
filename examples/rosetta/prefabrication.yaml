@@ -48,9 +48,9 @@
 # ║    for documentation — the pattern supports mixed instruments per track.    ║
 # ║                                                                             ║
 # ║  Usage:                                                                     ║
-# ║    mozart start                                                             ║
-# ║    mozart run examples/prefabrication.yaml                                  ║
-# ║    mozart status bookmark-manager                                           ║
+# ║    mzt start                                                             ║
+# ║    mzt run examples/prefabrication.yaml                                  ║
+# ║    mzt status bookmark-manager                                           ║
 # ║                                                                             ║
 # ║  Output:                                                                    ║
 # ║    workspaces/bookmark-manager/                                             ║
@@ -545,7 +545,7 @@ prompt:
     7. **Configuration** — environment variables (BOOKMARK_DB_PATH, etc.)
     8. **Architecture** — brief explanation of the contract-first design
     9. **How It Was Built** — explain the Prefabrication pattern:
-       "This application was built using Mozart AI Compose with the
+       "This application was built using Marianne AI Compose with the
        Prefabrication pattern from the Rosetta Corpus. Backend API and
        CLI client were developed in parallel by independent AI agents,
        coordinated only through an interface contract (contract.yaml).

@@ -35,7 +35,7 @@ class LearningHub:
     """Centralized learning for daemon mode.
 
     Instead of each job opening its own SQLite connection to
-    ~/.mozart/global-learning.db, the daemon maintains a single
+    ~/.marianne/global-learning.db, the daemon maintains a single
     GlobalLearningStore instance shared across all jobs.
 
     Benefits:

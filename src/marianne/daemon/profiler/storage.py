@@ -103,7 +103,7 @@ class MonitorStorage:
     """Async SQLite + JSONL storage for profiler time-series data.
 
     Uses aiosqlite for non-blocking database access and WAL mode
-    for safe concurrent reads (``mozart top``) while the daemon writes.
+    for safe concurrent reads (``mzt top``) while the daemon writes.
 
     Parameters
     ----------
@@ -511,7 +511,7 @@ class MonitorStorage:
 
         Returns a dict with peak memory, total CPU-time, process spawn
         count, and syscall hotspots — useful for scheduling hints and
-        ``mozart diagnose --resources``.
+        ``mzt diagnose --resources``.
         """
         await self._ensure_initialized()
 
@@ -691,7 +691,7 @@ class MonitorStorage:
 async def generate_resource_report(job_id: str, storage: MonitorStorage) -> str:
     """Generate comprehensive resource report for a job.
 
-    Produces a text report designed for AI consumption (``mozart diagnose
+    Produces a text report designed for AI consumption (``mzt diagnose
     --resources``).  Aggregates peak memory per sheet, total CPU-time,
     process spawn count, signal/kill events, zombie/OOM events, syscall
     hotspots, and anomaly history.

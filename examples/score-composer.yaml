@@ -2,13 +2,13 @@
 #
 # Composes implementation scores from design documents.
 #
-# Give it a design doc, it produces a runnable Mozart score that
+# Give it a design doc, it produces a runnable Marianne score that
 # implements the design. The generated score IS the plan — each
 # sheet is an implementation step, validations are acceptance
 # criteria, running it is execution.
 #
 # This replaces the write-plan → execute-plan → verify workflow.
-# Mozart orchestrates its own implementation.
+# Marianne orchestrates its own implementation.
 #
 # Execution Flow (4 movements, 4 sheets):
 #
@@ -24,8 +24,8 @@
 #   1. Set `doc` to the path of the design document
 #   2. Set `output_score` to the desired output score filename
 #   3. Set `project_root` to the project the score will run against
-#   4. mozart run examples/score-composer.yaml
-#   5. Review the generated score, then: mozart run <generated-score>
+#   4. mzt run examples/score-composer.yaml
+#   5. Review the generated score, then: mzt run <generated-score>
 
 name: "score-composer"
 description: "Compose an implementation score from a design document"
@@ -36,7 +36,7 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 1200
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Design Analysis"
@@ -53,7 +53,7 @@ sheet:
   prelude:
     - file: "{{ doc }}"
       as: context
-    - file: "../plugins/mozart/skills/score-authoring/SKILL.md"
+    - file: "../plugins/marianne/skills/score-authoring/SKILL.md"
       as: skill
   dependencies:
     2: [1]
@@ -96,8 +96,8 @@ prompt:
 
     # Additional context about the project for the composer
     project_context: >-
-      Mozart AI Compose — Python, asyncio, Pydantic v2, Protocol-based.
-      81K lines, 3384 tests. src/mozart/ is the source tree. Tests in tests/.
+      Marianne AI Compose — Python, asyncio, Pydantic v2, Protocol-based.
+      81K lines, 3384 tests. src/marianne/ is the source tree. Tests in tests/.
       The score-authoring skill is injected above — follow it exactly
       when generating score YAML.
 
@@ -222,7 +222,7 @@ prompt:
 
     ## Your Task
 
-    Generate a valid Mozart score YAML file that implements the design.
+    Generate a valid Marianne score YAML file that implements the design.
     Each task from the decomposition becomes one or more sheets.
 
     ### Score Structure Requirements
@@ -268,7 +268,7 @@ prompt:
 
     ### Output
 
-    Write the complete, valid Mozart score to:
+    Write the complete, valid Marianne score to:
     {{ workspace }}/{{ output_score }}.yaml
 
     Also write a brief README explaining the score's structure:
@@ -283,7 +283,7 @@ prompt:
     ## Your Task
 
     ### 1. Syntax Validation
-    Check the generated score against Mozart's requirements:
+    Check the generated score against Marianne's requirements:
     - Valid YAML (no syntax errors)
     - All required fields present (name, workspace, instrument, sheet, prompt)
     - `sheet.total_items` matches stage count

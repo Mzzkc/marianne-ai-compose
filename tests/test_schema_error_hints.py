@@ -26,7 +26,7 @@ runner = CliRunner()
 # =============================================================================
 # Story: Alex Writes Their First Score
 #
-# Alex just read the README and wants to try Mozart. They write a minimal
+# Alex just read the README and wants to try Marianne. They write a minimal
 # score file from memory, making the mistakes every newcomer makes.
 # The error messages should teach, not just reject.
 # =============================================================================

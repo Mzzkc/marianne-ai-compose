@@ -117,7 +117,7 @@ def run_extended_validation(
     filename: str = "config.yaml",
     workspace_path: str | None = None
 ) -> list[ValidationIssueResponse]:
-    """Run Mozart's extended validation checks.
+    """Run Marianne's extended validation checks.
 
     Args:
         config: Parsed JobConfig object
@@ -147,7 +147,7 @@ def run_extended_validation(
         Path(workspace_path) / filename if workspace_path else Path.cwd() / filename
     )
 
-    # Run validation using Mozart's built-in system
+    # Run validation using Marianne's built-in system
     runner = ValidationRunner(create_default_checks())
     issues = runner.validate(config, config_path, content)
 
@@ -195,7 +195,7 @@ def build_config_summary(config: JobConfig) -> dict[str, Any]:
 
 @router.post("/validate", response_model=ValidateConfigResponse)
 async def validate_config(request: ValidateConfigRequest) -> ValidateConfigResponse:
-    """Validate a YAML configuration for Mozart jobs.
+    """Validate a YAML configuration for Marianne jobs.
 
     Performs comprehensive validation including:
     - YAML syntax checking
@@ -274,7 +274,7 @@ async def validate_config(request: ValidateConfigRequest) -> ValidateConfigRespo
                             column=None,
                             context=None,
                             auto_fixable=False,
-                            suggestion="This may be a bug in Mozart validation system"
+                            suggestion="This may be a bug in Marianne validation system"
                         )
                     ]
 

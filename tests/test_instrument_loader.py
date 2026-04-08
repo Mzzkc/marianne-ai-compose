@@ -1,7 +1,7 @@
 """Tests for InstrumentProfileLoader — YAML loading from directories.
 
 TDD: These tests define the contract for loading InstrumentProfile configs
-from ~/.mozart/instruments/ (org) and .mozart/instruments/ (venue) directories.
+from ~/.marianne/instruments/ (org) and .marianne/instruments/ (venue) directories.
 
 The loader:
 - Scans directories for *.yaml and *.yml files

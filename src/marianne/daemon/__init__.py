@@ -1,4 +1,4 @@
-"""Mozart daemon service — long-running orchestration conductor."""
+"""Marianne daemon service — long-running orchestration conductor."""
 
 from marianne.daemon.backpressure import BackpressureController, PressureLevel
 from marianne.daemon.config import DaemonConfig

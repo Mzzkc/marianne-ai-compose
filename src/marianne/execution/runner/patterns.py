@@ -11,7 +11,7 @@ Architecture:
 
     Required attributes:
         - config: JobConfig
-        - _logger: MozartLogger
+        - _logger: MarianneLogger
         - _global_learning_store: GlobalLearningStore | None
         - outcome_store: OutcomeStore | None
         - _exploration_pattern_ids: list[str]
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from marianne.learning.global_store import GlobalLearningStore
 
 from marianne.core.config import JobConfig
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 from marianne.learning.outcomes import OutcomeStore
 
 # Pattern used to strip noise words for dedup grouping
@@ -175,7 +175,7 @@ class PatternsMixin:
 
     # Type hints for attributes provided by base.py
     config: JobConfig
-    _logger: MozartLogger
+    _logger: MarianneLogger
     console: Console
     _global_learning_store: GlobalLearningStore | None
     outcome_store: OutcomeStore | None

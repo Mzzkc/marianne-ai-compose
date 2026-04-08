@@ -1,11 +1,11 @@
-"""Integration tests for Mozart MCP Server.
+"""Integration tests for Marianne MCP Server.
 
-This module contains comprehensive integration tests for the Mozart MCP server,
+This module contains comprehensive integration tests for the Marianne MCP server,
 testing the full protocol implementation including tool execution, resource access,
 and error handling across all tool categories.
 
 The tests verify that the MCP server correctly implements the Model Context Protocol
-specification and that all Mozart capabilities are properly exposed to external clients.
+specification and that all Marianne capabilities are properly exposed to external clients.
 """
 
 import asyncio
@@ -87,7 +87,7 @@ class TestMCPServerIntegration:
 
         assert "capabilities" in response
         assert "serverInfo" in response
-        assert response["serverInfo"]["name"] == "mozart-mcp-server"
+        assert response["serverInfo"]["name"] == "marianne-mcp-server"
 
         # Verify capabilities
         capabilities = response["capabilities"]
@@ -115,9 +115,9 @@ class TestMCPServerIntegration:
         assert "cancel_job" in tool_names
 
         # Artifact tools
-        assert "mozart_artifact_list" in tool_names
-        assert "mozart_artifact_read" in tool_names
-        assert "mozart_artifact_get_logs" in tool_names
+        assert "marianne_artifact_list" in tool_names
+        assert "marianne_artifact_read" in tool_names
+        assert "marianne_artifact_get_logs" in tool_names
 
         # Score tools are intentionally hidden from list_tools (stubs)
         # They still work via call_tool but aren't advertised to MCP clients
@@ -170,14 +170,14 @@ class TestMCPServerIntegration:
         test_file.write_text("Test content")
 
         # Test artifact list
-        result = await mcp_server.call_tool("mozart_artifact_list", {
+        result = await mcp_server.call_tool("marianne_artifact_list", {
             "workspace": str(test_workspace)
         })
         assert "content" in result
         assert "test.txt" in result["content"][0]["text"]
 
         # Test artifact read
-        result = await mcp_server.call_tool("mozart_artifact_read", {
+        result = await mcp_server.call_tool("marianne_artifact_read", {
             "workspace": str(test_workspace),
             "file_path": "test.txt"
         })
@@ -234,7 +234,7 @@ class TestMCPServerIntegration:
         # Test that artifact tools reject paths outside workspace
         outside_path = Path("/tmp/outside")
 
-        result = await mcp_server.call_tool("mozart_artifact_list", {
+        result = await mcp_server.call_tool("marianne_artifact_list", {
             "workspace": str(outside_path)
         })
         assert "isError" in result
@@ -251,8 +251,8 @@ class TestMCPServerIntegration:
 
         # Execute multiple tools concurrently
         tasks = [
-            mcp_server.call_tool("mozart_artifact_list", {"workspace": str(test_workspace)}),
-            mcp_server.call_tool("mozart_artifact_read", {
+            mcp_server.call_tool("marianne_artifact_list", {"workspace": str(test_workspace)}),
+            mcp_server.call_tool("marianne_artifact_read", {
                 "workspace": str(test_workspace),
                 "file_path": "test0.txt"
             }),

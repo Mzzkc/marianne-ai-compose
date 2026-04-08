@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Mozart{% endblock %}
+{% block title %}Dashboard — Marianne{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -7,7 +7,7 @@
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
         <a href="/editor"
-           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-mozart-500 text-white hover:bg-mozart-600 transition-colors">
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-marianne-500 text-white hover:bg-marianne-600 transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>
@@ -43,7 +43,7 @@
                 </svg>
                 Active Jobs
             </h2>
-            <a href="/jobs" class="text-xs text-mozart-600 dark:text-mozart-400 hover:underline">View all</a>
+            <a href="/jobs" class="text-xs text-marianne-600 dark:text-marianne-400 hover:underline">View all</a>
         </div>
         <div id="active-jobs-container"
              hx-get="/jobs/list?status=running"
@@ -65,7 +65,7 @@
                         </svg>
                         Recent Activity
                     </h2>
-                    <a href="/jobs" class="text-xs text-mozart-600 dark:text-mozart-400 hover:underline">View all</a>
+                    <a href="/jobs" class="text-xs text-marianne-600 dark:text-marianne-400 hover:underline">View all</a>
                 </div>
                 <div id="recent-container"
                      hx-get="/api/dashboard/recent/partial"

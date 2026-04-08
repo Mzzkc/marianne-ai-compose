@@ -1,4 +1,4 @@
-"""Tests for mozart.notifications.webhook module.
+"""Tests for marianne.notifications.webhook module.
 
 Covers WebhookNotifier: creation, env var expansion, from_config, payload
 building, retry logic, send with success/failure, and MockWebhookNotifier.
@@ -177,7 +177,7 @@ class TestBuildPayload:
         n = WebhookNotifier(url="https://example.com")
         payload = n._build_payload(context)
         assert "metadata" in payload
-        assert payload["metadata"]["source"] == "mozart-ai-compose"
+        assert payload["metadata"]["source"] == "marianne-ai-compose"
 
     def test_metadata_excluded(self, context: NotificationContext):
         n = WebhookNotifier(url="https://example.com", include_metadata=False)

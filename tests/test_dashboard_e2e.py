@@ -1,4 +1,4 @@
-"""End-to-end integration tests for Mozart Dashboard."""
+"""End-to-end integration tests for Marianne Dashboard."""
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 

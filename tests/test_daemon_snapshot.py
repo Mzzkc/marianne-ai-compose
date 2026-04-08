@@ -26,7 +26,7 @@ def workspace(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / "my-job.json").write_text('{"status": "completed"}')
-    (ws / "mozart.log").write_text("INFO: job completed")
+    (ws / "marianne.log").write_text("INFO: job completed")
     return ws
 
 
@@ -62,8 +62,8 @@ class TestCapture:
     def test_capture_copies_log_files(self, mgr, workspace):
         result = mgr.capture("test-job", workspace)
         snap = Path(result)
-        assert (snap / "mozart.log").exists()
-        assert (snap / "mozart.log").read_text() == "INFO: job completed"
+        assert (snap / "marianne.log").exists()
+        assert (snap / "marianne.log").read_text() == "INFO: job completed"
 
     def test_capture_returns_snapshot_path_string(self, mgr, workspace):
         result = mgr.capture("test-job", workspace)
@@ -211,11 +211,11 @@ class TestEdgeCases:
     def test_capture_with_only_log_file(self, mgr, tmp_path):
         ws = tmp_path / "ws"
         ws.mkdir()
-        (ws / "mozart.log").write_text("some logs")
+        (ws / "marianne.log").write_text("some logs")
         result = mgr.capture("log-only-job", ws)
         assert result is not None
         snap = Path(result)
-        assert (snap / "mozart.log").exists()
+        assert (snap / "marianne.log").exists()
 
 
 # ─── Observer JSONL capture ───────────────────────────────────────────
@@ -228,7 +228,7 @@ class TestObserverJSONLCapture:
         workspace = tmp_path / "workspace"
         workspace.mkdir()
         # Create a mock observer JSONL file
-        jsonl = workspace / ".mozart-observer.jsonl"
+        jsonl = workspace / ".marianne-observer.jsonl"
         jsonl.write_text('{"event":"observer.file_created"}\n')
         # Also create the required state file so capture doesn't bail
         (workspace / "test-job.json").write_text("{}")
@@ -236,12 +236,12 @@ class TestObserverJSONLCapture:
         manager = SnapshotManager(base_dir=tmp_path / "snapshots")
         snapshot_path = manager.capture("test-job", workspace)
         assert snapshot_path is not None
-        captured = Path(snapshot_path) / ".mozart-observer.jsonl"
+        captured = Path(snapshot_path) / ".marianne-observer.jsonl"
         assert captured.exists()
         assert captured.read_text() == '{"event":"observer.file_created"}\n'
 
     def test_snapshot_without_observer_jsonl_still_works(self, tmp_path: Path) -> None:
-        """Snapshots work fine without any .mozart-observer.jsonl present."""
+        """Snapshots work fine without any .marianne-observer.jsonl present."""
         workspace = tmp_path / "workspace"
         workspace.mkdir()
         (workspace / "test-job.json").write_text("{}")
@@ -249,7 +249,7 @@ class TestObserverJSONLCapture:
         manager = SnapshotManager(base_dir=tmp_path / "snapshots")
         snapshot_path = manager.capture("test-job", workspace)
         assert snapshot_path is not None
-        captured = Path(snapshot_path) / ".mozart-observer.jsonl"
+        captured = Path(snapshot_path) / ".marianne-observer.jsonl"
         assert not captured.exists()
 
 
@@ -411,7 +411,7 @@ class TestObserverSummaryCapture:
         workspace.mkdir()
         (workspace / "test-job.json").write_text("{}")
 
-        jsonl = workspace / ".mozart-observer.jsonl"
+        jsonl = workspace / ".marianne-observer.jsonl"
         lines = [
             '{"event":"observer.file_created","path":"/a.txt"}',
             '{"event":"observer.file_created","path":"/b.txt"}',
@@ -448,7 +448,7 @@ class TestObserverSummaryCapture:
         workspace = tmp_path / "workspace"
         workspace.mkdir()
         (workspace / "test-job.json").write_text("{}")
-        (workspace / ".mozart-observer.jsonl").write_text("")
+        (workspace / ".marianne-observer.jsonl").write_text("")
 
         manager = SnapshotManager(base_dir=tmp_path / "snapshots")
         snapshot_path = manager.capture("test-job", workspace)
@@ -461,7 +461,7 @@ class TestObserverSummaryCapture:
         workspace.mkdir()
         (workspace / "test-job.json").write_text("{}")
 
-        jsonl = workspace / ".mozart-observer.jsonl"
+        jsonl = workspace / ".marianne-observer.jsonl"
         jsonl.write_text(
             '{"event":"observer.file_created"}\n'
             'not valid json\n'

@@ -577,7 +577,7 @@ class InstrumentNameCheck:
         available = sorted(known)
         suggestion = (
             f"Available instruments: {', '.join(available)}. "
-            f"Run 'mozart instruments list' to see all instruments."
+            f"Run 'mzt instruments list' to see all instruments."
         )
         return ValidationIssue(
             check_id=self.check_id,
@@ -686,7 +686,7 @@ class InstrumentFallbackCheck:
         available = sorted(known)
         suggestion = (
             f"Available instruments: {', '.join(available)}. "
-            f"Run 'mozart instruments list' to see all instruments."
+            f"Run 'mzt instruments list' to see all instruments."
         )
         return ValidationIssue(
             check_id=self.check_id,

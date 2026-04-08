@@ -130,7 +130,7 @@ class TestPromptBuilder:
         """Create PromptConfig with custom variables."""
         return PromptConfig(
             template="Process {{ project }} sheet {{ sheet_num }}.",
-            variables={"project": "Mozart"},
+            variables={"project": "Marianne"},
         )
 
     def test_build_sheet_context(self, basic_config: PromptConfig) -> None:
@@ -201,7 +201,7 @@ class TestPromptBuilder:
 
         prompt = builder.build_sheet_prompt(ctx)
 
-        assert "Process Mozart sheet 2" in prompt
+        assert "Process Marianne sheet 2" in prompt
 
     def test_build_sheet_prompt_with_patterns(self, basic_config: PromptConfig) -> None:
         """build_sheet_prompt should inject learned patterns."""

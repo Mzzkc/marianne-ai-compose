@@ -1,4 +1,4 @@
-"""Signal handling constants and utilities for Mozart error classification.
+"""Signal handling constants and utilities for Marianne error classification.
 
 This module provides signal-related constants and helper functions used by
 the error classifier to determine whether a process killed by a signal

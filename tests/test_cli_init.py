@@ -1,6 +1,6 @@
-"""Tests for ``mozart init`` command.
+"""Tests for ``mzt init`` command.
 
-Validates project scaffolding: starter score creation, .mozart/ directory
+Validates project scaffolding: starter score creation, .marianne/ directory
 setup, no-overwrite safety, and output messaging.
 
 TDD: These tests define the contract for the init command.
@@ -98,17 +98,17 @@ class TestInitCreatesStarterScore:
 
 
 # ---------------------------------------------------------------------------
-# .mozart/ directory creation
+# .marianne/ directory creation
 # ---------------------------------------------------------------------------
 
 
-class TestInitCreatesMozartDir:
-    """Init creates .mozart/ project config directory."""
+class TestInitCreatesMarianneDir:
+    """Init creates .marianne/ project config directory."""
 
-    def test_creates_mozart_directory(self, tmp_path: Path) -> None:
-        """The .mozart/ directory is created."""
+    def test_creates_marianne_directory(self, tmp_path: Path) -> None:
+        """The .marianne/ directory is created."""
         runner.invoke(app, ["init", "--path", str(tmp_path)])
-        assert (tmp_path / ".mozart").is_dir()
+        assert (tmp_path / ".marianne").is_dir()
 
 
 # ---------------------------------------------------------------------------
@@ -129,10 +129,10 @@ class TestInitOutput:
         """Output includes next steps for the user."""
         result = runner.invoke(app, ["init", "--path", str(tmp_path)])
         assert result.exit_code == 0
-        assert "mozart start" in result.stdout or "next" in result.stdout.lower()
+        assert "mzt start" in result.stdout or "next" in result.stdout.lower()
 
     def test_uses_musical_terminology(self, tmp_path: Path) -> None:
-        """Output uses Mozart's musical terminology."""
+        """Output uses Marianne's musical terminology."""
         result = runner.invoke(app, ["init", "--path", str(tmp_path)])
         assert result.exit_code == 0
         assert "score" in result.stdout.lower()
@@ -164,15 +164,15 @@ class TestInitSafety:
         # File should have new content
         assert score_file.read_text() != "old: content\n"
 
-    def test_refuses_overwrite_existing_mozart_dir(self, tmp_path: Path) -> None:
-        """Won't overwrite an existing .mozart/ directory without --force."""
-        mozart_dir = tmp_path / ".mozart"
-        mozart_dir.mkdir()
-        (mozart_dir / "existing.txt").write_text("important\n")
+    def test_refuses_overwrite_existing_marianne_dir(self, tmp_path: Path) -> None:
+        """Won't overwrite an existing .marianne/ directory without --force."""
+        marianne_dir = tmp_path / ".marianne"
+        marianne_dir.mkdir()
+        (marianne_dir / "existing.txt").write_text("important\n")
         result = runner.invoke(app, ["init", "--path", str(tmp_path)])
         assert result.exit_code != 0
         # Existing files preserved
-        assert (mozart_dir / "existing.txt").read_text() == "important\n"
+        assert (marianne_dir / "existing.txt").read_text() == "important\n"
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +233,7 @@ class TestInitSchemaValidation:
         assert "validations:" in non_comment
 
     def test_validate_command_accepts_generated_score(self, tmp_path: Path) -> None:
-        """Running `mozart validate` on the generated score passes with workspace created."""
+        """Running `mzt validate` on the generated score passes with workspace created."""
         runner.invoke(app, ["init", "--path", str(tmp_path)])
         score_file = tmp_path / "my-score.yaml"
         # Create workspace parent so V002 doesn't fire
@@ -451,10 +451,10 @@ class TestInitJsonOutput:
 
 
 class TestInitDoctorMention:
-    """Init output mentions mozart doctor for environment validation."""
+    """Init output mentions mzt doctor for environment validation."""
 
     def test_next_steps_mentions_doctor(self, tmp_path: Path) -> None:
-        """Next steps suggest running mozart doctor."""
+        """Next steps suggest running mzt doctor."""
         result = runner.invoke(app, ["init", "--path", str(tmp_path)])
         assert result.exit_code == 0
         assert "doctor" in result.stdout.lower()
@@ -476,10 +476,10 @@ class TestInitInstrumentTerminology:
 
 
 class TestInitPositionalArgument:
-    """mozart init accepts an optional positional argument (like git init).
+    """mzt init accepts an optional positional argument (like git init).
 
-    F-067b: `mozart init test-project` should work the same as
-    `mozart init --name test-project`. Every major CLI tool supports
+    F-067b: `mzt init test-project` should work the same as
+    `mzt init --name test-project`. Every major CLI tool supports
     this: git init, npm init, cargo init. The positional arg sets
     the score name.
     """

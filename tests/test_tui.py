@@ -1,4 +1,4 @@
-"""Comprehensive tests for the Mozart TUI monitor.
+"""Comprehensive tests for the Marianne TUI monitor.
 
 Tests cover:
 - MonitorReader (source detection, IPC calls, event routing)

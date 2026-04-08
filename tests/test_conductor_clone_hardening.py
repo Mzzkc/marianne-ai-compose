@@ -92,7 +92,7 @@ class TestCloneNameSanitizationAdversarial:
 
         Stripping hyphens made _sanitize_name lossy — e.g., '0' and '_0'
         would both sanitize to '0', causing clone path collisions. Hyphens
-        in path components like /tmp/mozart-clone--test.sock are safe.
+        in path components like /tmp/marianne-clone--test.sock are safe.
         """
         from marianne.daemon.clone import _sanitize_name
 

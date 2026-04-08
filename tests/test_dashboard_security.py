@@ -1,4 +1,4 @@
-"""Tests for Mozart Dashboard security module."""
+"""Tests for Marianne Dashboard security module."""
 
 from unittest.mock import patch
 
@@ -31,8 +31,8 @@ class TestSecurityConfig:
     def test_from_env(self):
         """Test config from environment variables."""
         env = {
-            "MOZART_CORS_ORIGINS": "https://app.example.com,https://api.example.com",
-            "MOZART_CORS_CREDENTIALS": "false",
+            "MZT_CORS_ORIGINS": "https://app.example.com,https://api.example.com",
+            "MZT_CORS_CREDENTIALS": "false",
         }
         with patch.dict("os.environ", env, clear=True):
             config = SecurityConfig.from_env()

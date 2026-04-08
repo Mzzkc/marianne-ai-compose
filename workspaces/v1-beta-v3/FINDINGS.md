@@ -71,15 +71,15 @@ Each finding should include:
 - **Status:** Resolved (movement 1, Circuit)
 - **Resolution:** Added cost warning to `mzt run` at `run.py:119-125` that fires when `cost_limits.enabled` is false and output is not JSON/quiet. Shows the warning text and a config suggestion. Also updated config panel to show "Instrument:" instead of "Backend:" to align with the new instrument terminology. 4 tests added to test_cli_run_resume.py.
 
-### F-006: No `marianne doctor` Command
+### F-006: No `mzt doctor` Command
 - **Movement:** 0 (carried from cycle 1)
 - **Agent:** Warden
 - **Category:** risk
 - **Finding:** No `doctor` command exists. Executive brief criterion U2 requires it. `mzt config init` exists but only creates daemon config — not environment validation.
-- **Action:** Implement `marianne doctor` as part of M3 UX.
+- **Action:** Implement `mzt doctor` as part of M3 UX.
 - **Status:** Resolved (movement 1, Ghost)
 - **Note:** Previously incorrectly recorded as resolved (was F-004 copy-paste). Corrected by Canyon.
-- **Resolution:** Implemented `marianne doctor` at `src/marianne/cli/commands/doctor.py`. Checks Python version, Marianne version, conductor status (PID file + os.kill probe), instrument availability (native + built-in YAML + user profiles, binary detection via shutil.which), and safety warnings (cost limits). Supports `--json` output mode. 12 tests in `tests/test_cli_doctor.py`. Registered in CLI at `src/marianne/cli/__init__.py`.
+- **Resolution:** Implemented `mzt doctor` at `src/marianne/cli/commands/doctor.py`. Checks Python version, Marianne version, conductor status (PID file + os.kill probe), instrument availability (native + built-in YAML + user profiles, binary detection via shutil.which), and safety warnings (cost limits). Supports `--json` output mode. 12 tests in `tests/test_cli_doctor.py`. Registered in CLI at `src/marianne/cli/__init__.py`.
 
 ---
 
@@ -153,8 +153,8 @@ Each finding should include:
 - **Found by:** Canyon, Movement 1
 - **Severity:** P3 (low — findings registry error)
 - **Status:** Resolved (movement 1, Canyon)
-- **Description:** F-006 ("No marianne doctor command") had its resolution field copy-pasted from F-004 ("shlex.quote fix"). The doctor command was never implemented. The TASKS.md still correctly lists it as unclaimed in M3.
-- **Impact:** Anyone reading FINDINGS.md would believe `marianne doctor` was implemented. It is not.
+- **Description:** F-006 ("No mzt doctor command") had its resolution field copy-pasted from F-004 ("shlex.quote fix"). The doctor command was never implemented. The TASKS.md still correctly lists it as unclaimed in M3.
+- **Impact:** Anyone reading FINDINGS.md would believe `mzt doctor` was implemented. It is not.
 - **Resolution:** Corrected F-006 status back to Open with a note explaining the error.
 
 ### F-015: Unwired Code Cluster Analysis (F-007 Disposition)
@@ -165,7 +165,7 @@ Each finding should include:
   1. **SchedulerStats** (scheduler.py:98) — KEEP. Required for scheduler/baton integration.
   2. **ErrorLearningHooks** (error_hooks.py:95) — KEEP. Movement III feature, design complete.
   3. **OutcomeMigrator** (migration.py:94) — ALREADY WIRED. Called from `learning-stats` CLI.
-  4. **ErrorChain** (errors/models.py:190) — KEEP. Infrastructure for `marianne diagnose`.
+  4. **ErrorChain** (errors/models.py:190) — KEEP. Infrastructure for `mzt diagnose`.
   5. **TableMapping/StateRegistry** (schema/registry.py:154) — REMOVE. Premature abstraction, never adopted. Registry exports removed from `schema/__init__.py`. File itself kept for now.
   6. **RunSummary.to_dict()** (runner/models.py:109) — NOT TOUCHED. File has concurrent edits. Dead method, can be removed when runner stabilizes.
   7. **DelayOutcome** (retry_strategy.py:61) — KEEP. Infrastructure for adaptive retry learning.
@@ -268,7 +268,7 @@ Each finding should include:
 - **Found by:** Newcomer, Movement 1
 - **Severity:** P0 (critical — tutorial breaks at step 5)
 - **Status:** Resolved (movement 1, Compass)
-- **Resolution:** Removed `--workspace` from README status/resume examples. Updated Common Options table to scope `--workspace` to `run`, `resume` only. Also updated backend→instrument terminology, added `marianne doctor` and `mzt instruments` commands to CLI reference, fixed recover command "(hidden)" label (F-034), and updated instrument description (F-036).
+- **Resolution:** Removed `--workspace` from README status/resume examples. Updated Common Options table to scope `--workspace` to `run`, `resume` only. Also updated backend→instrument terminology, added `mzt doctor` and `mzt instruments` commands to CLI reference, fixed recover command "(hidden)" label (F-034), and updated instrument description (F-036).
 - **Description:** `README.md:169` says `mzt status hello-world --workspace ./workspace/hello-world`. The `status` command no longer has a `-w/--workspace` flag. Verified via `mzt status --help` — only `--json`, `--watch`, `--interval` exist.
 - **Impact:** A newcomer following the Quick Start guide hits a CLI error at "check your results." The tutorial fails at the worst possible moment — when the user is trying to verify their first job worked.
 - **Action:** Remove `--workspace` from the README status example. The status command resolves workspaces from the conductor's job registry, so no flag is needed.
@@ -301,9 +301,9 @@ Each finding should include:
 - **Found by:** Newcomer, Movement 1
 - **Severity:** P2 (medium — easy fix, big UX improvement)
 - **Status:** Resolved (movement 1, Compass)
-- **Description:** `mzt status nonexistent`, `marianne diagnose nonexistent`, `mzt errors nonexistent` all produce "Score not found: nonexistent" with no guidance. Compare to `git` which suggests "did you mean...?" or shows similar branch names.
+- **Description:** `mzt status nonexistent`, `mzt diagnose nonexistent`, `mzt errors nonexistent` all produce "Score not found: nonexistent" with no guidance. Compare to `git` which suggests "did you mean...?" or shows similar branch names.
 - **Impact:** The user is stuck. They know their score doesn't exist but don't know what to do about it.
-- **Resolution:** Migrated 9 "Score not found" error outputs across `status.py` (2), `diagnose.py` (5), and `recover.py` (2) from raw `console.print` to `output_error()` with hints: "Run 'mzt list' to see available scores." The diagnose command also suggests "Run 'marianne doctor' to check your environment." JSON output mode also receives hints in structured format.
+- **Resolution:** Migrated 9 "Score not found" error outputs across `status.py` (2), `diagnose.py` (5), and `recover.py` (2) from raw `console.print` to `output_error()` with hints: "Run 'mzt list' to see available scores." The diagnose command also suggests "Run 'mzt doctor' to check your environment." JSON output mode also receives hints in structured format.
 
 ### F-031: Malformed YAML Produces Misleading Pydantic Error
 - **Found by:** Newcomer, Movement 1
@@ -344,13 +344,13 @@ Each finding should include:
 - **Status:** Resolved (movement 1, Compass)
 - **Description:** `docs/getting-started.md:112-116` says validate shows "Valid configuration: my-first-job / Sheets: 3 (10 items each) / Validations: 1". Actual format is richer: "Validating... / ✓ YAML syntax valid / ✓ Schema validation passed / Running extended validation checks / ..."
 - **Impact:** Newcomers might think something is wrong when they see a different format than documented.
-- **Resolution:** Updated expected output in getting-started.md to show the current validate output format with checkmarks. Also updated prerequisites to mention `marianne doctor` and troubleshooting to use `mzt instruments list` instead of `claude --version`.
+- **Resolution:** Updated expected output in getting-started.md to show the current validate output format with checkmarks. Also updated prerequisites to mention `mzt doctor` and troubleshooting to use `mzt instruments list` instead of `claude --version`.
 
 ### F-036: README Backend List Outdated — Doesn't Mention New Instruments
 - **Found by:** Newcomer, Movement 1
 - **Severity:** P3 (low — README undersells capabilities)
 - **Status:** Resolved (movement 1, Compass)
-- **Resolution:** Updated README "Multiple backends" line to "Multiple instruments" with full instrument list. Added `mzt instruments list|check` and `marianne doctor` to CLI reference tables. Updated "Backend" key concept to "Instrument". Updated backend type option to include named instruments.
+- **Resolution:** Updated README "Multiple backends" line to "Multiple instruments" with full instrument list. Added `mzt instruments list|check` and `mzt doctor` to CLI reference tables. Updated "Backend" key concept to "Instrument". Updated backend type option to include named instruments.
 - **Description:** `README.md:32` lists 4 backends (Claude CLI, Anthropic API, Ollama, Recursive Light). The instrument plugin system (M1) added 6 more: gemini-cli, codex-cli, cline-cli, aider, goose, claude-code. `mzt instruments list` shows 10 instruments.
 - **Impact:** Newcomers with non-Claude tools may not realize Marianne supports them.
 - **Action:** Update README to mention the instrument plugin system and list all supported instruments.
@@ -423,7 +423,7 @@ Each finding should include:
 - **Found by:** Ember, Movement 1 (renumbered from F-040 by Captain — collision with Axiom's F-040)
 - **Severity:** P2 (medium)
 - **Status:** Resolved (movement 2, Harper — HTTP instruments now show "? unchecked" instead of "http")
-- **Description:** `mzt instruments list` shows `http` in the STATUS column for all HTTP instruments (anthropic_api, ollama, recursive_light). "http" is the kind (already shown in the KIND column), not a status. The code at `src/marianne/cli/commands/instruments.py:154-156` hard-codes `status_str = "[dim]http[/dim]"` and counts HTTP instruments as ready without any connectivity check. Compare to `marianne doctor` which shows the endpoint URL: `✓ anthropic_api — Anthropic API (https://api.anthropic.com)`.
+- **Description:** `mzt instruments list` shows `http` in the STATUS column for all HTTP instruments (anthropic_api, ollama, recursive_light). "http" is the kind (already shown in the KIND column), not a status. The code at `src/marianne/cli/commands/instruments.py:154-156` hard-codes `status_str = "[dim]http[/dim]"` and counts HTTP instruments as ready without any connectivity check. Compare to `mzt doctor` which shows the endpoint URL: `✓ anthropic_api — Anthropic API (https://api.anthropic.com)`.
 - **Impact:** Users can't tell if HTTP instruments are actually reachable. The "6 ready" count includes unchecked instruments.
 - **Action:** Show `✓ available` (or `? unchecked`) instead of `http` in the STATUS column. Optionally, add a basic HTTP HEAD check.
 
@@ -648,7 +648,7 @@ Each finding should include:
 - **Found by:** Ember, Movement 2
 - **Severity:** P2 (medium — commands disagree on sheet status)
 - **Status:** Resolved (movement 2, Spark — mateship pickup, commit 3269eb2)
-- **Description:** `src/marianne/cli/commands/diagnose.py:1046` uses raw `sheet.status.value` in the Execution Timeline table. Forge's F-045 fix added `format_sheet_display_status()` in `output.py:131-156` that maps `COMPLETED + validation_passed=False` to `"failed"`, but this function is only used in `status.py`. The `diagnose` command still shows retry-exhausted sheets as "completed." Verified: `marianne diagnose marianne-orchestra-v3` shows sheets 11-14 as `completed` with 4-5 attempts, while `mzt status` correctly shows them as `failed`.
+- **Description:** `src/marianne/cli/commands/diagnose.py:1046` uses raw `sheet.status.value` in the Execution Timeline table. Forge's F-045 fix added `format_sheet_display_status()` in `output.py:131-156` that maps `COMPLETED + validation_passed=False` to `"failed"`, but this function is only used in `status.py`. The `diagnose` command still shows retry-exhausted sheets as "completed." Verified: `mzt diagnose marianne-orchestra-v3` shows sheets 11-14 as `completed` with 4-5 attempts, while `mzt status` correctly shows them as `failed`.
 - **Impact:** A user running `diagnose` after seeing "8 failed" in `status` sees those sheets as "completed" in the diagnostic. The two commands disagree about sheet status.
 - **Resolution:** Both the progress count (line 989) and the execution timeline (line 1059) in `_build_diagnostic_report()` now use `format_sheet_display_status()`. COMPLETED+validation_passed=False shows as "failed" in both places, matching `mzt status` output. 6 TDD tests in `test_diagnose_display_status.py`.
 
@@ -718,9 +718,9 @@ Each finding should include:
 - **Found by:** Journey, Movement 2
 - **Severity:** P3 (low — hint leads to another error)
 - **Status:** Resolved (already fixed in resume.py — verified by Lens, movement 4)
-- **Description:** `mzt resume nonexistent-job` suggests `Run: marianne diagnose nonexistent-job`. But `diagnose` will also say "Score not found: nonexistent-job". The hint sends the user to another error instead of a solution. Compare to `status` and `diagnose` which correctly suggest `Run 'mzt list' to see available scores.`
+- **Description:** `mzt resume nonexistent-job` suggests `Run: mzt diagnose nonexistent-job`. But `diagnose` will also say "Score not found: nonexistent-job". The hint sends the user to another error instead of a solution. Compare to `status` and `diagnose` which correctly suggest `Run 'mzt list' to see available scores.`
 - **Impact:** User follows the hint, hits another error, feels more lost than before.
-- **Action:** Change resume's hint to suggest `mzt list` instead of `marianne diagnose`. The `diagnose` hint makes sense for known-but-failed scores, not unknown scores.
+- **Action:** Change resume's hint to suggest `mzt list` instead of `mzt diagnose`. The `diagnose` hint makes sense for known-but-failed scores, not unknown scores.
 
 ### F-074: Quality Gate Baseline Drift (F-050 Continuation) — 103 → 106
 - **Found by:** Journey, Movement 2
@@ -916,12 +916,12 @@ Each finding should include:
 - **Error class:** Same as F-013 (1,699 lines), F-019 (136 lines), F-057 (2,262 lines), F-080 (1,100 lines). Fifth occurrence. The mateship pipeline catches these reliably, but prevention isn't happening. The commit step is consistently treated as deferrable rather than continuous.
 - **Action:** Commit the 32 files immediately. Consider structural changes to the commit protocol: commit after each logical task, not at the end of the session.
 
-### F-090: `marianne doctor` and `conductor-status` Disagree with `mzt status` About Conductor State
+### F-090: `mzt doctor` and `conductor-status` Disagree with `mzt status` About Conductor State
 - **Found by:** Ember, Movement 2
 - **Severity:** P2 (medium — three commands disagree about the same fact)
 - **Status:** Partially resolved (movement 1 cycle 2, Ghost — doctor.py fixed, conductor-status not yet)
 - **Resolution (doctor.py):** Added two-phase conductor detection: PID file check first, then IPC socket probe as fallback. When PID file is missing but the socket responds, doctor now correctly reports "running". 4 TDD tests. Commit 42d3d1a. `conductor-status` still uses PID-only via `process.py:get_conductor_status()` — needs the same socket fallback treatment.
-- **Description:** `mzt status` shows conductor RUNNING (15h 56m uptime) via IPC socket at `/tmp/marianne.sock`. `marianne doctor` shows "! Conductor not running" via PID file check. `conductor-status` shows "not running." The PID file (`~/.marianne/marianne.pid`) is absent. The process IS running (PID 1120, visible in `ps aux`). The socket exists. The IPC works. But the PID-based check returns false.
+- **Description:** `mzt status` shows conductor RUNNING (15h 56m uptime) via IPC socket at `/tmp/marianne.sock`. `mzt doctor` shows "! Conductor not running" via PID file check. `conductor-status` shows "not running." The PID file (`~/.marianne/marianne.pid`) is absent. The process IS running (PID 1120, visible in `ps aux`). The socket exists. The IPC works. But the PID-based check returns false.
 - **Impact:** Users who run `doctor` to check health get the wrong answer. A user who trusts `doctor` over `status` might try to start a second conductor, potentially conflicting with the running one. The discrepancy between three commands (status=RUNNING, doctor=not running, conductor-status=not running) erodes trust in diagnostic tooling.
 - **Error class:** State check uses different detection methods across commands. `status` checks IPC socket (reliable). `doctor` and `conductor-status` check PID file (fragile — can be deleted, stale, or never created). The PID file is a proxy, not the truth. The socket IS the truth.
 - **Action:** Unify conductor detection across all commands. Either: (a) all commands use IPC socket probe as primary detection, PID file as fallback, or (b) ensure the PID file is always created and maintained correctly. The socket-based check is more reliable.
@@ -1293,7 +1293,7 @@ Each finding should include:
 - **Severity:** P3 (low — transient, self-resolving)
 - **Status:** Open
 - **Description:** During a conductor restart (uptime went from 4h28m to 1m49s between two invocations), `mzt list` returned "Marianne conductor is not running" with exit code 1. The conductor WAS running — it was briefly unresponsive during startup. `mzt list --json` and `mzt list --all` succeeded seconds later. The error message is misleading: "not running" is the wrong diagnosis when the conductor is starting/restarting.
-- **Impact:** Low — the condition is transient and self-resolves within seconds. But the error message teaches the wrong mental model: the user thinks the conductor crashed when it's actually restarting. A user who trusts this message might run `marianne start` and get a "already running" conflict.
+- **Impact:** Low — the condition is transient and self-resolves within seconds. But the error message teaches the wrong mental model: the user thinks the conductor crashed when it's actually restarting. A user who trusts this message might run `mzt start` and get a "already running" conflict.
 - **Action:** Change the error message from "Marianne conductor is not running" to "Could not connect to the Marianne conductor. It may be starting up — try again in a few seconds." Add a retry hint. Alternatively, add a 1-retry with 2s delay before declaring the conductor unreachable.
 
 ### F-118: ValidationEngine Context Gap Between Runner and Baton Musician
@@ -1379,8 +1379,8 @@ Each finding should include:
 - **Severity:** P2 (medium — diagnostic tool misleads)
 - **Status:** Resolved (movement 2, Blueprint — commit 327e536)
 - **Resolution:** Changed `_classify_success_outcome()` to use persisted `sheet_state.attempt_count` (cumulative) instead of session-local `normal_attempts`. Also uses persisted `sheet_state.completion_attempts`. After restart+resume, a sheet with 18 cumulative attempts is correctly classified as SUCCESS_RETRY. 7 TDD tests including the F-127 regression case (18 attempts → SUCCESS_RETRY, not SUCCESS_FIRST_TRY).
-- **Description:** `marianne diagnose marianne-orchestra-v3` shows `success_first_try` in the Outcome column for sheets that required 18, 17, 10, 6, and 4 attempts respectively. The cause: `_classify_success_outcome()` at `src/marianne/execution/runner/sheet.py:2480` checks `normal_attempts <= 1` where `normal_attempts` is a session-local counter that resets when the conductor restarts and the job is resumed. Meanwhile, the Attempts column shows `attempt_count` from SheetState, which is the cumulative lifetime count. After a restart+resume, `normal_attempts` is 1 (current session) but `attempt_count` is 18 (cumulative) — the same table row contains contradictory information.
-- **Evidence:** `marianne diagnose marianne-orchestra-v3` output:
+- **Description:** `mzt diagnose marianne-orchestra-v3` shows `success_first_try` in the Outcome column for sheets that required 18, 17, 10, 6, and 4 attempts respectively. The cause: `_classify_success_outcome()` at `src/marianne/execution/runner/sheet.py:2480` checks `normal_attempts <= 1` where `normal_attempts` is a session-local counter that resets when the conductor restarts and the job is resumed. Meanwhile, the Attempts column shows `attempt_count` from SheetState, which is the cumulative lifetime count. After a restart+resume, `normal_attempts` is 1 (current session) but `attempt_count` is 18 (cumulative) — the same table row contains contradictory information.
+- **Evidence:** `mzt diagnose marianne-orchestra-v3` output:
   ```
   │    9 │ completed   │    1800.7s │      18 │ normal       │ success_first_try │
   │   12 │ completed   │    1530.6s │      17 │ normal       │ success_first_try │
@@ -1477,7 +1477,7 @@ Each finding should include:
 - **Found by:** Warden, Movement 2
 - **Severity:** P1 (high — credentials propagate to 6+ storage locations)
 - **Status:** Resolved (movement 2, Warden)
-- **Description:** `src/marianne/daemon/baton/musician.py:156` constructed `error_msg = f"{type(exc).__name__}: {exc}"` from caught exceptions WITHOUT calling `redact_credentials()`. This error_msg was: (1) logged at ERROR level with `exc_info=True`, (2) stored in `SheetAttemptResult.error_message` (persists to state DB), (3) visible in `marianne diagnose` and `mzt errors` output, (4) indexed by the learning store for pattern matching. Meanwhile, the same function DID redact `stdout_tail` and `stderr_tail` at line 573. The gap: output was sanitized, but exception messages were not.
+- **Description:** `src/marianne/daemon/baton/musician.py:156` constructed `error_msg = f"{type(exc).__name__}: {exc}"` from caught exceptions WITHOUT calling `redact_credentials()`. This error_msg was: (1) logged at ERROR level with `exc_info=True`, (2) stored in `SheetAttemptResult.error_message` (persists to state DB), (3) visible in `mzt diagnose` and `mzt errors` output, (4) indexed by the learning store for pattern matching. Meanwhile, the same function DID redact `stdout_tail` and `stderr_tail` at line 573. The gap: output was sanitized, but exception messages were not.
 - **Impact:** If a backend raised an exception containing an API key (e.g., `ConnectionError: Auth failed with key sk-ant-api03-...`), the credential would persist in logs, state DB, dashboard, diagnostic output, and learning store. The musician's `_capture_output()` correctly redacted credentials from stdout/stderr, but the exception handler's `error_msg` bypassed this protection entirely.
 - **Error class:** Same pattern as F-003/F-020 — safety applied to one data path but not an adjacent parallel path. The credential scanner existed, the import existed, but the call was missing at this specific location.
 - **Resolution:** Applied `redact_credentials()` to `error_msg` at musician.py:156 (exception handler) and to validation error text at musician.py:552 (validation engine exception). Both paths now sanitize exception messages before logging and storing. 26 TDD tests in `tests/test_musician_error_redaction.py` across 3 test classes: unit tests proving each credential type is redacted, integration tests exercising the actual `sheet_task()` function with credential-leaking mock backends, and adversarial edge cases (multi-pattern, unicode, JSON-embedded, traceback-embedded).
@@ -1542,7 +1542,7 @@ Each finding should include:
 - **Severity:** P3 (low — only affects pre-fix data)
 - **Status:** Open
 - **Description:** F-127 was fixed in Blueprint 327e536 — `_classify_success_outcome()` now uses persisted `attempt_count`. But `diagnose.py:1077,1222` reads `outcome_category` directly from the persisted `SheetState` field. All 67 v3 sheets completed before the fix display the old wrong classification (`success_first_try` for 18-attempt sheets). The fix prevents future lies but doesn't correct past ones.
-- **Evidence:** `marianne diagnose marianne-orchestra-v3` output (2026-04-02): Sheet 9 shows `18` attempts, `success_first_try` outcome. Confirmed by reading `diagnose.py:1077` — it reads `sheet.outcome_category` not recomputing from `sheet.attempt_count`.
+- **Evidence:** `mzt diagnose marianne-orchestra-v3` output (2026-04-02): Sheet 9 shows `18` attempts, `success_first_try` outcome. Confirmed by reading `diagnose.py:1077` — it reads `sheet.outcome_category` not recomputing from `sheet.attempt_count`.
 - **Impact:** Any score that completed sheets before the fix has incorrect outcome data forever. The v3 score (67 sheets, many multi-attempt) is the primary case.
 - **Action:** Either: (a) have `diagnose.py` recompute outcome from `attempt_count` at render time (ignore persisted `outcome_category`), (b) detect the contradiction (`attempt_count > 1 && outcome == success_first_try`) and display honestly, or (c) add a one-time migration that recomputes `outcome_category` from `attempt_count` for all completed sheets. Option (a) is simplest and most correct.
 
@@ -1800,7 +1800,7 @@ Each finding should include:
 - **Status:** Resolved (movement 4, Harper)
 - **Category:** bug
 - **Description:** `try_daemon_route()` at `src/marianne/daemon/detect.py:170-174` catches `DaemonError` (which includes "Method not found: daemon.clear_rate_limits") and returns `(False, None)` — the same signal as "daemon not reachable." The function already tracks `daemon_confirmed_running` at line 110 and uses it to differentiate TimeoutError (lines 113-122). But the DaemonError handler at line 170 ignores this flag, treating "method not found on a running daemon" identically to "daemon not reachable."
-- **Reproducer:** Start conductor from M2 code. Upgrade CLI to M3 code (with clear-rate-limits). Run `mzt clear-rate-limits`. Get: "Error: Marianne conductor is not running" while `marianne conductor-status` confirms it IS running.
+- **Reproducer:** Start conductor from M2 code. Upgrade CLI to M3 code (with clear-rate-limits). Run `mzt clear-rate-limits`. Get: "Error: Marianne conductor is not running" while `mzt conductor-status` confirms it IS running.
 - **Impact:** Trust-destroying inconsistency. User is told to start the conductor when it is already running. Broader: any CLI command added after a long-running conductor (or after a CLI upgrade without daemon restart) will give the same misleading error. Users upgrading Marianne without restarting their conductor will hit this for every new IPC method.
 - **Action:** In the DaemonError catch at detect.py:170-174, check `daemon_confirmed_running`. If True, raise a descriptive DaemonError ("Conductor is running but does not support method X — restart the conductor to load new features") instead of returning `(False, None)`.
 - **Error class:** Signal collapse — two distinct error states (not reachable vs. unsupported method) mapped to the same return value. Same pattern as the TimeoutError handler, which was already fixed.
@@ -1900,7 +1900,7 @@ Each finding should include:
 - **Severity:** P1 (high — newcomer UX blocker)
 - **Status:** Resolved (movement 3, Compass)
 - **Category:** bug
-- **Description:** `README.md` line 90, Manual Installation section: `pip install -e "."` omits the `[daemon]` extra. The Quick Start at line 117 requires `marianne start`, which depends on `psutil` (a daemon-only dependency). A newcomer who follows the manual path instead of `./setup.sh --daemon` hits an import error or unclear failure at Quick Start step 3. The recommended setup path (`./setup.sh --daemon`) handles this correctly, but the manual alternative doesn't.
+- **Description:** `README.md` line 90, Manual Installation section: `pip install -e "."` omits the `[daemon]` extra. The Quick Start at line 117 requires `mzt start`, which depends on `psutil` (a daemon-only dependency). A newcomer who follows the manual path instead of `./setup.sh --daemon` hits an import error or unclear failure at Quick Start step 3. The recommended setup path (`./setup.sh --daemon`) handles this correctly, but the manual alternative doesn't.
 - **Impact:** Any newcomer who prefers manual install over the setup script gets a broken first experience. The exact user we most need to impress — the one who wants to understand what they're installing — is the one who gets burned.
 - **Error class:** Same class as F-026 (broken Quick Start), F-095 (init teaches wrong patterns). Setup paths that produce broken first experiences.
 - **Resolution:** Changed to `pip install -e ".[daemon]"` with a note explaining the daemon extra is required for score execution. Guide independently fixed the same issue in commit f8245fa — convergent discovery.
@@ -1920,8 +1920,8 @@ Each finding should include:
 - **Severity:** P3 (low — internal metrics, not core UX)
 - **Status:** Open
 - **Category:** risk
-- **Description:** `marianne learning-stats` reports 12.0% first-attempt success rate, 0.51 avg effectiveness (barely above random), and 0.0% recovery success rate. These numbers are visible to any user who discovers the command. Without context (e.g., "exploration-heavy workloads have low first-attempt rates by design"), these stats would alarm any engineer evaluating Marianne for adoption. The 0.51 effectiveness is related to F-009 (all patterns had 0.5000) — the semantic tag fix may improve this over time, but current data reflects pre-fix patterns.
-- **Impact:** A potential adopter who runs `marianne learning-stats` might conclude the system doesn't learn effectively. The numbers need either contextual explanation in the output or clear documentation about what they mean.
+- **Description:** `mzt learning-stats` reports 12.0% first-attempt success rate, 0.51 avg effectiveness (barely above random), and 0.0% recovery success rate. These numbers are visible to any user who discovers the command. Without context (e.g., "exploration-heavy workloads have low first-attempt rates by design"), these stats would alarm any engineer evaluating Marianne for adoption. The 0.51 effectiveness is related to F-009 (all patterns had 0.5000) — the semantic tag fix may improve this over time, but current data reflects pre-fix patterns.
+- **Impact:** A potential adopter who runs `mzt learning-stats` might conclude the system doesn't learn effectively. The numbers need either contextual explanation in the output or clear documentation about what they mean.
 - **Action:** Add brief context to `learning-stats` output explaining what the numbers mean, or document expected ranges in the CLI reference.
 
 ### F-464: `history` Command Placement Inconsistency (README vs CLI)
@@ -1929,7 +1929,7 @@ Each finding should include:
 - **Severity:** P3 (low — minor doc inconsistency)
 - **Status:** Resolved (movement 4, Guide)
 - **Category:** risk
-- **Description:** README.md lists `marianne history` under the "Monitoring" section (line ~216). The actual CLI (`marianne --help`) lists `history` under "Diagnostics." A newcomer reading the README builds a mental model where history is a monitoring tool, then finds it categorized differently in the CLI. Minor inconsistency but breaks the otherwise-clean mapping between README and CLI.
+- **Description:** README.md lists `mzt history` under the "Monitoring" section (line ~216). The actual CLI (`marianne --help`) lists `history` under "Diagnostics." A newcomer reading the README builds a mental model where history is a monitoring tool, then finds it categorized differently in the CLI. Minor inconsistency but breaks the otherwise-clean mapping between README and CLI.
 - **Impact:** Low — most users won't notice. But the README was carefully restructured this movement (Compass, F-330) to match CLI groups exactly. This one slipped through.
 - **Action:** Move `history` to the Diagnostics section in README, consistent with the CLI grouping.
 
@@ -2208,9 +2208,9 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
 - **Status:** Resolved (movement 5, Circuit)
 - **Resolution:** When conductor returns JobSubmissionError (job not in registry) and -w workspace is provided, diagnose now falls back to filesystem search instead of immediately exiting. The -w flag is now visible (not hidden). Error hints mention -w when workspace not provided. 4 TDD tests in `test_f451_diagnose_workspace_fallback.py`.
 - **Category:** UX
-- **Description:** `marianne diagnose hello` returns "Score not found" even though `mzt status hello -w <workspace>` successfully shows full COMPLETED status. `diagnose` doesn't support `-w` (workspace) flag and only queries the conductor's registry. After a conductor restart, completed jobs may not be in the registry.
+- **Description:** `mzt diagnose hello` returns "Score not found" even though `mzt status hello -w <workspace>` successfully shows full COMPLETED status. `diagnose` doesn't support `-w` (workspace) flag and only queries the conductor's registry. After a conductor restart, completed jobs may not be in the registry.
 - **Impact:** Users can see a score's status (with -w) but can't diagnose it. The natural debugging path (`status` → see problem → `diagnose`) breaks when the conductor doesn't know about the job.
-- **Reproducer:** `mzt status hello -w workspaces/hello-marianne` (PASS) then `marianne diagnose hello` (FAIL: "Score not found")
+- **Reproducer:** `mzt status hello -w workspaces/hello-marianne` (PASS) then `mzt diagnose hello` (FAIL: "Score not found")
 - **Action:** Add `-w` workspace fallback to diagnose, or ensure completed jobs persist in registry across restarts.
 
 ### F-452: `mzt list --json` Returns Null Cost, `status --json` Returns Structured Cost
@@ -2385,7 +2385,7 @@ Add V212 validation check with "did you mean X?" suggestions for common typos (`
   **Process tree evidence:**
   ```
   Conductor PGID 2420:
-    PID 2420 (marianne start)
+    PID 2420 (mzt start)
 
   Agent PGID 2435 (sheet 6):          ← killed on sheet end ✓
     PID 2435 (claude)

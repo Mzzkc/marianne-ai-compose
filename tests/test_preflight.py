@@ -1,4 +1,4 @@
-"""Tests for mozart.execution.preflight module."""
+"""Tests for marianne.execution.preflight module."""
 
 from pathlib import Path
 

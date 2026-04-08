@@ -3820,7 +3820,7 @@ class TestPatternBroadcasting:
 class TestEvolutionTrajectoryTracking:
     """Tests for v16 Evolution: Evolution Trajectory Tracking.
 
-    Tests the ability to track Mozart's own evolution history for
+    Tests the ability to track Marianne's own evolution history for
     recursive self-improvement analysis.
     """
 

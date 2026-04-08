@@ -89,7 +89,7 @@ class WorktreeInfo:
     """Whether the worktree is currently locked."""
 
     job_id: str
-    """Mozart job ID associated with this worktree."""
+    """Marianne job ID associated with this worktree."""
 
 
 @dataclass
@@ -338,7 +338,7 @@ class GitWorktreeManager:
         if lock:
             lock_result = await self.lock_worktree(
                 worktree_path,
-                reason=f"Mozart job {job_id} in progress (pid={os.getpid()})",
+                reason=f"Marianne job {job_id} in progress (pid={os.getpid()})",
             )
             locked = lock_result.success
 
@@ -364,7 +364,7 @@ class GitWorktreeManager:
         self,
         job_id: str,
         source_branch: str | None = None,
-        branch_prefix: str = "mozart",
+        branch_prefix: str = "marianne",
         worktree_base: Path | None = None,
         lock: bool = True,
     ) -> WorktreeResult:
@@ -376,7 +376,7 @@ class GitWorktreeManager:
         Args:
             job_id: Unique job identifier for worktree and branch naming.
             source_branch: Branch to base worktree on (default: HEAD).
-            branch_prefix: Prefix for branch name (default: "mozart").
+            branch_prefix: Prefix for branch name (default: "marianne").
             worktree_base: Directory for worktrees (default: repo/.worktrees).
             lock: Whether to lock worktree after creation (default: True).
 
@@ -442,7 +442,7 @@ class GitWorktreeManager:
         if lock:
             lock_result = await self.lock_worktree(
                 worktree_path,
-                reason=f"Mozart job {job_id} in progress (pid={os.getpid()})",
+                reason=f"Marianne job {job_id} in progress (pid={os.getpid()})",
             )
             locked = lock_result.success
 
@@ -721,7 +721,7 @@ class GitWorktreeManager:
 
         Args:
             prefix_filter: Only return worktrees with branches matching prefix.
-                          For example, "mozart" returns all mozart/* branches.
+                          For example, "marianne" returns all marianne/* branches.
 
         Returns:
             List of WorktreeInfo for matching worktrees.
@@ -790,7 +790,7 @@ class GitWorktreeManager:
         """Extract job ID from branch name.
 
         Args:
-            branch: Branch name like "mozart/job-123".
+            branch: Branch name like "marianne/job-123".
 
         Returns:
             Job ID like "job-123", or branch name if no prefix.
@@ -801,7 +801,7 @@ class GitWorktreeManager:
 
     async def prune_orphaned(
         self,
-        prefix_filter: str = "mozart",
+        prefix_filter: str = "marianne",
         dry_run: bool = False,
     ) -> list[str]:
         """Clean up orphaned worktree metadata.
@@ -822,7 +822,7 @@ class GitWorktreeManager:
             dry_run=dry_run,
         )
 
-        # First, list worktrees to identify mozart-prefixed ones
+        # First, list worktrees to identify marianne-prefixed ones
         worktrees = await self.list_worktrees(prefix_filter=prefix_filter)
 
         # Find orphaned (path doesn't exist)

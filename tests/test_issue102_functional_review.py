@@ -261,7 +261,7 @@ class TestSnapshotObserverSummary:
         snapshot_dir = tmp_path / "snap"
         snapshot_dir.mkdir()
 
-        jsonl = ws / ".mozart-observer.jsonl"
+        jsonl = ws / ".marianne-observer.jsonl"
         records = [
             {"event": "observer.file_created"},
             {"event": "observer.file_created"},
@@ -292,7 +292,7 @@ class TestSnapshotObserverSummary:
         snapshot_dir = tmp_path / "snap"
         snapshot_dir.mkdir()
 
-        jsonl = ws / ".mozart-observer.jsonl"
+        jsonl = ws / ".marianne-observer.jsonl"
         jsonl.write_text(
             '{"event":"observer.file_created"}\n'
             "\n"
@@ -313,7 +313,7 @@ class TestSnapshotObserverSummary:
         snapshot_dir = tmp_path / "snap"
         snapshot_dir.mkdir()
 
-        jsonl = ws / ".mozart-observer.jsonl"
+        jsonl = ws / ".marianne-observer.jsonl"
         jsonl.write_text("not json\nalso not json\n")
 
         from marianne.daemon.snapshot import SnapshotManager
@@ -392,7 +392,7 @@ class TestSnapshotCapturePatterns:
         from marianne.daemon.snapshot import _CAPTURE_PATTERNS
         assert "*.yaml" in _CAPTURE_PATTERNS
         assert "*.yml" in _CAPTURE_PATTERNS
-        assert ".mozart-observer.jsonl" in _CAPTURE_PATTERNS
+        assert ".marianne-observer.jsonl" in _CAPTURE_PATTERNS
 
 
 # ===========================================================================
@@ -508,7 +508,7 @@ class TestEndToEndObserverFlow:
         ws = tmp_path / "ws"
         ws.mkdir()
         (ws / "my-job.json").write_text('{"status": "completed"}')
-        (ws / "mozart.log").write_text("done")
+        (ws / "marianne.log").write_text("done")
 
         # Observer JSONL
         jsonl_lines = [
@@ -516,7 +516,7 @@ class TestEndToEndObserverFlow:
             json.dumps({"event": "observer.file_modified", "path": "/b"}),
             json.dumps({"event": "observer.process_spawned", "pid": 123}),
         ]
-        (ws / ".mozart-observer.jsonl").write_text("\n".join(jsonl_lines) + "\n")
+        (ws / ".marianne-observer.jsonl").write_text("\n".join(jsonl_lines) + "\n")
 
         # Config file
         config = tmp_path / "my-job.yaml"
@@ -530,7 +530,7 @@ class TestEndToEndObserverFlow:
         snap = Path(result)
 
         # Observer JSONL captured
-        assert (snap / ".mozart-observer.jsonl").exists()
+        assert (snap / ".marianne-observer.jsonl").exists()
 
         # Observer summary generated
         summary = json.loads((snap / "observer-summary.json").read_text())
@@ -541,4 +541,4 @@ class TestEndToEndObserverFlow:
 
         # Standard artifacts
         assert (snap / "my-job.json").exists()
-        assert (snap / "mozart.log").exists()
+        assert (snap / "marianne.log").exists()

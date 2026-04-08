@@ -1,4 +1,4 @@
-"""Tests for mozart.execution.runner.base.JobRunnerBase.
+"""Tests for marianne.execution.runner.base.JobRunnerBase.
 
 Covers the initialization infrastructure mixin:
 - __init__ with minimal params (config, backend, state_backend)
@@ -569,7 +569,7 @@ class TestPauseSignalDetection:
                 status=JobStatus.RUNNING,
             )
             # Create the signal file
-            signal_file = Path(tmpdir) / f".mozart-pause-{state.job_id}"
+            signal_file = Path(tmpdir) / f".marianne-pause-{state.job_id}"
             signal_file.touch()
             assert runner._check_pause_signal(state) is True
 
@@ -584,7 +584,7 @@ class TestPauseSignalDetection:
                 last_completed_sheet=0,
                 status=JobStatus.RUNNING,
             )
-            signal_file = Path(tmpdir) / f".mozart-pause-{state.job_id}"
+            signal_file = Path(tmpdir) / f".marianne-pause-{state.job_id}"
             signal_file.touch()
             assert signal_file.exists()
             runner._clear_pause_signal(state)
@@ -885,8 +885,8 @@ class TestInternalInfrastructure:
     def test_logger_has_runner_component(self) -> None:
         """Logger is created with 'runner' component name."""
         runner = _make_runner()
-        from marianne.core.logging import MozartLogger
-        assert isinstance(runner._logger, MozartLogger)
+        from marianne.core.logging import MarianneLogger
+        assert isinstance(runner._logger, MarianneLogger)
 
     def test_pattern_tracking_accumulates_independently(self) -> None:
         """Pattern tracking lists start empty and accumulate independently."""

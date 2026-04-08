@@ -1,4 +1,4 @@
-"""Adversarial testing infrastructure for Mozart.
+"""Adversarial testing infrastructure for Marianne.
 
 Provides hypothesis profiles, Pydantic model strategies, adversarial input
 generators, and strict mock helpers for comprehensive property-based testing.
@@ -278,7 +278,7 @@ def log_config_strategy() -> st.SearchStrategy[dict[str, Any]]:
         st.fixed_dictionaries({
             "level": st.sampled_from(["DEBUG", "INFO", "WARNING", "ERROR"]),
             "format": st.just("both"),
-            "file_path": st.just("/tmp/mozart-test.log"),
+            "file_path": st.just("/tmp/marianne-test.log"),
         }),
     )
 

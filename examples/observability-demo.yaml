@@ -1,5 +1,5 @@
 # Example: Observability Demo Job
-# Demonstrates Mozart's observability features: logging, error tracking, diagnostics
+# Demonstrates Marianne's observability features: logging, error tracking, diagnostics
 
 name: "observability-demo"
 description: "Demo job showcasing observability features"
@@ -71,7 +71,7 @@ validations:
 logging:
   level: DEBUG              # Capture all log levels for debugging
   format: both              # Console + file output
-  file_path: observability-workspace/logs/mozart.log
+  file_path: observability-workspace/logs/marianne.log
   max_file_size_mb: 50      # Rotate at 50MB
   backup_count: 5           # Keep 5 compressed backups
   include_timestamps: true  # Add timestamps to all entries
@@ -93,30 +93,30 @@ pause_between_sheets_seconds: 5
 # ============================================================
 #
 # 1. RUN THE JOB:
-#    mozart run examples/observability-demo.yaml
+#    mzt run examples/observability-demo.yaml
 #
 # 2. WHILE RUNNING, tail logs:
-#    mozart logs -f
-#    mozart logs --level DEBUG
+#    mzt logs -f
+#    mzt logs --level DEBUG
 #
 # 3. AFTER COMPLETION, view diagnostics:
-#    mozart diagnose observability-demo
-#    mozart diagnose observability-demo --include-output
-#    mozart diagnose observability-demo --json
+#    mzt diagnose observability-demo
+#    mzt diagnose observability-demo --include-output
+#    mzt diagnose observability-demo --json
 #
 # 4. VIEW ERROR HISTORY:
-#    mozart errors observability-demo
-#    mozart errors --code E001
-#    mozart errors --verbose
+#    mzt errors observability-demo
+#    mzt errors --code E001
+#    mzt errors --verbose
 #
 # 5. CHECK RAW LOG FILES:
-#    cat observability-workspace/logs/mozart.log
-#    zcat observability-workspace/logs/mozart.log.1.gz
+#    cat observability-workspace/logs/marianne.log
+#    zcat observability-workspace/logs/marianne.log.1.gz
 #
 # 6. INSPECT STATE FILE (JSON backend):
-#    cat ~/.mozart/state/observability-demo.json | jq '.sheets'
-#    cat ~/.mozart/state/observability-demo.json | jq '.sheets."1".error_history'
-#    cat ~/.mozart/state/observability-demo.json | jq '.sheets."1".prompt_metrics'
+#    cat ~/.marianne/state/observability-demo.json | jq '.sheets'
+#    cat ~/.marianne/state/observability-demo.json | jq '.sheets."1".error_history'
+#    cat ~/.marianne/state/observability-demo.json | jq '.sheets."1".prompt_metrics'
 #
 # ============================================================
 # WHAT TO OBSERVE

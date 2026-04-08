@@ -1,4 +1,4 @@
-"""Adversarial tests for the 5 interconnected mozart top TUI bugs.
+"""Adversarial tests for the 5 interconnected mzt top TUI bugs.
 
 Each test class reproduces the EXACT broken scenario observed in production:
 - 32 processes ALL mapped to observer-integration with sheet_num=10

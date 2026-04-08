@@ -1,4 +1,4 @@
-"""Security middleware and utilities for Mozart Dashboard.
+"""Security middleware and utilities for Marianne Dashboard.
 
 Provides security headers, CORS configuration, and input validation.
 """
@@ -78,16 +78,16 @@ class SecurityConfig:
         """Create config from environment variables.
 
         Environment variables:
-            MOZART_CORS_ORIGINS: Comma-separated origins
-            MOZART_CORS_CREDENTIALS: true/false
+            MZT_CORS_ORIGINS: Comma-separated origins
+            MZT_CORS_CREDENTIALS: true/false
         """
         origins_str = os.getenv(
-            "MOZART_CORS_ORIGINS",
+            "MZT_CORS_ORIGINS",
             "http://localhost:8080,http://127.0.0.1:8080"
         )
         origins = [o.strip() for o in origins_str.split(",") if o.strip()]
 
-        credentials = os.getenv("MOZART_CORS_CREDENTIALS", "true").lower() == "true"
+        credentials = os.getenv("MZT_CORS_CREDENTIALS", "true").lower() == "true"
 
         return cls(
             cors_origins=origins,

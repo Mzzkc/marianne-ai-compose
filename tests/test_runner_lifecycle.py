@@ -1,4 +1,4 @@
-"""Tests for mozart.execution.runner.lifecycle module.
+"""Tests for marianne.execution.runner.lifecycle module.
 
 Covers LifecycleMixin: _finalize_summary, _get_config_summary,
 _get_completed_sheets, get_summary, _get_next_sheet_dag_aware,

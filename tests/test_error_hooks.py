@@ -1,4 +1,4 @@
-"""Tests for mozart.learning.error_hooks module.
+"""Tests for marianne.learning.error_hooks module.
 
 Covers ErrorLearningConfig, ErrorLearningContext, ErrorLearningHooks
 (on_error_classified, on_error_recovered, on_auth_failure, get_error_stats),

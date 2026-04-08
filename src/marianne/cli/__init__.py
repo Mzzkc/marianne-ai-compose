@@ -1,6 +1,6 @@
-"""Mozart CLI - modular command structure.
+"""Marianne CLI - modular command structure.
 
-This package provides a modular CLI implementation for Mozart AI Compose.
+This package provides a modular CLI implementation for Marianne AI Compose.
 The CLI is built using Typer and organized into command modules for maintainability.
 
 ★ Insight ─────────────────────────────────────
@@ -123,7 +123,7 @@ from .output import console
 # =============================================================================
 
 app = typer.Typer(
-    name="mozart",
+    name="marianne",
     help="Orchestration system for AI agent workflows",
     add_completion=False,
 )
@@ -137,7 +137,7 @@ app = typer.Typer(
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
-        console.print(f"Mozart AI Compose v{__version__}")
+        console.print(f"Marianne AI Compose v{__version__}")
         raise typer.Exit()
 
 
@@ -184,8 +184,8 @@ def conductor_clone_callback(value: str | None) -> str | None:
     This enables safe testing without risking the production conductor.
 
     Usage (always use = syntax):
-        mozart --conductor-clone= status             # Default clone
-        mozart --conductor-clone=staging run x.yaml  # Named clone
+        marianne --conductor-clone= status             # Default clone
+        marianne --conductor-clone=staging run x.yaml  # Named clone
     """
     if value is not None:
         from marianne.daemon.clone import set_clone_name
@@ -239,7 +239,7 @@ def main(
             "-L",
             callback=log_level_callback,
             help="Logging level (DEBUG, INFO, WARNING, ERROR)",
-            envvar="MOZART_LOG_LEVEL",
+            envvar="MZT_LOG_LEVEL",
         ),
     ] = None,
     log_file: Annotated[
@@ -248,7 +248,7 @@ def main(
             "--log-file",
             callback=log_file_callback,
             help="Path for log file output",
-            envvar="MOZART_LOG_FILE",
+            envvar="MZT_LOG_FILE",
         ),
     ] = None,
     log_format: Annotated[
@@ -257,11 +257,11 @@ def main(
             "--log-format",
             callback=log_format_callback,
             help="Log format: json, console, or both",
-            envvar="MOZART_LOG_FORMAT",
+            envvar="MZT_LOG_FORMAT",
         ),
     ] = None,
 ) -> None:
-    """Mozart AI Compose - Orchestration system for AI agent workflows."""
+    """Marianne AI Compose - Orchestration system for AI agent workflows."""
     # Configure logging based on CLI options (called once)
     configure_global_logging(console)
 

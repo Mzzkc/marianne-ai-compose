@@ -15,7 +15,7 @@ import httpx
 
 from marianne.core.checkpoint import ValidationDetailDict
 
-_logger = logging.getLogger("mozart.learning.judgment")
+_logger = logging.getLogger("marianne.learning.judgment")
 
 
 @dataclass
@@ -87,7 +87,7 @@ class JudgmentResponse:
 class JudgmentClient:
     """HTTP client for Recursive Light judgment API.
 
-    Connects to Recursive Light's /api/mozart/judgment endpoint
+    Connects to Recursive Light's /api/marianne/judgment endpoint
     to get TDF-aligned execution decisions with accumulated wisdom.
 
     Falls back to default "retry" action on connection errors
@@ -134,7 +134,7 @@ class JudgmentClient:
     async def get_judgment(self, query: JudgmentQuery) -> JudgmentResponse:
         """Get execution judgment from Recursive Light.
 
-        Posts the query to RL's /api/mozart/judgment endpoint and
+        Posts the query to RL's /api/marianne/judgment endpoint and
         parses the response. On errors, returns a default "retry"
         action for graceful degradation.
 
@@ -160,7 +160,7 @@ class JudgmentClient:
             }
 
             # POST to RL judgment endpoint
-            response = await client.post("/api/mozart/judgment", json=payload)
+            response = await client.post("/api/marianne/judgment", json=payload)
 
             if response.status_code != 200:
                 # API error - fall back to retry

@@ -1,7 +1,7 @@
-"""Tests for mozart.daemon.detect — CLI daemon detection and routing.
+"""Tests for marianne.daemon.detect — CLI daemon detection and routing.
 
 The detect module provides daemon availability checks and RPC routing.
-``mozart run`` requires a running daemon — if unavailable, the CLI
+``mzt run`` requires a running daemon — if unavailable, the CLI
 prints an error and exits.  ``is_daemon_available()`` and
 ``try_daemon_route()`` never raise; callers inspect return values.
 """
@@ -184,7 +184,7 @@ class TestTryDaemonRoute:
 
 
 class TestCliNonDaemonRegression:
-    """Verify that Mozart CLI's non-execution paths work without a daemon.
+    """Verify that Marianne CLI's non-execution paths work without a daemon.
 
     Uses subprocess execution to test the real CLI entry point.
     ``--dry-run`` and ``validate`` don't need a daemon.  Actual
@@ -192,7 +192,7 @@ class TestCliNonDaemonRegression:
     """
 
     def test_dry_run_without_daemon(self):
-        """mozart run --dry-run succeeds without a daemon socket.
+        """mzt run --dry-run succeeds without a daemon socket.
 
         Dry-run mode validates and displays the job plan without
         executing, so it doesn't require a running daemon.
@@ -208,7 +208,7 @@ class TestCliNonDaemonRegression:
             env={
                 **__import__("os").environ,
                 # Ensure no daemon socket is found
-                "MOZART_SOCKET_PATH": "/tmp/nonexistent-mozart-test.sock",
+                "MZT_SOCKET_PATH": "/tmp/nonexistent-marianne-test.sock",
             },
         )
         assert result.returncode == 0, (
@@ -222,7 +222,7 @@ class TestCliNonDaemonRegression:
         )
 
     def test_validate_without_daemon(self):
-        """mozart validate succeeds without a daemon socket."""
+        """mzt validate succeeds without a daemon socket."""
         result = subprocess.run(
             [
                 sys.executable, "-m", "marianne", "validate",

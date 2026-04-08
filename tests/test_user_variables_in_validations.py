@@ -3,7 +3,7 @@
 Score authors should be able to use {my_var} in validation paths
 when those variables are defined in prompt.variables. This works
 at three levels:
-1. Preview (mozart validate) — rendering.py
+1. Preview (mzt validate) — rendering.py
 2. Runtime (legacy runner) — already works via sheet.py:408
 3. Runtime (baton) — already works via Sheet.template_variables()
 

@@ -1,8 +1,8 @@
-# Getting Started with Mozart AI Compose
+# Getting Started with Marianne AI Compose
 
-Mozart AI Compose orchestrates multi-phase AI workflows with checkpointing, validation gates, and automatic recovery. You write a declarative YAML configuration (a **score**), and Mozart decomposes it into **sheets** (execution stages), runs each one through an AI **instrument**, validates the output, and recovers from failures automatically.
+Marianne AI Compose orchestrates multi-phase AI workflows with checkpointing, validation gates, and automatic recovery. You write a declarative YAML configuration (a **score**), and Marianne decomposes it into **sheets** (execution stages), runs each one through an AI **instrument**, validates the output, and recovers from failures automatically.
 
-**Repository:** [github.com/Mzzkc/mozart-ai-compose](https://github.com/Mzzkc/mozart-ai-compose)
+**Repository:** [github.com/Mzzkc/marianne-ai-compose](https://github.com/Mzzkc/marianne-ai-compose)
 
 ## Installation
 
@@ -10,8 +10,8 @@ Mozart AI Compose orchestrates multi-phase AI workflows with checkpointing, vali
 
 ```bash
 # Clone the repository
-git clone https://github.com/Mzzkc/mozart-ai-compose.git
-cd mozart-ai-compose
+git clone https://github.com/Mzzkc/marianne-ai-compose.git
+cd marianne-ai-compose
 
 # Install with conductor support (required for score execution)
 ./setup.sh --daemon
@@ -32,43 +32,43 @@ pip install -e ".[daemon]"
 ### Verify Installation
 
 ```bash
-mozart --version
+mzt --version
 ```
 
 ## Prerequisites
 
-Mozart uses Claude CLI as its default instrument. Ensure you have:
+Marianne uses Claude CLI as its default instrument. Ensure you have:
 
 1. **Claude CLI installed**: Follow [Claude CLI installation guide](https://docs.anthropic.com/claude-code)
 2. **API access configured**: Claude CLI should be authenticated
 3. **Daemon support installed**: `pip install -e ".[daemon]"` or `./setup.sh --daemon`
 
-After installation, run `mozart doctor` to verify your environment is ready.
+After installation, run `mzt doctor` to verify your environment is ready.
 
-## Quick Start: Run hello-mozart.yaml
+## Quick Start: Run hello-marianne.yaml
 
-The fastest way to see Mozart in action:
+The fastest way to see Marianne in action:
 
 ```bash
 # 1. Start the conductor (required for execution)
-mozart start
+mzt start
 
 # 2. Run the hello score
-mozart run examples/hello-mozart.yaml
+mzt run examples/hello-marianne.yaml
 
 # 3. Watch progress
-mozart status hello-mozart
+mzt status hello-marianne
 
 # 4. Open the result in your browser
-open workspaces/hello-mozart/the-sky-library.html   # macOS
-# xdg-open workspaces/hello-mozart/the-sky-library.html  # Linux
+open workspaces/hello-marianne/the-sky-library.html   # macOS
+# xdg-open workspaces/hello-marianne/the-sky-library.html  # Linux
 ```
 
-`hello-mozart.yaml` creates an interconnected fiction experience in three movements: a world setting, three parallel character vignettes, and a finale that weaves them together — all presented as a beautifully designed HTML page you can open in any browser. Five sheets, ~5 minutes, real creative output.
+`hello-marianne.yaml` creates an interconnected fiction experience in three movements: a world setting, three parallel character vignettes, and a finale that weaves them together — all presented as a beautifully designed HTML page you can open in any browser. Five sheets, ~5 minutes, real creative output.
 
 ## How Sheets Work
 
-Mozart splits work into **sheets** — execution stages processed one at a time (or in parallel when dependencies allow). You write one prompt template, and Mozart runs it once per sheet with different variables:
+Marianne splits work into **sheets** — execution stages processed one at a time (or in parallel when dependencies allow). You write one prompt template, and Marianne runs it once per sheet with different variables:
 
 | Config | Meaning |
 |--------|---------|
@@ -126,7 +126,7 @@ validations:
 Before running, validate the configuration:
 
 ```bash
-mozart validate my-first-score.yaml
+mzt validate my-first-score.yaml
 ```
 
 You should see:
@@ -149,10 +149,10 @@ The `V205` note is just advice — your score is valid. It's pointing out that `
 
 ### Step 3: Dry Run
 
-Preview what Mozart will do without executing:
+Preview what Marianne will do without executing:
 
 ```bash
-mozart run my-first-score.yaml --dry-run
+mzt run my-first-score.yaml --dry-run
 ```
 
 This shows:
@@ -162,18 +162,18 @@ This shows:
 
 ### Step 4: Start the Conductor
 
-The Mozart conductor is required for score execution:
+The Marianne conductor is required for score execution:
 
 ```bash
-mozart start
-mozart conductor-status   # Verify it's running
+mzt start
+mzt conductor-status   # Verify it's running
 ```
 
-> **What if I skip this?** Running `mozart run` without a conductor produces:
+> **What if I skip this?** Running `mzt run` without a conductor produces:
 > ```
-> Error: Conductor not running. Start with: mozart start
+> Error: Conductor not running. Start with: mzt start
 > ```
-> Only `mozart validate` and `mozart run --dry-run` work without a conductor.
+> Only `mzt validate` and `mzt run --dry-run` work without a conductor.
 > See the [Daemon Guide](daemon-guide.md) for why this is required.
 
 ### Step 5: Run the Score
@@ -181,7 +181,7 @@ mozart conductor-status   # Verify it's running
 Execute the score:
 
 ```bash
-mozart run my-first-score.yaml
+mzt run my-first-score.yaml
 ```
 
 You'll see:
@@ -195,10 +195,10 @@ While running (or after), check score status:
 
 ```bash
 # Show specific score details
-mozart status my-first-score
+mzt status my-first-score
 
 # List all active scores
-mozart list
+mzt list
 ```
 
 ## Handling Interruptions
@@ -212,7 +212,7 @@ Ctrl+C received. Finishing current sheet and saving state...
 
 State saved. Score paused at sheet 2/3.
 
-To resume: mozart resume my-first-score
+To resume: mzt resume my-first-score
 ```
 
 ### Resuming Scores
@@ -220,10 +220,10 @@ To resume: mozart resume my-first-score
 Resume a paused or failed score:
 
 ```bash
-mozart resume my-first-score
+mzt resume my-first-score
 ```
 
-Mozart continues from where it left off.
+Marianne continues from where it left off.
 
 ## Common Patterns
 
@@ -417,7 +417,7 @@ validations:
 Start the web dashboard for real-time monitoring:
 
 ```bash
-mozart dashboard
+mzt dashboard
 ```
 
 Access at `http://localhost:8000`:
@@ -428,7 +428,7 @@ Access at `http://localhost:8000`:
 
 Custom port:
 ```bash
-mozart dashboard --port 3000
+mzt dashboard --port 3000
 ```
 
 ## Next Steps
@@ -439,8 +439,8 @@ mozart dashboard --port 3000
 - [Configuration Reference](configuration-reference.md) — Every config field documented
 
 **Explore examples:**
-- [Examples](../examples/) — 37 score configurations across software, research, writing, and planning
-- [Mozart Score Playspace](https://github.com/Mzzkc/mozart-score-playspace) — Creative showcase with real output: philosophy, worldbuilding, education, and more
+- [Examples](../examples/) — 43 score configurations across software, research, writing, and planning
+- [Marianne Score Playspace](https://github.com/Mzzkc/marianne-score-playspace) — Creative showcase with real output: philosophy, worldbuilding, education, and more
 
 **Go deeper:**
 - [Daemon Guide](daemon-guide.md) — Conductor architecture, systemd integration, and troubleshooting
@@ -451,9 +451,9 @@ mozart dashboard --port 3000
 
 ### Score Won't Start
 
-1. Run `mozart doctor` to check your environment
-2. Check config: `mozart validate config.yaml`
-3. Verify your instrument is available: `mozart instruments list`
+1. Run `mzt doctor` to check your environment
+2. Check config: `mzt validate config.yaml`
+3. Verify your instrument is available: `mzt instruments list`
 
 ### Validation Failing
 
@@ -464,7 +464,7 @@ mozart dashboard --port 3000
 
 ### Rate Limits
 
-Mozart detects rate limits and waits automatically. Configure wait times:
+Marianne detects rate limits and waits automatically. Configure wait times:
 
 ```yaml
 rate_limit:
@@ -475,13 +475,13 @@ rate_limit:
 If a score is stuck waiting on a rate limit that has already expired, clear it manually:
 
 ```bash
-mozart clear-rate-limits                    # Clear all stale rate limits
-mozart clear-rate-limits --instrument NAME  # Clear for a specific instrument
+mzt clear-rate-limits                    # Clear all stale rate limits
+mzt clear-rate-limits --instrument NAME  # Clear for a specific instrument
 ```
 
 ### Unknown Field Errors
 
-Mozart strictly validates score YAML — any field name it doesn't recognize is an error, not silently ignored. This catches typos immediately:
+Marianne strictly validates score YAML — any field name it doesn't recognize is an error, not silently ignored. This catches typos immediately:
 
 ```
 Error: Schema validation failed: 1 validation error for JobConfig
@@ -489,7 +489,7 @@ insturment_config
   Extra inputs are not permitted
 ```
 
-Mozart suggests corrections for common typos:
+Marianne suggests corrections for common typos:
 
 ```
 Hints:
@@ -500,6 +500,6 @@ If you see this error, check for typos in your YAML field names. See the [Score 
 
 ### Resume Not Working
 
-1. Check score state: `mozart status <score-id>`
+1. Check score state: `mzt status <score-id>`
 2. Ensure config is available (stored in state or via `--config`)
 3. Use `--force` to restart completed scores

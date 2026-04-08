@@ -1,7 +1,7 @@
 # Example: Systematic Literature Review (PRISMA-Compliant)
 # Orchestrate a rigorous academic literature review following PRISMA 2020 guidelines
 #
-# This example demonstrates Mozart's capabilities BEYOND software development:
+# This example demonstrates Marianne's capabilities BEYOND software development:
 # - Multi-phase progressive synthesis
 # - Dual-reviewer/multi-expert validation pattern
 # - Evidence-based quality gates
@@ -16,11 +16,11 @@
 # Usage:
 #   # 1. Customize variables in prompt.variables section
 #   # 2. Validate configuration
-#   mozart validate examples/systematic-literature-review.yaml
+#   mzt validate examples/systematic-literature-review.yaml
 #   # 3. Run the review
-#   mozart run examples/systematic-literature-review.yaml
+#   mzt run examples/systematic-literature-review.yaml
 #   # 4. Monitor progress
-#   mozart status systematic-literature-review
+#   mzt status systematic-literature-review
 #
 # Estimated time: 4-8 hours depending on scope
 # Outputs: PRISMA-compliant systematic review in workspace/

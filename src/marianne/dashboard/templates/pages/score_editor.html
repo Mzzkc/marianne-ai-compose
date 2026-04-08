@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Score Editor — Mozart{% endblock %}
+{% block title %}Score Editor — Marianne{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="/static/codemirror/codemirror.min.css">
@@ -68,7 +68,7 @@
                     <div class="flex items-center gap-2">
                         <button @click="validateScore()"
                                 :disabled="validating"
-                                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-mozart-500 text-white hover:bg-mozart-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-marianne-500 text-white hover:bg-marianne-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             <svg x-show="!validating" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
@@ -124,7 +124,7 @@
                 <!-- Validating -->
                 <template x-if="validating">
                     <div class="p-6 text-center">
-                        <svg class="w-8 h-8 mx-auto text-mozart-500 animate-spin mb-2" fill="none" viewBox="0 0 24 24">
+                        <svg class="w-8 h-8 mx-auto text-marianne-500 animate-spin mb-2" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                         </svg>
@@ -276,7 +276,7 @@
                     </div>
                     <template x-if="submitResult.success && submitResult.job_id">
                         <a :href="'/jobs/' + submitResult.job_id + '/details'"
-                           class="text-xs text-mozart-600 dark:text-mozart-400 hover:underline">
+                           class="text-xs text-marianne-600 dark:text-marianne-400 hover:underline">
                             View job details
                         </a>
                     </template>
@@ -315,7 +315,7 @@
                         <div class="space-y-2">
                             <template x-for="tmpl in availableTemplates" :key="tmpl.name">
                                 <button @click="loadTemplate(tmpl)"
-                                        class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-mozart-300 dark:hover:border-mozart-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                        class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-marianne-300 dark:hover:border-marianne-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                     <div class="flex items-center justify-between mb-1">
                                         <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="tmpl.title"></span>
                                         <span class="px-1.5 py-0.5 text-xs font-medium rounded"
@@ -358,7 +358,7 @@ function scoreEditor() {
         availableTemplates: [],
 
         defaultContent: [
-            '# Mozart Score Configuration',
+            '# Marianne Score Configuration',
             'name: my-job',
             'workspace: ./workspace',
             '',

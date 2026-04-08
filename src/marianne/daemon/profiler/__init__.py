@@ -1,7 +1,7 @@
 """Profiler package — system resource collection, storage, and anomaly detection.
 
 Collects per-process metrics, GPU stats, strace summaries, and stores
-time-series data in SQLite for consumption by ``mozart top`` and the
+time-series data in SQLite for consumption by ``mzt top`` and the
 anomaly/correlation analyzers.
 """
 

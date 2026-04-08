@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.monitor module.
+"""Tests for marianne.daemon.monitor module.
 
 Covers ResourceMonitor check cycle, memory warning thresholds,
 process count tracking, is_accepting_work(), and psutil fallback.

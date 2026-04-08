@@ -23,7 +23,7 @@ But the movement's narrative — that the baton is approaching production readin
 Tested independently:
 
 ```
-$ mozart validate /tmp/test-adversary-unknown-field.yaml
+$ mzt validate /tmp/test-adversary-unknown-field.yaml
 Error: Schema validation failed: 1 validation error for JobConfig
 sheet.this_field_does_not_exist_at_all
   Extra inputs are not permitted
@@ -34,7 +34,7 @@ Nested models also reject unknowns:
 prompt.unknown_nested_field → Extra inputs are not permitted
 ```
 
-Verified `grep -c 'extra="forbid"' src/mozart/core/config/*.py` → 51 across 8 modules. The backward compatibility mechanism (`strip_computed_fields` at `job.py:323-334`) is correctly ordered — runs as a `mode="before"` model_validator before Pydantic's `extra="forbid"` check.
+Verified `grep -c 'extra="forbid"' src/marianne/core/config/*.py` → 51 across 8 modules. The backward compatibility mechanism (`strip_computed_fields` at `job.py:323-334`) is correctly ordered — runs as a `mode="before"` model_validator before Pydantic's `extra="forbid"` check.
 
 ### F-431: Daemon Config Strictness — CONFIRMED MISSING
 
@@ -43,14 +43,14 @@ Verified `grep -c 'extra="forbid"' src/mozart/core/config/*.py` → 51 across 8 
 # SILENT ACCEPT — unknown field silently dropped
 ```
 
-`grep -c 'extra="forbid"' src/mozart/daemon/config.py` → 0. Five BaseModel classes (`ResourceLimitConfig`, `SocketConfig`, `ObserverConfig`, `SemanticLearningConfig`, `DaemonConfig`) at `daemon/config.py:22,60,85,143,217` all lack `extra="forbid"`. A typo in `~/.mozart/conductor.yaml` is silently dropped — same bug class as F-441 but for operator-facing config.
+`grep -c 'extra="forbid"' src/marianne/daemon/config.py` → 0. Five BaseModel classes (`ResourceLimitConfig`, `SocketConfig`, `ObserverConfig`, `SemanticLearningConfig`, `DaemonConfig`) at `daemon/config.py:22,60,85,143,217` all lack `extra="forbid"`. A typo in `~/.marianne/conductor.yaml` is silently dropped — same bug class as F-441 but for operator-facing config.
 
 ### F-470: Memory Leak — CONFIRMED REAL
 
 `_synced_status` at `adapter.py:344` is NOT cleaned in `deregister_job()` at lines 492-518. The method cleans 6 data structures (`_job_sheets`, `_job_renderers`, `_job_cross_sheet`, `_completion_events`, `_completion_results`, `_active_tasks`) but not `_synced_status`. Verified via grep:
 
 ```
-$ grep -n '_synced_status' src/mozart/daemon/baton/adapter.py
+$ grep -n '_synced_status' src/marianne/daemon/baton/adapter.py
 344:        self._synced_status: dict[tuple[str, int], str] = {}
 1382:                    if self._synced_status.get(key) != cancelled_status:
 1383:                        self._synced_status[key] = cancelled_status
@@ -69,7 +69,7 @@ Code at `adapter.py:680-734` implements `_collect_cross_sheet_context()`. Reads 
 `_build_command()` at `cli_backend.py:169-232` does NOT reference `mcp_config_flag` anywhere. The instrument profile at `instruments/builtins/claude-code.yaml:78` defines `mcp_config_flag: "--mcp-config"`, but the PluginCliBackend never reads it. Every claude-code invocation via the plugin backend launches with the user's full MCP configuration. `ClaudeCliBackend` at `backends/claude_cli.py:255` handles `disable_mcp` correctly — the gap is plugin-backend-specific.
 
 ```
-$ grep -n 'mcp_config_flag\|disable_mcp\|mcp' src/mozart/execution/instruments/cli_backend.py
+$ grep -n 'mcp_config_flag\|disable_mcp\|mcp' src/marianne/execution/instruments/cli_backend.py
 (no output)
 ```
 
@@ -78,18 +78,18 @@ Zero references to MCP in the plugin backend. This is the production bug that ca
 ### F-255.2: Baton _live_states — CONFIRMED OPEN
 
 ```
-$ grep -n '_live_states' src/mozart/daemon/baton/adapter.py
+$ grep -n '_live_states' src/marianne/daemon/baton/adapter.py
 (no output)
 ```
 
-Zero references. The baton adapter does not publish state to the manager's `_live_states` dict (used at `manager.py:144` and referenced by 15+ call sites including `semantic_analyzer.py`, `profiler/collector.py`, and status display). When `use_baton: true` is flipped, `mozart status` will show degraded information for baton-managed jobs.
+Zero references. The baton adapter does not publish state to the manager's `_live_states` dict (used at `manager.py:144` and referenced by 15+ call sites including `semantic_analyzer.py`, `profiler/collector.py`, and status display). When `use_baton: true` is flipped, `mzt status` will show degraded information for baton-managed jobs.
 
 ---
 
 ## 2. The Baton Is Not Running — Ember Is Right
 
 ```
-$ grep "use_baton" ~/.mozart/conductor.yaml
+$ grep "use_baton" ~/.marianne/conductor.yaml
 use_baton: false
 ```
 
@@ -99,7 +99,7 @@ The distance to v1 beta is not "~50 lines." It is:
 1. Fix F-271 (~15 lines)
 2. Fix F-255.2 (~30 lines)
 3. Actually flip `use_baton: true` on a conductor-clone
-4. Run hello-mozart.yaml through the baton and debug whatever breaks
+4. Run hello-marianne.yaml through the baton and debug whatever breaks
 5. F-255 had 5 blocking gaps on the last production attempt — expect more
 6. Phase 2: flip the default
 7. Build the demo
@@ -124,7 +124,7 @@ sheet:
 
 This score validates clean:
 ```
-$ mozart validate /tmp/test-psi.yaml
+$ mzt validate /tmp/test-psi.yaml
 ✓ Configuration valid
 Instrument: claude_cli     # <-- note: shows SINGLE instrument
 ```
@@ -166,7 +166,7 @@ The README at line 32 advertises "Multiple instruments" as a current feature. It
 
 1. **F-271** (~15 lines) — PluginCliBackend MCP disable. Two movements open. Six musicians have called it out. Nobody has claimed it.
 2. **F-255.2** (~30 lines) — Baton `_live_states` population. Required for status display under baton.
-3. **Phase 1 baton test** — Run hello-mozart.yaml through `--conductor-clone` with `use_baton: true`. Nobody has done this.
+3. **Phase 1 baton test** — Run hello-marianne.yaml through `--conductor-clone` with `use_baton: true`. Nobody has done this.
 4. **Fix whatever Phase 1 reveals** — F-255 found 5 gaps last time. Expect more.
 5. **The demo** — 10 movements. Zero progress. The Wordware demos are a meaningful substitute (290-437 lines each, substantive domain content) but don't replace the visual demo the composer wants.
 
@@ -175,7 +175,7 @@ The README at line 32 advertises "Multiple instruments" as a current feature. It
 6. **F-431** — Daemon config `extra='forbid'`. Same bug class as F-441 but for conductor.yaml. 5 models. Small fix.
 7. **F-470** — `_synced_status` memory leak. ~3 lines to fix. `deregister_job()` at `adapter.py:516-517` needs to pop matching keys.
 8. **F-471** — Pending jobs lost on restart. Architectural, not a quick fix. Needs at minimum documentation.
-9. **Multi-instrument validation gap** — `mozart validate` should warn when `per_sheet_instruments` or `instrument_map` is configured but `use_baton` is not active on the target conductor.
+9. **Multi-instrument validation gap** — `mzt validate` should warn when `per_sheet_instruments` or `instrument_map` is configured but `use_baton` is not active on the target conductor.
 
 ---
 

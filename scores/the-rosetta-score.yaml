@@ -49,15 +49,15 @@
 #              [on_success: split corpus → chain to rosetta-prove]
 #
 # Usage:
-#   mozart run scores/the-rosetta-score.yaml              # First run
+#   mzt run scores/the-rosetta-score.yaml              # First run
 #   # ... it chains to itself automatically ...
-#   mozart status the-rosetta-score --watch               # Monitor
+#   mzt status the-rosetta-score --watch               # Monitor
 #   cat scores/rosetta-corpus.md                          # Read corpus
 
 name: "the-rosetta-score"
 description: "Self-perpetuating pattern discovery — six domains, adversarial review, proof by composition, chains to discover more"
 
-workspace: "/home/emzi/Projects/mozart-ai-compose/workspaces/rosetta-workspace"
+workspace: "/home/emzi/Projects/marianne-ai-compose/workspaces/rosetta-workspace"
 
 instrument: claude-code
 instrument_config:
@@ -118,26 +118,26 @@ prompt:
     # ─── PERMANENT LOCATIONS ───
     # The corpus lives outside the workspace and survives archival.
     # Each iteration reads it, adds to it, writes it back.
-    corpus_path: "/home/emzi/Projects/mozart-ai-compose/scores/rosetta-corpus.md"
+    corpus_path: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus.md"
 
     # ─── SCORE DIRECTORIES ───
     # The expeditions scan these for existing scores. Multiple dirs
     # so the score sees both public examples and the broader collection.
     score_dirs:
-      - "/home/emzi/Projects/mozart-ai-compose/examples"
+      - "/home/emzi/Projects/marianne-ai-compose/examples"
       - "/home/emzi/Projects/claude-compositions/scores"
 
     # Where proof scores land — in the rosetta subdirectory of examples.
-    proof_output_dir: "/home/emzi/Projects/mozart-ai-compose/examples/rosetta"
+    proof_output_dir: "/home/emzi/Projects/marianne-ai-compose/examples/rosetta"
 
     # Previously produced proof scores — the score reads these to avoid
     # re-proving patterns and to maintain a quality bar.
-    proof_scores_dir: "/home/emzi/Projects/mozart-ai-compose/examples/rosetta"
+    proof_scores_dir: "/home/emzi/Projects/marianne-ai-compose/examples/rosetta"
 
     # Decomposed corpus index — individual pattern files for targeted reading.
     # Produced by scripts/split-rosetta-corpus.py from the monolith.
-    corpus_index: "/home/emzi/Projects/mozart-ai-compose/scores/rosetta-corpus/INDEX.md"
-    corpus_patterns_dir: "/home/emzi/Projects/mozart-ai-compose/scores/rosetta-corpus/patterns"
+    corpus_index: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus/INDEX.md"
+    corpus_patterns_dir: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-corpus/patterns"
 
     # ─── THE QUESTION ───
     question: |
@@ -149,12 +149,12 @@ prompt:
       a shared grammar, a set of structural moves that appear everywhere
       because they are necessities of coordinated intelligence itself?
 
-    # ─── MOZART'S FULL TOOLKIT ───
+    # ─── MZT'S FULL TOOLKIT ───
     # Everything the expeditions can translate patterns INTO.
     primitives: |
       **Execution units:** sheet (one task, one agent), stage (group of
       sheets), movement (named major phase — movements: YAML key gives
-      each movement a name visible in `mozart status`), score (complete
+      each movement a name visible in `mzt status`), score (complete
       job), concert (multi-score orchestration)
 
       **Coordination:** fan-out (N parallel instances, stagger_delay_ms
@@ -380,7 +380,7 @@ prompt:
         name: "the-practitioner"
         title: "The Practitioner"
         attack: |
-          You compose Mozart scores. For every pattern: can I build a
+          You compose Marianne scores. For every pattern: can I build a
           score from this description in under 10 minutes? Are the stages
           concrete? Is the fan-out specified? Do the validations verify
           outcomes, not just process? If you can't compose from it,
@@ -398,7 +398,7 @@ prompt:
         name: "the-newcomer"
         title: "The Newcomer"
         attack: |
-          You've never used Mozart. Would someone who just installed it
+          You've never used Marianne. Would someone who just installed it
           understand these patterns? Is the "When to Use" clear enough
           to recognize in practice? Are the examples from domains a
           real user might work in? If it assumes expertise, it fails.
@@ -444,7 +444,7 @@ prompt:
     AN EXAMPLE: [A concrete task outside your domain this would serve.]
 
     INSTRUMENTS:
-    - Preferred: [which Mozart instrument(s) and why]
+    - Preferred: [which mzt instrument(s) and why]
     - Custom: [any non-AI instruments this pattern needs — CLI tools,
       scripts, APIs]
     ```
@@ -519,7 +519,7 @@ prompt:
     patterns connect across domains. The expeditions go deeper — finding
     the structural moves these equivalences are evidence of.
 
-    ## Mozart's Full Toolkit
+    ## Marianne's Full Toolkit
 
     {{ primitives }}
 
@@ -552,13 +552,13 @@ prompt:
     Find real examples, real terminology, real practitioners' knowledge.
     Don't work from what you already know alone.
 
-    You can also Read existing scores to understand what Mozart scores
+    You can also Read existing scores to understand what Marianne scores
     look like in practice:
     {% for dir in score_dirs %}
     - `{{ dir }}/`
     {% endfor %}
 
-    ## Mozart's Toolkit (what you're translating INTO)
+    ## Marianne's Toolkit (what you're translating INTO)
 
     {{ primitives }}
 
@@ -571,7 +571,7 @@ prompt:
     {{ pattern_format() }}
 
     Start from your domain's native coordination problems. Don't start
-    from Mozart and work backward. The first finds structures. The
+    from Marianne and work backward. The first finds structures. The
     second finds analogies.
 
     Use WebSearch to research real examples in your domain. Don't work
@@ -610,7 +610,7 @@ prompt:
     2. **Divergences** — genuinely unique to one domain
     3. **The answer** — commit to a position on universality
     4. **Deep structures** — what generates the universals?
-    5. **Ranking** — top 15-20 by utility for Mozart
+    5. **Ranking** — top 15-20 by utility for Marianne
 
     {{ output_spec("03-the-collision.md", 2500) }}
     {{ quality_bar("high") }}
@@ -643,12 +643,12 @@ prompt:
     ### Core Dynamic
     ### When to Use
     ### When NOT to Use
-    ### Mozart Score Structure
+    ### Marianne Score Structure
     ### Example
     ### Composes With
     ```
 
-    Group by scale. Every pattern must have a concrete Mozart score
+    Group by scale. Every pattern must have a concrete Marianne score
     structure.
 
     {{ output_spec("04-draft-corpus.md", 4000) }}
@@ -793,7 +793,7 @@ validations:
     pattern: "(?i)THE SCORE:"
     condition: "stage == 2"
     stage: 2
-    description: "Patterns include Mozart translations"
+    description: "Patterns include Marianne translations"
 
   # ── Stage 3: The Collision ──
   - type: file_exists
@@ -832,7 +832,7 @@ validations:
     description: "Draft has substantive content"
   - type: content_regex
     path: "{workspace}/04-draft-corpus.md"
-    pattern: "(?i)Mozart Score Structure"
+    pattern: "(?i)Marianne Score Structure"
     condition: "stage == 4"
     stage: 2
     description: "Patterns include score structures"
@@ -868,7 +868,7 @@ validations:
     description: "Corpus has substantive content"
   - type: content_regex
     path: "{workspace}/06-the-corpus.md"
-    pattern: "(?i)Mozart Score Structure"
+    pattern: "(?i)Marianne Score Structure"
     condition: "stage == 6"
     stage: 2
     description: "Patterns include buildable structures"
@@ -884,10 +884,10 @@ validations:
 # Post-completion: decompose corpus, then prove patterns
 on_success:
   - type: run_command
-    command: "python3 /home/emzi/Projects/mozart-ai-compose/scripts/split-rosetta-corpus.py"
+    command: "python3 /home/emzi/Projects/marianne-ai-compose/scripts/split-rosetta-corpus.py"
     description: "Decompose corpus monolith into indexed pattern files"
   - type: run_job
-    job_path: "/home/emzi/Projects/mozart-ai-compose/scores/rosetta-prove.yaml"
+    job_path: "/home/emzi/Projects/marianne-ai-compose/scores/rosetta-prove.yaml"
     detached: true
     fresh: true
     inherit_learning: true

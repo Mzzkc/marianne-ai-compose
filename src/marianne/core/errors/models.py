@@ -102,7 +102,7 @@ class ErrorInfo:
     ```python
     error_info = ErrorInfo(
         reason="BINARY_NOT_FOUND",
-        domain="mozart.backend.claude_cli",
+        domain="marianne.backend.claude_cli",
         metadata={
             "expected_binary": "claude",
             "search_path": "/usr/bin:/usr/local/bin",
@@ -113,7 +113,7 @@ class ErrorInfo:
 
     Attributes:
         reason: UPPER_SNAKE_CASE identifier for the specific error reason.
-        domain: Service/component identifier (e.g., "mozart.backend.claude_cli").
+        domain: Service/component identifier (e.g., "marianne.backend.claude_cli").
         metadata: Dynamic contextual information as key-value pairs.
     """
 
@@ -124,7 +124,7 @@ class ErrorInfo:
 
     domain: str
     """Service/component identifier.
-    Example: "mozart.backend.claude_cli", "mozart.execution"
+    Example: "marianne.backend.claude_cli", "marianne.execution"
     """
 
     metadata: dict[str, str] = field(default_factory=dict)

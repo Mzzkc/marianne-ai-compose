@@ -179,7 +179,7 @@ class TestJobControlService:
 
         # Verify pause signal file was created
         workspace_path = job_control_service._workspace_root
-        pause_signal_file = workspace_path / f".mozart-pause-{job_id}"
+        pause_signal_file = workspace_path / f".marianne-pause-{job_id}"
         assert pause_signal_file.exists()
 
         # Cleanup pause file
@@ -252,7 +252,7 @@ class TestJobControlService:
 
         # Verify pause signal file was created
         workspace_path = job_control_service._workspace_root
-        pause_signal_file = workspace_path / f".mozart-pause-{job_id}"
+        pause_signal_file = workspace_path / f".marianne-pause-{job_id}"
         assert pause_signal_file.exists()
 
         # Cleanup pause file
@@ -281,7 +281,7 @@ class TestJobControlService:
 
         # Create pause signal file that would exist from a pause operation
         workspace_path = job_control_service._workspace_root
-        pause_signal_file = workspace_path / f".mozart-pause-{job_id}"
+        pause_signal_file = workspace_path / f".marianne-pause-{job_id}"
         pause_signal_file.touch()
 
         with patch.object(job_control_service, "get_job_pid", return_value=12345):

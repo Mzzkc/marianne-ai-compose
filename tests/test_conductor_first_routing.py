@@ -6,7 +6,7 @@ These tests verify that:
 3. Commands fall back to filesystem with --workspace override
 4. The conductor RPC methods exist and handle parameters correctly
 5. The require_conductor helper works as expected
-6. The mozartd entry point is fully removed
+6. The marianned entry point is fully removed
 """
 
 from __future__ import annotations
@@ -47,11 +47,11 @@ def _make_job_state(
 # ─── Phase 1: Entry point consolidation ─────────────────────────────
 
 
-class TestMozartdRemoved:
-    """Verify mozartd entry point is fully removed."""
+class TestMariannedRemoved:
+    """Verify marianned entry point is fully removed."""
 
-    def test_mozartd_not_in_pyproject(self):
-        """mozartd should NOT appear in pyproject.toml scripts section."""
+    def test_marianned_not_in_pyproject(self):
+        """marianned should NOT appear in pyproject.toml scripts section."""
         import tomllib
 
         pyproject = Path(__file__).parent.parent / "pyproject.toml"
@@ -59,8 +59,9 @@ class TestMozartdRemoved:
             data = tomllib.load(f)
 
         scripts = data.get("project", {}).get("scripts", {})
-        assert "mozartd" not in scripts, "mozartd entry point should be removed"
-        assert "mozart" in scripts, "mozart entry point should still exist"
+        assert "marianned" not in scripts, "marianned entry point should be removed"
+        assert "marianned" not in scripts, "marianned entry point should be removed"
+        assert "mzt" in scripts, "mzt entry point should still exist"
 
     def test_daemon_app_not_in_source(self):
         """daemon_app Typer instance should be removed from process.py."""
@@ -72,7 +73,7 @@ class TestMozartdRemoved:
         assert "daemon_app" not in source, "daemon_app should be removed"
 
     def test_conductor_commands_registered(self):
-        """mozart start/stop/restart/conductor-status should be registered."""
+        """mzt start/stop/restart/conductor-status should be registered."""
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
         assert "start" in result.output
@@ -87,17 +88,17 @@ class TestConductorCommands:
     def test_start_help(self):
         result = runner.invoke(app, ["start", "--help"])
         assert result.exit_code == 0
-        assert "Start the Mozart conductor" in result.output
+        assert "Start the Marianne conductor" in result.output
 
     def test_stop_help(self):
         result = runner.invoke(app, ["stop", "--help"])
         assert result.exit_code == 0
-        assert "Stop the Mozart conductor" in result.output
+        assert "Stop the Marianne conductor" in result.output
 
     def test_restart_help(self):
         result = runner.invoke(app, ["restart", "--help"])
         assert result.exit_code == 0
-        assert "Restart the Mozart conductor" in result.output
+        assert "Restart the Marianne conductor" in result.output
 
 
 # ─── Phase 2+3: Commands route through conductor ────────────────────
@@ -107,7 +108,7 @@ class TestStatusRoutesThruConductor:
     """Status command routes through conductor by default."""
 
     def test_status_shows_conductor_required_error(self):
-        """Without conductor, mozart status shows clear error."""
+        """Without conductor, mzt status shows clear error."""
         with patch(
             "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
@@ -117,7 +118,7 @@ class TestStatusRoutesThruConductor:
 
         assert result.exit_code == 1
         assert "conductor is not running" in result.output.lower() or \
-               "mozart start" in result.output
+               "mzt start" in result.output
 
     def test_status_succeeds_via_conductor(self):
         """Status command works when conductor returns state."""
@@ -178,7 +179,7 @@ class TestPauseRoutesThruConductor:
     """Pause command routes through conductor by default."""
 
     def test_pause_shows_conductor_required_error(self):
-        """Without conductor, mozart pause shows clear error."""
+        """Without conductor, mzt pause shows clear error."""
         with patch(
             "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
@@ -188,7 +189,7 @@ class TestPauseRoutesThruConductor:
 
         assert result.exit_code == 1
         assert "conductor is not running" in result.output.lower() or \
-               "mozart start" in result.output
+               "mzt start" in result.output
 
     def test_pause_succeeds_via_conductor(self):
         """Pause command works when conductor acknowledges."""
@@ -218,7 +219,7 @@ class TestResumeRoutesThruConductor:
     """Resume command routes through conductor by default."""
 
     def test_resume_shows_conductor_required_error(self):
-        """Without conductor, mozart resume shows clear error."""
+        """Without conductor, mzt resume shows clear error."""
         with patch(
             "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
@@ -228,7 +229,7 @@ class TestResumeRoutesThruConductor:
 
         assert result.exit_code == 1
         assert "conductor is not running" in result.output.lower() or \
-               "mozart start" in result.output
+               "mzt start" in result.output
 
     def test_resume_succeeds_via_conductor(self):
         """Resume command works when conductor accepts."""
@@ -250,7 +251,7 @@ class TestErrorsRoutesThruConductor:
     """Errors command routes through conductor by default."""
 
     def test_errors_shows_conductor_required_error(self):
-        """Without conductor, mozart errors shows clear error."""
+        """Without conductor, mzt errors shows clear error."""
         with patch(
             "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
@@ -260,7 +261,7 @@ class TestErrorsRoutesThruConductor:
 
         assert result.exit_code == 1
         assert "conductor is not running" in result.output.lower() or \
-               "mozart start" in result.output
+               "mzt start" in result.output
 
     def test_errors_succeeds_via_conductor(self):
         """Errors command works via conductor."""
@@ -282,7 +283,7 @@ class TestDiagnoseRoutesThruConductor:
     """Diagnose command routes through conductor by default."""
 
     def test_diagnose_shows_conductor_required_error(self):
-        """Without conductor, mozart diagnose shows clear error."""
+        """Without conductor, mzt diagnose shows clear error."""
         with patch(
             "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
@@ -292,7 +293,7 @@ class TestDiagnoseRoutesThruConductor:
 
         assert result.exit_code == 1
         assert "conductor is not running" in result.output.lower() or \
-               "mozart start" in result.output
+               "mzt start" in result.output
 
     def test_diagnose_succeeds_via_conductor(self):
         """Diagnose command works via conductor."""
@@ -313,7 +314,7 @@ class TestHistoryRoutesThruConductor:
     """History command routes through conductor by default."""
 
     def test_history_shows_conductor_required_error(self):
-        """Without conductor, mozart history shows clear error."""
+        """Without conductor, mzt history shows clear error."""
         with patch(
             "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
@@ -323,7 +324,7 @@ class TestHistoryRoutesThruConductor:
 
         assert result.exit_code == 1
         assert "conductor is not running" in result.output.lower() or \
-               "mozart start" in result.output
+               "mzt start" in result.output
 
     def test_history_succeeds_via_conductor(self):
         """History command works via conductor."""
@@ -345,7 +346,7 @@ class TestRecoverRoutesThruConductor:
     """Recover command routes through conductor by default."""
 
     def test_recover_shows_conductor_required_error(self):
-        """Without conductor, mozart recover shows clear error."""
+        """Without conductor, mzt recover shows clear error."""
         with patch(
             "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
@@ -355,7 +356,7 @@ class TestRecoverRoutesThruConductor:
 
         assert result.exit_code == 1
         assert "conductor is not running" in result.output.lower() or \
-               "mozart start" in result.output
+               "mzt start" in result.output
 
 
 # ─── Phase 4: Hidden --workspace ────────────────────────────────────
@@ -536,10 +537,10 @@ class TestManagerEnrichments:
 
 
 class TestConductorErrorMessages:
-    """Verify error messages reference 'mozart start' not 'mozartd'."""
+    """Verify error messages reference 'mzt start' not 'marianned'."""
 
-    def test_require_conductor_mentions_mozart_start(self):
-        """Error message should say 'mozart start', not 'mozartd start'."""
+    def test_require_conductor_mentions_marianne_start(self):
+        """Error message should say 'mzt start', not 'marianned start'."""
         import typer
 
         from marianne.cli.helpers import require_conductor
@@ -551,11 +552,11 @@ class TestConductorErrorMessages:
         # The function prints to console, not returns — check the source
         import inspect
         source = inspect.getsource(require_conductor)
-        assert "mozart start" in source
-        assert "mozartd" not in source
+        assert "mzt start" in source
+        assert "marianned" not in source
 
-    def test_list_jobs_error_mentions_mozart_start(self):
-        """List command error should reference 'mozart start'."""
+    def test_list_jobs_error_mentions_marianne_start(self):
+        """List command error should reference 'mzt start'."""
         with patch(
             "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
@@ -564,7 +565,7 @@ class TestConductorErrorMessages:
             result = runner.invoke(app, ["list"])
 
         assert result.exit_code == 1
-        assert "mozart start" in result.output
+        assert "mzt start" in result.output
 
 
 # ─── try_daemon_route safety ────────────────────────────────────────
@@ -662,43 +663,43 @@ class TestFilesystemFallbacksPrivate:
 class TestDocumentationConsistency:
     """Verify user-facing documentation is updated."""
 
-    def test_no_mozartd_in_daemon_guide(self):
-        """daemon-guide.md should not reference mozartd."""
+    def test_no_marianned_in_daemon_guide(self):
+        """daemon-guide.md should not reference marianned."""
         doc = Path(__file__).parent.parent / "docs" / "daemon-guide.md"
         if doc.exists():
             content = doc.read_text()
-            assert "mozartd" not in content.lower(), \
-                "daemon-guide.md should use 'mozart start' not 'mozartd'"
+            assert "marianned" not in content.lower(), \
+                "daemon-guide.md should use 'mzt start' not 'marianned'"
 
-    def test_no_mozartd_in_getting_started(self):
-        """getting-started.md should not reference mozartd."""
+    def test_no_marianned_in_getting_started(self):
+        """getting-started.md should not reference marianned."""
         doc = Path(__file__).parent.parent / "docs" / "getting-started.md"
         if doc.exists():
             content = doc.read_text()
-            assert "mozartd" not in content.lower(), \
-                "getting-started.md should use 'mozart start' not 'mozartd'"
+            assert "marianned" not in content.lower(), \
+                "getting-started.md should use 'mzt start' not 'marianned'"
 
-    def test_no_mozartd_in_cli_reference(self):
-        """cli-reference.md should not reference mozartd."""
+    def test_no_marianned_in_cli_reference(self):
+        """cli-reference.md should not reference marianned."""
         doc = Path(__file__).parent.parent / "docs" / "cli-reference.md"
         if doc.exists():
             content = doc.read_text()
-            assert "mozartd" not in content.lower(), \
-                "cli-reference.md should use 'mozart start' not 'mozartd'"
+            assert "marianned" not in content.lower(), \
+                "cli-reference.md should use 'mzt start' not 'marianned'"
 
-    def test_no_mozartd_in_source_code(self):
-        """No mozartd references should remain in the src/ directory."""
+    def test_no_marianned_in_source_code(self):
+        """No marianned references should remain in the src/ directory."""
         src_dir = Path(__file__).parent.parent / "src"
         for py_file in src_dir.rglob("*.py"):
             content = py_file.read_text()
             # Allow it in logger names and comments documenting the transition
             lines = content.split("\n")
             for i, line in enumerate(lines):
-                if "mozartd" in line.lower():
+                if "marianned" in line.lower():
                     # Skip import/comment lines that reference the old name
                     stripped = line.strip()
                     if stripped.startswith("#") or stripped.startswith('"""'):
                         continue
                     raise AssertionError(
-                        f"mozartd reference in {py_file}:{i+1}: {line.strip()}"
+                        f"marianned reference in {py_file}:{i+1}: {line.strip()}"
                     )

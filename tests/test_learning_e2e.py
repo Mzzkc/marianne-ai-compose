@@ -1,4 +1,4 @@
-"""End-to-end learning cycle test for Mozart.
+"""End-to-end learning cycle test for Marianne.
 
 Tests the complete learning lifecycle:
   detect pattern -> store -> query -> apply -> record feedback

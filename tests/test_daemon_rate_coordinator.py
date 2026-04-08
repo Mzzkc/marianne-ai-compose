@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.rate_coordinator module.
+"""Tests for marianne.daemon.rate_coordinator module.
 
 Covers RateLimitCoordinator: reporting, querying via the RateLimitChecker
 protocol, event pruning, input validation (NaN/inf/negative/huge waits),

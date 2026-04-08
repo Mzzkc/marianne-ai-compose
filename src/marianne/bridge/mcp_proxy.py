@@ -1,6 +1,6 @@
 """MCP Proxy Service for managing MCP server subprocesses.
 
-Provides MCP client functionality for Mozart, enabling tool discovery and
+Provides MCP client functionality for Marianne, enabling tool discovery and
 execution through MCP servers. This is an IN-PROCESS manager, not a separate
 proxy process (see ADR-001 in architecture design).
 
@@ -108,7 +108,7 @@ class MCPProxyService:
     """MCP client that manages server subprocesses and executes tools.
 
     This service acts as an MCP CLIENT - it spawns and communicates with
-    MCP SERVERS. Mozart's existing MCP server (for external integration)
+    MCP SERVERS. Marianne's existing MCP server (for external integration)
     is separate from this client functionality.
 
     Lifecycle:
@@ -405,7 +405,7 @@ class MCPProxyService:
                     "tools": {},
                 },
                 "clientInfo": {
-                    "name": "mozart-ollama-bridge",
+                    "name": "marianne-ollama-bridge",
                     "version": "0.1.0",
                 },
             },

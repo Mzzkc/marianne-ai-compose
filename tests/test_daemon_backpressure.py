@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.backpressure module.
+"""Tests for marianne.daemon.backpressure module.
 
 Covers BackpressureController: pressure level assessment, can_start_sheet()
 protocol, should_accept_job() gating, gate() convenience method, and

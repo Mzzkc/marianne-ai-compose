@@ -1,4 +1,4 @@
-"""Unified migration runner for all Mozart SQLite databases.
+"""Unified migration runner for all Marianne SQLite databases.
 
 Applies numbered migrations sequentially using PRAGMA user_version
 for version tracking. Each migration is either a SQL string (split
@@ -9,7 +9,7 @@ Design decisions:
   implicitly commits and breaks transactional safety).
 - Each migration runs in its own transaction. On failure, that
   migration is rolled back and no further migrations are attempted.
-- Forward-compatible: a database from a newer Mozart version
+- Forward-compatible: a database from a newer Marianne version
   produces a warning, not an error.
 """
 
@@ -75,7 +75,7 @@ async def apply_migrations(
             target=target,
             message=(
                 f"Database '{db_name}' is at version {current} but app knows "
-                f"only {target} migrations. Running a newer Mozart version? "
+                f"only {target} migrations. Running a newer Marianne version? "
                 "Proceeding with caution."
             ),
         )

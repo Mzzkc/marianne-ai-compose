@@ -15,7 +15,7 @@ from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 from marianne.learning.store.base import SQLParam, _logger
 from marianne.learning.store.models import PatternRecord, QuarantineStatus
 
@@ -37,7 +37,7 @@ class PatternTrustMixin(_TrustBase):
     - _row_to_pattern_record(): For row conversion (from PatternQueryMixin)
     """
 
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
 
     def calculate_trust_score(self, pattern_id: str) -> float | None:

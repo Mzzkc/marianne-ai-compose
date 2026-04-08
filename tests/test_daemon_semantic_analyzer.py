@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.semantic_analyzer module."""
+"""Tests for marianne.daemon.semantic_analyzer module."""
 
 from __future__ import annotations
 

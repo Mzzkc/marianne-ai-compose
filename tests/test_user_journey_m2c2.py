@@ -6,7 +6,7 @@ User stories covered:
 1. Dana's score-level instruments — she names instruments for readability and
    expects per-sheet assignment, instrument_map, and movements to resolve them.
 2. Marcus's credential-heavy workflow — his agents print API keys in tracebacks
-   and he trusts Mozart to redact them before they hit the state DB.
+   and he trusts Marianne to redact them before they hit the state DB.
 3. Priya's recovery scenario — she resumes a job after a restart and expects
    attempt counts to carry forward so sheets don't get infinite retries.
 4. Leo's cost-conscious score — he sets cost limits and expects both the baton
@@ -171,7 +171,7 @@ class TestDanaScoreLevelInstruments:
 
 class TestMarcusCredentialRedaction:
     """Marcus runs scores that interact with multiple APIs. His agents sometimes
-    print API keys in error tracebacks. He trusts Mozart to catch these before
+    print API keys in error tracebacks. He trusts Marianne to catch these before
     they end up in the state DB, diagnostic output, or logs.
 
     This tests the full credential scanner pipeline end-to-end.

@@ -1,4 +1,4 @@
-"""Self-healing module for Mozart.
+"""Self-healing module for Marianne.
 
 Provides automatic diagnosis and remediation of common configuration
 and execution errors. The healing system activates when:

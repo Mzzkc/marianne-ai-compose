@@ -1,7 +1,7 @@
-"""Persistent job registry for the Mozart daemon.
+"""Persistent job registry for the Marianne daemon.
 
 SQLite-backed registry that tracks all jobs submitted to the daemon.
-Survives daemon restarts so ``mozart list`` always shows job history.
+Survives daemon restarts so ``mzt list`` always shows job history.
 
 Separate from the learning store (which tracks patterns across jobs).
 This DB tracks operational state: which jobs exist, their workspaces,

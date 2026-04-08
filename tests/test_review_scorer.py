@@ -1,4 +1,4 @@
-"""Tests for mozart.review.scorer module.
+"""Tests for marianne.review.scorer module.
 
 Covers ReviewIssue, AIReviewResult, GitDiffProvider, AIReviewer,
 and _parse_review_response / evaluate_result methods.

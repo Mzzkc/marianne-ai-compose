@@ -5,7 +5,7 @@ Tests cover end-to-end flows:
 - Anomaly detection → learning store flow
 - EventBus monitor.anomaly event publishing
 - SystemSnapshot NDJSON serialization round-trip
-- `mozart diagnose --resources` output format
+- `mzt diagnose --resources` output format
 - DaemonConfig loading with profiler section
 """
 
@@ -531,8 +531,8 @@ class TestProfilerConfigInDaemonConfig:
         assert config.profiler.strace_enabled is False
         assert config.profiler.gpu_enabled is False
         assert config.profiler.jsonl_max_bytes == 52_428_800
-        assert config.profiler.storage_path == Path("~/.mozart/monitor.db")
-        assert config.profiler.jsonl_path == Path("~/.mozart/monitor.jsonl")
+        assert config.profiler.storage_path == Path("~/.marianne/monitor.db")
+        assert config.profiler.jsonl_path == Path("~/.marianne/monitor.jsonl")
 
     def test_profiler_config_custom_values(self) -> None:
         """DaemonConfig accepts custom profiler settings."""

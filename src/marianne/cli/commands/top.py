@@ -1,4 +1,4 @@
-"""Monitor commands — ``mozart top`` real-time system monitor.
+"""Monitor commands — ``mzt top`` real-time system monitor.
 
 Provides four operating modes:
 
@@ -84,18 +84,18 @@ def top(
         2.0, "--interval", "-i", help="Refresh interval in seconds"
     ),
 ) -> None:
-    """Real-time system monitor for Mozart — like htop for your conductor.
+    """Real-time system monitor for Marianne — like htop for your conductor.
 
     Shows score-centric process tree, resource metrics, event timeline,
     anomaly detection, and learning insights.
 
     Examples:
-        mozart top                    # Launch TUI monitor
-        mozart top --json             # Stream NDJSON snapshots
-        mozart top --history 1h       # Replay last hour
-        mozart top --score my-review  # Filter by score
-        mozart top --interval 5       # 5-second refresh
-        mozart top --trace 12345      # Attach full strace to PID
+        mzt top                    # Launch TUI monitor
+        mzt top --json             # Stream NDJSON snapshots
+        mzt top --history 1h       # Replay last hour
+        mzt top --score my-review  # Filter by score
+        mzt top --interval 5       # 5-second refresh
+        mzt top --trace 12345      # Attach full strace to PID
     """
     if trace_pid is not None:
         asyncio.run(_trace_mode(trace_pid))
@@ -151,7 +151,7 @@ def _tui_mode(*, filter_job: str | None, interval: float) -> None:
                 hints=[
                     "Your system may be out of PIDs or memory (Resource temporarily unavailable).",
                     "Try closing unused applications or reducing MCP fanout concurrency.",
-                    "Use 'mozart status' or 'mozart top --json' for a non-graphical view.",
+                    "Use 'mzt status' or 'mzt top --json' for a non-graphical view.",
                 ],
             )
             raise typer.Exit(1) from None
@@ -204,7 +204,7 @@ async def _json_from_jsonl(*, filter_job: str | None, interval: float) -> None:
         output_error(
             "No monitor data available.",
             severity="warning",
-            hints=["Ensure the conductor is running with profiling enabled: mozart start"],
+            hints=["Ensure the conductor is running with profiling enabled: mzt start"],
         )
         raise typer.Exit(1)
 
@@ -380,7 +380,7 @@ async def _trace_mode(pid: int) -> None:
         raise typer.Exit(1)
 
     mgr = StraceManager(enabled=True)
-    trace_dir = Path(tempfile.mkdtemp(prefix="mozart-trace-"))
+    trace_dir = Path(tempfile.mkdtemp(prefix="marianne-trace-"))
     trace_file = trace_dir / f"trace-{pid}.log"
 
     console.print(f"[dim]Attaching strace to PID {pid}...[/dim]")

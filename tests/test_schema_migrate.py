@@ -130,7 +130,7 @@ class TestApplyMigrations:
 class TestForwardVersion:
     @pytest.mark.asyncio
     async def test_forward_version_warns_not_errors(self) -> None:
-        """A database from a newer Mozart version should produce a warning, not fail."""
+        """A database from a newer Marianne version should produce a warning, not fail."""
         db = await _memory_db()
         await set_version(db, 10)
 

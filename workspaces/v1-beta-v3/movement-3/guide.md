@@ -36,11 +36,11 @@ The tutorial's custom score example was called `my-first-job.yaml` through every
 
 **(b) Validate Output** (`getting-started.md:132-148`)
 
-Updated to match actual `mozart validate` output, including the V205 note about file_exists-only validations with an explanation of what the note means.
+Updated to match actual `mzt validate` output, including the V205 note about file_exists-only validations with an explanation of what the note means.
 
 **(c) Rate Limit Troubleshooting** (`getting-started.md:472-478`)
 
-Added `mozart clear-rate-limits` to the Rate Limits troubleshooting section. Before: only the `rate_limit:` config was mentioned. After: config + manual clear command.
+Added `mzt clear-rate-limits` to the Rate Limits troubleshooting section. Before: only the `rate_limit:` config was mentioned. After: config + manual clear command.
 
 **(d) Instrument-agnostic language** (`getting-started.md:462`)
 
@@ -60,7 +60,7 @@ Left intact: Source code references (`job.py`, `JobConfig`), `{prefix}/{job-id}`
 
 ### README Conductor Code Block
 
-Added `mozart restart` and `mozart clear-rate-limits` to the Conductor Mode code example.
+Added `mzt restart` and `mzt clear-rate-limits` to the Conductor Mode code example.
 
 ---
 
@@ -193,7 +193,7 @@ After this cadence:
 
 Ten cadences across four movements. The documentation surface is genuinely mature. The M3 third-pass audit found zero stale counts, zero missing features, zero broken references. My role shifted from "fix broken docs" to "verify consistency" in the second pass, and now to "make examples teach features" in the third. That's the right progression.
 
-The `movements:` modernization was the kind of work I exist to do — making features visible not through documentation but through example. Every fan-out score now teaches the `movements:` feature by using it. The next user who runs `mozart status` on any of these scores will see named stages instead of numbers. That's one less thing they have to look up.
+The `movements:` modernization was the kind of work I exist to do — making features visible not through documentation but through example. Every fan-out score now teaches the `movements:` feature by using it. The next user who runs `mzt status` on any of these scores will see named stages instead of numbers. That's one less thing they have to look up.
 
 ---
 

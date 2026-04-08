@@ -1,4 +1,4 @@
-"""Tests for Mozart MCP Artifact Tools - Comprehensive test suite for artifact management."""
+"""Tests for Marianne MCP Artifact Tools - Comprehensive test suite for artifact management."""
 
 import tempfile
 from datetime import datetime
@@ -27,7 +27,7 @@ class TestArtifactTools:
             (workspace / "job1" / "outputs").mkdir()
 
             # Create test files
-            (workspace / "job1" / "mozart.log").write_text(
+            (workspace / "job1" / "marianne.log").write_text(
                 "INFO: Job started\nDEBUG: Processing sheet 1\n"
                 "ERROR: Validation failed\nINFO: Job completed\n"
             )
@@ -91,11 +91,11 @@ class TestArtifactTools:
 
         tool_names = [tool["name"] for tool in tools]
         expected_tools = [
-            "mozart_artifact_list",
-            "mozart_artifact_read",
-            "mozart_artifact_get_logs",
-            "mozart_artifact_list_artifacts",
-            "mozart_artifact_get_artifact"
+            "marianne_artifact_list",
+            "marianne_artifact_read",
+            "marianne_artifact_get_logs",
+            "marianne_artifact_list_artifacts",
+            "marianne_artifact_get_artifact"
         ]
 
         for expected in expected_tools:
@@ -127,7 +127,7 @@ class TestArtifactTools:
         # Should list files and directories with emojis
         assert "📁 logs/" in text
         assert "📁 outputs/" in text
-        assert "📄 mozart.log" in text
+        assert "📄 marianne.log" in text
         assert "📄 job1.json" in text
 
     async def test_list_files_with_hidden(self, artifact_tools, temp_workspace):
@@ -234,7 +234,7 @@ class TestArtifactTools:
         })
 
         text = result["content"][0]["text"]
-        assert "📋 Logs for Mozart Job: job1" in text
+        assert "📋 Logs for Marianne Job: job1" in text
         assert "INFO: Job started" in text
         assert "DEBUG: Processing sheet 1" in text
         assert "ERROR: Validation failed" in text
@@ -293,7 +293,7 @@ class TestArtifactTools:
 
         mock_find.assert_called_once_with("job1")
         text = result["content"][0]["text"]
-        assert "📋 Logs for Mozart Job: job1" in text
+        assert "📋 Logs for Marianne Job: job1" in text
 
     async def test_get_logs_no_logs_found(self, artifact_tools, temp_workspace):
         """Test log retrieval when no log files exist."""
@@ -315,11 +315,11 @@ class TestArtifactTools:
         })
 
         text = result["content"][0]["text"]
-        assert "🎯 Artifacts for Mozart Job: job1" in text
+        assert "🎯 Artifacts for Marianne Job: job1" in text
         assert "LOG Artifacts" in text
         # job1.json categorization may vary
         assert "STATE Artifacts" in text or "OTHER Artifacts" in text
-        assert "mozart.log" in text
+        assert "marianne.log" in text
         assert "job1.json" in text
         assert "result.txt" in text
 
@@ -333,7 +333,7 @@ class TestArtifactTools:
 
         text = result["content"][0]["text"]
         assert "LOG Artifacts" in text
-        assert "mozart.log" in text
+        assert "marianne.log" in text
         # Should not show other types
         assert "STATE Artifacts" not in text
 
@@ -366,7 +366,7 @@ class TestArtifactTools:
 
         mock_find.assert_called_once_with("job1")
         text = result["content"][0]["text"]
-        assert "🎯 Artifacts for Mozart Job: job1" in text
+        assert "🎯 Artifacts for Marianne Job: job1" in text
 
     async def test_get_artifact_text_file(self, artifact_tools, temp_workspace):
         """Test retrieving a text artifact."""
@@ -377,7 +377,7 @@ class TestArtifactTools:
         })
 
         text = result["content"][0]["text"]
-        assert "🎯 Mozart Job Artifact: job1" in text
+        assert "🎯 Marianne Job Artifact: job1" in text
         assert "Artifact: outputs/result.txt" in text
         assert "Size: " in text
         assert "Modified: " in text
@@ -481,7 +481,7 @@ class TestArtifactTools:
     async def test_call_tool_routing(self, artifact_tools, temp_workspace):
         """Test that call_tool correctly routes to appropriate methods."""
         # Test successful routing
-        result = await artifact_tools.call_tool("mozart_artifact_list", {
+        result = await artifact_tools.call_tool("marianne_artifact_list", {
             "workspace": str(temp_workspace / "job1")
         })
         assert "content" in result
@@ -495,7 +495,7 @@ class TestArtifactTools:
 
     async def test_call_tool_exception_handling(self, artifact_tools):
         """Test that call_tool handles exceptions gracefully."""
-        result = await artifact_tools.call_tool("mozart_artifact_read", {
+        result = await artifact_tools.call_tool("marianne_artifact_read", {
             "workspace": "/nonexistent",
             "file_path": "test.txt"
         })
@@ -572,7 +572,7 @@ class TestCustomLogLevelCache:
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = Path(temp_dir)
             (workspace / "job1").mkdir()
-            (workspace / "job1" / "mozart.log").write_text(
+            (workspace / "job1" / "marianne.log").write_text(
                 "INFO: line1\nCRITICAL: line2\nINFO: line3\nCRITICAL: line4\n"
             )
             yield workspace

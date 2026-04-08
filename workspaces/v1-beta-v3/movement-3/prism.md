@@ -127,7 +127,7 @@ Litmus wrote 21 intelligence-layer validation tests covering all major M3 fixes.
 
 | Metric | M2 End | M3 End | Delta |
 |--------|--------|--------|-------|
-| Source lines (`src/mozart/`) | 96,475 | 97,424 | +949 |
+| Source lines (`src/marianne/`) | 96,475 | 97,424 | +949 |
 | Test files | 291 | 314 | +23 |
 | Test count | 10,402 | 10,919 | +517 |
 | M3 commits | — | 28 | — |

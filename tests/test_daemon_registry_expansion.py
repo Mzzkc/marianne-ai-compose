@@ -1,4 +1,4 @@
-"""Tests for registry expansion in mozart.daemon.registry.
+"""Tests for registry expansion in marianne.daemon.registry.
 
 Covers the new Phase 1 columns (current_sheet, total_sheets, last_event_at,
 log_path, snapshot_path), the update_progress() method, schema migration

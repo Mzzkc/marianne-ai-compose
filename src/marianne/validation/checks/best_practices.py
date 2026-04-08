@@ -11,7 +11,7 @@ from marianne.core.config import JobConfig
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml
 
-# Built-in template variable names used by Mozart's rendering engine.
+# Built-in template variable names used by Marianne's rendering engine.
 _BUILTIN_NAMES: frozenset[str] = frozenset({
     "workspace",
     "sheet_num",
@@ -398,7 +398,7 @@ class FanOutWithoutParallelCheck:
 class VariableShadowingCheck:
     """Check for user variables that shadow built-ins (V208).
 
-    User-defined prompt variables that share names with Mozart's
+    User-defined prompt variables that share names with Marianne's
     built-in variables will override the real values, causing
     unexpected behavior.
     """

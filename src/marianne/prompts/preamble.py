@@ -1,4 +1,4 @@
-"""Dynamic, context-aware preamble building for Mozart-orchestrated agents.
+"""Dynamic, context-aware preamble building for Marianne-orchestrated agents.
 
 Generates preambles that tell agents who they are, where they are in the
 concert, and what success looks like. Replaces the static 5-rule warning
@@ -15,7 +15,7 @@ def build_preamble(
     retry_count: int = 0,
     is_parallel: bool = False,
 ) -> str:
-    """Build a context-aware preamble for a Mozart-orchestrated agent.
+    """Build a context-aware preamble for a Marianne-orchestrated agent.
 
     Args:
         sheet_num: Current sheet number (1-indexed).
@@ -25,7 +25,7 @@ def build_preamble(
         is_parallel: Whether parallel execution is enabled.
 
     Returns:
-        Preamble string wrapped in ``<mozart-preamble>`` tags.
+        Preamble string wrapped in ``<marianne-preamble>`` tags.
     """
     if retry_count > 0:
         return _build_retry_preamble(
@@ -44,8 +44,8 @@ def _build_first_run_preamble(
 ) -> str:
     """Build preamble for first execution attempt."""
     lines = [
-        "<mozart-preamble>",
-        f"You are sheet {sheet_num} of {total_sheets} in a Mozart concert.",
+        "<marianne-preamble>",
+        f"You are sheet {sheet_num} of {total_sheets} in a Marianne concert.",
         f"Workspace: {workspace}",
     ]
 
@@ -65,7 +65,7 @@ def _build_first_run_preamble(
         "first automated check. Read them before you begin.",
         "",
         "Write all outputs to your workspace. Exit with no background processes.",
-        "</mozart-preamble>",
+        "</marianne-preamble>",
     ])
 
     return "\n".join(lines)
@@ -79,9 +79,9 @@ def _build_retry_preamble(
 ) -> str:
     """Build preamble for a retry attempt."""
     lines = [
-        "<mozart-preamble>",
+        "<marianne-preamble>",
         f"RETRY #{retry_count}",
-        f"You are sheet {sheet_num} of {total_sheets} in a Mozart concert.",
+        f"You are sheet {sheet_num} of {total_sheets} in a Marianne concert.",
         f"Workspace: {workspace}",
         "",
         "The previous attempt failed validation. Study the workspace for evidence",
@@ -95,7 +95,7 @@ def _build_retry_preamble(
         "first automated check. Read them before you begin.",
         "",
         "Write all outputs to your workspace. Exit with no background processes.",
-        "</mozart-preamble>",
+        "</marianne-preamble>",
     ]
 
     return "\n".join(lines)

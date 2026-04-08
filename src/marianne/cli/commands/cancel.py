@@ -1,6 +1,6 @@
-"""Cancel command for Mozart CLI.
+"""Cancel command for Marianne CLI.
 
-Provides `mozart cancel` to immediately cancel a running job via
+Provides `mzt cancel` to immediately cancel a running job via
 asyncio task cancellation. Unlike `pause`, this interrupts mid-sheet
 and does not wait for a clean boundary. Use `pause` for graceful
 stops; use `cancel` when the job must stop now.
@@ -27,15 +27,15 @@ def cancel(
         help="Output result as JSON",
     ),
 ) -> None:
-    """Cancel a running Mozart score immediately.
+    """Cancel a running Marianne score immediately.
 
     Unlike `pause`, this does not wait for a sheet boundary. The score's
     asyncio task is cancelled, in-progress work is rolled back, and the
     score is marked as CANCELLED. Use `pause` for graceful stops.
 
     Examples:
-        mozart cancel my-job
-        mozart cancel my-job --json
+        mzt cancel my-job
+        mzt cancel my-job --json
     """
     from ._shared import validate_job_id
 
@@ -54,7 +54,7 @@ async def _cancel_job(job_id: str, json_output: bool) -> None:
     except (OSError, ConnectionError, DaemonError) as exc:
         output_error(
             str(exc),
-            hints=["Check conductor status: mozart conductor-status"],
+            hints=["Check conductor status: mzt conductor-status"],
             json_output=json_output,
         )
         raise typer.Exit(1) from None
@@ -72,7 +72,7 @@ async def _cancel_job(job_id: str, json_output: bool) -> None:
     else:
         output_error(
             f"Score '{job_id}' not found or already stopped.",
-            hints=["Run 'mozart list' to see available scores."],
+            hints=["Run 'mzt list' to see available scores."],
             json_output=json_output,
         )
         raise typer.Exit(1)

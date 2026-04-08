@@ -1,11 +1,11 @@
-"""Pause and modify commands for Mozart CLI.
+"""Pause and modify commands for Marianne CLI.
 
-This module implements the `mozart pause` and `mozart modify` commands
+This module implements the `mzt pause` and `mzt modify` commands
 for gracefully pausing running jobs and updating their configuration.
 
 ★ Insight ─────────────────────────────────────
 1. **Signal-based pause mechanism**: Rather than interrupting execution directly,
-   Mozart uses a file-based signal (.mozart-pause-{job_id}). The runner polls for
+   Marianne uses a file-based signal (.marianne-pause-{job_id}). The runner polls for
    this file at sheet boundaries, enabling clean checkpoints without data loss.
 
 2. **Atomic state transitions**: The pause command only works on RUNNING jobs,
@@ -74,19 +74,19 @@ def pause(
         help="Force-cancel the score immediately (does not wait for sheet boundary)",
     ),
 ) -> None:
-    """Pause a running Mozart score gracefully.
+    """Pause a running Marianne score gracefully.
 
     Creates a pause signal that the job will detect at the next sheet boundary.
-    The job saves its state and can be resumed with `mozart resume`.
+    The job saves its state and can be resumed with `mzt resume`.
 
     Use --force to cancel the job immediately without waiting for a sheet
-    boundary (equivalent to `mozart cancel`).
+    boundary (equivalent to `mzt cancel`).
 
     Examples:
-        mozart pause my-job
-        mozart pause my-job --wait --timeout 30
-        mozart pause my-job --json
-        mozart pause my-job --force
+        mzt pause my-job
+        mzt pause my-job --wait --timeout 30
+        mzt pause my-job --json
+        mzt pause my-job --force
     """
     from ._shared import validate_job_id
 
@@ -130,7 +130,7 @@ async def _pause_job(
         output_error(
             str(exc),
             error_code="E501",
-            hints=["Run 'mozart list' to see available scores."],
+            hints=["Run 'mzt list' to see available scores."],
             json_output=json_output,
             job_id=job_id,
         )
@@ -146,7 +146,7 @@ async def _pause_job(
                 error_msg or f"Failed to pause score '{job_id}'",
                 error_code="E502",
                 hints=[
-                    f"Check score status: mozart status {job_id}",
+                    f"Check score status: mzt status {job_id}",
                     "Only running scores can be paused.",
                 ],
                 json_output=json_output,
@@ -168,10 +168,10 @@ async def _pause_job(
             console.print(f"Pause signal sent to score '[cyan]{job_id}[/cyan]'.")
             console.print("Score will pause at next sheet boundary.")
             console.print()
-            console.print(f"To resume: [bold]mozart resume {job_id}[/bold]")
+            console.print(f"To resume: [bold]mzt resume {job_id}[/bold]")
             console.print(
                 f"To resume with new config: "
-                f"[bold]mozart resume {job_id} --config new.yaml[/bold]"
+                f"[bold]mzt resume {job_id} --config new.yaml[/bold]"
             )
         return
 
@@ -219,9 +219,9 @@ async def _pause_job_direct(
         hints: list[str] = []
         if found_state.status == JobStatus.PAUSED:
             hints.append("Score is already paused.")
-            hints.append(f"Use 'mozart resume {job_id}' to resume.")
+            hints.append(f"Use 'mzt resume {job_id}' to resume.")
         elif found_state.status == JobStatus.PENDING:
-            hints.append("Use 'mozart run' to start the score.")
+            hints.append("Use 'mzt run' to start the score.")
         elif found_state.status == JobStatus.COMPLETED:
             hints.append("Score has already completed.")
         output_error(
@@ -260,7 +260,7 @@ async def _pause_job_direct(
                 severity="warning",
                 hints=[
                     "The score may still pause at the next sheet boundary.",
-                    f"Check status: mozart status {job_id}",
+                    f"Check status: mzt status {job_id}",
                 ],
                 json_output=json_output,
                 job_id=job_id,
@@ -285,10 +285,10 @@ async def _pause_job_direct(
             console.print(f"Pause signal sent to score '[cyan]{job_id}[/cyan]'.")
             console.print("Score will pause at next sheet boundary.")
         console.print()
-        console.print(f"To resume: [bold]mozart resume {job_id}[/bold]")
+        console.print(f"To resume: [bold]mzt resume {job_id}[/bold]")
         console.print(
             f"To resume with new config: "
-            f"[bold]mozart resume {job_id} --config new.yaml[/bold]"
+            f"[bold]mzt resume {job_id} --config new.yaml[/bold]"
         )
 
 
@@ -322,8 +322,8 @@ async def _pause_via_conductor(
                 str(exc),
                 error_code="E503",
                 hints=[
-                    "Check conductor status: mozart conductor-status",
-                    "Restart if needed: mozart restart",
+                    "Check conductor status: mzt conductor-status",
+                    "Restart if needed: mzt restart",
                 ],
                 json_output=json_output,
                 job_id=job_id,
@@ -353,7 +353,7 @@ async def _pause_via_conductor(
             msg,
             error_code="E503",
             hints=[
-                f"Check score status: mozart status {job_id}",
+                f"Check score status: mzt status {job_id}",
                 "Only running scores can be paused.",
             ],
             json_output=json_output,
@@ -411,7 +411,7 @@ async def _pause_via_filesystem(
                 severity="warning",
                 hints=[
                     "The score may still pause at the next sheet boundary.",
-                    f"Check status: mozart status {job_id}",
+                    f"Check status: mzt status {job_id}",
                 ],
                 json_output=json_output,
                 job_id=job_id,
@@ -467,9 +467,9 @@ def modify(
     Use --resume to immediately resume with the new configuration.
 
     Examples:
-        mozart modify my-job --config updated.yaml
-        mozart modify my-job -c new-config.yaml --resume
-        mozart modify my-job -c updated.yaml -r --wait
+        mzt modify my-job --config updated.yaml
+        mzt modify my-job -c new-config.yaml --resume
+        mzt modify my-job -c updated.yaml -r --wait
     """
     from ._shared import validate_job_id
 
@@ -534,8 +534,8 @@ async def _modify_job(
             str(exc),
             error_code="E501",
             hints=[
-                "Run 'mozart list' to see available scores.",
-                "Check conductor status: mozart conductor-status",
+                "Run 'mzt list' to see available scores.",
+                "Check conductor status: mzt conductor-status",
             ],
             json_output=json_output,
             job_id=job_id,
@@ -596,7 +596,7 @@ async def _modify_job(
         if found_state.status == JobStatus.COMPLETED:
             modify_hints.append("Score has already completed.")
         elif found_state.status == JobStatus.PENDING:
-            modify_hints.append("Use 'mozart run' to start the score.")
+            modify_hints.append("Use 'mzt run' to start the score.")
         output_error(
             f"Score '{job_id}' is {status_str}, cannot modify.",
             error_code="E502",
@@ -629,7 +629,7 @@ async def _modify_job(
                     str(exc),
                     error_code="E506",
                     hints=[
-                        "Check conductor status: mozart conductor-status",
+                        "Check conductor status: mzt conductor-status",
                         "The conductor must be running to modify a score.",
                     ],
                     json_output=json_output,
@@ -645,8 +645,8 @@ async def _modify_job(
                         msg,
                         hints=[
                             "The score must be paused before modifying its config.",
-                            f"Try: mozart pause {job_id} && "
-                            f"mozart modify {job_id} --config <path> --resume",
+                            f"Try: mzt pause {job_id} && "
+                            f"mzt modify {job_id} --config <path> --resume",
                         ],
                         json_output=json_output,
                         job_id=job_id,
@@ -658,7 +658,7 @@ async def _modify_job(
                     console.print(json.dumps(modify_result, indent=2))
                 else:
                     console.print(f"[green]{msg}[/green]")
-                    console.print(f"\nMonitor: [bold]mozart status {job_id}[/bold]")
+                    console.print(f"\nMonitor: [bold]mzt status {job_id}[/bold]")
             return
 
         # Non-daemon fallback: poll for pause then resume directly
@@ -677,7 +677,7 @@ async def _modify_job(
                         error_code="E504",
                         hints=[
                             "The score may still pause at the next sheet boundary.",
-                            f"Check status: mozart status {job_id}",
+                            f"Check status: mzt status {job_id}",
                         ],
                         json_output=json_output,
                         job_id=job_id,
@@ -714,11 +714,11 @@ async def _modify_job(
             console.print()
             console.print("When ready to resume with new config:")
             console.print(
-                f"  [bold]mozart resume {job_id} --config {config_file}[/bold]"
+                f"  [bold]mzt resume {job_id} --config {config_file}[/bold]"
             )
             console.print()
             console.print("Or to resume with original config:")
-            console.print(f"  [bold]mozart resume {job_id}[/bold]")
+            console.print(f"  [bold]mzt resume {job_id}[/bold]")
 
 
 # =============================================================================

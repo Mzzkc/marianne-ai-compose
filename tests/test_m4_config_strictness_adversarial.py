@@ -3,7 +3,7 @@
 Proves that unknown YAML fields in score configs are rejected, not silently
 ignored. The composer directive (2026-04-04) requires ERROR severity for
 unknown fields — score authors must not think they're using features that
-Mozart drops on the floor.
+Marianne drops on the floor.
 
 Attack surface: every config model reachable from JobConfig that could appear
 in a user-authored YAML score.

@@ -1,4 +1,4 @@
-"""Tests for mozart.state.memory.InMemoryStateBackend.
+"""Tests for marianne.state.memory.InMemoryStateBackend.
 
 Covers all StateBackend interface methods including edge cases
 for mark_sheet_status with different status types.

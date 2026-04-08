@@ -1,7 +1,7 @@
-"""Project initialization command for Mozart CLI.
+"""Project initialization command for Marianne CLI.
 
-Implements ``mozart init`` — scaffolds a new Mozart project with a starter
-score and ``.mozart/`` directory.  This is the first-run experience for
+Implements ``mzt init`` — scaffolds a new Marianne project with a starter
+score and ``.marianne/`` directory.  This is the first-run experience for
 new users.
 
 The generated score is a practical template with comments explaining every
@@ -50,16 +50,16 @@ def _validate_name(name: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 _STARTER_SCORE_TEMPLATE = """\
-# {name}.yaml — Your First Mozart Score
+# {name}.yaml — Your First Marianne Score
 #
 # A score tells the conductor what to do.  Edit the prompt below with
 # your actual task, then run it:
 #
-#   mozart start                    # Start the conductor (once)
-#   mozart run {name}.yaml          # Run this score
-#   mozart status {name}            # Check progress
+#   mzt start                    # Start the conductor (once)
+#   mzt run {name}.yaml          # Run this score
+#   mzt status {name}            # Check progress
 #
-# Docs: https://github.com/Mzzkc/mozart-ai-compose
+# Docs: https://github.com/Mzzkc/marianne-ai-compose
 
 name: {name}
 description: "A starter score — edit this with your task"
@@ -69,7 +69,7 @@ workspace: ./workspaces/{name}
 
 # Which instrument plays the score.
 # Available instruments: claude-code, gemini-cli, codex-cli, aider, goose, cline-cli
-# Run `mozart instruments list` to see what's available.
+# Run `mzt instruments list` to see what's available.
 instrument: claude-code
 instrument_config:
   timeout_seconds: 300
@@ -95,7 +95,7 @@ prompt:
     Write a short creative paragraph about topic {{{{ sheet_num }}}} of {{{{ total_sheets }}}}.
     Save your output to {{{{ workspace }}}}/output-{{{{ sheet_num }}}}.md
 
-# Validations: how Mozart knows the sheet succeeded.
+# Validations: how Marianne knows the sheet succeeded.
 # These checks run after each sheet completes.
 validations:
   - type: file_exists
@@ -143,18 +143,18 @@ def init(
         help="Output result as JSON",
     ),
 ) -> None:
-    """Scaffold a new Mozart project with a starter score.
+    """Scaffold a new Marianne project with a starter score.
 
-    Creates a starter score YAML and .mozart/ project directory.
+    Creates a starter score YAML and .marianne/ project directory.
     Edit the score with your task, then run it with the conductor.
 
     Examples:
-        mozart init
-        mozart init my-project
-        mozart init --path ./my-project
-        mozart init --name data-pipeline
-        mozart init --force
-        mozart init --json
+        mzt init
+        mzt init my-project
+        mzt init --path ./my-project
+        mzt init --name data-pipeline
+        mzt init --force
+        mzt init --json
     """
     # Resolve name: positional arg is convenience shorthand for --name.
     # --name flag takes precedence when both are provided (flag is explicit).
@@ -173,7 +173,7 @@ def init(
 
     target = path.resolve()
     score_file = target / f"{name}.yaml"
-    mozart_dir = target / ".mozart"
+    marianne_dir = target / ".marianne"
 
     # Safety: refuse to overwrite without --force
     if not force:
@@ -185,19 +185,19 @@ def init(
                 json_output=json_output,
             )
             raise typer.Exit(1)
-        if mozart_dir.exists():
+        if marianne_dir.exists():
             output_error(
-                f"Mozart project already initialized: {mozart_dir}",
+                f"Marianne project already initialized: {marianne_dir}",
                 severity="warning",
                 hints=["Use --force to reinitialize."],
                 json_output=json_output,
             )
             raise typer.Exit(1)
 
-    # Create .mozart/ directory
-    mozart_dir.mkdir(parents=True, exist_ok=True)
+    # Create .marianne/ directory
+    marianne_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create workspaces/ directory so `mozart validate` passes immediately
+    # Create workspaces/ directory so `mzt validate` passes immediately
     workspaces_dir = target / "workspaces"
     workspaces_dir.mkdir(parents=True, exist_ok=True)
 
@@ -217,25 +217,25 @@ def init(
         })
     else:
         console.print(
-            f"\n[bold green]Mozart project initialized[/bold green] in {target}\n"
+            f"\n[bold green]Marianne project initialized[/bold green] in {target}\n"
         )
         console.print(
             f"  Created: [bold]{name}.yaml[/bold]"
             "        (starter score — edit with your task)"
         )
         console.print(
-            "  Created: [bold].mozart/[/bold]"
+            "  Created: [bold].marianne/[/bold]"
             "              (project config directory)"
         )
         console.print()
         console.print("[dim]Next steps:[/dim]")
-        console.print("  0. [bold]mozart doctor[/bold]              (check your environment)")
+        console.print("  0. [bold]mzt doctor[/bold]              (check your environment)")
         console.print(f"  1. Edit [bold]{name}.yaml[/bold] with your task")
         console.print(
-            f"  2. [bold]mozart start[/bold] && "
-            f"[bold]mozart run {name}.yaml[/bold]"
+            f"  2. [bold]mzt start[/bold] && "
+            f"[bold]mzt run {name}.yaml[/bold]"
         )
-        console.print(f"  3. [bold]mozart status {name}[/bold] to watch progress")
+        console.print(f"  3. [bold]mzt status {name}[/bold] to watch progress")
         console.print()
 
 

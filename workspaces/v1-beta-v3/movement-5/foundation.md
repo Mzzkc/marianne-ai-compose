@@ -13,7 +13,7 @@ D-026: Fix F-271 (PluginCliBackend MCP process explosion) + F-255.2 (baton _live
 **Fix:** Profile-driven approach via `CliCommand.mcp_disable_args` list field (added by a parallel musician). `_build_command()` at `cli_backend.py:229-233` injects these args when the list is non-empty. The claude-code profile at `builtins/claude-code.yaml:82-85` specifies `["--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']`.
 
 **Files modified:**
-- `src/mozart/execution/instruments/cli_backend.py:229-233` — inject mcp_disable_args (note: another musician added the field; I adapted the backend to use it)
+- `src/marianne/execution/instruments/cli_backend.py:229-233` — inject mcp_disable_args (note: another musician added the field; I adapted the backend to use it)
 - `tests/test_foundation_m5_f271_mcp.py` — 7 TDD tests (mcp disabled, no mcp when empty, ordering, legacy parity, real claude-code profile, custom mechanism, default empty)
 - `tests/test_litmus_intelligence.py:3943-3950` — updated gap-proving test to verify fix holds
 
@@ -29,7 +29,7 @@ $ python -m pytest tests/test_litmus_intelligence.py::TestPluginCliBackendMcpGap
 ### F-255.2: Baton _live_states Never Populated — RESOLVED
 
 **Problem:** When jobs run through the baton adapter, `_live_states` was never populated with a `CheckpointState`. This meant:
-- `mozart status` showed "Full status unavailable" for baton-managed jobs
+- `mzt status` showed "Full status unavailable" for baton-managed jobs
 - `_on_baton_state_sync` returned early at `manager.py:500-502` (no live state to update)
 - Profiler and semantic analyzer saw no running baton jobs
 
@@ -38,9 +38,9 @@ $ python -m pytest tests/test_litmus_intelligence.py::TestPluginCliBackendMcpGap
 2. `_resume_via_baton()` at `manager.py:2178`: Populates `self._live_states[job_id]` with the recovered checkpoint BEFORE calling `adapter.recover_job()`.
 
 **Files modified:**
-- `src/mozart/daemon/manager.py:22` — added `SheetState` to imports
-- `src/mozart/daemon/manager.py:2017-2038` — create initial CheckpointState in _run_via_baton
-- `src/mozart/daemon/manager.py:2178` — populate _live_states in _resume_via_baton
+- `src/marianne/daemon/manager.py:22` — added `SheetState` to imports
+- `src/marianne/daemon/manager.py:2017-2038` — create initial CheckpointState in _run_via_baton
+- `src/marianne/daemon/manager.py:2178` — populate _live_states in _resume_via_baton
 - `tests/test_foundation_m5_f255_live_states.py` — 7 TDD tests (population, structure, instrument names, state sync callback, resume)
 - `tests/test_f151_instrument_observability.py:55-103,106-145` — updated 2 tests to match new live state creation behavior (instrument_name now set at creation time, not post-register fixup)
 

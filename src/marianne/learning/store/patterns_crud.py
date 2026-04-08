@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import cast
 
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 from marianne.learning.store.base import _logger
 from marianne.learning.store.models import QuarantineStatus
 
@@ -51,7 +51,7 @@ class PatternCrudMixin:
     - update_pattern_effectiveness(): For batch recalculation (self-referential)
     """
 
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
     batch_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
 

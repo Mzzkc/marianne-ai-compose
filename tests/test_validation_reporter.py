@@ -1,4 +1,4 @@
-"""Tests for mozart.validation.reporter module.
+"""Tests for marianne.validation.reporter module.
 
 Covers the ValidationReporter class: terminal formatting, JSON output,
 plain text formatting, and edge cases (empty issues, long context,

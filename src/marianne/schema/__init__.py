@@ -1,4 +1,4 @@
-"""Unified schema management for Mozart's SQLite databases.
+"""Unified schema management for Marianne's SQLite databases.
 
 Provides serialization utilities for converting Python values to/from
 SQLite-compatible types. The registry module exists but is not yet wired

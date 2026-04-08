@@ -1,4 +1,4 @@
-"""Tests for mozart.prompts.preamble module.
+"""Tests for marianne.prompts.preamble module.
 
 Covers build_preamble() for first-run and retry scenarios,
 XML tag structure, workspace inclusion, and parallel execution notes.
@@ -63,21 +63,21 @@ class TestBuildPreamble:
         assert "concurrently" not in result
 
     def test_proper_xml_tags(self, workspace: Path) -> None:
-        """Preamble is wrapped in <mozart-preamble> tags."""
+        """Preamble is wrapped in <marianne-preamble> tags."""
         result = build_preamble(
             sheet_num=1, total_sheets=1, workspace=workspace,
         )
-        assert result.startswith("<mozart-preamble>")
-        assert result.endswith("</mozart-preamble>")
+        assert result.startswith("<marianne-preamble>")
+        assert result.endswith("</marianne-preamble>")
 
     def test_retry_has_xml_tags(self, workspace: Path) -> None:
-        """Retry preamble is also wrapped in <mozart-preamble> tags."""
+        """Retry preamble is also wrapped in <marianne-preamble> tags."""
         result = build_preamble(
             sheet_num=1, total_sheets=1, workspace=workspace,
             retry_count=3,
         )
-        assert result.startswith("<mozart-preamble>")
-        assert result.endswith("</mozart-preamble>")
+        assert result.startswith("<marianne-preamble>")
+        assert result.endswith("</marianne-preamble>")
 
     def test_workspace_path_included(self, workspace: Path) -> None:
         """Workspace path is included as-is in the preamble."""

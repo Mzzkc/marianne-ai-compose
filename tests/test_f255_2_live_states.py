@@ -1,7 +1,7 @@
 """Tests for F-255.2: Baton adapter populates _live_states.
 
 The baton adapter must populate _live_states for baton-managed jobs
-so that `mozart status` can display their state. Previously, only
+so that `mzt status` can display their state. Previously, only
 the legacy runner populated _live_states via _on_state_published().
 
 Fix: Create a CheckpointState at baton job registration time and
@@ -119,7 +119,7 @@ class TestBatonLiveStatesPopulation:
         # After execution, _live_states should have been populated
         assert job_id in manager._live_states, (
             "F-255.2: _run_via_baton must populate _live_states for the job "
-            "so that `mozart status` can display baton-managed job state"
+            "so that `mzt status` can display baton-managed job state"
         )
 
         state = manager._live_states[job_id]

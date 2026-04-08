@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.pgroup module.
+"""Tests for marianne.daemon.pgroup module.
 
 Covers ProcessGroupManager setup(), cleanup_orphans(), and
 kill_all_children() signal propagation, including verification

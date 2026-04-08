@@ -1,4 +1,4 @@
-"""System summary header bar for the Mozart Monitor TUI.
+"""System summary header bar for the Marianne Monitor TUI.
 
 Displays conductor status, memory bar, CPU bar, GPU indicator,
 pressure level, and job/sheet counts in a compact single-line format.

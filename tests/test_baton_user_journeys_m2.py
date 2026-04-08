@@ -1,7 +1,7 @@
 """User journey tests for the baton state machine — Movement 2.
 
 These tests tell stories. Each test class is a user scenario: a real person
-sitting at a terminal, running a Mozart score, and encountering situations
+sitting at a terminal, running a Marianne score, and encountering situations
 that the acceptance criteria don't mention.
 
 The baton is the conductor's heart. These tests verify it beats correctly

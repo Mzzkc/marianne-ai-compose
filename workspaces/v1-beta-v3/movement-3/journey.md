@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-Explored Mozart's CLI from a real user's perspective. Found and fixed a terminology regression ("Backend:" → "Instrument:" in validate summary) and added context-aware schema validation hints that tell users *what's wrong* instead of dumping raw Pydantic errors. Wrote 22 TDD tests across 2 new test files. All work committed through mateship pipeline (Breakpoint pickup, commit 0028fa1).
+Explored Marianne's CLI from a real user's perspective. Found and fixed a terminology regression ("Backend:" → "Instrument:" in validate summary) and added context-aware schema validation hints that tell users *what's wrong* instead of dumping raw Pydantic errors. Wrote 22 TDD tests across 2 new test files. All work committed through mateship pipeline (Breakpoint pickup, commit 0028fa1).
 
 Verified teammate commits: Breakpoint (bd325bc, 0028fa1, 198ef8e) and Litmus (a4a66bd) — all tests pass in isolation. Example corpus is clean: 34/34 use `instrument:`, 0 use `backend:`, 0 hardcoded absolute paths.
 
@@ -24,13 +24,13 @@ Baseline counts were stale after M3 commits added bare MagicMock instances. Upda
 Became the user. Tested every major CLI command as a newcomer would encounter them.
 
 **Commands tested:**
-- `mozart --help` — clean panel layout, well-organized sections
-- `mozart validate` — happy path, empty files, plain text, YAML lists, missing fields, bad prompt
-- `mozart doctor` — instruments detected correctly, safety warning for cost limits
-- `mozart init` — creates project, validates clean, handles existing .mozart
-- `mozart instruments list` / `instruments check` — clean output, correct detection
-- `mozart status` — no-args overview, nonexistent score, JSON output
-- `mozart clear-rate-limits --help` — well-documented with examples
+- `marianne --help` — clean panel layout, well-organized sections
+- `mzt validate` — happy path, empty files, plain text, YAML lists, missing fields, bad prompt
+- `mzt doctor` — instruments detected correctly, safety warning for cost limits
+- `mzt init` — creates project, validates clean, handles existing .marianne
+- `mzt instruments list` / `instruments check` — clean output, correct detection
+- `mzt status` — no-args overview, nonexistent score, JSON output
+- `mzt clear-rate-limits --help` — well-documented with examples
 
 **Edge cases exercised:**
 - Score with emoji in name (🎵-my-score): validates fine, "Instrument: claude_cli" shown
@@ -43,13 +43,13 @@ Became the user. Tested every major CLI command as a newcomer would encounter th
 
 ### 3. Bug Found & Fixed: Terminology Regression
 
-**File:** `src/mozart/cli/commands/validate.py:160-164`
+**File:** `src/marianne/cli/commands/validate.py:160-164`
 **Finding:** The validate command displayed "Backend: claude_cli" when no explicit `instrument:` was set. The run command correctly showed "Instrument:" in the same scenario. The composer directive says the music metaphor is load-bearing — "Backend:" is legacy jargon.
 **Fix:** Changed conditional to always show "Instrument:" using `config.instrument or config.backend.type` (same pattern as run.py:128).
 
 ### 4. Bug Found & Fixed: Generic Schema Error Messages
 
-**File:** `src/mozart/cli/commands/validate.py:111-123` (new function `_schema_error_hints`)
+**File:** `src/marianne/cli/commands/validate.py:111-123` (new function `_schema_error_hints`)
 **Finding:** When a user writes `prompt: "Hello world"` (bare string instead of dict), the error said "Ensure your score has at minimum: name, sheet, and prompt sections" — which is wrong and unhelpful. The actual problem is prompt needs to be `prompt: { template: "..." }`.
 **Fix:** Added `_schema_error_hints()` that parses the Pydantic error message and returns context-specific hints:
 - PromptConfig type error → "The 'prompt' field must be a mapping, not a string"
@@ -143,7 +143,7 @@ Hints:
 ### What Could Still Trip Users
 - `total_sheets` in YAML is silently ignored (it's a computed property, not a field). Users who write `total_sheets: 5` think they're setting sheet count but aren't. The actual field is `total_items` + `size`. This is a naming confusion that should be addressed — either make `total_sheets` an alias that sets `total_items`, or warn when the user provides it.
 - The V201 warning about Jinja vs format syntax (`{{ workspace }}` vs `{workspace}` in validations) is good but could be stronger — it's a PASS with warning, but this will actually fail at runtime. Consider making it an error.
-- No tests exist for `mozart validate --json` on schema errors producing valid JSON (the existing test only checks empty files)
+- No tests exist for `mzt validate --json` on schema errors producing valid JSON (the existing test only checks empty files)
 
 ### Experiential Notes
 The mateship pipeline worked like clockwork this movement. Breakpoint picked up my uncommitted validate changes and test files within the same movement cycle, added 58 more adversarial tests on top, and committed everything. Four musicians touching the same UX surface without conflicts. That's the orchestra model working.

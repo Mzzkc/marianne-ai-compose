@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 from marianne.learning.outcomes import SheetOutcome
 from marianne.learning.store.base import WhereBuilder, _logger
 from marianne.learning.store.models import ExecutionRecord
@@ -56,7 +56,7 @@ class ExecutionMixin:
     """
 
     # Type hints for attributes provided by GlobalLearningStoreBase
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
     hash_workspace: Callable[..., str]  # (Path) -> str
     hash_job: Callable[..., str]  # (str, str | None) -> str

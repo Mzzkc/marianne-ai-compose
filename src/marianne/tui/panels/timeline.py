@@ -1,4 +1,4 @@
-"""Event timeline panel for the Mozart Monitor TUI.
+"""Event timeline panel for the Marianne Monitor TUI.
 
 Displays a chronological, color-coded list of process events,
 anomalies, and learning insights in a scrollable log.

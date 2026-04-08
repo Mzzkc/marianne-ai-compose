@@ -2,7 +2,7 @@
 
 F-255.2: When jobs run through the baton adapter, _live_states is never
 populated with a CheckpointState. This means:
-- mozart status shows "Full status unavailable" for baton-managed jobs
+- mzt status shows "Full status unavailable" for baton-managed jobs
 - _on_baton_state_sync returns early (no live state to update)
 - Profiler and semantic analyzer see no running jobs
 

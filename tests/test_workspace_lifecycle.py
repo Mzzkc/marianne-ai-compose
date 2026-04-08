@@ -1,4 +1,4 @@
-"""Tests for mozart.workspace.lifecycle module."""
+"""Tests for marianne.workspace.lifecycle module."""
 
 import shutil
 from pathlib import Path
@@ -93,19 +93,19 @@ class TestFilePreservation:
         assert (workspace / ".iteration").exists()
         assert not (workspace / "01-report.md").exists()
 
-    def test_mozart_state_files_preserved(
+    def test_marianne_state_files_preserved(
         self, workspace: Path, default_config: WorkspaceLifecycleConfig
     ):
-        """Files matching .mozart-* are preserved."""
-        (workspace / ".mozart-state.db").write_text("")
-        (workspace / ".mozart-outcomes.json").write_text("{}")
+        """Files matching .marianne-* are preserved."""
+        (workspace / ".marianne-state.db").write_text("")
+        (workspace / ".marianne-outcomes.json").write_text("{}")
         (workspace / "05-plan.md").write_text("data")
 
         archiver = WorkspaceArchiver(workspace, default_config)
         archiver.archive()
 
-        assert (workspace / ".mozart-state.db").exists()
-        assert (workspace / ".mozart-outcomes.json").exists()
+        assert (workspace / ".marianne-state.db").exists()
+        assert (workspace / ".marianne-outcomes.json").exists()
         assert not (workspace / "05-plan.md").exists()
 
     def test_coverage_file_preserved(
@@ -392,7 +392,7 @@ class TestConfigDefaults:
         assert config.archive_naming == "iteration"
         assert config.max_archives == 0
         assert ".iteration" in config.preserve_patterns
-        assert ".mozart-*" in config.preserve_patterns
+        assert ".marianne-*" in config.preserve_patterns
 
     def test_custom_archive_dir(self):
         config = WorkspaceLifecycleConfig(archive_dir="history")

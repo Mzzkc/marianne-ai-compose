@@ -1,4 +1,4 @@
-"""Tests for Mozart MCP Resources - Job and configuration resource access."""
+"""Tests for Marianne MCP Resources - Job and configuration resource access."""
 
 import json
 import tempfile
@@ -89,8 +89,8 @@ class TestConfigResources:
             "config://backend-options",
             "config://validation-types",
             "config://learning-options",
-            "mozart://jobs",
-            "mozart://templates"
+            "marianne://jobs",
+            "marianne://templates"
         ]
 
         for expected in expected_uris:
@@ -108,9 +108,9 @@ class TestConfigResources:
         resources = await config_resources_with_backend.list_resources()
 
         resource_uris = [r["uri"] for r in resources]
-        assert "mozart://jobs/{job_id}" in resource_uris
-        assert "mozart://jobs" in resource_uris
-        assert "mozart://templates" in resource_uris
+        assert "marianne://jobs/{job_id}" in resource_uris
+        assert "marianne://jobs" in resource_uris
+        assert "marianne://templates" in resource_uris
 
     async def test_get_config_schema(self, config_resources_basic):
         """Test retrieving configuration schema generated from Pydantic models."""
@@ -322,12 +322,12 @@ class TestConfigResources:
         schema = json.loads(content["text"])
         assert "title" in schema
 
-    async def test_read_resource_mozart_jobs(self, config_resources_with_backend):
-        """Test reading Mozart jobs resource."""
-        result = await config_resources_with_backend.read_resource("mozart://jobs")
+    async def test_read_resource_marianne_jobs(self, config_resources_with_backend):
+        """Test reading Marianne jobs resource."""
+        result = await config_resources_with_backend.read_resource("marianne://jobs")
 
         content = result["contents"][0]
-        assert content["uri"] == "mozart://jobs"
+        assert content["uri"] == "marianne://jobs"
         assert content["mimeType"] == "application/json"
 
         # Should be valid JSON
@@ -340,16 +340,16 @@ class TestConfigResources:
         """Test reading specific job detail resource."""
         mock_state_backend.load.return_value = sample_job_state
 
-        result = await config_resources_with_backend.read_resource("mozart://jobs/test-job-1")
+        result = await config_resources_with_backend.read_resource("marianne://jobs/test-job-1")
 
         content = result["contents"][0]
-        assert content["uri"] == "mozart://jobs/test-job-1"
+        assert content["uri"] == "marianne://jobs/test-job-1"
         details = json.loads(content["text"])
         assert "job_id" in details or "error" in details
 
     async def test_read_resource_templates(self, config_resources_basic):
         """Test reading job templates resource."""
-        result = await config_resources_basic.read_resource("mozart://templates")
+        result = await config_resources_basic.read_resource("marianne://templates")
 
         content = result["contents"][0]
         templates = json.loads(content["text"])
@@ -371,7 +371,7 @@ class TestConfigResources:
         # Make state backend raise an exception
         mock_state_backend.load.side_effect = OSError("Database error")
 
-        result = await config_resources_with_backend.read_resource("mozart://jobs")
+        result = await config_resources_with_backend.read_resource("marianne://jobs")
 
         # Should return error message instead of crashing
         content = result["contents"][0]

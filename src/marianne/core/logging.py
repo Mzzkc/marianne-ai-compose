@@ -1,6 +1,6 @@
-"""Structured logging infrastructure for Mozart.
+"""Structured logging infrastructure for Marianne.
 
-Provides structured JSON logging using structlog with Mozart-specific context
+Provides structured JSON logging using structlog with Marianne-specific context
 such as job_id, sheet_num, and component names. Supports both console and
 file output with log rotation.
 
@@ -78,7 +78,7 @@ def get_current_log_path() -> Path | None:
 def get_default_log_path(workspace: Path) -> Path:
     """Get the default log file path for a workspace.
 
-    The default log location is {workspace}/logs/mozart.log
+    The default log location is {workspace}/logs/marianne.log
 
     Args:
         workspace: The workspace directory.
@@ -86,7 +86,7 @@ def get_default_log_path(workspace: Path) -> Path:
     Returns:
         Path to the default log file location.
     """
-    return workspace / "logs" / "mozart.log"
+    return workspace / "logs" / "marianne.log"
 
 
 def find_log_files(workspace: Path, log_path: Path | None = None) -> list[Path]:
@@ -137,7 +137,7 @@ class CompressingRotatingFileHandler(RotatingFileHandler):
     """Rotating file handler that compresses old log files with gzip.
 
     After rotation, old log files are compressed to .gz format to save disk space.
-    For example, mozart.log.1 becomes mozart.log.1.gz.
+    For example, marianne.log.1 becomes marianne.log.1.gz.
 
     This handler extends the standard RotatingFileHandler with:
     - Automatic gzip compression of rotated files
@@ -146,7 +146,7 @@ class CompressingRotatingFileHandler(RotatingFileHandler):
 
     Example:
         handler = CompressingRotatingFileHandler(
-            "logs/mozart.log",
+            "logs/marianne.log",
             maxBytes=50 * 1024 * 1024,  # 50MB
             backupCount=5,
             compress_level=9,
@@ -298,7 +298,7 @@ class ExecutionContext:
 
     Attributes:
         job_id: The job identifier (from config name).
-        run_id: Unique execution run ID (UUID), unique per `mozart run` invocation.
+        run_id: Unique execution run ID (UUID), unique per `mzt run` invocation.
         sheet_num: Current sheet number being processed (None if not in sheet).
         component: Component name for the current operation (e.g., "runner", "backend").
         parent_run_id: Optional parent run ID for nested operations (e.g., sub-jobs).
@@ -385,7 +385,7 @@ class ExecutionContext:
 # Thread/task-safe context variable for ExecutionContext
 # Using ContextVar ensures proper isolation in async code
 _current_context: ContextVar[ExecutionContext | None] = ContextVar(
-    "mozart_context", default=None
+    "marianne_context", default=None
 )
 
 
@@ -535,11 +535,11 @@ def _add_context(
     return event_dict
 
 
-class MozartLogger:
-    """Mozart-specific logger wrapper around structlog.
+class MarianneLogger:
+    """Marianne-specific logger wrapper around structlog.
 
     Provides methods for debug, info, warning, error, and critical logging
-    with automatic inclusion of Mozart context (job_id, sheet_num, component).
+    with automatic inclusion of Marianne context (job_id, sheet_num, component).
 
     The logger is bound to a component name and can have additional context
     bound for a specific scope (e.g., job_id, sheet_num).
@@ -554,7 +554,7 @@ class MozartLogger:
         component: str,
         **initial_context: Any,
     ) -> None:
-        """Initialize a Mozart logger for a component.
+        """Initialize a Marianne logger for a component.
 
         Args:
             component: The component name (e.g., "runner", "backend", "validator").
@@ -568,35 +568,35 @@ class MozartLogger:
 
         This fetches a fresh logger each time to ensure it respects the
         current logging configuration, even if configure_logging() was
-        called after this MozartLogger was created.
+        called after this MarianneLogger was created.
         """
         logger: structlog.stdlib.BoundLogger = structlog.get_logger().bind(**self._context)
         return logger
 
-    def bind(self, **context: Any) -> MozartLogger:
+    def bind(self, **context: Any) -> MarianneLogger:
         """Create a new logger with additional bound context.
 
         Args:
             **context: Additional context to bind (e.g., job_id, sheet_num).
 
         Returns:
-            A new MozartLogger with the additional context bound.
+            A new MarianneLogger with the additional context bound.
         """
-        new_logger = MozartLogger.__new__(MozartLogger)
+        new_logger = MarianneLogger.__new__(MarianneLogger)
         new_logger._component = self._component
         new_logger._context = {**self._context, **context}
         return new_logger
 
-    def unbind(self, *keys: str) -> MozartLogger:
+    def unbind(self, *keys: str) -> MarianneLogger:
         """Create a new logger with specified keys removed.
 
         Args:
             *keys: Keys to remove from the bound context.
 
         Returns:
-            A new MozartLogger with the specified keys unbound.
+            A new MarianneLogger with the specified keys unbound.
         """
-        new_logger = MozartLogger.__new__(MozartLogger)
+        new_logger = MarianneLogger.__new__(MarianneLogger)
         new_logger._component = self._component
         new_logger._context = {k: v for k, v in self._context.items() if k not in keys}
         return new_logger
@@ -740,7 +740,7 @@ def configure_logging(
     include_context: bool = True,
     compress_logs: bool = True,
 ) -> None:
-    """Configure Mozart structured logging.
+    """Configure Marianne structured logging.
 
     This should be called once at application startup before any logging occurs.
 
@@ -839,8 +839,8 @@ def configure_logging(
     )
 
 
-def get_logger(component: str, **initial_context: Any) -> MozartLogger:
-    """Get a Mozart logger for a component.
+def get_logger(component: str, **initial_context: Any) -> MarianneLogger:
+    """Get a Marianne logger for a component.
 
     The returned logger will automatically include ExecutionContext fields
     (job_id, run_id, sheet_num) when logging inside a `with_context()` block.
@@ -850,7 +850,7 @@ def get_logger(component: str, **initial_context: Any) -> MozartLogger:
         **initial_context: Additional context to bind (e.g., job_id).
 
     Returns:
-        A MozartLogger instance bound to the component.
+        A MarianneLogger instance bound to the component.
 
     Example:
         logger = get_logger("runner")
@@ -858,14 +858,14 @@ def get_logger(component: str, **initial_context: Any) -> MozartLogger:
         with with_context(ctx):
             logger.info("sheet_started")  # Includes job_id, run_id automatically
     """
-    return MozartLogger(component, **initial_context)
+    return MarianneLogger(component, **initial_context)
 
 
 # Re-export for convenience
 __all__ = [
     "CompressingRotatingFileHandler",
     "ExecutionContext",
-    "MozartLogger",
+    "MarianneLogger",
     "SENSITIVE_PATTERNS",
     "clear_context",
     "configure_logging",

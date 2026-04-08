@@ -1,6 +1,6 @@
 """Conductor detection and CLI routing — safe fallback to direct execution.
 
-This module is used by CLI commands to auto-detect a running Mozart
+This module is used by CLI commands to auto-detect a running Marianne
 conductor and route operations through it. When no conductor is detected,
 the caller falls back to direct execution (existing behavior).
 
@@ -44,7 +44,7 @@ def _resolve_socket_path(socket_path: Path | None) -> Path:
 
 
 async def is_daemon_available(socket_path: Path | None = None) -> bool:
-    """Check if the Mozart conductor is running. Safe: returns False on any error."""
+    """Check if the Marianne conductor is running. Safe: returns False on any error."""
     resolved = _resolve_socket_path(socket_path)
     try:
         from marianne.daemon.ipc.client import DaemonClient
@@ -174,7 +174,7 @@ async def try_daemon_route(
             raise MethodNotFoundError(
                 f"Conductor does not support '{method}'. "
                 f"Restart the conductor to pick up code changes: "
-                f"mozart restart"
+                f"mzt restart"
             ) from e
 
         from marianne.daemon.exceptions import DaemonError

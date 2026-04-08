@@ -1,4 +1,4 @@
-"""Tests for mozart.core.tokens module.
+"""Tests for marianne.core.tokens module.
 
 Covers token estimation (T1.1–T1.11), TokenBudgetTracker (T2.1–T2.9),
 and divergent estimator reconciliation (T10.4) from the Litmus test specs.
@@ -80,7 +80,7 @@ class TestEstimateTokens:
         [
             "The quick brown fox jumps over the lazy dog.",
             "def calculate_total(items: list[float]) -> float:\n    return sum(items)",
-            "Mozart is an orchestration system for collaborative intelligence.",
+            "Marianne is an orchestration system for collaborative intelligence.",
             "import json\nimport math\nfrom pathlib import Path\n\ndef main():\n    pass",
             "a" * 1000,
         ],

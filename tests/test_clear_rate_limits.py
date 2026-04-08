@@ -1,4 +1,4 @@
-"""Tests for mozart clear-rate-limits CLI command and IPC pipeline.
+"""Tests for mzt clear-rate-limits CLI command and IPC pipeline.
 
 The clear-rate-limits command allows operators to manually clear stale
 rate limits on instruments. This is needed when rate limits expire in

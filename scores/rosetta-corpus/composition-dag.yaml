@@ -1,0 +1,1393 @@
+nodes:
+- name: After-Action Review
+  scale: iteration
+  problem: Execution insights are lost between iterations because no systematic reflection captures what worked, what failed,
+    and why.
+  signals:
+  - same mistakes happen repeatedly across iterations
+  - execution insights disappear after completion
+  - teams don't know what actually worked or why it worked
+  - improvement recommendations don't reach subsequent iterations
+  edge_count: 14
+- name: Andon Cord
+  scale: adaptation
+  problem: Validation failures are retried blindly without diagnosing root cause, wasting resources on repeated errors.
+  signals:
+  - validation failures repeat the same error across retries
+  - failure output is informative but gets ignored
+  - retry costs are high (~$1+ per attempt)
+  - agent needs corrective guidance, not just another attempt
+  edge_count: 6
+- name: Back-Slopping (Learning Inheritance)
+  scale: iteration
+  problem: Iterative processes lose hard-won insights because each iteration starts from scratch without accumulated learning.
+  signals:
+  - later iterations repeat mistakes from earlier ones
+  - valuable insights discovered during work are lost between iterations
+  - iterative process plateaus because it cannot build on prior discovery
+  edge_count: 3
+- name: Barn Raising
+  scale: score-level
+  problem: Parallel work streams produce inconsistent structure and style when each agent makes independent convention choices.
+  signals:
+  - parallel agents will work on similar types of artifacts
+  - consistency in naming, structure, or style matters for integration
+  - each agent might make reasonable but incompatible choices
+  - "prefabrication contracts aren't enough \u2014 need broader standards"
+  edge_count: 9
+- name: CDCL Search
+  scale: iteration
+  problem: Iterative processes repeat the same failures because no mechanism captures and propagates failure patterns as constraints.
+  signals:
+  - same failures occur across retry attempts
+  - retries don't help because nothing is learned
+  - failures contain diagnostic information that could prevent recurrence
+  - need to avoid known bad paths in subsequent iterations
+  edge_count: 8
+- name: CEGAR Loop
+  scale: iteration
+  problem: Coarse-grained analysis produces spurious findings requiring expensive verification to distinguish real from false
+    alarms.
+  signals:
+  - coarse analysis produces too many false alarms
+  - expensive to verify every finding at fine grain
+  - most findings disappear when abstraction is refined
+  - need selective refinement, not full re-analysis
+  edge_count: 6
+- name: Canary Probe
+  scale: score-level
+  problem: Full-scale execution risks loss of resources and time when pipeline changes or output formats are unproven.
+  signals:
+  - batch processing many items with unproven pipeline
+  - pipeline changes with uncertain format impact
+  - high cost of full-scale failure
+  - need validated evidence before full commitment
+  edge_count: 7
+- name: Cathedral Construction
+  scale: iteration
+  problem: Large artifacts cannot be produced in a single pass and require iterative construction toward a known target.
+  signals:
+  - artifact is too large to complete in one pass
+  - work must be built incrementally toward a target
+  - each iteration adds structural elements
+  - need to track progress toward a known endpoint
+  edge_count: 9
+- name: Circuit Breaker
+  scale: adaptation
+  problem: Long-running jobs fail catastrophically or waste resources when instruments become unavailable mid-execution.
+  signals:
+  - backend outages cause sudden job failures
+  - primary instrument becomes unavailable mid-concert
+  - self-chaining jobs lose progress when instruments fail
+  - cost overruns from repeated retries on broken instruments
+  edge_count: 8
+- name: Clash Detection
+  scale: score-level
+  problem: Parallel tracks produce conflicting artifacts that break integration, and discovering conflicts during integration
+    is expensive.
+  signals:
+  - parallel work needs to integrate but conflicts are unpredictable
+  - integration testing is expensive
+  - contracts can't anticipate all conflict modes
+  - need to detect conflicts before attempting merge
+  edge_count: 4
+- name: Closed-Loop Call
+  scale: score-level
+  problem: Semantic drift across pipeline stages when consumers misunderstand producer outputs.
+  signals:
+  - handoff fidelity is critical
+  - semantic drift is a real risk
+  - stages have non-obvious dependencies
+  - previous stage outputs are ambiguous
+  edge_count: 3
+- name: Commander's Intent Envelope
+  scale: within-stage
+  problem: Instruction-based prompts break when the agent encounters conditions the prompt author didn't anticipate.
+  signals:
+  - task has more than one valid approach
+  - inputs are variable-format or unpredictable
+  - different instruments would solve this differently
+  - want to validate outcomes, not methods
+  edge_count: 5
+- name: Commissioning Cascade
+  scale: instrument-strategy
+  problem: Different validation scopes require different tools; single-pass validation misses issues or wastes resources.
+  signals:
+  - unit tests pass but integration fails
+  - validation is slow because all scopes use expensive instruments
+  - can't diagnose failures because all tests run together
+  - need different rigor levels for different scopes
+  edge_count: 6
+- name: Composting Cascade
+  scale: score-level
+  problem: Phase transitions in iterative work need measurable readiness signals rather than time-based or manual progression
+    decisions.
+  signals:
+  - phase transitions are time-based or manual, not metrics-driven
+  - unclear when simple work is complete and should escalate to complex restructuring
+  - churn rates don't drive phase changes, even when they indicate ongoing work
+  - workspace readiness isn't observable
+  edge_count: 4
+- name: Constraint Propagation Sweep
+  scale: within-stage
+  problem: Agents generate from contradictory specifications because constraint conflicts remain hidden until expensive work
+    is already complete.
+  signals:
+  - specifications from different stakeholders contain implicit contradictions
+  - generated outputs fail because requirements conflicted silently
+  - reconciling heterogeneous inputs costs less than reworking outputs
+  - constraint set is large enough that pairwise conflicts are non-obvious
+  edge_count: 3
+- name: Dead Letter Quarantine
+  scale: score-level
+  problem: Batch processing repeatedly fails on the same items because no systematic analysis identifies root causes or adapts
+    strategy.
+  signals:
+  - some items consistently fail across retries
+  - batch processing has persistent partial failures
+  - retry loops waste resources on unfixable items
+  - no visibility into why certain items fail while others succeed
+  - failures seem random but may have underlying patterns
+  edge_count: 10
+- name: Decision Propagation
+  scale: within-stage
+  problem: Downstream agents contradict upstream decisions because constraints are buried in prose rather than structured,
+    parseable briefs.
+  signals:
+  - early decisions have compounding effects on later stages
+  - downstream agents unknowingly violate upstream constraints
+  - decisions are buried in prose output rather than structured artifacts
+  - agents cannot tell which upstream decisions are load-bearing
+  edge_count: 4
+- name: Delphi Convergence
+  scale: iteration
+  problem: Multiple independent agents must converge without anchoring on early opinions.
+  signals:
+  - expert opinions vary widely and need to converge
+  - agents anchor on initial assessments and won't update
+  - single-round synthesis isn't achieving consensus
+  edge_count: 3
+- name: Dormancy Gate
+  scale: score-level
+  problem: External prerequisites are not immediately available, but work cannot safely proceed without them.
+  signals:
+  - downstream work depends on external system state
+  - prerequisites will eventually be satisfied but are not immediate
+  - need to wait and retry, not fail outright
+  edge_count: 4
+- name: Echelon Repair
+  scale: instrument-strategy
+  problem: Expensive instruments waste resources on work that cheaper instruments could handle.
+  signals:
+  - work items vary wildly in difficulty
+  - expensive instrument is wasted on trivial tasks
+  - costs are high but most work is simple
+  - need to triage before processing
+  edge_count: 12
+- name: Fan-out + Synthesis
+  scale: score-level
+  problem: Work that could be parallelized is done sequentially, wasting time, or parallel outputs remain fragmented without
+    meaningful integration.
+  signals:
+  - problem decomposes into independent sub-problems
+  - sub-problems can be worked on simultaneously
+  - need to integrate diverse perspectives or findings
+  - synthesis must address cross-cutting themes, not just concatenate
+  edge_count: 12
+- name: Fermentation Relay
+  scale: instrument-strategy
+  problem: Expensive instruments waste resources fixing quality issues that cheap instruments created during initial processing.
+  signals:
+  - cheap instruments produce output too noisy for expensive stages to use directly
+  - expensive instruments waste budget on noise filtering instead of core work
+  - early outputs require multiple refinement steps before quality is acceptable
+  - no single instrument choice works well across all pipeline stages
+  edge_count: 5
+- name: Fixed-Point Iteration
+  scale: iteration
+  problem: Iterative refinement requires explicit convergence detection to avoid wasting iterations.
+  signals:
+  - repeated application produces improvements but stopping criterion is unclear
+  - iterations are expensive and need measurable termination beyond fixed counts
+  - output stabilizes after refinement but manual convergence checking is tedious
+  edge_count: 5
+- name: Forward Observer
+  scale: instrument-strategy
+  problem: Expensive instruments waste context budget processing information that could be pre-compressed by cheaper agents.
+  signals:
+  - input exceeds context window of expensive instrument
+  - large dataset needs expensive instrument processing
+  - token costs dominate total cost
+  - most input is redundant or low-value
+  edge_count: 7
+- name: Forward Observer
+  scale: instrument-strategy
+  problem: Expensive instruments waste resources reading raw input; cheap summarization can preserve actionable information.
+  signals:
+  - input exceeds available context window
+  - expensive instrument required for main task
+  - token costs dominate total cost
+  - most input is redundant or low-value
+  edge_count: 7
+- name: Fragmentary Order (FRAGO)
+  scale: adaptation
+  problem: Plans become stale mid-execution when discovered conditions diverge from expectations but no mechanism exists for
+    targeted correction without full replanning.
+  signals:
+  - earlier stages produced results that invalidate downstream assumptions
+  - the plan is partially wrong but not wrong enough to discard
+  - downstream agents need adjusted guidance, not a completely new plan
+  - conditions discovered mid-execution were not anticipated by the original plan
+  edge_count: 4
+- name: Graceful Retreat
+  scale: score-level
+  problem: Long-running work risks total failure on hard deadlines unless tiers of acceptable output are planned in advance.
+  signals:
+  - work has hard time deadlines where partial output has value
+  - downstream pipeline stages can adapt to variable completeness
+  - attempting full completion might waste resources or miss deadlines
+  edge_count: 3
+- name: Immune Cascade
+  scale: instrument-strategy
+  problem: Expensive instruments waste resources on broad scanning when cheap preliminary work could narrow scope first.
+  signals:
+  - broad scanning is expensive but most issues are benign
+  - don't know which findings warrant expensive investigation
+  - need to narrow findings before expensive deep analysis
+  edge_count: 12
+- name: Lines of Effort
+  scale: concert-level
+  problem: Parallel campaign workstreams drift apart without convergence mechanisms connecting distinct efforts toward a unified
+    end state.
+  signals:
+  - campaign has distinct workstreams with different objectives
+  - parallel efforts must converge toward a shared end state
+  - workstreams need autonomy but unified direction
+  - coordination should happen through shared state, not message passing
+  edge_count: 7
+- name: Memoization Cache
+  scale: iteration
+  problem: Self-chaining scores and iterative processes re-execute stages whose inputs haven't changed, wasting computation.
+  signals:
+  - self-chaining scores re-analyze unchanged modules wastefully
+  - concert campaigns process overlapping inputs redundantly
+  - CEGAR Loops re-examine stable abstraction regions unnecessarily
+  - iterative refinement compounds costs when inputs don't change
+  edge_count: 6
+- name: Mission Command
+  scale: score-level
+  problem: Centralized instruction-following breaks when agents face conditions the planner didn't anticipate.
+  signals:
+  - tasks require agent judgment and conditions may vary
+  - validation should check outcomes, not methods
+  - multiple agents must coordinate around shared intent
+  - top-down instructions are too brittle for variable conditions
+  edge_count: 8
+- name: Nurse Log
+  scale: score-level
+  problem: Downstream stages waste resources redoing common preparation work because no shared substrate exists.
+  signals:
+  - multiple stages need the same research or data collection
+  - agents are duplicating preparation work
+  - downstream work is blocked waiting for common prerequisites
+  edge_count: 2
+- name: Prefabrication
+  scale: score-level
+  problem: Parallel tracks produce incompatible outputs because no shared interface contract exists before work begins.
+  signals:
+  - parallel work must produce compatible outputs
+  - integration fails due to interface mismatches
+  - tracks can't communicate during development
+  - neither track depends on the other's code
+  edge_count: 7
+- name: Progressive Rollout
+  scale: concert-level
+  problem: Full deployment before validation risks large-scale failure; incremental rollout with monitoring gates progression
+    but requires coordinating batch selection, execution, and go/no-go decisions across phases.
+  signals:
+  - works on 5 doesn't guarantee works on 500
+  - need to detect scaling issues before full deployment
+  - rollback from 100% deployment is expensive
+  - early validation could prevent large-scale failures
+  edge_count: 3
+- name: Quorum Consensus
+  scale: score-level
+  problem: Partial agent failure should not block the pipeline when majority agreement is sufficient.
+  signals:
+  - fan-out agents may fail unpredictably
+  - partial failure shouldn't block downstream stages
+  - need to proceed with majority agreement
+  - some agents' failures are acceptable if quorum reached
+  edge_count: 3
+- name: Quorum Trigger
+  scale: within-stage
+  problem: Agents continue executing their original plan after accumulating evidence that makes continuing wasteful or dangerous.
+  signals:
+  - conditions discovered mid-task should change the approach
+  - findings accumulate that individually seem minor but collectively demand action
+  - agent needs to self-interrupt based on evidence density
+  - severity of issues should trigger a mode switch, not just a note
+  edge_count: 4
+- name: Rashomon Gate
+  scale: score-level
+  problem: Single-frame analysis produces unreliable conclusions when the optimal analytical perspective is unknown.
+  signals:
+  - the right analytical frame is unknown
+  - multiple valid perspectives exist (security, performance, maintainability)
+  - risk is getting the right answer from the wrong frame
+  - need to distinguish genuine ambiguity from frame artifacts
+  edge_count: 7
+- name: Read-and-React
+  scale: adaptation
+  problem: Downstream agents follow fixed behavior regardless of upstream results because their prompts don't instruct them
+    to inspect and adapt to workspace state.
+  signals:
+  - downstream behavior should change based on upstream results
+  - adaptation path is not known before execution begins
+  - workspace state determines which work is needed next
+  - agents proceed with default behavior ignoring what previous stages produced
+  edge_count: 5
+- name: Reconnaissance Pull
+  scale: score-level
+  problem: Planning without prior exploration risks misaligned approaches and wasted effort.
+  signals:
+  - task structure and complexity are unclear
+  - initial exploration costs are low relative to execution
+  - approach is not obvious from requirements alone
+  edge_count: 2
+- name: Red Team / Blue Team
+  scale: score-level
+  problem: Artifacts tested by known adversaries pass trivially; unknown adversaries reveal real flaws.
+  signals:
+  - testing is too predictable when defenders know the attacks
+  - need to find vulnerabilities that prepared defense would miss
+  - want realistic stress-testing where defenders work blind
+  edge_count: 2
+- name: Rehearsal Spotlight
+  scale: iteration
+  problem: Iteration is expensive; reworking entire outputs wastes resources when only parts need refinement.
+  signals:
+  - iteration cycles are expensive
+  - only specific sections need rework
+  - most output is good but a few parts are weak
+  - need to focus rework effort on problem areas
+  edge_count: 3
+- name: Relay Zone
+  scale: score-level
+  problem: Cumulative outputs across pipeline stages exceed context window limits, degrading downstream agent performance.
+  signals:
+  - pipeline outputs growing too large for downstream context windows
+  - later stages receiving more context than they can effectively use
+  - information from early stages drowning out recent findings
+  - need to preserve key findings while discarding volume
+  edge_count: 10
+- name: Saga Compensation Chain
+  scale: concert-level
+  problem: Partial completion of a multi-score concert leaves inconsistent shared state with no automated path to undo forward
+    steps.
+  signals:
+  - concert scores produce side effects on shared state
+  - partial completion is worse than full rollback
+  - manual cleanup after failure is expensive and error-prone
+  - each score's effects need a documented undo path
+  edge_count: 1
+- name: Screening Cascade
+  scale: instrument-strategy
+  problem: Difficulty emerges during processing; fixed upfront instruments waste expensive resources on simple work or fail
+    on complex work.
+  signals:
+  - work items vary in difficulty but this only becomes clear during processing
+  - cheap instruments can screen routine items but some need escalation to stronger capabilities
+  - costs are high because you're using expensive instruments for work that doesn't warrant them
+  - difficult work emerges during execution, not from upfront inspection
+  edge_count: 9
+- name: Season Bible
+  scale: concert-level
+  problem: Multi-score campaigns lose continuity because agents lack shared memory of prior decisions and evolving constraints.
+  signals:
+  - scores make decisions inconsistent with earlier work
+  - agents repeat mistakes or ignore prior learnings
+  - no central record of evolving state across campaign
+  - continuity errors accumulate as work progresses
+  edge_count: 4
+- name: Shipyard Sequence
+  scale: score-level
+  problem: Expensive fan-out proceeds on a broken foundation, wasting resources on downstream work that will fail.
+  signals:
+  - downstream fan-out is expensive
+  - foundation must be solid before scaling work
+  - need real validation tools, not LLM judgment
+  - costs multiply when defects reach later stages
+  edge_count: 7
+- name: Soil Maturity Index
+  scale: iteration
+  problem: Iterative processes lack domain-specific termination conditions beyond structural equality.
+  signals:
+  - iterative improvement plateaus on structural metrics but output lacks qualitative maturity
+  - need to distinguish real convergence from mere structural stability
+  - process converges structurally but hasn't achieved expected coherence or readiness
+  - domain-specific maturity assessment required before proceeding to next phase
+  edge_count: 4
+- name: Source Triangulation
+  scale: score-level
+  problem: Single-source analysis cannot detect contradictions between what code does, documentation says, and tests prove.
+  signals:
+  - technical claims need independent verification
+  - multiple source types exist (code, docs, tests, benchmarks)
+  - single perspective might miss contradictions
+  - need to categorize claims as corroborated vs uncorroborated
+  edge_count: 7
+- name: Speculative Hedge
+  scale: score-level
+  problem: Choosing one approach that fails requires expensive restart from scratch, wasting the initial attempt's cost.
+  signals:
+  - uncertain which approach will work for this problem
+  - starting over after failed approach costs more than running both
+  - need guaranteed progress despite approach uncertainty
+  - multiple valid strategies exist but success is unpredictable
+  edge_count: 4
+- name: Stigmergic Workspace
+  scale: communication
+  problem: Parallel agents duplicate effort or produce conflicts because they lack visibility into each other's progress and
+    decisions.
+  signals:
+  - parallel agents need loose coordination without direct messaging
+  - workspace files already capture meaningful state other agents need
+  - real-time coordination would create bottlenecks
+  - agents react to each other's outputs, not each other's messages
+  edge_count: 2
+- name: Succession Pipeline
+  scale: score-level
+  problem: Work requires sequential substrate transformations, but unstructured execution produces outputs incompatible with
+    downstream stages.
+  signals:
+  - each stage needs fundamentally different methods
+  - one stage's output becomes the next stage's input substrate
+  - stages have categorical differences, not just detail levels
+  - work resembles ecological succession with distinct phases
+  edge_count: 6
+- name: Sugya Weave (Editorial Synthesis)
+  scale: within-stage
+  problem: Diverse inputs need synthesis into an authoritative position with argued support, not neutral aggregation.
+  signals:
+  - multiple perspectives exist but need editorial judgment
+  - "summary isn't sufficient \u2014 need a supported position"
+  - inputs are diverse and require interpretation
+  - neutrality would hide necessary judgment calls
+  edge_count: 5
+- name: Systemic Acquired Resistance
+  scale: concert-level
+  problem: Failures encountered in one score don't inform subsequent scores in a concert, causing repeated failures across
+    the campaign.
+  signals:
+  - scores in a concert face similar threats
+  - first-encounter failure cost is high
+  - failures repeat across scores in a concert
+  - no mechanism to share failure recovery
+  edge_count: 4
+- name: Talmudic Page
+  scale: score-level
+  problem: Multiple perspectives on an artifact produce disconnected analyses when commentaries reference only the source,
+    not each other.
+  signals:
+  - primary artifact needs multi-layer annotation
+  - analysis requires multiple perspectives anchored to one text
+  - commentaries should reference both source and each other
+  - single-perspective analysis is insufficient
+  edge_count: 2
+- name: The Tool Chain
+  scale: instrument-strategy
+  problem: Expensive AI instruments waste budget on deterministic tasks that CLI tools could handle more cheaply.
+  signals:
+  - most pipeline stages are deterministic transformations
+  - costs are high using AI instruments for every step
+  - work is expressible as shell commands with exit codes
+  - need to optimize cost without losing necessary judgment
+  edge_count: 6
+- name: Triage Gate
+  scale: score-level
+  problem: Fan-out produces mixed-quality outputs but synthesis processes all outputs regardless of quality, wasting resources.
+  signals:
+  - fan-out produces wildly varying output quality
+  - synthesis stage is expensive and shouldn't process garbage
+  - some outputs need rework, others are ready
+  - structural quality checks are definable
+  edge_count: 10
+- name: Vickrey Auction
+  scale: instrument-strategy
+  problem: Selecting an instrument without evidence wastes resources or produces inferior results when multiple candidates
+    are viable.
+  signals:
+  - multiple instruments are available and it's unclear which performs best
+  - instrument choice is based on guesswork, not evidence
+  - cost or quality varies significantly across instruments for the same task
+  edge_count: 2
+edges:
+- source: After-Action Review
+  target: Back-Slopping
+  semantics: AAR generates the aar.md artifact that Back-Slopping propagates forward as starter culture to seed the next iteration
+    with learning inheritance.
+  bidirectional: false
+- source: After-Action Review
+  target: Cathedral Construction
+  semantics: AAR captures lessons from each Cathedral Construction iteration and feeds improvements into the next cycle's
+    prelude as accumulated knowledge.
+  bidirectional: true
+- source: After-Action Review
+  target: Immune Cascade
+  semantics: AAR analyzes which items graduated through Immune Cascade's tier gates and extracts lessons about gate criteria
+    effectiveness for refinement.
+  bidirectional: true
+- source: Andon Cord
+  target: Circuit Breaker
+  semantics: Circuit Breaker monitors instrument-level failures across tasks; Andon Cord diagnoses task-level validation failures
+    within a single workflow, operating at different failure scopes.
+  bidirectional: false
+- source: Andon Cord
+  target: Commissioning Cascade
+  semantics: Commissioning Cascade verifies outputs at multiple quality gates; Andon Cord provides the diagnostic-and-fix
+    mechanism when any commissioning tier fails validation.
+  bidirectional: false
+- source: Andon Cord
+  target: Quorum Trigger
+  semantics: Quorum Trigger activates Andon Cord when multiple validation failures reach threshold, preventing single-failure
+    noise from triggering expensive diagnosis stages.
+  bidirectional: true
+- source: Back-Slopping (Learning Inheritance)
+  target: CDCL Search
+  semantics: CDCL Search's learned clauses are a specialized form of culture; Back-Slopping generalizes the inheritance mechanism
+    beyond failure-specific constraints to all accumulated learning.
+  bidirectional: false
+- source: Back-Slopping (Learning Inheritance)
+  target: Cathedral Construction
+  semantics: Cathedral Construction's incremental building uses Back-Slopping's culture artifact to carry integration lessons
+    and architectural decisions across iterations.
+  bidirectional: false
+- source: Back-Slopping (Learning Inheritance)
+  target: Systemic Acquired Resistance
+  semantics: Systemic Acquired Resistance broadcasts defense primers across scores in a concert; Back-Slopping carries learning
+    forward across iterations within a single self-chaining score.
+  bidirectional: false
+- source: Barn Raising
+  target: Lines of Effort
+  semantics: Lines of Effort separates parallel streams of work; Barn Raising ensures those streams remain consistent through
+    shared conventions.
+  bidirectional: true
+- source: Barn Raising
+  target: Mission Command
+  semantics: Mission Command provides the intent envelope defining what to achieve, while Barn Raising provides the implementation
+    conventions defining how to structure the work.
+  bidirectional: true
+- source: Barn Raising
+  target: Prefabrication
+  semantics: Prefabrication defines strict interface contracts (input/output schemas), while Barn Raising establishes broader
+    conventions (naming, style, structure) that complement those contracts.
+  bidirectional: true
+- source: CDCL Search
+  target: After-Action Review
+  semantics: After-Action Review extracts lessons post-execution for human learning; CDCL Search's analyze-failure stage performs
+    similar extraction inline for machine learning between iterations.
+  bidirectional: false
+- source: CDCL Search
+  target: Back-Slopping
+  semantics: Back-Slopping provides the learning inheritance mechanism; CDCL Search uses it to accumulate and forward learned
+    failure clauses across self-chaining iterations.
+  bidirectional: false
+- source: CDCL Search
+  target: CEGAR Loop
+  semantics: "Both are iterative constraint refinement patterns \u2014 CEGAR Loop refines abstractions when verification fails,\
+    \ CDCL Search refines the search space by adding failure-derived clauses; compose by using CDCL for failure learning within\
+    \ CEGAR's refinement loop."
+  bidirectional: true
+- source: CEGAR Loop
+  target: CDCL Search
+  semantics: CDCL Search uses real findings confirmed by CEGAR triage as logical constraints to guide subsequent search.
+  bidirectional: true
+- source: CEGAR Loop
+  target: Immune Cascade
+  semantics: 'CEGAR instantiates Immune Cascade with abstraction level as the escalation tier: coarse analysis first, then
+    selective refinement on false positives.'
+  bidirectional: false
+- source: CEGAR Loop
+  target: Memoization Cache
+  semantics: Memoization Cache skips re-analysis of modules whose code has not changed, reducing the cost of CEGAR iterations.
+  bidirectional: true
+- source: Canary Probe
+  target: Dead Letter Quarantine
+  semantics: Canary Probe's failures reveal items that should be sent to Dead Letter Quarantine instead of full-run processing.
+  bidirectional: false
+- source: Canary Probe
+  target: Progressive Rollout
+  semantics: Canary Probe IS the validation gate and phase 1 of Progressive Rollout before scaling to full deployment.
+  bidirectional: true
+- source: Canary Probe
+  target: Speculative Hedge
+  semantics: Run Canary Probe on each hedge path before committing full-run resources to one strategy.
+  bidirectional: true
+- source: Cathedral Construction
+  target: After-Action Review
+  semantics: After-Action Review extracts lessons from the iteration history that Cathedral Construction accumulates, turning
+    execution record into doctrine.
+  bidirectional: true
+- source: Cathedral Construction
+  target: Back-Slopping
+  semantics: Back-Slopping carries forward patterns and learnings from previous iterations; Cathedral Construction's inherit_workspace
+    provides the substrate for this knowledge transfer.
+  bidirectional: false
+- source: Cathedral Construction
+  target: Memoization Cache
+  semantics: Memoization Cache stores previously-built components to avoid rebuilding; Cathedral Construction's incremental
+    additions benefit from cached artifacts across iterations.
+  bidirectional: true
+- source: Circuit Breaker
+  target: Dead Letter Quarantine
+  semantics: Dead Letter Quarantine receives items that fail both primary and fallback execution routes for manual inspection.
+  bidirectional: true
+- source: Circuit Breaker
+  target: Echelon Repair
+  semantics: Circuit Breaker can gate escalation within echelon tiers; if a cheaper tier's primary instrument fails, escalate
+    to the next tier instead of falling back.
+  bidirectional: true
+- source: Circuit Breaker
+  target: Speculative Hedge
+  semantics: Speculative Hedge pre-executes with candidate instruments in parallel; Circuit Breaker routes work to the fastest/most
+    reliable hedge when primary is unavailable.
+  bidirectional: false
+- source: Clash Detection
+  target: Andon Cord
+  semantics: When Clash Detection finds conflicts (non-zero clash_count), Andon Cord halts integration and triggers diagnostic
+    workflow to analyze root cause.
+  bidirectional: false
+- source: Clash Detection
+  target: Prefabrication
+  semantics: Prefabrication defines interface contracts for parallel tracks; Clash Detection verifies those contracts weren't
+    violated and catches unanticipated conflicts.
+  bidirectional: true
+- source: Clash Detection
+  target: The Tool Chain
+  semantics: The Tool Chain provides CLI tools (linters, static analyzers) that Clash Detection invokes to find structural
+    conflicts beyond what LLM inspection catches.
+  bidirectional: false
+- source: Closed-Loop Call
+  target: Prefabrication
+  semantics: Prefabrication defines strict output contracts that Closed-Loop Call verifies are correctly understood.
+  bidirectional: false
+- source: Closed-Loop Call
+  target: Relay Zone
+  semantics: Relay Zone compresses accumulated outputs between stages; Closed-Loop Call verifies the compressed handoff preserved
+    semantic meaning.
+  bidirectional: false
+- source: Closed-Loop Call
+  target: Succession Pipeline
+  semantics: Succession Pipeline chains execution stages; Closed-Loop Call ensures each handoff maintains semantic fidelity.
+  bidirectional: false
+- source: Commander's Intent Envelope
+  target: After-Action Review
+  semantics: The decision-log artifact feeds directly into After-Action Review, providing the record of autonomous decisions
+    for doctrine extraction.
+  bidirectional: false
+- source: Commander's Intent Envelope
+  target: Fan-out + Synthesis
+  semantics: The intent envelope is shared as prelude across fan-out instances, giving each instance the same boundaries but
+    allowing different methods.
+  bidirectional: false
+- source: Commander's Intent Envelope
+  target: Mission Command
+  semantics: "Commander's Intent Envelope IS Mission Command at the individual sheet scale \u2014 the same intent structure\
+    \ applied within one agent rather than across a team."
+  bidirectional: false
+- source: Commissioning Cascade
+  target: Echelon Repair
+  semantics: Echelon Repair classifies work items by difficulty; Commissioning Cascade validates each echelon's output using
+    tier-appropriate validation instruments.
+  bidirectional: true
+- source: Commissioning Cascade
+  target: Shipyard Sequence
+  semantics: Shipyard Sequence progresses through launch stages; Commissioning Cascade validates each stage with scope-appropriate
+    instruments.
+  bidirectional: false
+- source: Commissioning Cascade
+  target: The Tool Chain
+  semantics: The Tool Chain chains tools together; Commissioning Cascade validates the output of each tool using scope-appropriate
+    instruments.
+  bidirectional: true
+- source: Composting Cascade
+  target: Echelon Repair
+  semantics: Composting Cascade escalates instruments per phase; complex-work uses opus while simple-work and maturation use
+    cheaper instruments.
+  bidirectional: false
+- source: Composting Cascade
+  target: Succession Pipeline
+  semantics: Composting Cascade IS succession with metric-driven phase gates rather than time-based progression.
+  bidirectional: false
+- source: Composting Cascade
+  target: The Tool Chain
+  semantics: Composting Cascade uses CLI instruments (Tool Chain) as workspace thermometers to measure readiness for phase
+    transitions.
+  bidirectional: true
+- source: Constraint Propagation Sweep
+  target: CDCL Search
+  semantics: CDCL Search's learned failure clauses become additional constraints in the sweep's enumeration phase, preventing
+    previously discovered contradictions from recurring.
+  bidirectional: false
+- source: Constraint Propagation Sweep
+  target: Decision Propagation
+  semantics: Decision Propagation feeds structured constraint briefs into the sweep's enumeration phase, providing pre-identified
+    constraints from upstream decisions.
+  bidirectional: false
+- source: Constraint Propagation Sweep
+  target: Rashomon Gate
+  semantics: Rashomon Gate applies multiple analytical frames to the same constraint set, revealing frame-dependent contradictions
+    the sweep might miss from a single perspective.
+  bidirectional: false
+- source: Dead Letter Quarantine
+  target: After-Action Review
+  semantics: After-Action Review can analyze Dead Letter Quarantine's pattern-finding process itself, extracting doctrine
+    about what kinds of failures cluster.
+  bidirectional: false
+- source: Dead Letter Quarantine
+  target: Circuit Breaker
+  semantics: Circuit Breaker halts processing and routes tripped failures to Dead Letter Quarantine for root cause analysis
+    before resuming.
+  bidirectional: true
+- source: Dead Letter Quarantine
+  target: Immune Cascade
+  semantics: Dead Letter Quarantine handles items that fail Immune Cascade's successive verification stages, analyzing what
+    defects survived earlier tiers.
+  bidirectional: false
+- source: Dead Letter Quarantine
+  target: Screening Cascade
+  semantics: Screening Cascade's rejected items route to Dead Letter Quarantine, where accumulated rejections reveal systematic
+    criteria gaps in the screening filters.
+  bidirectional: true
+- source: Dead Letter Quarantine
+  target: Triage Gate
+  semantics: Triage Gate's BLACK-category items (reject/quarantine) feed directly into Dead Letter Quarantine's collection
+    stage for batch pattern analysis.
+  bidirectional: false
+- source: Decision Propagation
+  target: CDCL Search
+  semantics: When propagated decisions lead to failure, CDCL Search extracts the failure reason as a learned clause that prevents
+    the same bad decision propagation in future iterations.
+  bidirectional: false
+- source: Decision Propagation
+  target: CEGAR Loop (Progressive Refinement)
+  semantics: CEGAR Loop's refinement iterations generate decisions at progressively finer abstraction levels; Decision Propagation
+    structures each level's decisions for downstream consumption.
+  bidirectional: false
+- source: Decision Propagation
+  target: Commander's Intent Envelope
+  semantics: Commander's Intent Envelope defines the decision space boundaries (constraints and freedoms) within which Decision
+    Propagation's structured briefs specify concrete downstream constraints.
+  bidirectional: false
+- source: Delphi Convergence
+  target: Rashomon Gate
+  semantics: Rashomon Gate captures multiple conflicting perspectives; Delphi Convergence iterates those perspectives toward
+    measurable convergence.
+  bidirectional: false
+- source: Delphi Convergence
+  target: Source Triangulation
+  semantics: Source Triangulation verifies consistency across one-pass multi-perspective views; Delphi Convergence extends
+    to iterative rounds where perspectives update toward consensus.
+  bidirectional: false
+- source: Dormancy Gate
+  target: Read-and-React
+  semantics: Dormancy Gate pauses until conditions warrant re-evaluation, enabling Read-and-React to dynamically re-run the
+    score.
+  bidirectional: true
+- source: Dormancy Gate
+  target: Shipyard Sequence
+  semantics: Dormancy Gate ensures each shipyard phase waits for its external prerequisites before proceeding.
+  bidirectional: true
+- source: Echelon Repair
+  target: Circuit Breaker
+  semantics: Circuit Breaker halts escalation to expensive echelons when failure rates spike.
+  bidirectional: true
+- source: Echelon Repair
+  target: Commissioning Cascade
+  semantics: Commissioning Cascade verifies the output quality of each echelon tier.
+  bidirectional: true
+- source: Echelon Repair
+  target: Fermentation Relay
+  semantics: Fermentation Relay provides the instrument tier escalation that Echelon Repair's classification routes into.
+  bidirectional: true
+- source: Echelon Repair
+  target: Screening Cascade
+  semantics: Screening Cascade pre-filters items before echelon classification to remove obvious non-candidates.
+  bidirectional: true
+- source: Fan-out + Synthesis
+  target: After-Action Review
+  semantics: After-Action Review provides a coda on the synthesis stage, extracting lessons from the integration process.
+  bidirectional: false
+- source: Fan-out + Synthesis
+  target: Barn Raising
+  semantics: Barn Raising establishes shared conventions before fan-out, preventing output format drift across parallel instances.
+  bidirectional: false
+- source: Fan-out + Synthesis
+  target: Relay Zone
+  semantics: Relay Zone compresses verbose parallel outputs before synthesis, reducing synthesis complexity when fan-out produces
+    high-volume results.
+  bidirectional: true
+- source: Fan-out + Synthesis
+  target: Shipyard Sequence
+  semantics: Shipyard Sequence validates the prepare stage's scope before expensive fan-out begins, preventing cascading rework.
+  bidirectional: false
+- source: Fan-out + Synthesis
+  target: Triage Gate
+  semantics: Triage Gate classifies parallel outputs by quality before synthesis, allowing the synthesis stage to handle different
+    quality tiers differently.
+  bidirectional: true
+- source: Fermentation Relay
+  target: Echelon Repair
+  semantics: Fermentation Relay defines the multi-tier instrument cost progression that Echelon Repair routes classified difficult
+    items through for remediation.
+  bidirectional: true
+- source: Fermentation Relay
+  target: Screening Cascade
+  semantics: Screening Cascade pre-filters items before input to Fermentation Relay's pipeline, improving extraction quality
+    and reducing noise for refinement stages.
+  bidirectional: false
+- source: Fermentation Relay
+  target: Succession Pipeline
+  semantics: Both use sequential refinement stages; Fermentation Relay optimizes for cost-graduated instruments while Succession
+    Pipeline emphasizes early defect detection.
+  bidirectional: false
+- source: Fixed-Point Iteration
+  target: CDCL Search
+  semantics: CDCL Search instantiates fixed-point iteration as a SAT solver, iteratively refining clause sets toward satisfiability.
+  bidirectional: false
+- source: Fixed-Point Iteration
+  target: Cathedral Construction
+  semantics: Cathedral Construction applies fixed-point iteration to progressively refine and layer architectural components.
+  bidirectional: false
+- source: Fixed-Point Iteration
+  target: Memoization Cache
+  semantics: Memoization Cache optimizes fixed-point iteration by caching intermediate results across refinement cycles.
+  bidirectional: true
+- source: Forward Observer
+  target: Immune Cascade
+  semantics: Immune Cascade routes items through cheap-to-expensive instrument escalation by difficulty; Forward Observer
+    applies the same cheap-first escalation within a single analysis task.
+  bidirectional: false
+- source: Forward Observer
+  target: Immune Cascade
+  semantics: Immune Cascade escalates difficult items to expensive instruments; Forward Observer compresses large items for
+    those same instruments.
+  bidirectional: false
+- source: Forward Observer
+  target: Relay Zone
+  semantics: "Forward Observer compresses input for a single expensive stage; Relay Zone compresses accumulated outputs between\
+    \ any pipeline stages \u2014 both address context window limits at different granularities."
+  bidirectional: true
+- source: Forward Observer
+  target: Relay Zone
+  semantics: Forward Observer produces a formatted brief that Relay Zone can reliably relay between stages.
+  bidirectional: true
+- source: Forward Observer
+  target: Screening Cascade
+  semantics: Screening Cascade pre-filters which items reach expensive processing; Forward Observer compresses information
+    WITHIN items before expensive analysis.
+  bidirectional: false
+- source: Forward Observer
+  target: Screening Cascade
+  semantics: Screening Cascade filters volume before Forward Observer compresses the remainder for expensive instruments.
+  bidirectional: false
+- source: Fragmentary Order (FRAGO)
+  target: Lines of Effort
+  semantics: FRAGO provides mid-execution course corrections to individual lines of effort when they diverge from the convergence
+    plan.
+  bidirectional: false
+- source: Fragmentary Order (FRAGO)
+  target: Mission Command
+  semantics: Mission Command defines the original intent envelope; FRAGO adjusts tactical guidance when execution conditions
+    diverge from the original brief without overriding the mission's purpose or end state.
+  bidirectional: false
+- source: Fragmentary Order (FRAGO)
+  target: Read-and-React
+  semantics: Read-and-React provides the workspace-driven adaptation mechanism that the continue stage uses to detect and
+    respond to the FRAGO correction document.
+  bidirectional: true
+- source: Graceful Retreat
+  target: Andon Cord
+  semantics: When Graceful Retreat selects a lower tier, Andon Cord provides detailed diagnostics of what failed in the higher
+    tier for process improvement.
+  bidirectional: false
+- source: Graceful Retreat
+  target: Cathedral Construction
+  semantics: Graceful Retreat completes one iteration within time constraints; Cathedral Construction continues work across
+    iterations without losing prior partial progress.
+  bidirectional: false
+- source: Graceful Retreat
+  target: Dead Letter Quarantine
+  semantics: Tier 3 summary-only outputs are routed to Dead Letter Quarantine for enhanced reprocessing with additional resources
+    or different instruments.
+  bidirectional: false
+- source: Immune Cascade
+  target: After-Action Review
+  semantics: After-Action Review processes Immune Cascade's findings and learning stage outputs to extract methodology improvements.
+  bidirectional: true
+- source: Immune Cascade
+  target: Relay Zone
+  semantics: Relay Zone compresses the high-volume broad-sweep outputs before triage-handoff, preventing context overflow
+    when parallel scans produce results.
+  bidirectional: false
+- source: Immune Cascade
+  target: Triage Gate
+  semantics: The triage-handoff stage implements Triage Gate logic, filtering broad findings to identify investigation targets.
+  bidirectional: true
+- source: Lines of Effort
+  target: After-Action Review
+  semantics: After-Action Review evaluates each line's execution against its objectives, feeding lessons into subsequent convergence
+    checks.
+  bidirectional: false
+- source: Lines of Effort
+  target: Barn Raising
+  semantics: Barn Raising establishes shared conventions across all lines before parallel execution begins, preventing convention
+    drift between independent workstreams.
+  bidirectional: true
+- source: Lines of Effort
+  target: Season Bible
+  semantics: Season Bible maintains the mutable reference document that tracks evolving state across lines, ensuring continuity
+    as each line progresses.
+  bidirectional: true
+- source: Memoization Cache
+  target: CEGAR Loop
+  semantics: CEGAR Loop refines abstractions; Memoization Cache prevents re-analyzing unchanged regions of the refined model.
+  bidirectional: true
+- source: Memoization Cache
+  target: Cathedral Construction
+  semantics: Cathedral Construction builds iteratively; Memoization Cache caches layer results to avoid re-analyzing unchanged
+    layers.
+  bidirectional: true
+- source: Memoization Cache
+  target: Fixed-Point Iteration
+  semantics: Fixed-Point Iteration converges through repeated refinement; Memoization Cache detects converged regions and
+    skips re-analysis.
+  bidirectional: true
+- source: Mission Command
+  target: After-Action Review
+  semantics: After-Action Review evaluates whether decentralized execution achieved the mission brief's end state and extracts
+    lessons.
+  bidirectional: false
+- source: Mission Command
+  target: Barn Raising
+  semantics: Barn Raising establishes shared conventions before Mission Command's parallel execution, preventing convention
+    drift across agents.
+  bidirectional: true
+- source: Mission Command
+  target: Prefabrication
+  semantics: Prefabrication defines strict interface contracts that constrain Mission Command agents' output format while
+    preserving freedom of method.
+  bidirectional: true
+- source: Nurse Log
+  target: Fan-out + Synthesis
+  semantics: Nurse Log's work stage uses fan-out to build components in parallel; Fan-out + Synthesis adds a synthesis stage
+    to combine those parallel outputs.
+  bidirectional: false
+- source: Nurse Log
+  target: Fermentation Relay
+  semantics: Fermentation Relay can escalate the substrate preparation stage if initial research proves insufficient for downstream
+    work.
+  bidirectional: false
+- source: Prefabrication
+  target: Barn Raising
+  semantics: Barn Raising establishes shared conventions before Prefabrication's parallel tracks begin, providing the foundation
+    that the interface contract builds upon.
+  bidirectional: true
+- source: Prefabrication
+  target: Clash Detection
+  semantics: Clash Detection verifies no conflicts exist between assembled components after Prefabrication's integration stage
+    completes.
+  bidirectional: true
+- source: Prefabrication
+  target: Mission Command
+  semantics: "Both patterns coordinate independent parallel work through shared intent artifacts \u2014 Prefabrication uses\
+    \ an interface contract, Mission Command uses a mission brief with intent envelope."
+  bidirectional: true
+- source: Progressive Rollout
+  target: Canary Probe
+  semantics: Canary Probe provides the initial safety probe that becomes phase 1 of Progressive Rollout's graduated deployment
+    sequence.
+  bidirectional: true
+- source: Progressive Rollout
+  target: Dead Letter Quarantine
+  semantics: Dead Letter Quarantine analyzes failed items from each rollout phase to determine whether failures are systemic
+    or isolated.
+  bidirectional: false
+- source: Quorum Consensus
+  target: Fan-out + Synthesis
+  semantics: Quorum Consensus is a specific implementation of Fan-out + Synthesis that adds a quorum check to handle partial
+    failure, synthesizing results only from the successful majority.
+  bidirectional: false
+- source: Quorum Consensus
+  target: Source Triangulation
+  semantics: Source Triangulation enforces diversity across fan-out agents, preventing systematic bias that would corrupt
+    the quorum validity.
+  bidirectional: false
+- source: Quorum Consensus
+  target: Triage Gate
+  semantics: Triage Gate pre-filters candidates before Quorum Consensus's fan-out, reducing unnecessary agent invocations.
+  bidirectional: false
+- source: Quorum Trigger
+  target: Andon Cord
+  semantics: Quorum Trigger fires within a stage to detect accumulated problems; Andon Cord provides the between-stage diagnostic
+    response when the trigger fires.
+  bidirectional: true
+- source: Quorum Trigger
+  target: Circuit Breaker
+  semantics: "Quorum Trigger monitors task-level quality signals; Circuit Breaker monitors infrastructure-level failure signals\
+    \ \u2014 both are threshold-triggered switches at different abstraction levels."
+  bidirectional: false
+- source: Quorum Trigger
+  target: Immune Cascade
+  semantics: Quorum Trigger's threshold firing can initiate Immune Cascade's escalating triage response, routing accumulated
+    findings through graduated investigation tiers.
+  bidirectional: false
+- source: Rashomon Gate
+  target: Commander's Intent Envelope
+  semantics: Each analytical frame definition acts as a Commander's Intent Envelope for that instance, defining perspective
+    constraints while leaving method autonomous.
+  bidirectional: false
+- source: Rashomon Gate
+  target: Source Triangulation
+  semantics: "Rashomon Gate varies analytical frames over the same evidence; Source Triangulation varies evidence sources\
+    \ \u2014 they can be nested for full cross-product validation."
+  bidirectional: true
+- source: Rashomon Gate
+  target: Sugya Weave (Editorial Synthesis)
+  semantics: Sugya Weave synthesizes the categorized findings from Rashomon Gate into a coherent position that acknowledges
+    where frames agree and disagree.
+  bidirectional: true
+- source: Read-and-React
+  target: Dormancy Gate
+  semantics: Dormancy Gate waits for external conditions; Read-and-React adapts behavior based on the workspace state that
+    exists once conditions are met and the gate opens.
+  bidirectional: true
+- source: Read-and-React
+  target: Fragmentary Order (FRAGO)
+  semantics: FRAGO writes correction documents into the workspace that Read-and-React sheets detect and incorporate, adjusting
+    behavior based on the presence and content of the FRAGO.
+  bidirectional: true
+- source: Read-and-React
+  target: Triage Gate
+  semantics: Triage Gate classifies fan-out outputs into quality categories that Read-and-React sheets then detect and adapt
+    their processing strategy around.
+  bidirectional: false
+- source: Reconnaissance Pull
+  target: Canary Probe
+  semantics: Reconnaissance Pull informs Canary Probe's incremental exposure strategy by discovering the landscape before
+    probing begins.
+  bidirectional: false
+- source: Reconnaissance Pull
+  target: Mission Command
+  semantics: Reconnaissance Pull provides landscape discovery before Mission Command agents begin execution within their intent
+    envelope.
+  bidirectional: false
+- source: Red Team / Blue Team
+  target: After-Action Review
+  semantics: Purple debrief IS an after-action review, documenting attack-defense interactions and extracting patterns.
+  bidirectional: false
+- source: Red Team / Blue Team
+  target: Immune Cascade
+  semantics: Red Team / Blue Team stress-tests each tier of Immune Cascade's repairs to validate robustness across difficulty
+    levels.
+  bidirectional: false
+- source: Rehearsal Spotlight
+  target: CEGAR Loop
+  semantics: CEGAR Loop iteratively refines through abstraction phases; Rehearsal Spotlight structures the refinement cycle
+    to rework only sections that failed the previous quality check.
+  bidirectional: false
+- source: Rehearsal Spotlight
+  target: Echelon Repair
+  semantics: Echelon Repair allocates effort by difficulty tier; Rehearsal Spotlight focuses rework effort on specific weak
+    sections within one score iteration.
+  bidirectional: false
+- source: Rehearsal Spotlight
+  target: Soil Maturity Index
+  semantics: Soil Maturity Index measures convergence readiness of context; Rehearsal Spotlight applies convergence measurement
+    to identify which sections need another rehearsal.
+  bidirectional: false
+- source: Relay Zone
+  target: Fan-out + Synthesis
+  semantics: Relay Zone compresses fan-out outputs before synthesis, preventing context window overflow when many parallel
+    streams merge.
+  bidirectional: true
+- source: Relay Zone
+  target: Forward Observer
+  semantics: Forward Observer summarizes large input for a single expensive stage; Relay Zone compresses accumulated outputs
+    between any pipeline stages.
+  bidirectional: true
+- source: Relay Zone
+  target: Screening Cascade
+  semantics: Relay Zone compresses accumulated results between screening stages, preventing context bloat as items escalate
+    through the cascade.
+  bidirectional: false
+- source: Saga Compensation Chain
+  target: After-Action Review
+  semantics: The saga compensation log feeds After-Action Review with structured records of what succeeded, what failed, and
+    what was compensated.
+  bidirectional: false
+- source: Screening Cascade
+  target: Dead Letter Quarantine
+  semantics: Dead Letter Quarantine captures items that exceed all screening stages' capabilities, isolating unprocessable
+    work from the main pipeline.
+  bidirectional: true
+- source: Screening Cascade
+  target: Echelon Repair
+  semantics: Screening Cascade discovers difficulty progressively through escalating screens; Echelon Repair pre-classifies
+    items upfront, providing alternative approaches to matching work with instruments.
+  bidirectional: true
+- source: Screening Cascade
+  target: Immune Cascade
+  semantics: Screening Cascade escalates through capability tiers; Immune Cascade provides fallback processing when escalation
+    fails, with items flowing to Immune Cascade's recovery paths.
+  bidirectional: false
+- source: Season Bible
+  target: Cathedral Construction
+  semantics: Long-running iterative construction where the bible accumulates architectural decisions and constraints across
+    iterations.
+  bidirectional: false
+- source: Season Bible
+  target: Lines of Effort
+  semantics: Multiple parallel effort lines all read and update the shared bible, maintaining cross-stream continuity.
+  bidirectional: true
+- source: Season Bible
+  target: Relay Zone
+  semantics: Relay Zone compresses accumulated outputs to prevent context overflow; Season Bible preserves canonical state
+    that survives compression, ensuring continuity decisions persist across relayed handoffs.
+  bidirectional: false
+- source: Shipyard Sequence
+  target: Dormancy Gate
+  semantics: Dormancy Gate waits for external environmental conditions; Shipyard Sequence gates on foundation validation readiness
+    before proceeding.
+  bidirectional: true
+- source: Shipyard Sequence
+  target: Succession Pipeline
+  semantics: Succession Pipeline graduates candidates through quality tiers; Shipyard Sequence validates foundation quality
+    before expensive fan-out investment.
+  bidirectional: true
+- source: Shipyard Sequence
+  target: Triage Gate
+  semantics: Triage Gate filters work items before processing; Shipyard Sequence validates foundation before expensive downstream
+    fan-out.
+  bidirectional: false
+- source: Soil Maturity Index
+  target: Back-Slopping
+  semantics: Back-Slopping extracts learnings from iterations; Soil Maturity Index determines when iterations have produced
+    sufficient signal for learning.
+  bidirectional: false
+- source: Soil Maturity Index
+  target: Delphi Convergence
+  semantics: Delphi Convergence measures consensus across independent attempts; Soil Maturity Index assesses convergence within
+    a single iterative stream.
+  bidirectional: false
+- source: Soil Maturity Index
+  target: Fixed-Point Iteration
+  semantics: Soil Maturity Index provides domain-specific convergence detection where Fixed-Point Iteration uses only structural
+    no-change metrics.
+  bidirectional: false
+- source: Source Triangulation
+  target: Rashomon Gate
+  semantics: Rashomon Gate applies different analytical frames to the same evidence; Source Triangulation divides the evidence
+    itself across structurally different source types.
+  bidirectional: true
+- source: Source Triangulation
+  target: Sugya Weave
+  semantics: Source Triangulation's three investigation voices (code, docs, tests) feed into Sugya Weave's dialectical synthesis
+    when claims require interpretive layering beyond fact-checking.
+  bidirectional: false
+- source: Source Triangulation
+  target: Triage Gate
+  semantics: Triage Gate filters incoming claims before Source Triangulation's multi-source investigation, preventing waste
+    on obviously true or false claims.
+  bidirectional: false
+- source: Speculative Hedge
+  target: Canary Probe
+  semantics: Canary Probe validates each approach on a small subset before Speculative Hedge commits full resources to parallel
+    execution.
+  bidirectional: true
+- source: Speculative Hedge
+  target: Wargame Table
+  semantics: Wargame Table simulates approaches before Speculative Hedge executes them, allowing elimination of obviously-doomed
+    strategies before spending hedge budget.
+  bidirectional: false
+- source: Stigmergic Workspace
+  target: Barn Raising
+  semantics: Barn Raising establishes shared workspace conventions (naming, directory structure, file formats) that prevent
+    Stigmergic Workspace's failure mode of conflicting writes.
+  bidirectional: false
+- source: Stigmergic Workspace
+  target: Lines of Effort
+  semantics: "Lines of Effort organizes sustained parallel campaigns that use Stigmergic Workspace as their coordination mechanism\
+    \ \u2014 each line reads and writes to shared workspace state."
+  bidirectional: false
+- source: Succession Pipeline
+  target: Barn Raising
+  semantics: Barn Raising establishes conventions for how each stage structures its substrate output so the next stage can
+    consume it reliably.
+  bidirectional: false
+- source: Succession Pipeline
+  target: Shipyard Sequence
+  semantics: Shipyard Sequence gates each succession stage on environmental readiness, ensuring the substrate is prepared
+    before the next transformation begins.
+  bidirectional: true
+- source: Sugya Weave (Editorial Synthesis)
+  target: Fan-out + Synthesis
+  semantics: Fan-out produces diverse inputs; Sugya Weave synthesizes them with an editorial position rather than neutral
+    aggregation.
+  bidirectional: false
+- source: Sugya Weave (Editorial Synthesis)
+  target: Rashomon Gate
+  semantics: Rashomon Gate produces multiple interpretations; Sugya Weave takes a supported position on which interpretation
+    best fits the evidence.
+  bidirectional: true
+- source: Sugya Weave (Editorial Synthesis)
+  target: Source Triangulation
+  semantics: Source Triangulation provides multiple perspectives; Sugya Weave adjudicates between them with an argued position
+    on which is most credible.
+  bidirectional: false
+- source: Systemic Acquired Resistance
+  target: After-Action Review
+  semantics: "Primers are structured AAR output \u2014 AAR extracts lessons, SAR broadcasts them as actionable defenses."
+  bidirectional: false
+- source: Systemic Acquired Resistance
+  target: Back-Slopping
+  semantics: Back-Slopping provides the mechanism for culture inheritance; SAR structures that culture as threat-specific
+    primers.
+  bidirectional: false
+- source: Systemic Acquired Resistance
+  target: Circuit Breaker
+  semantics: Circuit Breaker generates a failure signal; SAR captures that signal as a primer to adjust future behavior.
+  bidirectional: false
+- source: Talmudic Page
+  target: Fan-out + Synthesis
+  semantics: Talmudic Page is Fan-out + Synthesis with the constraint that all fan-out instances must reference a shared central
+    text, creating hub-and-spoke commentary structure.
+  bidirectional: false
+- source: Talmudic Page
+  target: Sugya Weave (Editorial Synthesis)
+  semantics: Sugya Weave extends Talmudic Page's multi-layer commentary structure with editorial synthesis that extracts themes
+    across all layers.
+  bidirectional: false
+- source: The Tool Chain
+  target: Commissioning Cascade
+  semantics: Commissioning Cascade validates the output quality of each stage, especially the CLI-based transformations.
+  bidirectional: true
+- source: The Tool Chain
+  target: Composting Cascade
+  semantics: Composting Cascade accumulates CLI instrument exit codes and output as signal for overall process health.
+  bidirectional: true
+- source: The Tool Chain
+  target: Echelon Repair
+  semantics: "The Tool Chain implements Echelon Repair's E1 tier \u2014 deterministic work routed to CLI instruments for cost\
+    \ optimization."
+  bidirectional: false
+- source: Triage Gate
+  target: Fan-out + Synthesis
+  semantics: Triage Gate filters fan-out outputs before synthesis, preventing synthesis from processing low-quality or unusable
+    outputs.
+  bidirectional: true
+- source: Triage Gate
+  target: Immune Cascade
+  semantics: Triage Gate provides coarse filtering that precedes Immune Cascade's graduated verification stages.
+  bidirectional: true
+- source: Triage Gate
+  target: Relay Zone
+  semantics: Triage Gate classifies fan-out outputs by quality; Relay Zone compresses the classified results to prevent context
+    overflow in downstream processing stages.
+  bidirectional: false
+- source: Vickrey Auction
+  target: Canary Probe
+  semantics: Canary Probe tests pipeline viability on a data subset; Vickrey Auction tests instrument fitness on the same
+    task, combining to validate both pipeline and instrument choice before full commitment.
+  bidirectional: false
+- source: Vickrey Auction
+  target: Echelon Repair
+  semantics: Vickrey Auction's probe results inform which instrument tiers to assign in Echelon Repair's classification-based
+    routing.
+  bidirectional: false
+clusters:
+- name: Adaptation
+  patterns:
+  - Andon Cord
+  - Circuit Breaker
+  - Fragmentary Order (FRAGO)
+  - Read-and-React
+  shared_concern: Runtime adjustment based on conditions and feedback
+- name: Communication
+  patterns:
+  - Stigmergic Workspace
+  shared_concern: Information transfer and state synchronization
+- name: Concert Level
+  patterns:
+  - Lines of Effort
+  - Progressive Rollout
+  - Saga Compensation Chain
+  - Season Bible
+  - Systemic Acquired Resistance
+  shared_concern: Chaining multiple scores across job boundaries
+- name: Instrument Strategy
+  patterns:
+  - Commissioning Cascade
+  - Echelon Repair
+  - Fermentation Relay
+  - Forward Observer
+  - Forward Observer
+  - Immune Cascade
+  - Screening Cascade
+  - The Tool Chain
+  - Vickrey Auction
+  shared_concern: Matching AI backends to task characteristics
+- name: Iteration
+  patterns:
+  - After-Action Review
+  - Back-Slopping (Learning Inheritance)
+  - CDCL Search
+  - CEGAR Loop
+  - Cathedral Construction
+  - Delphi Convergence
+  - Fixed-Point Iteration
+  - Memoization Cache
+  - Rehearsal Spotlight
+  - Soil Maturity Index
+  shared_concern: Convergence and refinement through repeated execution
+- name: Score Level
+  patterns:
+  - Barn Raising
+  - Canary Probe
+  - Clash Detection
+  - Closed-Loop Call
+  - Composting Cascade
+  - Dead Letter Quarantine
+  - Dormancy Gate
+  - Fan-out + Synthesis
+  - Graceful Retreat
+  - Mission Command
+  - Nurse Log
+  - Prefabrication
+  - Quorum Consensus
+  - Rashomon Gate
+  - Reconnaissance Pull
+  - Red Team / Blue Team
+  - Relay Zone
+  - Shipyard Sequence
+  - Source Triangulation
+  - Speculative Hedge
+  - Succession Pipeline
+  - Talmudic Page
+  - Triage Gate
+  shared_concern: Coordinating multiple sheets within a single score
+- name: Within Stage
+  patterns:
+  - Commander's Intent Envelope
+  - Constraint Propagation Sweep
+  - Decision Propagation
+  - Quorum Trigger
+  - Sugya Weave (Editorial Synthesis)
+  shared_concern: Structuring individual sheet prompts and single-agent execution
+statistics:
+  total_nodes: 57
+  total_edges: 163
+  most_connected: After-Action Review (14 edges)
+  isolated: []
+  avg_edges_per_node: 2.9

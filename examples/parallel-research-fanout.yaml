@@ -1,5 +1,5 @@
 # Example: Fan-Out Parallel Research
-# Demonstrates Mozart's fan-out feature for parameterized parallel execution.
+# Demonstrates Marianne's fan-out feature for parameterized parallel execution.
 #
 # Compare with parallel-research.yaml which manually defines 3 parallel sheets.
 # This example achieves the same result with fan_out, eliminating duplication.
@@ -22,12 +22,12 @@
 #   - {{ movement }} (or {{ stage }}) = 2
 #
 # The movements: key gives human-readable names to each movement,
-# which appear in `mozart status` output.
+# which appear in `mzt status` output.
 #
 # Usage:
-#   mozart validate examples/parallel-research-fanout.yaml
-#   mozart run examples/parallel-research-fanout.yaml
-#   mozart status fanout-research
+#   mzt validate examples/parallel-research-fanout.yaml
+#   mzt run examples/parallel-research-fanout.yaml
+#   mzt status fanout-research
 
 name: "fanout-research"
 description: "Multi-source research using fan-out for parallel search"
@@ -38,7 +38,7 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 1800
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Research Setup"

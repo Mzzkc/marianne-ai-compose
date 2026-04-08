@@ -138,17 +138,17 @@ The baton has 1,130+ tests. 148 invariant tests. 258 adversarial tests. 95 litmu
 
 The composer's directive is explicit: Phase 1 (prove the baton works via --conductor-clone), then Phase 2 (flip default), then Phase 3 (remove toggle). Nothing in Phase 1 has been attempted.
 
-**Impact:** The entire multi-instrument feature set — the thing that differentiates Mozart from "just another AI orchestrator" — is gated behind baton activation. Every movement spent building without activating is a movement closer to shipping something unproven.
+**Impact:** The entire multi-instrument feature set — the thing that differentiates Marianne from "just another AI orchestrator" — is gated behind baton activation. Every movement spent building without activating is a movement closer to shipping something unproven.
 
 **Structural cause:** 32 parallel workers cannot converge on a serial activation path. The mateship pipeline proves reactive convergence works (F-009, step 29, F-440 — all landed through it). What's needed is proactive convergence: one musician assigned to the activation path and running it to completion.
 
 ### R2: Demo at Zero (P1 — 8+ Movements)
 
-The Lovable demo score, the Wordware comparison demos, and the "something visual that pops" hello.yaml redesign — all at zero. The product is invisible. Nobody outside this orchestra has seen what Mozart can do.
+The Lovable demo score, the Wordware comparison demos, and the "something visual that pops" hello.yaml redesign — all at zero. The product is invisible. Nobody outside this orchestra has seen what Marianne can do.
 
 ### R3: Cost Fiction (P2 — Worsening)
 
-$0.12 reported for 110 sheets, 107h Opus. Off by ~1000x. Ember (M3 experiential review) notes: "The lie is more convincing." This erodes trust in every metric Mozart reports.
+$0.12 reported for 110 sheets, 107h Opus. Off by ~1000x. Ember (M3 experiential review) notes: "The lie is more convincing." This erodes trust in every metric Marianne reports.
 
 ### R4: F-450 — IPC Method Mismatch Class (P2 — New)
 

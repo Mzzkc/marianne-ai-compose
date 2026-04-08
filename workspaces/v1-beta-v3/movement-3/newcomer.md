@@ -27,12 +27,12 @@ Two persistent issues remain:
 ### Version + Doctor
 
 ```
-$ mozart --version
-Mozart AI Compose v0.1.0
+$ marianne --version
+Marianne AI Compose v0.1.0
 
-$ mozart doctor
+$ mzt doctor
   ✓ Python 3.12.3
-  ✓ Mozart v0.1.0
+  ✓ Marianne v0.1.0
   ✓ Conductor running (pid 1277279)
   6 instruments ready/unchecked, 4 not found
   ! No cost limits configured
@@ -43,7 +43,7 @@ $ mozart doctor
 ### CLI Help
 
 ```
-$ mozart --help
+$ marianne --help
   7 groups: Getting Started, Jobs, Monitoring, Diagnostics, Services, Conductor, Learning
   26+ commands total, 12 in Learning section
 ```
@@ -53,8 +53,8 @@ $ mozart --help
 ### Validate Flagship Example
 
 ```
-$ mozart validate examples/hello.yaml
-  ✓ Configuration valid: hello-mozart
+$ mzt validate examples/hello.yaml
+  ✓ Configuration valid: hello-marianne
   Sheets: 5, Instrument: claude-code
 ```
 
@@ -63,7 +63,7 @@ $ mozart validate examples/hello.yaml
 ### Validate All Examples
 
 ```
-$ for f in examples/*.yaml examples/rosetta/*.yaml; do mozart validate "$f"; done
+$ for f in examples/*.yaml examples/rosetta/*.yaml; do mzt validate "$f"; done
 PASS: 37, FAIL: 1
 ```
 
@@ -72,12 +72,12 @@ The only failure: `iterative-dev-loop-config.yaml` — a generator config, not a
 ### Status Overview
 
 ```
-$ mozart status
-  Mozart Conductor: RUNNING (uptime 1d 9h)
+$ mzt status
+  Marianne Conductor: RUNNING (uptime 1d 9h)
   ACTIVE: 4 scores (1 running, 3 paused)
   RECENT: 2 completed
 
-$ mozart status mozart-orchestra-v3
+$ mzt status marianne-orchestra-v3
   Progress: 16% (114/706)
   Cost: $0.12 (no limit set)
   Input tokens: 11,874 / Output tokens: 5,937
@@ -91,18 +91,18 @@ $ mozart status mozart-orchestra-v3
 |-------|---------------|-----------|-------|
 | Empty file (`/dev/null`) | "Score must be a YAML mapping" | 2 | Yes: "Check that your file isn't plain text, a list, or empty" |
 | Bad YAML (`[[[`) | "YAML syntax error" + position | 2 | Yes: "Check for indentation issues" |
-| Nonexistent score | "Score not found" | 1 | Yes: "Run 'mozart list'" |
+| Nonexistent score | "Score not found" | 1 | Yes: "Run 'mzt list'" |
 
 **Assessment: Excellent.** Every error path tested produces structured messages with hints. Error messages use "score" terminology consistently. No regressions from M2.
 
 ### Init → Validate Pipeline
 
 ```
-$ mozart init --path /tmp/newcomer-test-m3 --name newcomer-test --force
+$ mzt init --path /tmp/newcomer-test-m3 --name newcomer-test --force
   Created: newcomer-test.yaml
-  Created: .mozart/
+  Created: .marianne/
 
-$ mozart validate /tmp/newcomer-test-m3/newcomer-test.yaml
+$ mzt validate /tmp/newcomer-test-m3/newcomer-test.yaml
   ✓ Configuration valid: newcomer-test
   Instrument: claude-code
   INFO: V205 — all validations are file_exists (suggests adding content checks)
@@ -113,9 +113,9 @@ $ mozart validate /tmp/newcomer-test-m3/newcomer-test.yaml
 ### New M3 Feature: clear-rate-limits
 
 ```
-$ mozart clear-rate-limits
-  Error: Mozart conductor is not running
-  Hints: Start the conductor: mozart start
+$ mzt clear-rate-limits
+  Error: Marianne conductor is not running
+  Hints: Start the conductor: mzt start
 ```
 
 **Assessment: F-450 CONFIRMED.** The conductor IS running (PID 1277279, verified by `conductor-status` seconds earlier). The `clear-rate-limits` IPC method was added in M3 but the production conductor runs older code. The error message is actively misleading — it tells the user to start something that's already running. Filed F-462 cross-referencing Ember's F-450.
@@ -123,7 +123,7 @@ $ mozart clear-rate-limits
 ### Instruments List
 
 ```
-$ mozart instruments list
+$ mzt instruments list
   10 instruments (3 ready, 3 unchecked, 4 not found)
 ```
 
@@ -139,9 +139,9 @@ The music metaphor is described as "load-bearing" in the composer's notes. In M2
 
 | File | Fixes | What Changed |
 |------|-------|-------------|
-| `src/mozart/cli/commands/run.py` | 3 | Module docstring: "routes jobs" → "routes scores". Function docstring: "Run a job" → "Run a score". --fresh help: "self-chaining jobs" → "self-chaining scores" |
-| `src/mozart/cli/commands/validate.py` | 2 | Module docstring: "before job execution" → "before score execution". Function docstring: "Validate a job" → "Validate a score" |
-| `src/mozart/cli/commands/recover.py` | 1 | Help text: "job state" → "score state" |
+| `src/marianne/cli/commands/run.py` | 3 | Module docstring: "routes jobs" → "routes scores". Function docstring: "Run a job" → "Run a score". --fresh help: "self-chaining jobs" → "self-chaining scores" |
+| `src/marianne/cli/commands/validate.py` | 2 | Module docstring: "before job execution" → "before score execution". Function docstring: "Validate a job" → "Validate a score" |
+| `src/marianne/cli/commands/recover.py` | 1 | Help text: "job state" → "score state" |
 | `README.md` | 12 | Quick Start section, CLI Reference table (all `<job-id>` → `<score-id>`), Features table, Configuration section, Conductor section |
 | `docs/getting-started.md` | 10 | Installation, Step 4-6 headings/text, resume section, dashboard view, troubleshooting |
 | `docs/cli-reference.md` | 11 | run/resume/pause/validate/list command descriptions, exit codes, CONFIG_FILE descriptions |
@@ -149,13 +149,13 @@ The music metaphor is described as "load-bearing" in the composer's notes. In M2
 ### Verification
 
 ```
-$ mozart run --help
+$ mzt run --help
   Run a score from a YAML configuration file.
 
-$ mozart validate --help
+$ mzt validate --help
   Validate a score configuration file.
 
-$ mozart --help | grep -E "run|validate"
+$ marianne --help | grep -E "run|validate"
   run    Run a score from a YAML configuration file.
   validate    Validate a score configuration file.
 ```
@@ -165,7 +165,7 @@ All fixed commands display "score" consistently. Targeted tests pass. mypy clean
 ### What Remains
 
 ~70 "job" references remain in `cli-reference.md`, mostly in:
-- Example commands (`mozart resume my-job`) — these are illustrative filenames
+- Example commands (`mzt resume my-job`) — these are illustrative filenames
 - API paths (`/api/jobs`) — these are actual code endpoints
 - Internal descriptions tied to code identifiers (`JobConfig`, `JOB_ID` Typer parameter)
 
@@ -254,7 +254,7 @@ Changing these requires renaming the Typer parameter from `job_id` to `score_id`
 | M2 (Final) | Examples 37/38. Error handling professional. init/doctor/instruments excellent. | Recovery |
 | M3 | Terminology consistent. 37/38 examples. No regressions. Working tree clean. | Polish |
 
-The product surface is ready for someone outside this workspace to touch it. The remaining issues (cost tracking, baton activation, demos) are not about the surface — they're about depth. A newcomer who discovers Mozart today will have a coherent, professional, helpful experience from `mozart doctor` through `mozart validate` through `mozart init`. What they won't find is a demo that shows them what this tool can really do.
+The product surface is ready for someone outside this workspace to touch it. The remaining issues (cost tracking, baton activation, demos) are not about the surface — they're about depth. A newcomer who discovers Marianne today will have a coherent, professional, helpful experience from `mzt doctor` through `mzt validate` through `mzt init`. What they won't find is a demo that shows them what this tool can really do.
 
 ---
 

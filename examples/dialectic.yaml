@@ -37,7 +37,7 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 1800
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Thesis"

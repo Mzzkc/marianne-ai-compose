@@ -10,7 +10,7 @@ This is a DESIGN DECISION because:
 1. Commands come from user-authored YAML config files (not user input at runtime)
 2. Users explicitly opt-in by adding on_success hooks to their config
 3. Shell features (pipes, redirects, env vars) are needed for real-world hooks
-4. Mozart runs with the same permissions as the user who invokes it
+4. Marianne runs with the same permissions as the user who invokes it
 
 The run_script hook type uses subprocess_exec (no shell) for cases where
 shell features aren't needed.
@@ -224,8 +224,8 @@ class HookExecutor:
     - Enforcing concert safety limits
     - Logging hook execution
 
-    Hook execution runs in Mozart's Python process, not inside Claude CLI.
-    This allows hooks to trigger new Mozart runs without recursion issues.
+    Hook execution runs in Marianne's Python process, not inside Claude CLI.
+    This allows hooks to trigger new Marianne runs without recursion issues.
     """
 
     def __init__(
@@ -370,7 +370,7 @@ class HookExecutor:
         return result
 
     async def _execute_run_job(self, hook: PostSuccessHookConfig) -> HookResult:
-        """Execute a run_job hook by spawning a new Mozart run.
+        """Execute a run_job hook by spawning a new Marianne run.
 
         This checks concert limits before spawning and prepares
         the context for the chained job.
@@ -426,8 +426,8 @@ class HookExecutor:
             )
             await asyncio.sleep(self.concert.cooldown_between_jobs_seconds)
 
-        # Build mozart command as argument list (safe, no shell injection)
-        cmd = ["mozart", "run", str(job_path)]
+        # Build marianne command as argument list (safe, no shell injection)
+        cmd = ["marianne", "run", str(job_path)]
         if hook.fresh:
             cmd.append("--fresh")
         if chained_workspace:
@@ -608,7 +608,7 @@ class HookExecutor:
                 hook_type="run_job",
                 description=hook.description,
                 success=False,
-                error_message="mozart command not found in PATH",
+                error_message="marianne command not found in PATH",
                 chained_job_path=job_path,
             )
         except (
@@ -774,7 +774,7 @@ class HookExecutor:
         Returns (job_path, workspace) for the first successful run_job hook,
         or None if no chaining should occur.
 
-        Note: This is for the synchronous chaining mode where Mozart
+        Note: This is for the synchronous chaining mode where Marianne
         itself manages the concert. For async/background chaining,
         hooks execute the jobs directly.
         """

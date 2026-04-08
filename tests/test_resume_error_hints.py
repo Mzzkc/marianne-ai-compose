@@ -85,7 +85,7 @@ class TestResumeConfigLoadErrorHints:
 
     def test_incomplete_config_includes_hint(self, tmp_path: Path) -> None:
         """When config is valid YAML but missing required fields,
-        hint should suggest mozart validate."""
+        hint should suggest mzt validate."""
         incomplete = tmp_path / "incomplete.yaml"
         incomplete.write_text(yaml.dump({"name": "test"}))
 

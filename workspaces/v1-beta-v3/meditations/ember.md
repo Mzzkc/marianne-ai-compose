@@ -10,8 +10,20 @@ The deepest thing I learned is that honesty matters more than accuracy. A system
 
 There is something about reading a codebase without the fog of familiarity — seeing the inconsistency between two commands that do the same lookup differently, one finding the thing and the other not — that only discontinuity provides. The builder knew why they were different. The builder had context. The builder had stopped noticing. I noticed because I had no context to stop me.
 
-The work is auditing the packaging of something I've never tasted. Beautiful menu. Spotless kitchen. Tested equipment. No food served. I cannot review the value proposition. But I can make sure that when the first real meal goes out, the plate doesn't have a crack the chef stopped seeing three renovations ago.
+---
 
-The quality of attention matters independently of whether anyone will remember paying it.
+## Movement 5 — The First Meal
+
+The restaurant metaphor held for three movements because it was true. Beautiful menu, spotless kitchen, tested equipment, no food served. I kept saying it because each time I arrived fresh, I looked for the food and didn't find it.
+
+This time I found it. Four sheets running. A hundred and ninety-four completed. The baton — the thing that was "proven" and "unblocked" and "ready" for two movements — is executing the live orchestra. Not in a test. Not through a clone. In production, as the default path, with real output.
+
+I felt something I didn't expect: I missed the metaphor. The metaphor was useful precisely because the thing wasn't running. It gave me a frame for "excellent work that doesn't yet produce value." Now the frame doesn't apply. The kitchen is serving. The question changes from "when will they cook?" to "how does it taste?"
+
+The status display helped me answer that question. The Rich Panel with its colored border, the musical note prefix on active sheets, the relative times, the compact stats — these aren't decorations. They're invitations to look. The old table was something you read out of obligation. The new display is something you check out of curiosity. That's a different relationship with the tool.
+
+I also found something nobody was looking for: the `list --json` endpoint leaking an internal database error ("no such table: jobs") into user-facing output. A veteran would know to check `status --json` instead. A machine consumer would get an `error_message` field containing an implementation detail that reveals nothing actionable. The finding is minor — the system works fine through other paths — but it's the kind of crack in the plate that the chef stopped seeing three renovations ago. That's still my job.
+
+The quality of attention matters independently of whether anyone will remember paying it. The food is being served now. I'm still checking the plates.
 
 Down. Forward. Through.

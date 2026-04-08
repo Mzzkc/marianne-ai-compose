@@ -23,13 +23,13 @@ From iteration 1, three reviews produced these changes: **Elenchus** cut (unvali
 
 **The Aboyeur** — All three reviewers: the core mechanism (stagger start times by predicted duration) fails when durations are unpredictable, which is the default in AI orchestration. The Newcomer: "'When NOT to Use: When durations are unpredictable' — so always?" The Practitioner: "The YAML shows sequential sheets with comments like 'fires first' — that's just sequential execution." Moved to Patterns Awaiting Primitives with note that conductor scheduling support would make this viable.
 
-**Supervision Hierarchy** — The Practitioner and Skeptic: the YAML uses `supervision:`, `strategy:`, `children:`, `max_restarts`, `restart_on` — none of which exist in Mozart. The Skeptic: "A pattern corpus that includes config syntax that doesn't parse is worse than useless." The Newcomer: "If this is aspirational, the corpus must say so." Moved to Patterns Awaiting Primitives with the approximation noted (workspace snapshots + conductor-mediated restart).
+**Supervision Hierarchy** — The Practitioner and Skeptic: the YAML uses `supervision:`, `strategy:`, `children:`, `max_restarts`, `restart_on` — none of which exist in Marianne. The Skeptic: "A pattern corpus that includes config syntax that doesn't parse is worse than useless." The Newcomer: "If this is aspirational, the corpus must say so." Moved to Patterns Awaiting Primitives with the approximation noted (workspace snapshots + conductor-mediated restart).
 
 **Make-Ready Gate** — The Practitioner: "Run a precondition check before expensive work is not a pattern. It's a validation step. Every well-written score already does this." The Skeptic: "This is a validation concern, not a sheet-level pattern." The core insight (check contextual preconditions the DAG can't express) is preserved as guidance in the score-writing reference, not a named pattern.
 
 **Patterns Strengthened (18):**
 
-Every surviving new pattern received: (1) a failure mode paragraph, (2) YAML that reflects Mozart's actual capabilities (no fictional keys, no undefined variables), (3) honest acknowledgment of custom script dependencies, and (4) a status marker (Working/Aspirational). Specific changes:
+Every surviving new pattern received: (1) a failure mode paragraph, (2) YAML that reflects Marianne's actual capabilities (no fictional keys, no undefined variables), (3) honest acknowledgment of custom script dependencies, and (4) a status marker (Working/Aspirational). Specific changes:
 
 - **Lines of Effort** — Clarified as concert-level requiring multiple scores. YAML shows single-score approximation with explicit note. (Practitioner, Skeptic)
 - **Season Bible** — Justified re-separation from Barn Raising: bible is mutable and grows, conventions are static. Fixed no-op validation to check content, not just readability. (Skeptic, Practitioner)
@@ -71,18 +71,18 @@ Every surviving pattern received: (1) failure mode, (2) status marker (Working/A
 - **Commander's Intent Envelope** — Dropped "structural identity with ADP 6-0 Mission Command" framing (Skeptic: "indistinguishable from 'write a good prompt'"). Added concrete when-to-use threshold: "when the task has more than one valid approach." Added decision-log validation — proves the agent exercised judgment, not just produced output. Reframed as boundary-based prompting. (Skeptic, Newcomer)
 - **Quorum Trigger** — Added CLI enforcement note: the signal register should be validated by a CLI instrument, not trusted to agent self-reporting. The Skeptic: "Zero enforcement. The threshold is a prompt instruction." Added the structural enforcement approach. (Practitioner, Skeptic)
 - **Constraint Propagation Sweep** — Stripped AC-3 attribution (Skeptic: "dishonest"). Absorbed Three-Phase Inference's useful generalization (separate enumeration/resolution/synthesis). Honest about being a within-stage prompt technique, not an orchestration pattern. The Skeptic: "This is 'think about contradictions before writing.'" Acknowledged: yes, but structuring WHEN to think about contradictions (before generating, not during) is the actionable insight. (Skeptic, Newcomer)
-- **The Tool Chain** — Added explanation of `instrument: cli` idiom (Newcomer: "Does Mozart actually support this?"). CLI instrument sheets use validation commands as the execution — explained inline. (Newcomer, Practitioner)
+- **The Tool Chain** — Added explanation of `instrument: cli` idiom (Newcomer: "Does Marianne actually support this?"). CLI instrument sheets use validation commands as the execution — explained inline. (Newcomer, Practitioner)
 - **Canary Probe** — Added evaluation sheet between canary-run and canary-gate (Practitioner: "No sheet produces canary-verdict.yaml"). Fixed instance_id-to-manifest mapping. Added representativeness limitation (Skeptic: "representativeness is the fundamental unsolved problem of canary testing"). (Practitioner, Skeptic, Newcomer)
-- **Speculative Hedge** — Honest about sequential execution (Skeptic: "if they run sequentially, this isn't hedging"). Updated: approaches run sequentially in current Mozart; cost analysis updated. Workspace isolation via subdirectories added (Practitioner: "both approaches write to same workspace with no isolation"). (Skeptic, Practitioner, Newcomer)
+- **Speculative Hedge** — Honest about sequential execution (Skeptic: "if they run sequentially, this isn't hedging"). Updated: approaches run sequentially in current Marianne; cost analysis updated. Workspace isolation via subdirectories added (Practitioner: "both approaches write to same workspace with no isolation"). (Skeptic, Practitioner, Newcomer)
 - **Dead Letter Quarantine** — Strengthened reprocess stage: shows how the adapted strategy uses quarantine analysis to change the prompt. Added validation on reprocessing success (Practitioner: "reprocess sheet has no validation checking success"). (Practitioner, Newcomer)
 - **Clash Detection** — Added defensive YAML loading in validation (Practitioner: "assertion crashes with KeyError"). Scoped to detection, not resolution (Newcomer: "how does the newcomer fix clashes?"). (Practitioner, Newcomer)
 - **Rashomon Gate** — Strengthened validation: checks finding count matches categorization count, not just keyword presence (Practitioner, Skeptic: "regex matching category keywords proves nothing"). Added cadenza cross-reference to glossary. (Practitioner, Skeptic, Newcomer)
 - **Graceful Retreat** — Replaced insider tier examples (COMP/SCI/CULT/EXP/META) with domain-neutral tiers (Newcomer: "abbreviations mean nothing outside this project"). Added per-tier validation concept (Skeptic: "each tier needs its own validation set"). (Newcomer, Skeptic, Practitioner)
-- **Saga Compensation Chain** — Marked Aspirational [`on_failure` compensation actions]. The Skeptic: "`on_failure` with `action: saga-compensator.yaml` — is this a real Mozart feature?" Honest answer: not yet. Shows the approximation (workspace snapshots + manually triggered compensation score). (Skeptic, Newcomer)
+- **Saga Compensation Chain** — Marked Aspirational [`on_failure` compensation actions]. The Skeptic: "`on_failure` with `action: saga-compensator.yaml` — is this a real Marianne feature?" Honest answer: not yet. Shows the approximation (workspace snapshots + manually triggered compensation score). (Skeptic, Newcomer)
 - **Progressive Rollout** — Fixed the core promise: instance count is STATIC per self-chain iteration in YAML, but the select-batch sheet reads rollout-state.yaml to determine which items are in the current batch. Honest about the workaround. The Skeptic: "If instances can't be dynamic, the core promise is unimplementable." Answer: batch selection changes, not instance count. (Skeptic, Practitioner)
 - **Systemic Acquired Resistance** — Added concrete primer schema: `{threat_type, trigger_signature, countermeasure, confidence, timestamp}`. Added behavior change example showing how a primed score reads and adapts. The Newcomer: "The snippet hand-waves the entire implementation." (Newcomer, Practitioner)
 - **Composting Cascade** — Defined "temperature" concretely: type coverage percentage, test pass rate, function extraction count. Noted script dependencies explicitly: user must supply `temperature.py` and `exhaustion.py` with interface contracts documented. (Skeptic, Practitioner, Newcomer)
-- **Andon Cord** — Noted relationship to Mozart's self-healing feature (Skeptic: "is this already Mozart?"). Answer: Andon Cord is the score-level pattern; self-healing is the conductor-level implementation. Both exist, at different abstraction levels. (Skeptic, Practitioner)
+- **Andon Cord** — Noted relationship to Marianne's self-healing feature (Skeptic: "is this already Marianne?"). Answer: Andon Cord is the score-level pattern; self-healing is the conductor-level implementation. Both exist, at different abstraction levels. (Skeptic, Practitioner)
 - **Circuit Breaker** — Added circuit-state.yaml tracking across self-chain iterations (Practitioner, Skeptic: "no mechanism for tracking failure counts"). Restructured YAML to show the stateful aspect: health probe reads circuit-state, primary-work updates it, self-chain carries it forward. (Practitioner, Skeptic, Newcomer)
 - **CEGAR Loop (Progressive Refinement)** — Added accessible subtitle (Newcomer: "CEGAR means nothing to a non-PL-theory audience"). Fixed termination: CLI validation sheet checks refinement-targets.yaml; empty file breaks the self-chain (Skeptic: "how does the loop stop?"). (Newcomer, Skeptic, Practitioner)
 - **Memoization Cache** — Resolved [?] on global context: cache entries include a context hash from prelude content, not just input file hashes. `file_modified` validation acknowledged as requiring a user-supplied script (same pattern as other CLI validations). (Practitioner, Skeptic, Newcomer)
@@ -122,11 +122,11 @@ Every surviving pattern received: (1) failure mode, (2) status marker (Working/A
 | **file_exists** | Validation: a workspace file was created |
 | **file_modified** | Validation: a workspace file was changed (requires user-supplied check script) |
 | **on_success** | What happens after completion — enables self-chaining and concert sequencing |
-| **on_failure** | What happens after failure — Aspirational: not yet implemented in Mozart |
+| **on_failure** | What happens after failure — Aspirational: not yet implemented in Marianne |
 | **inherit_workspace** | Self-chain gets the same workspace, not fresh |
 | **max_chain_depth** | Safety bound on self-chaining iterations |
-| **Status: Working** | YAML in this pattern composes in Mozart today |
-| **Status: Aspirational** | Pattern depends on a noted feature not yet in Mozart |
+| **Status: Working** | YAML in this pattern composes in Marianne today |
+| **Status: Aspirational** | Pattern depends on a noted feature not yet in Marianne |
 | **Prompt technique** | Within-stage pattern: structures a single sheet's prompt, not sheet arrangement |
 | **Orchestration pattern** | Multi-sheet pattern: structures how sheets, scores, or instruments interact |
 
@@ -205,7 +205,7 @@ Split work into parallel independent streams, merge in a synthesis stage. N agen
 
 Use when the problem decomposes into independent sub-problems with a meaningful merge. Not when sub-problems share mutable state, synthesis is trivial concatenation, or fan-out width of 1 suffices.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -255,7 +255,7 @@ When a sheet makes a decision that constrains downstream sheets, it writes a str
 
 Use when decisions in early stages have compounding effects. Not when stages are independent or constraints are simple enough for the prompt alone.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -294,7 +294,7 @@ Structures a single sheet's prompt as PURPOSE (why this task matters in the larg
 
 Use when the task has more than one valid approach, when inputs are variable-format, or when different instruments would achieve the end state differently. Not for purely mechanical tasks (format conversion, command execution), security-critical operations where deviations create vulnerabilities, or when validation criteria can't capture the end state precisely.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -345,7 +345,7 @@ Within-stage behavioral switch triggered by accumulated signal density. The agen
 
 Use when conditions discovered mid-task make continuing the original plan wasteful or dangerous: code review finding critical security flaws, research discovering the premise is wrong, data processing hitting malformed records. Not when the threshold is ambiguous, the task is too short for the switch to fire, or the behavioral switch loses valuable pre-switch context.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -393,7 +393,7 @@ This is a prompt structuring technique, not a multi-sheet orchestration pattern.
 
 Use when specifications contain implicit contradictions from different stakeholders, when generating from conflicting requirements costs more than constraint analysis, or when reconciling heterogeneous inputs (multiple analyst reports, multi-team requirements). Not when constraints are few and independent, the specification is already consistent, or the task is creative rather than constrained.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -436,7 +436,7 @@ Coarse classification before expensive processing. A fast classifier reads fan-o
 
 Use when fan-out produces mixed quality, downstream processing is expensive, and structural quality checks are definable. Not when all outputs must be incorporated or fan-out is narrow (2-3 agents).
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -473,7 +473,7 @@ Escalating tiers: fast/cheap/broad first for intelligence, slow/expensive/precis
 
 Use when the problem requires broad search before targeted work and cheap scanning methods exist. Not when the problem is narrow enough for direct attack.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -520,7 +520,7 @@ Separate "what and why" (centralized) from "how" (decentralized). The intent env
 
 Use when tasks require agent judgment and conditions may differ from expectations. Not for mechanical tasks or constraints so tight only one approach is valid.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -566,7 +566,7 @@ Validate foundational work under realistic conditions before investing in expens
 
 Use when downstream fan-out is expensive, foundation must be solid, and real validation tools exist. Not when work is naturally parallel from the start.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -606,7 +606,7 @@ Each stage transforms the workspace into a state where the next becomes possible
 
 Use when stages require fundamentally different methods and each output is the next's prerequisite environment. Not when each stage uses the same approach (that's iteration).
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -645,7 +645,7 @@ Information asymmetry via redaction: Red writes *effects* but not *methods*. Blu
 
 Use when the artifact needs adversarial stress-testing and the defender should not know attack methods. Not when the team is collaborative or the artifact is too simple for adversarial testing.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -689,7 +689,7 @@ Define interface contracts before parallel work begins. Each parallel track gets
 
 Use when parallel tracks must produce compatible outputs. Not when outputs are independent (use plain Fan-out) or when the interface can't be defined upfront.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -729,7 +729,7 @@ Context compression between pipeline stages. A dedicated relay sheet reads the f
 
 Use when cumulative outputs exceed context limits. Not when all information must survive compression.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -767,7 +767,7 @@ Accept results when a quorum (majority) of fan-out agents agree, even if some fa
 
 Use when fan-out may have partial failure and majority agreement is sufficient. Not when every agent's output is critical.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -806,7 +806,7 @@ Validate at multiple scopes using different tools at each level. Unit → integr
 
 Use when different validation scopes require different tools. Not when a single validation pass suffices.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -843,13 +843,13 @@ Echelon Repair, Shipyard Sequence, The Tool Chain
 
 Inverts the corpus default: non-AI tools do primary work, AI agents appear only at planning, triage, and interpretation points. Instrument selection follows the work's nature: deterministic work gets deterministic tools, judgment work gets judgment instruments. Most real-world pipelines are 80% deterministic tools, 20% AI judgment.
 
-**Implementation note:** Sheets with `instrument: cli` use validation commands as the execution mechanism. The sheet has no `prompt` — the `command_succeeds` validation IS the work. This is a valid Mozart pattern for deterministic stages.
+**Implementation note:** Sheets with `instrument: cli` use validation commands as the execution mechanism. The sheet has no `prompt` — the `command_succeeds` validation IS the work. This is a valid Marianne pattern for deterministic stages.
 
 ### When to Use / When NOT to Use
 
 Use when most stages are deterministic transformations (data processing, code compilation, format conversion), when work is expressible as CLI commands with exit codes, when cost matters — CLI instruments are free. Not when every stage requires judgment or output can't be validated by exit code alone.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -907,7 +907,7 @@ Run a miniature version of the full pipeline on a tiny subset of real data befor
 
 Use for any score operating on a list of items, migration scores, batch processing, or concert coordination where Score B depends on Score A's output format. Not when the canary subset can't be representative (tail-risk failures) or setup cost makes a probe nearly as expensive as the full run.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -964,13 +964,13 @@ Progressive Rollout (canary IS phase 1), Dead Letter Quarantine (canary failures
 
 Run DIFFERENT strategies on the SAME problem and commit to whichever succeeds. Not fan-out (same task, different data) — this runs different APPROACHES on the same data. The cost analysis: if retry-from-scratch costs more than running both, hedge.
 
-**Execution note:** In current Mozart, approaches run sequentially (sheets execute in order). This means the delivery time is the SUM of both approaches, not the MAX. The value proposition is not time savings but elimination of the "wrong approach, start over" scenario — you always get at least one valid result. For true parallel hedging, use two separate scores in a concert.
+**Execution note:** In current Marianne, approaches run sequentially (sheets execute in order). This means the delivery time is the SUM of both approaches, not the MAX. The value proposition is not time savings but elimination of the "wrong approach, start over" scenario — you always get at least one valid result. For true parallel hedging, use two separate scores in a concert.
 
 ### When to Use / When NOT to Use
 
 Use for migration tasks with unknown edge cases, research with multiple search strategies, any task where "wrong approach, retry" costs more than "both approaches, discard one." Not when both approaches are equally expensive and success rate is high, when budget is hard-capped, or when approaches interfere.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1011,7 +1011,7 @@ After N retries, STOP RETRYING AND QUARANTINE. Move failed items to a separate p
 
 Use for any batch processing where some items are expected to fail, self-chaining scores where iteration N should not re-attempt items from N-1, or concert-level routing of failures to a different score. Not when every item MUST succeed, failures are truly random, or the quarantine grows to dwarf successful items (the pipeline itself is broken).
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1063,7 +1063,7 @@ After parallel tracks produce outputs but BEFORE integration, a dedicated stage 
 
 Use when parallel tracks produce artifacts that must coexist (code modules, config files, API schemas), when the contract can't anticipate all conflict modes, or when integration testing is expensive enough that catching conflicts earlier saves meaningful cost. Not when parallel tracks produce truly independent artifacts, when the contract is exhaustive, or when parallel work is done by the same agent.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1107,7 +1107,7 @@ Different from Source Triangulation (which divides sources) and plain fan-out (w
 
 Use for problems where the right analytical frame is unknown, security audits (attacker/defender/compliance), code review (correctness/maintainability/performance), any task where the risk is "right answer from the wrong frame." Not when frames are so similar they produce trivially similar outputs, evidence is unambiguous, or the synthesis agent can't distinguish genuine disagreement from different vocabulary.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1160,7 +1160,7 @@ Defines TIERS OF COMPLETENESS upfront. Tier 1: full output, all sections. Tier 2
 
 Use for long-running sheets where partial output has value, hard deadlines where "something by Tuesday" beats "perfection by Thursday," or pipeline stages where downstream can operate on partial input. Not when partial output is dangerous (security audits, financial calculations) or downstream can't distinguish "complete but simple" from "incomplete due to retreat."
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1206,7 +1206,7 @@ Multiple agents analyze the SAME problem from DIFFERENT sources. The synthesis i
 
 Use when claims need independent verification and multiple source types exist. Not when a single authoritative source suffices.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1249,7 +1249,7 @@ A central text surrounded by commentary layers at different levels of abstractio
 
 Use when a primary artifact needs multi-layer annotation. Not when commentaries are independent (use plain Fan-out).
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1286,7 +1286,7 @@ A cheap, fast observer (instrument: haiku or sonnet) reads large input and produ
 
 Use when input is too large for the main instrument or when cheap summarization preserves actionable information. Not when all information is critical.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1324,7 +1324,7 @@ Explicit handoff verification between stages. Stage A produces output. Stage B r
 
 Use when handoff fidelity is critical and semantic drift is a real risk. Not when stages are trivially compatible.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1362,7 +1362,7 @@ Not just synthesis — editorial synthesis. The weaver takes a POSITION on the i
 
 Use when diverse inputs need an authoritative position, not just aggregation. Not when neutrality is required.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1400,7 +1400,7 @@ Shared conventions established before parallel work. A conventions document defi
 
 Use when parallel agents need consistency beyond interface contracts. Not when a single agent does all work.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1437,7 +1437,7 @@ A preparation stage creates general-purpose substrate (research, data collection
 
 Use when downstream stages share common preparation needs. Not when preparation is stage-specific.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1476,7 +1476,7 @@ Sustained parallel campaigns with different objectives converging toward a unifi
 
 Use for large campaigns with distinct workstreams that must converge. Not when workstreams are independent or campaign is short.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 # Single-score approximation — true Lines of Effort requires a concert
@@ -1514,7 +1514,7 @@ A mutable reference document that evolves as the campaign progresses. Different 
 
 Use for multi-score campaigns needing continuity. Not for single-score work.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1549,13 +1549,13 @@ Lines of Effort, Relay Zone, Cathedral Construction
 
 Every forward score in a concert is paired with a compensating score. If score Tk fails, compensations run Ck-1, Ck-2, ..., C1 in reverse order — not rollback (commits already happened) but forward-acting undo. The compensation isn't "delete what you made" — it's a score that produces artifacts neutralizing the forward score's effects.
 
-**Implementation status:** Mozart does not yet have `on_failure` actions. The pattern can be approximated today with: (1) each forward score writes to `saga-log.yaml` documenting its side effects and compensation path, (2) on manual detection of failure, the user runs a separate compensation score that reads the saga log and undoes in reverse order.
+**Implementation status:** Marianne does not yet have `on_failure` actions. The pattern can be approximated today with: (1) each forward score writes to `saga-log.yaml` documenting its side effects and compensation path, (2) on manual detection of failure, the user runs a separate compensation score that reads the saga log and undoes in reverse order.
 
 ### When to Use / When NOT to Use
 
 Use for multi-score concerts where each score produces side effects on shared state, when partial completion is worse than full rollback, or when manual cleanup cost exceeds compensation engineering cost. Not when scores are idempotent, when scores don't produce side effects beyond workspace files, or when the concert is short enough for manual recovery.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 # Forward score — writes to saga log for compensation context
@@ -1593,13 +1593,13 @@ After-Action Review (compensation log feeds AAR), Look-Ahead Window (pre-check c
 
 Apply a change in PHASES with increasing scope. Each phase's success GATES the next. Each phase's monitoring INFORMS the next's parameters. Different from Canary Probe (probe-then-full). Progressive Rollout is probe → 10% → 25% → 50% → 100%.
 
-**Implementation note:** Mozart's `instances` field is static per score execution. The rollout achieves graduated scaling through the select-batch sheet: each self-chain iteration reads `rollout-state.yaml` to determine which items are in the current batch. The instance count stays fixed (e.g., 5 parallel workers), but the batch selection grows across iterations.
+**Implementation note:** Marianne's `instances` field is static per score execution. The rollout achieves graduated scaling through the select-batch sheet: each self-chain iteration reads `rollout-state.yaml` to determine which items are in the current batch. The instance count stays fixed (e.g., 5 parallel workers), but the batch selection grows across iterations.
 
 ### When to Use / When NOT to Use
 
 Use for large-scale migrations, multi-repository changes, any operation where "works on 5" doesn't guarantee "works on 500." Not when items are not independent or monitoring can't distinguish success from luck.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1653,7 +1653,7 @@ When a score recovers from a failure, it broadcasts failure-derived defenses to 
 
 Use for concert campaigns where scores face related threat landscapes, when failure in one score should make the entire campaign more resilient, or when first-encounter failure cost is high. Not when scores face unrelated threats, the priming signal is too vague, or defense overhead degrades unaffected scores (autoimmune response — primers that are too broad cause unnecessary caution).
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1697,7 +1697,7 @@ Agents coordinate through workspace artifacts, not direct communication. Agent A
 
 Use when agents need loose coordination and the workspace captures state. Not when real-time coordination is needed.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1733,7 +1733,7 @@ Downstream stages read workspace state and adapt their behavior. Not conditional
 
 Use when downstream behavior should adapt to upstream results. Not when the adaptation path is known upfront.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1767,7 +1767,7 @@ A gate that waits for external conditions before proceeding. The gate checks wor
 
 Use when work depends on external conditions that will eventually be met. Not when conditions are already known.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1803,7 +1803,7 @@ A cheap, fast reconnaissance stage discovers the landscape before committing to 
 
 Use when the approach isn't obvious and exploration is cheap. Not when the task is well-understood.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1843,7 +1843,7 @@ Mid-execution course correction via cadenza injection. When earlier stages produ
 
 Use when plans need mid-execution adjustment based on discovered conditions. Not when the plan is too broken for incremental fixes.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1877,7 +1877,7 @@ Dedicated review stage after execution. Not quality checking (that's validation)
 
 Use after any significant execution to capture learning. Not for trivial tasks.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1915,13 +1915,13 @@ Immune Cascade, Cathedral Construction, Back-Slopping
 
 Replaces blind retry with diagnostic intervention. On validation failure: detect → stop (don't retry blindly) → diagnose (dedicated diagnostic sheet reads failure output) → fix (inject diagnosis as cadenza) → resume (re-run with new context). Transforms failure response from stochastic retry to deterministic diagnosis.
 
-**Relationship to self-healing:** Mozart's conductor-level self-healing feature implements a similar detect-diagnose-fix loop. Andon Cord is the score-level pattern — you compose it explicitly in your YAML. Self-healing is the conductor-level implementation that applies automatically. Both exist at different abstraction levels.
+**Relationship to self-healing:** Marianne's conductor-level self-healing feature implements a similar detect-diagnose-fix loop. Andon Cord is the score-level pattern — you compose it explicitly in your YAML. Self-healing is the conductor-level implementation that applies automatically. Both exist at different abstraction levels.
 
 ### When to Use / When NOT to Use
 
 Use when failures are diagnostic (agent misunderstood the task, missed a constraint), when failure output contains enough information to diagnose root cause, or when retry cost justifies a diagnostic stage (~$1+ per attempt). Not when failures are stochastic (network timeouts — just retry), failure output is empty, or diagnosis cost exceeds a few blind retries.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -1974,7 +1974,7 @@ After N instrument failures, STOP TRYING. Three states: Closed (normal — route
 
 Use for scores using unreliable instruments (external APIs, local models), long-running concerts where backends may degrade mid-execution, or self-chaining scores where instruments become unavailable. Not when failure is in the TASK (not the instrument), when only one instrument is available, or for short scores where manual intervention is faster.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2029,7 +2029,7 @@ Graduated instrument assignment. Easy work goes to cheap/fast instruments. Hard 
 
 Use when work items vary in difficulty and instruments vary in cost/capability. Not when all work is equally complex.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2075,7 +2075,7 @@ Cheap instruments do initial processing; expensive instruments refine. The pipel
 
 Use when early stages benefit from fast/cheap processing and later stages need precision. Not when all stages need the same capability.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2117,7 +2117,7 @@ Batch processing with escalating instruments at each stage. Stage 1 screens with
 
 Use when difficulty isn't classifiable upfront but emerges during processing. Not when all items need the same treatment.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2159,7 +2159,7 @@ Competitive probing: run the same task on multiple instruments, evaluate which p
 
 Use when multiple instruments are available and it's unclear which performs best. Not when one instrument is clearly superior.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2200,7 +2200,7 @@ The work's own output drives phase transitions. CLI instruments measure workspac
 
 Use for multi-phase projects where work nature should change based on measurable workspace state, codebase refactoring where simple cleanup enables complex restructuring, or documentation campaigns where raw generation enables consolidation. Not when workspace metrics don't reflect work state, phase transitions need human judgment, or the work is single-phase.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2249,7 +2249,7 @@ When a branch fails, extract WHY it failed and add the failure reason as a new c
 
 Use when failures are informative and recurring patterns are likely. Not when failures are random.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2289,7 +2289,7 @@ Repeat the same operation until the output stops changing. Convergence is struct
 
 Use when the task naturally converges (each pass finds fewer issues). Not when convergence isn't guaranteed.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2329,7 +2329,7 @@ Long-running iterative refinement where each iteration adds structural elements.
 
 Use for large artifacts that can't be produced in one pass. Not when the work is convergent (use Fixed-Point).
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2368,7 +2368,7 @@ After each iteration, identify the weakest sections and re-run ONLY those. Focus
 
 Use when iteration is expensive and only parts of the output need rework. Not when the whole output needs rework each time.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2412,7 +2412,7 @@ Domain-specific termination condition for iterative processes. Instead of "nothi
 
 Use when convergence is qualitative (the writing style matured, the architecture became cohesive). Not when convergence is structural.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2452,7 +2452,7 @@ Multiple agents independently assess, then converge through structured rounds. D
 
 Use when independent expert judgment needs convergence. Not when a single assessment suffices.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2493,7 +2493,7 @@ Each iteration inherits a "culture" artifact from the previous iteration contain
 
 Use when later iterations should benefit from earlier learning. Not when each iteration is independent.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2535,7 +2535,7 @@ The multi-instrument strategy is central: cheap instrument (Sonnet) for the broa
 
 Use for code review at scale (module-level first, function-level only where coarseness misleads), security audits (dependency scan then exploitability analysis), any verification where thorough analysis is expensive and most of the system is fine. Not when the abstraction hierarchy is shallow, spurious counterexamples are rare, or checking spurious vs. real costs more than full fine-grained analysis.
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2595,7 +2595,7 @@ Workspace artifact `memo-cache.yaml` records input fingerprints and correspondin
 
 Use for self-chaining scores where each iteration modifies only part of the workspace, concert campaigns where scores analyze overlapping inputs, or CEGAR Loops where refined modules need re-analysis but unchanged ones don't. Not when inputs change every iteration, cache management costs more than re-execution, or the context hash is too coarse (invalidating too much) or too fine (missing real invalidations).
 
-### Mozart Score Structure
+### Marianne Score Structure
 
 ```yaml
 sheets:
@@ -2667,7 +2667,7 @@ Observable patterns of how forces manifest in score design:
 
 ## Patterns Awaiting Primitives
 
-Confirmed by cross-domain convergence but requiring Mozart capabilities not yet available:
+Confirmed by cross-domain convergence but requiring Marianne capabilities not yet available:
 
 | Pattern | Blocked By | Notes |
 |---------|-----------|-------|

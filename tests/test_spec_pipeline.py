@@ -86,7 +86,7 @@ class TestSpecCorpusConfigFiltering:
     @pytest.fixture()
     def config_with_fragments(self) -> SpecCorpusConfig:
         return SpecCorpusConfig(
-            spec_dir=".mozart/spec",
+            spec_dir=".marianne/spec",
             fragments=[
                 SpecFragment(name="intent", content="Goals doc", tags=["goals", "purpose"]),
                 SpecFragment(name="constraints", content="MUSTs", tags=["safety", "guardrails"]),
@@ -332,8 +332,8 @@ class TestEndToEndPipeline:
         assert "Build the best orchestrator" not in formatted
 
     def test_pipeline_with_real_spec_corpus(self) -> None:
-        """Integration: load the REAL .mozart/spec/ directory."""
-        spec_dir = Path(".mozart/spec")
+        """Integration: load the REAL .marianne/spec/ directory."""
+        spec_dir = Path(".marianne/spec")
         if not spec_dir.is_dir():
             pytest.skip("Real spec corpus not available")
 

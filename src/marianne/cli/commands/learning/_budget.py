@@ -48,10 +48,10 @@ def patterns_budget(
     - Budget never drops below floor (default 5%)
 
     Examples:
-        mozart patterns-budget               # Show current budget status
-        mozart patterns-budget --history     # View budget adjustment history
-        mozart patterns-budget --job abc123  # Filter by specific job
-        mozart patterns-budget --json        # JSON output for scripting
+        mzt patterns-budget               # Show current budget status
+        mzt patterns-budget --history     # View budget adjustment history
+        mzt patterns-budget --job abc123  # Filter by specific job
+        mzt patterns-budget --json        # JSON output for scripting
     """
     from marianne.learning.global_store import get_global_store
 

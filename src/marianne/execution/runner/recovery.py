@@ -14,7 +14,7 @@ Architecture:
         - backend: Backend
         - state_backend: StateBackend
         - console: Console
-        - _logger: MozartLogger
+        - _logger: MarianneLogger
         - _global_learning_store: GlobalLearningStore | None
         - _healing_coordinator: SelfHealingCoordinator | None
         - error_classifier: ErrorClassifier
@@ -49,7 +49,7 @@ from marianne.backends.base import Backend, ExecutionResult
 from marianne.core.checkpoint import CheckpointState
 from marianne.core.config import JobConfig
 from marianne.core.errors import ClassificationResult, ClassifiedError, ErrorClassifier
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 from marianne.state.base import StateBackend
 
 from .models import FatalError, RateLimitExhaustedError
@@ -88,7 +88,7 @@ class RecoveryMixin:
     backend: Backend
     state_backend: StateBackend
     console: Console
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _global_learning_store: GlobalLearningStore | None
     _healing_coordinator: SelfHealingCoordinator | None
     error_classifier: ErrorClassifier

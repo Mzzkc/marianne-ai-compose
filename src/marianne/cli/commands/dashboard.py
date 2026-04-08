@@ -1,4 +1,4 @@
-"""Dashboard and MCP server commands for Mozart CLI.
+"""Dashboard and MCP server commands for Marianne CLI.
 
 This module implements server commands for external integrations:
 - `dashboard`: Start the web dashboard for job monitoring
@@ -15,8 +15,8 @@ This module implements server commands for external integrations:
    sensible defaults - SQLite offers better query performance for dashboards while
    JSON provides simplicity and human readability for debugging.
 
-3. **MCP as external API surface**: The MCP server exposes Mozart's capabilities to
-   external AI agents using a standardized protocol. This transforms Mozart from
+3. **MCP as external API surface**: The MCP server exposes Marianne's capabilities to
+   external AI agents using a standardized protocol. This transforms Marianne from
    a standalone CLI into an API-accessible service that other AI systems can invoke.
 ─────────────────────────────────────────────────
 """
@@ -56,14 +56,14 @@ def dashboard(
 ) -> None:
     """Start the web dashboard.
 
-    Launches the Mozart dashboard API server for job monitoring and control.
+    Launches the Marianne dashboard API server for job monitoring and control.
     The API provides endpoints for listing, viewing, and managing jobs.
 
     Examples:
-        mozart dashboard                    # Start on localhost:8000
-        mozart dashboard --port 3000        # Custom port
-        mozart dashboard --host 0.0.0.0     # Allow external connections
-        mozart dashboard --workspace ./jobs # Use specific state directory
+        mzt dashboard                    # Start on localhost:8000
+        mzt dashboard --port 3000        # Custom port
+        mzt dashboard --host 0.0.0.0     # Allow external connections
+        mzt dashboard --workspace ./jobs # Use specific state directory
     """
     try:
         import uvicorn
@@ -83,7 +83,7 @@ def dashboard(
 
     # Create state backend (prefer SQLite if exists, otherwise JSON)
     state_backend: StateBackend
-    sqlite_path = state_dir / ".mozart-state.db"
+    sqlite_path = state_dir / ".marianne-state.db"
     if sqlite_path.exists():
         state_backend = SQLiteStateBackend(sqlite_path)
         console.print(f"[dim]Using SQLite state backend: {sqlite_path}[/dim]")
@@ -94,14 +94,14 @@ def dashboard(
     # Create the FastAPI app
     fastapi_app = create_app(
         state_backend=state_backend,
-        title="Mozart Dashboard",
+        title="Marianne Dashboard",
         version=__version__,
     )
 
     # Display startup info
     console.print(
         Panel(
-            f"[bold]Mozart Dashboard[/bold]\n\n"
+            f"[bold]Marianne Dashboard[/bold]\n\n"
             f"API: http://{host}:{port}\n"
             f"Docs: http://{host}:{port}/docs\n"
             f"OpenAPI: http://{host}:{port}/openapi.json\n\n"
@@ -138,9 +138,9 @@ def mcp(
         help="Workspace directory for job operations (defaults to current directory)",
     ),
 ) -> None:
-    """Start the Mozart MCP (Model Context Protocol) server.
+    """Start the Marianne MCP (Model Context Protocol) server.
 
-    Launches an MCP server that exposes Mozart's job management capabilities
+    Launches an MCP server that exposes Marianne's job management capabilities
     as tools for external AI agents. The server provides:
 
     - Job management tools (run, status, pause, resume, cancel)
@@ -151,9 +151,9 @@ def mcp(
     File system access is restricted to designated workspace directories.
 
     Examples:
-        mozart mcp                          # Start on localhost:8001
-        mozart mcp --port 8002              # Custom port
-        mozart mcp --workspace ./projects   # Use specific workspace root
+        mzt mcp                          # Start on localhost:8001
+        mzt mcp --port 8002              # Custom port
+        mzt mcp --workspace ./projects   # Use specific workspace root
     """
     try:
         asyncio.run(_run_mcp_server(host, port, workspace))
@@ -171,13 +171,13 @@ async def _run_mcp_server(host: str, port: int, workspace_root: Path | None) -> 
 
     # Initialize with basic client info
     await server.initialize({
-        "name": "mozart-cli",
+        "name": "marianne-cli",
         "version": __version__
     })
 
     console.print(
         Panel(
-            f"[bold]Mozart MCP Server[/bold]\n\n"
+            f"[bold]Marianne MCP Server[/bold]\n\n"
             f"Protocol: Model Context Protocol\n"
             f"Host: {host}:{port}\n"
             f"Workspace: {workspace}\n"

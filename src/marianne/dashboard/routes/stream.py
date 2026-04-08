@@ -82,8 +82,8 @@ async def _get_job_log_file(job_id: str, backend: StateBackend) -> Path:
     # Determine workspace path for log file location
     workspace = resolve_job_workspace(state, job_id)
 
-    # Standard Mozart log file location
-    log_file = workspace / "mozart.log"
+    # Standard Marianne log file location
+    log_file = workspace / "marianne.log"
 
     if not log_file.exists():
         raise HTTPException(
@@ -480,7 +480,7 @@ async def download_logs(
         lines = content.count('\n')
         size_kb = len(content.encode('utf-8')) / 1024
 
-        header = f"# Mozart Job Logs - Job ID: {job_id}\n"
+        header = f"# Marianne Job Logs - Job ID: {job_id}\n"
         header += f"# Generated: {datetime.now().isoformat()}\n"
         header += f"# File: {log_file.name}\n"
         header += f"# Size: {size_kb:.1f} KB, {lines} lines\n"
@@ -489,7 +489,7 @@ async def download_logs(
         return PlainTextResponse(
             content=header + content,
             headers={
-                "Content-Disposition": f"attachment; filename=mozart-{job_id}-logs.txt",
+                "Content-Disposition": f"attachment; filename=marianne-{job_id}-logs.txt",
                 "Content-Type": "text/plain; charset=utf-8"
             }
         )

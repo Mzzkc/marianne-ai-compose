@@ -1,6 +1,6 @@
 # Instrument Guide
 
-Mozart uses **instruments** to execute scores. An instrument is any AI tool that
+Marianne uses **instruments** to execute scores. An instrument is any AI tool that
 can receive a prompt and produce output — Claude Code, Gemini CLI, Codex CLI,
 Aider, Goose, or any CLI tool you configure. The conductor assigns musicians
 (AI agents) to instruments and manages execution across all of them.
@@ -14,25 +14,25 @@ how the instrument system works.
 
 ```bash
 # See what instruments are available
-mozart instruments list
+mzt instruments list
 
 # Check if a specific instrument is ready
-mozart instruments check gemini-cli
+mzt instruments check gemini-cli
 
 # Full environment health check
-mozart doctor
+mzt doctor
 ```
 
 ---
 
 ## Built-in Instruments
 
-Mozart ships with 10 instruments: 4 native backends (built into the Python code)
+Marianne ships with 10 instruments: 4 native backends (built into the Python code)
 and 6 config-driven profiles (YAML files).
 
 ### Native Backends
 
-These are built into Mozart and require no configuration beyond installing
+These are built into Marianne and require no configuration beyond installing
 the tool and authenticating:
 
 | Name | Tool | Auth |
@@ -44,14 +44,14 @@ the tool and authenticating:
 
 ### Config-Driven Profiles
 
-These ship as YAML profiles bundled with Mozart and are loaded at conductor
+These ship as YAML profiles bundled with Marianne and are loaded at conductor
 startup:
 
 | Name | Tool | Auth |
 |------|------|------|
 | `claude-code` | Claude Code CLI | `claude login` |
 | `gemini-cli` | Google Gemini CLI | `GOOGLE_API_KEY` or `gcloud auth` |
-| `codex-cli` | OpenAI Codex CLI | `CODEX_API_KEY` |
+| `codex-cli` | OpenAI Codex CLI | `OPENAI_API_KEY or CODEX_API_KEY` |
 | `cline-cli` | Cline CLI | Provider API key |
 | `aider` | Aider | Provider API key (`OPENAI_API_KEY`, etc.) |
 | `goose` | Block's Goose | Provider API key |
@@ -59,7 +59,7 @@ startup:
 To check which instruments are available on your system:
 
 ```bash
-mozart instruments list
+mzt instruments list
 ```
 
 ---
@@ -119,27 +119,27 @@ profile without replacing it.
 
 ## Adding Your Own Instruments
 
-Any CLI tool that accepts a prompt and produces output can become a Mozart
+Any CLI tool that accepts a prompt and produces output can become a Marianne
 instrument. You write a YAML profile describing the tool's CLI interface and
-drop it in a directory Mozart scans.
+drop it in a directory Marianne scans.
 
 ### Profile Directories
 
-Mozart loads instrument profiles from three directories, in order:
+Marianne loads instrument profiles from three directories, in order:
 
-1. **Built-in** — shipped with Mozart (lowest precedence)
-2. **Organization** — `~/.mozart/instruments/` (shared across all projects)
-3. **Venue** — `.mozart/instruments/` (project-specific, highest precedence)
+1. **Built-in** — shipped with Marianne (lowest precedence)
+2. **Organization** — `~/.marianne/instruments/` (shared across all projects)
+3. **Venue** — `.marianne/instruments/` (project-specific, highest precedence)
 
 Later directories override earlier ones on name collision. This lets you
-customize a built-in profile for your project without modifying Mozart's source.
+customize a built-in profile for your project without modifying Marianne's source.
 
 ### Writing a Profile
 
 Here is a minimal profile for a hypothetical CLI tool:
 
 ```yaml
-# ~/.mozart/instruments/my-tool.yaml
+# ~/.marianne/instruments/my-tool.yaml
 
 name: my-tool
 display_name: "My Tool"
@@ -165,10 +165,10 @@ cli:
       - "429"
 ```
 
-Save it to `~/.mozart/instruments/my-tool.yaml`, then verify:
+Save it to `~/.marianne/instruments/my-tool.yaml`, then verify:
 
 ```bash
-mozart instruments check my-tool
+mzt instruments check my-tool
 ```
 
 ### Profile Reference
@@ -252,7 +252,7 @@ and used by the conductor for instrument selection in future versions.
 | `rate_limit_patterns` | `[]` | Regex patterns in stderr/stdout indicating rate limiting |
 | `auth_error_patterns` | `[]` | Regex patterns indicating auth failures |
 
-These patterns supplement Mozart's built-in error classifier. When a pattern
+These patterns supplement Marianne's built-in error classifier. When a pattern
 matches, the error is classified as `RATE_LIMIT` or `AUTH_FAILURE` and handled
 accordingly (rate limits pause the instrument; auth failures fail immediately).
 
@@ -269,7 +269,7 @@ models:
     max_output_tokens: 65536     # Max output tokens (null if unlimited)
 ```
 
-Model metadata enables cost tracking in `mozart status` and context budget
+Model metadata enables cost tracking in `mzt status` and context budget
 calculation. If you omit models, cost tracking shows `$0.00` and context
 budget uses a conservative default.
 
@@ -282,9 +282,9 @@ budget uses a conservative default.
 At conductor startup:
 
 1. **Native instruments** are registered first (4 built-in Python backends)
-2. **Built-in YAML profiles** are loaded from Mozart's bundled instruments directory
-3. **Organization profiles** from `~/.mozart/instruments/` override built-ins
-4. **Venue profiles** from `.mozart/instruments/` override everything
+2. **Built-in YAML profiles** are loaded from Marianne's bundled instruments directory
+3. **Organization profiles** from `~/.marianne/instruments/` override built-ins
+4. **Venue profiles** from `.marianne/instruments/` override everything
 
 The result is a single `InstrumentRegistry` mapping names to profiles. When a
 score references `instrument: gemini-cli`, the conductor looks up that name
@@ -315,7 +315,7 @@ and error detection based on the profile configuration.
 
 ### Error Handling
 
-Mozart classifies execution errors into categories:
+Marianne classifies execution errors into categories:
 
 - **RATE_LIMIT** — Detected via `rate_limit_patterns` or HTTP 429. The conductor
   pauses the instrument and schedules a retry when it recovers. Rate limits
@@ -363,7 +363,7 @@ validations:
 ### Custom Instrument for a Private Tool
 
 ```yaml
-# .mozart/instruments/internal-agent.yaml
+# .marianne/instruments/internal-agent.yaml
 name: internal-agent
 display_name: "Internal Agent"
 description: "Company internal coding agent"
@@ -413,7 +413,7 @@ instrument: internal-agent
 ### Instrument not found
 
 ```
-mozart instruments check my-tool
+mzt instruments check my-tool
   Binary: my-tool ✗ not found
 ```
 
@@ -422,7 +422,7 @@ path in your instrument profile's `executable` field.
 
 ### Rate limits not detected
 
-If your instrument hits rate limits but Mozart doesn't detect them, add the
+If your instrument hits rate limits but Marianne doesn't detect them, add the
 rate limit text to `cli.errors.rate_limit_patterns`. Use regex:
 
 ```yaml
@@ -436,7 +436,7 @@ errors:
 
 ### No cost tracking
 
-If `mozart status` shows `$0.00` for all sheets, your instrument profile likely
+If `mzt status` shows `$0.00` for all sheets, your instrument profile likely
 has no `models` section with pricing. Add model entries with `cost_per_1k_input`
 and `cost_per_1k_output` to enable cost tracking.
 

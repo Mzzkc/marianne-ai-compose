@@ -1,4 +1,4 @@
-"""Tests for mozart.learning.store.rate_limits module (RateLimitMixin).
+"""Tests for marianne.learning.store.rate_limits module (RateLimitMixin).
 
 Exercises the actual SQLite-backed rate limit recording, querying,
 and cleanup operations through the GlobalLearningStore.

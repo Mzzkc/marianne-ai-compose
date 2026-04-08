@@ -1,4 +1,4 @@
-"""GPU probing for the Mozart daemon profiler.
+"""GPU probing for the Marianne daemon profiler.
 
 Provides a ``GpuProbe`` class that follows the same "try primary → fallback
 → graceful None" pattern as ``SystemProbe``.  Priority chain:
@@ -23,7 +23,7 @@ _logger = get_logger("daemon.profiler.gpu_probe")
 # Check pynvml availability once at import time.
 # Use nvidia-ml-py (not the deprecated pynvml package) — same module name.
 # Suppress FutureWarning from the legacy pynvml package at import time
-# so it doesn't pollute CLI output (even `mozart status` triggers this).
+# so it doesn't pollute CLI output (even `mzt status` triggers this).
 import warnings
 
 _pynvml_available: bool = False

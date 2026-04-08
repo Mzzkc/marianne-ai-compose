@@ -5,8 +5,8 @@
 # - Cadenza: Injected into SPECIFIC sheets (per-sheet overrides)
 #
 # Usage:
-#   mozart validate examples/prelude-cadenza-example.yaml
-#   mozart run examples/prelude-cadenza-example.yaml --dry-run
+#   mzt validate examples/prelude-cadenza-example.yaml
+#   mzt run examples/prelude-cadenza-example.yaml --dry-run
 
 name: "prelude-cadenza-demo"
 description: "Demonstrates prelude/cadenza context injection"

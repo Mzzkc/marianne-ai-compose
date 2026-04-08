@@ -8,7 +8,7 @@ Fixed issue #103 (auto-detect changed score files on re-run), contributed enhanc
 
 ### Issue #103: Auto-Fresh Detection (P1) — FIXED
 
-**Problem:** When a score file is modified after a completed run, `mozart run` picks up the previous run's completed state. Users must know to pass `--fresh` manually.
+**Problem:** When a score file is modified after a completed run, `mzt run` picks up the previous run's completed state. Users must know to pass `--fresh` manually.
 
 **Root cause:** `submit_job()` in manager.py had no mechanism to compare the score file's state against the previous run. It either resumed from checkpoint or required explicit `--fresh`.
 
@@ -21,8 +21,8 @@ Fixed issue #103 (auto-detect changed score files on re-run), contributed enhanc
 - Logs `auto_fresh.score_changed` for debugging
 
 **Files modified:**
-- `src/mozart/daemon/manager.py:44-73` — `_should_auto_fresh()` function
-- `src/mozart/daemon/manager.py:698-714` — wiring in `submit_job()`
+- `src/marianne/daemon/manager.py:44-73` — `_should_auto_fresh()` function
+- `src/marianne/daemon/manager.py:698-714` — wiring in `submit_job()`
 
 **Tests:** 7 TDD tests in `tests/test_stale_completed_detection.py`:
 - `test_score_modified_after_completion` — mtime > completed_at → True
@@ -36,7 +36,7 @@ Fixed issue #103 (auto-detect changed score files on re-run), contributed enhanc
 ### Enhanced Resume Event Context (#122 supplement)
 
 Added `previous_error` and `config_reloaded` fields to the daemon service's `resuming` event:
-- `src/mozart/daemon/job_service.py:356-357` — two new fields in the event dict
+- `src/marianne/daemon/job_service.py:356-357` — two new fields in the event dict
 - Gives downstream consumers (dashboard, logging, observers) clear context about what state the job was in before resume and whether config was reloaded
 
 ### Test Fixes (Mateship)

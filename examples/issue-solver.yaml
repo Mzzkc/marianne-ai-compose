@@ -20,8 +20,8 @@
 # ║                                                                            ║
 # ║  Usage:                                                                    ║
 # ║    cd /path/to/your/project                                                ║
-# ║    setsid mozart run examples/issue-solver.yaml \                          ║
-# ║      > .issue-solver-workspace/mozart.log 2>&1 &                          ║
+# ║    setsid mzt run examples/issue-solver.yaml \                          ║
+# ║      > .issue-solver-workspace/marianne.log 2>&1 &                          ║
 # ║                                                                            ║
 # ║  Prerequisites:                                                            ║
 # ║    - gh CLI authenticated (gh auth login)                                  ║
@@ -54,7 +54,7 @@ cross_sheet:
     - "{{ workspace }}/*.md"
     - "{{ workspace }}/*.sh"
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Issue Selection"
@@ -200,7 +200,7 @@ prompt:
     ```bash
     ITER=$(cat {{ workspace }}/.iteration 2>/dev/null || echo "?")
     gh issue comment ISSUE_NUMBER \
-      --body "Mozart issue-solver: Starting work on this issue (iteration $ITER)."
+      --body "Marianne issue-solver: Starting work on this issue (iteration $ITER)."
     ```
 
     **Step 5: Write selection report**
@@ -855,13 +855,13 @@ prompt:
     **Step 4: Smoke test basic functionality**
     ```bash
     # Verify imports still work
-    python -c "import mozart" 2>&1
+    python -c "import marianne" 2>&1
 
     # Verify CLI entry point
-    mozart --help 2>&1 | head -5
+    marianne --help 2>&1 | head -5
 
     # Verify config validation
-    mozart validate examples/sheet-review.yaml 2>&1 | head -10
+    mzt validate examples/sheet-review.yaml 2>&1 | head -10
     ```
 
     **Step 5: Integration check**
@@ -1080,10 +1080,10 @@ prompt:
     **Step 5: Verify no regressions**
     ```bash
     # Check that imports still work
-    python -c "import mozart" 2>&1
+    python -c "import marianne" 2>&1
 
     # Check CLI
-    mozart --help >/dev/null 2>&1 && echo "CLI OK" || echo "CLI BROKEN"
+    marianne --help >/dev/null 2>&1 && echo "CLI OK" || echo "CLI BROKEN"
     ```
 
     **Step 6: Live conductor smoke tests**
@@ -1093,13 +1093,13 @@ prompt:
 
     ```bash
     # Verify conductor is responsive
-    mozart conductor-status 2>&1 && echo "CONDUCTOR OK" || echo "CONDUCTOR UNREACHABLE"
+    mzt conductor-status 2>&1 && echo "CONDUCTOR OK" || echo "CONDUCTOR UNREACHABLE"
 
     # Verify job listing works (this job should appear)
-    mozart list 2>&1 && echo "LIST OK" || echo "LIST BROKEN"
+    mzt list 2>&1 && echo "LIST OK" || echo "LIST BROKEN"
 
     # Verify status command doesn't crash (may show basic or full status)
-    mozart status issue-solver 2>&1 && echo "STATUS OK" || echo "STATUS BROKEN"
+    mzt status issue-solver 2>&1 && echo "STATUS OK" || echo "STATUS BROKEN"
     ```
 
     If ANY smoke test fails, debug and fix the issue. These are real runtime
@@ -1124,8 +1124,8 @@ prompt:
     | import check | pass/fail | |
     | CLI check | pass/fail | |
     | conductor-status | pass/fail | |
-    | mozart list | pass/fail | |
-    | mozart status | pass/fail | |
+    | mzt list | pass/fail | |
+    | mzt status | pass/fail | |
 
     ## All Checks Passed
     YES / NO
@@ -1201,7 +1201,7 @@ prompt:
 
     Resolves #$ISSUE_NUM
 
-    Co-Authored-By: Mozart AI Compose <noreply@mozart.ai>"
+    Co-Authored-By: Marianne AI Compose <noreply@marianne.ai>"
     ```
 
     **Step 6: Push**
@@ -1254,12 +1254,12 @@ prompt:
     ITER=$(cat {{ workspace }}/.iteration 2>/dev/null || echo "?")
 
     gh issue close "$ISSUE_NUM" \
-      --comment "Resolved by Mozart issue-solver (iteration $ITER).
+      --comment "Resolved by Marianne issue-solver (iteration $ITER).
 
     **Commit:** $(git log --oneline -1)
     **Changes:** $(git diff --stat HEAD~1 | tail -5)
 
-    *Closed automatically by Mozart Issue Solver.*"
+    *Closed automatically by Marianne Issue Solver.*"
     ```
 
     **Step 2: Archive this iteration**

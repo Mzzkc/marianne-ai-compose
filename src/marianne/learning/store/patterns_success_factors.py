@@ -16,7 +16,7 @@ from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 from marianne.learning.store.base import _logger
 from marianne.learning.store.models import PatternRecord, SuccessFactors
 
@@ -38,7 +38,7 @@ class PatternSuccessFactorsMixin(_SuccessFactorsBase):
     - analyze_pattern_why(): Self-reference for get_patterns_with_why
     """
 
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
 
     def update_success_factors(

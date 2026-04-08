@@ -1,6 +1,6 @@
 """Tests for learning export command filtering logic.
 
-This module tests the fixes to the `mozart learning-export` command that
+This module tests the fixes to the `mzt learning-export` command that
 ensure correct pattern retrieval and filtering:
 
 1. Case sensitivity fix: Use PatternType.SEMANTIC_INSIGHT.value instead of

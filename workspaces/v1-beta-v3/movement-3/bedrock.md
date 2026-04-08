@@ -28,8 +28,8 @@ Files: `FINDING_RANGES.md`, `scripts/next-finding-id.sh`, `FINDINGS.md` (header 
 ### Mateship Pickup: Rate Limit Wait Cap (F-350)
 
 **Found:** 4 uncommitted files implementing a safety cap on `parse_reset_time()`:
-- `src/mozart/core/constants.py:66-73` — `RESET_TIME_MAXIMUM_WAIT_SECONDS = 86400.0` (24h)
-- `src/mozart/core/errors/classifier.py:247-295` — `_clamp_wait()` static method, replaces 3 bare `max()` calls
+- `src/marianne/core/constants.py:66-73` — `RESET_TIME_MAXIMUM_WAIT_SECONDS = 86400.0` (24h)
+- `src/marianne/core/errors/classifier.py:247-295` — `_clamp_wait()` static method, replaces 3 bare `max()` calls
 - `tests/test_quality_gate.py:27` — BARE_MAGICMOCK baseline 1230→1234
 - `tests/test_rate_limit_wait_cap.py` (untracked) — 10 TDD tests
 
@@ -100,7 +100,7 @@ Note: M5 counts include Warden's 3 uncommitted task additions (now committed via
 
 | Metric | Value | Change from M2 |
 |--------|-------|----------------|
-| Source lines (`src/mozart/`) | 97,368 | +893 |
+| Source lines (`src/marianne/`) | 97,368 | +893 |
 | Test files | 306 | +15 |
 | Total findings (FINDINGS.md) | 183 | +12 |
 | Resolved findings | ~126 | +14 |

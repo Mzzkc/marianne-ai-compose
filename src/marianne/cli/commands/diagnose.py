@@ -1,4 +1,4 @@
-"""Diagnostic commands for Mozart CLI.
+"""Diagnostic commands for Marianne CLI.
 
 This module implements commands for inspecting job state and debugging issues:
 - `logs`: View and follow log files
@@ -187,7 +187,7 @@ class LogFollower:
         except OSError as e:
             output_error(
                 f"Cannot read log file: {e}",
-                hints=["Check that the Mozart log file exists at ~/.mozart/mozart.log"],
+                hints=["Check that the Marianne log file exists at ~/.marianne/marianne.log"],
             )
             return []
 
@@ -253,7 +253,7 @@ class LogFollower:
         except OSError as e:
             output_error(
                 f"Cannot follow log file: {e}",
-                hints=["Check that the Mozart log file exists at ~/.mozart/mozart.log"],
+                hints=["Check that the Marianne log file exists at ~/.marianne/marianne.log"],
             )
             raise typer.Exit(1) from None
         finally:
@@ -314,19 +314,19 @@ def logs(
 ) -> None:
     """Show or tail log files for a score.
 
-    Displays log entries from Mozart log files. Supports both current log files
+    Displays log entries from Marianne log files. Supports both current log files
     and compressed rotated logs (.gz).
 
     Examples:
-        mozart logs                         # Show recent logs
-        mozart logs my-job                  # Filter by job ID
-        mozart logs --follow                # Follow log file (like tail -f)
-        mozart logs --lines 100             # Show last 100 lines
-        mozart logs --level ERROR           # Show only ERROR and above
-        mozart logs --json                  # Output raw JSON entries
+        mzt logs                         # Show recent logs
+        mzt logs my-job                  # Filter by job ID
+        mzt logs --follow                # Follow log file (like tail -f)
+        mzt logs --lines 100             # Show last 100 lines
+        mzt logs --level ERROR           # Show only ERROR and above
+        mzt logs --json                  # Output raw JSON entries
 
     Note:
-        Log files are stored at {workspace}/logs/mozart.log by default.
+        Log files are stored at {workspace}/logs/marianne.log by default.
         Use --file to specify a different log file path.
     """
     from ._shared import validate_job_id
@@ -347,7 +347,7 @@ def logs(
             console.print(f"[yellow]No log files found at:[/yellow] {target_log}")
             console.print(
                 "\n[dim]Hint: Logs are created when running scores with file logging enabled.\n"
-                "Use --log-file or --log-format=both with mozart run to enable file logging.[/dim]"
+                "Use --log-file or --log-format=both with mzt run to enable file logging.[/dim]"
             )
             raise typer.Exit(1)
         # Use the first available log
@@ -436,11 +436,11 @@ def errors(
     - Blue: Rate limit errors (retriable after wait)
 
     Examples:
-        mozart errors my-job                   # Show all errors
-        mozart errors my-job --sheet 3         # Errors for sheet 3 only
-        mozart errors my-job --type transient  # Only transient errors
-        mozart errors my-job --code E001       # Only timeout errors
-        mozart errors my-job --verbose         # Show stdout/stderr details
+        mzt errors my-job                   # Show all errors
+        mzt errors my-job --sheet 3         # Errors for sheet 3 only
+        mzt errors my-job --type transient  # Only transient errors
+        mzt errors my-job --code E001       # Only timeout errors
+        mzt errors my-job --verbose         # Show stdout/stderr details
     """
     from ._shared import validate_job_id
 
@@ -471,14 +471,14 @@ async def _errors_job(
     except JobSubmissionError as err:
         output_error(
             f"Score not found: {job_id}",
-            hints=["Run 'mozart list' to see available scores."],
+            hints=["Run 'mzt list' to see available scores."],
             json_output=json_output,
         )
         raise typer.Exit(1) from err
     except DaemonError as err:
         output_error(
             str(err),
-            hints=["Restart the conductor: mozart restart"],
+            hints=["Restart the conductor: mzt restart"],
             json_output=json_output,
         )
         raise typer.Exit(1) from None
@@ -499,7 +499,7 @@ async def _errors_job(
     if found_job is None:
         output_error(
             f"Score not found: {job_id}",
-            hints=["Run 'mozart list' to see available scores."],
+            hints=["Run 'mzt list' to see available scores."],
             json_output=json_output,
         )
         raise typer.Exit(1)
@@ -695,10 +695,10 @@ def diagnose(
     or understanding why a score is running slowly.
 
     Examples:
-        mozart diagnose my-job                 # Full diagnostic report
-        mozart diagnose my-job --json          # Machine-readable output
-        mozart diagnose my-job --include-logs  # Include inline log content
-        mozart diagnose my-job --resources     # Include resource profile
+        mzt diagnose my-job                 # Full diagnostic report
+        mzt diagnose my-job --json          # Machine-readable output
+        mzt diagnose my-job --include-logs  # Include inline log content
+        mzt diagnose my-job --resources     # Include resource profile
     """
     from ._shared import validate_job_id
 
@@ -745,16 +745,16 @@ async def _diagnose_job(
         else:
             output_error(
                 f"Score not found: {job_id}",
-                hints=["Run 'mozart list' to see available scores.",
+                hints=["Run 'mzt list' to see available scores.",
                        "Use -w to specify the workspace directory.",
-                       "Run 'mozart doctor' to check your environment."],
+                       "Run 'mzt doctor' to check your environment."],
                 json_output=json_output,
             )
             raise typer.Exit(1) from None
     except DaemonError as err:
         output_error(
             str(err),
-            hints=["Restart the conductor: mozart restart"],
+            hints=["Restart the conductor: mzt restart"],
             json_output=json_output,
         )
         raise typer.Exit(1) from None
@@ -787,8 +787,8 @@ async def _diagnose_job(
     if found_job is None:
         output_error(
             f"Score not found: {job_id}",
-            hints=["Run 'mozart list' to see available scores.",
-                   "Run 'mozart doctor' to check your environment."],
+            hints=["Run 'mzt list' to see available scores.",
+                   "Run 'mzt doctor' to check your environment."],
             json_output=json_output,
         )
         raise typer.Exit(1)
@@ -1301,7 +1301,7 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
         if len(errors_list) > 15:
             console.print(f"[dim]... and {len(errors_list) - 15} more errors[/dim]")
         console.print(
-            f"\n[dim]Use 'mozart errors {job.job_id} --verbose' for full error details[/dim]"
+            f"\n[dim]Use 'mzt errors {job.job_id} --verbose' for full error details[/dim]"
         )
 
     # Job-level error
@@ -1344,7 +1344,7 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
             console.print(f"\n[yellow]Hint:[/yellow] {rotation_hint}")
 
         console.print(
-            f"\n[dim]Use 'mozart diagnose {job.job_id} --include-logs' "
+            f"\n[dim]Use 'mzt diagnose {job.job_id} --include-logs' "
             "to inline log content[/dim]"
         )
 
@@ -1493,10 +1493,10 @@ def history(
     the JSON backend).
 
     Examples:
-        mozart history my-job                  # Show all history
-        mozart history my-job --sheet 3        # History for sheet 3 only
-        mozart history my-job --limit 100      # Show more records
-        mozart history my-job --json           # Machine-readable output
+        mzt history my-job                  # Show all history
+        mzt history my-job --sheet 3        # History for sheet 3 only
+        mzt history my-job --limit 100      # Show more records
+        mzt history my-job --json           # Machine-readable output
     """
     from ._shared import validate_job_id
 
@@ -1528,14 +1528,14 @@ async def _history_job(
     except JobSubmissionError as err:
         output_error(
             f"Score not found: {job_id}",
-            hints=["Run 'mozart list' to see available scores."],
+            hints=["Run 'mzt list' to see available scores."],
             json_output=json_output,
         )
         raise typer.Exit(1) from err
     except DaemonError as err:
         output_error(
             str(err),
-            hints=["Restart the conductor: mozart restart"],
+            hints=["Restart the conductor: mzt restart"],
             json_output=json_output,
         )
         raise typer.Exit(1) from None
@@ -1550,7 +1550,7 @@ async def _history_job(
         # Fallback to filesystem — load from SQLite backend directly
         from marianne.state import SQLiteStateBackend
 
-        sqlite_path = workspace / ".mozart-state.db"
+        sqlite_path = workspace / ".marianne-state.db"
         if sqlite_path.exists():
             backend = SQLiteStateBackend(sqlite_path)
             try:

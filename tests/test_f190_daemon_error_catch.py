@@ -34,7 +34,7 @@ class TestDiagnoseErrorsDaemonErrorCatch:
             new_callable=AsyncMock,
             side_effect=MethodNotFoundError(
                 "Method 'job.errors' not found on conductor. "
-                "Restart with: mozart restart"
+                "Restart with: mzt restart"
             ),
         ):
             result = runner.invoke(app, ["errors", "test-job"])

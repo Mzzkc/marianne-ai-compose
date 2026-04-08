@@ -1,6 +1,6 @@
 # Conductor Guide
 
-Mozart uses a conductor process to manage job execution, similar to how Docker requires `dockerd`. The conductor centralizes resource management, maintains a persistent job registry, and provides health monitoring with backpressure.
+Marianne uses a conductor process to manage job execution, similar to how Docker requires `dockerd`. The conductor centralizes resource management, maintains a persistent job registry, and provides health monitoring with backpressure.
 
 ## Why a Conductor?
 
@@ -15,42 +15,42 @@ Running jobs through a long-lived conductor process provides several advantages 
 
 ```bash
 # 1. Start the conductor
-mozart start --foreground    # Foreground (logs to console)
-mozart start                 # Background (double-fork, logs to file)
+mzt start --foreground    # Foreground (logs to console)
+mzt start                 # Background (double-fork, logs to file)
 
 # 2. Run a job (routed through conductor)
-mozart run my-score.yaml
+mzt run my-score.yaml
 
 # 3. Check conductor status
-mozart conductor-status
+mzt conductor-status
 
 # 4. Stop the conductor
-mozart stop
+mzt stop
 ```
 
 ## The Conductor Requirement
 
-`mozart run` **requires a running conductor**. If no conductor is detected, the command exits with an error:
+`mzt run` **requires a running conductor**. If no conductor is detected, the command exits with an error:
 
 ```
-Error: Mozart conductor is not running.
-Start it with: mozart start
+Error: Marianne conductor is not running.
+Start it with: mzt start
 ```
 
 **Exceptions that work without a conductor:**
 
 | Command | Conductor Required? | Why |
 |---------|-----------------|-----|
-| `mozart run config.yaml` | Yes | Job execution goes through conductor |
-| `mozart run --dry-run config.yaml` | No | Only validates and displays the job plan |
-| `mozart validate config.yaml` | No | Static config validation, no execution |
+| `mzt run config.yaml` | Yes | Job execution goes through conductor |
+| `mzt run --dry-run config.yaml` | No | Only validates and displays the job plan |
+| `mzt validate config.yaml` | No | Static config validation, no execution |
 
 ### How Auto-Detection Works
 
-When `mozart run` is invoked:
+When `mzt run` is invoked:
 
-1. The CLI calls `is_daemon_available()` from `mozart.daemon.detect`
-2. This resolves the socket path (default: `/tmp/mozart.sock`)
+1. The CLI calls `is_daemon_available()` from `marianne.daemon.detect`
+2. This resolves the socket path (default: `/tmp/marianne.sock`)
 3. A `DaemonClient` attempts to open a Unix socket connection
 4. If the connection succeeds, the job is submitted via JSON-RPC
 5. If the connection fails (socket missing, refused, timeout), the CLI reports the conductor is not running
@@ -146,7 +146,7 @@ Rate limits do **not** cause job rejection. They are per-instrument concerns han
 
 ## Configuration
 
-The conductor is configured via a YAML file passed to `mozart start --config <path>`. Without a config file, all defaults are used.
+The conductor is configured via a YAML file passed to `mzt start --config <path>`. Without a config file, all defaults are used.
 
 ### DaemonConfig Fields
 
@@ -164,10 +164,10 @@ The conductor is configured via a YAML file passed to `mozart start --config <pa
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `socket.path` | `Path` | `/tmp/mozart.sock` | Unix domain socket path |
+| `socket.path` | `Path` | `/tmp/marianne.sock` | Unix domain socket path |
 | `socket.permissions` | `int` | `0o660` | Socket file permissions (octal) |
 | `socket.backlog` | `int` | `5` | Max pending connections |
-| `pid_file` | `Path` | `/tmp/mozart.pid` | PID file path |
+| `pid_file` | `Path` | `/tmp/marianne.pid` | PID file path |
 | `shutdown_timeout_seconds` | `float` | `300.0` | Max wait for graceful shutdown (5 min) |
 | `monitor_interval_seconds` | `float` | `15.0` | Resource check interval |
 | `max_job_history` | `int` | `1000` | Terminal jobs kept in memory before eviction |
@@ -181,12 +181,25 @@ Controls the SemanticAnalyzer — LLM-based analysis of sheet completions that p
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `true` | Enable semantic learning. Defaults to on when the conductor is running. |
-| `model` | `str` | `"claude-sonnet-4-5-20250929"` | Model ID for analysis LLM calls |
-| `api_key_env` | `str` | `"ANTHROPIC_API_KEY"` | Environment variable containing the API key |
+| `backend` | `BackendConfig` | *(nested)* | Backend configuration for the analysis LLM. Supports any backend type: `claude_cli` (uses Claude Code, no API key needed), `anthropic_api`, `ollama` (free local models), or `recursive_light`. See BackendConfig fields below. |
 | `analyze_on` | `list` | `["success", "failure"]` | Which outcomes to analyze: `success`, `failure`, or both |
 | `max_concurrent_analyses` | `int` | `3` | Max concurrent LLM analysis tasks (1–20) |
-| `analysis_timeout_seconds` | `float` | `120.0` | Timeout for a single analysis call (≥10s) |
-| `max_tokens` | `int` | `4096` | Max response tokens for the analysis call (256–32768) |
+| `entropy_threshold` | `float` | `0.1` | Entropy threshold for triggering diversity injection. When pattern diversity index drops below this value (10% of max entropy by default), the learning system automatically boosts exploration budget to escape local optima. |
+| `exploration_budget` | `float` | `0.15` | Exploration budget boost amount when entropy response triggers. Controls how aggressively the system explores alternatives when pattern diversity collapses. |
+
+**BackendConfig fields** (nested under `learning.backend.*`):
+
+The `backend` field accepts the same `BackendConfig` used by job execution. Common fields include:
+
+| Field | Example | Description |
+|-------|---------|-------------|
+| `type` | `"anthropic_api"` | Backend type: `anthropic_api`, `claude_cli`, `ollama`, etc. |
+| `model` | `"claude-sonnet-4-5-20250929"` | Model ID for analysis LLM calls |
+| `api_key_env` | `"ANTHROPIC_API_KEY"` | Environment variable containing the API key (not needed for `claude_cli`) |
+| `max_tokens` | `4096` | Max response tokens (256–32768) |
+| `temperature` | `0.3` | Sampling temperature for analytical precision (0.0–1.0) |
+
+See the [Configuration Reference](configuration-reference.md) for all available backend options.
 
 ### Resource Limits (nested under `resource_limits`)
 
@@ -200,7 +213,7 @@ Controls the SemanticAnalyzer — LLM-based analysis of sheet completions that p
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `state_db_path` | `Path` | `~/.mozart/daemon-state.db` | Job registry database path. Overridden by `--conductor-clone` for clone isolation. |
+| `state_db_path` | `Path` | `~/.marianne/daemon-state.db` | Job registry database path. Overridden by `--conductor-clone` for clone isolation. |
 | `max_concurrent_sheets` | `int` | `10` | Max concurrent sheets across all jobs (used by the baton when `use_baton: true`) |
 | `use_baton` | `bool` | `true` | Enable the baton execution engine. The baton is the default since Phase 2. Set to `false` to fall back to the legacy monolithic runner. |
 | `preflight.token_warning_threshold` | `int` | `50000` | Token count above which to warn during preflight checks. Set higher for large-context instruments. `0` to disable. |
@@ -211,7 +224,7 @@ Controls the SemanticAnalyzer — LLM-based analysis of sheet completions that p
 Most users need very little configuration. The defaults are sensible:
 
 ```yaml
-# ~/.mozart/conductor.yaml — minimal config
+# ~/.marianne/conductor.yaml — minimal config
 max_concurrent_jobs: 10
 log_level: info
 ```
@@ -219,11 +232,11 @@ log_level: info
 For more control:
 
 ```yaml
-# ~/.mozart/conductor.yaml — full example
+# ~/.marianne/conductor.yaml — full example
 max_concurrent_jobs: 10
 job_timeout_seconds: 43200  # 12 hours for long jobs
 log_level: debug
-log_file: ~/.mozart/mozart.log
+log_file: ~/.marianne/marianne.log
 
 resource_limits:
   max_memory_mb: 4096
@@ -244,16 +257,16 @@ learning:
 Instead of configuring individual fields, use `--profile` to apply a preset:
 
 ```bash
-mozart start                        # sensible defaults
-mozart start --profile dev          # debug logging, strace on
-mozart start --profile intensive    # 48h timeout, high resource limits
-mozart start --profile minimal      # profiler + learning off
+mzt start                        # sensible defaults
+mzt start --profile dev          # debug logging, strace on
+mzt start --profile intensive    # 48h timeout, high resource limits
+mzt start --profile minimal      # profiler + learning off
 ```
 
 Profiles are partial overrides applied on top of your config file. Resolution order:
 
 1. `DaemonConfig` defaults
-2. `~/.mozart/conductor.yaml` (if exists)
+2. `~/.marianne/conductor.yaml` (if exists)
 3. `--profile` (if specified)
 4. CLI flags (`--log-level`, etc.) override everything
 
@@ -261,14 +274,14 @@ Profiles are partial overrides applied on top of your config file. Resolution or
 
 | Profile | Use Case | Key Overrides |
 |---------|----------|-------------|
-| `dev` | Debugging Mozart itself | `log_level: debug`, `max_concurrent_jobs: 2`, `strace_enabled: true` |
+| `dev` | Debugging Marianne itself | `log_level: debug`, `max_concurrent_jobs: 2`, `strace_enabled: true` |
 | `intensive` | Long-running production work | `job_timeout: 48h`, `max_memory: 16GB`, `max_processes: 100` |
 | `minimal` | Low-resource environments | `profiler: off`, `learning: off`, `max_concurrent_jobs: 2` |
 
 Profiles also work with `restart`:
 
 ```bash
-mozart restart --profile dev
+mzt restart --profile dev
 ```
 
 ### Live Config Reload (SIGHUP)
@@ -276,8 +289,8 @@ mozart restart --profile dev
 The conductor supports hot-reloading configuration without a restart. Send `SIGHUP` to the conductor process and it will re-read the config file from disk:
 
 ```bash
-# Reload config after editing ~/.mozart/conductor.yaml
-kill -SIGHUP $(cat /tmp/mozart.pid)
+# Reload config after editing ~/.marianne/conductor.yaml
+kill -SIGHUP $(cat /tmp/marianne.pid)
 ```
 
 **Reloadable fields** (take effect immediately):
@@ -294,25 +307,25 @@ If a non-reloadable field differs from the running config, the conductor logs a 
 
 ### Live Config Display
 
-`mozart config show` automatically queries the running conductor for its in-memory config. This reflects any SIGHUP reloads. When the conductor is not running, it falls back to reading from disk.
+`mzt config show` automatically queries the running conductor for its in-memory config. This reflects any SIGHUP reloads. When the conductor is not running, it falls back to reading from disk.
 
 ```bash
 # Shows [live] source when conductor is running
-mozart config show
+mzt config show
 
 # Validate a config file without starting the conductor
-mozart config check
-mozart config check --config /path/to/custom.yaml
+mzt config check
+mzt config check --config /path/to/custom.yaml
 ```
 
 ## Monitoring
 
-### `mozart conductor-status`
+### `mzt conductor-status`
 
 The primary monitoring command. Queries the conductor via IPC and displays:
 
 ```
-Mozart conductor is running (PID 12345)
+Marianne conductor is running (PID 12345)
   Uptime: 2h 15m 30s
   [+] Readiness: ready
   Running jobs: 2
@@ -330,12 +343,12 @@ In foreground mode, logs go to stderr in console format. In background mode, log
 
 ```bash
 # View conductor logs (if log_file is set)
-tail -f ~/.mozart/mozart.log
+tail -f ~/.marianne/marianne.log
 ```
 
 ### Programmatic Health Probes
 
-The `daemon.health` and `daemon.ready` IPC methods are available for integration with external monitoring. They are used internally by `mozart conductor-status`:
+The `daemon.health` and `daemon.ready` IPC methods are available for integration with external monitoring. They are used internally by `mzt conductor-status`:
 
 - **Liveness** (`daemon.health`): Returns OK if the conductor can execute the handler — minimal cost, no resource checks.
 - **Readiness** (`daemon.ready`): Returns `ready` when memory is within limits, failure rate is normal, notifications are functional, and the conductor is not shutting down.
@@ -348,26 +361,26 @@ test scores and CLI behavior without risking your production conductor.
 
 ```bash
 # Start a clone
-mozart --conductor-clone start
+marianne --conductor-clone start
 
 # Submit a score to the clone
-mozart --conductor-clone run my-test-score.yaml
+marianne --conductor-clone run my-test-score.yaml
 
 # Check the clone's status
-mozart --conductor-clone conductor-status
+marianne --conductor-clone conductor-status
 
 # Named clones for parallel testing
-mozart --conductor-clone=staging start
-mozart --conductor-clone=staging run staging-test.yaml
+marianne --conductor-clone=staging start
+marianne --conductor-clone=staging run staging-test.yaml
 
 # Stop when done
-mozart --conductor-clone stop
+marianne --conductor-clone stop
 ```
 
 **Key behaviors:**
-- The clone inherits your production `~/.mozart/conductor.yaml` config.
-- Clone paths: `/tmp/mozart-clone.sock` (socket), `/tmp/mozart-clone.pid` (PID).
-- Named clones: `/tmp/mozart-clone-staging.sock`, etc.
+- The clone inherits your production `~/.marianne/conductor.yaml` config.
+- Clone paths: `/tmp/marianne-clone.sock` (socket), `/tmp/marianne-clone.pid` (PID).
+- Named clones: `/tmp/marianne-clone-staging.sock`, etc.
 - Clone names are sanitized (64-character limit, safe characters only).
 - Commands that don't interact with the conductor (`validate`, `--help`) ignore the flag.
 
@@ -377,7 +390,7 @@ See the [CLI Reference](cli-reference.md#conductor-clones) for full details.
 
 ## The Baton (Event-Driven Execution Engine)
 
-The baton (`daemon/baton/`) is Mozart's execution engine, using event-driven
+The baton (`daemon/baton/`) is Marianne's execution engine, using event-driven
 per-sheet dispatch instead of the legacy monolithic sequential runner. It is
 the default execution path (`use_baton: true`) with 1,900+ tests.
 
@@ -389,7 +402,7 @@ Key capabilities:
 - **Timer-based retry** — backoff delays use a timer wheel instead of `asyncio.sleep()`
 - **Rate limit auto-resume** — when a rate limit is hit, the baton schedules a timer to
   automatically clear the limit when it expires and resume WAITING sheets. Without this,
-  rate-limited sheets stay blocked until manually cleared via `mozart clear-rate-limits`.
+  rate-limited sheets stay blocked until manually cleared via `mzt clear-rate-limits`.
 - **Restart recovery** — baton state persists and reconciles with CheckpointState on restart
 - **Cost enforcement** — per-sheet and per-job cost limits enforced after every attempt
 - **Full prompt assembly** — the baton renders prompts through the complete pipeline
@@ -401,7 +414,7 @@ Key capabilities:
   deduplication to prevent redundant callbacks
 
 **The baton is active by default.** No configuration needed. To fall back to the legacy
-runner, set `use_baton: false` in `~/.mozart/conductor.yaml`.
+runner, set `use_baton: false` in `~/.marianne/conductor.yaml`.
 
 ### Transition Plan
 
@@ -437,24 +450,24 @@ These components are still in use through the current execution path:
   Built but not yet wired into the execution path.
 - **RateLimitCoordinator** (`daemon/rate_coordinator.py`) — Cross-job rate limit state
   sharing. The write path is active; the read path feeds the scheduler. Stale limits
-  can be cleared manually with `mozart clear-rate-limits`.
+  can be cleared manually with `mzt clear-rate-limits`.
 
 ## Migration from Pre-Conductor Usage
 
-If you previously ran Mozart without a conductor:
+If you previously ran Marianne without a conductor:
 
-**Before (direct execution, no longer supported for `mozart run`):**
+**Before (direct execution, no longer supported for `mzt run`):**
 ```bash
-mozart run my-score.yaml
+mzt run my-score.yaml
 ```
 
 **After (conductor required):**
 ```bash
 # One-time: start the conductor
-mozart start
+mzt start
 
 # Then run jobs as before
-mozart run my-score.yaml
+mzt run my-score.yaml
 
 # The conductor stays running — no need to restart per job
 ```
@@ -472,16 +485,16 @@ This installs the `daemon` extras group, which includes `psutil` for the `Resour
 
 ## Troubleshooting
 
-### "Mozart conductor is not running"
+### "Marianne conductor is not running"
 
-The conductor is not reachable at the default socket path (`/tmp/mozart.sock`).
+The conductor is not reachable at the default socket path (`/tmp/marianne.sock`).
 
 ```bash
 # Start the conductor
-mozart start
+mzt start
 
 # Verify it's running
-mozart conductor-status
+mzt conductor-status
 ```
 
 ### "Conductor is already running"
@@ -489,24 +502,24 @@ mozart conductor-status
 A conductor instance is already active. Check with:
 
 ```bash
-mozart conductor-status
+mzt conductor-status
 ```
 
 If the conductor is unresponsive but the PID file exists, it may have crashed:
 
 ```bash
 # Stop cleans up stale PID files
-mozart stop
-mozart start
+mzt stop
+mzt start
 ```
 
 ### Stale PID File
 
-If `mozart stop` reports "conductor is not running" but a PID file exists, the file is automatically cleaned up. If it persists:
+If `mzt stop` reports "conductor is not running" but a PID file exists, the file is automatically cleaned up. If it persists:
 
 ```bash
-rm /tmp/mozart.pid
-mozart start
+rm /tmp/marianne.pid
+mzt start
 ```
 
 ### Permission Errors on Socket
@@ -516,13 +529,13 @@ The socket is created with `0o660` permissions by default (owner + group read/wr
 ### "Conductor does not support '...'. Restart the conductor"
 
 The CLI is newer than the running conductor. This happens when you update
-Mozart code but don't restart the conductor — the running daemon still has
+Marianne code but don't restart the conductor — the running daemon still has
 the old code loaded and doesn't recognize new IPC methods.
 
 ```bash
 # Pick up code changes
 pip install -e ".[dev]"
-mozart restart
+mzt restart
 ```
 
 ### "--escalation incompatible with conductor"
@@ -539,14 +552,14 @@ manager.orphans_recovered count=2
 
 ### Advisory Lock Conflicts
 
-The conductor uses `fcntl.flock()` on the PID file to prevent concurrent starts. If you see "PID file locked" errors, another `mozart start` is in progress. Wait a moment and retry.
+The conductor uses `fcntl.flock()` on the PID file to prevent concurrent starts. If you see "PID file locked" errors, another `mzt start` is in progress. Wait a moment and retry.
 
 ### Force Stop
 
 If the conductor is unresponsive to graceful shutdown:
 
 ```bash
-mozart stop --force    # Sends SIGKILL instead of SIGTERM
+mzt stop --force    # Sends SIGKILL instead of SIGTERM
 ```
 
 This kills the process immediately without waiting for running jobs to complete. Use as a last resort — running jobs will not checkpoint cleanly.

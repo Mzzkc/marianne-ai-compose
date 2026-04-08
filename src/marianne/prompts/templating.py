@@ -1,4 +1,4 @@
-"""Prompt templating for Mozart jobs.
+"""Prompt templating for Marianne jobs.
 
 Handles building sheet prompts from templates and generating
 auto-completion prompts for partial sheet recovery.

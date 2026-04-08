@@ -3,7 +3,7 @@
 Streams SystemSnapshot NDJSON events from the profiler's JSONL file or
 SQLite storage to connected dashboard clients.  Each event is a complete
 ``SystemSnapshot`` serialized as JSON — the same format produced by
-``mozart top --json``.
+``mzt top --json``.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ _logger = get_logger("dashboard.monitor")
 router = APIRouter(prefix="/api/monitor", tags=["Monitor"])
 
 # Default paths (match ProfilerConfig defaults)
-_DEFAULT_JSONL_PATH = Path("~/.mozart/monitor.jsonl").expanduser()
-_DEFAULT_DB_PATH = Path("~/.mozart/monitor.db").expanduser()
+_DEFAULT_JSONL_PATH = Path("~/.marianne/monitor.jsonl").expanduser()
+_DEFAULT_DB_PATH = Path("~/.marianne/monitor.db").expanduser()
 
 # Cached MonitorStorage instance (avoids re-init on every request/stream)
 _monitor_storage_cache: dict[str, Any] = {}
@@ -265,14 +265,14 @@ async def stream_monitor(
     """Stream real-time system monitor snapshots via Server-Sent Events.
 
     Each event contains a complete SystemSnapshot as JSON — the same
-    format used by ``mozart top --json``.
+    format used by ``mzt top --json``.
 
     **Source selection:**
 
     - ``auto`` (default): Uses daemon IPC if configured, then JSONL, then SQLite.
     - ``daemon``: Polls ``DaemonSystemView`` via IPC.
-    - ``jsonl``: Tails ``~/.mozart/monitor.jsonl`` directly.
-    - ``sqlite``: Polls ``~/.mozart/monitor.db`` for recent snapshots.
+    - ``jsonl``: Tails ``~/.marianne/monitor.jsonl`` directly.
+    - ``sqlite``: Polls ``~/.marianne/monitor.db`` for recent snapshots.
 
     Returns:
         SSE stream of ``snapshot`` events, with periodic ``heartbeat``

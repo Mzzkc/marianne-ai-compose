@@ -10,7 +10,7 @@ Eighth coordination assessment. Movement 4 delivered 39 commits from 31 unique m
 
 The critical path advanced two steps this movement — F-210 resolved (serial blocker since M3) and F-441 resolved (new discovery, immediate fix). This is the first movement to advance more than one serial step. The Wordware demos (4 scores, all validating clean) are the first demo-class deliverables in 9+ movements. They work TODAY on the legacy runner.
 
-But the activation deadlock persists. Phase 1 baton testing remains at zero despite being unblocked since the first week of M4. The Lovable demo is still at zero. The product thesis — that Mozart can replace software teams — remains unproven to anyone outside this orchestra.
+But the activation deadlock persists. Phase 1 baton testing remains at zero despite being unblocked since the first week of M4. The Lovable demo is still at zero. The product thesis — that Marianne can replace software teams — remains unproven to anyone outside this orchestra.
 
 ## Quantitative Assessment
 
@@ -91,7 +91,7 @@ Net: +23 tasks completed, +15 new tasks discovered. The completion percentage ro
 - **D-024 cost accuracy:** Circuit 4055f0b. JSON token extraction from Claude CLI. Confidence display in status. 17 TDD tests.
 - **F-110 pending jobs:** Lens d286e07, Spark 539d12c/5b9d12e. Rate-limited jobs queued as PENDING instead of rejected. Auto-start on clear. Cancel support. 23 TDD tests.
 - **#120 fan-in SKIPPED:** Maverick a77aa35. Skipped upstream sheets inject `[SKIPPED]` placeholder + `skipped_upstream` template variable.
-- **Skill rename:** Dash 7f5c8a1. `mozart:usage` → `mozart:command` to avoid collision with built-in `/usage`.
+- **Skill rename:** Dash 7f5c8a1. `marianne:usage` → `marianne:command` to avoid collision with built-in `/usage`.
 - **Error quality layer 2:** Lens d286e07. All `output_error()` calls now have hints. 10 TDD tests.
 
 ### Safety & Verification
@@ -141,7 +141,7 @@ The baton has never executed a real sheet through `--conductor-clone`. Phase 1 t
 
 ### HIGH — Demo at Zero (PARTIALLY MITIGATED)
 
-The Lovable demo remains unstarted. But the Wordware demos (4 scores) are demo-class deliverables that work TODAY. Atlas correctly identified: "Wordware demos break the visibility deadlock." They don't require the baton. They can demonstrate Mozart to external audiences immediately.
+The Lovable demo remains unstarted. But the Wordware demos (4 scores) are demo-class deliverables that work TODAY. Atlas correctly identified: "Wordware demos break the visibility deadlock." They don't require the baton. They can demonstrate Marianne to external audiences immediately.
 
 The existential risk is not "we have nothing to show." The existential risk is "the thing we planned to show (Lovable) requires infrastructure that's in flight, while the things we can show (Wordware) don't require permission or infrastructure."
 
@@ -205,7 +205,7 @@ Theorem's discovery that the baton is executing 150+ sheets in production change
 
 1. **Reframe Phase 1:** The baton is running. Assign one musician to evaluate output quality of completed baton sheets vs what legacy runner would have produced. This is analysis, not testing.
 
-2. **Ship Wordware demos:** They work. They're ready. They demonstrate Mozart today. Don't wait for the Lovable demo.
+2. **Ship Wordware demos:** They work. They're ready. They demonstrate Marianne today. Don't wait for the Lovable demo.
 
 3. **Close verified issues:** #122, #120, #93, #103, #128, #156 are all verified fixed. Close them.
 
@@ -220,7 +220,7 @@ Theorem's discovery that the baton is executing 150+ sheets in production change
 All claims in this report are derived from:
 - `git log --oneline` (39 M4 commits verified)
 - `git shortlog -sn` (31 unique committers verified)
-- `wc -l src/mozart/**/*.py` (98,441 source lines)
+- `wc -l src/marianne/**/*.py` (98,441 source lines)
 - `find tests/ -name "*.py" | wc -l` (333 test files)
 - `pytest --co` (11,397 tests collected)
 - `mypy src/` (clean)

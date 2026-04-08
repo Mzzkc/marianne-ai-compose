@@ -45,7 +45,7 @@ from marianne.core.checkpoint import CheckpointState, JobStatus, ProgressSnapsho
 from marianne.core.config import JobConfig
 from marianne.core.config.spec import SpecFragment
 from marianne.core.errors import ErrorClassifier
-from marianne.core.logging import ExecutionContext, MozartLogger, get_logger
+from marianne.core.logging import ExecutionContext, MarianneLogger, get_logger
 from marianne.execution.circuit_breaker import CircuitBreaker
 from marianne.execution.dag import (
     CycleDetectedError,
@@ -259,7 +259,7 @@ class JobRunnerBase:
         self._escalation_update_failures: int = 0
 
         # Structured logging (Task 8: Logging Integration)
-        self._logger: MozartLogger = get_logger("runner")
+        self._logger: MarianneLogger = get_logger("runner")
         self._execution_context: ExecutionContext | None = None
 
         # Circuit breaker for resilient execution (Task 12)
@@ -424,9 +424,9 @@ class JobRunnerBase:
         - SIGHUP: Terminal disconnected (SSH drop, terminal close)
 
         All three trigger the same graceful shutdown: finish the current sheet,
-        save state, and exit cleanly. Without SIGTERM/SIGHUP handlers, Mozart
+        save state, and exit cleanly. Without SIGTERM/SIGHUP handlers, Marianne
         dies immediately and the job is left in a stale RUNNING state that
-        requires manual ``mozart resume`` to recover.
+        requires manual ``mzt resume`` to recover.
 
         On Windows, we rely on KeyboardInterrupt.
         """
@@ -481,7 +481,7 @@ class JobRunnerBase:
             f"\n[green]State saved.[/green] Job paused at sheet "
             f"{state.last_completed_sheet + 1}/{state.total_sheets}."
         )
-        self.console.print(f"\n[bold]To resume:[/bold] mozart resume {state.job_id}")
+        self.console.print(f"\n[bold]To resume:[/bold] mzt resume {state.job_id}")
 
         raise GracefulShutdownError(f"Job {state.job_id} paused by user request")
 
@@ -526,7 +526,7 @@ class JobRunnerBase:
 
         try:
             workspace_path = Path(self.config.workspace)
-            pause_signal_file = workspace_path / f".mozart-pause-{state.job_id}"
+            pause_signal_file = workspace_path / f".marianne-pause-{state.job_id}"
             return pause_signal_file.exists()
         except OSError:
             return False
@@ -541,7 +541,7 @@ class JobRunnerBase:
             return
 
         workspace_path = Path(self.config.workspace)
-        pause_signal_file = workspace_path / f".mozart-pause-{state.job_id}"
+        pause_signal_file = workspace_path / f".marianne-pause-{state.job_id}"
 
         try:
             if pause_signal_file.exists():
@@ -614,7 +614,7 @@ class JobRunnerBase:
             f"{current_sheet}/{state.total_sheets}.[/yellow]"
         )
         self.console.print(
-            f"[green]State saved.[/green] To resume: [bold]mozart resume {state.job_id}[/bold]"
+            f"[green]State saved.[/green] To resume: [bold]mzt resume {state.job_id}[/bold]"
         )
 
         raise GracefulShutdownError(f"Job {state.job_id} paused at sheet {current_sheet}")

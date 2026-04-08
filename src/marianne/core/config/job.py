@@ -172,7 +172,7 @@ class MovementDef(BaseModel):
 class SheetConfig(BaseModel):
     """Configuration for sheet processing.
 
-    In Mozart's musical theme, a composition is divided into sheets,
+    In Marianne's musical theme, a composition is divided into sheets,
     each containing a portion of the work to be performed.
 
     Fan-out support: When ``fan_out`` is specified, stages are expanded into
@@ -193,7 +193,7 @@ class SheetConfig(BaseModel):
         default_factory=dict,
         description=(
             "Human-readable labels for sheets. Map of sheet_num -> description. "
-            "Displayed in 'mozart status' output. Sheets without entries show no description. "
+            "Displayed in 'mzt status' output. Sheets without entries show no description. "
             "Example: {1: 'Setup environment', 2: 'Build project', 3: 'Run tests'}"
         ),
     )
@@ -617,7 +617,7 @@ class PromptConfig(BaseModel):
             "Additional prompt directives applied to all sheets in this score. "
             "Each entry is either inline text or a file path ending in .md/.txt. "
             "File paths are resolved relative to the config file location. "
-            "Extensions are injected after the Mozart default preamble."
+            "Extensions are injected after the Marianne default preamble."
         ),
     )
 
@@ -756,7 +756,7 @@ class JobConfig(BaseModel):
     )
     bridge: BridgeConfig | None = Field(
         default=None,
-        description="Mozart-Ollama bridge configuration. "
+        description="Marianne-Ollama bridge configuration. "
         "Enables Ollama backend with MCP tool support.",
     )
     cross_sheet: CrossSheetConfig | None = Field(
@@ -790,7 +790,7 @@ class JobConfig(BaseModel):
     )
     state_path: Path | None = Field(
         default=None,
-        description="Path for state storage (default: workspace/.mozart-state)",
+        description="Path for state storage (default: workspace/.marianne-state)",
     )
 
     pause_between_sheets_seconds: int = Field(
@@ -901,8 +901,8 @@ class JobConfig(BaseModel):
         if not isinstance(data, dict):
             raise ValueError(
                 "The score file is empty or invalid. "
-                "A Mozart score requires at minimum: name, sheet, and prompt sections. "
-                "See 'mozart validate --help' or the score writing guide for examples."
+                "A Marianne score requires at minimum: name, sheet, and prompt sections. "
+                "See 'mzt validate --help' or the score writing guide for examples."
             )
         # Pre-resolve relative workspace relative to the score file's parent
         # directory, not the current process CWD (#109).  This is critical when
@@ -920,7 +920,7 @@ class JobConfig(BaseModel):
         if not isinstance(data, dict):
             raise ValueError(
                 "The score content is empty or invalid. "
-                "A Mozart score requires at minimum: name, sheet, and prompt sections."
+                "A Marianne score requires at minimum: name, sheet, and prompt sections."
             )
         return cls.model_validate(data)
 
@@ -929,13 +929,13 @@ class JobConfig(BaseModel):
         if self.state_path:
             return self.state_path
         if self.state_backend == "json":
-            return self.workspace / ".mozart-state.json"
-        return self.workspace / ".mozart-state.db"
+            return self.workspace / ".marianne-state.json"
+        return self.workspace / ".marianne-state.db"
 
     def get_outcome_store_path(self) -> Path:
         """Get the resolved outcome store path for learning."""
         if self.learning.outcome_store_path:
             return self.learning.outcome_store_path
         if self.learning.outcome_store_type == "json":
-            return self.workspace / ".mozart-outcomes.json"
-        return self.workspace / ".mozart-outcomes.db"
+            return self.workspace / ".marianne-outcomes.json"
+        return self.workspace / ".marianne-outcomes.db"

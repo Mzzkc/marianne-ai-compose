@@ -1,4 +1,4 @@
-"""Tests for Mozart MCP Tools - Job Management and Control."""
+"""Tests for Marianne MCP Tools - Job Management and Control."""
 
 import tempfile
 from datetime import datetime
@@ -101,8 +101,8 @@ class TestJobTools:
 
         assert "content" in result
         assert len(result["content"]) == 1
-        assert "Mozart MCP Job Listing" in result["content"][0]["text"]
-        assert "mozart list" in result["content"][0]["text"]
+        assert "Marianne MCP Job Listing" in result["content"][0]["text"]
+        assert "mzt list" in result["content"][0]["text"]
 
     async def test_get_job_success(self, job_tools: JobTools, mock_state_backend: Mock,
                                   sample_checkpoint_state: CheckpointState):
@@ -128,7 +128,7 @@ class TestJobTools:
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "Mozart Job Details: test-job-123" in content_text
+        assert "Marianne Job Details: test-job-123" in content_text
         assert "Job Name: Test Job" in content_text
         assert "Status: running" in content_text
         assert "PID: 12345" in content_text
@@ -183,7 +183,7 @@ sheet:
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✓ Mozart job started successfully!" in content_text
+        assert "✓ Marianne job started successfully!" in content_text
         assert "Job ID: new-job-456" in content_text
         assert "Job Name: Test Job" in content_text
         assert "Status: running" in content_text
@@ -443,11 +443,11 @@ class TestArtifactTools:
         assert len(tools) == 5
         tool_names = [tool["name"] for tool in tools]
         expected_tools = [
-            "mozart_artifact_list",
-            "mozart_artifact_read",
-            "mozart_artifact_get_logs",
-            "mozart_artifact_list_artifacts",
-            "mozart_artifact_get_artifact"
+            "marianne_artifact_list",
+            "marianne_artifact_read",
+            "marianne_artifact_get_logs",
+            "marianne_artifact_list_artifacts",
+            "marianne_artifact_get_artifact"
         ]
         for expected in expected_tools:
             assert expected in tool_names
@@ -462,13 +462,13 @@ class TestArtifactTools:
 
         # Test file listing
         result = await artifact_tools.call_tool(
-            "mozart_artifact_list", {"workspace": str(temp_workspace)},
+            "marianne_artifact_list", {"workspace": str(temp_workspace)},
         )
         assert "content" in result
         assert "test.txt" in result["content"][0]["text"]
 
         # Test file reading
-        result = await artifact_tools.call_tool("mozart_artifact_read", {
+        result = await artifact_tools.call_tool("marianne_artifact_read", {
             "workspace": str(temp_workspace),
             "file_path": "test.txt"
         })
@@ -522,7 +522,7 @@ sheet:
         job_tools.job_control.start_job = AsyncMock(return_value=start_result)
 
         result = await job_tools.call_tool("start_job", {"config_path": str(config_file)})
-        assert "✓ Mozart job started successfully!" in result["content"][0]["text"]
+        assert "✓ Marianne job started successfully!" in result["content"][0]["text"]
 
         # 2. Get job status
         checkpoint_state = CheckpointState(

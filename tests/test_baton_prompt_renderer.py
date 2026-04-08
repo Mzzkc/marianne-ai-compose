@@ -227,7 +227,7 @@ class TestPreamble:
         )
         result = renderer.render(sheet, _make_context(attempt_number=1))
 
-        assert "<mozart-preamble>" in result.preamble
+        assert "<marianne-preamble>" in result.preamble
         assert "sheet 1 of 10" in result.preamble
         assert "RETRY" not in result.preamble
 
@@ -554,4 +554,4 @@ class TestRenderedPrompt:
         assert isinstance(result, RenderedPrompt)
         assert len(result.prompt) > 0
         assert len(result.preamble) > 0
-        assert "<mozart-preamble>" in result.preamble
+        assert "<marianne-preamble>" in result.preamble

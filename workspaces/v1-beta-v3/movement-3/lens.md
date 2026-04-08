@@ -16,15 +16,15 @@ Shipped commit `4b83dae` with 7 TDD regression tests and 1 correctness fix.
 **File:** `tests/test_rejection_hints_ux.py` (new, 288 lines)
 **Commit:** `4b83dae`
 
-7 TDD tests covering the `_rejection_hints()` function in `src/mozart/cli/commands/run.py`:
+7 TDD tests covering the `_rejection_hints()` function in `src/marianne/cli/commands/run.py`:
 
 | Test Class | Rejection Type | Verifies |
 |-----------|---------------|----------|
-| `TestRejectionHintsShutdown` | "Daemon is shutting down" | Hints mention `mozart start` or restart |
+| `TestRejectionHintsShutdown` | "Daemon is shutting down" | Hints mention `mzt start` or restart |
 | `TestRejectionHintsPressure` | "System under high pressure" | Hints mention `clear-rate-limits` or `conductor-status` |
 | `TestRejectionHintsDuplicate` | "Job already running" | Hints mention pause/cancel |
 | `TestRejectionHintsWorkspace` | "Workspace parent not exist" | Hints mention workspace/--workspace |
-| `TestRejectionHintsConfigParse` | "Failed to parse config" | Hints mention `mozart validate` |
+| `TestRejectionHintsConfigParse` | "Failed to parse config" | Hints mention `mzt validate` |
 | `TestEarlyFailureDisplay` | Early failure with error detail | Error detail appears in hints, not raw print |
 | `TestEarlyFailureDisplay` | Early failure without detail | Diagnose hint still appears |
 
@@ -32,7 +32,7 @@ These tests verify behavior implemented by Dash in `8bb3a10`. They add regressio
 
 ### 2. instruments.py JSON Error Path Fix
 
-**File:** `src/mozart/cli/commands/instruments.py:190`
+**File:** `src/marianne/cli/commands/instruments.py:190`
 **Commit:** `4b83dae`
 
 Changed:
@@ -55,8 +55,8 @@ Also added `output_json` to the import on line 21.
 | `pytest tests/test_rejection_hints_ux.py` | 7 passed |
 | `pytest tests/test_cli_error_ux.py` | 10 passed |
 | `pytest tests/test_cli_instruments.py` | 17 passed |
-| `mypy src/mozart/cli/commands/run.py instruments.py` | Clean |
-| `ruff check src/mozart/cli/commands/run.py instruments.py` | All checks passed |
+| `mypy src/marianne/cli/commands/run.py instruments.py` | Clean |
+| `ruff check src/marianne/cli/commands/run.py instruments.py` | All checks passed |
 | Bare MagicMock in my test file | Zero instances |
 
 ## What I Found
@@ -65,7 +65,7 @@ Also added `output_json` to the import on line 21.
 Arrived intending to build context-aware rejection hints in `run.py`. Found Dash had already implemented the full feature in `8bb3a10` — `_rejection_hints()`, `_show_rate_limits_on_rejection()`, `format_rate_limit_info()`, `query_rate_limits()`. Pivoted to regression tests and the instruments.py fix. The mateship pipeline works: Dash built the feature, I added the test coverage.
 
 ### Raw Error Patterns — Status
-Scanned all `console.print` calls in `src/mozart/cli/commands/`. Zero raw error patterns remain. All `console.print` calls with `[red]` are display labels ("Recent Errors", "Error Details") or status indicators — correctly using Rich formatting for data display, not error handling. The error standardization task (M3 step 35) is genuinely complete.
+Scanned all `console.print` calls in `src/marianne/cli/commands/`. Zero raw error patterns remain. All `console.print` calls with `[red]` are display labels ("Recent Errors", "Error Details") or status indicators — correctly using Rich formatting for data display, not error handling. The error standardization task (M3 step 35) is genuinely complete.
 
 ### Remaining JSON Consistency Gaps
 Found 6 instances of `console.print(json.dumps(...))` across `pause.py` (4) and `instruments.py` (2, one fixed). These are success-path JSON outputs, not error paths. The error path fix was the priority; the success paths are lower risk since they don't contain user-facing error messages that need markup safety.

@@ -1,8 +1,8 @@
-"""Mozart MCP Server implementation.
+"""Marianne MCP Server implementation.
 
-This module implements the core MCP server that exposes Mozart job management
+This module implements the core MCP server that exposes Marianne job management
 capabilities through the Model Context Protocol. The server provides tools
-and resources for external AI agents to interact with Mozart.
+and resources for external AI agents to interact with Marianne.
 
 The server implements JSON-RPC 2.0 over HTTP/SSE transport and follows the
 MCP specification for capability negotiation, tool execution, and resource access.
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class MCPServer:
-    """Mozart MCP Server - Exposes Mozart capabilities via Model Context Protocol.
+    """Marianne MCP Server - Exposes Marianne capabilities via Model Context Protocol.
 
     The server implements the MCP specification to provide:
     - Job management tools (run, pause, resume, cancel, status)
@@ -29,8 +29,8 @@ class MCPServer:
 
     Security:
     - All tool executions require explicit user consent
-    - File system access is restricted to Mozart workspace directories
-    - No arbitrary code execution beyond Mozart's built-in capabilities
+    - File system access is restricted to Marianne workspace directories
+    - No arbitrary code execution beyond Marianne's built-in capabilities
 
     Attributes:
         tools: Available MCP tools grouped by category
@@ -103,9 +103,9 @@ class MCPServer:
         return {
             "capabilities": self.capabilities,
             "serverInfo": {
-                "name": "mozart-mcp-server",
+                "name": "marianne-mcp-server",
                 "version": "1.0.0",
-                "description": "Mozart AI Compose MCP Server - Job management and orchestration"
+                "description": "Marianne AI Compose MCP Server - Job management and orchestration"
             }
         }
 
@@ -149,10 +149,10 @@ class MCPServer:
         job_tool_names = ["list_jobs", "get_job", "start_job"]
         control_tool_names = ["pause_job", "resume_job", "cancel_job"]
         artifact_tool_names = [
-            "mozart_artifact_list", "mozart_artifact_read",
-            "mozart_artifact_get_logs",
-            "mozart_artifact_list_artifacts",
-            "mozart_artifact_get_artifact",
+            "marianne_artifact_list", "marianne_artifact_read",
+            "marianne_artifact_get_logs",
+            "marianne_artifact_list_artifacts",
+            "marianne_artifact_get_artifact",
         ]
         score_tool_names = ["validate_score", "generate_score"]
 
@@ -197,7 +197,7 @@ class MCPServer:
             raise RuntimeError("Server not initialized")
 
         # Route to appropriate resource handler
-        if uri.startswith("config://") or uri.startswith("mozart://"):
+        if uri.startswith("config://") or uri.startswith("marianne://"):
             return await self.config_resources.read_resource(uri)
         else:
             raise ValueError(f"Unknown resource URI: {uri}")

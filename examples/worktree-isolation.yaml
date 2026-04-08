@@ -1,7 +1,7 @@
 # Example: Worktree Isolation Configuration
 #
 # This example demonstrates how to enable worktree isolation for parallel-safe
-# Mozart jobs. When enabled, each job runs in an isolated git worktree, allowing
+# Marianne jobs. When enabled, each job runs in an isolated git worktree, allowing
 # multiple jobs to modify code simultaneously without interference.
 #
 # Key benefits:
@@ -75,7 +75,7 @@ validations:
 
 # How worktree isolation works:
 #
-# 1. At job start, Mozart creates a git worktree in detached HEAD mode:
+# 1. At job start, Marianne creates a git worktree in detached HEAD mode:
 #    git worktree add --detach <workspace>/.worktrees/<job-id> [<source_branch>]
 #
 # 2. The backend's working_directory is set to the worktree path

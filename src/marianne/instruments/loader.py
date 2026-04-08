@@ -6,9 +6,9 @@ instrument plugin system — the conductor calls the loader at startup
 to discover available instruments.
 
 Loading order matters:
-    1. Built-in profiles (shipped with Mozart, lowest precedence)
-    2. Organization profiles (~/.mozart/instruments/)
-    3. Venue profiles (.mozart/instruments/, highest precedence)
+    1. Built-in profiles (shipped with Marianne, lowest precedence)
+    2. Organization profiles (~/.marianne/instruments/)
+    3. Venue profiles (.marianne/instruments/, highest precedence)
 
 Later directories override earlier ones on name collision. This lets
 venue-specific profiles customize organization-wide defaults, which in
@@ -23,8 +23,8 @@ Usage:
     from marianne.instruments.loader import InstrumentProfileLoader
 
     profiles = InstrumentProfileLoader.load_directories([
-        Path.home() / ".mozart" / "instruments",
-        Path(".mozart/instruments"),
+        Path.home() / ".marianne" / "instruments",
+        Path(".marianne/instruments"),
     ])
 """
 
@@ -116,8 +116,8 @@ class InstrumentProfileLoader:
         Later directories override earlier ones on name collision. The
         intended loading order:
             1. Built-in profiles (lowest precedence)
-            2. Organization profiles (~/.mozart/instruments/)
-            3. Venue profiles (.mozart/instruments/, highest precedence)
+            2. Organization profiles (~/.marianne/instruments/)
+            3. Venue profiles (.marianne/instruments/, highest precedence)
 
         Args:
             directories: Ordered list of directories to scan. Missing
@@ -210,9 +210,9 @@ def load_all_profiles() -> dict[str, InstrumentProfile]:
 
     Convenience function that encapsulates the standard loading order:
         1. Native instruments (4 built-in backends)
-        2. Built-in YAML profiles (shipped with Mozart)
-        3. Organization profiles (~/.mozart/instruments/)
-        4. Venue profiles (.mozart/instruments/)
+        2. Built-in YAML profiles (shipped with Marianne)
+        3. Organization profiles (~/.marianne/instruments/)
+        4. Venue profiles (.marianne/instruments/)
 
     Later sources override earlier ones on name collision.
 
@@ -229,8 +229,8 @@ def load_all_profiles() -> dict[str, InstrumentProfile]:
     }
 
     builtins_dir = Path(__file__).resolve().parent / "builtins"
-    org_dir = Path.home() / ".mozart" / "instruments"
-    venue_dir = Path(".mozart") / "instruments"
+    org_dir = Path.home() / ".marianne" / "instruments"
+    venue_dir = Path(".marianne") / "instruments"
 
     yaml_profiles = InstrumentProfileLoader.load_directories(
         [builtins_dir, org_dir, venue_dir]

@@ -1,6 +1,6 @@
-"""Tests for mozart status no-args overview mode.
+"""Tests for mzt status no-args overview mode.
 
-Tests the overview display that shows when 'mozart status' is called
+Tests the overview display that shows when 'mzt status' is called
 without a job_id argument — showing conductor status and active scores.
 """
 
@@ -53,7 +53,7 @@ class TestFormatUptime:
 # ---------------------------------------------------------------------------
 
 class TestStatusOverview:
-    """Test the overview mode of mozart status."""
+    """Test the overview mode of mzt status."""
 
     async def test_no_conductor_shows_error(self) -> None:
         """When conductor is not running, show error and exit."""

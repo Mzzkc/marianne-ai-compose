@@ -12,10 +12,10 @@
 
 **Directive:** Bedrock → F-097 timeout config (P1)
 
-The `idle_timeout_seconds` value was already raised from 1800 to 7200 by the composer in the untracked `scores-internal/v1-beta/generate-v3.py:443`. The regenerated score at `scores-internal/v1-beta/mozart-orchestra-v3.yaml:3963` confirms the value. Both tasks in TASKS.md were unclaimed — I marked them complete with evidence.
+The `idle_timeout_seconds` value was already raised from 1800 to 7200 by the composer in the untracked `scores-internal/v1-beta/generate-v3.py:443`. The regenerated score at `scores-internal/v1-beta/marianne-orchestra-v3.yaml:3963` confirms the value. Both tasks in TASKS.md were unclaimed — I marked them complete with evidence.
 
 F-097 is now FULLY RESOLVED across all four sub-tasks:
-1. **E006 error code** — Blueprint (M4, `src/mozart/core/errors/codes.py`)
+1. **E006 error code** — Blueprint (M4, `src/marianne/core/errors/codes.py`)
 2. **Error display fix** — Spark (M1, `error_code` field in SheetState, 26 TDD tests)
 3. **Timeout increase** — Composer (verified by Bedrock M4)
 4. **Score regeneration** — Composer (verified by Bedrock M4)
@@ -27,7 +27,7 @@ Both FINDINGS.md entries (original at line 991, M4 at line 1138) updated to Reso
 $ grep idle_timeout scores-internal/v1-beta/generate-v3.py
     "idle_timeout_seconds": 7200,
 
-$ grep idle_timeout scores-internal/v1-beta/mozart-orchestra-v3.yaml
+$ grep idle_timeout scores-internal/v1-beta/marianne-orchestra-v3.yaml
   idle_timeout_seconds: 7200
 ```
 
@@ -90,7 +90,7 @@ Updated collective memory under `## Current Status`:
 | Source/test files changed | 41 |
 | Source/test insertions | 4,765 |
 | Source/test deletions | 117 |
-| Source lines (src/mozart/) | 98,247 (+823 from M3) |
+| Source lines (src/marianne/) | 98,247 (+823 from M3) |
 | Test files | 327 (+12 from M3) |
 | Reports filed | 14+ (this movement in progress) |
 
@@ -131,7 +131,7 @@ F-210 was THE blocker since M3. Canyon resolved it in a single commit (748335f),
 
 ### The Demo Remains at Zero
 
-D-022 (Lovable demo) is assigned to Guide + Codex but neither has started. This is now 9+ movements at zero on the single most impactful deliverable. The Wordware demos (D-023) are complete and buildable today — they demonstrate Mozart's capabilities without the baton. But the Lovable demo requires the baton transition, which means Phase 1→2→3, which means multiple more movements.
+D-022 (Lovable demo) is assigned to Guide + Codex but neither has started. This is now 9+ movements at zero on the single most impactful deliverable. The Wordware demos (D-023) are complete and buildable today — they demonstrate Marianne's capabilities without the baton. But the Lovable demo requires the baton transition, which means Phase 1→2→3, which means multiple more movements.
 
 The Wordware demos are the pragmatic path to visibility RIGHT NOW. The Lovable demo is the aspirational path that requires the baton transition to complete.
 

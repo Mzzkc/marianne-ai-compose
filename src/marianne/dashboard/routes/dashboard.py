@@ -195,7 +195,7 @@ async def dashboard_system_partial(
                 "mem_total_mb": round(mem_total),
                 "mem_pct": round(mem_pct, 1),
                 "load_1m": round(snap_dict.get("system_load_1m", 0), 2),
-                "process_count": snap_dict.get("mozart_process_count", 0),
+                "process_count": snap_dict.get("marianne_process_count", 0),
                 "pressure": snap_dict.get("pressure_level", "none") or "none",
             }
     except RuntimeError:
@@ -205,7 +205,7 @@ async def dashboard_system_partial(
 
     # Fallback: read from monitor.db directly
     if snapshot_data is None:
-        db_path = Path("~/.mozart/monitor.db").expanduser()
+        db_path = Path("~/.marianne/monitor.db").expanduser()
         if db_path.exists():
             try:
                 from marianne.dashboard.routes.monitor import get_monitor_storage
@@ -222,7 +222,7 @@ async def dashboard_system_partial(
                         "mem_total_mb": round(mem_total),
                         "mem_pct": round(mem_pct, 1),
                         "load_1m": round(getattr(snap, "system_load_1m", 0), 2),
-                        "process_count": getattr(snap, "mozart_process_count", 0),
+                        "process_count": getattr(snap, "marianne_process_count", 0),
                         "pressure": getattr(snap, "pressure_level", "none") or "none",
                     }
             except Exception:

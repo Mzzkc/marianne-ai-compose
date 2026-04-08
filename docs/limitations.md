@@ -1,6 +1,6 @@
 # Known Limitations
 
-An honest accounting of what Mozart doesn't do, what's incomplete, and where sharp edges exist. Each limitation includes the technical reason it exists and any available workaround.
+An honest accounting of what Marianne doesn't do, what's incomplete, and where sharp edges exist. Each limitation includes the technical reason it exists and any available workaround.
 
 ---
 
@@ -8,17 +8,17 @@ An honest accounting of what Mozart doesn't do, what's incomplete, and where sha
 
 ### Conductor Required for Execution
 
-`mozart run` routes all jobs through the conductor. There is no standalone execution mode.
+`mzt run` routes all jobs through the conductor. There is no standalone execution mode.
 
-**What this means:** You must start the conductor (`mozart start`) before running any job. Only `mozart validate` and `mozart run --dry-run` work without a running conductor.
+**What this means:** You must start the conductor (`mzt start`) before running any job. Only `mzt validate` and `mzt run --dry-run` work without a running conductor.
 
 **Why:** Centralized resource management, rate-limit coordination, and backpressure control require a single process to track all active jobs. The conductor also enables the persistent job registry and crash recovery.
 
 **Workaround:** None. Start the conductor first:
 
 ```bash
-mozart start            # background
-mozart run my-job.yaml  # now works
+mzt start            # background
+mzt run my-job.yaml  # now works
 ```
 
 **Status:** Permanent design choice.
@@ -29,13 +29,13 @@ mozart run my-job.yaml  # now works
 
 The `--escalation` flag (human-in-the-loop prompts for low-confidence sheets) is explicitly blocked when the daemon routes jobs.
 
-**What this means:** You cannot use `mozart run my-job.yaml --escalation`. The CLI exits with an error:
+**What this means:** You cannot use `mzt run my-job.yaml --escalation`. The CLI exits with an error:
 
 > `--escalation requires interactive console prompts which are not available in daemon mode. Escalation is not currently supported.`
 
 **Why:** The daemon runs jobs as background tasks without an attached terminal. Interactive console prompts have no UI surface to display through.
 
-**Workaround:** None currently. The escalation feature exists in the codebase (`src/mozart/learning/store/escalation.py`) but has no supported execution path.
+**Workaround:** None currently. The escalation feature exists in the codebase (`src/marianne/learning/store/escalation.py`) but has no supported execution path.
 
 **Status:** Blocked until the dashboard or IPC layer supports interactive prompts.
 
@@ -53,14 +53,14 @@ Execution is batch-oriented. stdout and stderr are captured after each sheet com
 
 **Why:** The `asyncio.create_subprocess_exec` backend collects output via `communicate()`, which buffers until process exit. Streaming would require line-by-line reads with significant complexity for timeout handling.
 
-**Relevant constants** (from `src/mozart/core/constants.py`):
+**Relevant constants** (from `src/marianne/core/constants.py`):
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
 | `TRUNCATE_STDOUT_TAIL_CHARS` | 500 | Log display truncation |
 | `HEALING_CONTEXT_TAIL_CHARS` | 10,000 | Self-healing diagnostic context |
 
-**Workaround:** For long jobs, use `mozart status <job> --watch` to poll completion state, or `tail -f workspace/mozart.log` for log-level updates.
+**Workaround:** For long jobs, use `mzt status <job> --watch` to poll completion state, or `tail -f workspace/marianne.log` for log-level updates.
 
 **Status:** Permanent for the current architecture.
 
@@ -70,9 +70,9 @@ Execution is batch-oriented. stdout and stderr are captured after each sheet com
 
 ### Legacy Runner Still Available
 
-The baton (`src/mozart/daemon/baton/`) is now the default execution engine (`use_baton: true`), providing event-driven per-sheet dispatch, per-instrument concurrency, timer-based retry, rate limit auto-resume, and restart recovery. The legacy monolithic runner remains available as a fallback.
+The baton (`src/marianne/daemon/baton/`) is now the default execution engine (`use_baton: true`), providing event-driven per-sheet dispatch, per-instrument concurrency, timer-based retry, rate limit auto-resume, and restart recovery. The legacy monolithic runner remains available as a fallback.
 
-**What this means:** Jobs run via the baton by default. Set `use_baton: false` in `~/.mozart/conductor.yaml` to fall back to the legacy runner if needed.
+**What this means:** Jobs run via the baton by default. Set `use_baton: false` in `~/.marianne/conductor.yaml` to fall back to the legacy runner if needed.
 
 **Impact of legacy fallback:** The legacy runner ignores per-sheet instrument assignments — it uses a single backend regardless of per-sheet configuration. Rate limit handling is also less sophisticated.
 
@@ -82,7 +82,7 @@ The baton (`src/mozart/daemon/baton/`) is now the default execution engine (`use
 
 ### Single-Machine Only
 
-Mozart runs on a single machine. There is no distributed execution, remote workers, or cluster mode.
+Marianne runs on a single machine. There is no distributed execution, remote workers, or cluster mode.
 
 **What this means:**
 
@@ -90,9 +90,9 @@ Mozart runs on a single machine. There is no distributed execution, remote worke
 - Worktree isolation creates local git worktrees
 - All concurrent jobs share the same machine's CPU, memory, and network
 
-**Why:** The Unix socket IPC layer (`src/mozart/daemon/ipc/`) is inherently local. Distributed coordination would require a fundamentally different architecture (message queues, consensus protocols, distributed state).
+**Why:** The Unix socket IPC layer (`src/marianne/daemon/ipc/`) is inherently local. Distributed coordination would require a fundamentally different architecture (message queues, consensus protocols, distributed state).
 
-**Workaround:** Run separate Mozart instances on different machines with different workspaces. They won't coordinate rate limits, but they'll operate independently.
+**Workaround:** Run separate Marianne instances on different machines with different workspaces. They won't coordinate rate limits, but they'll operate independently.
 
 **Status:** Permanent design choice. Distributed execution is out of scope.
 
@@ -102,17 +102,17 @@ Mozart runs on a single machine. There is no distributed execution, remote worke
 
 ### Instrument Plugin System
 
-Mozart supports multiple AI instruments through a config-driven plugin system. Six instruments ship as built-in profiles, and users can add custom instruments via YAML files.
+Marianne supports multiple AI instruments through a config-driven plugin system. Six instruments ship as built-in profiles, and users can add custom instruments via YAML files.
 
 **Built-in instruments:** `claude-code`, `gemini-cli`, `codex-cli`, `cline-cli`, `aider`, `goose`
 
 **Native backends:** `claude_cli` (ClaudeCliBackend), `anthropic_api`, `ollama`, `recursive_light`
 
-Run `mozart instruments list` to see all available instruments and their status.
+Run `mzt instruments list` to see all available instruments and their status.
 
 ### Error Classification Is Claude-Tuned
 
-The error classifier (`src/mozart/core/errors/classifier.py`) was originally designed around Claude CLI output patterns. While it handles common rate-limit patterns across providers, edge cases in non-Claude instruments may produce suboptimal error recovery.
+The error classifier (`src/marianne/core/errors/classifier.py`) was originally designed around Claude CLI output patterns. While it handles common rate-limit patterns across providers, edge cases in non-Claude instruments may produce suboptimal error recovery.
 
 **What this means:**
 
@@ -142,7 +142,7 @@ instrument_config:
   disable_mcp: true    # Prevents loading ambient MCP servers
 ```
 
-**Status:** The `mozart validate` command warns about this (V209). A proper technique system for per-sheet MCP/skill configuration is planned but not yet implemented.
+**Status:** The `mzt validate` command warns about this (V209). A proper technique system for per-sheet MCP/skill configuration is planned but not yet implemented.
 
 ---
 
@@ -150,11 +150,11 @@ instrument_config:
 
 ### Runner Mixin Architecture
 
-The `JobRunner` class is composed of 6 mixins plus a base class (7 classes total) via multiple inheritance:
+The `JobRunner` class is composed of 7 mixins plus a base class (8 classes total) via multiple inheritance:
 
 ```
 JobRunner(
-    SheetExecutionMixin,  # Sheet execution (~3,000 lines)
+    SheetExecutionMixin,  # Sheet execution (~3,400 lines)
     LifecycleMixin,       # run() orchestration
     RecoveryMixin,        # Error classification and retry
     PatternsMixin,        # Pattern management
@@ -166,31 +166,32 @@ JobRunner(
 
 **What this means:**
 
-- Debugging requires tracing method calls across multiple files in `src/mozart/execution/runner/`
+- Debugging requires tracing method calls across multiple files in `src/marianne/execution/runner/`
 - MRO (Method Resolution Order) determines which mixin's method wins
 - State is shared across mixins via `self`, with no encapsulation between them
-- `SheetExecutionMixin` alone (`sheet.py`) is ~3,000 lines
+- `SheetExecutionMixin` alone (`sheet.py`) is ~3,400 lines
 
 **Why:** The runner grew organically. Each concern (cost, isolation, recovery) was added as a mixin to avoid a single 5,000+ line file.
 
 **Workaround:** When debugging, start from `base.py` (initialization) and `lifecycle.py` (`run()` entry point), then trace into specific mixins.
 
-**Status:** Working but complex. The baton execution engine (`src/mozart/daemon/baton/`) replaces this architecture with a cleaner event-driven model where musicians execute once and the conductor handles all retry/recovery decisions. The baton is built and tested but not yet the default path.
+**Status:** Working but complex. The baton execution engine (`src/marianne/daemon/baton/`) replaces this architecture with a cleaner event-driven model where musicians execute once and the conductor handles all retry/recovery decisions. The baton is built and tested but not yet the default path.
 
 ---
 
 ### Learning System Complexity
 
-The learning store has 14 modules in `src/mozart/learning/store/`:
+The learning store has 16 modules in `src/marianne/learning/store/`:
 
 ```
-base.py                   budget.py
-drift.py                  escalation.py
-executions.py             models.py
-patterns.py               patterns_broadcast.py
-patterns_crud.py           patterns_quarantine.py
-patterns_query.py          patterns_success_factors.py
-patterns_trust.py          rate_limits.py
+__init__.py               base.py
+budget.py                 drift.py
+escalation.py             executions.py
+models.py                 patterns.py
+patterns_broadcast.py     patterns_crud.py
+patterns_lifecycle.py     patterns_quarantine.py
+patterns_query.py         patterns_success_factors.py
+patterns_trust.py         rate_limits.py
 ```
 
 **What this means:** The learning system tracks pattern drift, entropy, trust scores, quarantine state, success factors, and budget constraints. For simple jobs (run 5 sheets sequentially), most of this infrastructure is unused overhead.

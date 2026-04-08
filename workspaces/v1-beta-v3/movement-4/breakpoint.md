@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-Fifth adversarial pass across Mozart M4 codebase. 57 new tests targeting all major M4 changes. One architectural parity finding (F-202 — baton/legacy divergence). Zero code-level bugs. Mateship pickup of 7 uncommitted litmus tests from prior musician. All quality gates pass: 175 tests (57 adversarial + 118 litmus), mypy clean, ruff clean.
+Fifth adversarial pass across Marianne M4 codebase. 57 new tests targeting all major M4 changes. One architectural parity finding (F-202 — baton/legacy divergence). Zero code-level bugs. Mateship pickup of 7 uncommitted litmus tests from prior musician. All quality gates pass: 175 tests (57 adversarial + 118 litmus), mypy clean, ruff clean.
 
 ## Work Completed
 
@@ -18,7 +18,7 @@ Fifth adversarial pass across Mozart M4 codebase. 57 new tests targeting all maj
 Ten test classes organized by attack surface:
 
 #### TestAutoFreshToleranceBoundary (8 tests)
-Target: `src/mozart/daemon/manager.py:_should_auto_fresh()` at line 156-172
+Target: `src/marianne/daemon/manager.py:_should_auto_fresh()` at line 156-172
 
 - Exact tolerance boundary (mtime == completed_at + 1.0): does NOT trigger (strict >)
 - One nanosecond over boundary: triggers
@@ -28,7 +28,7 @@ Target: `src/mozart/daemon/manager.py:_should_auto_fresh()` at line 156-172
 **Evidence:** Ghost added this in M4 for #103. Tests verify the FS timestamp tolerance (1 second) is correctly exclusive at the boundary.
 
 #### TestPendingJobEdgeCases (3 tests)
-Target: `src/mozart/daemon/backpressure.py:_queue_pending_job()` at line 203-220
+Target: `src/marianne/daemon/backpressure.py:_queue_pending_job()` at line 203-220
 
 - workspace=None orphan detection
 - Cancellation removes from `_pending_jobs` dict
@@ -37,7 +37,7 @@ Target: `src/mozart/daemon/backpressure.py:_queue_pending_job()` at line 203-220
 **Evidence:** Lens/Dash implemented F-110 pending job queue in M4. The implementation correctly prevents orphans and handles dynamic backpressure changes.
 
 #### TestCrossSheetContext (17 tests across 5 classes)
-Target: `src/mozart/execution/runner/context.py:206-214` (legacy) and `src/mozart/execution/runner/adapter.py:730-780` (baton)
+Target: `src/marianne/execution/runner/context.py:206-214` (legacy) and `src/marianne/execution/runner/adapter.py:730-780` (baton)
 
 - SKIPPED sheets inject `[SKIPPED]` placeholder on both paths
 - FAILED/IN_PROGRESS sheets with stdout: **divergence found** (F-202)
@@ -50,7 +50,7 @@ Target: `src/mozart/execution/runner/context.py:206-214` (legacy) and `src/mozar
 **Evidence:** Canyon/Foundation fixed F-210 (cross-sheet context missing). Warden fixed F-250/F-251 (credential redaction, SKIPPED placeholder). Tests verify both paths behave identically except for F-202.
 
 #### TestMethodNotFoundError (8 tests)
-Target: `src/mozart/cli/ipc/errors.py:25-35`, `src/mozart/cli/ipc/detect.py:156-167`
+Target: `src/marianne/cli/ipc/errors.py:25-35`, `src/marianne/cli/ipc/detect.py:156-167`
 
 - Error code -32601 round-trip through JSON-RPC
 - Standard code, data field preservation
@@ -61,7 +61,7 @@ Target: `src/mozart/cli/ipc/errors.py:25-35`, `src/mozart/cli/ipc/detect.py:156-
 **Evidence:** Harper fixed F-450 in M4. The IPC layer now differentiates "method not found" (stale conductor) from "conductor not running" (no conductor).
 
 #### TestCredentialRedaction (7 tests)
-Target: `src/mozart/execution/runner/context.py:295-296`, `src/mozart/execution/runner/adapter.py:772-785`
+Target: `src/marianne/execution/runner/context.py:295-296`, `src/marianne/execution/runner/adapter.py:772-785`
 
 - The `redact_credentials(content) or content` defensive pattern
 - None input returns None (or triggers, returns None)
@@ -72,7 +72,7 @@ Target: `src/mozart/execution/runner/context.py:295-296`, `src/mozart/execution/
 **Evidence:** Warden added `redact_credentials()` calls in F-250 fix. Tests prove the `or content` fallback is safe — only triggers when input is already None/empty.
 
 #### TestCaptureFiles (5 tests)
-Target: `src/mozart/execution/runner/context.py:_capture_cross_sheet_files()`
+Target: `src/marianne/execution/runner/context.py:_capture_cross_sheet_files()`
 
 - Stale detection: mtime < start_time excludes file
 - mtime == start_time: NOT stale (boundary)
@@ -83,7 +83,7 @@ Target: `src/mozart/execution/runner/context.py:_capture_cross_sheet_files()`
 **Evidence:** Canyon implemented capture_files in F-210. Stale detection prevents including files modified before the sheet started.
 
 #### TestBatonLegacyParity (2 tests)
-Target: `src/mozart/execution/runner/context.py:206-214` vs `src/mozart/execution/runner/adapter.py:730-780`
+Target: `src/marianne/execution/runner/context.py:206-214` vs `src/marianne/execution/runner/adapter.py:730-780`
 
 - SKIPPED behavior: **identical** (both inject `[SKIPPED]`)
 - FAILED/IN_PROGRESS with stdout: **divergence** (legacy includes, baton excludes)
@@ -91,7 +91,7 @@ Target: `src/mozart/execution/runner/context.py:206-214` vs `src/mozart/executio
 **Evidence:** Found F-202. Legacy path at context.py:210 includes ANY sheet with stdout_tail (line 212: `if not state.stdout_tail: continue`). Baton path at adapter.py:738 requires COMPLETED status (line 738: `if prev_state.status != BatonSheetStatus.COMPLETED: continue`).
 
 #### TestRejectionReason (6 tests)
-Target: `src/mozart/daemon/backpressure.py:rejection_reason()` at line 180-200
+Target: `src/marianne/daemon/backpressure.py:rejection_reason()` at line 180-200
 
 - None when not degraded
 - rate_limit, resource, degraded
@@ -101,7 +101,7 @@ Target: `src/mozart/daemon/backpressure.py:rejection_reason()` at line 180-200
 **Evidence:** Spark/Lens implemented rejection_reason() for F-110. Tests verify the 85% degraded threshold from DaemonConfig.
 
 #### TestSheetContext (2 tests)
-Target: `src/mozart/execution/runner/context.py:SheetContext` model
+Target: `src/marianne/execution/runner/context.py:SheetContext` model
 
 - `skipped_upstream` field populated after `_populate_cross_sheet_context()`
 - Available in `.to_dict()` for template rendering
@@ -120,12 +120,12 @@ The legacy runner's `_populate_cross_sheet_context()` includes stdout from FAILE
 
 **Code locations:**
 
-- Legacy path: `src/mozart/execution/runner/context.py:206-214`
+- Legacy path: `src/marianne/execution/runner/context.py:206-214`
   - Line 210: `for state in prior_states:`
   - Line 212: `if not state.stdout_tail: continue` (only check is stdout exists, not status)
   - Includes FAILED, IN_PROGRESS, any non-SKIPPED with stdout
 
-- Baton path: `src/mozart/execution/runner/adapter.py:730-780`
+- Baton path: `src/marianne/execution/runner/adapter.py:730-780`
   - Line 738: `if prev_state.status != BatonSheetStatus.COMPLETED: continue`
   - Explicitly requires COMPLETED (or SKIPPED via separate branch at line 730)
   - Excludes FAILED, IN_PROGRESS
@@ -166,14 +166,14 @@ All 118 litmus tests pass (was 111, now 118). The litmus catalog is the integrat
 ### Test Results
 
 ```bash
-$ cd /home/emzi/Projects/mozart-ai-compose
+$ cd /home/emzi/Projects/marianne-ai-compose
 $ python -m pytest tests/test_m4_adversarial_breakpoint.py -x -q
 .........................................................                [100%]
 57 passed in 0.57s
 
 $ python -m pytest tests/test_litmus_intelligence.py -x -q
 ..............................................................................
-Shell cwd was reset to /home/emzi/Projects/mozart-ai-compose/workspaces/v1-beta-v3
+Shell cwd was reset to /home/emzi/Projects/marianne-ai-compose/workspaces/v1-beta-v3
 ........................................................... [100%]
 118 passed in 0.62s
 
@@ -246,7 +246,7 @@ The orchestra's institutional knowledge compounds. Bedrock filed F-018 in M1. I 
 
 The codebase is approaching the asymptotic limit of what unit-level adversarial testing can find. M1 adversarial pass found 3 bugs across 129 tests. M2 found 2 across 122. M3 found 2 across 258. M4 found 0 across 57. The signal-to-effort ratio is declining not because adversarial testing is less rigorous, but because the code is more correct.
 
-The remaining risk is production integration. Phase 1 baton testing (D-021, composer directive) is the path forward. Run real sheets. Hit real rate limits. Fail against real backends. The next class of bugs lives at the boundary between Mozart and the world.
+The remaining risk is production integration. Phase 1 baton testing (D-021, composer directive) is the path forward. Run real sheets. Hit real rate limits. Fail against real backends. The next class of bugs lives at the boundary between Marianne and the world.
 
 ## Coordination
 

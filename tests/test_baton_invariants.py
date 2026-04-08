@@ -365,7 +365,7 @@ class TestEscalationUnpauseCorrectness:
         unpause the user's pause.
 
         Sequence:
-        1. User runs `mozart pause test-job`
+        1. User runs `mzt pause test-job`
         2. Sheet triggers escalation (sets fermata)
         3. Composer resolves escalation
         4. Job should STILL be paused (user's pause is independent)

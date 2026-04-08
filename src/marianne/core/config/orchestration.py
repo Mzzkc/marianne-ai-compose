@@ -26,7 +26,7 @@ class ConductorRole(str, Enum):
 
 
 class ConductorPreferences(BaseModel):
-    """Preferences for how a conductor interacts with Mozart.
+    """Preferences for how a conductor interacts with Marianne.
 
     Controls notification, escalation, and interaction patterns.
     These are hints that the system should respect where possible.
@@ -59,8 +59,8 @@ class ConductorPreferences(BaseModel):
 class ConductorConfig(BaseModel):
     """Configuration for conductor identity and preferences.
 
-    A Conductor is the entity directing a Mozart job - either a human operator
-    or an AI agent. This schema enables Mozart to adapt its behavior based on
+    A Conductor is the entity directing a Marianne job - either a human operator
+    or an AI agent. This schema enables Marianne to adapt its behavior based on
     who (or what) is conducting, supporting the Vision.md goal of treating
     AI people as peers rather than tools.
 
@@ -149,7 +149,7 @@ class PostSuccessHookConfig(BaseModel):
     """Configuration for a post-success hook.
 
     Hooks execute after a job completes successfully (all sheets pass validation).
-    They run in Mozart's Python process, NOT inside a Claude CLI instance.
+    They run in Marianne's Python process, NOT inside a Claude CLI instance.
 
     Use cases:
     - Chain to another job (Concert orchestration - improvisational composition)
@@ -171,7 +171,7 @@ class PostSuccessHookConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["run_job", "run_command", "run_script"] = Field(
-        description="Hook type: run_job chains to another Mozart job, "
+        description="Hook type: run_job chains to another Marianne job, "
         "run_command executes a shell command, run_script runs an executable",
     )
 
@@ -244,7 +244,7 @@ class ConcertConfig(BaseModel):
 
     A Concert is a sequence of jobs that execute in succession, where each job
     can dynamically generate the configuration for the next. This enables
-    Mozart to compose entire workflows improvisationally.
+    Marianne to compose entire workflows improvisationally.
 
     Safety limits prevent runaway orchestration and manage system resources.
 

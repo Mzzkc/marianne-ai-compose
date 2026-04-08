@@ -1,7 +1,7 @@
-"""Data reader for the Mozart Monitor TUI.
+"""Data reader for the Marianne Monitor TUI.
 
 Provides ``MonitorReader`` which reads system snapshots and process events
-from multiple data sources (IPC, SQLite, JSONL) for display in ``mozart top``.
+from multiple data sources (IPC, SQLite, JSONL) for display in ``mzt top``.
 
 The reader auto-detects the best available data source:
 1. IPC (DaemonClient) — live data from the running conductor

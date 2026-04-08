@@ -55,9 +55,9 @@
 # ║    CLI instrument for S3/S7 — match instrument to task difficulty.         ║
 # ║                                                                             ║
 # ║  Usage:                                                                     ║
-# ║    mozart start                                                             ║
-# ║    mozart run examples/dead-letter-quarantine.yaml                         ║
-# ║    mozart status utility-toolkit                                           ║
+# ║    mzt start                                                             ║
+# ║    mzt run examples/dead-letter-quarantine.yaml                         ║
+# ║    mzt status utility-toolkit                                           ║
 # ║                                                                             ║
 # ║  Output:                                                                    ║
 # ║    workspaces/utility-toolkit/                                             ║

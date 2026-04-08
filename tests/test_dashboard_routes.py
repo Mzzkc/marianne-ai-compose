@@ -379,7 +379,7 @@ class TestCoreReadRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["service"] == "mozart-dashboard"
+        assert data["service"] == "marianne-dashboard"
         assert "version" in data
 
     def test_list_jobs_empty(self, client):
@@ -744,7 +744,7 @@ class TestStreamRoutes:
         """Test static log download."""
         workspace = temp_state_dir / "test-workspace"
         workspace.mkdir()
-        log_file = workspace / "mozart.log"
+        log_file = workspace / "marianne.log"
         log_content = "LOG: Job started\nLOG: Sheet 1 completed\nLOG: Job finished"
         log_file.write_text(log_content)
 
@@ -766,13 +766,13 @@ class TestStreamRoutes:
         assert response.status_code == 200
         assert log_content in response.text
         assert "attachment" in response.headers["content-disposition"]
-        assert "mozart-test-123-logs.txt" in response.headers["content-disposition"]
+        assert "marianne-test-123-logs.txt" in response.headers["content-disposition"]
 
     def test_get_log_info_success(self, client, temp_state_dir):
         """Test getting log file info."""
         workspace = temp_state_dir / "test-workspace"
         workspace.mkdir()
-        log_file = workspace / "mozart.log"
+        log_file = workspace / "marianne.log"
         log_content = "Line 1\nLine 2\nLine 3\n"
         log_file.write_text(log_content)
 
@@ -794,6 +794,6 @@ class TestStreamRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["job_id"] == "test-123"
-        assert data["log_file"] == "mozart.log"
+        assert data["log_file"] == "marianne.log"
         assert data["size_bytes"] == len(log_content.encode())
         assert data["lines"] == 3

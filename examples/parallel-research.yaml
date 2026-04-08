@@ -1,5 +1,5 @@
 # Example: Parallel Research with Sheet Dependencies
-# Demonstrates Mozart's parallel sheet execution feature (v17 evolution)
+# Demonstrates Marianne's parallel sheet execution feature (v17 evolution)
 #
 # This example shows how to:
 # - Define sheet dependencies with `sheet.dependencies`
@@ -24,9 +24,9 @@
 #            Sheet 6 (report)
 #
 # Usage:
-#   mozart validate examples/parallel-research.yaml
-#   mozart run examples/parallel-research.yaml
-#   mozart status parallel-research
+#   mzt validate examples/parallel-research.yaml
+#   mzt run examples/parallel-research.yaml
+#   mzt status parallel-research
 #
 # Benefits:
 # - Sheets 2, 3, 4 run concurrently (3x faster than sequential)

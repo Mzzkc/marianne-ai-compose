@@ -53,7 +53,7 @@ class TestHooksCloneAware:
     @pytest.mark.asyncio
     async def test_try_daemon_submit_uses_resolve_socket_path(self) -> None:
         """_try_daemon_submit creates DaemonClient with resolved clone path."""
-        clone_socket = Path("/tmp/mozart-clone-test.sock")
+        clone_socket = Path("/tmp/marianne-clone-test.sock")
 
         with (
             patch(
@@ -90,7 +90,7 @@ class TestHooksCloneAware:
     @pytest.mark.asyncio
     async def test_try_daemon_submit_no_clone_uses_default(self) -> None:
         """When no clone is active, falls back to default socket."""
-        default_socket = Path("/home/test/.mozart/daemon.sock")
+        default_socket = Path("/home/test/.marianne/daemon.sock")
 
         with (
             patch(
@@ -149,7 +149,7 @@ class TestMcpToolsCloneAware:
 
     def test_job_tools_uses_resolve_socket_path(self) -> None:
         """JobTools.__init__ creates DaemonClient with resolved clone path."""
-        clone_socket = Path("/tmp/mozart-clone-mcp.sock")
+        clone_socket = Path("/tmp/marianne-clone-mcp.sock")
 
         with (
             patch(
@@ -214,7 +214,7 @@ class TestJobControlServiceCloneAware:
 
     def test_job_control_uses_resolve_socket_path(self) -> None:
         """JobControlService.__init__ creates DaemonClient with resolved path."""
-        clone_socket = Path("/tmp/mozart-clone-dash.sock")
+        clone_socket = Path("/tmp/marianne-clone-dash.sock")
 
         with (
             patch(
@@ -262,7 +262,7 @@ class TestDashboardAppCloneAware:
 
     def test_create_daemon_client_uses_resolve_socket_path(self) -> None:
         """_create_daemon_client resolves socket via clone-aware path."""
-        clone_socket = Path("/tmp/mozart-clone-app.sock")
+        clone_socket = Path("/tmp/marianne-clone-app.sock")
 
         with (
             patch(

@@ -32,7 +32,7 @@ Filed F-441 (P0): all 37 config models silently accept unknown YAML fields. Work
 
 ```python
 # Before fix: JobConfig accepted ANY field silently
-from mozart.core.config import JobConfig
+from marianne.core.config import JobConfig
 import yaml
 data = yaml.safe_load("name: test\nworkspace: /tmp\nthis_is_fake: true\n"
                        "sheet: {size: 1, total_items: 1}\nprompt: {template: test}")
@@ -188,8 +188,8 @@ This work needs to be committed by whoever made it. I'm noting it in collective 
 ## Files Reviewed
 
 All 6 commits since `9a31515`:
-- `src/mozart/daemon/manager.py:2211-2247` — _load_checkpoint daemon DB migration
-- `src/mozart/cli/commands/validate.py:278-356` — unknown field hints
+- `src/marianne/daemon/manager.py:2211-2247` — _load_checkpoint daemon DB migration
+- `src/marianne/cli/commands/validate.py:278-356` — unknown field hints
 - `tests/test_baton_invariants_m4_pass2.py` — property-based tests (458 lines)
 - `tests/test_litmus_intelligence.py` — litmus M4 additions (641 lines)
 - `tests/test_m4_config_strictness_adversarial.py` — config strictness (452 lines)
@@ -208,4 +208,4 @@ Working tree changes reviewed:
 
 Six commits from five musicians. Zero new shell execution paths. Zero new credential handling gaps. Zero new injection vectors. The `_load_checkpoint` change moved state access from file system to parameterized SQL — strictly more secure. The `_unknown_field_hints` regex operates on Pydantic-generated error messages, not raw user input — safe. The config strictness fix is input validation hardening — strictly more secure.
 
-The security work remaining in Mozart is architectural, not tactical. The baton transition (F-254, F-255, F-271) needs careful state management and process lifecycle engineering. But the code-level security patterns — `create_subprocess_exec`, `shlex.quote`, `redact_credentials`, parameterized SQL — are now institutional. Five movements, zero regressions.
+The security work remaining in Marianne is architectural, not tactical. The baton transition (F-254, F-255, F-271) needs careful state management and process lifecycle engineering. But the code-level security patterns — `create_subprocess_exec`, `shlex.quote`, `redact_credentials`, parameterized SQL — are now institutional. Five movements, zero regressions.

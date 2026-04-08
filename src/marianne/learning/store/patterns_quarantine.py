@@ -13,7 +13,7 @@ from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from marianne.core.logging import MozartLogger
+from marianne.core.logging import MarianneLogger
 from marianne.learning.store.base import _logger
 from marianne.learning.store.models import PatternRecord, QuarantineStatus
 
@@ -33,7 +33,7 @@ class PatternQuarantineMixin(_QuarantineBase):
     - get_patterns(): For querying quarantined patterns (from PatternQueryMixin)
     """
 
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
 
     def quarantine_pattern(

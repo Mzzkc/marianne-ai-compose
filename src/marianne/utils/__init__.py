@@ -1,4 +1,4 @@
-"""Shared utilities for Mozart.
+"""Shared utilities for Marianne.
 
 Contains cross-cutting utilities used by multiple modules.
 """

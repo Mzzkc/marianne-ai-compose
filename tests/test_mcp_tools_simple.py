@@ -1,4 +1,4 @@
-"""Simplified tests for Mozart MCP Tools - Job Management and Control."""
+"""Simplified tests for Marianne MCP Tools - Job Management and Control."""
 
 import tempfile
 from datetime import datetime
@@ -48,7 +48,7 @@ class TestJobToolsBasic:
 
         assert "content" in result
         assert len(result["content"]) == 1
-        assert "Mozart MCP Job Listing" in result["content"][0]["text"]
+        assert "Marianne MCP Job Listing" in result["content"][0]["text"]
 
     @patch('marianne.mcp.tools.JobControlService')
     async def test_get_job_success(
@@ -89,7 +89,7 @@ class TestJobToolsBasic:
 
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "Mozart Job Details: test-job-123" in content_text
+        assert "Marianne Job Details: test-job-123" in content_text
         assert "Job Name: Test Job" in content_text
         assert "Status: running" in content_text
 
@@ -253,7 +253,7 @@ sheet:
             "self_healing": True
         })
 
-        assert "✓ Mozart job started successfully!" in result["content"][0]["text"]
+        assert "✓ Marianne job started successfully!" in result["content"][0]["text"]
         assert "Self-healing: Enabled" in result["content"][0]["text"]
 
     @patch('marianne.mcp.tools.JobControlService')

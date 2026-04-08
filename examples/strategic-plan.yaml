@@ -1,7 +1,7 @@
 # Example: Strategic Plan Development (Multi-Framework Synthesis)
 # Orchestrate comprehensive strategic planning using PESTEL, Porter's Five Forces, and SWOT
 #
-# This example demonstrates Mozart's capabilities BEYOND software development:
+# This example demonstrates Marianne's capabilities BEYOND software development:
 # - Multi-framework synthesis (3+ analytical frameworks)
 # - Evidence-based strategic analysis
 # - Structured decision-making workflow
@@ -17,11 +17,11 @@
 # Usage:
 #   # 1. Customize variables in prompt.variables section
 #   # 2. Validate configuration
-#   mozart validate examples/strategic-plan.yaml
+#   mzt validate examples/strategic-plan.yaml
 #   # 3. Run the strategic planning process
-#   mozart run examples/strategic-plan.yaml
+#   mzt run examples/strategic-plan.yaml
 #   # 4. Monitor progress
-#   mozart status strategic-plan
+#   mzt status strategic-plan
 #
 # Estimated time: 4-8 hours depending on scope
 # Outputs: Complete strategic plan with supporting analyses in workspace/

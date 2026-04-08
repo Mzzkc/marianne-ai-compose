@@ -1,4 +1,4 @@
-"""Sheet entity model — the first-class execution unit in Mozart.
+"""Sheet entity model — the first-class execution unit in Marianne.
 
 A Sheet carries everything a musician needs to execute: identity, instrument,
 prompt, context injection, validations, and timeout. Sheets are constructed

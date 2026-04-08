@@ -1,4 +1,4 @@
-"""Entry point for python -m mozart."""
+"""Entry point for python -m marianne."""
 
 from marianne.cli import app
 

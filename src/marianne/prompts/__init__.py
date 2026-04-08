@@ -1,4 +1,4 @@
-"""Prompt templating for Mozart jobs.
+"""Prompt templating for Marianne jobs.
 
 Handles Jinja2 templates, completion prompt generation, and dynamic preambles.
 """

@@ -1,4 +1,4 @@
-"""Adversarial tests for Mozart v1 beta — Movement 1, Cycle 3.
+"""Adversarial tests for Marianne v1 beta — Movement 1, Cycle 3.
 
 Targets the highest-severity production bugs found by real usage.
 

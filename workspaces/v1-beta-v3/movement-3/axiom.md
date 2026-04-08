@@ -131,7 +131,7 @@ All closures backed by commit references and verification reports.
 
 | File | Change | Lines |
 |------|--------|-------|
-| `src/mozart/daemon/baton/core.py` | F-440 fix: re-propagate failure on register_job | 546-556 |
+| `src/marianne/daemon/baton/core.py` | F-440 fix: re-propagate failure on register_job | 546-556 |
 | `tests/test_recovery_failure_propagation.py` | 8 TDD tests for F-440 | New file |
 | `tests/test_baton_m2c2_adversarial.py` | Updated 2 tests: assert FAILED not PENDING for dependents of FAILED sheets | Lines 986-1057 |
 | `workspaces/v1-beta-v3/FINDINGS.md` | F-440 finding entry | Appended |

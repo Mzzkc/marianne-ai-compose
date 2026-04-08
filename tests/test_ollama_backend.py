@@ -728,7 +728,7 @@ class TestOllamaPreamble:
         self, ollama_backend, mock_httpx_response, sample_ollama_response
     ):
         """set_preamble() content is prepended to the user message."""
-        ollama_backend.set_preamble("<mozart-preamble>Identity</mozart-preamble>")
+        ollama_backend.set_preamble("<marianne-preamble>Identity</marianne-preamble>")
 
         mock_client = AsyncMock(spec=httpx.AsyncClient)
         mock_client.is_closed = False
@@ -744,7 +744,7 @@ class TestOllamaPreamble:
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
         user_content = payload["messages"][0]["content"]
 
-        assert user_content.startswith("<mozart-preamble>")
+        assert user_content.startswith("<marianne-preamble>")
         assert "Do the task" in user_content
 
     async def test_extensions_appended_to_user_message(
@@ -773,7 +773,7 @@ class TestOllamaPreamble:
         self, ollama_backend, mock_httpx_response, sample_ollama_response
     ):
         """Preamble + prompt + extensions in correct order."""
-        ollama_backend.set_preamble("<mozart-preamble>Preamble</mozart-preamble>")
+        ollama_backend.set_preamble("<marianne-preamble>Preamble</marianne-preamble>")
         ollama_backend.set_prompt_extensions(["Extension"])
 
         mock_client = AsyncMock(spec=httpx.AsyncClient)

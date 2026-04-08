@@ -1,6 +1,6 @@
 """Tests for CLI error UX improvements.
 
-F-031: Malformed YAML in `mozart run` should show "YAML syntax error",
+F-031: Malformed YAML in `mzt run` should show "YAML syntax error",
 not a misleading Pydantic "Schema validation failed" message.
 
 F-110 (partial): Backpressure rejection should NOT show "conductor is
@@ -26,7 +26,7 @@ runner = CliRunner()
 
 
 class TestF031YamlSyntaxError:
-    """YAML syntax errors in `mozart run` must say 'YAML syntax error',
+    """YAML syntax errors in `mzt run` must say 'YAML syntax error',
     not 'Schema validation failed'."""
 
     def test_malformed_yaml_in_run_shows_yaml_error(self, tmp_path: Path) -> None:
@@ -225,7 +225,7 @@ class TestHintVsHintsAPIMismatch:
     def test_not_running_hint_visible_in_terminal(
         self, tmp_path: Path
     ) -> None:
-        """The 'mozart start' hint must appear in terminal output."""
+        """The 'mzt start' hint must appear in terminal output."""
         config_path = self._make_config(tmp_path)
 
         with patch(
@@ -236,8 +236,8 @@ class TestHintVsHintsAPIMismatch:
             result = runner.invoke(app, ["run", str(config_path)])
 
         assert result.exit_code != 0
-        # The hint "Start it with: mozart start" must be visible
-        assert "mozart start" in result.output
+        # The hint "Start it with: mzt start" must be visible
+        assert "mzt start" in result.output
 
     def test_not_running_hint_uses_hints_parameter(
         self, tmp_path: Path

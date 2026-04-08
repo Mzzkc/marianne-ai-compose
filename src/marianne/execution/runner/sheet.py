@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from marianne.core.checkpoint import SheetState
     from marianne.core.config import JobConfig
     from marianne.core.errors import ClassificationResult, ErrorClassifier
-    from marianne.core.logging import MozartLogger
+    from marianne.core.logging import MarianneLogger
     from marianne.execution.circuit_breaker import CircuitBreaker
     from marianne.execution.escalation import ConsoleCheckpointHandler, ConsoleEscalationHandler
     from marianne.execution.grounding import GroundingEngine
@@ -163,7 +163,7 @@ class SheetExecutionMixin:
         preflight_checker: PreflightChecker
         prompt_builder: PromptBuilder
         error_classifier: ErrorClassifier
-        _logger: MozartLogger
+        _logger: MarianneLogger
         _circuit_breaker: CircuitBreaker | None
         _global_learning_store: GlobalLearningStore | None
         _grounding_engine: GroundingEngine | None

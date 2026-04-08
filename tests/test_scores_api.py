@@ -16,7 +16,7 @@ def client(tmp_path):
 
 @pytest.fixture
 def valid_yaml_config():
-    """Valid Mozart configuration for testing."""
+    """Valid Mzt configuration for testing."""
     return """
 name: test-job
 sheet:
@@ -230,7 +230,7 @@ class TestValidationAPI:
         # Check severity is valid (may be lowercase from V-codes or uppercase from SCHEMA)
         assert issue["severity"].lower() in ["error", "warning", "info"]
 
-        # Check_id should follow Mozart pattern (V001) or be SCHEMA for schema errors
+        # Check_id should follow Marianne pattern (V001) or be SCHEMA for schema errors
         assert issue["check_id"].startswith("V") or issue["check_id"] == "SCHEMA"
 
     def test_validate_with_workspace_path(self, client, valid_yaml_config):
@@ -629,7 +629,7 @@ TEST CODE REVIEW NOTES (Principle #11 - Review during implementation):
 - Error handling paths: Covered
 - Configuration summary building: Covered
 
-✓ TEST CATEGORIES (Mozart v20):
+✓ TEST CATEGORIES (Marianne v20):
 - LOW complexity (x1.5): Basic validation, request/response structure
 - MEDIUM complexity (x4.5): Extended validation integration, complex configs
 - HIGH complexity would be: Runner integration (not applicable here)
@@ -643,7 +643,7 @@ TEST CODE REVIEW NOTES (Principle #11 - Review during implementation):
 - Workspace path handling
 
 ✓ INTEGRATION POINTS:
-- Mozart ValidationRunner integration
+- Marianne ValidationRunner integration
 - JobConfig schema validation
 - FastAPI request validation
 - JSON response structure

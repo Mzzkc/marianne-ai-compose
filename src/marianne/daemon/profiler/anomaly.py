@@ -1,4 +1,4 @@
-"""Heuristic anomaly detection for the Mozart system profiler.
+"""Heuristic anomaly detection for the Marianne system profiler.
 
 Compares the current ``SystemSnapshot`` against recent history to detect
 resource anomalies: memory spikes, runaway processes, zombies, and FD

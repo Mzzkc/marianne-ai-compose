@@ -18,7 +18,7 @@ The base class (GlobalLearningStoreBase) provides:
 Usage:
     from marianne.learning.store import GlobalLearningStore
 
-    store = GlobalLearningStore()  # Uses default ~/.mozart/global-learning.db
+    store = GlobalLearningStore()  # Uses default ~/.marianne/global-learning.db
     store = GlobalLearningStore(db_path=Path("/custom/path.db"))
 
 The composed class inherits from all mixins with GlobalLearningStoreBase listed
@@ -84,9 +84,9 @@ class GlobalLearningStore(  # type: ignore[misc]
 ):
     """Global learning store combining all mixins.
 
-    This is the primary interface for Mozart's cross-workspace learning system.
+    This is the primary interface for Marianne's cross-workspace learning system.
     It provides persistent storage for execution outcomes, detected patterns,
-    error recovery data, and learning metrics across all Mozart workspaces.
+    error recovery data, and learning metrics across all Marianne workspaces.
 
     The class is composed from multiple mixins, each providing domain-specific
     functionality. The base class (listed last for proper MRO) provides:
@@ -151,7 +151,7 @@ class GlobalLearningStore(  # type: ignore[misc]
 
     Note:
         The database uses WAL mode for safe concurrent access from multiple
-        Mozart jobs. Schema migrations are applied automatically when the
+        Marianne jobs. Schema migrations are applied automatically when the
         store is initialized.
     """
 
@@ -176,7 +176,7 @@ def get_global_store(
 
     Args:
         db_path: Optional custom database path. If None, uses the default
-            path at ~/.mozart/global-learning.db.
+            path at ~/.marianne/global-learning.db.
 
     Returns:
         The GlobalLearningStore singleton instance.

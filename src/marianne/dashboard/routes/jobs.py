@@ -112,7 +112,7 @@ async def start_job(
     request: StartJobRequest,
     job_service: JobControlService = Depends(get_job_control_service),
 ) -> StartJobResponse:
-    """Start a new Mozart job execution.
+    """Start a new Marianne job execution.
 
     Supports both inline YAML config content or path to config file.
 
@@ -357,7 +357,7 @@ async def get_sheet_details(
 
 @router.get("/daemon/status", tags=["Daemon"])
 async def daemon_status() -> dict[str, Any]:
-    """Check if the Mozart conductor is running and get its status.
+    """Check if the Marianne conductor is running and get its status.
 
     Returns a "Daemon Connected" indicator and status details when the conductor
     is available, or a disconnected status when it's not.

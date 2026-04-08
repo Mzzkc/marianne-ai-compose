@@ -10,7 +10,7 @@
 #   export ANTHROPIC_API_KEY=sk-ant-...
 #
 # Usage:
-#   mozart run examples/api-backend.yaml
+#   mzt run examples/api-backend.yaml
 
 name: "api-sheet"
 description: "Sheet processing using Anthropic API"
@@ -19,7 +19,7 @@ workspace: "../workspaces/api-workspace"
 
 # Instrument: use the Anthropic Messages API directly
 # This is a native instrument — no YAML profile needed.
-# See `mozart instruments list` for all available instruments.
+# See `mzt instruments list` for all available instruments.
 instrument: anthropic_api
 instrument_config:
   model: claude-sonnet-4-20250514

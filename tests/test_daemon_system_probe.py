@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.system_probe module.
+"""Tests for marianne.daemon.system_probe module.
 
 Covers the consolidated SystemProbe class — memory probes, child process
 counting, zombie detection/reaping, and process group member counting.

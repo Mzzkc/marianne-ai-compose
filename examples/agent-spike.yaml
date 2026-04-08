@@ -11,7 +11,7 @@
 # ║  - Task tool not available → fallback-only approach (still valuable)        ║
 # ║                                                                              ║
 # ║  Usage:                                                                      ║
-# ║    mozart run examples/agent-spike.yaml                                     ║
+# ║    mzt run examples/agent-spike.yaml                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: "agent-spike"
@@ -44,7 +44,7 @@ prompt:
 
     Try to use the Task tool with:
     - subagent_type: "pr-review-toolkit:silent-failure-hunter"
-    - prompt: "Audit the file src/mozart/core/errors.py for silent failure
+    - prompt: "Audit the file src/marianne/core/errors.py for silent failure
       patterns. Find: bare except blocks, catch-and-continue, empty except
       handlers, fallback logic that masks errors. Report each finding with
       file path, line number, severity, and description."
@@ -54,7 +54,7 @@ prompt:
 
     If Test 1 fails (agent type not found), try:
     - subagent_type: "general-purpose"
-    - prompt: "Read the file src/mozart/core/errors.py and identify any bare
+    - prompt: "Read the file src/marianne/core/errors.py and identify any bare
       except blocks, broad exception catches, or error-swallowing patterns.
       List each finding with line number and severity."
     - description: "General agent audit of errors.py"

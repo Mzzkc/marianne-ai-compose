@@ -3,8 +3,8 @@
 **Overall:** v1 Beta — Baton Phase 2 COMPLETE, baton is now the default execution model (2026-04-06)
 **Tests:** 11,638 test functions across 363 files
 **Source:** 99,718 lines across the codebase
-**Package:** `marianne` (renamed from `mozart` — see Marianne Rename below)
-**GitHub:** https://github.com/Mzzkc/mozart-ai-compose
+**Package:** `marianne` (renamed from `marianne` — see Marianne Rename below)
+**GitHub:** https://github.com/Mzzkc/marianne-ai-compose
 **Dashboard:** Production-grade web UI with job control
 **License:** Dual AGPL-3.0 / Commercial
 
@@ -14,17 +14,17 @@
 
 ### 165+ commits across 5 movements, 32 musicians, zero merge conflicts
 
-The v1 beta is being built by a 706-sheet self-evolution score (`mozart-orchestra-v3.yaml`) running 32 AI musicians in parallel. The flat orchestra model — no hierarchy, shared coordination through TASKS.md, FINDINGS.md, and collective memory — has proven effective.
+The v1 beta is being built by a 706-sheet self-evolution score (`marianne-orchestra-v3.yaml`) running 32 AI musicians in parallel. The flat orchestra model — no hierarchy, shared coordination through TASKS.md, FINDINGS.md, and collective memory — has proven effective.
 
 **Key milestones completed:**
 - **M0: Stabilization** — COMPLETE. Learning store remediation, critical bugs, dead code removal.
 - **M1: Foundation** — COMPLETE. Instrument plugin system (6 built-in instruments), sheet-first architecture, safety baseline (credential scanning, cost tracking).
 - **M2: Baton** — COMPLETE. All 13 steps (17-29) done. Event-driven execution engine with retry state machine, rate limit handling, failure propagation, cost enforcement, restart recovery. 1,500+ baton tests.
-- **M3: UX & Polish** — COMPLETE. Error standardization (100% adoption of `output_error()`), `mozart doctor`, `mozart init`, `mozart instruments`, movement-grouped status display, large-score summary view, CLI UX audit.
+- **M3: UX & Polish** — COMPLETE. Error standardization (100% adoption of `output_error()`), `mzt doctor`, `mzt init`, `mzt instruments`, movement-grouped status display, large-score summary view, CLI UX audit.
 - **M4: Multi-Instrument** — 85%. Per-sheet instrument assignment, score-level named instruments, movement definitions, model override, instrument observability, cross-sheet context in baton, checkpoint sync, cost accuracy investigation, fan-in skipped upstream, resume improvements, instrument fallbacks complete. Demo score remains.
 - **M5: Hardening** — 96%. Workspace paths, injection prevention, credential filtering, CVE resolution, config reload, fan-out stagger, stop safety guard, IPC error differentiation, pause-during-retry fix, backpressure rework, diagnose workspace fallback.
 - **--conductor-clone** — COMPLETE. Safe parallel daemon testing with isolated socket, PID, state DB, and logs. All IPC paths clone-aware.
-- **Marianne rename** — Phase 1 COMPLETE. Package `src/mozart/` → `src/marianne/`, pyproject.toml, 325 test imports.
+- **Marianne rename** — Phase 1 COMPLETE. Package `src/marianne/` → `src/marianne/`, pyproject.toml, 325 test imports.
 
 **Movement 5 critical resolutions:**
 - **D-026 COMPLETE** — F-271 (MCP process explosion) + F-255.2 (live_states) resolved. Foundation.
@@ -39,14 +39,14 @@ The v1 beta is being built by a 706-sheet self-evolution score (`mozart-orchestr
 - **Rosetta** — 6 proof scores updated with per-sheet instrumentation. Spark.
 
 **Current blockers:**
-- Marianne rename incomplete — docs, examples, config paths (`~/.mozart/` → `~/.mzt/`), CLI command, story still pending
+- Marianne rename incomplete — docs, examples, config paths (`~/.marianne/` → `~/.mzt/`), CLI command, story still pending
 - Lovable demo score — not started
 - Production conductor still runs legacy (`use_baton: false` in `conductor.yaml`) — code default is True but running config overrides
-- 160 stale `from mozart.` imports in tests/temp/ (test artifacts, not tracked)
+- 160 stale `from marianne.` imports in tests/temp/ (test artifacts, not tracked)
 
 **Quality gates:** mypy clean, ruff clean, 11,638 tests passing.
 
-**Specification corpus:** `.mozart/spec/` — 5 YAML files covering intent, architecture, conventions, constraints, quality.
+**Specification corpus:** `.marianne/spec/` — 5 YAML files covering intent, architecture, conventions, constraints, quality.
 
 ---
 
@@ -80,7 +80,7 @@ The v1 beta is being built by a 706-sheet self-evolution score (`mozart-orchestr
 
 ## Previous: Observability Gaps Closed (2026-02-10)
 
-### Fix: Every Mozart failure now diagnosable
+### Fix: Every Marianne failure now diagnosable
 
 Commit 0e70812 closes all major visibility gaps identified during iteration 13.
 
@@ -88,7 +88,7 @@ Commit 0e70812 closes all major visibility gaps identified during iteration 13.
 - **Detached hook logging** — Hook output now written to `{workspace}/hooks/` instead of /dev/null
 - **API backend parity** — `anthropic_api.py` now writes stdout/stderr log files like CLI backend
 - **Execution history** — Every sheet attempt recorded in SQLite with prompt, output, exit code
-- **Enhanced diagnostics** — `mozart diagnose --include-logs` inlines log contents
+- **Enhanced diagnostics** — `mzt diagnose --include-logs` inlines log contents
 - **Status visibility** — Elapsed time, hook results, circuit breaker state, cost summary
 - **Circuit breaker persistence** — State changes saved to checkpoint for post-mortem analysis
 - **Ruff lint clean** — All 85 pre-existing lint errors fixed
@@ -106,7 +106,7 @@ Self-chaining jobs (`on_success → run_job` to self) caused infinite empty-run 
 **Defense-in-depth fix (two independent layers):**
 
 1. **`--fresh` flag + `fresh` config field** (root cause)
-   - `mozart run --fresh` deletes existing state before starting
+   - `mzt run --fresh` deletes existing state before starting
    - `PostSuccessHookConfig.fresh: bool` passes `--fresh` to chained jobs
    - Files: `run.py`, `config.py`, `hooks.py`
 
@@ -230,12 +230,12 @@ None (all resolved or closed in v24)
 | Dashboard API | DONE | FastAPI REST (needs UI improvement) |
 | Test Suite | DONE | 3384+ pytest tests |
 | Learning Foundation | DONE | Phases 1-4 complete |
-| Meta-Orchestration | DONE | Mozart calling Mozart works |
+| Meta-Orchestration | DONE | Marianne calling Marianne works |
 | Pattern Detection | DONE | PatternDetector/Matcher/Applicator |
-| Global Learning Store | DONE | SQLite at ~/.mozart/global-learning.db |
+| Global Learning Store | DONE | SQLite at ~/.marianne/global-learning.db |
 | Escalation Integration | DONE | `--escalation` CLI flag |
 | External Grounding Hooks | DONE | GroundingEngine for custom validation |
-| Goal Drift Detection | DONE | `mozart learning-drift` CLI command |
+| Goal Drift Detection | DONE | `mzt learning-drift` CLI command |
 | Pattern Auto-Retirement | DONE | `retire_drifting_patterns()` (v14) |
 | Pattern Broadcasting | DONE | `record/check_recent_pattern_discoveries()` (v14) |
 | Active Broadcast Polling | DONE | `check_active_pattern_discoveries()` (v16) |
@@ -251,12 +251,12 @@ None (all resolved or closed in v24)
 | Pattern Auto-Apply Engine | DONE | `get_patterns_for_auto_apply()` (v19, verified v21) |
 | Metacognitive Pattern Reflection | DONE | `SuccessFactors`, `analyze_pattern_why()` (v22) |
 | Trust-Aware Auto-Apply | DONE | `AutoApplyConfig`, trust threshold filtering (v22) |
-| CLI Pause/Modify Commands | DONE | `mozart pause`, `mozart modify` (pause-workspace) |
+| CLI Pause/Modify Commands | DONE | `mzt pause`, `mzt modify` (pause-workspace) |
 | Exploration Budget Maintenance | DONE | `ExplorationBudgetConfig`, budget tracking (v23) |
 | Automatic Entropy Response | DONE | `EntropyResponseConfig`, response triggers (v23) |
 | **Validation-Informed Retry** | **DONE** | `ValidationRetryStrategy`, `get_retry_strategy_for_failure()` (v24) |
 | **Pattern Effectiveness Dashboard** | **DONE** | `patterns-effectiveness` CLI command (v24) |
-| **Daemon Mode (mozartd)** | **DONE** | All 5 phases complete, merged to main (Issue #39) |
+| **Daemon Mode (marianned)** | **DONE** | All 5 phases complete, merged to main (Issue #39) |
 
 ---
 
@@ -307,7 +307,7 @@ None (all resolved or closed in v24)
 | Result Synthesizer | `src/marianne/execution/synthesizer.py` |
 | Validation (+ Cross-Sheet) | `src/marianne/execution/validation.py` |
 | Daemon | `src/marianne/daemon/` (package) |
-| **Evolved Score v25** | `mozart-opus-evolution-v25.yaml` |
+| **Evolved Score v25** | `marianne-opus-evolution-v25.yaml` |
 | **v24 Cycle Summary** | `evolution-workspace-v24/09-coda-summary.md` |
 
 ---

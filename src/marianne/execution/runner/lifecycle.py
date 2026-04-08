@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from marianne.backends.base import Backend
     from marianne.core.config import JobConfig
-    from marianne.core.logging import MozartLogger
+    from marianne.core.logging import MarianneLogger
     from marianne.execution.dag import DependencyDAG
     from marianne.execution.parallel import ParallelBatchResult, ParallelExecutor
     from marianne.learning.global_store import GlobalLearningStore
@@ -60,7 +60,7 @@ class LifecycleMixin:
         - backend: Backend
         - state_backend: StateBackend
         - console: Console
-        - _logger: MozartLogger
+        - _logger: MarianneLogger
         - _parallel_executor: ParallelExecutor | None
         - _dependency_dag: DependencyDAG | None
         - _global_learning_store: GlobalLearningStore | None
@@ -90,7 +90,7 @@ class LifecycleMixin:
         backend: Backend
         state_backend: StateBackend
         console: Any  # rich.console.Console
-        _logger: MozartLogger
+        _logger: MarianneLogger
         _parallel_executor: ParallelExecutor | None
         _dependency_dag: DependencyDAG | None
         _global_learning_store: GlobalLearningStore | None
@@ -415,7 +415,7 @@ class LifecycleMixin:
                         # Process is alive - refuse to start
                         raise FatalError(
                             f"Job is already running (PID {state.pid}). "
-                            f"Use 'mozart status {job_id}' to check, "
+                            f"Use 'mzt status {job_id}' to check, "
                             "or kill the other process first."
                         )
                     except ProcessLookupError:
@@ -585,7 +585,7 @@ class LifecycleMixin:
         """Execute post-success hooks after job completion.
 
         This enables concert orchestration where jobs can chain to other jobs.
-        Hooks run in Mozart's Python process, not inside Claude CLI.
+        Hooks run in Marianne's Python process, not inside Claude CLI.
 
         Args:
             state: Final job state (must have COMPLETED status).
@@ -623,7 +623,7 @@ class LifecycleMixin:
         hooks_succeeded = sum(1 for r in results if r.success)
         hooks_failed = len(results) - hooks_succeeded
 
-        # Persist hook results to checkpoint state so `mozart status` can
+        # Persist hook results to checkpoint state so `mzt status` can
         # display them and failures aren't silently lost.
         for r in results:
             state.record_hook_result({

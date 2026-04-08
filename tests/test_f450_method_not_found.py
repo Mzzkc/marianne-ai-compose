@@ -144,7 +144,7 @@ class TestTryDaemonRouteMethodNotFound:
                 )
 
             # The wrapped message includes restart guidance
-            assert "mozart restart" in str(exc_info.value)
+            assert "mzt restart" in str(exc_info.value)
             assert "daemon.new_feature" in str(exc_info.value)
 
     async def test_method_not_found_not_returned_as_false(self):

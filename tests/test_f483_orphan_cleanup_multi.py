@@ -26,7 +26,7 @@ from marianne.daemon.pgroup import ProcessGroupManager
 # exercise — reap_orphaned_backends(), cleanup_orphans() ancestry kill block,
 # _reap_orphans_proc() — were intentionally disabled after they caused 9
 # WSL2 session crashes by killing systemd --user along with MCP servers.
-# Harper's F-483 race fix (commit 8ce018f on mozart tree) landed
+# Harper's F-483 race fix (commit 8ce018f on marianne tree) landed
 # concurrently but did not address the F-487 "kill wrong things" root cause.
 # These tests assert the kill behavior that is currently a no-op.
 #

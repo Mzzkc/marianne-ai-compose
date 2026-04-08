@@ -85,7 +85,7 @@ class TestMCPServer:
         assert server.initialized is True
         assert "capabilities" in result
         assert "serverInfo" in result
-        assert result["serverInfo"]["name"] == "mozart-mcp-server"
+        assert result["serverInfo"]["name"] == "marianne-mcp-server"
 
     async def test_initialize_with_no_client_info(self, tmp_path: Path) -> None:
         server = MCPServer(workspace_root=tmp_path)
@@ -115,7 +115,7 @@ class TestMCPServer:
         tool_names = [t["name"] for t in tools]
         assert "list_jobs" in tool_names
         assert "pause_job" in tool_names
-        assert "mozart_artifact_list" in tool_names
+        assert "marianne_artifact_list" in tool_names
 
     async def test_call_tool_requires_initialization(self, tmp_path: Path) -> None:
         server = MCPServer(workspace_root=tmp_path)
@@ -189,7 +189,7 @@ class TestConfigResources:
         resources = ConfigResources(state_backend=backend)
         result = await resources.list_resources()
         uris = [r["uri"] for r in result]
-        assert "mozart://jobs/{job_id}" in uris
+        assert "marianne://jobs/{job_id}" in uris
 
     async def test_get_config_schema(self) -> None:
         resources = ConfigResources()
@@ -236,7 +236,7 @@ class TestConfigResources:
 
     async def test_get_jobs_overview_no_backend(self) -> None:
         resources = ConfigResources(state_backend=None)
-        result = await resources.read_resource("mozart://jobs")
+        result = await resources.read_resource("marianne://jobs")
         content = result["contents"][0]
         data = json.loads(content["text"])
         assert "error" in data
@@ -248,7 +248,7 @@ class TestConfigResources:
 
         backend = _mock_state_backend(state)
         resources = ConfigResources(state_backend=backend, workspace_root=tmp_path)
-        result = await resources.read_resource("mozart://jobs")
+        result = await resources.read_resource("marianne://jobs")
         content = result["contents"][0]
         data = json.loads(content["text"])
         assert "jobs" in data
@@ -257,7 +257,7 @@ class TestConfigResources:
     async def test_get_job_details_not_found(self) -> None:
         backend = _mock_state_backend(None)
         resources = ConfigResources(state_backend=backend)
-        result = await resources.read_resource("mozart://jobs/nonexistent")
+        result = await resources.read_resource("marianne://jobs/nonexistent")
         content = result["contents"][0]
         data = json.loads(content["text"])
         assert "error" in data
@@ -266,14 +266,14 @@ class TestConfigResources:
         state = _make_state(job_id="my-job")
         backend = _mock_state_backend(state)
         resources = ConfigResources(state_backend=backend)
-        result = await resources.read_resource("mozart://jobs/my-job")
+        result = await resources.read_resource("marianne://jobs/my-job")
         content = result["contents"][0]
         data = json.loads(content["text"])
         assert data.get("job_id") == "my-job" or "error" not in data
 
     async def test_get_job_templates(self) -> None:
         resources = ConfigResources()
-        result = await resources.read_resource("mozart://templates")
+        result = await resources.read_resource("marianne://templates")
         content = result["contents"][0]
         data = json.loads(content["text"])
         assert "templates" in data
@@ -443,23 +443,23 @@ class TestArtifactTools:
         tools = ArtifactTools(tmp_path)
         result = await tools.list_tools()
         names = [t["name"] for t in result]
-        assert "mozart_artifact_list" in names
-        assert "mozart_artifact_read" in names
-        assert "mozart_artifact_get_logs" in names
+        assert "marianne_artifact_list" in names
+        assert "marianne_artifact_read" in names
+        assert "marianne_artifact_get_logs" in names
 
     async def test_list_files(self, tmp_path: Path) -> None:
         (tmp_path / "test.txt").write_text("hello")
         (tmp_path / "subdir").mkdir()
 
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_list", {"workspace": str(tmp_path)})
+        result = await tools.call_tool("marianne_artifact_list", {"workspace": str(tmp_path)})
         assert not result.get("isError")
         text = result["content"][0]["text"]
         assert "test.txt" in text
 
     async def test_list_files_security_traversal(self, tmp_path: Path) -> None:
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_list", {
+        result = await tools.call_tool("marianne_artifact_list", {
             "workspace": str(tmp_path),
             "path": "../../etc",
         })
@@ -470,7 +470,7 @@ class TestArtifactTools:
         test_file.write_text("hello world")
 
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_read", {
+        result = await tools.call_tool("marianne_artifact_read", {
             "workspace": str(tmp_path),
             "file_path": "test.txt",
         })
@@ -479,7 +479,7 @@ class TestArtifactTools:
 
     async def test_read_file_not_found(self, tmp_path: Path) -> None:
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_read", {
+        result = await tools.call_tool("marianne_artifact_read", {
             "workspace": str(tmp_path),
             "file_path": "nonexistent.txt",
         })
@@ -490,7 +490,7 @@ class TestArtifactTools:
         big_file.write_text("x" * 1000)
 
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_read", {
+        result = await tools.call_tool("marianne_artifact_read", {
             "workspace": str(tmp_path),
             "file_path": "big.txt",
             "max_size": 10,
@@ -499,7 +499,7 @@ class TestArtifactTools:
 
     async def test_read_file_security_traversal(self, tmp_path: Path) -> None:
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_read", {
+        result = await tools.call_tool("marianne_artifact_read", {
             "workspace": str(tmp_path),
             "file_path": "../../etc/passwd",
         })
@@ -507,18 +507,18 @@ class TestArtifactTools:
 
     async def test_get_logs_no_log_files(self, tmp_path: Path) -> None:
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_get_logs", {
+        result = await tools.call_tool("marianne_artifact_get_logs", {
             "job_id": "test-job",
             "workspace": str(tmp_path),
         })
         assert result.get("isError") is True
 
     async def test_get_logs_with_log_file(self, tmp_path: Path) -> None:
-        log_file = tmp_path / "mozart.log"
+        log_file = tmp_path / "marianne.log"
         log_file.write_text("INFO Starting job\nERROR Something failed\nINFO Done\n")
 
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_get_logs", {
+        result = await tools.call_tool("marianne_artifact_get_logs", {
             "job_id": "test-job",
             "workspace": str(tmp_path),
         })
@@ -527,11 +527,11 @@ class TestArtifactTools:
         assert "Starting job" in text
 
     async def test_get_logs_level_filter(self, tmp_path: Path) -> None:
-        log_file = tmp_path / "mozart.log"
+        log_file = tmp_path / "marianne.log"
         log_file.write_text("INFO Starting\nERROR Failed\nINFO Done\n")
 
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_get_logs", {
+        result = await tools.call_tool("marianne_artifact_get_logs", {
             "job_id": "test-job",
             "workspace": str(tmp_path),
             "level": "error",
@@ -545,7 +545,7 @@ class TestArtifactTools:
         (tmp_path / "state.json").write_text("{}")
 
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_list_artifacts", {
+        result = await tools.call_tool("marianne_artifact_list_artifacts", {
             "job_id": "test-job",
             "workspace": str(tmp_path),
         })
@@ -558,7 +558,7 @@ class TestArtifactTools:
         artifact.write_text('{"status": "ok"}')
 
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_get_artifact", {
+        result = await tools.call_tool("marianne_artifact_get_artifact", {
             "job_id": "test-job",
             "artifact_path": "results.json",
             "workspace": str(tmp_path),
@@ -568,7 +568,7 @@ class TestArtifactTools:
 
     async def test_get_artifact_security_traversal(self, tmp_path: Path) -> None:
         tools = ArtifactTools(tmp_path)
-        result = await tools.call_tool("mozart_artifact_get_artifact", {
+        result = await tools.call_tool("marianne_artifact_get_artifact", {
             "job_id": "test-job",
             "artifact_path": "../../etc/passwd",
             "workspace": str(tmp_path),

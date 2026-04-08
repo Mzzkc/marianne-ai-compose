@@ -1,0 +1,6 @@
+error: the following required arguments were not provided:
+  --symbol <SYMBOL>
+
+Usage: flowspec trace --symbol <SYMBOL> --format <FORMAT> <PATH>
+
+For more information, try '--help'.

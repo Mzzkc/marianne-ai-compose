@@ -1,6 +1,6 @@
-"""Clear rate limits command for Mozart CLI.
+"""Clear rate limits command for Marianne CLI.
 
-Provides `mozart clear-rate-limits` to manually clear stale rate limits
+Provides `mzt clear-rate-limits` to manually clear stale rate limits
 on one or all instruments. Useful when a backend's rate limit has expired
 but the conductor still caches it, or when an operator wants to force
 a retry after a rate limit event.
@@ -42,9 +42,9 @@ def clear_rate_limits(
     the baton's per-instrument state (used by the dispatch loop).
 
     Examples:
-        mozart clear-rate-limits                    # Clear all
-        mozart clear-rate-limits -i claude-cli      # Clear one instrument
-        mozart clear-rate-limits --json             # JSON output
+        mzt clear-rate-limits                    # Clear all
+        mzt clear-rate-limits -i claude-cli      # Clear one instrument
+        mzt clear-rate-limits --json             # JSON output
     """
     asyncio.run(_clear_rate_limits(instrument=instrument, json_output=json_output))
 
@@ -66,17 +66,17 @@ async def _clear_rate_limits(
     except (OSError, ConnectionError, DaemonError) as exc:
         output_error(
             str(exc),
-            hints=["Check conductor status: mozart conductor-status"],
+            hints=["Check conductor status: mzt conductor-status"],
             json_output=json_output,
         )
         raise typer.Exit(1) from None
 
     if not routed:
         output_error(
-            "Mozart conductor is not running",
+            "Marianne conductor is not running",
             hints=[
-                "Start the conductor: mozart start",
-                "Check status: mozart conductor-status",
+                "Start the conductor: mzt start",
+                "Check status: mzt conductor-status",
             ],
             json_output=json_output,
         )

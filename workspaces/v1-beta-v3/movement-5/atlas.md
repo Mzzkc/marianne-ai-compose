@@ -30,15 +30,15 @@ Three serial steps in one movement. The previous rate was one step per movement 
 
 **2. Marianne Rename Phase 1 COMPLETE**
 
-Ghost completed the most mechanically risky operation of the entire project: renaming the Python package from `mozart` to `marianne` across 326 files, updating pyproject.toml, and fixing all test imports. Zero source-level stale imports remain. Zero test failures from the rename. This is infrastructure execution at its best.
+Ghost completed the most mechanically risky operation of the entire project: renaming the Python package from `marianne` to `marianne` across 326 files, updating pyproject.toml, and fixing all test imports. Zero source-level stale imports remain. Zero test failures from the rename. This is infrastructure execution at its best.
 
 **Remaining rename work (verified):**
-- CLAUDE.md: 14 `src/mozart/` references → fixed by Atlas this session
+- CLAUDE.md: 14 `src/marianne/` references → fixed by Atlas this session
 - STATUS.md: stale throughout → fixed by Atlas this session
-- Config paths: `~/.mozart/` → `~/.mzt/` (not started)
-- CLI command: `mozart` → `mzt` (not started)
-- Docs: all references still say `mozart` (not started)
-- Examples: score files reference `mozart` in comments/names (not started)
+- Config paths: `~/.marianne/` → `~/.mzt/` (not started)
+- CLI command: `marianne` → `mzt` (not started)
+- Docs: all references still say `marianne` (not started)
+- Examples: score files reference `marianne` in comments/names (not started)
 - Story: Marianne's story in README/docs (not started — Codex/Guide assigned)
 
 **3. Instrument Fallbacks: Full Feature**
@@ -67,22 +67,22 @@ Codex delivered 12 documentation updates across 5 docs: D-027 baton default, F-1
 
 ### What Users Would See (Cultural)
 
-A user encountering Mozart today would see:
+A user encountering Marianne today would see:
 1. **11,638 passing tests** across 363 files — extraordinary quality assurance
 2. **Status beautification** (D-029) — musical header panels, "Now Playing" section, compact stats, relative times
 3. **Instrument fallbacks** — scores can now specify fallback instruments when primary is unavailable
-4. **Better diagnostics** — `mozart diagnose -w` works even when conductor can't find the job (F-451)
+4. **Better diagnostics** — `mzt diagnose -w` works even when conductor can't find the job (F-451)
 5. **The baton as default** — multi-instrument scores actually work now (the baton routes to the correct instrument per sheet)
 
 But they would ALSO see:
-1. **Stale `mozart` CLI** — the command hasn't been renamed to `mzt` yet
-2. **Stale config paths** — `~/.mozart/` hasn't changed
+1. **Stale `marianne` CLI** — the command hasn't been renamed to `mzt` yet
+2. **Stale config paths** — `~/.marianne/` hasn't changed
 3. **No demo** — still no Lovable demo or impressive hello experience
-4. **Docs say `mozart` everywhere** — the rename is incomplete
+4. **Docs say `marianne` everywhere** — the rename is incomplete
 
 ### What I'm Not Seeing (Meta)
 
-**The production conductor is lying.** Canyon's D-027 flipped the code default to `use_baton: true`, but `~/.mozart/conductor.yaml` still has `use_baton: false`. The production conductor — the one running this orchestra — is using legacy runner. Every status display, every "baton is default" claim, every "Phase 2 complete" celebration describes what the code says, not what the conductor does. The baton has never run a real production job through this orchestra.
+**The production conductor is lying.** Canyon's D-027 flipped the code default to `use_baton: true`, but `~/.marianne/conductor.yaml` still has `use_baton: false`. The production conductor — the one running this orchestra — is using legacy runner. Every status display, every "baton is default" claim, every "Phase 2 complete" celebration describes what the code says, not what the conductor does. The baton has never run a real production job through this orchestra.
 
 This is exactly the integration cliff Prism has warned about for five movements. The baton has 1,500+ tests. It has never conducted a real performance.
 
@@ -120,11 +120,11 @@ Missing: Breakpoint, Journey, Litmus, Oracle, Sentinel, Warden = **6**
 
 The baton has never run a real production job. `conductor.yaml` still has `use_baton: false`. The code default is True but config overrides it. Five movements of warnings about this. 1,500+ tests prove components work. Zero tests prove the whole works.
 
-**What would resolve this:** One musician, one session, `--conductor-clone` with `use_baton: true`, run hello-mozart.yaml, verify per-sheet instrument assignment works end-to-end.
+**What would resolve this:** One musician, one session, `--conductor-clone` with `use_baton: true`, run hello-marianne.yaml, verify per-sheet instrument assignment works end-to-end.
 
 ### 2. HIGH — Marianne Rename Incomplete (NEW)
 
-Phase 1 (package + imports) is done. Phases 2-5 (config paths, CLI command, docs, examples, story) are not. The project is in a split identity state — source code says `marianne`, everything else says `mozart`. Every doc, every example, every config path, every CLI invocation uses the old name. The longer this persists, the more stale references accumulate.
+Phase 1 (package + imports) is done. Phases 2-5 (config paths, CLI command, docs, examples, story) are not. The project is in a split identity state — source code says `marianne`, everything else says `marianne`. Every doc, every example, every config path, every CLI invocation uses the old name. The longer this persists, the more stale references accumulate.
 
 ### 3. HIGH — Demo Vacuum (UNCHANGED — 10+ movements)
 
@@ -143,8 +143,8 @@ The production conductor config doesn't match code defaults. `use_baton: false` 
 ## What Atlas Did This Movement
 
 ### Context Management (P0)
-- **Fixed STATUS.md:** Completely stale since M4. Updated header (Marianne AI Compose, Phase 2 complete, 11,638 tests, 99,718 source lines), current section (M5 progress, all critical resolutions, current blockers), Key Files table (all `src/mozart/` → `src/marianne/`).
-- **Fixed CLAUDE.md:** 14 stale `src/mozart/` references updated to `src/marianne/` across config models, repository organization, key files, and instrument system sections.
+- **Fixed STATUS.md:** Completely stale since M4. Updated header (Marianne AI Compose, Phase 2 complete, 11,638 tests, 99,718 source lines), current section (M5 progress, all critical resolutions, current blockers), Key Files table (all `src/marianne/` → `src/marianne/`).
+- **Fixed CLAUDE.md:** 14 stale `src/marianne/` references updated to `src/marianne/` across config models, repository organization, key files, and instrument system sections.
 
 ### Strategic Assessment (P0)
 - 8th strategic alignment report (this document). Full M5 analysis across all five domains.
@@ -173,7 +173,7 @@ $ pytest: 11,638 passed, 5 skipped (verified by Ghost, Bedrock)
 | File | Change |
 |------|--------|
 | `STATUS.md` | Full rewrite — M5 state, Marianne rename, 11,638 tests, key files table |
-| `CLAUDE.md` | 14 `src/mozart/` → `src/marianne/` references |
+| `CLAUDE.md` | 14 `src/marianne/` → `src/marianne/` references |
 | `workspaces/v1-beta-v3/meditations/atlas.md` | New — meditation |
 | `workspaces/v1-beta-v3/movement-5/atlas.md` | New — this report |
 | `workspaces/v1-beta-v3/memory/atlas.md` | Appended — M5 hot context |

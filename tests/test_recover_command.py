@@ -1,4 +1,4 @@
-"""Tests for the Mozart recover CLI command.
+"""Tests for the Marianne recover CLI command.
 
 Tests cover:
 - State file discovery (workspace vs search paths)
@@ -103,7 +103,7 @@ def _no_daemon_route(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class TestRecoverCommand:
-    """Tests for the `mozart recover` command."""
+    """Tests for the `mzt recover` command."""
 
     def test_recover_nonexistent_job(self, tmp_path: Path) -> None:
         """Recover exits with error when job state not found."""

@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.health module."""
+"""Tests for marianne.daemon.health module."""
 
 from __future__ import annotations
 

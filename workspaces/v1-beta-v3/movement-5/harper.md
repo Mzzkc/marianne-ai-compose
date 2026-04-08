@@ -67,7 +67,7 @@ Results:
 - SIG_IGN dance: Correctly implemented in 2 locations (pgroup.py)
 - **Zero sibling bugs found.** The codebase is clean.
 
-Recommended 3 new constraints (M-011 through M-013) for `.mozart/spec/constraints.yaml`.
+Recommended 3 new constraints (M-011 through M-013) for `.marianne/spec/constraints.yaml`.
 
 ## Evidence
 

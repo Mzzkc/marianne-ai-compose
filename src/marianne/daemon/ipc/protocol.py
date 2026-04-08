@@ -1,4 +1,4 @@
-"""JSON-RPC 2.0 wire protocol models for Mozart daemon IPC.
+"""JSON-RPC 2.0 wire protocol models for Marianne daemon IPC.
 
 Defines Pydantic v2 models for the JSON-RPC 2.0 message types used over
 the Unix domain socket. These models enforce the wire format at the

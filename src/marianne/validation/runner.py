@@ -85,7 +85,7 @@ class ValidationRunner:
                         check_id=check.check_id,
                         severity=ValidationSeverity.ERROR,
                         message=f"Check {check.check_id} failed to execute: {e}",
-                        suggestion="This may be a bug in Mozart validation",
+                        suggestion="This may be a bug in Marianne validation",
                     )
                 )
 

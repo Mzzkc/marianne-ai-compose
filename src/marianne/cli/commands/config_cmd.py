@@ -1,13 +1,13 @@
-"""Daemon configuration management commands for Mozart CLI.
+"""Daemon configuration management commands for Marianne CLI.
 
-This module implements the `mozart config` command group for viewing
+This module implements the `mzt config` command group for viewing
 and managing the conductor daemon configuration file.
 
 Subcommands:
-- `mozart config show`  — Display current config as a Rich table
-- `mozart config set`   — Update a config value
-- `mozart config path`  — Show config file location
-- `mozart config init`  — Create a default config file
+- `mzt config show`  — Display current config as a Rich table
+- `mzt config set`   — Update a config value
+- `mzt config path`  — Show config file location
+- `mzt config init`  — Create a default config file
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ config_app = typer.Typer(
     invoke_without_command=True,
 )
 
-DEFAULT_CONFIG_DIR = Path("~/.mozart")
+DEFAULT_CONFIG_DIR = Path("~/.marianne")
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "daemon.yaml"
 
 
@@ -153,7 +153,7 @@ def show(
         None,
         "--config",
         "-c",
-        help="Path to daemon config file (default: ~/.mozart/daemon.yaml)",
+        help="Path to daemon config file (default: ~/.marianne/daemon.yaml)",
     ),
     show_all: bool = typer.Option(
         False,
@@ -174,9 +174,9 @@ def show(
     or --section to drill into a specific section.
 
     Examples:
-        mozart config show
-        mozart config show --all
-        mozart config show --section profiler
+        mzt config show
+        mzt config show --all
+        mzt config show --section profiler
     """
     from marianne.daemon.config import DaemonConfig
 
@@ -204,7 +204,7 @@ def show(
         except Exception as e:
             output_error(
                 f"Error loading config: {e}",
-                hints=["Check ~/.mozart/conductor.yaml syntax."],
+                hints=["Check ~/.marianne/conductor.yaml syntax."],
             )
             raise typer.Exit(1) from None
 
@@ -276,7 +276,7 @@ def set_value(
         None,
         "--config",
         "-c",
-        help="Path to daemon config file (default: ~/.mozart/daemon.yaml)",
+        help="Path to daemon config file (default: ~/.marianne/daemon.yaml)",
     ),
 ) -> None:
     """Update a daemon configuration value.
@@ -285,10 +285,10 @@ def set_value(
     Use dot notation for nested keys (e.g., socket.path, resource_limits.max_memory_mb).
 
     Examples:
-        mozart config set max_concurrent_jobs 10
-        mozart config set socket.path /tmp/custom.sock
-        mozart config set resource_limits.max_memory_mb 4096
-        mozart config set log_level debug
+        mzt config set max_concurrent_jobs 10
+        mzt config set socket.path /tmp/custom.sock
+        mzt config set resource_limits.max_memory_mb 4096
+        mzt config set log_level debug
     """
     from marianne.daemon.config import DaemonConfig
 
@@ -304,7 +304,7 @@ def set_value(
     except Exception as e:
         output_error(
             f"Invalid value: {e}",
-            hints=["Run 'mozart config show --all' to see current values."],
+            hints=["Run 'mzt config show --all' to see current values."],
         )
         raise typer.Exit(1) from None
 
@@ -318,7 +318,7 @@ def path(
         None,
         "--config",
         "-c",
-        help="Path to daemon config file (default: ~/.mozart/daemon.yaml)",
+        help="Path to daemon config file (default: ~/.marianne/daemon.yaml)",
     ),
 ) -> None:
     """Show the daemon config file location.
@@ -326,8 +326,8 @@ def path(
     Displays the resolved path and whether the file exists.
 
     Examples:
-        mozart config path
-        mozart config path --config /etc/mozart/daemon.yaml
+        mzt config path
+        mzt config path --config /etc/marianne/daemon.yaml
     """
     resolved = _resolve_config_path(config_file)
     exists = resolved.exists()
@@ -341,7 +341,7 @@ def init(
         None,
         "--config",
         "-c",
-        help="Path to create config file (default: ~/.mozart/daemon.yaml)",
+        help="Path to create config file (default: ~/.marianne/daemon.yaml)",
     ),
     force: bool = typer.Option(
         False,
@@ -356,9 +356,9 @@ def init(
     descriptive comments. Refuses to overwrite unless --force is given.
 
     Examples:
-        mozart config init
-        mozart config init --config /etc/mozart/daemon.yaml
-        mozart config init --force
+        mzt config init
+        mzt config init --config /etc/marianne/daemon.yaml
+        mzt config init --force
     """
     from marianne.daemon.config import DaemonConfig
 
@@ -397,8 +397,8 @@ def check(
     Exits 0 if valid, 1 if invalid or the file cannot be loaded.
 
     Examples:
-        mozart config check --config my-daemon.yaml
-        mozart config check
+        mzt config check --config my-daemon.yaml
+        mzt config check
     """
     from marianne.daemon.config import DaemonConfig
 
@@ -406,7 +406,7 @@ def check(
     if not path.exists():
         output_error(
             f"Config file not found: {path}",
-            hints=["Run 'mozart config init' to create a default config."],
+            hints=["Run 'mzt config init' to create a default config."],
         )
         raise typer.Exit(1)
 
@@ -417,7 +417,7 @@ def check(
     except Exception as e:
         output_error(
             f"Invalid config: {path} — {e}",
-            hints=["Run 'mozart config show' to see the expected schema."],
+            hints=["Run 'mzt config show' to see the expected schema."],
         )
         raise typer.Exit(1) from None
 

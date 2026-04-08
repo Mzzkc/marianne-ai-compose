@@ -405,7 +405,7 @@ class TestBug5IsDaemonRunningShortCircuit:
 
         # Simulate a stale socket: path exists, connection succeeds,
         # but no daemon handler is processing requests.
-        client = DaemonClient(Path("/tmp/stale-mozart-test-socket"))
+        client = DaemonClient(Path("/tmp/stale-marianne-test-socket"))
 
         mock_writer = MagicMock()
         mock_writer.close = MagicMock()

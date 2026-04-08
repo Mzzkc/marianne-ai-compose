@@ -1,4 +1,4 @@
-# mozart/cli/commands: Command modules for Mozart CLI.
+# marianne/cli/commands: Command modules for Marianne CLI.
 #
 # Each module in this package provides one or more CLI commands.
 

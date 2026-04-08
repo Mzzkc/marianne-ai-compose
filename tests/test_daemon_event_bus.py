@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.event_bus module.
+"""Tests for marianne.daemon.event_bus module.
 
 Covers EventBus lifecycle, subscription management, publish/subscribe
 delivery, backpressure (bounded queue with drop-oldest), event filtering,

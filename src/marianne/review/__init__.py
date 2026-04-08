@@ -1,4 +1,4 @@
-"""AI code review module for Mozart.
+"""AI code review module for Marianne.
 
 Provides automated code quality assessment after batch execution.
 """

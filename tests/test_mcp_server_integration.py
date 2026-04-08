@@ -1,4 +1,4 @@
-"""Tests for Mozart MCP Server Integration - Basic functionality tests."""
+"""Tests for Marianne MCP Server Integration - Basic functionality tests."""
 
 import tempfile
 from pathlib import Path
@@ -29,7 +29,7 @@ class TestMCPServerIntegration:
 
         assert "capabilities" in result
         assert "serverInfo" in result
-        assert result["serverInfo"]["name"] == "mozart-mcp-server"
+        assert result["serverInfo"]["name"] == "marianne-mcp-server"
         assert mcp_server.initialized is True
 
     async def test_capabilities(self, mcp_server):
@@ -84,7 +84,7 @@ class TestMCPServerIntegration:
     async def test_call_tool_before_init(self, mcp_server):
         """Test calling tool before initialization."""
         with pytest.raises(RuntimeError, match="Server not initialized"):
-            await mcp_server.call_tool("mozart_artifact_list", {})
+            await mcp_server.call_tool("marianne_artifact_list", {})
 
     async def test_call_tool_unknown_tool(self, mcp_server):
         """Test calling unknown tool."""

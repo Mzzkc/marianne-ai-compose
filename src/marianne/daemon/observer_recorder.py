@@ -129,7 +129,7 @@ class ObserverRecorder:
             return
         state = _JobRecorderState(job_id, workspace)
         if self._config.persist_events:
-            jsonl_path = workspace / ".mozart-observer.jsonl"
+            jsonl_path = workspace / ".marianne-observer.jsonl"
             try:
                 state.file_handle = open(jsonl_path, "a+", encoding="utf-8")  # noqa: SIM115
             except OSError:
@@ -335,7 +335,7 @@ class ObserverRecorder:
             cap = self._config.max_timeline_bytes
             fh.flush()
 
-            jsonl_path = state.workspace / ".mozart-observer.jsonl"
+            jsonl_path = state.workspace / ".marianne-observer.jsonl"
             size = jsonl_path.stat().st_size
             if size <= cap:
                 return

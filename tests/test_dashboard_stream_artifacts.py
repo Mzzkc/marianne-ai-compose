@@ -53,7 +53,7 @@ def workspace_with_logs(temp_state_dir):
     """Create a workspace with a log file and return (workspace, log_file)."""
     workspace = temp_state_dir / "test-workspace"
     workspace.mkdir()
-    log_file = workspace / "mozart.log"
+    log_file = workspace / "marianne.log"
     log_content = "Line 1: Job started\nLine 2: Sheet 1 executing\nLine 3: Sheet 1 done\n"
     log_file.write_text(log_content)
     return workspace, log_file
@@ -253,7 +253,7 @@ class TestStreamEndpoints:
         assert response.status_code == 200
         assert "attachment" in response.headers["content-disposition"]
         assert "Job started" in response.text
-        assert "# Mozart Job Logs" in response.text
+        assert "# Marianne Job Logs" in response.text
 
     def test_log_info_returns_metadata(self, client, job_state_with_worktree) -> None:
         """Log info endpoint should return size and line count."""
@@ -264,7 +264,7 @@ class TestStreamEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["job_id"] == "test-123"
-        assert data["log_file"] == "mozart.log"
+        assert data["log_file"] == "marianne.log"
         assert data["lines"] == 3
         assert data["size_bytes"] > 0
 

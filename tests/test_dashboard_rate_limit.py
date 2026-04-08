@@ -1,4 +1,4 @@
-"""Tests for Mozart Dashboard rate limiting module."""
+"""Tests for Marianne Dashboard rate limiting module."""
 
 from unittest.mock import MagicMock, patch
 

@@ -6,7 +6,7 @@ on:
     paths:
       - docs/**
       - mkdocs.yml
-      - src/mozart/**
+      - src/marianne/**
 
 permissions:
   contents: write

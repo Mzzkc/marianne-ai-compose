@@ -107,14 +107,11 @@ Tested: rate_limited priority over success, full validation → completed, parti
 
 One P3 observation: self-referential fallback chains are allowed but waste retry cycles. Not filing — it's defensive behavior, not a bug.
 
-## Blocker
+## Blocker (RESOLVED)
 
-**The Bash tool cannot execute** because the repository was renamed from `mozart-ai-compose` to `marianne-ai-compose` but the sandbox CWD still points to the old path. This means:
-- Tests were **written but not run** this session
-- No pytest/mypy/ruff verification possible
-- No git commit possible
-
-The tests are structurally correct (imports verified via Read tool, type annotations match the codebase), but must be verified by a teammate or the quality gate.
+**Previously blocked** by F-492 (repo rename broke Bash CWD). Resolved in follow-up session:
+- Fixed 6 incorrect patch targets in V211 tests: `marianne.validation.checks.config.load_all_profiles` → `marianne.instruments.loader.load_all_profiles` (the function is imported locally inside `InstrumentFallbackCheck.check()`, not at module level)
+- All 57 tests now **pass** (verified via pytest)
 
 ## Evidence
 
@@ -145,4 +142,4 @@ Reviewed collective memory for teammates' M5 work. All major changes verified th
 
 Sixth adversarial pass. The codebase has hardened to the point where 57 tests across every M5 attack surface find zero bugs. The bug classes have shifted again: M1 found state machine gaps, M2 found integration seam bugs, M3 found utility function bugs, M4 found behavioral divergence between execution paths, and M5 finds... nothing. The adversarial frontier has reached the edge of what unit-level testing can discover. The next class of bugs lives in production behavior — the kind you only find by running real sheets through the baton.
 
-The Bash tool failure is frustrating. I wrote the tests, analyzed the code, but couldn't verify execution. The tests must be run by someone else. It's an honest constraint.
+The Bash tool failure from the prior session was frustrating but ultimately productive — the follow-up session found and fixed a real bug (wrong patch targets in 6 V211 tests) that only surfaced when the tests were actually executed. Writing tests you can't run catches structural issues; running them catches behavioral ones. Both passes are necessary.

@@ -1,7 +1,7 @@
-"""Tests for Mozart conductor commands (mozart start/stop/restart/conductor-status).
+"""Tests for Marianne conductor commands (mzt start/stop/restart/conductor-status).
 
 Tests verify that the conductor commands correctly delegate to the
-core functions in ``mozart.daemon.process`` and handle edge cases
+core functions in ``marianne.daemon.process`` and handle edge cases
 like already-running conductors and missing PID files.
 """
 
@@ -22,13 +22,13 @@ runner = CliRunner()
 
 
 class TestStartCommand:
-    """Tests for ``mozart start``."""
+    """Tests for ``mzt start``."""
 
     def test_start_help(self):
-        """``mozart start --help`` shows conductor start help."""
+        """``mzt start --help`` shows conductor start help."""
         result = runner.invoke(app, ["start", "--help"])
         assert result.exit_code == 0
-        assert "Start the Mozart conductor" in result.output
+        assert "Start the Marianne conductor" in result.output
 
     def test_start_already_running_exits_1(self, tmp_path: Path):
         """start exits with code 1 if conductor already running."""
@@ -97,13 +97,13 @@ class TestStartCommand:
 
 
 class TestStopCommand:
-    """Tests for ``mozart stop``."""
+    """Tests for ``mzt stop``."""
 
     def test_stop_help(self):
-        """``mozart stop --help`` shows conductor stop help."""
+        """``mzt stop --help`` shows conductor stop help."""
         result = runner.invoke(app, ["stop", "--help"])
         assert result.exit_code == 0
-        assert "Stop the Mozart conductor" in result.output
+        assert "Stop the Marianne conductor" in result.output
 
     def test_stop_not_running_exits_1(self, tmp_path: Path):
         """stop exits with code 1 when conductor is not running."""
@@ -154,13 +154,13 @@ class TestStopCommand:
 
 
 class TestRestartCommand:
-    """Tests for ``mozart restart``."""
+    """Tests for ``mzt restart``."""
 
     def test_restart_help(self):
-        """``mozart restart --help`` shows conductor restart help."""
+        """``mzt restart --help`` shows conductor restart help."""
         result = runner.invoke(app, ["restart", "--help"])
         assert result.exit_code == 0
-        assert "Restart the Mozart conductor" in result.output
+        assert "Restart the Marianne conductor" in result.output
 
     def test_restart_calls_stop_then_start(self, tmp_path: Path):
         """restart calls stop_conductor, waits, then start_conductor."""
@@ -208,13 +208,13 @@ class TestRestartCommand:
 
 
 class TestConductorStatusCommand:
-    """Tests for ``mozart conductor-status``."""
+    """Tests for ``mzt conductor-status``."""
 
     def test_conductor_status_help(self):
-        """``mozart conductor-status --help`` shows status help."""
+        """``mzt conductor-status --help`` shows status help."""
         result = runner.invoke(app, ["conductor-status", "--help"])
         assert result.exit_code == 0
-        assert "Check Mozart conductor status" in result.output
+        assert "Check Marianne conductor status" in result.output
 
     def test_conductor_status_not_running(self, tmp_path: Path):
         """conductor-status exits with 1 when not running."""

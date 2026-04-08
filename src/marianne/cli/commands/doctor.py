@@ -1,6 +1,6 @@
-"""``mozart doctor`` — environment health check.
+"""``mzt doctor`` — environment health check.
 
-Inspired by ``flutter doctor``. Checks Python version, Mozart version,
+Inspired by ``flutter doctor``. Checks Python version, Marianne version,
 conductor status, instrument availability, and safety configuration.
 Reports issues with clear status indicators and actionable suggestions.
 
@@ -26,7 +26,7 @@ from marianne.instruments.loader import load_all_profiles
 
 
 def _check_conductor_status() -> tuple[str, int | None]:
-    """Check if the Mozart conductor is running.
+    """Check if the Marianne conductor is running.
 
     Two-phase detection for reliability (F-090):
     1. PID file check — fast, works offline
@@ -129,9 +129,9 @@ def _get_all_profiles() -> dict[str, InstrumentProfile]:
 def doctor(
     json: bool = typer.Option(False, "--json", help="Output results as JSON"),
 ) -> None:
-    """Check Mozart environment health.
+    """Check Marianne environment health.
 
-    Validates Python version, Mozart installation, conductor status,
+    Validates Python version, Marianne installation, conductor status,
     available instruments, and safety configuration. Use this after
     installation to verify everything is set up correctly.
     """
@@ -154,9 +154,9 @@ def doctor(
     if not py_ok:
         errors.append("Python 3.11+ required")
 
-    # --- Mozart version ---
+    # --- Marianne version ---
     checks.append({
-        "name": "Mozart",
+        "name": "Marianne",
         "status": "ok",
         "detail": f"v{__version__}",
         "hint": None,
@@ -170,7 +170,7 @@ def doctor(
         "name": "Conductor",
         "status": "ok" if conductor_ok else "warning",
         "detail": detail,
-        "hint": "Start with: mozart start" if not conductor_ok else None,
+        "hint": "Start with: mzt start" if not conductor_ok else None,
     })
     if not conductor_ok:
         warnings.append("Conductor not running")
@@ -218,7 +218,7 @@ def doctor(
     if json:
         result: dict[str, Any] = {
             "python_version": py_version,
-            "mozart_version": __version__,
+            "marianne_version": __version__,
             "conductor": {
                 "status": conductor_status,
                 "pid": conductor_pid,
@@ -233,7 +233,7 @@ def doctor(
 
     # --- Rich output ---
     out.print()
-    out.print("[bold]Mozart Doctor[/bold]")
+    out.print("[bold]Marianne Doctor[/bold]")
     out.print()
 
     # Core checks
@@ -267,14 +267,14 @@ def doctor(
     if total_errors > 0:
         out.print(
             f"[red]{total_errors} error(s), {total_warnings} warning(s). "
-            f"Mozart is not ready.[/red]"
+            f"Marianne is not ready.[/red]"
         )
     elif total_warnings > 0:
         out.print(
-            f"[yellow]{total_warnings} warning(s).[/yellow] Mozart is ready."
+            f"[yellow]{total_warnings} warning(s).[/yellow] Marianne is ready."
         )
     else:
-        out.print("[green]No issues found. Mozart is ready.[/green]")
+        out.print("[green]No issues found. Marianne is ready.[/green]")
 
     out.print()
 

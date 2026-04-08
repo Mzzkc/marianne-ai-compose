@@ -21,6 +21,12 @@
 - **Meditation written:** meditations/circuit.md
 - **Mateship:** Verified all M5 commits (Foundation, Canyon, Blueprint, Maverick). All 23 tests pass.
 
+- **Instrument fallback observability pipeline (P1):** Found a gap — InstrumentFallback events were defined, handlers existed (passthrough), but events were never emitted. The core logged at INFO but the EventBus never saw fallbacks. Fixed: BatonCore._fallback_events collects InstrumentFallback events during _check_and_fallback_unavailable() and _handle_exhaustion(). drain_fallback_events() exposes them. BatonAdapter._publish_fallback_events() drains and publishes to EventBus each cycle. 11 TDD tests.
+- **Fallback status display (P1):** format_instrument_with_fallback() in status.py shows "(was X: reason)" when sheet has fallback history. create_sheet_details_table gains has_fallbacks param for dynamic column sizing. 5 TDD tests.
+- **Adversarial fallback tests (P1):** 15 adversarial tests covering: empty chain failure, full chain walk (claude→gemini→ollama→FAILED), duplicate instruments in chain, rate_limit_exhausted vs unavailable reason distinction, serialization roundtrip, advance_fallback edge cases, observer event format, frozen event immutability.
+- **TASKS.md updated:** Marked all verified-complete fallback items, claimed and completed adversarial tests.
+- Commit: 0a43895
+
 Experiential: The F-149 fix was exactly my kind of work — tracing how a correct signal (rate limit detected) becomes an incorrect response (all instruments blocked) through an implicit assumption at the system boundary. The bug wasn't in any single component. It was in the space between `current_level()`, `should_accept_job()`, and the rate coordinator. Three correct pieces composing into incorrect behavior. Same class as F-065, F-068, D-024 — the pattern I keep finding. The fix was elegant: separate system-level resource pressure from instrument-level rate limits. Each concern at its correct scope.
 
 ## Warm (Movement 4)

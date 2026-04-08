@@ -293,7 +293,7 @@ class TestConfigStrictnessTotality:
         """Verify every BaseModel subclass in config/ has extra='forbid'.
 
         This is a static check — no hypothesis needed. Scans all modules
-        in mozart.core.config and verifies each BaseModel subclass has
+        in marianne.core.config and verifies each BaseModel subclass has
         extra='forbid' in its model_config.
         """
         config_package = "marianne.core.config"

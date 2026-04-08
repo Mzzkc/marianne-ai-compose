@@ -24,7 +24,7 @@
 | Insertions | 38,168 | 18,504 | — |
 | Deletions | 639 | 6,992 | +6,353 |
 
-**Note on participation:** 12/32 (37.5%) musicians committed in M5, down from M4's 100%. This is not necessarily an indicator of reduced engagement — the Marianne rename alone accounts for much of the file churn (707 files changed, 6,992 deletions from the src/mozart/ removal), and M5 work was heavily concentrated in specific areas (baton flip, instrument fallbacks, process safety). Twenty musicians may have been spawned but found their work pre-empted by others or naturally scoped out by the movement's concentrated focus.
+**Note on participation:** 12/32 (37.5%) musicians committed in M5, down from M4's 100%. This is not necessarily an indicator of reduced engagement — the Marianne rename alone accounts for much of the file churn (707 files changed, 6,992 deletions from the src/marianne/ removal), and M5 work was heavily concentrated in specific areas (baton flip, instrument fallbacks, process safety). Twenty musicians may have been spawned but found their work pre-empted by others or naturally scoped out by the movement's concentrated focus.
 
 ---
 
@@ -36,7 +36,7 @@ M5 delivered three structural advances:
 
 2. **Instrument fallbacks shipped as a complete feature** (Harper + Circuit). Config models, Sheet entity resolution, baton dispatch logic, availability checking, V211 validation, status display with fallback history, observability event pipeline. 35+ TDD tests. This was spec'd in M4 and fully delivered in M5.
 
-3. **The Marianne rename completed Phase 1** (Composer + Ghost). Package renamed from `mozart` to `marianne`, 325 test files updated, pyproject.toml rewritten, flowspec config updated. Tests pass under the new package name. Phases 2-5 (config paths, docs, examples, story, verification) remain open.
+3. **The Marianne rename completed Phase 1** (Composer + Ghost). Package renamed from `marianne` to `marianne`, 325 test files updated, pyproject.toml rewritten, flowspec config updated. Tests pass under the new package name. Phases 2-5 (config paths, docs, examples, story, verification) remain open.
 
 ### All M5 Deliverables by Musician
 
@@ -132,10 +132,10 @@ For four consecutive movements, the serial critical path advanced exactly one st
 M4 had 93 commits from all 32 musicians — breadth. M5 had 26 commits from 12 musicians — depth. The codebase grew by 1,247 source lines but 29 test files were added. The Marianne rename touched 707 files. The work was necessarily concentrated: you can't have 32 musicians independently working on a package rename. This is a natural rhythm of the orchestra — distributed movements for breadth work, concentrated movements for focused changes.
 
 ### The Composer's Production Findings
-F-484 through F-490 were all found by the composer during actual production usage of Mozart. The orchestra built 11,638 tests and all pass. The composer ran a real score and found processes killing the WSL2 session. This is the "tests pass but the product doesn't work" gap at its sharpest. No amount of unit testing would have found that `os.killpg()` with a bad PGID kills the entire user session. Reality testing — using the product as a user — remains the irreplaceable quality check.
+F-484 through F-490 were all found by the composer during actual production usage of Marianne. The orchestra built 11,638 tests and all pass. The composer ran a real score and found processes killing the WSL2 session. This is the "tests pass but the product doesn't work" gap at its sharpest. No amount of unit testing would have found that `os.killpg()` with a bad PGID kills the entire user session. Reality testing — using the product as a user — remains the irreplaceable quality check.
 
 ### Rename Scope Risk
-The F-480 rename has 15 open tasks across 5 phases. Phase 1 (package + imports) is done. But phases 2-5 (config paths, docs, examples, story, verification) are substantial. The rename touches `~/.mozart/` runtime paths, all 5 spec files, all 6 docs files, all examples, and requires a backward-compatibility migration. This is not a morning's work. It needs coordinated effort across multiple musicians.
+The F-480 rename has 15 open tasks across 5 phases. Phase 1 (package + imports) is done. But phases 2-5 (config paths, docs, examples, story, verification) are substantial. The rename touches `~/.marianne/` runtime paths, all 5 spec files, all 6 docs files, all examples, and requires a backward-compatibility migration. This is not a morning's work. It needs coordinated effort across multiple musicians.
 
 ---
 

@@ -1,4 +1,4 @@
-"""Tests for the error parsers module (mozart.core.errors.parsers)."""
+"""Tests for the error parsers module (marianne.core.errors.parsers)."""
 
 from __future__ import annotations
 

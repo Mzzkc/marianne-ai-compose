@@ -1,7 +1,7 @@
-"""Tests for mozart.core.sheet — Sheet entity model.
+"""Tests for marianne.core.sheet — Sheet entity model.
 
 TDD: These tests define the contract for the Sheet entity, the first-class
-execution unit in Mozart's sheet-first architecture. A Sheet carries everything
+execution unit in Marianne's sheet-first architecture. A Sheet carries everything
 a musician needs to execute: identity, instrument, prompt, context, validations.
 
 Tests cover: construction, identity fields, defaults, immutability guarantees,

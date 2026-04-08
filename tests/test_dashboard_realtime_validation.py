@@ -1,5 +1,5 @@
 """
-Test suite for real-time validation functionality in Mozart Dashboard.
+Test suite for real-time validation functionality in Marianne Dashboard.
 
 This module tests the enhanced score editor with real-time validation feedback,
 including API integration, error markers, and validation panel behavior.
@@ -35,7 +35,7 @@ sheet:
   total_items: 1
 
 prompt:
-  template: "echo 'Hello Mozart'"
+  template: "echo 'Hello Marianne'"
 
 workspace: "./workspace"
 """

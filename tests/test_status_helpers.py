@@ -642,7 +642,7 @@ class TestStatusJsonOutput:
 
 
 class TestListJobsCommand:
-    """Tests for the 'mozart list' command (daemon registry-based)."""
+    """Tests for the 'mzt list' command (daemon registry-based)."""
 
     @staticmethod
     def _mock_daemon_route(jobs: list[dict[str, Any]]):
@@ -850,7 +850,7 @@ class TestCostSummaryAlwaysVisible:
 
 
 # ---------------------------------------------------------------------------
-# F-071: mozart list --json (Dash, M4)
+# F-071: mzt list --json (Dash, M4)
 # ---------------------------------------------------------------------------
 
 

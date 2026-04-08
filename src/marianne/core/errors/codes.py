@@ -1,6 +1,6 @@
 """Error codes, categories, and severity levels.
 
-Contains the structured error classification enums used throughout Mozart.
+Contains the structured error classification enums used throughout Marianne.
 
 This module provides:
 - ExitReason: Type alias for process exit reasons
@@ -13,7 +13,7 @@ This module provides:
 Error Code Taxonomy
 ===================
 
-Mozart uses a structured error code system organized by category prefixes.
+Marianne uses a structured error code system organized by category prefixes.
 Each error code provides specific retry behavior guidance.
 
 **E0xx - Execution Errors**
@@ -109,7 +109,7 @@ Each error code provides specific retry behavior guidance.
 Usage
 -----
 
-Error codes are used throughout Mozart for:
+Error codes are used throughout Marianne for:
 - **Programmatic routing**: Switch on error_code.category for handling logic
 - **Retry decisions**: Use error_code.get_retry_behavior() for delay/retriability
 - **Logging/metrics**: Structured error codes enable aggregation and alerting

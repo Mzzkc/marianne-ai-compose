@@ -1,4 +1,4 @@
-"""Central profiler orchestrator for the Mozart daemon.
+"""Central profiler orchestrator for the Marianne daemon.
 
 ``ProfilerCollector`` is the heart of the profiling subsystem.  It runs a
 periodic collection loop that gathers system metrics, per-process data,

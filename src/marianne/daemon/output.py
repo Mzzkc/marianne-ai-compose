@@ -1,4 +1,4 @@
-"""Output protocol for Mozart daemon — decouples execution from Rich console.
+"""Output protocol for Marianne daemon — decouples execution from Rich console.
 
 Replaces tight coupling to Rich Console with an abstract OutputProtocol.
 Implementations:

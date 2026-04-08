@@ -1,4 +1,4 @@
-"""Resource monitoring for the Mozart daemon.
+"""Resource monitoring for the Marianne daemon.
 
 Periodic background checks on memory, child process count, and zombie
 detection.  Emits structured log warnings when limits are approached and

@@ -22,8 +22,8 @@
 # ║    Stage 14: Commit & Push                                                   ║
 # ║                                                                              ║
 # ║  Usage:                                                                      ║
-# ║    mozartd start --foreground &                                              ║
-# ║    mozart run examples/docs-generator.yaml                                   ║
+# ║    marianned start --foreground &                                              ║
+# ║    mzt run examples/docs-generator.yaml                                   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: "docs-generator"
@@ -90,7 +90,7 @@ prompt:
     find src/ -name "*.py" -type f | sort
 
     # Count lines per module (top-level packages)
-    for d in src/mozart/*/; do
+    for d in src/marianne/*/; do
       echo "$(find "$d" -name '*.py' -type f -exec cat {} + 2>/dev/null | wc -l) $d"
     done | sort -rn
 
@@ -151,36 +151,36 @@ prompt:
     ```bash
     # Run --help on every command and capture line counts
     for cmd in \
-      "mozart --help" \
-      "mozart run --help" \
-      "mozart resume --help" \
-      "mozart pause --help" \
-      "mozart modify --help" \
-      "mozart status --help" \
-      "mozart validate --help" \
-      "mozart list --help" \
-      "mozart logs --help" \
-      "mozart errors --help" \
-      "mozart diagnose --help" \
-      "mozart recover --help" \
-      "mozart history --help" \
-      "mozart dashboard --help" \
-      "mozart mcp --help" \
-      "mozart config --help" \
-      "mozart patterns-list --help" \
-      "mozart patterns-why --help" \
-      "mozart patterns-entropy --help" \
-      "mozart patterns-budget --help" \
-      "mozart learning-stats --help" \
-      "mozart learning-insights --help" \
-      "mozart learning-drift --help" \
-      "mozart learning-epistemic-drift --help" \
-      "mozart learning-activity --help" \
-      "mozart entropy-status --help" \
-      "mozartd --help" \
-      "mozartd start --help" \
-      "mozartd stop --help" \
-      "mozartd status --help"; do
+      "marianne --help" \
+      "mzt run --help" \
+      "mzt resume --help" \
+      "mzt pause --help" \
+      "mzt modify --help" \
+      "mzt status --help" \
+      "mzt validate --help" \
+      "mzt list --help" \
+      "mzt logs --help" \
+      "mzt errors --help" \
+      "mzt diagnose --help" \
+      "mzt recover --help" \
+      "mzt history --help" \
+      "mzt dashboard --help" \
+      "mzt mcp --help" \
+      "mzt config --help" \
+      "mzt patterns-list --help" \
+      "mzt patterns-why --help" \
+      "mzt patterns-entropy --help" \
+      "mzt patterns-budget --help" \
+      "mzt learning-stats --help" \
+      "mzt learning-insights --help" \
+      "mzt learning-drift --help" \
+      "mzt learning-epistemic-drift --help" \
+      "mzt learning-activity --help" \
+      "marianne entropy-status --help" \
+      "marianned --help" \
+      "marianned start --help" \
+      "marianned stop --help" \
+      "marianned status --help"; do
       LINES=$($cmd 2>&1 | wc -l)
       echo "$cmd: $LINES lines"
     done
@@ -190,7 +190,7 @@ prompt:
     ```bash
     for f in examples/*.yaml; do
       echo -n "$f: "
-      mozart validate "$f" 2>&1 | tail -1
+      mzt validate "$f" 2>&1 | tail -1
     done
     ```
 
@@ -198,7 +198,7 @@ prompt:
 
     Check if there are Claude Code skill files that reference this project:
     ```bash
-    find ~/.claude/skills/ -name "*.md" -exec grep -l "mozart" {} \; 2>/dev/null
+    find ~/.claude/skills/ -name "*.md" -exec grep -l "marianne" {} \; 2>/dev/null
     ```
 
     If any skill files reference this project, read them and note what
@@ -243,17 +243,17 @@ prompt:
     **Step 3: Critical gap: daemon requirement**
 
     Specifically audit:
-    - Does README.md explain that `mozart run` requires a running daemon?
-    - Does getting-started.md include `mozartd start`?
+    - Does README.md explain that `mzt run` requires a running daemon?
+    - Does getting-started.md include `marianned start`?
     - Does CLAUDE.md mention the daemon requirement?
-    - Does setup.sh install daemon dependencies and mention mozartd?
+    - Does setup.sh install daemon dependencies and mention marianned?
     - Is `--escalation` documented as incompatible with daemon?
 
     **Step 4: Missing documentation categories**
 
     Check if these exist:
     - Score/concert writing guide (how to author YAML scores)
-    - Daemon operation guide (mozartd lifecycle, monitoring)
+    - Daemon operation guide (marianned lifecycle, monitoring)
     - Known limitations doc (what doesn't work yet)
     - Complete configuration reference (all Pydantic config fields)
     - Browsable API reference (auto-generated from source)
@@ -299,7 +299,7 @@ prompt:
     - gen_ref_pages.py for API auto-discovery
 
     **Stage 5 (setup.sh):**
-    - --daemon flag (install daemon extra, verify mozartd)
+    - --daemon flag (install daemon extra, verify marianned)
     - --docs flag (install docs extra, run mkdocs build)
     - Updated help text and completion summary
 
@@ -326,15 +326,15 @@ prompt:
     - Other known limitations
 
     **Stage 9 (Config Reference):** docs/configuration-reference.md
-    - Every Pydantic model field from src/mozart/core/config/
-    - DaemonConfig from src/mozart/daemon/config.py
+    - Every Pydantic model field from src/marianne/core/config/
+    - DaemonConfig from src/marianne/daemon/config.py
     - Organized by section with types, defaults, descriptions
 
     **Stage 10 (Update Existing Docs):**
     - README.md: daemon section, license, architecture
     - docs/getting-started.md: daemon quick start
     - docs/cli-reference.md: verify all commands vs --help
-    - docs/mozart-reference.md: remove WARNING, rewrite for daemon era
+    - docs/marianne-reference.md: remove WARNING, rewrite for daemon era
     - CLAUDE.md: key files, test count, validation types
 
     **Output to:** {{ workspace }}/03-docs-plan.md
@@ -378,7 +378,7 @@ prompt:
 
     **Step 4: Verify gen_ref_pages.py exists**
 
-    Check `docs/scripts/gen_ref_pages.py`. It should walk `src/mozart/` and
+    Check `docs/scripts/gen_ref_pages.py`. It should walk `src/marianne/` and
     generate API reference pages. If missing, create it using the standard
     mkdocstrings pattern.
 
@@ -419,8 +419,8 @@ prompt:
 
     1. **Add `--daemon` flag:**
        - Installs `.[daemon]` extra (psutil)
-       - Verifies `mozartd` command is available after install
-       - Adds mozartd to the completion summary
+       - Verifies `marianned` command is available after install
+       - Adds marianned to the completion summary
 
     2. **Add `--docs` flag:**
        - Installs `.[docs]` extra (mkdocs-material stack)
@@ -430,12 +430,12 @@ prompt:
     3. **Update help text:**
        - Add --daemon and --docs to Options section
        - Add examples: `./setup.sh --daemon`, `./setup.sh --docs`
-       - Add mozartd to Prerequisites mention
+       - Add marianned to Prerequisites mention
 
     4. **Update completion summary:**
-       - If daemon installed, show: `mozartd start` / `mozartd status`
+       - If daemon installed, show: `marianned start` / `marianned status`
        - If docs installed, show: `mkdocs serve` (browse at localhost:8000)
-       - Update "To run your first job" to include `mozartd start` step
+       - Update "To run your first job" to include `marianned start` step
 
     5. **Update example config reference:**
        - The script references `examples/simple-sheet.yaml` — verify this exists
@@ -458,19 +458,19 @@ prompt:
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     Create `docs/score-writing-guide.md` — a comprehensive guide to authoring
-    Mozart score YAML files.
+    Marianne score YAML files.
 
     **Research first:**
 
     Read these source files to understand the complete config model:
     ```bash
-    cat src/mozart/core/config/job.py
-    cat src/mozart/core/config/execution.py
-    cat src/mozart/core/config/orchestration.py
-    cat src/mozart/core/config/backend.py
-    cat src/mozart/core/config/learning.py
-    cat src/mozart/core/config/workspace.py
-    cat src/mozart/prompts/templating.py
+    cat src/marianne/core/config/job.py
+    cat src/marianne/core/config/execution.py
+    cat src/marianne/core/config/orchestration.py
+    cat src/marianne/core/config/backend.py
+    cat src/marianne/core/config/learning.py
+    cat src/marianne/core/config/workspace.py
+    cat src/marianne/prompts/templating.py
     ```
 
     Read 3-4 example scores to see real patterns:
@@ -529,8 +529,8 @@ prompt:
        - Conductor/concert configuration (if applicable)
 
     8. **Testing Your Score:**
-       - `mozart validate <file>` — structural validation
-       - `mozart run <file> --dry-run` — execution simulation
+       - `mzt validate <file>` — structural validation
+       - `mzt run <file> --dry-run` — execution simulation
        - `setsid` for detached execution
        - Common validation errors and fixes
 
@@ -539,7 +539,7 @@ prompt:
        - Set appropriate timeouts per stage
        - Use preamble for consistent context
        - Put validation markers in prompt instructions
-       - Validate all examples: `mozart validate examples/*.yaml`
+       - Validate all examples: `mzt validate examples/*.yaml`
 
     **Rules:**
     - Use REAL examples from the examples/ directory, not hypothetical ones
@@ -557,28 +557,28 @@ prompt:
     ║  "The daemon is now mandatory — document it properly"                       ║
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
-    Create `docs/daemon-guide.md` — the complete guide to Mozart's daemon mode.
+    Create `docs/daemon-guide.md` — the complete guide to Marianne's daemon mode.
 
     **Research first:**
 
     Read the daemon source:
     ```bash
-    cat src/mozart/daemon/config.py
-    cat src/mozart/daemon/process.py
-    head -100 src/mozart/daemon/manager.py
-    head -100 src/mozart/daemon/job_service.py
-    cat src/mozart/daemon/detect.py
-    cat src/mozart/daemon/health.py
-    head -80 src/mozart/daemon/scheduler.py
-    head -80 src/mozart/daemon/rate_coordinator.py
-    head -80 src/mozart/daemon/backpressure.py
-    cat src/mozart/daemon/ipc/protocol.py
+    cat src/marianne/daemon/config.py
+    cat src/marianne/daemon/process.py
+    head -100 src/marianne/daemon/manager.py
+    head -100 src/marianne/daemon/job_service.py
+    cat src/marianne/daemon/detect.py
+    cat src/marianne/daemon/health.py
+    head -80 src/marianne/daemon/scheduler.py
+    head -80 src/marianne/daemon/rate_coordinator.py
+    head -80 src/marianne/daemon/backpressure.py
+    cat src/marianne/daemon/ipc/protocol.py
     ```
 
     Read how the CLI detects and requires daemon:
     ```bash
-    cat src/mozart/cli/commands/run.py
-    grep -n "daemon\|mozartd" src/mozart/cli/commands/*.py
+    cat src/marianne/cli/commands/run.py
+    grep -n "daemon\|marianned" src/marianne/cli/commands/*.py
     ```
 
     **Required sections:**
@@ -592,22 +592,22 @@ prompt:
     2. **Quick Start:**
        ```bash
        # Start daemon
-       mozartd start --foreground  # or: mozartd start (background)
+       marianned start --foreground  # or: marianned start (background)
 
        # Run a job
-       mozart run my-score.yaml
+       mzt run my-score.yaml
 
        # Check status
-       mozartd status
+       marianned status
 
        # Stop daemon
-       mozartd stop
+       marianned stop
        ```
 
     3. **The Daemon Requirement:**
-       - `mozart run` requires a running daemon (verified via Unix socket)
-       - `mozart run --dry-run` works WITHOUT a daemon
-       - `mozart validate` works WITHOUT a daemon
+       - `mzt run` requires a running daemon (verified via Unix socket)
+       - `mzt run --dry-run` works WITHOUT a daemon
+       - `mzt validate` works WITHOUT a daemon
        - How auto-detection works (socket check at default IPC path)
 
     4. **Architecture:**
@@ -618,16 +618,16 @@ prompt:
        - Backpressure (memory-based load management)
 
     5. **Configuration:**
-       - DaemonConfig fields (from src/mozart/daemon/config.py)
+       - DaemonConfig fields (from src/marianne/daemon/config.py)
        - Default paths (socket, PID file, log)
        - Environment variables (if any)
 
     6. **Monitoring:**
-       - `mozartd status` — is daemon running?
-       - `mozartd health` — health check details
-       - `mozartd jobs` — list active jobs
-       - `mozartd resources` — resource usage
-       - Log location: `~/.mozart/mozartd.log`
+       - `marianned status` — is daemon running?
+       - `marianned health` — health check details
+       - `marianned jobs` — list active jobs
+       - `marianned resources` — resource usage
+       - Log location: `~/.marianne/marianned.log`
 
     7. **What's Built But NOT Yet Wired (Phase 3):**
        - GlobalScheduler: cross-job sheet scheduling with priority
@@ -635,19 +635,19 @@ prompt:
        - Both are built, tested, but not integrated into the execution path
 
     8. **Migration from Pre-Daemon Usage:**
-       - Before: `mozart run my-score.yaml`
-       - After: `mozartd start && mozart run my-score.yaml`
+       - Before: `mzt run my-score.yaml`
+       - After: `marianned start && mzt run my-score.yaml`
        - setup.sh now has `--daemon` flag
 
     9. **Troubleshooting:**
        - "Socket not found" — daemon not running, start it
-       - "Stale PID file" — daemon crashed, `mozartd stop && mozartd start`
+       - "Stale PID file" — daemon crashed, `marianned stop && marianned start`
        - Permission errors on socket file
        - Port/socket conflicts
        - --escalation incompatible with daemon
 
     **Rules:**
-    - Verify every mozartd command by reading the CLI source
+    - Verify every marianned command by reading the CLI source
     - Don't document Phase 3 features as if they're active
     - Use actual DaemonConfig field names from the Pydantic model
     - Include the daemon detection flow from detect.py
@@ -670,26 +670,26 @@ prompt:
     Check for known issues:
     ```bash
     # Escalation blocking
-    grep -n "escalation" src/mozart/cli/commands/run.py
+    grep -n "escalation" src/marianne/cli/commands/run.py
 
     # Phase 3 wiring status
-    grep -rn "not.*wired\|TODO\|FIXME\|HACK\|XXX" src/mozart/daemon/ | head -20
+    grep -rn "not.*wired\|TODO\|FIXME\|HACK\|XXX" src/marianne/daemon/ | head -20
 
     # Backend limitations
-    grep -n "class.*Backend\|class.*Protocol" src/mozart/backends/*.py
+    grep -n "class.*Backend\|class.*Protocol" src/marianne/backends/*.py
 
     # Dashboard state
-    ls src/mozart/dashboard/
+    ls src/marianne/dashboard/
 
     # Learning system complexity
-    ls src/mozart/learning/store/
+    ls src/marianne/learning/store/
     ```
 
     **Required limitations to document:**
 
     1. **Daemon Required for Execution**
-       - `mozart run` requires `mozartd` — no standalone execution mode
-       - Only `--dry-run` and `mozart validate` work without daemon
+       - `mzt run` requires `marianned` — no standalone execution mode
+       - Only `--dry-run` and `mzt validate` work without daemon
        - Rationale: centralized resource management
 
     2. **Escalation Incompatible with Daemon**
@@ -754,20 +754,20 @@ prompt:
     ╚══════════════════════════════════════════════════════════════════════════════╝
 
     Create `docs/configuration-reference.md` — a complete reference of every
-    configuration field in Mozart score YAML files.
+    configuration field in Marianne score YAML files.
 
     **Research: Read ALL Pydantic config models**
     ```bash
     # Core config models
-    cat src/mozart/core/config/backend.py
-    cat src/mozart/core/config/execution.py
-    cat src/mozart/core/config/orchestration.py
-    cat src/mozart/core/config/job.py
-    cat src/mozart/core/config/learning.py
-    cat src/mozart/core/config/workspace.py
+    cat src/marianne/core/config/backend.py
+    cat src/marianne/core/config/execution.py
+    cat src/marianne/core/config/orchestration.py
+    cat src/marianne/core/config/job.py
+    cat src/marianne/core/config/learning.py
+    cat src/marianne/core/config/workspace.py
 
     # Daemon config
-    cat src/mozart/daemon/config.py
+    cat src/marianne/daemon/config.py
     ```
 
     **For EACH Pydantic model, extract:**
@@ -796,7 +796,7 @@ prompt:
     15. **conductor/concert:** orchestration fields
     16. **notifications:** notification config
     17. **learning:** learning config fields
-    18. **DaemonConfig:** (separate section for mozartd configuration)
+    18. **DaemonConfig:** (separate section for marianned configuration)
 
     **Format each section as a table:**
     ```markdown
@@ -827,7 +827,7 @@ prompt:
     **Files to update:**
 
     1. **README.md**
-       - Add daemon section (mozartd start, the requirement)
+       - Add daemon section (marianned start, the requirement)
        - Update architecture overview if stale
        - Update license references from MIT to AGPL-3.0
        - Link to new docs (daemon guide, score writing guide, etc.)
@@ -835,7 +835,7 @@ prompt:
        - Verify all file paths and commands still work
 
     2. **docs/getting-started.md**
-       - Add daemon quick start: mozartd start before mozart run
+       - Add daemon quick start: marianned start before mzt run
        - Update CLI examples for daemon era
        - Verify example config references exist
        - Add link to daemon guide for details
@@ -844,9 +844,9 @@ prompt:
        - Run `--help` for EVERY command and compare to what's documented
        - Update any mismatches
        - Add missing commands (learning-*, patterns-*, entropy-*)
-       - Add mozartd commands section
+       - Add marianned commands section
 
-    4. **docs/mozart-reference.md**
+    4. **docs/marianne-reference.md**
        - Remove the WARNING header about being outdated
        - Rewrite for daemon-first architecture
        - Update component descriptions
@@ -882,7 +882,7 @@ prompt:
     # Check that all pages referenced in mkdocs.yml nav exist
     for f in docs/index.md docs/getting-started.md docs/daemon-guide.md \
              docs/score-writing-guide.md docs/configuration-reference.md \
-             docs/limitations.md docs/cli-reference.md docs/mozart-reference.md \
+             docs/limitations.md docs/cli-reference.md docs/marianne-reference.md \
              docs/MCP-INTEGRATION.md docs/DISTRIBUTED-LEARNING-ARCHITECTURE.md \
              docs/TOKEN-COMPRESSION-STRATEGIES.md docs/OPUS-CONVERGENCE-ANALYSIS.md; do
       if [ -f "$f" ]; then echo "✓ $f"
@@ -931,26 +931,26 @@ prompt:
     Actually run EVERY CLI command listed in the documentation and verify
     the output matches what the docs claim.
 
-    **Step 1: Run --help for every mozart command**
+    **Step 1: Run --help for every marianne command**
     ```bash
-    echo "=== Mozart CLI Commands ==="
+    echo "=== Marianne CLI Commands ==="
     for cmd in \
-      "mozart --help" \
-      "mozart run --help" \
-      "mozart resume --help" \
-      "mozart pause --help" \
-      "mozart modify --help" \
-      "mozart status --help" \
-      "mozart validate --help" \
-      "mozart list --help" \
-      "mozart logs --help" \
-      "mozart errors --help" \
-      "mozart diagnose --help" \
-      "mozart recover --help" \
-      "mozart history --help" \
-      "mozart dashboard --help" \
-      "mozart mcp --help" \
-      "mozart config --help"; do
+      "marianne --help" \
+      "mzt run --help" \
+      "mzt resume --help" \
+      "mzt pause --help" \
+      "mzt modify --help" \
+      "mzt status --help" \
+      "mzt validate --help" \
+      "mzt list --help" \
+      "mzt logs --help" \
+      "mzt errors --help" \
+      "mzt diagnose --help" \
+      "mzt recover --help" \
+      "mzt history --help" \
+      "mzt dashboard --help" \
+      "mzt mcp --help" \
+      "mzt config --help"; do
       echo "--- $cmd ---"
       if $cmd 2>&1 | head -5; then
         echo "RESULT: PASS"
@@ -965,16 +965,16 @@ prompt:
     ```bash
     echo "=== Learning Commands ==="
     for cmd in \
-      "mozart patterns-list --help" \
-      "mozart patterns-why --help" \
-      "mozart patterns-entropy --help" \
-      "mozart patterns-budget --help" \
-      "mozart learning-stats --help" \
-      "mozart learning-insights --help" \
-      "mozart learning-drift --help" \
-      "mozart learning-epistemic-drift --help" \
-      "mozart learning-activity --help" \
-      "mozart entropy-status --help"; do
+      "mzt patterns-list --help" \
+      "mzt patterns-why --help" \
+      "mzt patterns-entropy --help" \
+      "mzt patterns-budget --help" \
+      "mzt learning-stats --help" \
+      "mzt learning-insights --help" \
+      "mzt learning-drift --help" \
+      "mzt learning-epistemic-drift --help" \
+      "mzt learning-activity --help" \
+      "marianne entropy-status --help"; do
       echo "--- $cmd ---"
       if $cmd 2>&1 | head -3; then
         echo "RESULT: PASS"
@@ -985,14 +985,14 @@ prompt:
     done
     ```
 
-    **Step 3: Run --help for every mozartd command**
+    **Step 3: Run --help for every marianned command**
     ```bash
     echo "=== Daemon Commands ==="
     for cmd in \
-      "mozartd --help" \
-      "mozartd start --help" \
-      "mozartd stop --help" \
-      "mozartd status --help"; do
+      "marianned --help" \
+      "marianned start --help" \
+      "marianned stop --help" \
+      "marianned status --help"; do
       echo "--- $cmd ---"
       if $cmd 2>&1 | head -5; then
         echo "RESULT: PASS"
@@ -1008,11 +1008,11 @@ prompt:
     echo "=== Example Config Validation ==="
     for f in examples/*.yaml; do
       echo -n "$f: "
-      if mozart validate "$f" 2>&1 | grep -q "Valid\|valid\|✓"; then
+      if mzt validate "$f" 2>&1 | grep -q "Valid\|valid\|✓"; then
         echo "VALID"
       else
         echo "INVALID or WARNING"
-        mozart validate "$f" 2>&1 | tail -3
+        mzt validate "$f" 2>&1 | tail -3
       fi
     done
     ```
@@ -1020,7 +1020,7 @@ prompt:
     **Step 5: Validate this score itself**
     ```bash
     echo "=== Self-Validation ==="
-    mozart validate examples/docs-generator.yaml 2>&1
+    mzt validate examples/docs-generator.yaml 2>&1
     ```
 
     **Step 6: Verify setup.sh syntax**
@@ -1040,7 +1040,7 @@ prompt:
     ```markdown
     # Command Verification Results
 
-    ## Mozart CLI Commands
+    ## Marianne CLI Commands
     | Command | --help Works | Documented | Match |
     |---------|-------------|------------|-------|
 
@@ -1148,7 +1148,7 @@ prompt:
     - README.md architecture vs CLAUDE.md key files
     - docs/cli-reference.md vs actual --help output
     - docs/configuration-reference.md field names vs Pydantic models
-    - docs/daemon-guide.md commands vs mozartd --help
+    - docs/daemon-guide.md commands vs marianned --help
 
     **Output to:** {{ workspace }}/13-accuracy-audit.md
 
@@ -1224,7 +1224,7 @@ prompt:
     docs: Comprehensive documentation overhaul
 
     New documentation:
-    - docs/score-writing-guide.md: Complete guide to authoring Mozart scores
+    - docs/score-writing-guide.md: Complete guide to authoring Marianne scores
     - docs/daemon-guide.md: Daemon operation, architecture, troubleshooting
     - docs/limitations.md: Known limitations and caveats
     - docs/configuration-reference.md: All config fields with types and defaults
@@ -1236,13 +1236,13 @@ prompt:
     - README.md: Daemon section, license fix (MIT→AGPL-3.0), new doc links
     - docs/getting-started.md: Daemon quick start
     - docs/cli-reference.md: Verified against --help, added missing commands
-    - docs/mozart-reference.md: Rewritten for daemon era
+    - docs/marianne-reference.md: Rewritten for daemon era
     - CLAUDE.md: Updated key files, references
     - setup.sh: Added --daemon and --docs flags
     - pyproject.toml: Added docs extra, fixed license to AGPL-3.0
     - examples/docs-generator.yaml: 14-stage comprehensive score
 
-    Co-Authored-By: Mozart AI Compose <noreply@mozart.ai>
+    Co-Authored-By: Marianne AI Compose <noreply@marianne.ai>
     ```
 
     Adjust the message based on what was ACTUALLY changed (don't list files
@@ -1338,14 +1338,14 @@ prompt:
       - Concise and scannable beats exhaustive
       - Every claim must be verifiable against source code
       - Commit history reveals undocumented features
-      - Daemon-first: mozart run requires mozartd
+      - Daemon-first: mzt run requires marianned
 
       **Project root:** This is a Python project at the current working directory.
-      - Source code: src/mozart/
+      - Source code: src/marianne/
       - Documentation: docs/
       - Examples: examples/
-      - Config models: src/mozart/core/config/
-      - Daemon code: src/mozart/daemon/
+      - Config models: src/marianne/core/config/
+      - Daemon code: src/marianne/daemon/
 
 validations:
   # ── Stage 1: Inventory ──────────────────────────────────────────────────────
@@ -1456,8 +1456,8 @@ validations:
     condition: "stage >= 7"
 
   - type: command_succeeds
-    command: "grep -q 'mozartd' ../docs/daemon-guide.md"
-    description: "Daemon guide must reference mozartd"
+    command: "grep -q 'marianned' ../docs/daemon-guide.md"
+    description: "Daemon guide must reference marianned"
     condition: "stage >= 7"
 
   - type: command_succeeds

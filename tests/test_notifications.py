@@ -1,4 +1,4 @@
-"""Tests for mozart.notifications module."""
+"""Tests for marianne.notifications module."""
 
 import os
 from datetime import datetime
@@ -90,7 +90,7 @@ class TestNotificationContext:
             job_name="my-job",
         )
         title = ctx.format_title()
-        assert "Mozart" in title
+        assert "Marianne" in title
         assert "my-job" in title
         assert "Complete" in title
 
@@ -873,7 +873,7 @@ class TestWebhookNotifier:
         assert payload["context"]["job_id"] == "123"
         assert payload["context"]["job_name"] == "test-job"
         assert "metadata" in payload
-        assert payload["metadata"]["source"] == "mozart-ai-compose"
+        assert payload["metadata"]["source"] == "marianne-ai-compose"
 
     def test_build_payload_without_metadata(self):
         """Test payload building without metadata."""

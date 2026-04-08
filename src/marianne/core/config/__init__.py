@@ -1,4 +1,4 @@
-"""Configuration models for Mozart jobs.
+"""Configuration models for Marianne jobs.
 
 This package provides Pydantic models for loading and validating YAML job
 configurations. All models are re-exported from this ``__init__`` for

@@ -22,7 +22,7 @@ from marianne.core.logging import get_logger
 _logger = get_logger("learning.global_store")
 
 # Default location following XDG conventions
-DEFAULT_GLOBAL_STORE_PATH = Path.home() / ".mozart" / "global-learning.db"
+DEFAULT_GLOBAL_STORE_PATH = Path.home() / ".marianne" / "global-learning.db"
 
 # Type alias for SQLite query parameters — matches sqlite3.execute() signature.
 # SQLite accepts str, int, float, bytes, and None as bind parameters.
@@ -69,7 +69,7 @@ class GlobalLearningStoreBase:
     """SQLite-based global learning store base class.
 
     Provides persistent storage infrastructure for execution outcomes, detected patterns,
-    and error recovery data across all Mozart workspaces. Uses WAL mode for safe
+    and error recovery data across all Marianne workspaces. Uses WAL mode for safe
     concurrent access.
 
     This base class handles:
@@ -147,7 +147,7 @@ class GlobalLearningStoreBase:
 
         Args:
             db_path: Path to the SQLite database file.
-                    Defaults to ~/.mozart/global-learning.db
+                    Defaults to ~/.marianne/global-learning.db
         """
         self.db_path = db_path or DEFAULT_GLOBAL_STORE_PATH
         self._logger = _logger

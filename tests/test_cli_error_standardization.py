@@ -279,7 +279,7 @@ class TestOutputErrorStandardization:
         output_error(
             "Score not found",
             error_code="E501",
-            hints=["Run 'mozart list' to see available scores"],
+            hints=["Run 'mzt list' to see available scores"],
             json_output=True,
             console_instance=console,
             job_id="test-score",
@@ -288,7 +288,7 @@ class TestOutputErrorStandardization:
         assert parsed["success"] is False
         assert parsed["job_id"] == "test-score"
         assert parsed["error_code"] == "E501"
-        assert "Run 'mozart list'" in parsed["hints"][0]
+        assert "Run 'mzt list'" in parsed["hints"][0]
 
     def test_output_error_rich_mode_shows_hints(self) -> None:
         """Rich mode shows hints after the error message."""
@@ -324,7 +324,7 @@ class TestPauseErrorStandardization:
     def test_pause_daemon_error_includes_hint(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Pause daemon route error (E501) now includes 'mozart list' hint."""
+        """Pause daemon route error (E501) now includes 'mzt list' hint."""
         from marianne.daemon.exceptions import DaemonError
 
         async def _raise(
@@ -338,7 +338,7 @@ class TestPauseErrorStandardization:
         result = runner.invoke(app, ["pause", "ghost-test"])
         assert result.exit_code != 0
         assert "ghost-test" in result.output
-        assert "mozart list" in result.output
+        assert "mzt list" in result.output
 
     def test_pause_daemon_error_json_has_hints(
         self, monkeypatch: pytest.MonkeyPatch,
@@ -359,7 +359,7 @@ class TestPauseErrorStandardization:
         data = json.loads(result.output.strip())
         assert data["error_code"] == "E501"
         assert "hints" in data
-        assert any("mozart list" in h for h in data["hints"])
+        assert any("mzt list" in h for h in data["hints"])
 
     def test_modify_invalid_config_includes_hint(self, tmp_path: Path) -> None:
         """Modify with invalid config (E505) now includes YAML syntax hint."""
@@ -395,19 +395,19 @@ class TestPauseErrorStandardization:
 
 
 class TestRequireConductorStandardization:
-    """require_conductor() now uses output_error with 'mozart start' hint."""
+    """require_conductor() now uses output_error with 'mzt start' hint."""
 
     def test_require_conductor_includes_start_hint(self) -> None:
-        """When conductor is not running, error suggests 'mozart start'."""
+        """When conductor is not running, error suggests 'mzt start'."""
         # Use a CLI command that requires the conductor — status with a job_id
         # will call require_conductor when the daemon is not available
         result = runner.invoke(app, ["status", "nonexistent-job"])
         # Either exits with error or shows conductor not running message
         if result.exit_code != 0:
             output_lower = result.output.lower()
-            # Should include "mozart start" hint if conductor isn't running
+            # Should include "mzt start" hint if conductor isn't running
             assert (
-                "mozart start" in output_lower
+                "mzt start" in output_lower
                 or "conductor" in output_lower
                 or "not found" in output_lower
             )

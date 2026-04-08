@@ -1,1 +1,1 @@
-"""Workspace management for Mozart jobs."""
+"""Workspace management for Marianne jobs."""

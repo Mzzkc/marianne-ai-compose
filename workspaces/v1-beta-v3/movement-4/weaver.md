@@ -37,13 +37,13 @@ The composer's M4 directive established the baton transition as the mandatory pa
 **Status: RESOLVED (Journey 8c95f02)**
 - `manager.py:2211-2247` now calls `self._registry.load_checkpoint(job_id)` instead of reading workspace JSON files.
 - Sentinel verified the change is security-positive (parameterized SQL, removed file-based state).
-- **Verified at:** `src/mozart/daemon/manager.py:2233`
+- **Verified at:** `src/marianne/daemon/manager.py:2233`
 
 #### F-255.2: Baton adapter doesn't publish to _live_states
 **Status: STILL OPEN — blocks Phase 1 baton testing**
 - The baton adapter has `_on_baton_state_sync()` wired at `manager.py:348,487-517` which UPDATES entries in `_live_states`. But `_live_states` is only POPULATED at `manager.py:1681` inside `_on_state_published()` — the legacy runner's checkpoint callback.
 - For baton-managed jobs: `_on_baton_state_sync()` is called → checks `self._live_states.get(job_id)` → returns `None` → exits immediately. No state ever appears.
-- Consequence: `get_job_status()` at `manager.py:929-930` checks `_live_states`, finds nothing, skips registry for active statuses (line 937), falls through to basic metadata. `mozart status <job>` shows minimal info for running baton jobs.
+- Consequence: `get_job_status()` at `manager.py:929-930` checks `_live_states`, finds nothing, skips registry for active statuses (line 937), falls through to basic metadata. `mzt status <job>` shows minimal info for running baton jobs.
 - **Fix needed:** Create initial `CheckpointState` in `_live_states` when a baton job is registered (during `_run_via_baton` or the adapter's registration callback).
 
 #### F-255.3: PluginCliBackend doesn't disable MCP
@@ -52,7 +52,7 @@ The composer's M4 directive established the baton transition as the mandatory pa
 - The field EXISTS on `CliCommand` (`instruments.py:169`), is SET in the claude-code profile (`builtins/claude-code.yaml:78`), but is NEVER USED in command construction.
 - The legacy `ClaudeCliBackend` adds `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` by default. The PluginCliBackend (used by baton) does not.
 - Production impact: 80 child processes instead of 8 per F-255 report.
-- **Verified not referenced at:** `grep mcp_config_flag src/mozart/execution/instruments/cli_backend.py` → no matches
+- **Verified not referenced at:** `grep mcp_config_flag src/marianne/execution/instruments/cli_backend.py` → no matches
 
 #### F-255.4: Three state stores disagree
 **Status: PARTIALLY ADDRESSED**
@@ -116,7 +116,7 @@ The M4 work is remarkably coherent for 31 parallel musicians:
 
 **Concerning:**
 - **F-255.2 and F-271 are small but unclaimed.** The baton can't be tested without them. They've been known since the production run (F-255 filed by composer, F-271 independently confirmed by Litmus and Sentinel) but no musician claimed them. This is the coordination gap I see most clearly: everyone is building features and fixing bugs, but the two ~25-line fixes that unblock the critical path remain undone.
-- **Phase 1 testing has never been attempted.** Zero real baton executions exist. 1,400+ baton tests prove the handlers are correct in isolation. None prove the baton can orchestrate a complete job. This is the same gap I flagged in M3 (F-210 context) but elevated: the tests now pass, the code is ready, and nobody has run `mozart run hello.yaml --conductor-clone` with `use_baton: true`.
+- **Phase 1 testing has never been attempted.** Zero real baton executions exist. 1,400+ baton tests prove the handlers are correct in isolation. None prove the baton can orchestrate a complete job. This is the same gap I flagged in M3 (F-210 context) but elevated: the tests now pass, the code is ready, and nobody has run `mzt run hello.yaml --conductor-clone` with `use_baton: true`.
 
 ### 6. Meditation
 
@@ -135,7 +135,7 @@ Written to `workspaces/v1-beta-v3/meditations/weaver.md`. Integration is not a t
 ### F-271 Reconfirmation: PluginCliBackend MCP Process Explosion
 - **Severity:** P1 (production impact: 80 child processes instead of 8)
 - **Status:** Open (independently confirmed by Litmus, Sentinel, and now Weaver)
-- **Evidence:** `grep mcp_config_flag src/mozart/execution/instruments/cli_backend.py` → 0 results. The field exists on `CliCommand` (`instruments.py:169`), is set in claude-code profile (`builtins/claude-code.yaml:78`), never read by `_build_command()`.
+- **Evidence:** `grep mcp_config_flag src/marianne/execution/instruments/cli_backend.py` → 0 results. The field exists on `CliCommand` (`instruments.py:169`), is set in claude-code profile (`builtins/claude-code.yaml:78`), never read by `_build_command()`.
 - **Fix:** In `_build_command()`, after extra_flags, check if `cmd.mcp_config_flag` is set and no MCP servers are requested, then add `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`. ~15 lines.
 
 ### Quality Gate Baseline Stale (P3)

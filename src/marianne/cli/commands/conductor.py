@@ -1,8 +1,8 @@
-"""Conductor commands — ``mozart start/stop/restart/conductor-status``.
+"""Conductor commands — ``mzt start/stop/restart/conductor-status``.
 
 These commands consolidate
-all daemon lifecycle management into the main ``mozart`` CLI.
-The core logic lives in ``mozart.daemon.process`` (shared functions);
+all daemon lifecycle management into the main ``marianne`` CLI.
+The core logic lives in ``marianne.daemon.process`` (shared functions);
 this module provides thin Typer command wrappers.
 """
 
@@ -25,7 +25,7 @@ def start(
         "Overrides config file defaults.",
     ),
 ) -> None:
-    """Start the Mozart conductor."""
+    """Start the Marianne conductor."""
     from marianne.daemon.clone import get_clone_name, is_clone_active
     from marianne.daemon.process import start_conductor
 
@@ -42,7 +42,7 @@ def stop(
     pid_file: Path | None = typer.Option(None, "--pid-file", help="PID file path"),
     force: bool = typer.Option(False, "--force", help="Send SIGKILL instead of SIGTERM"),
 ) -> None:
-    """Stop the Mozart conductor.
+    """Stop the Marianne conductor.
 
     When jobs are actively running, warns and asks for confirmation.
     Use --force to skip the safety check and send SIGKILL.
@@ -72,7 +72,7 @@ def restart(
         "Overrides config file defaults.",
     ),
 ) -> None:
-    """Restart the Mozart conductor (stop + start)."""
+    """Restart the Marianne conductor (stop + start)."""
     from marianne.daemon.clone import get_clone_name, is_clone_active
     from marianne.daemon.process import (
         start_conductor,
@@ -101,7 +101,7 @@ def restart(
     if not wait_for_conductor_exit(pid_file, timeout=30.0):
         output_error(
             "Old conductor did not exit within 30 seconds.",
-            hints=["Try 'mozart stop --force' to send SIGKILL."],
+            hints=["Try 'mzt stop --force' to send SIGKILL."],
         )
         raise typer.Exit(1)
 
@@ -118,7 +118,7 @@ def conductor_status(
     pid_file: Path | None = typer.Option(None, "--pid-file", help="PID file path"),
     socket_path: Path | None = typer.Option(None, "--socket", help="Unix socket path"),
 ) -> None:
-    """Check Mozart conductor status."""
+    """Check Marianne conductor status."""
     from marianne.daemon.clone import get_clone_name, is_clone_active
     from marianne.daemon.process import get_conductor_status
 

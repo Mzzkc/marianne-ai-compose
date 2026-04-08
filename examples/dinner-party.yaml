@@ -2,7 +2,7 @@
 #
 # Plan a dinner party from scratch.
 #
-# This score proves Mozart isn't a coding tool — it's an orchestration
+# This score proves Marianne isn't a coding tool — it's an orchestration
 # tool for any complex, multi-faceted task that benefits from parallel
 # planning and structured synthesis.
 #
@@ -38,7 +38,7 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 1200
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Guest Brief"

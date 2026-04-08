@@ -51,10 +51,10 @@ def patterns_why(
     v22 Evolution: Metacognitive Pattern Reflection
 
     Examples:
-        mozart patterns-why              # Show all patterns with WHY analysis
-        mozart patterns-why abc123       # Analyze specific pattern
-        mozart patterns-why --min-obs 3  # Only patterns with 3+ observations
-        mozart patterns-why --json       # JSON output for scripting
+        mzt patterns-why              # Show all patterns with WHY analysis
+        mzt patterns-why abc123       # Analyze specific pattern
+        mzt patterns-why --min-obs 3  # Only patterns with 3+ observations
+        mzt patterns-why --json       # JSON output for scripting
     """
     from marianne.learning.global_store import get_global_store
 
@@ -67,7 +67,7 @@ def patterns_why(
         if not matching:
             output_error(
                 f"No pattern found with ID starting with '{pattern_id}'",
-                hints=["Run 'mozart patterns-list' to see available patterns."],
+                hints=["Run 'mzt patterns-list' to see available patterns."],
             )
             raise typer.Exit(1)
 
@@ -187,7 +187,7 @@ def patterns_why(
 
         console.print(table)
         console.print(
-            "\n[dim]Use 'mozart patterns-why <id>' for detailed analysis.[/dim]"
+            "\n[dim]Use 'mzt patterns-why <id>' for detailed analysis.[/dim]"
         )
 
 
@@ -238,11 +238,11 @@ def patterns_list(
     Displays patterns learned from job executions across all workspaces.
 
     Examples:
-        mozart patterns-list                  # Show global patterns
-        mozart patterns-list --min-priority 0.5  # Only high-priority patterns
-        mozart patterns-list --json           # JSON output for scripting
-        mozart patterns-list --quarantined    # Show quarantined patterns
-        mozart patterns-list --high-trust     # Show trusted patterns only
+        mzt patterns-list                  # Show global patterns
+        mzt patterns-list --min-priority 0.5  # Only high-priority patterns
+        mzt patterns-list --json           # JSON output for scripting
+        mzt patterns-list --quarantined    # Show quarantined patterns
+        mzt patterns-list --high-trust     # Show trusted patterns only
     """
     from marianne.learning.global_store import QuarantineStatus, get_global_store
 

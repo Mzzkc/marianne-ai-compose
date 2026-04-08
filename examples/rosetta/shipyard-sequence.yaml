@@ -44,9 +44,9 @@
 #        Verify all modules work together
 #
 # Usage:
-#   mozart start
-#   mozart run examples/rosetta/shipyard-sequence.yaml
-#   mozart status lib-builder
+#   mzt start
+#   mzt run examples/rosetta/shipyard-sequence.yaml
+#   mzt status lib-builder
 #   ls workspaces/lib-builder/src/
 #
 # Output:

@@ -7,7 +7,7 @@ every observability feature works end-to-end:
 - API backend log file writing
 - CLI backend log write failure handling
 - Execution history recording (SQLite)
-- `mozart history` CLI command
+- `mzt history` CLI command
 - Diagnose command log file discovery
 - Circuit breaker state persistence
 - Chained job info tracking
@@ -429,12 +429,12 @@ class TestExecutionHistoryRecorded:
 
 
 # =============================================================================
-# Test 6: mozart history command
+# Test 6: mzt history command
 # =============================================================================
 
 
-class TestMozartHistoryCommand:
-    """Verify the `mozart history` CLI command works correctly."""
+class TestMarianneHistoryCommand:
+    """Verify the `mzt history` CLI command works correctly."""
 
     def test_history_command_is_registered(self):
         """The history command should be registered in the CLI app."""

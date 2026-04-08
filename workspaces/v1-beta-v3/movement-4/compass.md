@@ -7,19 +7,19 @@
 
 ## What Changed for Alex?
 
-Alex is the developer who just saw the demo and wants to try Mozart. Here's what changed for them in M4:
+Alex is the developer who just saw the demo and wants to try Marianne. Here's what changed for them in M4:
 
 ### Positive Changes
 
-1. **Typos now get caught immediately (F-441).** Before M4, Mozart silently ignored unknown YAML fields. Alex could write `insturment_config: {timeout: 300}` and Mozart would validate it as clean while dropping the field on the floor. Now Mozart errors with a clear message and — for common typos — a "did you mean?" suggestion. This is the single biggest UX improvement in M4.
+1. **Typos now get caught immediately (F-441).** Before M4, Marianne silently ignored unknown YAML fields. Alex could write `insturment_config: {timeout: 300}` and Marianne would validate it as clean while dropping the field on the floor. Now Marianne errors with a clear message and — for common typos — a "did you mean?" suggestion. This is the single biggest UX improvement in M4.
 
-2. **Four Wordware comparison demos exist (D-023).** For the first time in 8+ movements, Mozart has demo-class deliverables that can show external audiences what the tool does — without requiring the baton. Contract generation, candidate screening, marketing content, and invoice analysis. All validate clean. All runnable TODAY with the legacy runner.
+2. **Four Wordware comparison demos exist (D-023).** For the first time in 8+ movements, Marianne has demo-class deliverables that can show external audiences what the tool does — without requiring the baton. Contract generation, candidate screening, marketing content, and invoice analysis. All validate clean. All runnable TODAY with the legacy runner.
 
 3. **Cost estimates are honest (D-024).** `~$0.17 (est.)` with a warning instead of the previous silent fiction of `$0.00`. When instruments return JSON token data, costs are precise. When they don't, the estimate is flagged as approximate. Alex knows what they're paying.
 
-4. **Auto-fresh detection (#103).** If Alex modifies a score and re-runs it, Mozart automatically detects the change and starts fresh instead of resuming from stale state. No more `--fresh` flag required for the common case.
+4. **Auto-fresh detection (#103).** If Alex modifies a score and re-runs it, Marianne automatically detects the change and starts fresh instead of resuming from stale state. No more `--fresh` flag required for the common case.
 
-5. **Pending job state (F-110).** When rate-limited, Mozart queues the score as pending instead of rejecting it. The score starts automatically when the rate limit clears. Alex doesn't have to babysit rate limits.
+5. **Pending job state (F-110).** When rate-limited, Marianne queues the score as pending instead of rejecting it. The score starts automatically when the rate limit clears. Alex doesn't have to babysit rate limits.
 
 6. **Better error messages (F-450).** "Conductor not running" was reported when the actual problem was "conductor is running an older version that doesn't support this command." Now the error says "Conductor does not support '...'. Restart the conductor."
 
@@ -49,11 +49,11 @@ Alex is the developer who just saw the demo and wants to try Mozart. Here's what
 
 **docs/getting-started.md:**
 - Added "Unknown Field Errors" troubleshooting section explaining the F-441 validation strictness change
-- Documents what the error looks like and how Mozart suggests corrections
+- Documents what the error looks like and how Marianne suggests corrections
 
 ### Expanded "Did You Mean?" Typo Suggestions
 
-Added 6 common typos to `_KNOWN_TYPOS` in `src/mozart/cli/commands/validate.py:309-327`:
+Added 6 common typos to `_KNOWN_TYPOS` in `src/marianne/cli/commands/validate.py:309-327`:
 - `insturment` → `instrument` (common transposition)
 - `instrumnet` → `instrument` (common transposition)
 - `insturment_config` → `instrument_config`
@@ -79,10 +79,10 @@ Added 6 common typos to `_KNOWN_TYPOS` in `src/mozart/cli/commands/validate.py:3
 
 ```
 tests/test_unknown_field_ux_journeys.py — 21/21 pass (16 existing + 5 new)
-mypy src/mozart/cli/commands/validate.py — clean
-ruff check src/mozart/cli/commands/validate.py — All checks passed
-mozart validate examples/*.yaml — 38/38 pass (iterative-dev-loop-config.yaml removed)
-mozart validate examples/rosetta/*.yaml — 6/6 pass
+mypy src/marianne/cli/commands/validate.py — clean
+ruff check src/marianne/cli/commands/validate.py — All checks passed
+mzt validate examples/*.yaml — 38/38 pass (iterative-dev-loop-config.yaml removed)
+mzt validate examples/rosetta/*.yaml — 6/6 pass
 ```
 
 ---

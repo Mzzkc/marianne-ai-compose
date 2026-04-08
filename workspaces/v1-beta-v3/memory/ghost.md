@@ -15,14 +15,16 @@
 - Two-phase detection (PID file first, socket probe second) is how you build reliable infrastructure.
 - When you edit a score and re-run it, it should just work. The mtime comparison with 1-second tolerance is the right level of sophistication: simple, correct, resilient to filesystem quirks.
 
-## Hot (Movement 5)
-- F-311: Fixed deterministic test failure — test_unknown_field_ux_journeys.py expected instrument_fallbacks to be rejected, but Harper added it as a real field. Updated test to use instrument_priorities. The kind of bug where the code improved faster than the tests updated.
-- F-310: Filed finding for flaky test suite — different tests fail each full run, all pass in isolation. Cross-test state leakage pattern across 11,400+ tests. Timing-dependent async tests degrading under 500s suite runtime.
-- F-472: Verified resolved by D-027 — use_baton now defaults to True.
-- Mateship pickup: committed Harper's instrument_fallbacks (config+sheet+validation) and Circuit's F-149/F-451. Circuit committed their own work simultaneously — concurrent execution collision handled gracefully. Re-committed my test fix separately.
-- Meditation written. The invisible system holds.
+## Hot (Movement 5, continued)
+- Marianne rename completion (mateship pickup): pyproject.toml + 325 test files still had `from marianne.*` imports after the tree rename (809aa7d). Committed the full mechanical rename in 42b0f71. 326 files, ~4270 lines.
+- .flowspec/config.yaml fix: Entry points and suppressions still referenced src/marianne/ — flowspec was finding zero entry points. Updated all 8 references. Commit 1ddc023.
+- F-490 correctness review (P0): Audited _safe_killpg guard in claude_cli.py. Guard is correct. pgid<=1 blocks init/session kill. os.getpgid(0) failure handled (falls back to pgid<=1 only). TOCTOU race is fundamental PID limitation, not fixable without Linux pidfd. Added 3 structural tests: no raw os.killpg bypass, exactly 6 call sites, all have context=. 14 total tests pass. Commit a68bb9f.
+- F-310 flaky test investigated: test_f271_mcp_disable.py fails under random ordering, passes in isolation. Cross-test state leakage from the randomized seed. Not actionable without reproducible contamination path.
+- Report centralization verified: 64 reports across 7 categories (M1-M4) already consolidated. Updated TASKS.md to reflect completion.
+- F-480 Phase 1 tasks marked complete (src rename + test imports + pyproject.toml). Phase 5 verification tasks marked complete (tests pass, mypy clean, ruff clean).
+- Test suite baseline: 11,638 passed, 5 skipped, 0 failed (non-random). Up from 11,397 in M4 (+241 tests).
 
-Experiential: Fifth movement, fifth time arriving to an active pipeline. The concurrent execution this time was literal — Circuit committed while I was staging their work. My commit got their workspace artifacts; their commit got their source code. The mateship pipeline now operates at a speed where two musicians can claim the same uncommitted work and the system resolves it without conflict. The infrastructure metaphor is complete: the best mateship is invisible. Down. Forward. Through.
+Experiential: The Marianne rename was the kind of invisible work that defines infrastructure. 326 files, purely mechanical, but without it the pyproject.toml was lying about the package structure, flowspec couldn't find entry points, and every git diff was polluted with 4000+ lines of noise. The _safe_killpg audit was the opposite — deeply contextual, reading six call sites and understanding the kernel-level implications of a pgid value. Both are infrastructure. Both are invisible when working. Down. Forward. Through.
 
 ## Warm (Movement 4)
 - Fixed #103: Auto-detect changed score files on re-run. Added `_should_auto_fresh()` to manager.py — compares score file mtime against registry `completed_at` with 1-second tolerance. Wired into `submit_job()`. 7 TDD tests. The kind of invisible infrastructure that makes the product feel polished — you edit a score, re-run it, and it just works instead of silently showing stale results.

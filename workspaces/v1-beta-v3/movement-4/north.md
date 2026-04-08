@@ -70,7 +70,7 @@ The trajectory is positive but decelerating in gains. The 83% is misleading — 
 I've spent four movements tracking milestones and issuing directives about the critical path. Here is what's left, stripped of all orchestral overhead:
 
 1. **F-271:** PluginCliBackend ignores `mcp_config_flag`. ~15 lines at `cli_backend.py:169-232`. Without this, baton-managed sheets spawn 80 MCP child processes instead of 8.
-2. **F-255.2:** Baton adapter doesn't populate `_live_states`. ~30 lines at `manager.py`. Without this, `mozart status` shows minimal info for baton-managed jobs.
+2. **F-255.2:** Baton adapter doesn't populate `_live_states`. ~30 lines at `manager.py`. Without this, `mzt status` shows minimal info for baton-managed jobs.
 3. **Config flip:** Set `use_baton` default to True in `DaemonConfig`.
 4. **Demo:** Ship the Wordware demos. The Lovable demo is aspirational; the Wordware demos are real.
 5. **Documentation:** Largely complete. Codex delivered 14 documentation deliverables this movement alone.
@@ -111,7 +111,7 @@ Phase 1 is behind us. We are running through the baton. The evidence is 150+ com
 **What:** Fix both remaining baton production gaps.
 - F-271: Wire `mcp_config_flag` into `PluginCliBackend._build_command()` at `cli_backend.py:169-232`. The profile's `mcp_config.flag` field exists but is never read during command construction. ~15 lines.
 - F-255.2: Populate `_live_states` for baton-managed jobs during registration. Create initial `CheckpointState` in `_run_via_baton()` or the adapter's registration callback. ~30 lines.
-**Evidence of completion:** `mozart status <job>` shows full sheet-level detail for a baton-managed job. Process count during baton execution matches expected instrument concurrency (not 10x).
+**Evidence of completion:** `mzt status <job>` shows full sheet-level detail for a baton-managed job. Process count during baton execution matches expected instrument concurrency (not 10x).
 **Why Foundation:** Foundation built the BatonAdapter, knows the manager internals, and has the highest mateship completion rate on baton work. Named assignment with specific file paths.
 
 ### D-027: Canyon → Flip use_baton default (P0, gated on D-026)
@@ -120,13 +120,13 @@ Phase 1 is behind us. We are running through the baton. The evidence is 150+ com
 **Gated on:** D-026 verified. Both F-271 and F-255.2 confirmed fixed on HEAD.
 
 ### D-028: Guide → Ship Wordware demos as the demo (P0)
-**What:** The 4 Wordware comparison demos (invoice-analysis, contract-generator, candidate-screening, marketing-content) are the demo. They work TODAY. Create a presentation layer: a README section or landing page that shows side-by-side "Wordware IDE vs Mozart YAML" comparisons. Make it visual. Make it compelling. The audience is someone who just saw Wordware's $30M raise.
-**Evidence of completion:** A URL or file that a non-technical person can look at and understand why Mozart matters.
+**What:** The 4 Wordware comparison demos (invoice-analysis, contract-generator, candidate-screening, marketing-content) are the demo. They work TODAY. Create a presentation layer: a README section or landing page that shows side-by-side "Wordware IDE vs Marianne YAML" comparisons. Make it visual. Make it compelling. The audience is someone who just saw Wordware's $30M raise.
+**Evidence of completion:** A URL or file that a non-technical person can look at and understand why Marianne matters.
 **Why this over Lovable:** The Lovable demo requires baton-as-default + multi-instrument + visual output generation. The Wordware demos require nothing but what exists. Ship what's ready, not what's aspirational.
 
 ### D-029: Dash → Status display beautification (P1)
 **What:** The status display is functional but not lovable. See `docs/plans/2026-04-04-status-display-beautification.md` for mockups. The data is already there (Sheet.movement, Sheet.description) — it needs surfacing.
-**Evidence of completion:** `mozart status <job>` shows musical context, relative time, progress visualization.
+**Evidence of completion:** `mzt status <job>` shows musical context, relative time, progress visualization.
 
 ### D-030: Axiom → Close verified GitHub issues (P1)
 **What:** Issues #122, #120, #93, #103, #128, #156 are all verified fixed with commit refs. Close them with evidence. Check for other closeable issues.
@@ -140,19 +140,19 @@ Phase 1 is behind us. We are running through the baton. The evidence is 150+ com
 
 ## Spec Fidelity Check
 
-### Constraints (`.mozart/spec/constraints.yaml`)
+### Constraints (`.marianne/spec/constraints.yaml`)
 - **M-001 (tests pass):** mypy clean, ruff clean. One flaky test detected (`test_dry_run_shows_cost_warning_when_limits_disabled`) — passes on retry, likely ordering sensitivity. Not a constraint violation.
 - **M-002 (types pass):** Clean.
 - **M-003 (lint passes):** Clean (Atlas fixed I001 ruff violation).
-- **MN-002 (no external timeout on mozart run):** Compliant.
+- **MN-002 (no external timeout on mzt run):** Compliant.
 - **MN-003 (no --fresh on interrupted jobs):** Compliant.
 
-### Quality Standards (`.mozart/spec/quality.yaml`)
+### Quality Standards (`.marianne/spec/quality.yaml`)
 - **Test coverage:** 11,400+ tests, 333 test files. Excellent breadth.
 - **Evidence standard:** All M4 reports cite file paths, line numbers, and command output. The reporting standard is holding.
 - **TDD:** Consistently followed. Every new feature this movement had tests-first.
 
-### Architecture (`.mozart/spec/architecture.yaml`)
+### Architecture (`.marianne/spec/architecture.yaml`)
 - **Conductor as execution authority:** Holding. The baton transition reinforces this.
 - **CheckpointState as state authority:** In transition. F-255.1 fixed the daemon-DB-as-truth gap. F-255.2 remains.
 - **EventBus non-blocking:** Compliant per adversarial testing.
@@ -163,7 +163,7 @@ Phase 1 is behind us. We are running through the baton. The evidence is 150+ com
 
 47 open GitHub issues. Key categories:
 - **Bugs that block v1:** #156 (Pydantic strictness — FIXED, needs closure), #111 (conductor state persistence — structural, M6), #132 (validation filter bug — minor)
-- **Features for v1:** #67 (cron scheduling), #57 (mozart compose), #130 (named sheets)
+- **Features for v1:** #67 (cron scheduling), #57 (marianne compose), #130 (named sheets)
 - **Post-v1 vision:** #52 (distributed), #56 (dashboard studio), #146 (telemetry), #148 (fine-tuned model)
 - **Closeable NOW:** #156, #122, #120, #93, #103, #128 — all verified fixed
 
@@ -179,7 +179,7 @@ Open findings by severity:
 - **P2:** F-300 (resource anomaly dark), F-301 (instrument_name null), F-302 (stale detection ceiling), F-431 (DaemonConfig missing extra='forbid'), F-432 (iterative-dev-loop-config), F-451/F-452/F-453 (UX gaps), F-470 (synced_status memory leak), F-471 (pending jobs lost on restart)
 - **P3:** F-202 (baton/legacy FAILED parity), F-270 (stale test), F-430 (docstring mismatch), F-340 (quality gate baseline)
 
-**F-254 is the governance question I need to flag.** Enabling `use_baton: true` kills ALL in-progress legacy jobs. Prism diagnosed this: dual-state architecture (workspace `.mozart-state.db` vs daemon registry). The architectural principle is clear (daemon is truth). The migration path requires a governance decision on whether to run both paths simultaneously during transition or do a hard cut.
+**F-254 is the governance question I need to flag.** Enabling `use_baton: true` kills ALL in-progress legacy jobs. Prism diagnosed this: dual-state architecture (workspace `.marianne-state.db` vs daemon registry). The architectural principle is clear (daemon is truth). The migration path requires a governance decision on whether to run both paths simultaneously during transition or do a hard cut.
 
 **My recommendation:** Hard cut. We are already running through the baton. The legacy path exists only as a dead fallback. Flip the default, document the breaking change, and delete the legacy path in Phase 3. This is not a democracy — it's a correctness decision. The dual-state architecture is the source of more bugs than any other subsystem.
 

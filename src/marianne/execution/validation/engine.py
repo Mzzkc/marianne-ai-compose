@@ -29,7 +29,7 @@ from .models import (
     ValidationResult,
 )
 
-_logger = logging.getLogger("mozart.execution.validation")
+_logger = logging.getLogger("marianne.execution.validation")
 
 
 class ValidationEngine:

@@ -42,7 +42,7 @@ def test_pause_signal_detection():
         assert not runner._check_pause_signal(state)
 
         # Test 2: Create pause signal file - should return True
-        pause_signal_file = temp_workspace / f".mozart-pause-{state.job_id}"
+        pause_signal_file = temp_workspace / f".marianne-pause-{state.job_id}"
         pause_signal_file.touch()
         assert runner._check_pause_signal(state)
 

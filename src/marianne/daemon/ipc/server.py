@@ -1,4 +1,4 @@
-"""Async Unix domain socket server for Mozart daemon IPC.
+"""Async Unix domain socket server for Marianne daemon IPC.
 
 Binds a Unix socket, accepts concurrent client connections, reads
 newline-delimited JSON-RPC 2.0 requests, dispatches them through
@@ -27,7 +27,7 @@ _logger = get_logger("daemon.ipc.server")
 # Must accommodate full CheckpointState payloads — jobs with many sheets,
 # stdout_tail (up to 10 KB/sheet), synthesis_results, and config_snapshot
 # can easily reach 4-8 MB.  Bumped from 1 MiB after real-world jobs
-# (21 sheets) exceeded the limit and broke `mozart status`.
+# (21 sheets) exceeded the limit and broke `mzt status`.
 MAX_MESSAGE_BYTES = 16_777_216  # 16 MiB
 
 # Default limit on concurrent client connections.

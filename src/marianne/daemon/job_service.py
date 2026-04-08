@@ -365,7 +365,7 @@ class JobService:
         })
 
         # Wrap backend early so the initial state save publishes to the
-        # conductor, making ``mozart status`` available immediately.
+        # conductor, making ``mzt status`` available immediately.
         runner_backend = self._wrap_state_backend(found_backend)
 
         # Reset job status to RUNNING
@@ -447,7 +447,7 @@ class JobService:
             )
 
         # Create pause signal file
-        signal_file = workspace / f".mozart-pause-{job_id}"
+        signal_file = workspace / f".marianne-pause-{job_id}"
         signal_file.touch()
 
         self._output.job_event(job_id, "pause_signal_sent", {
@@ -844,7 +844,7 @@ class JobService:
         backends: list[tuple[str, StateBackend]] = []
 
         # Check for SQLite first (preferred for concurrent access)
-        sqlite_path = workspace / ".mozart-state.db"
+        sqlite_path = workspace / ".marianne-state.db"
         if sqlite_path.exists():
             backends.append(("sqlite", SQLiteStateBackend(sqlite_path)))
 

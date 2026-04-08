@@ -1,12 +1,12 @@
-# Mozart MCP Integration Guide
+# Marianne MCP Integration Guide
 
-This guide explains how to integrate Mozart AI Compose with Claude Desktop using the Model Context Protocol (MCP) server.
+This guide explains how to integrate Marianne AI Compose with Claude Desktop using the Model Context Protocol (MCP) server.
 
 ## Overview
 
-Mozart's MCP server provides external AI agents with comprehensive access to:
+Marianne's MCP server provides external AI agents with comprehensive access to:
 
-- **Job Management**: Start, pause, resume, and cancel Mozart jobs
+- **Job Management**: Start, pause, resume, and cancel Marianne jobs
 - **Progress Monitoring**: Real-time status, process health, and execution logs
 - **Workspace Access**: Browse files, read artifacts, and access job outputs
 - **Quality Assessment**: Code review scoring and validation tools
@@ -16,22 +16,23 @@ Mozart's MCP server provides external AI agents with comprehensive access to:
 
 ### 1. Prerequisites
 
-Ensure Mozart is properly installed and accessible via CLI:
+Ensure Marianne is properly installed and accessible via CLI:
 
 ```bash
-# Verify Mozart installation
-mozart --version
+# Verify Marianne installation
+mzt --version
 
 # Test basic functionality
-mozart validate examples/sheet-review.yaml
+mzt validate examples/sheet-review.yaml
 ```
 
 ### 2. Configure Claude Desktop MCP
 
-Add the Mozart MCP server to your Claude Desktop configuration file.
+Add the Marianne MCP server to your Claude Desktop configuration file.
 
 **Location:**
 - **macOS**: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 **Configuration:**
@@ -39,11 +40,11 @@ Add the Mozart MCP server to your Claude Desktop configuration file.
 ```json
 {
   "mcpServers": {
-    "mozart": {
+    "marianne": {
       "command": "python",
-      "args": ["-m", "mozart.mcp.server"],
+      "args": ["-m", "marianne.mcp.server"],
       "env": {
-        "MOZART_WORKSPACE_ROOT": "/path/to/your/workspaces"
+        "MZT_WORKSPACE_ROOT": "/path/to/your/workspaces"
       }
     }
   }
@@ -54,8 +55,8 @@ Add the Mozart MCP server to your Claude Desktop configuration file.
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `MOZART_WORKSPACE_ROOT` | Root directory for workspace operations | Current working directory |
-| `MOZART_LOG_LEVEL` | Logging level for MCP server | `INFO` |
+| `MZT_WORKSPACE_ROOT` | Root directory for workspace operations | Current working directory |
+| `MZT_LOG_LEVEL` | Logging level for MCP server | `INFO` |
 
 ### 4. Workspace Security
 
@@ -70,17 +71,17 @@ The MCP server restricts file system access to the configured workspace root dir
 ### Job Management Tools
 
 #### `list_jobs`
-List all Mozart jobs with optional status filtering.
+List all Marianne jobs with optional status filtering.
 
 **Parameters:**
 - `status_filter` (optional): Filter by job status (`running`, `paused`, `completed`, `failed`, `cancelled`)
 - `limit` (optional): Maximum number of jobs to return (default: 50)
 
 #### `get_job`
-Get detailed information about a specific Mozart job.
+Get detailed information about a specific Marianne job.
 
 **Parameters:**
-- `job_id` (required): Mozart job ID to retrieve
+- `job_id` (required): Marianne job ID to retrieve
 
 **Returns:**
 - Job metadata and configuration
@@ -89,10 +90,10 @@ Get detailed information about a specific Mozart job.
 - Recent execution status
 
 #### `start_job`
-Start a new Mozart job from a configuration file.
+Start a new Marianne job from a configuration file.
 
 **Parameters:**
-- `config_path` (required): Path to Mozart job configuration file
+- `config_path` (required): Path to Marianne job configuration file
 - `workspace` (optional): Workspace directory for job execution
 - `start_sheet` (optional): Sheet number to start from (default: 1)
 - `self_healing` (optional): Enable automatic error recovery (default: false)
@@ -100,34 +101,34 @@ Start a new Mozart job from a configuration file.
 ### Job Control Tools
 
 #### `pause_job`
-Gracefully pause a running Mozart job at the next sheet boundary.
+Gracefully pause a running Marianne job at the next sheet boundary.
 
 **Parameters:**
-- `job_id` (required): Mozart job ID to pause
+- `job_id` (required): Marianne job ID to pause
 
 #### `resume_job`
-Resume a paused Mozart job from where it left off.
+Resume a paused Marianne job from where it left off.
 
 **Parameters:**
-- `job_id` (required): Mozart job ID to resume
+- `job_id` (required): Marianne job ID to resume
 
 #### `cancel_job`
-Permanently cancel a running Mozart job.
+Permanently cancel a running Marianne job.
 
 **Parameters:**
-- `job_id` (required): Mozart job ID to cancel
+- `job_id` (required): Marianne job ID to cancel
 
 ### Artifact Management Tools
 
-#### `mozart_artifact_list`
-List files in a Mozart workspace.
+#### `marianne_artifact_list`
+List files in a Marianne workspace.
 
 **Parameters:**
 - `workspace` (required): Workspace directory to browse
 - `path` (optional): Subdirectory path within workspace
 - `include_hidden` (optional): Include hidden files (default: false)
 
-#### `mozart_artifact_read`
+#### `marianne_artifact_read`
 Read content of a file in the workspace.
 
 **Parameters:**
@@ -136,29 +137,29 @@ Read content of a file in the workspace.
 - `max_size` (optional): Maximum file size to read in bytes (default: 50,000)
 - `encoding` (optional): Text encoding to use (default: UTF-8)
 
-#### `mozart_artifact_get_logs`
-Get execution logs from a Mozart job.
+#### `marianne_artifact_get_logs`
+Get execution logs from a Marianne job.
 
 **Parameters:**
-- `job_id` (required): Mozart job ID
+- `job_id` (required): Marianne job ID
 - `workspace` (optional): Workspace directory (auto-detected if not provided)
 - `lines` (optional): Number of recent lines to return (default: 100)
 - `level` (optional): Log level filter (`debug`, `info`, `warning`, `error`, `all`)
 
-#### `mozart_artifact_list_artifacts`
-List all artifacts created by a Mozart job.
+#### `marianne_artifact_list_artifacts`
+List all artifacts created by a Marianne job.
 
 **Parameters:**
-- `job_id` (required): Mozart job ID
+- `job_id` (required): Marianne job ID
 - `workspace` (optional): Workspace directory (auto-detected if not provided)
 - `sheet_filter` (optional): Filter artifacts by sheet number
 - `artifact_type` (optional): Filter by type (`output`, `error`, `log`, `state`, `all`)
 
-#### `mozart_artifact_get_artifact`
-Get a specific artifact from a Mozart job.
+#### `marianne_artifact_get_artifact`
+Get a specific artifact from a Marianne job.
 
 **Parameters:**
-- `job_id` (required): Mozart job ID
+- `job_id` (required): Marianne job ID
 - `artifact_path` (required): Relative path to artifact within job workspace
 - `workspace` (optional): Workspace directory (auto-detected if not provided)
 - `max_size` (optional): Maximum artifact size to read (default: 100,000 bytes)
@@ -190,10 +191,12 @@ Generate quality score for code changes with detailed feedback.
 
 ## Usage Examples
 
+**Note**: The examples below show the structure of MCP tool calls for reference. In Claude Desktop, you interact with these tools through natural language requests (e.g., "Start a Marianne job with config.yaml"), and Claude formulates the appropriate MCP tool calls internally.
+
 ### Starting a Job
 
 ```javascript
-// In Claude Desktop conversation
+// Tool call structure (Claude Desktop handles this internally)
 await call_tool("start_job", {
   config_path: "/workspaces/my-project/job-config.yaml",
   workspace: "/workspaces/my-project",
@@ -210,7 +213,7 @@ const status = await call_tool("get_job", {
 });
 
 // Get recent logs
-const logs = await call_tool("mozart_artifact_get_logs", {
+const logs = await call_tool("marianne_artifact_get_logs", {
   job_id: "my-job-123",
   lines: 50,
   level: "error"
@@ -238,13 +241,13 @@ const score_report = await call_tool("generate_score", {
 
 ```javascript
 // Browse workspace files
-const files = await call_tool("mozart_artifact_list", {
+const files = await call_tool("marianne_artifact_list", {
   workspace: "/workspaces/my-project",
   include_hidden: false
 });
 
 // Read specific artifact
-const artifact = await call_tool("mozart_artifact_get_artifact", {
+const artifact = await call_tool("marianne_artifact_get_artifact", {
   job_id: "my-job-123",
   artifact_path: "output/results.json"
 });
@@ -254,16 +257,16 @@ const artifact = await call_tool("mozart_artifact_get_artifact", {
 
 ### Configuration Resources
 
-The MCP server exposes Mozart configurations as readable resources:
+The MCP server exposes Mzt configurations as readable resources:
 
 - `config://job/{job_id}` - Job configuration
-- `mozart://config/global` - Global Mozart settings
+- `marianne://config/global` - Global Marianne settings
 
 ## Security Considerations
 
 ### User Consent Required
 
-All Mozart MCP tools require explicit user consent before execution due to:
+All Marianne MCP tools require explicit user consent before execution due to:
 - File system access and modification
 - Process execution and management
 - Network operations for job orchestration
@@ -271,8 +274,8 @@ All Mozart MCP tools require explicit user consent before execution due to:
 ### Access Restrictions
 
 - File access limited to configured workspace root
-- No arbitrary code execution beyond Mozart's built-in capabilities
-- Process management restricted to Mozart job processes only
+- No arbitrary code execution beyond Marianne's built-in capabilities
+- Process management restricted to Marianne job processes only
 
 ### Data Protection
 
@@ -286,11 +289,11 @@ All Mozart MCP tools require explicit user consent before execution due to:
 
 **MCP Server Not Starting**
 ```bash
-# Check Mozart installation
-mozart --version
+# Check Marianne installation
+mzt --version
 
 # Verify MCP server module
-python -m mozart.mcp.server --help
+python -m marianne.mcp.server --help
 ```
 
 **Permission Errors**
@@ -302,8 +305,8 @@ chmod 755 /path/to/workspaces
 
 **Tool Execution Failures**
 ```bash
-# Check Mozart CLI functionality
-mozart validate examples/sheet-review.yaml
+# Check Marianne CLI functionality
+mzt validate examples/sheet-review.yaml
 
 # Verify workspace permissions
 ls -la /path/to/workspace
@@ -316,12 +319,12 @@ Enable debug logging in Claude Desktop configuration:
 ```json
 {
   "mcpServers": {
-    "mozart": {
+    "marianne": {
       "command": "python",
-      "args": ["-m", "mozart.mcp.server", "--debug"],
+      "args": ["-m", "marianne.mcp.server", "--debug"],
       "env": {
-        "MOZART_WORKSPACE_ROOT": "/path/to/workspaces",
-        "MOZART_LOG_LEVEL": "DEBUG"
+        "MZT_WORKSPACE_ROOT": "/path/to/workspaces",
+        "MZT_LOG_LEVEL": "DEBUG"
       }
     }
   }
@@ -330,7 +333,7 @@ Enable debug logging in Claude Desktop configuration:
 
 ## Daemon Integration
 
-When the Mozart conductor (`mozart start`) is running, the MCP server automatically routes job operations through it. This enables:
+When the Marianne conductor (`mzt start`) is running, the MCP server automatically routes job operations through it. This enables:
 
 - **Coordinated rate limiting** across multiple concurrent jobs
 - **Centralized learning** — patterns learned by one job benefit others
@@ -342,14 +345,14 @@ The MCP server detects the daemon automatically. No additional configuration is 
 
 | Mode | How to Start | When to Use |
 |------|-------------|-------------|
-| Standalone | `mozart mcp` | Single-job workflows, development |
-| Through Conductor | `mozart start` then `mozart mcp` | Multi-job orchestration, production |
+| Standalone | `mzt mcp` | Single-job workflows, development |
+| Through Conductor | `mzt start` then `mzt mcp` | Multi-job orchestration, production |
 
 ### Related Commands
 
-- `mozart mcp` — Start the MCP server (see [CLI Reference](cli-reference.md#mozart-mcp))
-- `mozart start` — Start the conductor (see [CLI Reference](cli-reference.md#mozart-start))
-- `mozart config` — Manage conductor configuration (see [CLI Reference](cli-reference.md#mozart-config))
+- `mzt mcp` — Start the MCP server (see [CLI Reference](cli-reference.md#mzt-mcp))
+- `mzt start` — Start the conductor (see [CLI Reference](cli-reference.md#mzt-start))
+- `mzt config` — Manage conductor configuration (see [CLI Reference](cli-reference.md#mzt-config))
 
 ---
 
@@ -361,14 +364,14 @@ Use MCP tools to create automated monitoring workflows:
 
 1. Start job with `start_job`
 2. Poll status with `get_job`
-3. Retrieve logs on errors with `mozart_artifact_get_logs`
+3. Retrieve logs on errors with `marianne_artifact_get_logs`
 4. Validate results with `validate_score`
 
 ### Quality Gates
 
 Implement quality gates in development workflows:
 
-1. Run Mozart job for code analysis
+1. Run Marianne job for code analysis
 2. Use `validate_score` to check quality thresholds
 3. Block deployment if score below minimum
 4. Generate detailed reports with `generate_score`
@@ -377,20 +380,20 @@ Implement quality gates in development workflows:
 
 Perform comprehensive workspace analysis:
 
-1. List all artifacts with `mozart_artifact_list_artifacts`
-2. Read configuration files with `mozart_artifact_read`
-3. Analyze execution logs with `mozart_artifact_get_logs`
+1. List all artifacts with `marianne_artifact_list_artifacts`
+2. Read configuration files with `marianne_artifact_read`
+3. Analyze execution logs with `marianne_artifact_get_logs`
 4. Generate quality assessments with score tools
 
 ## Support
 
 For issues with MCP integration:
 
-1. Verify Mozart CLI functionality first
+1. Verify Marianne CLI functionality first
 2. Check Claude Desktop MCP server logs
 3. Validate workspace permissions and configuration
-4. Refer to Mozart documentation for job configuration
+4. Refer to Marianne documentation for job configuration
 
 ---
 
-*This integration guide reflects the current Mozart MCP capabilities. MCP tools and capabilities continue to evolve.*
+*This integration guide reflects the current Marianne MCP capabilities. MCP tools and capabilities continue to evolve.*

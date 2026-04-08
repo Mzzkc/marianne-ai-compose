@@ -1,7 +1,7 @@
-"""Run command for Mozart CLI.
+"""Run command for Marianne CLI.
 
-This module implements the ``mozart run`` command which routes scores
-through a running conductor (``mozart start``).  Direct execution is not
+This module implements the ``mzt run`` command which routes scores
+through a running conductor (``mzt start``).  Direct execution is not
 supported — a running conductor is required (like docker requires dockerd).
 
 The only exception is ``--dry-run``, which validates and displays the
@@ -102,7 +102,7 @@ def run(
                 f"YAML syntax error: {e}",
                 hints=[
                     "Check for indentation issues or invalid YAML characters.",
-                    f"Validate with: mozart validate {config_file}",
+                    f"Validate with: mzt validate {config_file}",
                 ],
             )
         raise typer.Exit(1) from None
@@ -112,7 +112,7 @@ def run(
         else:
             output_error(
                 str(e),
-                hints=[f"Validate with: mozart validate {config_file}"],
+                hints=[f"Validate with: mzt validate {config_file}"],
             )
         raise typer.Exit(1) from None
 
@@ -193,12 +193,12 @@ def run(
     # Daemon not available or submission failed
     if json_output:
         output_json({
-            "error": "Mozart conductor is not running. Start with: mozart start",
+            "error": "Marianne conductor is not running. Start with: mzt start",
         })
     else:
         output_error(
-            "Mozart conductor is not running.",
-            hints=["Start it with: mozart start"],
+            "Marianne conductor is not running.",
+            hints=["Start it with: mzt start"],
         )
     raise typer.Exit(1)
 
@@ -284,7 +284,7 @@ async def _try_daemon_submit(
         else:
             if early_failed:
                 err = early.get("error_message", "") if isinstance(early, dict) else ""
-                hints = [f"Run: mozart diagnose {job_id}"]
+                hints = [f"Run: mzt diagnose {job_id}"]
                 if err:
                     hints.insert(0, err)
                 output_error(
@@ -296,7 +296,7 @@ async def _try_daemon_submit(
             if msg:
                 console.print(f"  {msg}")
             console.print(
-                f"\n[dim]Monitor with:[/dim] mozart status {job_id} --watch"
+                f"\n[dim]Monitor with:[/dim] mzt status {job_id} --watch"
             )
 
         return True
@@ -311,7 +311,7 @@ async def _try_daemon_submit(
         if isinstance(exc, DaemonError):
             output_error(
                 str(exc),
-                hints=["Restart the conductor: mozart restart"],
+                hints=["Restart the conductor: mzt restart"],
                 json_output=json_output,
             )
             raise typer.Exit(1) from None
@@ -330,13 +330,13 @@ def _rejection_hints(msg: str, *, fresh: bool = False) -> list[str]:
     if "shutting down" in msg_lower:
         return [
             "The conductor is shutting down.",
-            "Wait for shutdown to complete, then restart: mozart start",
+            "Wait for shutdown to complete, then restart: mzt start",
         ]
 
     if "pressure" in msg_lower:
         return [
             "The system is under heavy load.",
-            "Check active rate limits: mozart clear-rate-limits (to view/clear)",
+            "Check active rate limits: mzt clear-rate-limits (to view/clear)",
             "Wait for running jobs to complete or reduce concurrent work.",
         ]
 
@@ -345,11 +345,11 @@ def _rejection_hints(msg: str, *, fresh: bool = False) -> list[str]:
     ):
         hints = [
             "A score with this name is already active.",
-            "Pause or cancel it first: mozart pause <id> / mozart cancel <id>",
+            "Pause or cancel it first: mzt pause <id> / mzt cancel <id>",
         ]
         if fresh:
             hints.append(
-                "Clear the stale entry: mozart clear --score <id>"
+                "Clear the stale entry: mzt clear --score <id>"
             )
         else:
             hints.append("Or wait for it to finish.")
@@ -358,7 +358,7 @@ def _rejection_hints(msg: str, *, fresh: bool = False) -> list[str]:
     if "parse" in msg_lower or "failed to parse" in msg_lower:
         return [
             "The score file has errors.",
-            "Validate it with: mozart validate <file>",
+            "Validate it with: mzt validate <file>",
         ]
 
     if "workspace" in msg_lower and (
@@ -378,7 +378,7 @@ def _rejection_hints(msg: str, *, fresh: bool = False) -> list[str]:
     # Fallback: generic but still actionable
     return [
         "The conductor is running but declined this submission.",
-        "Check with: mozart conductor-status",
+        "Check with: mzt conductor-status",
     ]
 
 
@@ -405,10 +405,10 @@ def _handle_pending_response(
         console.print(f"[yellow]Score queued as pending:[/yellow] {job_id}")
         console.print(f"  {display_msg}")
         console.print(
-            f"\n[dim]Monitor with:[/dim] mozart status {job_id} --watch"
+            f"\n[dim]Monitor with:[/dim] mzt status {job_id} --watch"
         )
         console.print(
-            "[dim]Cancel with:[/dim]  mozart cancel " + job_id
+            "[dim]Cancel with:[/dim]  mzt cancel " + job_id
         )
 
 

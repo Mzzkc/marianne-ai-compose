@@ -1,7 +1,7 @@
-"""JSON-RPC 2.0 error codes and helper functions for Mozart daemon IPC.
+"""JSON-RPC 2.0 error codes and helper functions for Marianne daemon IPC.
 
 Maps the daemon exception hierarchy (``DaemonError`` and subclasses) to
-standard and Mozart-extension JSON-RPC error codes, plus convenience
+standard and Marianne-extension JSON-RPC error codes, plus convenience
 builders for the most common error responses.
 """
 
@@ -29,7 +29,7 @@ INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
 
 # ---------------------------------------------------------------------------
-# Mozart extension error codes (-32000 to -32099)
+# Marianne extension error codes (-32000 to -32099)
 # ---------------------------------------------------------------------------
 
 JOB_NOT_FOUND = -32000

@@ -12,7 +12,7 @@ import logging
 from .codes import ErrorCategory, ErrorCode, ExitReason
 from .models import ClassifiedError, ErrorInfo, ParsedCliError
 
-_logger = logging.getLogger("mozart.errors.parsers")
+_logger = logging.getLogger("marianne.errors.parsers")
 
 
 # Priority scores for root cause selection.
@@ -302,7 +302,7 @@ def classify_single_json_error(
                 suggested_wait_seconds=30.0,
                 error_info=ErrorInfo(
                     reason="BINARY_NOT_FOUND",
-                    domain="mozart.backend.claude_cli",
+                    domain="marianne.backend.claude_cli",
                     metadata={"original_message": parsed_error.message},
                 ),
             )

@@ -1,4 +1,4 @@
-"""Tests for mozart.learning.store.base module.
+"""Tests for marianne.learning.store.base module.
 
 Covers:
 - WhereBuilder: clause accumulation, build with/without clauses, multi-param clauses
@@ -144,8 +144,8 @@ class TestInitialization:
     """Tests for store initialization and database setup."""
 
     def test_default_db_path(self):
-        """DEFAULT_GLOBAL_STORE_PATH points to ~/.mozart/global-learning.db."""
-        assert DEFAULT_GLOBAL_STORE_PATH == Path.home() / ".mozart" / "global-learning.db"
+        """DEFAULT_GLOBAL_STORE_PATH points to ~/.marianne/global-learning.db."""
+        assert DEFAULT_GLOBAL_STORE_PATH == Path.home() / ".marianne" / "global-learning.db"
 
     def test_custom_db_path(self, tmp_path: Path):
         """Custom db_path is stored on the instance."""

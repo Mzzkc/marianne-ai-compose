@@ -1,4 +1,4 @@
-# Token Compression Strategies for Mozart
+# Token Compression Strategies for Marianne
 
 > **Status: Research / Not Implemented** — This document describes strategies under consideration. None have been implemented.
 
@@ -9,9 +9,9 @@
 
 ## Executive Summary
 
-This document captures research on algorithmic token compression strategies applicable to Mozart AI Compose. The goal is reducing token usage (and thus cost/latency) while maintaining output quality.
+This document captures research on algorithmic token compression strategies applicable to Marianne AI Compose. The goal is reducing token usage (and thus cost/latency) while maintaining output quality.
 
-**Key Finding:** Mozart's batch-oriented, declarative YAML model aligns naturally with prompt caching and prefix sharing strategies. The highest-impact, lowest-complexity strategy is **Anthropic's native prompt caching**, which can deliver 90% cost reduction with minimal code changes.
+**Key Finding:** Marianne's batch-oriented, declarative YAML model aligns naturally with prompt caching and prefix sharing strategies. The highest-impact, lowest-complexity strategy is **Anthropic's native prompt caching**, which can deliver 90% cost reduction with minimal code changes.
 
 ---
 
@@ -20,21 +20,21 @@ This document captures research on algorithmic token compression strategies appl
 ### Explicit Audience
 - **Developers** running batch AI operations (code review, data processing, content generation)
 - **Teams** needing cost optimization for high-volume Claude usage
-- **Mozart contributors** implementing new optimization features
+- **Marianne contributors** implementing new optimization features
 
 ### Implicit Audience (P5 Recognition)
-- **Mozart itself** - as a self-evolving system, Mozart may use this research to inform its own evolution decisions. The opus evolution cycles (v1→v4) demonstrate Mozart's capacity to improve its own score based on discovered patterns.
+- **Marianne itself** - as a self-evolving system, Marianne may use this research to inform its own evolution decisions. The opus evolution cycles (v1→v4) demonstrate Marianne's capacity to improve its own score based on discovered patterns.
 
 ---
 
 ## Current State Analysis
 
-### Existing Compression Patterns in Mozart
+### Existing Compression Patterns in Marianne
 
-Mozart already implements basic compression thinking:
+Marianne already implements basic compression thinking:
 
 ```python
-# src/mozart/prompts/templating.py:222-224
+# src/marianne/prompts/templating.py:222-224
 if len(original_context) > 3000:
     truncation_msg = "\n\n[... original prompt truncated for brevity ...]"
     original_context = original_context[:3000] + truncation_msg
@@ -42,25 +42,25 @@ if len(original_context) > 3000:
 
 **Problem:** Naive truncation loses potentially important context. Smart compression would preserve semantics while reducing tokens.
 
-### Token Flow in Mozart
+### Token Flow in Marianne
 
 ```
 YAML Config → PromptBuilder → [COMPRESSION POINT] → Backend → Claude API/CLI
                     ↓
             Template + Stakes + Thinking Method + Variables
                     ↓
-            MOZART_OPERATOR_IMPERATIVE injection (claude_cli.py:51-104)
+            MZT_OPERATOR_IMPERATIVE injection (claude_cli.py:51-104)
                     ↓
             Final prompt (~1000-5000 tokens typical)
 ```
 
-**Key Insight:** The MOZART_OPERATOR_IMPERATIVE (53 lines, ~800 tokens) is injected into EVERY prompt. This is a prime candidate for caching.
+**Key Insight:** The MZT_OPERATOR_IMPERATIVE (53 lines, ~800 tokens) is injected into EVERY prompt. This is a prime candidate for caching.
 
 ---
 
 ## Strategy Ranking
 
-| Rank | Strategy | Cost Savings | Latency Savings | Complexity | Mozart Fit |
+| Rank | Strategy | Cost Savings | Latency Savings | Complexity | Marianne Fit |
 |------|----------|--------------|-----------------|------------|------------|
 | 1 | Anthropic Prompt Caching | 90% | 85% | Low | Excellent |
 | 2 | Sheet Prefix Sharing | 30-50% | 20-40% | Medium | Excellent |
@@ -76,13 +76,13 @@ YAML Config → PromptBuilder → [COMPRESSION POINT] → Backend → Claude API
 
 Anthropic's native prompt caching allows marking portions of prompts as cacheable. Cached content is stored for 5-60 minutes and reused across API calls.
 
-### Why It Fits Mozart
+### Why It Fits Marianne
 
-Mozart's batch model has high cache potential:
+Marianne's batch model has high cache potential:
 
 | Prompt Component | Per-Sheet Variation | Cache Candidate |
 |------------------|---------------------|-----------------|
-| MOZART_OPERATOR_IMPERATIVE | None | YES (100%) |
+| MZT_OPERATOR_IMPERATIVE | None | YES (100%) |
 | Template body | None | YES (100%) |
 | Stakes | None | YES (100%) |
 | Thinking method | None | YES (100%) |
@@ -107,7 +107,7 @@ Mozart's batch model has high cache potential:
 ### Implementation Plan
 
 ```python
-# src/mozart/backends/anthropic_api.py (enhancement)
+# src/marianne/backends/anthropic_api.py (enhancement)
 
 class AnthropicApiBackend(Backend):
     def __init__(self, ..., enable_prompt_caching: bool = True):
@@ -161,9 +161,9 @@ backend:
 
 When processing multiple sheets, identify the common prompt prefix and optimize how it's sent to the model. This is related to but distinct from API-level caching—it's about structuring prompts for optimal KV cache reuse at inference time.
 
-### Why It Fits Mozart
+### Why It Fits Marianne
 
-All sheets in a Mozart job share:
+All sheets in a Marianne job share:
 - Same system instructions
 - Same template structure
 - Same stakes/thinking method
@@ -172,7 +172,7 @@ All sheets in a Mozart job share:
 ### Implementation Approach
 
 ```python
-# src/mozart/execution/runner.py (enhancement)
+# src/marianne/execution/runner.py (enhancement)
 
 class JobRunner:
     def _extract_common_prefix(self, prompts: list[str]) -> tuple[str, list[str]]:
@@ -267,7 +267,7 @@ Research shows a three-tier fidelity approach works well:
 ### Implementation Hooks
 
 ```python
-# src/mozart/prompts/compression.py (new file)
+# src/marianne/prompts/compression.py (new file)
 
 from enum import Enum
 from dataclasses import dataclass
@@ -327,7 +327,7 @@ class ContextCompressor:
 
 Detect and remove semantically redundant content before sending to the model.
 
-### Where Redundancy Occurs in Mozart
+### Where Redundancy Occurs in Marianne
 
 | Source | Example | Typical Redundancy |
 |--------|---------|-------------------|
@@ -338,7 +338,7 @@ Detect and remove semantically redundant content before sending to the model.
 ### Implementation Approach
 
 ```python
-# src/mozart/prompts/deduplication.py (new file)
+# src/marianne/prompts/deduplication.py (new file)
 
 from typing import Protocol
 import hashlib
@@ -437,19 +437,19 @@ Use a smaller language model (GPT-2 Small, LLaMA-7B) to identify and remove non-
 | LongLLMLingua | Long contexts | 4-6x (quality focus) | Baseline |
 | LLMLingua-2 | Speed + accuracy | 3-6x | 3-6x faster |
 
-### Why Lower Priority for Mozart
+### Why Lower Priority for Marianne
 
 | Consideration | Impact |
 |---------------|--------|
 | Requires external model | Added complexity, latency |
-| Best for RAG/documents | Mozart prompts are structured, not documents |
+| Best for RAG/documents | Marianne prompts are structured, not documents |
 | Diminishing returns | Prompt caching already gives 90% savings |
 | Dependency management | Additional Python packages |
 
 ### If Implementing
 
 ```python
-# src/mozart/prompts/llmlingua.py (optional)
+# src/marianne/prompts/llmlingua.py (optional)
 
 try:
     from llmlingua import PromptCompressor
@@ -515,7 +515,7 @@ Tasks:
 **Impact:** 40-60% reduction in completion prompt tokens
 
 Tasks:
-1. Create `src/mozart/prompts/compression.py` module
+1. Create `src/marianne/prompts/compression.py` module
 2. Implement `ContextCompressor` with fidelity levels
 3. Replace naive truncation in `build_completion_prompt()`
 4. Add summarization backend option (Haiku for cost)
@@ -572,7 +572,7 @@ class CompressionMetrics:
 Add to outcome recording:
 
 ```yaml
-# In .mozart-outcomes.json
+# In .marianne-outcomes.json
 {
   "job_id": "my-job",
   "sheet_num": 1,
@@ -595,8 +595,8 @@ Add to outcome recording:
 | **COMP** | Clear integration points exist (PromptBuilder, Backend). Prompt caching requires API backend, not CLI. |
 | **SCI** | Benchmarks show 90% savings achievable. RAG systems report 30-40% redundancy. |
 | **CULT** | Anthropic's caching is Claude-native (no external dependencies). DSPy philosophy differs (signatures vs prompts). |
-| **EXP** | Prompt caching "feels right" for Mozart's declarative model. LLMLingua feels like overkill. |
-| **META** | This research itself demonstrates P5—Mozart documenting how to improve Mozart. |
+| **EXP** | Prompt caching "feels right" for Marianne's declarative model. LLMLingua feels like overkill. |
+| **META** | This research itself demonstrates P5—Marianne documenting how to improve Marianne. |
 
 ---
 
@@ -622,5 +622,5 @@ Add to outcome recording:
 ---
 
 *Document created: 2026-01-05*
-*Research conducted by: Claude (via Mozart parallel session)*
-*For use by: Mozart evolution cycles, human contributors*
+*Research conducted by: Claude (via Marianne parallel session)*
+*For use by: Marianne evolution cycles, human contributors*

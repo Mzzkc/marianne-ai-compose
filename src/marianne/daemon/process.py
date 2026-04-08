@@ -1,10 +1,10 @@
-"""Mozart daemon process.
+"""Marianne daemon process.
 
 Long-running orchestration service that manages job execution,
 resources, and cross-job coordination.  Provides core functions
 for starting, stopping, and checking conductor status.
 
-The entry point is ``mozart start/stop/restart`` via
+The entry point is ``mzt start/stop/restart`` via
 ``cli/commands/conductor.py``.
 """
 
@@ -51,9 +51,9 @@ def start_conductor(
     profile: str | None = None,
     clone_name: str | None = None,
 ) -> None:
-    """Start the Mozart conductor process.
+    """Start the Marianne conductor process.
 
-    Called by ``mozart start`` via ``cli/commands/conductor.py``.
+    Called by ``mzt start`` via ``cli/commands/conductor.py``.
 
     When *clone_name* is provided, the conductor runs with isolated
     paths (socket, PID file, state DB, log) so it can coexist with the
@@ -82,7 +82,7 @@ def start_conductor(
             label = (
                 "clone conductor"
                 if clone_name is not None
-                else "Mozart conductor"
+                else "Marianne conductor"
             )
             typer.echo(f"{label} is already running (PID {pid})")
             raise typer.Exit(1)
@@ -104,7 +104,7 @@ def start_conductor(
             finally:
                 os.close(probe_fd)
         except OSError:
-            typer.echo("Mozart conductor is starting up (PID file locked)")
+            typer.echo("Marianne conductor is starting up (PID file locked)")
             raise typer.Exit(1) from None
 
     from marianne.core.logging import configure_logging
@@ -167,9 +167,9 @@ def stop_conductor(
     force: bool = False,
     socket_path: Path | None = None,
 ) -> None:
-    """Stop the running Mozart conductor (daemon) process.
+    """Stop the running Marianne conductor (daemon) process.
 
-    Called by ``mozart stop`` via ``cli/commands/conductor.py``.
+    Called by ``mzt stop`` via ``cli/commands/conductor.py``.
 
     When jobs are actively running and ``--force`` is not set, warns
     the user and asks for confirmation before proceeding (#94).
@@ -178,7 +178,7 @@ def stop_conductor(
     resolved_pid_file = pid_file or DaemonConfig().pid_file
     pid = _read_pid(resolved_pid_file)
     if pid is None or not _pid_alive(pid):
-        typer.echo("Mozart conductor is not running")
+        typer.echo("Marianne conductor is not running")
         resolved_pid_file.unlink(missing_ok=True)
         raise typer.Exit(1)
 
@@ -199,7 +199,7 @@ def stop_conductor(
     sig = signal.SIGKILL if force else signal.SIGTERM
     os.kill(pid, sig)
     typer.echo(
-        f"Sent {'SIGKILL' if force else 'SIGTERM'} to Mozart conductor (PID {pid})",
+        f"Sent {'SIGKILL' if force else 'SIGTERM'} to Marianne conductor (PID {pid})",
     )
 
 
@@ -207,9 +207,9 @@ def get_conductor_status(
     pid_file: Path | None = None,
     socket_path: Path | None = None,
 ) -> None:
-    """Check Mozart conductor (daemon) status via health probes.
+    """Check Marianne conductor (daemon) status via health probes.
 
-    Called by ``mozart conductor-status`` via ``cli/commands/conductor.py``.
+    Called by ``mzt conductor-status`` via ``cli/commands/conductor.py``.
     """
     _defaults = DaemonConfig()
     resolved_pid_file = pid_file or _defaults.pid_file
@@ -217,11 +217,11 @@ def get_conductor_status(
 
     pid = _read_pid(resolved_pid_file)
     if pid is None or not _pid_alive(pid):
-        typer.echo("Mozart conductor is not running")
+        typer.echo("Marianne conductor is not running")
         resolved_pid_file.unlink(missing_ok=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Mozart conductor is running (PID {pid})")
+    typer.echo(f"Marianne conductor is running (PID {pid})")
 
     from marianne.daemon.ipc.client import DaemonClient
 
@@ -330,7 +330,7 @@ def get_conductor_status(
 
 
 class DaemonProcess:
-    """Long-running Mozart daemon process.
+    """Long-running Marianne daemon process.
 
     Composes DaemonServer (IPC), JobManager (job tracking),
     and ResourceMonitor (limits) into a single lifecycle.
@@ -407,7 +407,7 @@ class DaemonProcess:
                 ),
                 (
                     "state_db_path",
-                    str(self._config.state_db_path), "~/.mozart/daemon-state.db",
+                    str(self._config.state_db_path), "~/.marianne/daemon-state.db",
                     "config.reserved_field_ignored",
                     "state_db_path is reserved for future use and has no "
                     "effect. Daemon state persistence is not yet implemented.",
@@ -930,7 +930,7 @@ def _load_config(
     """Load DaemonConfig from YAML file or return defaults.
 
     If *config_file* is ``None``, the well-known default location
-    ``~/.mozart/conductor.yaml`` is checked automatically.
+    ``~/.marianne/conductor.yaml`` is checked automatically.
 
     When *profile* is given, the named built-in profile is deep-merged
     on top of the base config data before Pydantic validation.
@@ -946,7 +946,7 @@ def _load_config(
 
     # Auto-discover default config when none explicitly provided
     if config_file is None:
-        default_path = Path("~/.mozart/conductor.yaml").expanduser()
+        default_path = Path("~/.marianne/conductor.yaml").expanduser()
         if default_path.exists():
             config_file = default_path
 
@@ -972,7 +972,7 @@ def _load_config(
 def _write_pid(pid_file: Path) -> None:
     """Write current PID to file atomically with advisory lock.
 
-    Uses fcntl.flock() to prevent TOCTOU races when two ``mozart start``
+    Uses fcntl.flock() to prevent TOCTOU races when two ``mzt start``
     invocations run concurrently.  Also rejects symlinks to avoid a local
     attacker redirecting the write to an arbitrary file.
     """

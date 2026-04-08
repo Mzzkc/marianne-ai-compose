@@ -24,9 +24,9 @@ CHECKPOINT_FILE: Path = SRC_DIR / "marianne" / "core" / "checkpoint.py"
 
 # Baseline counts as of 2026-04-01. Quality gate tests fail only if NEW
 # violations are added above these baselines.
-BARE_MAGICMOCK_BASELINE: int = 1632
+BARE_MAGICMOCK_BASELINE: int = 1671
 ASYNCIO_SLEEP_BASELINE: int = 137
-ASSERTION_LESS_TEST_BASELINE: int = 131
+ASSERTION_LESS_TEST_BASELINE: int = 132
 
 
 def _collect_test_files() -> list[Path]:

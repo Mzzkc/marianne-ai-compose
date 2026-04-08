@@ -1,4 +1,4 @@
-"""Workspace lifecycle management for Mozart jobs.
+"""Workspace lifecycle management for Marianne jobs.
 
 Handles archival of workspace files when --fresh is used on self-chaining jobs.
 This prevents stale validation artifacts from causing false-positive validations

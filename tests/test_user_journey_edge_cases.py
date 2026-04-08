@@ -28,7 +28,7 @@ runner = CliRunner()
 # =============================================================================
 # Story 1: Dana's Iterative Editing
 #
-# Dana is writing her first real score. She starts with `mozart init`, then
+# Dana is writing her first real score. She starts with `mzt init`, then
 # edits the YAML by hand, making mistakes along the way. Each edit →
 # validate cycle should guide her to the right answer.
 # =============================================================================
@@ -297,7 +297,7 @@ class TestPriyasForgottenScore:
 
     @pytest.mark.adversarial
     def test_status_no_args_shows_something_useful(self) -> None:
-        """Running 'mozart status' with no args gives an overview."""
+        """Running 'mzt status' with no args gives an overview."""
         result = runner.invoke(app, ["status"])
         # May fail if conductor isn't running, which is fine
         # But should never crash with a traceback
@@ -332,7 +332,7 @@ class TestPriyasForgottenScore:
         result = runner.invoke(app, ["status", "my-scroe-typo-123"])
         if result.exit_code != 0:
             combined = result.stdout + result.output
-            # Should suggest running 'mozart list'
+            # Should suggest running 'mzt list'
             assert "list" in combined.lower()
 
 

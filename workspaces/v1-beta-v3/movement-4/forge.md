@@ -16,7 +16,7 @@ AFTER: 5 passed in 1.54s
 ```
 
 ### 2. Fix #93: Pause During Retry Loop (mateship pickup of Harper's work)
-**Files:** `src/mozart/execution/runner/sheet.py:1565-1570`, `tests/test_pause_during_retry.py`
+**Files:** `src/marianne/execution/runner/sheet.py:1565-1570`, `tests/test_pause_during_retry.py`
 **Status:** Code + tests existed uncommitted in working tree. Verified and committed as mateship.
 
 The bug: when a sheet is stuck in a validation-failure retry loop, pause signals are only consumed at sheet boundaries. The retry `while True` loop never reaches a boundary, so the pause signal is never detected.
@@ -31,7 +31,7 @@ The fix: added `_check_pause_signal(state)` + `_handle_pause_request(state, shee
 - End-to-end filesystem-based signal
 
 ### 3. Fix #122: Resume Gives Unclear Output (my work)
-**Files:** `src/mozart/cli/commands/resume.py:327-340,419-443`, `tests/test_resume_output_clarity.py`, `tests/test_cli_run_resume.py:879-886`, `tests/test_conductor_first_routing.py`, `tests/test_resume_no_reload_ipc.py`
+**Files:** `src/marianne/cli/commands/resume.py:327-340,419-443`, `tests/test_resume_output_clarity.py`, `tests/test_cli_run_resume.py:879-886`, `tests/test_conductor_first_routing.py`, `tests/test_resume_no_reload_ipc.py`
 
 **Root cause:** `await_early_failure()` polls the conductor for status immediately after resume acceptance. For a resume of a FAILED job, the status is still "failed" from the previous run. The conductor's `resume_job()` resets the status to RUNNING asynchronously, but the CLI poll races with this transition and catches the stale state:
 
@@ -60,7 +60,7 @@ AFTER:  "Resume accepted for score 'my-score'."
 - Resume daemon exception shows error
 
 ### 4. Fix F-450: IPC MethodNotFoundError (mateship pickup of Harper's work)
-**Files:** `src/mozart/daemon/exceptions.py:37-43`, `src/mozart/daemon/detect.py:168-178`, `src/mozart/daemon/ipc/errors.py:16,139`, `tests/test_f450_method_not_found.py`
+**Files:** `src/marianne/daemon/exceptions.py:37-43`, `src/marianne/daemon/detect.py:168-178`, `src/marianne/daemon/ipc/errors.py:16,139`, `tests/test_f450_method_not_found.py`
 **Status:** Code + tests existed uncommitted in working tree. Verified and committed as mateship.
 
 The bug: `try_daemon_route()` returned `(False, None)` for both "conductor not running" and "IPC method not found." The CLI then displays "Conductor is not running" when the conductor IS running but doesn't recognize a new IPC method.
@@ -68,7 +68,7 @@ The bug: `try_daemon_route()` returned `(False, None)` for both "conductor not r
 The fix:
 1. Added `MethodNotFoundError(DaemonError)` exception class
 2. Mapped `METHOD_NOT_FOUND` (-32601) → `MethodNotFoundError` in `_CODE_EXCEPTION_MAP`
-3. `try_daemon_route()` catches `MethodNotFoundError` and re-raises with restart guidance: "Conductor does not support 'X'. Restart the conductor to pick up code changes: mozart restart"
+3. `try_daemon_route()` catches `MethodNotFoundError` and re-raises with restart guidance: "Conductor does not support 'X'. Restart the conductor to pick up code changes: mzt restart"
 
 15 TDD tests in `test_f450_method_not_found.py`.
 
@@ -87,16 +87,16 @@ Full test suite run in progress at time of report. All targeted test files pass 
 | File | Change | Reason |
 |------|--------|--------|
 | `tests/test_quality_gate.py` | Baseline 1396→1440 | M4 drift |
-| `src/mozart/execution/runner/sheet.py` | Pause check in retry loop | #93 mateship |
+| `src/marianne/execution/runner/sheet.py` | Pause check in retry loop | #93 mateship |
 | `tests/test_pause_during_retry.py` | New (5 tests) | #93 tests |
-| `src/mozart/cli/commands/resume.py` | Remove early failure poll, enhance panel | #122 |
+| `src/marianne/cli/commands/resume.py` | Remove early failure poll, enhance panel | #122 |
 | `tests/test_resume_output_clarity.py` | New (7 tests) | #122 tests |
 | `tests/test_cli_run_resume.py` | Remove stale mock patch | #122 cleanup |
 | `tests/test_conductor_first_routing.py` | Remove stale mock patch | #122 cleanup |
 | `tests/test_resume_no_reload_ipc.py` | Remove stale mock patches | #122 cleanup |
-| `src/mozart/daemon/exceptions.py` | Add MethodNotFoundError | F-450 mateship |
-| `src/mozart/daemon/detect.py` | Catch MethodNotFoundError | F-450 mateship |
-| `src/mozart/daemon/ipc/errors.py` | Map error code | F-450 mateship |
+| `src/marianne/daemon/exceptions.py` | Add MethodNotFoundError | F-450 mateship |
+| `src/marianne/daemon/detect.py` | Catch MethodNotFoundError | F-450 mateship |
+| `src/marianne/daemon/ipc/errors.py` | Map error code | F-450 mateship |
 | `tests/test_f450_method_not_found.py` | New (15 tests) | F-450 tests |
 
 ## Mateship

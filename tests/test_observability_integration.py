@@ -1,4 +1,4 @@
-"""Integration tests for Mozart observability features.
+"""Integration tests for Marianne observability features.
 
 End-to-end tests verifying that all observability components work together:
 - Raw output capture
@@ -477,16 +477,16 @@ class TestLogRotationIntegration:
         log_dir.mkdir()
 
         # Create current log and compressed backups
-        (log_dir / "mozart.log").write_text("current log")
-        (log_dir / "mozart.log.1.gz").write_bytes(gzip.compress(b"backup 1"))
-        (log_dir / "mozart.log.2.gz").write_bytes(gzip.compress(b"backup 2"))
+        (log_dir / "marianne.log").write_text("current log")
+        (log_dir / "marianne.log.1.gz").write_bytes(gzip.compress(b"backup 1"))
+        (log_dir / "marianne.log.2.gz").write_bytes(gzip.compress(b"backup 2"))
 
         files = find_log_files(tmp_path)
 
         assert len(files) == 3
-        assert log_dir / "mozart.log" in files
-        assert log_dir / "mozart.log.1.gz" in files
-        assert log_dir / "mozart.log.2.gz" in files
+        assert log_dir / "marianne.log" in files
+        assert log_dir / "marianne.log.1.gz" in files
+        assert log_dir / "marianne.log.2.gz" in files
 
 
 class TestEndToEndObservability:

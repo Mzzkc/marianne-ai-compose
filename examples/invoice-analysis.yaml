@@ -1,6 +1,6 @@
 # invoice-analysis.yaml — Invoice Analysis Pipeline
 #
-# A Mozart score that analyzes invoices for accuracy, compliance, and anomalies.
+# A Marianne score that analyzes invoices for accuracy, compliance, and anomalies.
 # Demonstrates structured data extraction with parallel multi-perspective
 # analysis and consolidated reporting:
 #
@@ -11,14 +11,14 @@
 #               - Voice 3: Anomaly detection (unusual patterns, duplicate charges, outliers)
 #   Movement 3: Produce a consolidated analysis report with action items
 #
-# This is a Wordware comparison demo — showing how Mozart splits complex
+# This is a Wordware comparison demo — showing how Marianne splits complex
 # analysis into parallel expert perspectives that would require sequential
 # prompt chaining in other tools.
 #
 # Usage:
-#   mozart start
-#   mozart run examples/invoice-analysis.yaml
-#   mozart status invoice-analysis
+#   mzt start
+#   mzt run examples/invoice-analysis.yaml
+#   mzt status invoice-analysis
 #   cat workspaces/invoice-analysis/03-report.md
 #
 # Output:

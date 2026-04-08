@@ -13,9 +13,9 @@
 
 Quality gates are GREEN: 10,986 tests collected, mypy clean (256 source files), ruff clean, flowspec clean. M3 milestone is 100% complete. 43+ commits from 26+ musicians. The surface is polished. The error messages teach. The documentation is honest. The test suite is vast.
 
-And the thing that makes Mozart a conductor — the baton — cannot run a real score. Not because of bugs. Because it doesn't know what previous sheets said.
+And the thing that makes Marianne a conductor — the baton — cannot run a real score. Not because of bugs. Because it doesn't know what previous sheets said.
 
-I traced this independently and the evidence is unambiguous: `grep -rn 'cross_sheet' src/mozart/daemon/baton/` returns **zero results**. `grep -rn 'previous_outputs' src/mozart/daemon/baton/` returns exactly **one hit** — a field declaration at `state.py:161` that is never populated anywhere. The field was declared, the docstring describes what it should do ("Populated by the adapter from CheckpointState for cross-sheet context"), and zero lines of code do the populating. 18 of 34 example scores have `auto_capture_stdout: true`. 12 reference `{{ previous_outputs }}` in their templates. The baton renders those templates with empty dicts. The legacy runner populates them via `_populate_cross_sheet_context()` at `context.py:171-221`. The baton path was built to replace the legacy runner and doesn't replicate its most-used integration surface.
+I traced this independently and the evidence is unambiguous: `grep -rn 'cross_sheet' src/marianne/daemon/baton/` returns **zero results**. `grep -rn 'previous_outputs' src/marianne/daemon/baton/` returns exactly **one hit** — a field declaration at `state.py:161` that is never populated anywhere. The field was declared, the docstring describes what it should do ("Populated by the adapter from CheckpointState for cross-sheet context"), and zero lines of code do the populating. 18 of 34 example scores have `auto_capture_stdout: true`. 12 reference `{{ previous_outputs }}` in their templates. The baton renders those templates with empty dicts. The legacy runner populates them via `_populate_cross_sheet_context()` at `context.py:171-221`. The baton path was built to replace the legacy runner and doesn't replicate its most-used integration surface.
 
 This is my fourth consecutive adversarial review of the baton. The 67 Phase 1 tests I wrote earlier this movement all pass. The system's internal mechanics are correct. But correctness at the unit level and correctness at the integration level are different things, and F-210 is a gap between them that would cause silent functional degradation — not crashes, not errors, just worse output.
 
@@ -23,13 +23,13 @@ This is my fourth consecutive adversarial review of the baton. The 67 Phase 1 te
 
 1. **F-210 (P1, BLOCKER) — independently confirmed.** `previous_outputs` is declared at `state.py:161`, never written in `adapter.py`, `musician.py`, or `core.py`. The legacy runner's `_populate_cross_sheet_context()` at `context.py:171-221` has no baton equivalent. `Sheet.template_variables()` at `sheet.py:133-177` returns identity vars (sheet_num, movement, voice, workspace, instrument_name) but not cross-sheet context. Templates referencing `{{ previous_outputs[N] }}` will get `UndefinedError` in strict mode or empty dict in lenient mode. Either way: broken prompts with no error signal.
 
-2. **F-450 (P2) — independently confirmed.** `mozart clear-rate-limits` outputs "Mozart conductor is not running" while the conductor IS running (PID 1277279, verified by `mozart status`, `mozart doctor`, `mozart conductor-status`). Root cause traced to `rate_limits.py:74-80`: `try_daemon_route()` returns `routed=False` when the IPC method `daemon.clear_rate_limits` doesn't exist on the running conductor (because the conductor was started from pre-M3 code). The conditional at line 74 conflates "method not found" with "conductor not running." The error tells you to start a conductor that's already started. This is the only error message in the product that lies.
+2. **F-450 (P2) — independently confirmed.** `mzt clear-rate-limits` outputs "Marianne conductor is not running" while the conductor IS running (PID 1277279, verified by `mzt status`, `mzt doctor`, `mzt conductor-status`). Root cause traced to `rate_limits.py:74-80`: `try_daemon_route()` returns `routed=False` when the IPC method `daemon.clear_rate_limits` doesn't exist on the running conductor (because the conductor was started from pre-M3 code). The conditional at line 74 conflates "method not found" with "conductor not running." The error tells you to start a conductor that's already started. This is the only error message in the product that lies.
 
-3. **F-465 (P1) — independently confirmed at 4 locations.** The README quick start (steps 5, 6, 7) tells users to run `mozart status hello-mozart`. The conductor registers the score as `hello` (filename-derived). `mozart status hello-mozart` returns "Score not found." Verified on HEAD:
+3. **F-465 (P1) — independently confirmed at 4 locations.** The README quick start (steps 5, 6, 7) tells users to run `mzt status hello-marianne`. The conductor registers the score as `hello` (filename-derived). `mzt status hello-marianne` returns "Score not found." Verified on HEAD:
 
    ```
-   $ mozart status hello-mozart → Error: Score not found: hello-mozart
-   $ mozart status hello → COMPLETED (ID: hello, name: hello-mozart)
+   $ mzt status hello-marianne → Error: Score not found: hello-marianne
+   $ mzt status hello → COMPLETED (ID: hello, name: hello-marianne)
    ```
 
    Broken at: `README.md:141`, `README.md:158`, `docs/getting-started.md:60`, `examples/hello.yaml:16`.
@@ -43,7 +43,7 @@ This is my fourth consecutive adversarial review of the baton. The 67 Phase 1 te
 | mypy | **GREEN** | `mypy src/` | "Success: no issues found in 256 source files" |
 | ruff | **GREEN** | `ruff check src/` | "All checks passed!" |
 | pytest collection | **GREEN** | `pytest tests/ --co` | 10,986 tests collected in 2.62s |
-| Examples | **GREEN** | `mozart validate examples/hello.yaml` | 38/38 validatable examples pass |
+| Examples | **GREEN** | `mzt validate examples/hello.yaml` | 38/38 validatable examples pass |
 
 No disputes with the quality gate report. Bedrock's numbers (10,981/5 skipped) are from a slightly earlier HEAD; 5 more tests landed after the gate.
 
@@ -73,9 +73,9 @@ The composer's P0 directives include Lovable demo and Wordware comparison demos.
 
 Ember's finding is independently verifiable. The orchestra has completed 127/706 sheets, each running Claude Opus for 4-8 minutes. The conductor reports $0.20 total cost and 19,080 total input tokens. That's 150 input tokens per sheet — approximately one paragraph. The real context per sheet is 10,000-200,000 tokens.
 
-**Root cause traced:** The `claude_cli.py` backend — the one used for `claude-code` instrument — has **zero token tracking**. `grep -rn 'input_tokens\|output_tokens' src/mozart/backends/claude_cli.py` returns nothing. Only `anthropic_api.py` (lines 227-258) and `ollama.py` (lines 301-492) track tokens. The `PluginCliBackend` at `execution/instruments/cli_backend.py` tracks tokens IF the instrument profile specifies JSON paths for them, but the native `claude_cli.py` backend doesn't use PluginCliBackend — it's a separate implementation.
+**Root cause traced:** The `claude_cli.py` backend — the one used for `claude-code` instrument — has **zero token tracking**. `grep -rn 'input_tokens\|output_tokens' src/marianne/backends/claude_cli.py` returns nothing. Only `anthropic_api.py` (lines 227-258) and `ollama.py` (lines 301-492) track tokens. The `PluginCliBackend` at `execution/instruments/cli_backend.py` tracks tokens IF the instrument profile specifies JSON paths for them, but the native `claude_cli.py` backend doesn't use PluginCliBackend — it's a separate implementation.
 
-The cost tracking system works correctly for what it measures. What it measures is not what the user cares about. The system counts tokens at the Mozart↔backend boundary, not the backend↔LLM boundary. For API backends (`anthropic_api.py`), these are the same thing. For CLI backends (`claude_cli.py`), they're separated by an entire agent runtime. The displayed cost is 100-1000x lower than actual spend.
+The cost tracking system works correctly for what it measures. What it measures is not what the user cares about. The system counts tokens at the Marianne↔backend boundary, not the backend↔LLM boundary. For API backends (`anthropic_api.py`), these are the same thing. For CLI backends (`claude_cli.py`), they're separated by an entire agent runtime. The displayed cost is 100-1000x lower than actual spend.
 
 A user who trusts `cost_limits.max_cost_per_job: 50` as a budget guardrail will overshoot by two orders of magnitude before the limiter triggers.
 
@@ -124,12 +124,12 @@ Error message quality is excellent. Every error teaches. Every hint is actionabl
 
 | Command | Expected | Actual | Pass? |
 |---------|----------|--------|-------|
-| `mozart status` | Running summary | Correct: 4 active, uptime 1d 13h | **YES** |
-| `mozart doctor` | Health check | Correct: PID, instruments, cost warning | **YES** |
-| `mozart status hello` | Completed score details | Correct: ID, name, progress, synthesis | **YES** |
-| `mozart status hello-mozart` | Found (name lookup) | **FAIL** — "Score not found" (F-465) | **NO** |
-| `mozart clear-rate-limits` | Rate limit info | **FAIL** — "Conductor not running" (F-450) | **NO** |
-| `mozart validate examples/hello.yaml` | Valid with DAG preview | Correct: A+ experience | **YES** |
+| `mzt status` | Running summary | Correct: 4 active, uptime 1d 13h | **YES** |
+| `mzt doctor` | Health check | Correct: PID, instruments, cost warning | **YES** |
+| `mzt status hello` | Completed score details | Correct: ID, name, progress, synthesis | **YES** |
+| `mzt status hello-marianne` | Found (name lookup) | **FAIL** — "Score not found" (F-465) | **NO** |
+| `mzt clear-rate-limits` | Rate limit info | **FAIL** — "Conductor not running" (F-450) | **NO** |
+| `mzt validate examples/hello.yaml` | Valid with DAG preview | Correct: A+ experience | **YES** |
 
 ---
 

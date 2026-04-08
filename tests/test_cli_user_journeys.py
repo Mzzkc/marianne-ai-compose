@@ -1,7 +1,7 @@
-"""CLI user journey tests — stories about real users interacting with Mozart.
+"""CLI user journey tests — stories about real users interacting with Marianne.
 
 I test stories, not functions. Each test class is a story about someone using
-Mozart for the first time, making mistakes, trying edge cases, and hopefully
+Marianne for the first time, making mistakes, trying edge cases, and hopefully
 getting to success. The bugs these tests find are the ones that make users
 quietly abandon the product.
 
@@ -26,14 +26,14 @@ runner = CliRunner()
 # =============================================================================
 # Story 1: Sarah's First Day
 #
-# Sarah just saw the Mozart demo. She's excited. She wants to scaffold a
+# Sarah just saw the Marianne demo. She's excited. She wants to scaffold a
 # project, validate it, and understand what instruments she has. She has
 # a meeting in five minutes. Everything needs to be fast and obvious.
 # =============================================================================
 
 
 class TestSarahsFirstDay:
-    """Sarah discovers Mozart and walks through the getting-started flow."""
+    """Sarah discovers Marianne and walks through the getting-started flow."""
 
     @pytest.mark.adversarial
     def test_init_then_validate_succeeds(self, tmp_path: Path) -> None:
@@ -70,7 +70,7 @@ class TestSarahsFirstDay:
         result = runner.invoke(app, ["doctor"])
         assert result.exit_code == 0
         assert "python" in result.stdout.lower()
-        assert "mozart" in result.stdout.lower()
+        assert "marianne" in result.stdout.lower()
 
     @pytest.mark.adversarial
     def test_instruments_list_shows_something(self) -> None:
@@ -90,7 +90,7 @@ class TestSarahsFirstDay:
         # Must contain instructions, not just config
         assert "edit" in score.lower() or "task" in score.lower()
         assert "workspace" in score.lower()
-        assert "mozart" in score.lower()
+        assert "marianne" in score.lower()
 
 
 # =============================================================================
@@ -103,7 +103,7 @@ class TestSarahsFirstDay:
 
 
 class TestTomsBadDay:
-    """Tom provides every possible wrong input. Mozart should handle it all."""
+    """Tom provides every possible wrong input. Marianne should handle it all."""
 
     @pytest.mark.adversarial
     def test_validate_empty_file(self, tmp_path: Path) -> None:
@@ -195,7 +195,7 @@ class TestTomsBadDay:
 # =============================================================================
 # Story 3: The Instruments Display
 #
-# Alice runs `mozart instruments list` and the count summary should make
+# Alice runs `mzt instruments list` and the count summary should make
 # sense. No broken parentheses. No counting unchecked as ready.
 # =============================================================================
 
@@ -255,7 +255,7 @@ class TestInstrumentsDisplay:
 # =============================================================================
 # Story 4: Bob the Scripter
 #
-# Bob wants to integrate Mozart into his CI pipeline. He needs JSON output
+# Bob wants to integrate Marianne into his CI pipeline. He needs JSON output
 # from every command he uses. He pipes everything through `jq`.
 # =============================================================================
 
@@ -386,7 +386,7 @@ class TestCostVisibility:
     @pytest.mark.adversarial
     def test_dry_run_shows_cost_warning_when_limits_disabled(self) -> None:
         """Dry-run warns when cost tracking is disabled."""
-        result = runner.invoke(app, ["run", "--dry-run", "examples/hello-mozart.yaml"])
+        result = runner.invoke(app, ["run", "--dry-run", "examples/hello-marianne.yaml"])
         assert result.exit_code == 0
         output = result.output.lower()
         assert "cost" in output, (
@@ -408,7 +408,7 @@ class TestCancelJourney:
 
     @pytest.mark.adversarial
     def test_cancel_wrong_name_suggests_list(self) -> None:
-        """Wrong score name suggests 'mozart list'."""
+        """Wrong score name suggests 'mzt list'."""
         from unittest.mock import AsyncMock, patch
 
         with patch(
@@ -421,7 +421,7 @@ class TestCancelJourney:
         assert result.exit_code != 0
         output = result.output.lower()
         assert "list" in output, (
-            "Cancel not-found should suggest 'mozart list' like other commands"
+            "Cancel not-found should suggest 'mzt list' like other commands"
         )
 
     @pytest.mark.adversarial

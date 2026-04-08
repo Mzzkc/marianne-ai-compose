@@ -1,11 +1,11 @@
-"""Enhanced validation module for Mozart job configurations.
+"""Enhanced validation module for Marianne job configurations.
 
 This module provides comprehensive validation beyond Pydantic schema validation,
 including Jinja template syntax checking, path existence validation, regex
 pattern compilation, and cross-reference checks.
 
 The validation system is designed for two use cases:
-1. Pre-execution validation via `mozart validate` command
+1. Pre-execution validation via `mzt validate` command
 2. Self-healing diagnosis to identify fixable configuration issues
 
 Example usage:

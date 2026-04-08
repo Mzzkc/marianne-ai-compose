@@ -1,4 +1,4 @@
-"""Integration tests for Mozart end-to-end workflows.
+"""Integration tests for Marianne end-to-end workflows.
 
 These tests verify that all components work together correctly:
 - Run -> Status -> Resume flow
@@ -604,7 +604,7 @@ class TestDashboardAPIIntegration:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["service"] == "mozart-dashboard"
+        assert data["service"] == "marianne-dashboard"
 
 
 # ============================================================================
@@ -672,7 +672,7 @@ class TestAllCLICommandsFunctional:
                 app, ["dashboard", "--workspace", str(tmp_path)]
             )
             assert result.exit_code == 0
-            assert "Mozart Dashboard" in result.stdout
+            assert "Marianne Dashboard" in result.stdout
 
 
 # ============================================================================

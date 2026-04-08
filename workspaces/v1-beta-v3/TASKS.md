@@ -144,7 +144,7 @@ This is the highest priority task. You are running inside a live conductor. You 
 
 - [x] [Circuit] Implement `mzt status` no-args mode (priority: P0) [source: roadmap step 30 / issue #114]
 - [x] [Dash] Implement movement-grouped status display (priority: P0) [source: roadmap step 31]
-- [x] [Ghost] Implement `marianne doctor` (priority: P1) [source: roadmap step 32 / F-006]
+- [x] [Ghost] Implement `mzt doctor` (priority: P1) [source: roadmap step 32 / F-006]
 - [x] [Harper] Implement `mzt init` + starter score (priority: P1) [source: roadmap step 33] — mateship pickup of Lens's untracked init_cmd.py. Harper added: name validation (path traversal, spaces, dots, null bytes), --json output mode, doctor mention in next steps, instrument terminology in comments. Extracted shared load_all_profiles() from duplicated doctor/instruments code. 35 tests.
 - [x] [Harper] Implement `mzt instruments list|check` (priority: P1) [source: roadmap step 34]
 - [x] [Dash, Lens, Harper, Ghost, Forge, Maverick] Standardize error messages (raw console.print → output_error) (priority: P1) [source: roadmap step 35] — COMPLETE. 71 output_error() calls across 15 files. All raw error/warning console.print calls migrated to output_error(). Remaining console.print calls are status displays (green success, diagnostic results), not errors. Contributors: Compass (status/diagnose/recover), Forge (run.py), Ghost (pause/recover/helpers), Dash (status/cancel/validate/resume/config_cmd), Harper (diagnose/_patterns/instruments), Maverick (M3: _entropy.py dominant pattern warning). Display labels like "Recent Errors" correctly stay as rich console output.
@@ -152,7 +152,7 @@ This is the highest priority task. You are running inside a live conductor. You 
 - [x] [Circuit] First-run cost warning (priority: P1) [source: roadmap step 37 / F-005]
 - [x] [Guide] Create examples/hello.yaml — 3-movement interconnected fiction with parallel voices, solarpunk setting, colophon (priority: P0) [source: composer notes]
 - [x] [Harper] Add rich_help_panel grouping to CLI commands (priority: P2) [source: investigation-lens]
-- [x] [Circuit] Add "Run marianne diagnose" suggestion on job failure (priority: P2) [source: investigation-lens]
+- [x] [Circuit] Add "Run mzt diagnose" suggestion on job failure (priority: P2) [source: investigation-lens]
 - [x] [Compass] Fix README Quick Start (F-026 P0, F-034 P3, F-036 P3) — removed --workspace, updated instruments/doctor CLI, fixed terminology (priority: P0) [source: F-026, F-034, F-036]
 - [x] [Compass] Fix getting-started.md validate output + troubleshooting (F-035 P3) (priority: P3) [source: F-035]
 - [x] [Compass] Fix "Score not found" dead-end errors (F-030 P2) — migrated to output_error() with hints in status/diagnose/recover (priority: P2) [source: F-030]
@@ -320,7 +320,7 @@ Source: F-502, CLI audit of all mzt commands
 - [ ] JobConfig.to_yaml() (#110) (priority: P3) [source: issue #110]
 - [ ] Job registry ID mismatch (#124) (priority: P2) [source: issue #124]
 - [ ] Fan-out integration tests (#121) (priority: P2) [source: issue #121]
-- [x] [Dash] CLI stale state feedback (#139) (priority: P2) [source: issue #139] — Full completion across 3 sessions: (1) check_pid_alive() helper + fresh-aware rejection hints (8bb3a10), (2) stale PID detection in `marianne start` — cleans up dead PID files with user notification, (3) `--fresh` early failure suppression — skips `await_early_failure` when --fresh to prevent false reports from old state (#139 root cause 1), (4) contradictory error regression verified fixed (Lens 4b83dae). 10 TDD tests in test_stale_state_feedback.py covering all 3 root causes from the issue.
+- [x] [Dash] CLI stale state feedback (#139) (priority: P2) [source: issue #139] — Full completion across 3 sessions: (1) check_pid_alive() helper + fresh-aware rejection hints (8bb3a10), (2) stale PID detection in `mzt start` — cleans up dead PID files with user notification, (3) `--fresh` early failure suppression — skips `await_early_failure` when --fresh to prevent false reports from old state (#139 root cause 1), (4) contradictory error regression verified fixed (Lens 4b83dae). 10 TDD tests in test_stale_state_feedback.py covering all 3 root causes from the issue.
 
 ---
 

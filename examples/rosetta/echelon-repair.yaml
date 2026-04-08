@@ -50,9 +50,9 @@
 # ║                                                                             ║
 # ║  Usage:                                                                     ║
 # ║    cd /path/to/your/project                                                ║
-# ║    mozart start                                                             ║
-# ║    mozart run examples/rosetta/echelon-repair.yaml                         ║
-# ║    mozart status security-audit                                            ║
+# ║    mzt start                                                             ║
+# ║    mzt run examples/rosetta/echelon-repair.yaml                         ║
+# ║    mzt status security-audit                                            ║
 # ║                                                                             ║
 # ║  Output:                                                                    ║
 # ║    workspaces/security-audit/                                              ║

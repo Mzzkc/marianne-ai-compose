@@ -1,9 +1,9 @@
 """Slack notification implementation using httpx.
 
-Provides Slack webhook notifications for Mozart job events.
+Provides Slack webhook notifications for Marianne job events.
 Messages are formatted with rich Slack Block Kit formatting.
 
-Phase 5 of Mozart implementation: Missing README features.
+Phase 5 of Marianne implementation: Missing README features.
 """
 
 import os
@@ -68,8 +68,8 @@ class SlackNotifier:
             on_events: [job_complete, job_failed, sheet_failed]
             config:
               webhook_url_env: SLACK_WEBHOOK_URL
-              channel: "#mozart-alerts"
-              username: "Mozart Bot"
+              channel: "#marianne-alerts"
+              username: "Marianne Bot"
               timeout: 10
     """
 
@@ -78,7 +78,7 @@ class SlackNotifier:
         webhook_url: str | None = None,
         webhook_url_env: str = "SLACK_WEBHOOK_URL",
         channel: str | None = None,
-        username: str = "Mozart AI Compose",
+        username: str = "Marianne AI Compose",
         icon_emoji: str = ":musical_score:",
         events: set[NotificationEvent] | None = None,
         timeout: float = 10.0,
@@ -155,7 +155,7 @@ class SlackNotifier:
             webhook_url=config.get("webhook_url"),
             webhook_url_env=config.get("webhook_url_env", "SLACK_WEBHOOK_URL"),
             channel=config.get("channel"),
-            username=config.get("username", "Mozart AI Compose"),
+            username=config.get("username", "Marianne AI Compose"),
             icon_emoji=config.get("icon_emoji", ":musical_score:"),
             events=events if events else None,
             timeout=config.get("timeout", 10.0),

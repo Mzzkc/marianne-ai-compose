@@ -2,13 +2,13 @@
 
 Root Cause: When a sibling sheet's Claude CLI gets SIGABRT, the parallel
 executor cancels remaining tasks. In Python 3.12, asyncio.CancelledError
-inherits from BaseException (not Exception). Mozart's cleanup handlers
+inherits from BaseException (not Exception). Marianne's cleanup handlers
 previously only caught Exception, so cancellation bypassed all subprocess
 cleanup — leaving zombie processes, leaked FDs, and orphaned MCP servers.
 
 These tests verify the fixes hold:
 1. CancelledError triggers subprocess cleanup (kill + wait)
-2. Parallel cancellation doesn't crash Mozart
+2. Parallel cancellation doesn't crash Marianne
 3. _kill_orphaned_process accepts BaseException
 4. find_job_state handles backend errors gracefully
 """
@@ -357,7 +357,7 @@ class TestFindJobStateBackendErrors:
     """Verify that find_job_state falls back to the next backend when one errors.
 
     When SQLite backend raises (e.g., database locked during crash recovery),
-    the JSON fallback must still work so `mozart status` doesn't crash.
+    the JSON fallback must still work so `mzt status` doesn't crash.
     """
 
     @pytest.mark.asyncio
@@ -369,7 +369,7 @@ class TestFindJobStateBackendErrors:
         workspace.mkdir()
 
         # Create a fake SQLite file so it gets tried first
-        (workspace / ".mozart-state.db").touch()
+        (workspace / ".marianne-state.db").touch()
 
         # Create a JSON state file that the fallback should find
         import json
@@ -434,7 +434,7 @@ class TestLoggerKeywordArgs:
 
     This is a targeted regression test — the broader logger audit found ~67
     printf-style violations across the codebase, but this specific call was
-    in the crash path for `mozart status` during SIGABRT recovery.
+    in the crash path for `mzt status` during SIGABRT recovery.
     """
 
     @pytest.mark.asyncio

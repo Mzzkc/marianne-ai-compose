@@ -1,7 +1,7 @@
-"""Tests for mozart.daemon.ipc.protocol — JSON-RPC 2.0 wire format models.
+"""Tests for marianne.daemon.ipc.protocol — JSON-RPC 2.0 wire format models.
 
 Also includes tests for the IPC error codes and factory functions
-(mozart.daemon.ipc.errors) since they are tightly coupled to the protocol models.
+(marianne.daemon.ipc.errors) since they are tightly coupled to the protocol models.
 """
 
 import pytest
@@ -211,7 +211,7 @@ class TestErrorDetail:
 
 
 class TestErrorCodes:
-    """Tests for JSON-RPC and Mozart extension error codes."""
+    """Tests for JSON-RPC and Marianne extension error codes."""
 
     def test_standard_error_codes_match_spec(self):
         """Standard JSON-RPC 2.0 error codes are in the correct range."""
@@ -222,7 +222,7 @@ class TestErrorCodes:
         assert INTERNAL_ERROR == -32603
 
     def test_extension_error_codes_in_range(self):
-        """Mozart extension codes are in the -32000 to -32099 range."""
+        """Marianne extension codes are in the -32000 to -32099 range."""
         ext_codes = [
             JOB_NOT_FOUND,
             RESOURCE_EXHAUSTED,

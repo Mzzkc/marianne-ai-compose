@@ -1,4 +1,4 @@
-"""Shared utilities for Mozart CLI commands.
+"""Shared utilities for Marianne CLI commands.
 
 This module contains helpers used across multiple CLI command modules:
 - Logger setup and configuration
@@ -167,11 +167,11 @@ def configure_global_logging(console: Console) -> None:
 
 
 # Default state directory when no config is available
-DEFAULT_STATE_DIR = Path.home() / ".mozart" / "state"
+DEFAULT_STATE_DIR = Path.home() / ".marianne" / "state"
 
 
 # Re-exported from notifications module for backwards compatibility.
-# The canonical implementation lives in mozart.notifications.factory.
+# The canonical implementation lives in marianne.notifications.factory.
 from marianne.notifications.factory import (
     create_notifiers_from_config as create_notifiers_from_config,  # noqa: F401, E501
 )
@@ -201,7 +201,7 @@ def _find_job_workspace(job_id: str, hint: Path | None = None) -> Path | None:
         if json_state.exists():
             return path
 
-        sqlite_state = path / ".mozart-state.db"
+        sqlite_state = path / ".marianne-state.db"
         if sqlite_state.exists():
             return path
 
@@ -232,14 +232,14 @@ async def _find_job_state_fs(
     if workspace:
         if not workspace.exists():
             return None, None
-        sqlite_path = workspace / ".mozart-state.db"
+        sqlite_path = workspace / ".marianne-state.db"
         if sqlite_path.exists():
             backends.append(SQLiteStateBackend(sqlite_path))
         backends.append(JsonStateBackend(workspace))
     else:
         cwd = Path.cwd()
         backends.append(JsonStateBackend(cwd))
-        sqlite_cwd = cwd / ".mozart-state.db"
+        sqlite_cwd = cwd / ".marianne-state.db"
         if sqlite_cwd.exists():
             backends.append(SQLiteStateBackend(sqlite_cwd))
 
@@ -305,7 +305,7 @@ async def _find_job_state_direct(
             error_code="E501",
             hints=[
                 "Use --workspace to specify the directory containing the score state",
-                "Run 'mozart list' to see available scores",
+                "Run 'mzt list' to see available scores",
             ],
             json_output=json_output,
             job_id=job_id,
@@ -317,7 +317,7 @@ async def _find_job_state_direct(
 
 def _create_pause_signal(workspace: Path, job_id: str) -> Path:
     """Create pause signal file for a job (filesystem fallback)."""
-    signal_file = workspace / f".mozart-pause-{job_id}"
+    signal_file = workspace / f".marianne-pause-{job_id}"
     signal_file.touch()
     return signal_file
 
@@ -357,7 +357,7 @@ def require_conductor(
 
     Used by CLI commands that route through the conductor IPC. If the
     conductor was not reachable, this prints a helpful message directing
-    the user to ``mozart start``.
+    the user to ``mzt start``.
 
     Args:
         routed: Whether ``try_daemon_route`` succeeded.
@@ -372,8 +372,8 @@ def require_conductor(
     from .output import output_error
 
     output_error(
-        "Mozart conductor is not running.",
-        hints=["Start it with: mozart start"],
+        "Marianne conductor is not running.",
+        hints=["Start it with: mzt start"],
         json_output=json_output,
     )
     raise typer.Exit(1)

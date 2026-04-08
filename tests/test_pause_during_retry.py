@@ -402,7 +402,7 @@ class TestPauseDuringRetryLoop:
             iteration += 1
             # Create pause signal file after first execution
             if iteration == 1:
-                pause_file = workspace / ".mozart-pause-pause-retry-test"
+                pause_file = workspace / ".marianne-pause-pause-retry-test"
                 pause_file.touch()
             result = MagicMock()
             result.success = True

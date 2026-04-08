@@ -1,4 +1,4 @@
-"""Shared test helpers for Mozart tests."""
+"""Shared test helpers for Marianne tests."""
 
 from typing import Any
 

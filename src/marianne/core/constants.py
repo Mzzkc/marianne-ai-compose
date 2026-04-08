@@ -1,4 +1,4 @@
-"""Global constants for Mozart.
+"""Global constants for Marianne.
 
 Centralizes magic numbers used throughout the codebase,
 making them discoverable, consistent, and easy to modify.
@@ -70,7 +70,7 @@ Safety cap: without this, adversarial or malformed API responses like
 'resets in 999999 hours' would schedule timers for years, effectively
 blocking the instrument forever with no auto-recovery. 24 hours is the
 longest any real API provider rate limit should last. If it's longer,
-the operator can re-trigger via `mozart clear-rate-limits`.
+the operator can re-trigger via `mzt clear-rate-limits`.
 """
 
 DEFAULT_QUOTA_WAIT_SECONDS = 3600.0

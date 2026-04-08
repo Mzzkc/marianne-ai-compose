@@ -1,4 +1,4 @@
-"""Time utilities for Mozart.
+"""Time utilities for Marianne.
 
 Provides timezone-aware datetime functions to replace deprecated datetime methods.
 """

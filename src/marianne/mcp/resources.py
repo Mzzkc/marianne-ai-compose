@@ -1,11 +1,11 @@
-"""Mozart MCP Resources - Resource implementations for Mozart configuration access.
+"""Marianne MCP Resources - Resource implementations for Mzt configuration access.
 
-This module implements MCP resources that expose Mozart configuration and
+This module implements MCP resources that expose Mzt configuration and
 documentation as readable content. Resources provide context and reference
-material for AI agents working with Mozart.
+material for AI agents working with Marianne.
 
 Resources are organized by category:
-- ConfigResources: Access to Mozart configuration schemas and examples
+- ConfigResources: Access to Mzt configuration schemas and examples
 """
 
 import json
@@ -24,17 +24,17 @@ _CONTENT_TYPE_JSON = "application/json"
 
 
 class ConfigResources:
-    """Mozart configuration resources.
+    """Mzt configuration resources.
 
-    Provides access to Mozart configuration schemas, examples, and documentation
-    as MCP resources. These resources help AI agents understand Mozart's
+    Provides access to Mzt configuration schemas, examples, and documentation
+    as MCP resources. These resources help AI agents understand Marianne's
     configuration format and available options.
     """
 
     def __init__(
         self, state_backend: StateBackend | None = None, workspace_root: Path | None = None
     ) -> None:
-        # Base project directory (assuming we're in src/mozart/mcp/)
+        # Base project directory (assuming we're in src/marianne/mcp/)
         self.project_root = Path(__file__).parent.parent.parent.parent
         self.state_backend = state_backend
         self.workspace_root = workspace_root or Path.cwd()
@@ -44,14 +44,14 @@ class ConfigResources:
         resources = [
             {
                 "uri": "config://schema",
-                "name": "Mozart Configuration Schema",
-                "description": "Complete JSON schema for Mozart job configuration files",
+                "name": "Mzt configuration Schema",
+                "description": "Complete JSON schema for Marianne job configuration files",
                 "mimeType": _CONTENT_TYPE_JSON
             },
             {
                 "uri": "config://example",
-                "name": "Mozart Configuration Example",
-                "description": "Example Mozart job configuration with common patterns",
+                "name": "Mzt configuration Example",
+                "description": "Example Marianne job configuration with common patterns",
                 "mimeType": "text/yaml"
             },
             {
@@ -74,15 +74,15 @@ class ConfigResources:
             },
             # Job management resources
             {
-                "uri": "mozart://jobs",
-                "name": "Mozart Jobs Overview",
-                "description": "List of all Mozart jobs with status and metadata",
+                "uri": "marianne://jobs",
+                "name": "Marianne Jobs Overview",
+                "description": "List of all Marianne jobs with status and metadata",
                 "mimeType": _CONTENT_TYPE_JSON
             },
             {
-                "uri": "mozart://templates",
-                "name": "Mozart Job Templates",
-                "description": "Collection of Mozart job configuration templates",
+                "uri": "marianne://templates",
+                "name": "Marianne Job Templates",
+                "description": "Collection of Marianne job configuration templates",
                 "mimeType": _CONTENT_TYPE_JSON
             }
         ]
@@ -90,9 +90,9 @@ class ConfigResources:
         # Dynamic job detail resources - only available if we have state backend
         if self.state_backend:
             resources.append({
-                "uri": "mozart://jobs/{job_id}",
-                "name": "Mozart Job Details (Template)",
-                "description": "Detailed information about a specific Mozart job",
+                "uri": "marianne://jobs/{job_id}",
+                "name": "Marianne Job Details (Template)",
+                "description": "Detailed information about a specific Marianne job",
                 "mimeType": _CONTENT_TYPE_JSON
             })
 
@@ -105,8 +105,8 @@ class ConfigResources:
         "config://backend-options": "_get_backend_options",
         "config://validation-types": "_get_validation_types",
         "config://learning-options": "_get_learning_options",
-        "mozart://jobs": "_get_jobs_overview",
-        "mozart://templates": "_get_job_templates",
+        "marianne://jobs": "_get_jobs_overview",
+        "marianne://templates": "_get_job_templates",
     }
 
     async def read_resource(self, uri: str) -> dict[str, Any]:
@@ -117,8 +117,8 @@ class ConfigResources:
                 result: dict[str, Any] = await getattr(self, handler_name)()
                 return result
 
-            if uri.startswith("mozart://jobs/"):
-                job_id = uri.replace("mozart://jobs/", "")
+            if uri.startswith("marianne://jobs/"):
+                job_id = uri.replace("marianne://jobs/", "")
                 return await self._get_job_details(job_id)
 
             raise ValueError(f"Unknown resource URI: {uri}")
@@ -136,7 +136,7 @@ class ConfigResources:
             }
 
     async def _get_config_schema(self) -> dict[str, Any]:
-        """Generate JSON schema for Mozart configuration from Pydantic models.
+        """Generate JSON schema for Mzt configuration from Pydantic models.
 
         Uses JobConfig.model_json_schema() to generate a schema that stays
         in sync with the actual Pydantic models, avoiding manual drift.
@@ -144,11 +144,11 @@ class ConfigResources:
         return self._mcp_json_content("config://schema", JobConfig.model_json_schema())
 
     async def _get_config_example(self) -> dict[str, Any]:
-        """Get example Mozart configuration."""
-        example_content = """# Mozart Job Configuration Example
+        """Get example Mzt configuration."""
+        example_content = """# Marianne Job Configuration Example
 
 job_id: example-review
-description: Example Mozart job configuration
+description: Example Marianne job configuration
 
 backend:
   backend_type: claude_cli
@@ -205,7 +205,7 @@ learning:
 
 notifications:
   - type: desktop
-    title: "Mozart Job Complete"
+    title: "Marianne Job Complete"
 """
 
         return {
@@ -347,7 +347,7 @@ notifications:
         """Get learning configuration options."""
         learning_options = {
             "learning_system": {
-                "description": "Mozart's adaptive learning system configuration",
+                "description": "Marianne's adaptive learning system configuration",
                 "options": {
                     "enabled": {
                         "type": "boolean",
@@ -399,9 +399,9 @@ notifications:
     }
 
     async def _get_jobs_overview(self) -> dict[str, Any]:
-        """Get overview of all Mozart jobs."""
+        """Get overview of all Marianne jobs."""
         if not self.state_backend:
-            return self._mcp_json_content("mozart://jobs", {
+            return self._mcp_json_content("marianne://jobs", {
                 "error": "Jobs overview requires state backend initialization",
                 "note": "Configure MCP server with workspace_root to enable job listing",
             })
@@ -433,7 +433,7 @@ notifications:
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
             jobs_overview["error"] = f"Error scanning jobs: {str(e)}"
 
-        return self._mcp_json_content("mozart://jobs", jobs_overview)
+        return self._mcp_json_content("marianne://jobs", jobs_overview)
 
     async def _load_job_summary(self, job_id: str) -> dict[str, Any] | None:
         """Load a single job's summary from state backend.
@@ -487,7 +487,7 @@ notifications:
 
     async def _get_job_details(self, job_id: str) -> dict[str, Any]:
         """Get detailed information about a specific job."""
-        uri = f"mozart://jobs/{job_id}"
+        uri = f"marianne://jobs/{job_id}"
 
         if not self.state_backend:
             return self._mcp_json_content(uri, {
@@ -544,7 +544,7 @@ notifications:
             })
 
     async def _get_job_templates(self) -> dict[str, Any]:
-        """Get collection of Mozart job configuration templates."""
+        """Get collection of Marianne job configuration templates."""
         templates = {
             "templates": {
                 "code-analysis": _build_code_analysis_template(),
@@ -555,7 +555,7 @@ notifications:
             "usage": _build_template_usage_guide(),
         }
 
-        return self._mcp_json_content("mozart://templates", templates)
+        return self._mcp_json_content("marianne://templates", templates)
 
 
 def _build_code_analysis_template() -> dict[str, Any]:
@@ -783,7 +783,10 @@ def _build_refactoring_template() -> dict[str, Any]:
 def _build_template_usage_guide() -> dict[str, Any]:
     """Build usage guidance for job templates."""
     return {
-        "description": "Mozart job templates provide starting points for common development tasks",
+        "description": (
+            "Marianne job templates provide starting points"
+            " for common development tasks"
+        ),
         "how_to_use": [
             "Copy the desired template configuration",
             "Replace {timestamp} placeholders with actual values",

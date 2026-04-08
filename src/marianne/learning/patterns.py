@@ -5,7 +5,7 @@ This module implements the "Close the Learning Loop" evolution:
 - PatternMatcher: Matches patterns to current execution context
 - PatternApplicator: Generates prompt modifications from patterns
 
-The pattern system enables Mozart to learn from past executions
+The pattern system enables Marianne to learn from past executions
 and apply that learning to improve future sheet executions.
 """
 
@@ -1054,7 +1054,7 @@ class OutputPatternExtractor:
     """Extracts patterns from stdout/stderr output for learning.
 
     Analyzes execution output to detect common failure patterns, error signatures,
-    and other indicators that can inform future executions. This enables Mozart
+    and other indicators that can inform future executions. This enables Marianne
     to learn from the raw output of failed executions, not just validation results.
 
     The extractor uses a dictionary of regex patterns to identify common error

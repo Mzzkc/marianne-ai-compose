@@ -1,7 +1,7 @@
 """TDD tests for stale state feedback (#139).
 
 Three remaining issues from the stale state feedback work:
-1. Stale PID detection in ``mozart start`` — clean up + notify user
+1. Stale PID detection in ``mzt start`` — clean up + notify user
 2. ``--fresh`` early failure suppression — skip await_early_failure when --fresh
 3. Contradictory error regression — rejection must NOT fall through to "not running"
 
@@ -38,12 +38,12 @@ def _make_config(tmp_path: Path) -> Path:
 
 
 # =============================================================================
-# 1. Stale PID detection in ``mozart start``
+# 1. Stale PID detection in ``mzt start``
 # =============================================================================
 
 
 class TestStalePidDetection:
-    """When ``mozart start`` finds a PID file with a dead process,
+    """When ``mzt start`` finds a PID file with a dead process,
     it should clean up the stale file and notify the user."""
 
     def test_stale_pid_shows_cleanup_message(
@@ -59,7 +59,7 @@ class TestStalePidDetection:
 
         mock_config = MagicMock()
         mock_config.pid_file = pid_file
-        mock_config.log_file = tmp_path / "mozart.log"
+        mock_config.log_file = tmp_path / "marianne.log"
 
         with (
             patch(
@@ -125,7 +125,7 @@ class TestStalePidDetection:
 
         mock_config = MagicMock()
         mock_config.pid_file = pid_file
-        mock_config.log_file = tmp_path / "mozart.log"
+        mock_config.log_file = tmp_path / "marianne.log"
 
         with (
             patch(
@@ -154,7 +154,7 @@ class TestStalePidDetection:
 
         mock_config = MagicMock()
         mock_config.pid_file = tmp_path / "marianne.pid"
-        mock_config.log_file = tmp_path / "mozart.log"
+        mock_config.log_file = tmp_path / "marianne.log"
 
         with (
             patch(

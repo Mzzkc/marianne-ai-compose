@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.process module.
+"""Tests for marianne.daemon.process module.
 
 Covers core conductor functions, PID file helpers, signal handler
 installation, and _daemonize() skip in foreground mode.
@@ -414,11 +414,11 @@ class TestDaemonProcess:
         import yaml
         cfg_path = tmp_path / "daemon.yaml"
         cfg_path.write_text(yaml.dump({
-            "socket": {"path": "/tmp/new-mozart.sock"},
+            "socket": {"path": "/tmp/new-marianne.sock"},
         }))
 
         config = DaemonConfig(
-            socket=SocketConfig(path=Path("/tmp/old-mozart.sock")),
+            socket=SocketConfig(path=Path("/tmp/old-marianne.sock")),
         )
         config.config_file = cfg_path
         dp = DaemonProcess(config)
@@ -428,7 +428,7 @@ class TestDaemonProcess:
         # Should not raise — applies config and logs warning for socket.path
         await dp._handle_sighup()
         # Config is updated despite non-reloadable warning
-        assert dp._config.socket.path == Path("/tmp/new-mozart.sock")
+        assert dp._config.socket.path == Path("/tmp/new-marianne.sock")
 
     @pytest.mark.asyncio
     async def test_register_methods_without_health(self):

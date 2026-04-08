@@ -1,4 +1,4 @@
-"""Mozart score templates.
+"""Marianne score templates.
 
 Pre-built score configurations for common use cases.
 """

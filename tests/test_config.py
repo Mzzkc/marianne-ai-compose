@@ -1,4 +1,4 @@
-"""Tests for mozart.core.config module."""
+"""Tests for marianne.core.config module."""
 
 from pathlib import Path
 

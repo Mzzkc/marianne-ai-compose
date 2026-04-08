@@ -1,8 +1,8 @@
-"""Exception hierarchy for the Mozart daemon.
+"""Exception hierarchy for the Marianne daemon.
 
 All daemon-specific exceptions inherit from DaemonError, enabling callers
 to catch broad (DaemonError) or narrow (e.g., ResourceExhaustedError).
-Follows the same flat hierarchy pattern as other Mozart modules
+Follows the same flat hierarchy pattern as other Marianne modules
 (WorktreeError, ParallelExecutionError, etc.).
 """
 
@@ -39,7 +39,7 @@ class MethodNotFoundError(DaemonError):
 
     This typically means the CLI is newer than the running conductor.
     The user should restart the conductor to pick up code changes:
-    ``pip install -e ".[dev]" && mozart restart``
+    ``pip install -e ".[dev]" && mzt restart``
     """
 
 

@@ -1,7 +1,7 @@
 # Example: Training Data Curation for Machine Learning
 # Orchestrate high-quality dataset creation from schema design through annotation and validation
 #
-# This example demonstrates Mozart's capabilities BEYOND software development:
+# This example demonstrates Marianne's capabilities BEYOND software development:
 # - Iterative refinement with quality gates
 # - Multi-annotator synthesis (TDF-aligned pattern)
 # - Quantitative quality metrics (Inter-Annotator Agreement)
@@ -17,11 +17,11 @@
 # Usage:
 #   # 1. Customize variables in prompt.variables section
 #   # 2. Validate configuration
-#   mozart validate examples/training-data-curation.yaml
+#   mzt validate examples/training-data-curation.yaml
 #   # 3. Run the curation pipeline
-#   mozart run examples/training-data-curation.yaml
+#   mzt run examples/training-data-curation.yaml
 #   # 4. Monitor progress
-#   mozart status training-data-curation
+#   mzt status training-data-curation
 #
 # Estimated time: 3-6 hours depending on dataset size
 # Outputs: Curated, documented dataset with IAA metrics in workspace/

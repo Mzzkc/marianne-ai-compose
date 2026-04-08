@@ -23,7 +23,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
-from marianne.core.logging import MozartLogger, get_logger
+from marianne.core.logging import MarianneLogger, get_logger
 
 from .models import EntropyResponseRecord, ExplorationBudgetRecord, PatternEntropyMetrics
 
@@ -92,7 +92,7 @@ class BudgetMixin:
     """
 
     # Annotations for attributes provided by the composed class (GlobalLearningStoreBase)
-    _logger: MozartLogger
+    _logger: MarianneLogger
     _get_connection: Callable[[], AbstractContextManager[sqlite3.Connection]]
 
     @staticmethod
@@ -827,7 +827,7 @@ class BudgetMixin:
         }
 
     # =========================================================================
-    # Pattern Entropy Monitoring (used by `mozart patterns-entropy` CLI)
+    # Pattern Entropy Monitoring (used by `mzt patterns-entropy` CLI)
     # =========================================================================
 
     def calculate_pattern_entropy(self) -> PatternEntropyMetrics:

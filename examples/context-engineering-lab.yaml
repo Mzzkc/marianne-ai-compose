@@ -65,8 +65,8 @@
 # Usage:
 #   1. Edit the `project` variable below to describe YOUR project
 #   2. Set the `workspace` path to where you want outputs saved
-#   3. mozart validate examples/context-engineering-lab.yaml
-#   4. mozart run examples/context-engineering-lab.yaml
+#   3. mzt validate examples/context-engineering-lab.yaml
+#   4. mzt run examples/context-engineering-lab.yaml
 
 name: "context-engineering-lab"
 description: "Dual-LLM context engineering investigation for any project"
@@ -78,7 +78,7 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 2400
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Framing"
@@ -144,7 +144,7 @@ prompt:
     # Everything below this section is template-driven and generic.
     # ════════════════════════════════════════════════════════════
     project:
-      name: "Mozart AI Compose"
+      name: "Marianne AI Compose"
       path: "."  # Set to your project's root directory
       description: >-
         An orchestration system that replaces software teams with
@@ -159,15 +159,15 @@ prompt:
         contributors — human or AI.
       organization: >-
         Solo developer + AI collaborators. The project has a specification
-        corpus (.mozart/spec/), session memory (memory-bank/), CLAUDE.md
+        corpus (.marianne/spec/), session memory (memory-bank/), CLAUDE.md
         files, and extensive documentation. A sister project (Recursive
         Light Framework) provides a dual-LLM architecture for AI
         personhood that serves as a reference integration.
       key_docs:
         - "CLAUDE.md"
-        - ".mozart/spec/intent.yaml"
-        - ".mozart/spec/architecture.yaml"
-        - ".mozart/spec/conventions.yaml"
+        - ".marianne/spec/intent.yaml"
+        - ".marianne/spec/architecture.yaml"
+        - ".marianne/spec/conventions.yaml"
         - "docs/score-writing-guide.md"
 
     # ════════════════════════════════════════════════════════════

@@ -1,331 +1,264 @@
-# Mozart Global Learning Architecture
+# Marianne Learning Architecture
 
-**Status:** IMPLEMENTED (v1.0)
+**Status:** Phase 1 IMPLEMENTED and evolved through 24+ autonomous self-improvement cycles. Original design Phases 2-6 remain unbuilt proposals.
 **Created:** 2025-12-27
-**Implemented:** 2026-01-14
-**Vision:** Every Mozart instance learns from execution, aggregates patterns across all workspaces, and improves over time.
+**Initial Implementation:** 2026-01-14
+**Last Updated:** 2026-04-07
 
 ---
 
 ## Overview
 
-Mozart's global learning system aggregates execution outcomes and patterns across all workspaces, enabling Mozart to learn from every job and improve retry strategies, error handling, and pattern detection over time.
+Marianne's learning system aggregates execution outcomes and patterns across all workspaces, enabling Marianne to learn from every job and improve retry strategies, error handling, and pattern detection over time. All learning data stays local in a SQLite database at `~/.marianne/global-learning.db`. The system has evolved significantly beyond its original Phase 1 design through autonomous self-improvement cycles.
 
-### What Was Built
-
-| Component | File | LOC | Purpose |
-|-----------|------|-----|---------|
-| Global Store | `src/mozart/learning/global_store.py` | 1196 | SQLite persistence |
-| Aggregator | `src/mozart/learning/aggregator.py` | 348 | Pattern merging |
-| Weighter | `src/mozart/learning/weighter.py` | 340 | Priority calculation |
-| Error Hooks | `src/mozart/learning/error_hooks.py` | 283 | Error learning |
-| Migration | `src/mozart/learning/migration.py` | 283 | Workspace import |
-| Tests | `tests/test_global_learning.py` | 569 | 29 test cases |
-
-**Total:** ~3300 LOC implementation + tests
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           Mozart Instance                                │
-│                                                                          │
-│  ┌──────────────┐    ┌──────────────┐    ┌────────────────────────────┐ │
-│  │   Runner     │───▶│   Pattern    │───▶│   Global Learning Store    │ │
-│  │  (executes)  │    │  Aggregator  │    │  (~/.mozart/global-...)    │ │
-│  └──────────────┘    └──────────────┘    └────────────────────────────┘ │
-│         │                   │                         │                  │
-│         ▼                   ▼                         ▼                  │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │                   Error Learning Hooks                             │  │
-│  │  - Records error classifications and recoveries                    │  │
-│  │  - Learns adaptive wait times from recovery success               │  │
-│  │  - Shares learned delays across workspaces                         │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+> **Reading guide:** This document has two clearly separated parts. **[Part 1](#part-1-implemented-system)** describes working, tested code (~11,400 lines) that ships today — file paths and module names are verifiable against the codebase. **[Part 2](#part-2-design-proposals-not-implemented)** is the original design document for features that have **not been built** — the file paths, CLI commands, and config structures described there do not exist. Every section is labelled. If you are configuring or debugging Marianne, only Part 1 applies.
 
 ---
+
+# Part 1: Implemented System
+
+Everything in this section describes working code. File paths and module names are verifiable.
+
+## Components
+
+The learning system comprises ~11,400 lines of implementation across two packages:
+
+### Core Learning Package (`src/marianne/learning/`)
+
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `global_store.py` | 89 | Re-exports from modular store package (backward compat) |
+| `store/` (16 modules) | 7,268 | SQLite-backed global learning store (see below) |
+| `patterns.py` | 1,267 | Pattern extraction, matching, and application |
+| `aggregator.py` | 581 | Cross-workspace pattern merging |
+| `error_hooks.py` | 456 | Error classification learning and adaptive wait times |
+| `migration.py` | 450 | Workspace outcome import to global store |
+| `judgment.py` | 452 | Learning-informed decision making |
+| `weighter.py` | 304 | Priority calculation (recency + effectiveness) |
+| `outcomes.py` | 403 | Execution outcome recording |
+
+### Global Learning Store (`src/marianne/learning/store/`)
+
+The store was originally a monolithic ~5,136-line module. It has been modularized into 16 files using a mixin architecture:
+
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `base.py` | 922 | SQLite connection, schema, migrations, WAL mode |
+| `models.py` | 656 | Dataclasses and enums (PatternRecord, ExecutionRecord, etc.) |
+| `patterns_crud.py` | 678 | Pattern create/read/update/delete |
+| `patterns_query.py` | 289 | Pattern search and filtering |
+| `patterns_trust.py` | 248 | Trust scoring for patterns (v19 evolution) |
+| `patterns_quarantine.py` | 180 | Quarantine lifecycle (pending/quarantined/validated/retired) |
+| `patterns_lifecycle.py` | 272 | Pattern state transitions |
+| `patterns_broadcast.py` | 200 | Cross-workspace pattern sharing |
+| `patterns_success_factors.py` | 269 | Metacognitive pattern reflection (v22) |
+| `budget.py` | 975 | Exploration budget management (v23) |
+| `drift.py` | 1,025 | Effectiveness and epistemic drift detection |
+| `executions.py` | 714 | Execution outcome recording and querying |
+| `escalation.py` | 288 | Escalation decision recording |
+| `rate_limits.py` | 236 | Cross-workspace rate limit coordination |
+| `patterns.py` | 78 | Pattern mixin aggregation |
+| `__init__.py` | 238 | Package exports |
+
+### Daemon Integration
+
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `daemon/learning_hub.py` | ~120 | Centralized store for all daemon jobs |
+| `daemon/semantic_analyzer.py` | 486 | AI-powered pattern analysis |
+
+The `LearningHub` maintains a single `GlobalLearningStore` instance shared across all concurrent jobs. Pattern discoveries in Job A are immediately visible to Job B. Periodic persistence (60-second heartbeat) replaces per-write flushes.
+
+### Configuration (`src/marianne/core/config/learning.py`)
+
+The `LearningConfig` Pydantic model provides these implemented configuration fields:
+
+| Field | Default | Purpose |
+|-------|---------|---------|
+| `enabled` | `true` | Master switch for learning |
+| `outcome_store_type` | `"json"` | Backend type (`json` or `sqlite`) |
+| `outcome_store_path` | `None` | Custom path (default: workspace/.marianne-outcomes.json) |
+| `min_confidence_threshold` | `0.3` | Below this triggers escalation |
+| `high_confidence_threshold` | `0.7` | Above this uses completion mode |
+| `escalation_enabled` | `false` | Enable low-confidence escalation |
+| `use_global_patterns` | `true` | Query global store for patterns |
+| `exploration_rate` | `0.15` | Epsilon-greedy exploration rate |
+| `exploration_min_priority` | `0.05` | Floor for exploration candidates |
+| `entropy_alert_threshold` | `0.5` | Low-diversity alert trigger |
+| `entropy_check_interval` | `100` | Check every N applications |
+| `auto_apply_enabled` | `false` | High-trust auto-apply (deprecated flat field) |
+| `auto_apply_trust_threshold` | `0.85` | Trust score for auto-apply (deprecated flat field) |
+| `exploration_budget` | `ExplorationBudgetConfig()` | Dynamic budget (v23) |
+| `entropy_response` | `EntropyResponseConfig()` | Auto entropy response (v23) |
+| `auto_apply` | `None` | Structured auto-apply config (v22, replaces flat fields) |
+
+Additional config models defined in the same file:
+
+- `ExplorationBudgetConfig` — Dynamic exploration budget with floor/ceiling/decay (v23)
+- `EntropyResponseConfig` — Automatic diversity injection when entropy drops (v23)
+- `AutoApplyConfig` — Trust-aware autonomous pattern application (v22)
+- `GroundingConfig` — External grounding hooks (file checksum validation)
+- `GroundingHookConfig` — Individual hook configuration (currently supports `file_checksum` type)
+- `CheckpointConfig` — Proactive pre-execution checkpoints (v21)
+- `CheckpointTriggerConfig` — Trigger conditions for checkpoints (sheet numbers, keywords, retry count)
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           Marianne Instance                              │
+│                                                                          │
+│  ┌──────────────┐    ┌──────────────┐    ┌─────────────────────────────┐│
+│  │   Runner     │───▶│   Pattern    │───▶│   Global Learning Store     ││
+│  │  (executes)  │    │  Aggregator  │    │  (~/.marianne/global-       ││
+│  └──────────────┘    └──────────────┘    │   learning.db)              ││
+│         │                   │            └─────────────────────────────┘│
+│         │                   │                        │                   │
+│         ▼                   ▼                        ▼                   │
+│  ┌────────────────────────────────────────────────────────────────────┐ │
+│  │                   Error Learning Hooks                              │ │
+│  │  - Records error classifications and recoveries                    │ │
+│  │  - Learns adaptive wait times from recovery success                │ │
+│  │  - Shares learned delays across workspaces                         │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+│         │                                                                │
+│         ▼                                                                │
+│  ┌────────────────────────────────────────────────────────────────────┐ │
+│  │                   Daemon Learning Hub                               │ │
+│  │  - Single GlobalLearningStore shared across concurrent jobs        │ │
+│  │  - Instant cross-job pattern visibility                            │ │
+│  │  - 60-second heartbeat persistence                                 │ │
+│  │  - Semantic analysis of patterns (AI-powered)                      │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Pattern Lifecycle
+
+Patterns follow a quarantine lifecycle (v19 evolution):
+
+```
+PENDING → VALIDATED    (proven effective through repeated application)
+PENDING → QUARANTINED  (flagged for review due to failures)
+QUARANTINED → VALIDATED (rehabilitated after investigation)
+QUARANTINED → RETIRED   (permanently deactivated)
+VALIDATED → RETIRED     (no longer relevant)
+```
+
+### Trust and Exploration
+
+The system balances exploitation of known-good patterns with exploration of unproven ones:
+
+- **Epsilon-greedy selection:** `exploration_rate` (default 0.15) determines how often lower-priority patterns are tried.
+- **Dynamic budget (v23):** When entropy drops, the exploration budget auto-boosts. When entropy is healthy, it decays toward a floor.
+- **Trust scoring (v19):** Patterns accumulate trust through successful applications. High-trust patterns (>0.85) can be auto-applied without human confirmation.
+- **Drift detection:** Tracks effectiveness drift (are patterns degrading?) and epistemic drift (is the system's knowledge becoming stale?).
 
 ## CLI Commands
 
 ```bash
 # View global patterns
-mozart patterns-list [--min-priority 0.0] [--limit N]
+mzt patterns-list [--min-priority 0.0] [--limit N]
 
-# View learning statistics
-mozart learning-stats
+# Why patterns succeed (metacognitive analysis)
+mzt patterns-why
 
-# Pattern analysis
-mozart patterns-why          # Why patterns succeed
-mozart patterns-entropy      # Pattern diversity
-mozart patterns-budget       # Exploration budget
-mozart learning-drift        # Effectiveness drift
-mozart learning-activity     # Recent activity
+# Pattern diversity metrics
+mzt patterns-entropy
+
+# Exploration budget status
+mzt patterns-budget
+
+# Learning statistics
+mzt learning-stats
+
+# Learning insights
+mzt learning-insights
+
+# Effectiveness drift detection
+mzt learning-drift
+
+# Epistemic drift detection
+mzt learning-epistemic-drift
+
+# Recent learning activity
+mzt learning-activity
+
+# Export patterns
+mzt learning-export [--output FILE]
+
+# Record evolution trajectory
+mzt learning-record-evolution
+
+# Entropy system status
+mzt entropy-status
 ```
+
+## Test Coverage
+
+The learning system has extensive test coverage across 16 dedicated test files (~19,500 lines):
+
+- `test_global_learning.py` — Comprehensive store tests (patterns, executions, trust, quarantine)
+- `test_learning_executions.py` — Execution recording and similarity matching
+- `test_learning_budget.py` — Exploration budget dynamics and entropy response
+- `test_learning_store_base.py` — SQLite schema, migrations, WAL mode
+- `test_learning_aggregator.py` — Outcome aggregation into global patterns
+- `test_learning_drift.py` — Effectiveness and epistemic drift detection
+- `test_learning_weighter.py` — Priority calculations
+- `test_learning_migration_judgment.py` — Outcome store migration
+- `test_error_learning_hooks.py` — Error code recovery learning
+- `test_learning_store_fk_migration.py` — Foreign key constraint handling
+- `test_learning_e2e.py` — End-to-end pattern detection and application
+- `test_learning_export_filtering.py` — Data export with filtering
+- `test_daemon_learning_hub.py` — Async hub lifecycle
+- `test_cli_learning.py` — CLI command validation
+- `test_cli_learning_export.py` — Export command validation
+- `test_learning_store_priority_and_fk.py` — Priority calculations and FK migrations
+
+## Key Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Global Store Location | SQLite at `~/.marianne/global-learning.db` | Single-file, no server, WAL mode for concurrent access |
+| Aggregation Trigger | Immediate on job completion | Patterns available instantly for next job |
+| Pattern Weighting | Combined recency + effectiveness | Recent successes weighted higher than old ones |
+| Error Learning | Hook-based extension of ErrorClassifier | Non-invasive integration with existing error handling |
+| Store Architecture | Mixin-based modular design | Original 5,136-line monolith was unmaintainable |
+| Daemon Integration | Centralized LearningHub | Single store instance prevents SQLite lock contention |
+
+## Evolution History
+
+The learning system has evolved through Marianne's autonomous self-improvement cycles. Key evolutions visible in the code:
+
+| Evolution | Feature Added |
+|-----------|---------------|
+| v8 | Cross-workspace rate limit coordination |
+| v11 | Escalation learning loop |
+| v12 | Goal drift detection |
+| v14 | Real-time pattern broadcasting |
+| v19 | Pattern quarantine lifecycle, trust scoring, provenance tracking |
+| v21 | Epistemic drift detection, proactive checkpoints, pattern entropy monitoring |
+| v22 | Metacognitive pattern reflection (success factors), trust-aware autonomous application |
+| v23 | Exploration budget maintenance, automatic entropy response |
+
+These evolutions extended the system far beyond its original Phase 1 design. The proposed Phases 2-6 (anonymization, GitHub contribution, sync) were never implemented; instead, the system evolved in a different direction — toward self-awareness and autonomous pattern management.
 
 ---
 
-## Key Decisions (TDF-Validated)
+# Part 2: Design Proposals (Not Implemented)
 
-| Decision | Choice | CV |
-|----------|--------|-----|
-| Global Store Location | SQLite (~/.mozart/global-learning.db) | 0.82 |
-| Aggregation Trigger | Immediate on job completion | 0.83 |
-| Pattern Weighting | Combined recency + effectiveness | 0.80 |
-| Error Learning | Extend ErrorClassifier with hooks | 0.82 |
+> **Everything below this line describes aspirational designs from the original 2025-12-27 design document (Phases 2-6). None of this code exists. The following proposed files were never created:** `adaptation.py`, `preflight.py`, `improvements.py`, `quality.py`, `anonymize.py`, `contribute.py`, `sync.py`, `database.py`. **The config structures and CLI commands shown below are proposals, not references to real code.**
 
----
+The original design envisioned six phases. Only Phase 1 (local learning foundation) was implemented — and the actual implementation diverged significantly from the original design, evolving through 24 autonomous self-improvement cycles into the system described in Part 1. Phases 2-6 remain unbuilt.
 
-## Future Work (v2+)
+## Proposed: Preflight Learning (Before Execution)
 
-- Preflight Learning (query patterns before execution)
-- Mid-Run Adaptation (modify prompts during retry)
-- GitHub Contribution Pipeline (anonymize and share patterns)
-- Centralized Learning Store (PostgreSQL for multi-user)
-
----
-
-*Implemented 2026-01-14 via Mozart Global Learning Orchestration*
-
----
----
-
-# Original Design Document (Reference)
-
-The sections below contain the original design document for reference.
-
----
-
-## First Principles
-
-### What is Mozart learning?
-
-Every execution generates knowledge at multiple levels:
-
-```
-Level 0: Raw Events
-├── Command executed, exit code, duration
-├── Stdout/stderr content
-├── Validation results (pass/fail, confidence)
-└── Resource usage (tokens, time, retries)
-
-Level 1: Patterns
-├── Failure patterns ("validation markers missing")
-├── Success patterns ("explicit format in code block")
-├── Recovery patterns ("retry with clarification works")
-└── Timing patterns ("sheet 4 consistently slow")
-
-Level 2: Insights
-├── Prompt structure effectiveness
-├── Config structure effectiveness
-├── Validation reliability scores
-├── Error recoverability classifications
-
-Level 3: Improvements
-├── Prompt template changes
-├── Validation logic changes
-├── Default config changes
-├── Error handling changes
-├── Documentation updates
-└── New helper utilities
-```
-
-### What can be improved?
-
-| Category | Example | Contribution Type |
-|----------|---------|-------------------|
-| **Prompts** | "Add explicit validation marker format" | Template change |
-| **Validations** | "file_exists + size > 0 more reliable than content_contains" | Code change |
-| **Defaults** | "completion_threshold_percent: 60 works better than 50" | Config change |
-| **Retry Logic** | "Rate limit needs exponential backoff floor of 30s" | Code change |
-| **Error Messages** | "Suggest checking X when Y error occurs" | Code/docs change |
-| **New Validators** | "Add yaml_valid validator for config generation" | Code addition |
-
----
-
-## Architecture
-
-### Local Learning Stack
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Mozart Instance                          │
-│                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │   Runner     │───▶│   Learning   │───▶│   Local DB   │  │
-│  │  (executes)  │    │   Extractor  │    │  (SQLite)    │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│         │                   │                    │          │
-│         │                   ▼                    │          │
-│         │           ┌──────────────┐             │          │
-│         │           │   Pattern    │             │          │
-│         │           │   Analyzer   │             │          │
-│         │           └──────────────┘             │          │
-│         │                   │                    │          │
-│         ▼                   ▼                    ▼          │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │              Learning Application Layer               │  │
-│  │  - Preflight checks (before execution)               │  │
-│  │  - Mid-run adaptation (during execution)             │  │
-│  │  - Post-run analysis (after execution)               │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                            │                                │
-│                            ▼                                │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │              Contribution Preparation                 │  │
-│  │  - Anonymization                                      │  │
-│  │  - Deduplication                                      │  │
-│  │  - Quality filtering                                  │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                            │                                │
-└────────────────────────────┼────────────────────────────────┘
-                             │
-                             ▼
-              ┌──────────────────────────────┐
-              │      GitHub Contribution      │
-              │  (PR to mozart-ai-compose)    │
-              └──────────────────────────────┘
-```
-
-### Database Schema (Local SQLite)
-
-```sql
--- Core execution data
-CREATE TABLE executions (
-    id TEXT PRIMARY KEY,
-    job_hash TEXT NOT NULL,           -- Hash of job name (anonymized)
-    sheet_num INTEGER NOT NULL,
-    started_at TIMESTAMP,
-    completed_at TIMESTAMP,
-    duration_seconds REAL,
-    status TEXT,                       -- completed, failed, etc.
-    retry_count INTEGER DEFAULT 0,
-    first_attempt_success BOOLEAN,
-
-    -- Aggregated metrics (no PII)
-    prompt_token_estimate INTEGER,
-    validation_count INTEGER,
-    validation_pass_rate REAL,
-    confidence_score REAL
-);
-
--- Learned patterns
-CREATE TABLE patterns (
-    id TEXT PRIMARY KEY,
-    pattern_type TEXT NOT NULL,        -- failure, success, recovery, timing
-    pattern_name TEXT NOT NULL,        -- e.g., "validation_markers_missing"
-    description TEXT,
-
-    -- Statistics
-    occurrence_count INTEGER DEFAULT 1,
-    first_seen TIMESTAMP,
-    last_seen TIMESTAMP,
-
-    -- Effectiveness
-    led_to_success_count INTEGER DEFAULT 0,
-    led_to_failure_count INTEGER DEFAULT 0,
-
-    -- Suggested action
-    suggested_action TEXT,             -- e.g., "add explicit format to prompt"
-    action_effectiveness REAL          -- 0.0-1.0 based on outcomes
-);
-
--- Pattern-execution linkage
-CREATE TABLE execution_patterns (
-    execution_id TEXT REFERENCES executions(id),
-    pattern_id TEXT REFERENCES patterns(id),
-    PRIMARY KEY (execution_id, pattern_id)
-);
-
--- Improvement suggestions (ready for contribution)
-CREATE TABLE improvements (
-    id TEXT PRIMARY KEY,
-    category TEXT NOT NULL,            -- prompt, validation, config, code, docs
-    target_file TEXT,                  -- Relative path in repo
-    description TEXT NOT NULL,
-
-    -- The actual change
-    change_type TEXT,                  -- add, modify, delete
-    change_content TEXT,               -- Diff or new content
-
-    -- Evidence
-    supporting_pattern_ids TEXT,       -- JSON array of pattern IDs
-    confidence REAL,                   -- 0.0-1.0
-    sample_size INTEGER,               -- How many executions support this
-
-    -- Contribution status
-    status TEXT DEFAULT 'pending',     -- pending, contributed, rejected, merged
-    contributed_at TIMESTAMP,
-    pr_url TEXT
-);
-
--- Contribution history
-CREATE TABLE contributions (
-    id TEXT PRIMARY KEY,
-    contributed_at TIMESTAMP,
-    pr_url TEXT,
-    status TEXT,                       -- open, merged, closed
-    improvements_included TEXT,        -- JSON array of improvement IDs
-
-    -- Anonymized instance identifier (rotates periodically)
-    instance_hash TEXT
-);
-```
-
-### Anonymization Layer
-
-**Must Strip:**
-```python
-STRIP_FIELDS = [
-    "pid",
-    "user_id",
-    "username",
-    "home_directory",
-    "absolute_paths",      # Convert to relative
-    "api_keys",
-    "environment_variables",
-    "hostnames",
-    "ip_addresses",
-    "timestamps",          # Normalize to relative times
-    "stdout_content",      # May contain sensitive data
-    "stderr_content",      # May contain sensitive data
-]
-```
-
-**Must Hash (for correlation without exposure):**
-```python
-HASH_FIELDS = [
-    "job_name",            # Hash to allow pattern matching
-    "workspace_path",      # Hash to correlate executions
-    "project_path",        # Hash to identify project-specific patterns
-]
-```
-
-**Keep As-Is:**
-```python
-KEEP_FIELDS = [
-    "pattern_names",       # Generic, no PII
-    "validation_types",    # Generic
-    "success_rates",       # Aggregate metrics
-    "retry_counts",        # Numeric
-    "duration_buckets",    # Bucketed, not exact
-    "config_structure",    # Structure only, no values
-    "prompt_structure",    # Structure only, no content
-]
-```
-
----
-
-## Three Modes of Learning Application
-
-### Mode 1: Preflight Learning (Before Execution)
+Query the local database for similar past executions before running a sheet. Identify patterns that led to failures and apply learned mitigations automatically.
 
 ```yaml
-# In job config
+# PROPOSED config — does not exist
 learning:
-  enabled: true
   preflight:
     enabled: true
     check_similar_failures: true
@@ -333,500 +266,89 @@ learning:
     warn_on_risky_patterns: true
 ```
 
-**What it does:**
-1. Before sheet execution, queries local DB for similar past executions
-2. Identifies patterns that led to failures
-3. Applies learned mitigations (e.g., modify prompt, adjust timeout)
-4. Warns user of risky patterns detected in config
-
-**Example preflight output:**
+Proposed preflight output:
 ```
 Sheet 3 preflight:
-  ⚠ Similar sheet failed 2/3 times historically
-  ⚠ Pattern detected: "validation_markers_missing" (80% failure rate)
-  ✓ Applied mitigation: Added explicit marker format to prompt
-  ✓ Adjusted timeout: 1800s → 2400s (based on timing patterns)
+  ! Similar sheet failed 2/3 times historically
+  ! Pattern detected: "validation_markers_missing" (80% failure rate)
+  Applied mitigation: Added explicit marker format to prompt
+  Adjusted timeout: 1800s -> 2400s (based on timing patterns)
 ```
 
-### Mode 2: Mid-Run Adaptation (During Execution)
+## Proposed: Mid-Run Adaptation (During Execution)
+
+On validation failure, query patterns for this failure type and apply learned recovery strategies to modify the prompt for retry.
 
 ```yaml
+# PROPOSED config — does not exist
 learning:
-  enabled: true
   mid_run:
     enabled: true
     adapt_on_failure: true
     max_adaptations: 2
 ```
 
-**What it does:**
-1. On validation failure, queries patterns for this failure type
-2. Applies learned recovery strategies
-3. Modifies prompt/approach for retry based on what worked before
+## Proposed: Post-Run Improvement Detection
 
-**Decision flow:**
-```
-Validation Failed
-      │
-      ▼
-Query: "What worked when this pattern occurred before?"
-      │
-      ▼
-Found: "Adding 'IMPORTANT: Include exact format' worked 73% of the time"
-      │
-      ▼
-Apply: Modify prompt with learned enhancement
-      │
-      ▼
-Retry with adaptation
-```
+Analyze completed jobs for improvement opportunities. Generate suggestions, filter through quality gates, and queue for contribution.
 
-### Mode 3: Post-Run Analysis (After Execution)
+Proposed deliverables:
+- `src/marianne/learning/improvements.py` — Improvement detection
+- `src/marianne/learning/quality.py` — Quality gates
 
-```yaml
-learning:
-  enabled: true
-  post_run:
-    enabled: true
-    extract_patterns: true
-    suggest_improvements: true
-    queue_for_contribution: true
-```
+## Proposed: Anonymization Layer
 
-**What it does:**
-1. Analyzes completed job for new patterns
-2. Updates pattern statistics (success/failure counts)
-3. Generates improvement suggestions
-4. Queues significant improvements for contribution
+Strip PII from patterns before any external sharing. Hash identifiers for correlation without exposure.
 
----
+Fields to strip: PIDs, usernames, absolute paths, API keys, environment variables, hostnames, IP addresses, stdout/stderr content.
 
-## Contribution Flow
+Fields to hash: job names, workspace paths, project paths.
 
-### Local → GitHub PR Pipeline
+Fields to keep: pattern names, validation types, success rates, retry counts, config structure (no values).
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  1. Improvement Detected                                    │
-│     Pattern X led to failure, but modification Y fixed it   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  2. Quality Gate                                            │
-│     - Minimum sample size (e.g., 5 occurrences)            │
-│     - Minimum confidence (e.g., 0.7)                        │
-│     - Not already contributed                               │
-│     - Improvement category allowed                          │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  3. Anonymization                                           │
-│     - Strip all PII                                         │
-│     - Hash identifiers                                      │
-│     - Normalize paths                                       │
-│     - Remove content, keep structure                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  4. Contribution Preparation                                │
-│     - Generate diff/patch                                   │
-│     - Write evidence summary                                │
-│     - Create PR description                                 │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  5. GitHub PR Creation                                      │
-│     - Fork if needed                                        │
-│     - Create branch: learning/pattern-name-hash             │
-│     - Commit changes                                        │
-│     - Open PR with evidence                                 │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  6. Human Review (maintainer)                               │
-│     - Review anonymization                                  │
-│     - Validate improvement                                  │
-│     - Merge or close with feedback                          │
-└─────────────────────────────────────────────────────────────┘
-```
+Proposed deliverables:
+- `src/marianne/learning/anonymize.py` — Anonymization logic
 
-### Contribution Categories
+## Proposed: GitHub Contribution Pipeline
 
-| Category | Auto-Contribute | Requires Review | Example |
-|----------|-----------------|-----------------|---------|
-| **Pattern Definition** | Yes | Light | New failure pattern identified |
-| **Default Config Values** | Yes | Light | Better default timeout |
-| **Prompt Structure** | Yes | Moderate | Add explicit format section |
-| **Validation Logic** | No | Heavy | New validator implementation |
-| **Error Handling** | No | Heavy | New error recovery code |
-| **Core Algorithm** | No | Heavy | Retry strategy changes |
+Automatically generate PRs from locally-learned improvements:
 
-### PR Template for Contributions
+1. Improvement detected (pattern X causes failure, modification Y fixes it)
+2. Quality gate (minimum sample size, minimum confidence, not already contributed)
+3. Anonymization (strip PII, hash identifiers, normalize paths)
+4. Contribution preparation (generate diff, write evidence summary)
+5. GitHub PR creation (fork, branch, commit, open PR)
+6. Human review by maintainer
 
-```markdown
-## Mozart Learning Contribution
+Proposed deliverables:
+- `src/marianne/learning/contribute.py` — GitHub contribution logic
 
-**Type:** [Pattern | Config | Prompt | Validation | Code]
-**Confidence:** 0.XX
-**Sample Size:** N executions
+## Proposed: Learning Sync
 
-### Evidence Summary
+Pull merged learnings from the GitHub repository and apply to the local database.
 
-This improvement was learned from N executions across M distinct jobs.
+Proposed CLI command: `mzt learning sync`
 
-**Pattern Observed:**
-- [Description of failure pattern]
-- Occurrence rate: X%
-- Failure rate without mitigation: Y%
+Proposed deliverables:
+- `src/marianne/learning/sync.py` — Learning synchronization
 
-**Improvement Applied:**
-- [Description of improvement]
-- Success rate with improvement: Z%
+## Proposed: Centralized Learning Store
 
-### Changes
+Three options were considered:
 
-[Diff of proposed changes]
+**Option A: Shared PostgreSQL** — Real-time sharing, centralized statistics. Cons: requires network, privacy concerns, hosting cost.
 
-### Anonymization Verification
+**Option B: Git-Based Federation** (recommended for start) — Works offline, full transparency, human review via PRs. Cons: async, requires GitHub access.
 
-- [ ] No absolute paths
-- [ ] No usernames or user IDs
-- [ ] No API keys or secrets
-- [ ] No project-specific content
-- [ ] Instance identifier is hashed
+**Option C: Hybrid** — Local SQLite syncs periodically to central PostgreSQL, materialized to git for transparency.
 
----
-*Automatically generated by Mozart Learning System*
-*Instance: [hashed-id] | Contribution: [contribution-id]*
-```
+## Open Design Questions
+
+1. **Should code changes ever be auto-contributed?** Current proposal: No, always requires PR review.
+2. **How to handle conflicting learnings?** Different instances may learn opposite things. Needs conflict resolution.
+3. **Rate limiting contributions?** Prevent spam from misconfigured instances.
+4. **Versioning learnings?** Patterns may become obsolete as Marianne evolves.
 
 ---
 
-## Centralized Learning Store (Future)
-
-### Option A: Shared PostgreSQL
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  Central Learning Database                   │
-│                     (PostgreSQL)                             │
-│                                                              │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
-│  │  Patterns  │  │ Statistics │  │Improvements│            │
-│  │  (global)  │  │ (aggregate)│  │  (queued)  │            │
-│  └────────────┘  └────────────┘  └────────────┘            │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-         ▲                ▲                ▲
-         │                │                │
-    ┌────┴────┐      ┌────┴────┐      ┌────┴────┐
-    │Instance │      │Instance │      │Instance │
-    │    A    │      │    B    │      │    C    │
-    └─────────┘      └─────────┘      └─────────┘
-```
-
-**Pros:**
-- Real-time learning sharing
-- Immediate benefit from others' learnings
-- Centralized statistics
-
-**Cons:**
-- Requires network access
-- Privacy concerns (even with anonymization)
-- Single point of failure
-- Hosting cost
-
-### Option B: Git-Based Federation (Recommended for Start)
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                GitHub: mozart-ai-compose                     │
-│                                                              │
-│  /learnings/                                                 │
-│  ├── patterns/                                               │
-│  │   ├── validation-markers-missing.yaml                    │
-│  │   ├── rate-limit-exponential-backoff.yaml                │
-│  │   └── ...                                                 │
-│  ├── defaults/                                               │
-│  │   ├── recommended-timeouts.yaml                          │
-│  │   └── recommended-thresholds.yaml                        │
-│  └── statistics/                                             │
-│      └── aggregate-patterns.yaml  (updated by CI)           │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-         ▲                ▲                ▲
-         │ PR             │ PR             │ PR
-    ┌────┴────┐      ┌────┴────┐      ┌────┴────┐
-    │Instance │      │Instance │      │Instance │
-    │    A    │      │    B    │      │    C    │
-    │ (local) │      │ (local) │      │ (local) │
-    └─────────┘      └─────────┘      └─────────┘
-         │                │                │
-         └────────────────┴────────────────┘
-                          │
-                    git pull
-                   (sync learnings)
-```
-
-**Pros:**
-- Works offline
-- No central infrastructure needed
-- Full transparency (all learnings in git)
-- Human review before merge
-- Natural deduplication via git
-
-**Cons:**
-- Async (not real-time)
-- Requires git/GitHub access for contribution
-- PR review bottleneck
-
-### Option C: Hybrid (Future Scale)
-
-```
-Local SQLite → Periodic sync → Central PostgreSQL → Materialized to Git
-                                      │
-                                      ▼
-                              Real-time API for
-                              high-value lookups
-```
-
----
-
-## Implementation Phases
-
-### Phase 1: Local Learning Foundation
-**Timeline:** 1-2 weeks
-
-1. Migrate from JSON outcome store to SQLite
-2. Implement pattern extraction from executions
-3. Add pattern table and linkage
-4. Basic preflight pattern checking
-5. Configuration options for enabling/disabling
-
-**Deliverables:**
-- `src/mozart/learning/database.py` - SQLite schema and operations
-- `src/mozart/learning/patterns.py` - Pattern extraction and matching
-- `src/mozart/learning/preflight.py` - Preflight checks
-- Updated `JobConfig` with learning options
-
-### Phase 2: Mid-Run Adaptation
-**Timeline:** 1 week
-
-1. Query patterns on validation failure
-2. Apply learned mitigations to prompts
-3. Track adaptation effectiveness
-4. Update pattern statistics after run
-
-**Deliverables:**
-- `src/mozart/learning/adaptation.py` - Mid-run adaptation logic
-- Updated runner integration
-
-### Phase 3: Improvement Detection
-**Timeline:** 1-2 weeks
-
-1. Post-run analysis for improvement opportunities
-2. Improvement suggestion generation
-3. Quality gate filtering
-4. Local improvement queue
-
-**Deliverables:**
-- `src/mozart/learning/improvements.py` - Improvement detection
-- `src/mozart/learning/quality.py` - Quality gates
-
-### Phase 4: Anonymization Layer
-**Timeline:** 1 week
-
-1. Comprehensive field stripping
-2. Identifier hashing
-3. Content sanitization
-4. Verification tests
-
-**Deliverables:**
-- `src/mozart/learning/anonymize.py` - Anonymization logic
-- Extensive test coverage for PII detection
-
-### Phase 5: GitHub Contribution Pipeline
-**Timeline:** 2 weeks
-
-1. PR generation from improvements
-2. Evidence summary formatting
-3. Automated branch/commit/PR creation
-4. Contribution tracking
-
-**Deliverables:**
-- `src/mozart/learning/contribute.py` - GitHub contribution logic
-- `src/mozart/cli.py` additions for manual contribution trigger
-- CI workflow for contribution validation
-
-### Phase 6: Learning Sync
-**Timeline:** 1 week
-
-1. Pull merged learnings from GitHub
-2. Apply to local database
-3. Periodic sync mechanism
-
-**Deliverables:**
-- `src/mozart/learning/sync.py` - Learning synchronization
-- CLI command: `mozart learning sync`
-
----
-
-## CLI Commands
-
-```bash
-# View local learning statistics
-mozart learning stats
-
-# Show patterns detected
-mozart learning patterns [--type failure|success|recovery]
-
-# Show queued improvements
-mozart learning improvements [--status pending|contributed|merged]
-
-# Trigger contribution (with review)
-mozart learning contribute [--dry-run]
-
-# Sync learnings from upstream
-mozart learning sync
-
-# Export anonymized learnings (for manual review)
-mozart learning export --output learnings.yaml
-
-# Run self-improvement analysis
-mozart learning analyze [workspace]
-```
-
----
-
-## Configuration
-
-```yaml
-# In mozart config or ~/.config/mozart/config.yaml
-
-learning:
-  # Master switch
-  enabled: true
-
-  # Local storage
-  database_path: ~/.mozart/learnings.db
-
-  # Preflight checks
-  preflight:
-    enabled: true
-    check_similar_failures: true
-    apply_learned_patterns: true
-    warn_threshold: 0.5  # Warn if failure rate above this
-
-  # Mid-run adaptation
-  adaptation:
-    enabled: true
-    max_adaptations_per_sheet: 2
-    min_confidence: 0.6
-
-  # Post-run analysis
-  post_run:
-    enabled: true
-    extract_patterns: true
-    suggest_improvements: true
-
-  # Contribution
-  contribute:
-    enabled: true  # Queue improvements for contribution
-    auto_contribute: false  # Require manual trigger
-    min_sample_size: 5
-    min_confidence: 0.7
-    categories:
-      - patterns
-      - defaults
-      - prompts
-    # Exclude categories that need heavy review
-    exclude_categories:
-      - validation_code
-      - core_code
-
-  # Sync
-  sync:
-    enabled: true
-    auto_sync: true  # Pull on startup
-    sync_interval_hours: 24
-```
-
----
-
-## Security Considerations
-
-### Privacy Guarantees
-
-1. **No content leaves local machine without explicit action**
-   - Patterns are structural, not content-based
-   - Improvements describe changes, don't include user data
-
-2. **Anonymization is verified before contribution**
-   - Automated scanning for PII patterns
-   - Manual review step available
-
-3. **Hashed identifiers rotate**
-   - Instance hash rotates monthly
-   - Cannot track individual users over time
-
-4. **Opt-out is always available**
-   - `learning.contribute.enabled: false` prevents any contribution
-   - `learning.enabled: false` disables all learning
-
-### What Never Leaves
-
-- API keys or credentials
-- File contents (only structure)
-- Absolute paths
-- Usernames or user IDs
-- Stdout/stderr content
-- Environment variables
-- Exact timestamps (only relative durations)
-
----
-
-## Success Metrics
-
-### Local Learning
-- Reduction in first-attempt failures
-- Reduction in total retry count
-- Improvement in average confidence scores
-
-### Global Learning
-- Number of patterns in central repository
-- Number of improvements merged
-- Adoption rate of learned defaults
-
-### Quality
-- False positive rate on pattern detection
-- Effectiveness of applied mitigations
-- PII leak incidents (target: 0)
-
----
-
-## Open Questions
-
-1. **Should code changes ever be auto-contributed?**
-   - Current design: No, always requires PR review
-   - Alternative: Auto-merge for trivial changes with high confidence
-
-2. **How to handle conflicting learnings?**
-   - Different instances learn opposite things
-   - Need conflict resolution strategy
-
-3. **Rate limiting contributions?**
-   - Prevent spam from misconfigured instances
-   - Quality over quantity
-
-4. **Versioning learnings?**
-   - Patterns may become obsolete as Mozart evolves
-   - Need versioning or deprecation mechanism
-
----
-
-*This document outlines the vision for Mozart's distributed learning system. Implementation should be phased, with local learning as the foundation before any contribution mechanisms are built.*
+*Initial implementation 2026-01-14. System evolved through 24+ autonomous cycles (v8-v23). Design proposals (Phases 2-6) remain unimplemented as of 2026-04-07.*

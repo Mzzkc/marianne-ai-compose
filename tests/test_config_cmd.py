@@ -1,4 +1,4 @@
-"""Tests for mozart.cli.commands.config_cmd module.
+"""Tests for marianne.cli.commands.config_cmd module.
 
 Covers the `check` subcommand for config validation and the `show`
 subcommand for live/disk config display.
@@ -18,7 +18,7 @@ runner = CliRunner()
 
 
 class TestConfigCheck:
-    """Tests for `mozart config check` subcommand."""
+    """Tests for `mzt config check` subcommand."""
 
     def test_valid_config_exits_0(self, tmp_path: Path) -> None:
         """Valid YAML config passes validation with exit code 0."""
@@ -86,7 +86,7 @@ class TestConfigCheck:
 
 
 class TestConfigShow:
-    """Tests for `mozart config show` subcommand with live IPC support."""
+    """Tests for `mzt config show` subcommand with live IPC support."""
 
     def test_show_live_config_from_conductor(self) -> None:
         """show displays live config when conductor is running."""
@@ -132,7 +132,7 @@ class TestConfigShow:
         ):
             result = runner.invoke(
                 config_app,
-                ["show", "--config", "/tmp/nonexistent-mozart-test.yaml"],
+                ["show", "--config", "/tmp/nonexistent-marianne-test.yaml"],
             )
 
         assert result.exit_code == 0
@@ -381,7 +381,7 @@ class TestLoadConfigData:
 
 
 class TestConfigSet:
-    """Tests for `mozart config set` subcommand."""
+    """Tests for `mzt config set` subcommand."""
 
     def test_set_valid_value(self, tmp_path: Path) -> None:
         """Setting a valid config value writes to disk."""
@@ -435,7 +435,7 @@ class TestConfigSet:
 
 
 class TestConfigPath:
-    """Tests for `mozart config path` subcommand."""
+    """Tests for `mzt config path` subcommand."""
 
     def test_path_existing_file(self, tmp_path: Path) -> None:
         """path shows location and 'exists' status for existing file."""
@@ -459,7 +459,7 @@ class TestConfigPath:
 
 
 class TestConfigInit:
-    """Tests for `mozart config init` subcommand."""
+    """Tests for `mzt config init` subcommand."""
 
     def test_init_creates_default_config(self, tmp_path: Path) -> None:
         """init creates a default config file."""

@@ -2,7 +2,7 @@
 
 The instrument_name field on SheetState (checkpoint.py:247) exists but is
 never populated. Score authors cannot see which instrument ran each sheet
-in `mozart status` output. This fix populates instrument_name at execution
+in `mzt status` output. This fix populates instrument_name at execution
 time in both the legacy runner and baton paths.
 """
 

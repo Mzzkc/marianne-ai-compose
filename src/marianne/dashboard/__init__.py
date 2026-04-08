@@ -1,4 +1,4 @@
-"""Mozart Dashboard - Web interface for job monitoring.
+"""Marianne Dashboard - Web interface for job monitoring.
 
 This module provides a FastAPI-based REST API for:
 - Listing jobs and their status

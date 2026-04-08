@@ -69,7 +69,7 @@ No new sibling bugs found. All process-control syscalls follow the defensive pat
 
 ## Recommendations for Constraints Spec
 
-Add to `.mozart/spec/constraints.yaml`:
+Add to `.marianne/spec/constraints.yaml`:
 
 ```yaml
 M-011:

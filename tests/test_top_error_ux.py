@@ -1,4 +1,4 @@
-"""Tests for ``mozart top`` error message standardization.
+"""Tests for ``mzt top`` error message standardization.
 
 The ``top`` command was added in M1 after error standardization (step 35)
 completed. Six error paths used raw console.print("[red]...") instead of

@@ -1,4 +1,4 @@
-"""Execution layer for Mozart jobs.
+"""Execution layer for Marianne jobs.
 
 Contains validation, retry logic, circuit breaker, adaptive retry strategy,
 and the main runner.

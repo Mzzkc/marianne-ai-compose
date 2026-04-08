@@ -61,8 +61,8 @@ def _make_daemon_config(tmp_path: Path, *, use_baton: bool = False) -> DaemonCon
             Defaults to False for legacy tests that mock JobService.start_job.
     """
     return DaemonConfig(
-        socket=SocketConfig(path=tmp_path / "test-mozart.sock"),
-        pid_file=tmp_path / "test-mozart.pid",
+        socket=SocketConfig(path=tmp_path / "test-marianne.sock"),
+        pid_file=tmp_path / "test-marianne.pid",
         state_db_path=tmp_path / "test-registry.db",
         max_concurrent_jobs=2,
         max_concurrent_sheets=3,

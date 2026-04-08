@@ -1,7 +1,7 @@
 """Exploratory tests for the baton — user journey scenarios and edge cases.
 
 I test stories, not functions. These tests simulate what happens when real
-users interact with Mozart through the baton. Not the idealized user who
+users interact with Marianne through the baton. Not the idealized user who
 follows the happy path — the real user who hits the back button at the
 worst moment, whose API key expires mid-job, who tries to pause a job
 that's already failing.
@@ -449,7 +449,7 @@ class TestEscalationDance:
 # =============================================================================
 # Story 5: The Graceful Shutdown
 #
-# The user runs `mozart stop` while jobs are in various states.
+# The user runs `mzt stop` while jobs are in various states.
 # Completed work must survive. In-flight work must be cleanly cancelled.
 # =============================================================================
 

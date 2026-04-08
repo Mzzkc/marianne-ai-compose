@@ -1,4 +1,4 @@
-"""Tests for mozart.daemon.registry module.
+"""Tests for marianne.daemon.registry module.
 
 Covers the async JobRegistry: connection lifecycle, CRUD operations,
 orphan recovery, job deletion, and error handling.

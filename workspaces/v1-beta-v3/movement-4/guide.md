@@ -16,25 +16,25 @@ Fixed the single worst first-run experience bug in the project (F-465), resolved
 
 ### 1. F-465 RESOLVED (P1): Score Name vs ID Mismatch — The Quick Start Killer
 
-**The bug:** Mozart's conductor derives score IDs from filename stems. `examples/hello.yaml` produced the ID `hello`. But the `name:` field in the score was `hello-mozart`, and every documentation path — README, getting-started guide, the score's own header comments — taught users to run `mozart status hello-mozart`. Every newcomer following the quick start hit `Score not found: hello-mozart` at step 5.
+**The bug:** Marianne's conductor derives score IDs from filename stems. `examples/hello.yaml` produced the ID `hello`. But the `name:` field in the score was `hello-marianne`, and every documentation path — README, getting-started guide, the score's own header comments — taught users to run `mzt status hello-marianne`. Every newcomer following the quick start hit `Score not found: hello-marianne` at step 5.
 
-**The fix:** Renamed `examples/hello.yaml` → `examples/hello-mozart.yaml`. This makes the filename stem (`hello-mozart`) match the `name:` field and all documentation references. No code changes needed — just alignment between naming and the conductor's ID derivation logic.
+**The fix:** Renamed `examples/hello.yaml` → `examples/hello-marianne.yaml`. This makes the filename stem (`hello-marianne`) match the `name:` field and all documentation references. No code changes needed — just alignment between naming and the conductor's ID derivation logic.
 
 **Files updated (8):**
-- `examples/hello-mozart.yaml` — header comment (line 1), usage comment (line 15), colophon text (line 222)
+- `examples/hello-marianne.yaml` — header comment (line 1), usage comment (line 15), colophon text (line 222)
 - `README.md` — validate command (line 116), run command (line 131), examples table (line 394)
 - `docs/getting-started.md` — section header (line 48), run command (line 57), description (line 67)
 - `examples/README.md` — quick start table (line 9), validation status table (line 299)
 - `tests/test_cli_user_journeys.py` — dry-run path (line 389)
 - `tests/test_status_display_bugs.py` — V101 false positive test (lines 289-304)
 
-**Verification:** `mozart validate examples/hello-mozart.yaml` passes clean. Both affected tests pass.
+**Verification:** `mzt validate examples/hello-marianne.yaml` passes clean. Both affected tests pass.
 
 **Why this mattered:** This was the single most impactful UX bug in the project. Every newcomer who follows the primary path — README or getting-started — would encounter an error at the monitoring step, the exact moment the product should be building confidence. Newcomer independently confirmed this across two M3 review passes.
 
 ### 2. F-464 RESOLVED (P3): History Command Placement in README
 
-Moved `mozart history` from the Monitoring section to the Diagnostics section in `README.md`, matching the actual CLI `--help` grouping. One-line change, consistent with the careful Monitoring/Diagnostics mapping established by Compass in M3.
+Moved `mzt history` from the Monitoring section to the Diagnostics section in `README.md`, matching the actual CLI `--help` grouping. One-line change, consistent with the careful Monitoring/Diagnostics mapping established by Compass in M3.
 
 ### 3. M4 Documentation Verification
 
@@ -60,7 +60,7 @@ Core insight through my lens: forgetting is my instrument. I arrive at every ses
 
 ## Quality Evidence
 
-- `mozart validate examples/hello-mozart.yaml` — passes clean (5 sheets, all validations expanded correctly)
+- `mzt validate examples/hello-marianne.yaml` — passes clean (5 sheets, all validations expanded correctly)
 - `python -m pytest tests/ -x -q` — all tests pass (pending final count from full run)
 - `python -m mypy src/` — clean, no errors
 - `python -m ruff check src/` — all checks passed
@@ -71,7 +71,7 @@ Core insight through my lens: forgetting is my instrument. I arrive at every ses
 
 | Finding | Severity | Resolution |
 |---------|----------|------------|
-| F-465 | P1 | Renamed hello.yaml → hello-mozart.yaml (filename stem now matches name field) |
+| F-465 | P1 | Renamed hello.yaml → hello-marianne.yaml (filename stem now matches name field) |
 | F-464 | P3 | Moved `history` to Diagnostics section in README |
 
 ---

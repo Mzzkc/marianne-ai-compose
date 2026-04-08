@@ -785,7 +785,7 @@ class TestPauseResumeEdgeCases:
         pause_dir = tmp_path / "signals"
         pause_dir.mkdir()
         job_id = "lifecycle-test"
-        pause_file = pause_dir / f".mozart-pause-{job_id}"
+        pause_file = pause_dir / f".marianne-pause-{job_id}"
 
         # No file → no pause
         assert not pause_file.exists()
@@ -800,14 +800,14 @@ class TestPauseResumeEdgeCases:
 
     def test_double_pause_file_creation(self, tmp_path: Path) -> None:
         """Creating pause file twice should not error."""
-        pause_file = tmp_path / ".mozart-pause-test"
+        pause_file = tmp_path / ".marianne-pause-test"
         pause_file.touch()
         pause_file.touch()  # second time
         assert pause_file.exists()
 
     def test_pause_cleanup_missing_file(self, tmp_path: Path) -> None:
         """Cleaning up non-existent pause file should not raise."""
-        pause_file = tmp_path / ".mozart-pause-nonexistent"
+        pause_file = tmp_path / ".marianne-pause-nonexistent"
         # Simulates unlink_missing_ok behavior
         pause_file.unlink(missing_ok=True)
 

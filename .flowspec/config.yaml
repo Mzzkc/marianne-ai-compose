@@ -31,14 +31,14 @@ exclude:
   - ".idea/"
   - ".vscode/"
 
-  # Node/JS (dashboard has JS but Mozart is a Python project)
+  # Node/JS (dashboard has JS but Marianne is a Python project)
   - "node_modules/"
 
   # Internal scores (YAML configs, not source code)
   - "scores-internal/"
 
   # Generated evolution scores at repo root
-  - "mozart-*.yaml"
+  - "marianne-*.yaml"
 
   # Git internals
   - ".git/"

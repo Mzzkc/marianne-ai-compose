@@ -643,7 +643,7 @@ class TestDetectLayerMethodNotFound:
     """Verify detect.py re-raises MethodNotFoundError with restart guidance."""
 
     def test_method_not_found_message_contains_restart_guidance(self) -> None:
-        """The re-raised MethodNotFoundError mentions 'mozart restart'."""
+        """The re-raised MethodNotFoundError mentions 'mzt restart'."""
         from marianne.daemon.exceptions import MethodNotFoundError
 
         # Simulate the message format from detect.py line 174-178
@@ -651,10 +651,10 @@ class TestDetectLayerMethodNotFound:
         exc = MethodNotFoundError(
             f"Conductor does not support '{method}'. "
             f"Restart the conductor to pick up code changes: "
-            f"mozart restart"
+            f"mzt restart"
         )
         msg = str(exc)
-        assert "mozart restart" in msg
+        assert "mzt restart" in msg
         assert method in msg
 
 

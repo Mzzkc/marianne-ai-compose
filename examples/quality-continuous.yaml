@@ -35,7 +35,7 @@
 # ║                                                                              ║
 # ║  Usage:                                                                      ║
 # ║    cd /path/to/your/project                                                  ║
-# ║    mozart run /path/to/examples/quality-continuous.yaml                      ║
+# ║    mzt run /path/to/examples/quality-continuous.yaml                      ║
 # ║                                                                              ║
 # ║  Goal: Close the gap between 90% LLM completion and 100% production quality  ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -53,7 +53,7 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 3000  # 50 min per sheet — extra time for subagent invocations
 
-# Movement declarations — names appear in `mozart status` output
+# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "Setup"
@@ -1290,7 +1290,7 @@ prompt:
     Stats: M fixed, N deferred | Tests: [pass count] passed
     GitHub issues referenced: #X, #Y (if any known issues were addressed)
 
-    Co-Authored-By: Mozart AI Compose <noreply@mozart.ai>
+    Co-Authored-By: Marianne AI Compose <noreply@marianne.ai>
     ```
 
     Rules for the commit message:
@@ -1312,7 +1312,7 @@ prompt:
     ```bash
     # Stage only files this quality iteration actually modified.
     # Build list from batch results — example:
-    #   git add src/mozart/core/config.py src/mozart/backends/claude_cli.py ...
+    #   git add src/marianne/core/config.py src/marianne/backends/claude_cli.py ...
     #
     # If you modified test files, include them too.
     # Do NOT stage workspace files, yaml scores, or unrelated changes.
@@ -1611,7 +1611,7 @@ prompt:
 
     **Step 4: Deduplicate against existing issues**
     ```bash
-    gh issue list --label "mozart-quality" --state open --json number,title,body --limit 10
+    gh issue list --label "marianne-quality" --state open --json number,title,body --limit 10
     ```
     - If a previous iteration's tracking issue exists and ALL its checklist
       items were resolved this iteration, close it with comment:
@@ -1621,7 +1621,7 @@ prompt:
     **Step 5: Create tracking issue**
     Create the label if it doesn't already exist:
     ```bash
-    gh label create "mozart-quality" \
+    gh label create "marianne-quality" \
       --description "Deferred items from automated quality review" \
       --color "d4c5f9" 2>/dev/null || true
     ```
@@ -1630,12 +1630,12 @@ prompt:
 
     Issue requirements:
     - **Title:** `Quality Iteration N: M deferred items requiring manual effort`
-    - **Label:** `mozart-quality`
+    - **Label:** `marianne-quality`
     - **Body must include:**
       - Checkbox list (`- [ ]`) of each deferred item with effort estimate
       - Category for each item (structural, testing, performance, etc.)
       - Summary table: issues found vs fixed vs deferred this iteration
-      - Footer: `*Filed automatically by Mozart Quality Score*`
+      - Footer: `*Filed automatically by Marianne Quality Score*`
 
     Do NOT create individual issues per item — one summary issue per iteration.
 

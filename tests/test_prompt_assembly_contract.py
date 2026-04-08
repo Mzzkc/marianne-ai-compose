@@ -1,6 +1,6 @@
 """Prompt assembly contract characterization tests.
 
-These tests document the exact behavior of Mozart's prompt assembly pipeline.
+These tests document the exact behavior of Marianne's prompt assembly pipeline.
 They exist to prevent regressions when the baton replaces the monolithic runner
 (step 28). Every test captures a CONTRACT — an observable behavior that downstream
 code depends on.
@@ -123,10 +123,10 @@ class TestPreambleContract:
     """The preamble is the first thing a musician reads. Its structure is a contract."""
 
     def test_preamble_wrapped_in_xml_tags(self, workspace: Path) -> None:
-        """Preamble starts with <mozart-preamble> and ends with </mozart-preamble>."""
+        """Preamble starts with <marianne-preamble> and ends with </marianne-preamble>."""
         result = build_preamble(1, 5, workspace)
-        assert result.startswith("<mozart-preamble>")
-        assert result.endswith("</mozart-preamble>")
+        assert result.startswith("<marianne-preamble>")
+        assert result.endswith("</marianne-preamble>")
 
     def test_preamble_contains_sheet_identity(self, workspace: Path) -> None:
         """Preamble tells the musician which sheet they are."""

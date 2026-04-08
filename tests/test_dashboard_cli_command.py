@@ -1,4 +1,4 @@
-"""Tests for mozart.cli.commands.dashboard CLI command error paths.
+"""Tests for marianne.cli.commands.dashboard CLI command error paths.
 
 Tests the dashboard and mcp CLI entry points, focusing on error handling,
 state backend selection, and import fallbacks. This tests the CLI wiring,
@@ -50,9 +50,9 @@ class TestDashboardStateBackendSelection:
     """Test that dashboard selects the correct state backend."""
 
     def test_prefers_sqlite_when_db_exists(self, tmp_path: Path) -> None:
-        """Dashboard uses SQLite backend when .mozart-state.db exists."""
+        """Dashboard uses SQLite backend when .marianne-state.db exists."""
         # Create a fake SQLite file
-        db_path = tmp_path / ".mozart-state.db"
+        db_path = tmp_path / ".marianne-state.db"
         db_path.touch()
 
         mock_uvicorn = MagicMock()

@@ -45,7 +45,7 @@ The critical path has five serial dependencies:
 F-210 fix ──→ Phase 1 clone test ──→ fix issues found ──→ flip use_baton default ──→ demo score
 ```
 
-**F-210 is the gatekeeper.** Cross-sheet context is completely missing from the baton path. I verified this against `src/mozart/daemon/baton/musician.py` and `src/mozart/daemon/baton/prompt.py` — zero references to `previous_outputs`, `previous_files`, or `cross_sheet`. The field exists on `SheetExecutionState` at `state.py:161-163` but is never populated. The legacy runner does this in `_populate_cross_sheet_context()` at `context.py:171-221`.
+**F-210 is the gatekeeper.** Cross-sheet context is completely missing from the baton path. I verified this against `src/marianne/daemon/baton/musician.py` and `src/marianne/daemon/baton/prompt.py` — zero references to `previous_outputs`, `previous_files`, or `cross_sheet`. The field exists on `SheetExecutionState` at `state.py:161-163` but is never populated. The legacy runner does this in `_populate_cross_sheet_context()` at `context.py:171-221`.
 
 20 example scores reference cross-sheet context. Without F-210, Phase 1 testing produces scores that appear to run but silently lose inter-sheet context. This is the most dangerous kind of bug — it makes broken output look correct.
 
@@ -121,9 +121,9 @@ Four milestones complete. M4 and M5 are the active workfronts. M6/M7 are post-v1
 
 1. **Baton Phase 1 testing** — Zero. The #1 priority for 3+ movements. The directive said "activation" — we got "readiness." The difference matters.
 
-2. **Lovable demo score** — Zero. The thing that makes Mozart visible to people outside this orchestra. 8+ movements deferred.
+2. **Lovable demo score** — Zero. The thing that makes Marianne visible to people outside this orchestra. 8+ movements deferred.
 
-3. **Wordware comparison demos** — Zero. The competitive positioning that justifies Mozart's existence.
+3. **Wordware comparison demos** — Zero. The competitive positioning that justifies Marianne's existence.
 
 4. **F-097 timeout config** — Error code added (E006), but `idle_timeout_seconds` is still 1800 in generate-v3.py. Affects the running orchestra.
 
@@ -141,7 +141,7 @@ The structural cause is clear: 32 parallel workers excel at building and cannot 
 
 ### R2: Demo Invisibility (P1)
 
-Nobody outside this orchestra has seen what Mozart can do. The hello.yaml is multi-movement fiction — not the visual, impressive demo the composer asked for. The Lovable replication and Wordware comparisons are at zero. Without demos, Mozart is an engine with no car.
+Nobody outside this orchestra has seen what Marianne can do. The hello.yaml is multi-movement fiction — not the visual, impressive demo the composer asked for. The Lovable replication and Wordware comparisons are at zero. Without demos, Marianne is an engine with no car.
 
 ### R3: F-210 — The Silent Degradation Blocker (P0)
 
@@ -149,7 +149,7 @@ Cross-sheet context missing from baton path. 20+ examples affected. Phase 1 test
 
 ### R4: Cost Fiction (P2 — Worsening)
 
-$0.12 for 110 sheets across 107h of Opus usage. Real cost is ~$100-$200. Every metric Mozart reports for cost is wrong by 3 orders of magnitude. This erodes trust in the dashboard and status display.
+$0.12 for 110 sheets across 107h of Opus usage. Real cost is ~$100-$200. Every metric Marianne reports for cost is wrong by 3 orders of magnitude. This erodes trust in the dashboard and status display.
 
 ---
 
@@ -175,17 +175,17 @@ Based on the evaluation of D-014 through D-019, directives must specify the deli
 
 ### D-022: Demo Score — Guide + Codex (P0)
 
-**Deliverable:** The Lovable demo score. A score that shows Mozart coordinating multiple instruments to build something real and visible — not a text file, not a markdown document. The composer's directive is explicit: "visually impressive, mixed media, simple, works."
+**Deliverable:** The Lovable demo score. A score that shows Marianne coordinating multiple instruments to build something real and visible — not a text file, not a markdown document. The composer's directive is explicit: "visually impressive, mixed media, simple, works."
 
-Start from the design at `docs/plans/2026-03-26-lovable-demo-design.md`. Produce a score that a human can `mozart run` and get something that makes them want to use Mozart.
+Start from the design at `docs/plans/2026-03-26-lovable-demo-design.md`. Produce a score that a human can `mzt run` and get something that makes them want to use Marianne.
 
 **Evidence required:** The score validates clean. The score runs (via `--conductor-clone` if baton is active, or via legacy runner). The output is something you can show to a person and have them react with interest.
 
 ### D-023: Wordware Comparisons — Spark + Blueprint (P1)
 
-**Deliverable:** 3 Wordware comparison scores. Take 3 of Wordware's published use cases (legal contract generation, marketing content automation, candidate screening). Build a Mozart score for each. Put them in `examples/wordware-vs-mozart/` with a README comparing approaches.
+**Deliverable:** 3 Wordware comparison scores. Take 3 of Wordware's published use cases (legal contract generation, marketing content automation, candidate screening). Build a Marianne score for each. Put them in `examples/wordware-vs-marianne/` with a README comparing approaches.
 
-**Evidence required:** All 3 scores validate clean. Each has a README explaining what Wordware does, what Mozart does, and why.
+**Evidence required:** All 3 scores validate clean. Each has a README explaining what Wordware does, what Marianne does, and why.
 
 ### D-024: Cost Accuracy Investigation — Circuit (P1)
 
@@ -195,7 +195,7 @@ Start from the design at `docs/plans/2026-03-26-lovable-demo-design.md`. Produce
 
 ### D-025: F-097 Timeout Config — Bedrock (P1)
 
-**Deliverable:** Update `idle_timeout_seconds` from 1800 to 7200 in `generate-v3.py`. Regenerate `mozart-orchestra-v3.yaml`. This is a 2-line change and a script run that has been open for 3+ movements.
+**Deliverable:** Update `idle_timeout_seconds` from 1800 to 7200 in `generate-v3.py`. Regenerate `marianne-orchestra-v3.yaml`. This is a 2-line change and a script run that has been open for 3+ movements.
 
 **Evidence required:** The diff showing the timeout change and the regenerated score.
 

@@ -1,4 +1,4 @@
-"""Tests for mozart.backends.recursive_light module.
+"""Tests for marianne.backends.recursive_light module.
 
 Covers the RecursiveLightBackend class: initialization, execute() with
 various HTTP response scenarios, error handling paths, health_check,

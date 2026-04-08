@@ -1,4 +1,4 @@
-"""Tests for mozart.learning.weighter module.
+"""Tests for marianne.learning.weighter module.
 
 Covers PatternWeighter: priority calculation, effectiveness scoring,
 recency decay, frequency factor, deprecation logic, uncertainty

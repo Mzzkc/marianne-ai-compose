@@ -1,4 +1,4 @@
-"""Comprehensive tests for the BudgetMixin in mozart.learning.store.budget.
+"""Comprehensive tests for the BudgetMixin in marianne.learning.store.budget.
 
 Tests the exploration budget management and automatic entropy response
 functionality provided by BudgetMixin, exercised through the composed

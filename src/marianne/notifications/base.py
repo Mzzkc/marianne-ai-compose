@@ -1,11 +1,11 @@
 """Notification framework base types and protocols.
 
-Provides the core notification infrastructure for Mozart:
+Provides the core notification infrastructure for Marianne:
 - NotificationEvent enum for event types
 - Notifier protocol for notification backends
 - NotificationManager for coordinating multiple notifiers
 
-Phase 5 of Mozart implementation: Missing README features.
+Phase 5 of Marianne implementation: Missing README features.
 """
 
 from dataclasses import dataclass, field
@@ -23,7 +23,7 @@ _logger = get_logger("notifications")
 class NotificationEvent(Enum):
     """Events that can trigger notifications.
 
-    These events align with the lifecycle of Mozart job execution
+    These events align with the lifecycle of Marianne job execution
     and are referenced in NotificationConfig.on_events.
     """
 
@@ -92,17 +92,17 @@ class NotificationContext:
             A concise title string suitable for notification headers.
         """
         event_titles = {
-            NotificationEvent.JOB_START: f"Mozart: Job '{self.job_name}' Started",
-            NotificationEvent.JOB_COMPLETE: f"Mozart: Job '{self.job_name}' Complete ✓",
-            NotificationEvent.JOB_FAILED: f"Mozart: Job '{self.job_name}' Failed ✗",
-            NotificationEvent.JOB_PAUSED: f"Mozart: Job '{self.job_name}' Paused",
-            NotificationEvent.JOB_RESUMED: f"Mozart: Job '{self.job_name}' Resumed",
-            NotificationEvent.SHEET_START: f"Mozart: Sheet {self.sheet_num} Started",
-            NotificationEvent.SHEET_COMPLETE: f"Mozart: Sheet {self.sheet_num} Complete",
-            NotificationEvent.SHEET_FAILED: f"Mozart: Sheet {self.sheet_num} Failed",
-            NotificationEvent.RATE_LIMIT_DETECTED: "Mozart: Rate Limit Detected",
+            NotificationEvent.JOB_START: f"Marianne: Job '{self.job_name}' Started",
+            NotificationEvent.JOB_COMPLETE: f"Marianne: Job '{self.job_name}' Complete ✓",
+            NotificationEvent.JOB_FAILED: f"Marianne: Job '{self.job_name}' Failed ✗",
+            NotificationEvent.JOB_PAUSED: f"Marianne: Job '{self.job_name}' Paused",
+            NotificationEvent.JOB_RESUMED: f"Marianne: Job '{self.job_name}' Resumed",
+            NotificationEvent.SHEET_START: f"Marianne: Sheet {self.sheet_num} Started",
+            NotificationEvent.SHEET_COMPLETE: f"Marianne: Sheet {self.sheet_num} Complete",
+            NotificationEvent.SHEET_FAILED: f"Marianne: Sheet {self.sheet_num} Failed",
+            NotificationEvent.RATE_LIMIT_DETECTED: "Marianne: Rate Limit Detected",
         }
-        return event_titles.get(self.event, f"Mozart: {self.event.value}")
+        return event_titles.get(self.event, f"Marianne: {self.event.value}")
 
     def format_message(self) -> str:
         """Generate a notification message body based on context.
@@ -150,7 +150,7 @@ class Notifier(Protocol):
     - Receives NotificationContext when events occur
     - Handles delivery asynchronously
 
-    Following Mozart's Protocol pattern (like OutcomeStore, EscalationHandler).
+    Following Marianne's Protocol pattern (like OutcomeStore, EscalationHandler).
     """
 
     @property
@@ -184,7 +184,7 @@ class Notifier(Protocol):
 
 
 class NotificationManager:
-    """Coordinates multiple notifiers for Mozart job events.
+    """Coordinates multiple notifiers for Marianne job events.
 
     Central hub for notification delivery:
     - Maintains list of active notifiers

@@ -6,7 +6,7 @@ status, diagnose, and resume do), providing hints and JSON support.
 Currently, cancel uses raw console.print with [yellow] for the not-found
 case, which means:
 - No error code
-- No hints (user doesn't know about 'mozart list')
+- No hints (user doesn't know about 'mzt list')
 - No JSON support for the not-found case
 """
 
@@ -25,7 +25,7 @@ class TestCancelNotFoundError:
     """When a score is not found, cancel should provide helpful guidance."""
 
     def test_not_found_suggests_list_command(self) -> None:
-        """Cancel for nonexistent score should suggest 'mozart list'."""
+        """Cancel for nonexistent score should suggest 'mzt list'."""
         with patch(
             "marianne.daemon.detect.try_daemon_route",
             new_callable=AsyncMock,
@@ -36,7 +36,7 @@ class TestCancelNotFoundError:
         assert result.exit_code != 0
         output = result.output.lower()
         assert "list" in output, (
-            "Cancel not-found should suggest 'mozart list' like status/diagnose do"
+            "Cancel not-found should suggest 'mzt list' like status/diagnose do"
         )
 
     def test_not_found_uses_output_error(self) -> None:

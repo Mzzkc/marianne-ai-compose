@@ -1,4 +1,4 @@
-"""Tests for mozart.core.logging module."""
+"""Tests for marianne.core.logging module."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from marianne.core.config import LogConfig
 from marianne.core.logging import (
     SENSITIVE_PATTERNS,
     CompressingRotatingFileHandler,
-    MozartLogger,
+    MarianneLogger,
     _sanitize_event_dict,
     _sanitize_value,
     configure_logging,
@@ -109,23 +109,23 @@ class TestSensitivePatterns:
         assert result["config"]["model"] == "claude-3"
 
 
-class TestMozartLogger:
-    """Tests for the MozartLogger class."""
+class TestMarianneLogger:
+    """Tests for the MarianneLogger class."""
 
     def test_create_logger_with_component(self):
         """Test creating a logger with a component name."""
-        logger = MozartLogger("runner")
+        logger = MarianneLogger("runner")
         assert logger._component == "runner"
 
     def test_create_logger_with_initial_context(self):
         """Test creating a logger with initial context."""
-        logger = MozartLogger("runner", job_id="test-job")
+        logger = MarianneLogger("runner", job_id="test-job")
         # The context is stored in the bound logger
         assert logger._component == "runner"
 
     def test_bind_returns_new_logger(self):
         """Test that bind() returns a new logger instance."""
-        logger = MozartLogger("runner")
+        logger = MarianneLogger("runner")
         bound_logger = logger.bind(job_id="test-job")
 
         assert bound_logger is not logger
@@ -133,7 +133,7 @@ class TestMozartLogger:
 
     def test_unbind_returns_new_logger(self):
         """Test that unbind() returns a new logger instance."""
-        logger = MozartLogger("runner", job_id="test-job")
+        logger = MarianneLogger("runner", job_id="test-job")
         unbound_logger = logger.unbind("job_id")
 
         assert unbound_logger is not logger
@@ -141,7 +141,7 @@ class TestMozartLogger:
 
     def test_logger_methods_exist(self):
         """Test that all expected logging methods exist."""
-        logger = MozartLogger("runner")
+        logger = MarianneLogger("runner")
 
         assert callable(logger.debug)
         assert callable(logger.info)
@@ -154,10 +154,10 @@ class TestMozartLogger:
 class TestGetLogger:
     """Tests for the get_logger function."""
 
-    def test_get_logger_creates_mozart_logger(self):
-        """Test that get_logger returns a MozartLogger."""
+    def test_get_logger_creates_marianne_logger(self):
+        """Test that get_logger returns a MarianneLogger."""
         logger = get_logger("test-component")
-        assert isinstance(logger, MozartLogger)
+        assert isinstance(logger, MarianneLogger)
         assert logger._component == "test-component"
 
     def test_get_logger_with_initial_context(self):
@@ -196,7 +196,7 @@ class TestConfigureLogging:
 
     def test_configure_with_file_path(self, tmp_path: Path):
         """Test configuring logging with file output."""
-        log_file = tmp_path / "logs" / "mozart.log"
+        log_file = tmp_path / "logs" / "marianne.log"
 
         configure_logging(
             level="INFO",
@@ -257,7 +257,7 @@ class TestLogConfigModel:
         config = LogConfig(
             level="DEBUG",
             format="json",
-            file_path=Path("/var/log/mozart.log"),
+            file_path=Path("/var/log/marianne.log"),
             max_file_size_mb=100,
             backup_count=10,
             include_timestamps=False,
@@ -265,7 +265,7 @@ class TestLogConfigModel:
 
         assert config.level == "DEBUG"
         assert config.format == "json"
-        assert config.file_path == Path("/var/log/mozart.log")
+        assert config.file_path == Path("/var/log/marianne.log")
         assert config.max_file_size_mb == 100
         assert config.backup_count == 10
         assert config.include_timestamps is False
@@ -1355,7 +1355,7 @@ class TestLogPathFunctions:
         workspace = tmp_path / "my-workspace"
         result = get_default_log_path(workspace)
 
-        assert result == workspace / "logs" / "mozart.log"
+        assert result == workspace / "logs" / "marianne.log"
 
     def test_get_current_log_path_none_by_default(self):
         """Test that current log path is None when no file handler configured."""
@@ -1367,7 +1367,7 @@ class TestLogPathFunctions:
 
     def test_get_current_log_path_after_configure(self, tmp_path: Path):
         """Test that current log path is set after configuration."""
-        log_file = tmp_path / "logs" / "mozart.log"
+        log_file = tmp_path / "logs" / "marianne.log"
 
         configure_logging(
             level="INFO",
@@ -1392,7 +1392,7 @@ class TestLogPathFunctions:
         log_dir = workspace / "logs"
         log_dir.mkdir(parents=True)
 
-        log_file = log_dir / "mozart.log"
+        log_file = log_dir / "marianne.log"
         log_file.write_text("current log content")
 
         result = find_log_files(workspace)
@@ -1404,14 +1404,14 @@ class TestLogPathFunctions:
         log_dir = workspace / "logs"
         log_dir.mkdir(parents=True)
 
-        log_file = log_dir / "mozart.log"
+        log_file = log_dir / "marianne.log"
         log_file.write_text("current log")
 
         # Create compressed backups
-        gz1 = log_dir / "mozart.log.1.gz"
+        gz1 = log_dir / "marianne.log.1.gz"
         gz1.write_bytes(gzip.compress(b"backup 1"))
 
-        gz2 = log_dir / "mozart.log.2.gz"
+        gz2 = log_dir / "marianne.log.2.gz"
         gz2.write_bytes(gzip.compress(b"backup 2"))
 
         result = find_log_files(workspace)
@@ -1447,7 +1447,7 @@ class TestConfigureLoggingWithCompression:
 
     def test_configure_with_compression_enabled(self, tmp_path: Path):
         """Test configuring logging with compression enabled (default)."""
-        log_file = tmp_path / "logs" / "mozart.log"
+        log_file = tmp_path / "logs" / "marianne.log"
 
         configure_logging(
             level="INFO",
@@ -1468,7 +1468,7 @@ class TestConfigureLoggingWithCompression:
         """Test configuring logging with compression disabled."""
         from logging.handlers import RotatingFileHandler
 
-        log_file = tmp_path / "logs" / "mozart.log"
+        log_file = tmp_path / "logs" / "marianne.log"
 
         configure_logging(
             level="INFO",
@@ -1488,7 +1488,7 @@ class TestConfigureLoggingWithCompression:
 
 
 class TestLogsCLI:
-    """Tests for the mozart logs CLI command."""
+    """Tests for the mzt logs CLI command."""
 
     def test_logs_command_exists(self):
         """Test that the logs command is registered."""
@@ -1545,7 +1545,7 @@ class TestLogsCLI:
         # Create log directory and file
         log_dir = tmp_path / "logs"
         log_dir.mkdir()
-        log_file = log_dir / "mozart.log"
+        log_file = log_dir / "marianne.log"
 
         # Write some JSON log entries
         entries = [
@@ -1576,7 +1576,7 @@ class TestLogsCLI:
         # Create log directory and file
         log_dir = tmp_path / "logs"
         log_dir.mkdir()
-        log_file = log_dir / "mozart.log"
+        log_file = log_dir / "marianne.log"
 
         entries = [
             {"event": "debug_event", "level": "DEBUG"},
@@ -1606,7 +1606,7 @@ class TestLogsCLI:
         # Create log directory and file
         log_dir = tmp_path / "logs"
         log_dir.mkdir()
-        log_file = log_dir / "mozart.log"
+        log_file = log_dir / "marianne.log"
 
         entries = [
             {"event": "event_1", "level": "INFO", "job_id": "job-a"},
@@ -1636,7 +1636,7 @@ class TestLogsCLI:
         # Create log directory and file
         log_dir = tmp_path / "logs"
         log_dir.mkdir()
-        log_file = log_dir / "mozart.log"
+        log_file = log_dir / "marianne.log"
 
         entry = {"event": "test_event", "level": "INFO", "custom_field": "value"}
         log_file.write_text(json.dumps(entry))
@@ -1670,11 +1670,11 @@ class TestLogsCLI:
 
         # Create compressed log file (use .1.gz to simulate rotated log)
         entry = {"event": "compressed_event", "level": "INFO"}
-        gz_file = log_dir / "mozart.log.1.gz"
+        gz_file = log_dir / "marianne.log.1.gz"
         gz_file.write_bytes(gzip.compress(json.dumps(entry).encode()))
 
         # Also create current log file (required by find_log_files)
-        current_log = log_dir / "mozart.log"
+        current_log = log_dir / "marianne.log"
         current_log.write_text(json.dumps({"event": "current_event", "level": "INFO"}))
 
         monkeypatch.chdir(tmp_path)
@@ -1697,7 +1697,7 @@ class TestLogsCLI:
         # Create log directory and file
         log_dir = tmp_path / "logs"
         log_dir.mkdir()
-        log_file = log_dir / "mozart.log"
+        log_file = log_dir / "marianne.log"
 
         # Write 10 entries
         entries = [
@@ -1727,7 +1727,7 @@ class TestLogsCLI:
         # Create log directory and file
         log_dir = tmp_path / "logs"
         log_dir.mkdir()
-        log_file = log_dir / "mozart.log"
+        log_file = log_dir / "marianne.log"
         log_file.write_text('{"event": "test", "level": "INFO"}')
 
         monkeypatch.chdir(tmp_path)

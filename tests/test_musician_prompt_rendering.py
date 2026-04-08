@@ -152,7 +152,7 @@ class TestBuildPromptJinja2Rendering:
         prompt = _build_prompt(sheet, context, total_sheets=1, total_movements=1)
 
         # Should have preamble at minimum
-        assert "mozart-preamble" in prompt
+        assert "marianne-preamble" in prompt
 
     def test_jinja2_strict_undefined_raises_on_missing_var(self) -> None:
         """References to undefined variables raise an error."""
@@ -179,7 +179,7 @@ class TestBuildPromptPreamble:
         prompt = _build_prompt(sheet, context, total_sheets=10, total_movements=5)
 
         # Preamble should be before the template content
-        preamble_pos = prompt.find("<mozart-preamble>")
+        preamble_pos = prompt.find("<marianne-preamble>")
         template_pos = prompt.find("Do the work")
         assert preamble_pos >= 0, "Preamble not found"
         assert template_pos > preamble_pos, "Preamble should precede template"

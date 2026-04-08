@@ -1,4 +1,4 @@
-"""Tests for mozart.execution.grounding module.
+"""Tests for marianne.execution.grounding module.
 
 Tests for grounding hook configuration, factory, and integration.
 Evolution v9: Grounding Engine Integration.

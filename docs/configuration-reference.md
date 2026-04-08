@@ -1,8 +1,8 @@
 # Configuration Reference
 
-Complete reference for every field in Mozart score YAML files. All types, defaults,
+Complete reference for every field in Marianne score YAML files. All types, defaults,
 and constraints are extracted directly from the Pydantic v2 config models in
-`src/mozart/core/config/`.
+`src/marianne/core/config/`.
 
 ---
 
@@ -60,14 +60,14 @@ and constraints are extracted directly from the Pydantic v2 config models in
 
 ## Top-Level Fields
 
-*Source: `src/mozart/core/config/job.py` — `JobConfig`*
+*Source: `src/marianne/core/config/job.py` — `JobConfig`*
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `name` | `str` | **required** | Unique score name |
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
-| `instrument` | `str \| None` | `None` | Named instrument to use (e.g., `claude-code`, `gemini-cli`). Alternative to `backend.type`. Run `mozart instruments list` to see available instruments. Cannot be used together with `backend`. |
+| `instrument` | `str \| None` | `None` | Named instrument to use (e.g., `claude-code`, `gemini-cli`). Alternative to `backend.type`. Run `mzt instruments list` to see available instruments. Cannot be used together with `backend`. |
 | `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults (e.g., `model`, `timeout_seconds`). Only valid when `instrument` is set. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
@@ -86,13 +86,13 @@ backend:
   skip_permissions: true
 ```
 
-> **Note:** `instrument:` and `backend:` are mutually exclusive. Use one or the other. If neither is specified, Mozart defaults to `claude_cli`.
+> **Note:** `instrument:` and `backend:` are mutually exclusive. Use one or the other. If neither is specified, Marianne defaults to `claude_cli`.
 
 ---
 
 ## instruments
 
-*Source: `src/mozart/core/config/job.py` — `JobConfig.instruments`*
+*Source: `src/marianne/core/config/job.py` — `JobConfig.instruments`*
 
 Named instrument definitions local to this score. Each entry declares a reusable alias that
 references a registered instrument profile with optional configuration overrides. These aliases
@@ -113,18 +113,18 @@ instruments:
 
 ### InstrumentDef Sub-Config
 
-*Source: `src/mozart/core/config/job.py` — `InstrumentDef`*
+*Source: `src/marianne/core/config/job.py` — `InstrumentDef`*
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `profile` | `str` | **required** | min_length=1 | Name of the registered instrument profile (e.g., `gemini-cli`, `claude-code`). Must match a profile loaded by `mozart instruments list`. |
+| `profile` | `str` | **required** | min_length=1 | Name of the registered instrument profile (e.g., `gemini-cli`, `claude-code`). Must match a profile loaded by `mzt instruments list`. |
 | `config` | `dict` | `{}` | | Configuration overrides merged with the profile's defaults. Flat key-value pairs. |
 
 ---
 
 ## Instrument Fallbacks
 
-When a primary instrument is unavailable or rate-limited to exhaustion, Mozart can
+When a primary instrument is unavailable or rate-limited to exhaustion, Marianne can
 automatically try fallback instruments in order. Fallbacks are specified as a list
 of instrument names (profile names or score-local aliases).
 
@@ -156,17 +156,17 @@ sheet:
 2. `movements.N.instrument_fallbacks` — per-movement default
 3. Top-level `instrument_fallbacks` — score default
 
-The `mozart validate` command checks fallback names against known profiles (V211)
+The `mzt validate` command checks fallback names against known profiles (V211)
 and warns if any name doesn't match a registered instrument.
 
 ---
 
 ## movements
 
-*Source: `src/mozart/core/config/job.py` — `JobConfig.movements`*
+*Source: `src/marianne/core/config/job.py` — `JobConfig.movements`*
 
 Movement declarations. Map of movement number to MovementDef. Movements are sequential execution
-phases. Each movement can specify a name (for display in `mozart status`), an instrument
+phases. Each movement can specify a name (for display in `mzt status`), an instrument
 (overriding the score default), instrument configuration, and a voice count (shorthand for `fan_out`).
 
 Movement numbers must be positive integers within the range `[1, total_items]`.
@@ -191,11 +191,11 @@ movements:
 
 ### MovementDef Sub-Config
 
-*Source: `src/mozart/core/config/job.py` — `MovementDef`*
+*Source: `src/marianne/core/config/job.py` — `MovementDef`*
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `name` | `str \| None` | `None` | | Human-readable name for this movement. Shown in `mozart status` output. |
+| `name` | `str \| None` | `None` | | Human-readable name for this movement. Shown in `mzt status` output. |
 | `instrument` | `str \| None` | `None` | min_length=1 | Instrument for all sheets in this movement. Overrides the score-level `instrument:` but is overridden by per-sheet assignments. Can reference a score-local `instruments:` alias or a registered profile name. |
 | `instrument_config` | `dict` | `{}` | | Instrument configuration overrides for this movement. Merged with the resolved instrument's defaults. |
 | `voices` | `int \| None` | `None` | `>= 1` | Number of parallel voices in this movement. Shorthand for `fan_out: {N: voices}`. |
@@ -213,7 +213,7 @@ movements:
 
 ## workspace_lifecycle
 
-*Source: `src/mozart/core/config/workspace.py` — `WorkspaceLifecycleConfig`*
+*Source: `src/marianne/core/config/workspace.py` — `WorkspaceLifecycleConfig`*
 
 Controls how workspace files are handled across score iterations, particularly for self-chaining scores that reuse the same workspace.
 
@@ -223,7 +223,7 @@ Controls how workspace files are handled across score iterations, particularly f
 | `archive_dir` | `str` | `"archive"` | | Subdirectory within workspace for archive storage. |
 | `archive_naming` | `"iteration" \| "timestamp"` | `"iteration"` | | Naming scheme for archive directories. `iteration` reads `.iteration` file, `timestamp` uses current time. |
 | `max_archives` | `int` | `0` | `>= 0` | Maximum archive directories to keep. 0 = unlimited. When exceeded, oldest archives are deleted. |
-| `preserve_patterns` | `list[str]` | `[".iteration", ".mozart-*", ".coverage", "archive/**", ".worktrees/**"]` | | Glob patterns for files/directories to preserve (not archive). Matched against paths relative to workspace root. |
+| `preserve_patterns` | `list[str]` | `[".iteration", ".marianne-*", ".coverage", "archive/**", ".worktrees/**"]` | | Glob patterns for files/directories to preserve (not archive). Matched against paths relative to workspace root. |
 
 ```yaml
 workspace_lifecycle:
@@ -232,7 +232,7 @@ workspace_lifecycle:
   max_archives: 10
   preserve_patterns:
     - ".iteration"
-    - ".mozart-*"
+    - ".marianne-*"
     - "archive/**"
 ```
 
@@ -240,7 +240,7 @@ workspace_lifecycle:
 
 ## backend
 
-*Source: `src/mozart/core/config/backend.py` — `BackendConfig`*
+*Source: `src/marianne/core/config/backend.py` — `BackendConfig`*
 
 Uses a flat structure with cross-field validation. Fields marked with a backend prefix (e.g., `[claude_cli]`) only take effect when `type` matches that backend. Setting fields for an unselected backend emits a warning.
 
@@ -250,7 +250,7 @@ Uses a flat structure with cross-field validation. Fields marked with a backend 
 | `skip_permissions` | `bool` | `true` | | **[claude_cli]** Skip permission prompts for unattended execution. Maps to `--dangerously-skip-permissions`. |
 | `disable_mcp` | `bool` | `true` | | **[claude_cli]** Disable MCP server loading for faster, isolated execution (~2x speedup). Maps to `--strict-mcp-config {}`. Set to `false` to use MCP servers. |
 | `output_format` | `"json" \| "text" \| "stream-json"` | `"text"` | | **[claude_cli]** Claude CLI output format. `text` for human-readable, `json` for structured, `stream-json` for streaming events. |
-| `cli_model` | `str \| None` | `None` | | **[claude_cli]** Model for Claude CLI. Maps to `--model` flag. If `None`, uses Claude Code's default. Example: `"claude-sonnet-4-20250514"` |
+| `cli_model` | `str \| None` | `None` | | **[claude_cli]** Model for Claude CLI. Maps to `--model` flag. If `None`, uses Claude Code's default. Example: `"claude-sonnet-4-5-20250929"` |
 | `allowed_tools` | `list[str] \| None` | `None` | | **[claude_cli]** Restrict Claude to specific tools. Maps to `--allowedTools`. Example: `["Read", "Grep", "Glob"]` for read-only execution. |
 | `system_prompt_file` | `Path \| None` | `None` | | **[claude_cli]** Path to custom system prompt file. Maps to `--system-prompt`. |
 | `working_directory` | `Path \| None` | `None` | | Working directory for execution. If `None`, uses the directory containing the config file. |
@@ -273,13 +273,13 @@ backend:
   timeout_seconds: 1800
   timeout_overrides:
     5: 3600    # Sheet 5 gets 1 hour
-  cli_model: "claude-sonnet-4-20250514"
+  cli_model: "claude-sonnet-4-5-20250929"
   allowed_tools: ["Read", "Grep", "Glob", "Write", "Edit"]
 ```
 
 ### Ollama Sub-Config
 
-*Source: `src/mozart/core/config/backend.py` — `OllamaConfig`*
+*Source: `src/marianne/core/config/backend.py` — `OllamaConfig`*
 
 Nested under `backend.ollama`. Only meaningful when `backend.type` is `"ollama"`.
 
@@ -297,21 +297,21 @@ Nested under `backend.ollama`. Only meaningful when `backend.type` is `"ollama"`
 
 ### Recursive Light Sub-Config
 
-*Source: `src/mozart/core/config/backend.py` — `RecursiveLightConfig`*
+*Source: `src/marianne/core/config/backend.py` — `RecursiveLightConfig`*
 
 Nested under `backend.recursive_light`. Only meaningful when `backend.type` is `"recursive_light"`.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `endpoint` | `str` | `"http://localhost:8080"` | | Base URL for the Recursive Light API server |
-| `user_id` | `str \| None` | `None` | | Unique identifier for this Mozart instance (generates UUID if not set) |
+| `user_id` | `str \| None` | `None` | | Unique identifier for this Marianne instance (generates UUID if not set) |
 | `timeout` | `float` | `30.0` | `> 0` | Request timeout in seconds for RL API calls |
 
 ---
 
 ## bridge
 
-*Source: `src/mozart/core/config/backend.py` — `BridgeConfig`*
+*Source: `src/marianne/core/config/backend.py` — `BridgeConfig`*
 
 The bridge enables Ollama models to use MCP tools through a proxy service. Set at the top level (not inside `backend`). Defaults to `None` (bridge disabled).
 
@@ -327,7 +327,7 @@ The bridge enables Ollama models to use MCP tools through a proxy service. Set a
 
 ### MCP Server Sub-Config
 
-*Source: `src/mozart/core/config/backend.py` — `MCPServerConfig`*
+*Source: `src/marianne/core/config/backend.py` — `MCPServerConfig`*
 
 Each entry in `bridge.mcp_servers`.
 
@@ -356,7 +356,7 @@ bridge:
 
 ## sheet
 
-*Source: `src/mozart/core/config/job.py` — `SheetConfig`*
+*Source: `src/marianne/core/config/job.py` — `SheetConfig`*
 
 Defines how the work is divided into sheets (execution units).
 
@@ -422,7 +422,7 @@ sheet:
 
 ### SkipWhenCommand Sub-Config
 
-*Source: `src/mozart/core/config/execution.py` — `SkipWhenCommand`*
+*Source: `src/marianne/core/config/execution.py` — `SkipWhenCommand`*
 
 Defines a command-based conditional skip rule for sheet execution. When the command exits 0, the sheet is **skipped**. When the command exits non-zero, the sheet **runs**. On timeout or error, the sheet runs (fail-open for safety).
 
@@ -450,7 +450,7 @@ sheet:
 
 ### InjectionItem Sub-Config
 
-*Source: `src/mozart/core/config/job.py` — `InjectionItem`*
+*Source: `src/marianne/core/config/job.py` — `InjectionItem`*
 
 A single injection item referencing a file with a category. Used in `prelude` (all sheets) and `cadenzas` (per-sheet) to inject file content into prompts at category-appropriate locations.
 
@@ -486,13 +486,13 @@ sheet:
 - Files are read at **sheet execution time**, not config parse time — so dynamic outputs from earlier sheets are available via Jinja-templated paths.
 - Missing files for `context` category log a warning and are skipped.
 - Missing files for `skill` or `tool` category log an error and are skipped.
-- `mozart validate` checks static file paths (V108 warning) but skips Jinja-templated paths that can't be resolved at validation time.
+- `mzt validate` checks static file paths (V108 warning) but skips Jinja-templated paths that can't be resolved at validation time.
 
 ---
 
 ## spec
 
-*Source: `src/mozart/core/config/spec.py` — `SpecCorpusConfig`*
+*Source: `src/marianne/core/config/spec.py` — `SpecCorpusConfig`*
 
 Configuration for the specification corpus. Controls where spec fragments are loaded
 from and how they are filtered for injection into agent prompts. Spec loading is opt-in —
@@ -505,11 +505,11 @@ set `spec_dir` to enable.
 
 ```yaml
 spec:
-  spec_dir: ".mozart/spec"
+  spec_dir: ".marianne/spec"
   include_claude_md: true
 ```
 
-When `spec_dir` is set, Mozart loads all YAML files in that directory as spec fragments.
+When `spec_dir` is set, Marianne loads all YAML files in that directory as spec fragments.
 Each fragment has a name, tags, kind, and content. Tags are used for per-sheet filtering
 via `sheet.spec_tags` in `SheetConfig` — a map of `sheet_num -> list of tags`. Sheets
 with spec_tags receive only fragments matching those tags; sheets without spec_tags
@@ -519,7 +519,7 @@ receive all fragments.
 
 ## prompt
 
-*Source: `src/mozart/core/config/job.py` — `PromptConfig`*
+*Source: `src/marianne/core/config/job.py` — `PromptConfig`*
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -528,7 +528,7 @@ receive all fragments.
 | `variables` | `dict[str, Any]` | `{}` | | Static variables available in template |
 | `stakes` | `str \| None` | `None` | | Motivational stakes section appended to prompt |
 | `thinking_method` | `str \| None` | `None` | | Thinking methodology injected into prompt |
-| `prompt_extensions` | `list[str]` | `[]` | | Additional directives injected after the Mozart default preamble for all sheets. Each entry is inline text or a file path (.md/.txt). |
+| `prompt_extensions` | `list[str]` | `[]` | | Additional directives injected after the Marianne default preamble for all sheets. Each entry is inline text or a file path (.md/.txt). |
 
 For template variable reference, see the [Score Writing Guide](score-writing-guide.md#template-variables-reference).
 
@@ -550,7 +550,7 @@ prompt:
 
 ## parallel
 
-*Source: `src/mozart/core/config/execution.py` — `ParallelConfig`*
+*Source: `src/marianne/core/config/execution.py` — `ParallelConfig`*
 
 Enables running multiple sheets concurrently when the dependency DAG permits.
 
@@ -574,7 +574,7 @@ parallel:
 
 ## retry
 
-*Source: `src/mozart/core/config/execution.py` — `RetryConfig`*
+*Source: `src/marianne/core/config/execution.py` — `RetryConfig`*
 
 Controls retry behavior including partial completion recovery.
 
@@ -589,7 +589,7 @@ Controls retry behavior including partial completion recovery.
 | `completion_delay_seconds` | `float` | `5.0` | `>= 0` | Delay between completion attempts (seconds) |
 | `completion_threshold_percent` | `float` | `50.0` | `> 0`, `<= 100` | Minimum pass percentage to trigger completion mode |
 
-**Completion mode:** When a sheet partially passes validation (more than `completion_threshold_percent`), Mozart sends a targeted "complete the remaining work" prompt instead of a full retry. This is more efficient and preserves already-completed work.
+**Completion mode:** When a sheet partially passes validation (more than `completion_threshold_percent`), Marianne sends a targeted "complete the remaining work" prompt instead of a full retry. This is more efficient and preserves already-completed work.
 
 ```yaml
 retry:
@@ -606,7 +606,7 @@ retry:
 
 ## rate_limit
 
-*Source: `src/mozart/core/config/execution.py` — `RateLimitConfig`*
+*Source: `src/marianne/core/config/execution.py` — `RateLimitConfig`*
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -629,7 +629,7 @@ rate_limit:
 
 ## circuit_breaker
 
-*Source: `src/mozart/core/config/execution.py` — `CircuitBreakerConfig`*
+*Source: `src/marianne/core/config/execution.py` — `CircuitBreakerConfig`*
 
 Prevents cascading failures by temporarily blocking requests after repeated failures. State transitions: CLOSED (normal) → OPEN (blocking) → HALF_OPEN (testing recovery).
 
@@ -653,7 +653,7 @@ circuit_breaker:
 
 ## cost_limits
 
-*Source: `src/mozart/core/config/execution.py` — `CostLimitConfig`*
+*Source: `src/marianne/core/config/execution.py` — `CostLimitConfig`*
 
 Prevents runaway costs by tracking token usage. When enabled, at least one of `max_cost_per_sheet` or `max_cost_per_job` must be set.
 
@@ -680,7 +680,7 @@ cost_limits:
 
 ## stale_detection
 
-*Source: `src/mozart/core/config/execution.py` — `StaleDetectionConfig`*
+*Source: `src/marianne/core/config/execution.py` — `StaleDetectionConfig`*
 
 Detects hung sheet executions that produce no output.
 
@@ -701,7 +701,7 @@ stale_detection:
 
 ## cross_sheet
 
-*Source: `src/mozart/core/config/workspace.py` — `CrossSheetConfig`*
+*Source: `src/marianne/core/config/workspace.py` — `CrossSheetConfig`*
 
 Enables passing outputs and files between sheets. Set to `null` or omit to disable. When configured, later sheets can access `{{ previous_outputs[N] }}` and `{{ previous_files }}` in templates.
 
@@ -725,7 +725,7 @@ cross_sheet:
 
 ## validations
 
-*Source: `src/mozart/core/config/execution.py` — `ValidationRule`*
+*Source: `src/marianne/core/config/execution.py` — `ValidationRule`*
 
 A list of validation rules applied after each sheet execution. Supports staged execution — validations run in stage order, and if any validation in a stage fails, higher stages are skipped.
 
@@ -820,7 +820,7 @@ validations:
 
 ## isolation
 
-*Source: `src/mozart/core/config/workspace.py` — `IsolationConfig`*
+*Source: `src/marianne/core/config/workspace.py` — `IsolationConfig`*
 
 Git worktree isolation for parallel-safe score execution. Each score runs in an isolated git working directory.
 
@@ -829,7 +829,7 @@ Git worktree isolation for parallel-safe score execution. Each score runs in an 
 | `enabled` | `bool` | `false` | | Enable worktree isolation |
 | `mode` | `"none" \| "worktree"` | `"worktree"` | | Isolation method. Currently only `worktree` is supported. |
 | `worktree_base` | `Path \| None` | `None` | | Directory for worktrees. `None` resolves to `<repo>/.worktrees` at runtime. |
-| `branch_prefix` | `str` | `"mozart"` | Pattern: `^[a-zA-Z][a-zA-Z0-9_-]*$` | Prefix for worktree branch names. Format: `{prefix}/{job-id}` |
+| `branch_prefix` | `str` | `"marianne"` | Pattern: `^[a-zA-Z][a-zA-Z0-9_-]*$` | Prefix for worktree branch names. Format: `{prefix}/{job-id}` |
 | `source_branch` | `str \| None` | `None` | | Branch to base worktree on. Default: current branch (HEAD). |
 | `cleanup_on_success` | `bool` | `true` | | Remove worktree after successful score completion |
 | `cleanup_on_failure` | `bool` | `false` | | Remove worktree when score fails. Default `false` for debugging. |
@@ -842,7 +842,7 @@ Git worktree isolation for parallel-safe score execution. Each score runs in an 
 isolation:
   enabled: true
   mode: worktree
-  branch_prefix: mozart
+  branch_prefix: marianne
   cleanup_on_success: true
   cleanup_on_failure: false
 ```
@@ -851,7 +851,7 @@ isolation:
 
 ## grounding
 
-*Source: `src/mozart/core/config/learning.py` — `GroundingConfig`*
+*Source: `src/marianne/core/config/learning.py` — `GroundingConfig`*
 
 External grounding hooks validate sheet outputs against external sources to prevent model drift.
 
@@ -865,7 +865,7 @@ External grounding hooks validate sheet outputs against external sources to prev
 
 ### Grounding Hook Sub-Config
 
-*Source: `src/mozart/core/config/learning.py` — `GroundingHookConfig`*
+*Source: `src/marianne/core/config/learning.py` — `GroundingHookConfig`*
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -889,7 +889,7 @@ grounding:
 
 ## conductor
 
-*Source: `src/mozart/core/config/orchestration.py` — `ConductorConfig`*
+*Source: `src/marianne/core/config/orchestration.py` — `ConductorConfig`*
 
 Identifies who (or what) is conducting the job. Affects escalation behavior and output formatting.
 
@@ -902,7 +902,7 @@ Identifies who (or what) is conducting the job. Affects escalation behavior and 
 
 ### Conductor Preferences Sub-Config
 
-*Source: `src/mozart/core/config/orchestration.py` — `ConductorPreferences`*
+*Source: `src/marianne/core/config/orchestration.py` — `ConductorPreferences`*
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -925,7 +925,7 @@ conductor:
 
 ## concert
 
-*Source: `src/mozart/core/config/orchestration.py` — `ConcertConfig`*
+*Source: `src/marianne/core/config/orchestration.py` — `ConcertConfig`*
 
 Concert orchestration chains multiple jobs in sequence. Each job can dynamically generate the config for the next.
 
@@ -949,7 +949,7 @@ concert:
 
 ## on_success (Post-Success Hooks)
 
-*Source: `src/mozart/core/config/orchestration.py` — `PostSuccessHookConfig`*
+*Source: `src/marianne/core/config/orchestration.py` — `PostSuccessHookConfig`*
 
 A list of hooks that execute after successful job completion.
 
@@ -983,7 +983,7 @@ on_success:
 
 ## notifications
 
-*Source: `src/mozart/core/config/orchestration.py` — `NotificationConfig`*
+*Source: `src/marianne/core/config/orchestration.py` — `NotificationConfig`*
 
 A list of notification channel configurations.
 
@@ -1007,7 +1007,7 @@ notifications:
 
 ## learning
 
-*Source: `src/mozart/core/config/learning.py` — `LearningConfig`*
+*Source: `src/marianne/core/config/learning.py` — `LearningConfig`*
 
 Controls outcome recording, confidence thresholds, pattern application, and escalation.
 
@@ -1015,7 +1015,7 @@ Controls outcome recording, confidence thresholds, pattern application, and esca
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `true` | | Enable learning and outcome recording |
 | `outcome_store_type` | `"json" \| "sqlite"` | `"json"` | | Backend for storing learning outcomes |
-| `outcome_store_path` | `Path \| None` | `None` | | Path for outcome store (default: `workspace/.mozart-outcomes.json`) |
+| `outcome_store_path` | `Path \| None` | `None` | | Path for outcome store (default: `workspace/.marianne-outcomes.json`) |
 | `min_confidence_threshold` | `float` | `0.3` | `0.0–1.0` | Confidence below this triggers escalation (if enabled) |
 | `high_confidence_threshold` | `float` | `0.7` | `0.0–1.0` | Confidence above this uses completion mode for partial failures |
 | `escalation_enabled` | `bool` | `false` | | Enable escalation for low-confidence decisions |
@@ -1032,7 +1032,7 @@ Controls outcome recording, confidence thresholds, pattern application, and esca
 
 ### Exploration Budget Sub-Config
 
-*Source: `src/mozart/core/config/learning.py` — `ExplorationBudgetConfig`*
+*Source: `src/marianne/core/config/learning.py` — `ExplorationBudgetConfig`*
 
 Nested under `learning.exploration_budget`. Maintains a dynamic exploration budget that prevents convergence to zero.
 
@@ -1047,7 +1047,7 @@ Nested under `learning.exploration_budget`. Maintains a dynamic exploration budg
 
 ### Entropy Response Sub-Config
 
-*Source: `src/mozart/core/config/learning.py` — `EntropyResponseConfig`*
+*Source: `src/marianne/core/config/learning.py` — `EntropyResponseConfig`*
 
 Nested under `learning.entropy_response`. Automatically injects diversity when pattern entropy drops.
 
@@ -1062,7 +1062,7 @@ Nested under `learning.entropy_response`. Automatically injects diversity when p
 
 ### Auto Apply Sub-Config
 
-*Source: `src/mozart/core/config/learning.py` — `AutoApplyConfig`*
+*Source: `src/marianne/core/config/learning.py` — `AutoApplyConfig`*
 
 Nested under `learning.auto_apply`. Enables high-trust patterns to be applied without human confirmation.
 
@@ -1092,7 +1092,7 @@ learning:
 
 ## checkpoints
 
-*Source: `src/mozart/core/config/learning.py` — `CheckpointConfig`*
+*Source: `src/marianne/core/config/learning.py` — `CheckpointConfig`*
 
 Proactive checkpoints ask for confirmation before dangerous operations.
 
@@ -1103,7 +1103,7 @@ Proactive checkpoints ask for confirmation before dangerous operations.
 
 ### Checkpoint Trigger Sub-Config
 
-*Source: `src/mozart/core/config/learning.py` — `CheckpointTriggerConfig`*
+*Source: `src/marianne/core/config/learning.py` — `CheckpointTriggerConfig`*
 
 Each trigger must have at least one condition (`sheet_nums`, `prompt_contains`, or `min_retry_count`).
 
@@ -1133,7 +1133,7 @@ checkpoints:
 
 ## ai_review
 
-*Source: `src/mozart/core/config/workspace.py` — `AIReviewConfig`*
+*Source: `src/marianne/core/config/workspace.py` — `AIReviewConfig`*
 
 AI-powered code review after batch execution with scoring.
 
@@ -1159,7 +1159,7 @@ ai_review:
 
 ## logging
 
-*Source: `src/mozart/core/config/workspace.py` — `LogConfig`*
+*Source: `src/marianne/core/config/workspace.py` — `LogConfig`*
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -1175,7 +1175,7 @@ ai_review:
 logging:
   level: DEBUG
   format: both
-  file_path: ./workspace/mozart.log
+  file_path: ./workspace/marianne.log
   max_file_size_mb: 100
 ```
 
@@ -1183,7 +1183,7 @@ logging:
 
 ## feedback
 
-*Source: `src/mozart/core/config/workspace.py` — `FeedbackConfig`*
+*Source: `src/marianne/core/config/workspace.py` — `FeedbackConfig`*
 
 Extracts structured feedback from agent output after each sheet.
 
@@ -1204,21 +1204,21 @@ feedback:
 
 ## State and Misc
 
-*Source: `src/mozart/core/config/job.py` — `JobConfig`*
+*Source: `src/marianne/core/config/job.py` — `JobConfig`*
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `state_backend` | `"json" \| "sqlite"` | `"sqlite"` | State storage backend |
-| `state_path` | `Path \| None` | `None` | Path for state storage (default: `workspace/.mozart-state.db` for sqlite, `.mozart-state.json` for json) |
+| `state_path` | `Path \| None` | `None` | Path for state storage (default: `workspace/.marianne-state.db` for sqlite, `.marianne-state.json` for json) |
 | `pause_between_sheets_seconds` | `int` | `2` | Seconds to wait between sheets. `>= 0`. |
 
 ---
 
 ## DaemonConfig (Conductor)
 
-*Source: `src/mozart/daemon/config.py` — `DaemonConfig`*
+*Source: `src/marianne/daemon/config.py` — `DaemonConfig`*
 
-Top-level configuration for the Mozart daemon process. Configured separately from score files (typically via `~/.mozart/conductor.yaml` or CLI flags).
+Top-level configuration for the Marianne daemon process. Configured separately from score files (typically via `~/.marianne/conductor.yaml` or CLI flags).
 
 ### Essential Fields
 
@@ -1240,11 +1240,11 @@ Available but rarely need changing:
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `socket` | `SocketConfig` | *(see sub-config)* | | Unix domain socket configuration |
-| `pid_file` | `Path` | `/tmp/mozart.pid` | | PID file for daemon process management |
+| `pid_file` | `Path` | `/tmp/marianne.pid` | | PID file for daemon process management |
 | `max_concurrent_sheets` | `int` | `10` | `1–100` | **Reserved for Phase 3 scheduler — not yet enforced.** Global parallel sheet limit. |
 | `resource_limits` | `ResourceLimitConfig` | *(see sub-config)* | | Resource constraints |
 | `state_backend_type` | `"sqlite"` | `"sqlite"` | **Reserved — frozen to sqlite.** Changing has no effect. |
-| `state_db_path` | `Path` | `~/.mozart/daemon-state.db` | **Reserved — not yet implemented.** | Future daemon state database path |
+| `state_db_path` | `Path` | `~/.marianne/daemon-state.db` | **Reserved — not yet implemented.** | Future daemon state database path |
 | `log_file` | `Path \| None` | `None` | | Log file path. `None` = stderr only. |
 | `shutdown_timeout_seconds` | `float` | `300.0` | `>= 10` | Max seconds for graceful shutdown |
 | `monitor_interval_seconds` | `float` | `15.0` | `>= 5` | Interval between resource monitor checks |
@@ -1260,10 +1260,10 @@ Available but rarely need changing:
 Instead of configuring every field, use `--profile` to apply a preset:
 
 ```bash
-mozart start                    # sensible defaults
-mozart start --profile dev      # debug logging, strace on, low concurrency
-mozart start --profile intensive # 48h timeout, high resource limits
-mozart start --profile minimal  # profiler off, learning off, low concurrency
+mzt start                    # sensible defaults
+mzt start --profile dev      # debug logging, strace on, low concurrency
+mzt start --profile intensive # 48h timeout, high resource limits
+mzt start --profile minimal  # profiler off, learning off, low concurrency
 ```
 
 Profiles are partial overrides merged on top of your config file. Resolution order: **defaults → config file → profile → CLI flags**.
@@ -1272,23 +1272,23 @@ Profiles are partial overrides merged on top of your config file. Resolution ord
 
 | Profile | Description | Key Settings |
 |---------|-------------|-------------|
-| `dev` | Mozart development / debugging | `log_level: debug`, `max_concurrent_jobs: 2`, `strace_enabled: true`, `interval_seconds: 2.0` |
+| `dev` | Marianne development / debugging | `log_level: debug`, `max_concurrent_jobs: 2`, `strace_enabled: true`, `interval_seconds: 2.0` |
 | `intensive` | Long-running production work | `job_timeout_seconds: 172800` (48h), `max_memory_mb: 16384`, `max_processes: 100` |
 | `minimal` | Low-resource environments | `max_concurrent_jobs: 2`, `profiler.enabled: false`, `learning.enabled: false` |
 
 ### Socket Sub-Config
 
-*Source: `src/mozart/daemon/config.py` — `SocketConfig`*
+*Source: `src/marianne/daemon/config.py` — `SocketConfig`*
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `path` | `Path` | `/tmp/mozart.sock` | | Unix domain socket path |
+| `path` | `Path` | `/tmp/marianne.sock` | | Unix domain socket path |
 | `permissions` | `int` | `0o660` | | Socket file permissions (owner+group read/write) |
 | `backlog` | `int` | `5` | `>= 1` | Maximum pending connections in listen queue |
 
 ### Resource Limits Sub-Config
 
-*Source: `src/mozart/daemon/config.py` — `ResourceLimitConfig`*
+*Source: `src/marianne/daemon/config.py` — `ResourceLimitConfig`*
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -1298,7 +1298,7 @@ Profiles are partial overrides merged on top of your config file. Resolution ord
 
 ### Semantic Learning Sub-Config
 
-*Source: `src/mozart/daemon/config.py` — `SemanticLearningConfig`*
+*Source: `src/marianne/daemon/config.py` — `SemanticLearningConfig`*
 
 Controls the conductor's LLM-based analysis of sheet completions. The SemanticAnalyzer subscribes to EventBus sheet events, sends completion context to an LLM, and stores insights as `SEMANTIC_INSIGHT` patterns in the global learning store. These patterns are automatically picked up by the existing pattern injection pipeline.
 
@@ -1312,7 +1312,7 @@ The `backend` field accepts the same `BackendConfig` used by job execution, so a
 | `max_concurrent_analyses` | `int` | `3` | `1–20` | Maximum concurrent LLM analysis tasks. Controls API cost and system load. |
 
 ```yaml
-# Conductor config (daemon.yaml)
+# Conductor config (conductor.yaml)
 learning:
   enabled: true
   backend:
@@ -1327,7 +1327,7 @@ learning:
 
 ### Preflight Sub-Config
 
-*Source: `src/mozart/core/config/execution.py` — `PreflightConfig`*
+*Source: `src/marianne/core/config/execution.py` — `PreflightConfig`*
 
 Controls token count thresholds for pre-flight prompt analysis before sheet execution. Different instruments have different context windows — a 150K threshold that's correct for a 200K-context model is wrong for a 1M-context model. Set thresholds appropriate for the instruments in use.
 

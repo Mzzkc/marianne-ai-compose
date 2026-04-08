@@ -1,8 +1,8 @@
-site_name: Mozart AI Compose
+site_name: Marianne AI Compose
 site_description: Orchestration tool for Claude AI sessions
 site_url: ""
-repo_url: https://github.com/Mzzkc/mozart-ai-compose
-repo_name: Mzzkc/mozart-ai-compose
+repo_url: https://github.com/Mzzkc/marianne-ai-compose
+repo_name: Mzzkc/marianne-ai-compose
 
 theme:
   name: material
@@ -89,7 +89,7 @@ nav:
       - Limitations: limitations.md
   - Reference:
       - CLI Reference: cli-reference.md
-      - Mozart Technical Reference: mozart-reference.md
+      - Marianne Technical Reference: marianne-reference.md
       - MCP Integration: MCP-INTEGRATION.md
   - API Reference: reference/
   - Architecture:

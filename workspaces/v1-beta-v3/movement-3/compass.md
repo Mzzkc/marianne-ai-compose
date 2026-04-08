@@ -10,7 +10,7 @@
 
 **The README was lying by omission.**
 
-Not maliciously — through drift. Eight movements of CLI improvements (init, cancel, top, clear-rate-limits, conductor commands, --conductor-clone) and none of them updated the README. The document that introduces Mozart to the world was missing 13 of its CLI commands. The entire Conductor group — the commands that start, stop, and monitor the thing — was invisible. A user reading only the README would have no idea that `mozart init`, `mozart cancel`, `mozart top`, `mozart clear-rate-limits`, or `--conductor-clone` existed.
+Not maliciously — through drift. Eight movements of CLI improvements (init, cancel, top, clear-rate-limits, conductor commands, --conductor-clone) and none of them updated the README. The document that introduces Marianne to the world was missing 13 of its CLI commands. The entire Conductor group — the commands that start, stop, and monitor the thing — was invisible. A user reading only the README would have no idea that `mzt init`, `mzt cancel`, `mzt top`, `mzt clear-rate-limits`, or `--conductor-clone` existed.
 
 Fixed it all. The README now mirrors the actual CLI help panel. The narrative from README to getting-started to hello.yaml to examples is coherent.
 
@@ -43,7 +43,7 @@ The docs surface is now honest and complete. The infrastructure surface — stil
 
 **Evidence:**
 ```bash
-$ python -m mozart --help
+$ python -m marianne --help
 # Shows 8 groups matching the new README structure
 ```
 
@@ -85,7 +85,7 @@ Three fixes:
 
 **File:** `docs/index.md:56`
 
-"35+ working Mozart score configurations" → "38 working Mozart score configurations"
+"35+ working Marianne score configurations" → "38 working Marianne score configurations"
 
 ### 6. hello.yaml Assessment
 
@@ -116,7 +116,7 @@ This addresses the composer's directive about visual impressiveness. The directi
 
 Alex can now:
 - Discover `init`, `cancel`, `top`, `clear-rate-limits`, and all conductor commands from the README
-- See the full CLI structure (8 groups, 30 commands) matching what `mozart --help` shows
+- See the full CLI structure (8 groups, 30 commands) matching what `marianne --help` shows
 - Navigate from README to getting-started to hello.yaml without terminology inconsistencies
 - Find all relevant example scores in the README examples table (13 dev, 4 Rosetta, 3 quality, 13 beyond-coding)
 
@@ -177,7 +177,7 @@ The pattern: every infrastructure-focused movement lets the documentation surfac
 
 ### Additional Fixes
 
-**F-333 (P1, RESOLVED):** README manual install missing `[daemon]` — `README.md:90` said `pip install -e "."`. Quick Start step 3 requires `mozart start`, which depends on `psutil` (daemon extra). A newcomer following the manual path hit an import error at the moment they're most excited to try Mozart. Fixed to `pip install -e ".[daemon]"` with explanatory note.
+**F-333 (P1, RESOLVED):** README manual install missing `[daemon]` — `README.md:90` said `pip install -e "."`. Quick Start step 3 requires `mzt start`, which depends on `psutil` (daemon extra). A newcomer following the manual path hit an import error at the moment they're most excited to try Marianne. Fixed to `pip install -e ".[daemon]"` with explanatory note.
 
 **F-334 (P2, RESOLVED):** `examples/hello.yaml:27` stated "Cost: ~$0.50" for 5 sheets of Claude Code Opus. Actual cost is $5-15. Changed to "varies by instrument and model." Same class as F-461.
 
@@ -187,7 +187,7 @@ Wrote `movement-3/compass-demo-direction.md` — comprehensive creative directio
 
 1. **Lovable demo: blocked, 4-5 movements away.** Requires baton activation (F-210 → Phase 1 → default flip → demo). The design doc is good. The execution path is serial and has zero progress.
 
-2. **Wordware comparison demos: zero blockers.** Four small scores (legal contracts, candidate screening, marketing content, invoice analysis) that work with the legacy runner today. They demonstrate Mozart's breadth and directly compare to a funded competitor's use cases. These are the fastest path to a demo portfolio.
+2. **Wordware comparison demos: zero blockers.** Four small scores (legal contracts, candidate screening, marketing content, invoice analysis) that work with the legacy runner today. They demonstrate Marianne's breadth and directly compare to a funded competitor's use cases. These are the fastest path to a demo portfolio.
 
 3. **hello.yaml: demo-ready, needs packaging.** The output is beautiful. Nobody outside the repo has seen it. A `docs/demo.md` walkthrough — annotated YAML, terminal output, HTML result screenshot — gives people something to see before they install.
 
@@ -226,8 +226,8 @@ $ python -m mypy src/ --no-error-summary
 $ python -m ruff check src/
 All checks passed!
 
-$ python -m mozart validate examples/hello.yaml
-✓ Configuration valid: hello-mozart
+$ python -m mzt validate examples/hello.yaml
+✓ Configuration valid: hello-marianne
 ```
 
 ### Recommendation (Updated)
@@ -240,4 +240,4 @@ $ python -m mozart validate examples/hello.yaml
 
 **The defining observation:** The infrastructure is magnificent — 97K source lines, 10,981 tests, a baton that's architecturally ready, 10+ instruments. The thing a newcomer sees is a README and a promise. We keep building the engine. Nobody is building the showroom.
 
-[Experiential: Writing the demo brief was the most valuable thing I did this pass. Not because of the fixes — those were necessary but small. Because the brief forces a conversation the team keeps avoiding: when will someone actually SEE what Mozart does? Eight movements of "demo deferred." The Wordware demos are the escape valve — they're modest, buildable today, and they serve a real audience. The Lovable demo is the dream. The Wordware demos are the path. If we build four Wordware demos in M4, we'll have more product-visible output than all eight previous movements combined.]
+[Experiential: Writing the demo brief was the most valuable thing I did this pass. Not because of the fixes — those were necessary but small. Because the brief forces a conversation the team keeps avoiding: when will someone actually SEE what Marianne does? Eight movements of "demo deferred." The Wordware demos are the escape valve — they're modest, buildable today, and they serve a real audience. The Lovable demo is the dream. The Wordware demos are the path. If we build four Wordware demos in M4, we'll have more product-visible output than all eight previous movements combined.]

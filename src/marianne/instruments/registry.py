@@ -1,10 +1,10 @@
 """Instrument registry — the central lookup for all available instruments.
 
-Combines native instruments (Mozart's 4 built-in backends) with config-loaded
+Combines native instruments (Marianne's 4 built-in backends) with config-loaded
 profiles from YAML files. The conductor creates a registry at startup, populates
 it with native instruments, then loads profiles from directories.
 
-Native instruments map Mozart's existing Backend subclasses to InstrumentProfile
+Native instruments map Marianne's existing Backend subclasses to InstrumentProfile
 metadata. This lets the new instrument-based lookup coexist with the existing
 backend system — scores using ``backend:`` continue to work unchanged, while
 scores using ``instrument:`` resolve through this registry.
@@ -227,7 +227,7 @@ def _ollama_profile() -> InstrumentProfile:
         display_name="Ollama",
         description=(
             "Local model execution via Ollama — free, private, offline. "
-            "Supports tool calling with the Mozart-Ollama bridge."
+            "Supports tool calling with the Marianne-Ollama bridge."
         ),
         kind="http",
         capabilities={
@@ -275,7 +275,7 @@ def _recursive_light_profile() -> InstrumentProfile:
 
 
 def register_native_instruments(registry: InstrumentRegistry) -> None:
-    """Register Mozart's 4 built-in backends as named instruments.
+    """Register Marianne's 4 built-in backends as named instruments.
 
     This bridges the native backend system (BackendConfig → Backend) with
     the new instrument system (InstrumentProfile → registry lookup). After

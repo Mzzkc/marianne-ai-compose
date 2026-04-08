@@ -179,7 +179,7 @@ class TestCheckPauseSignalWithEvent:
         # Create pause signal file
         ws = Path(runner.config.workspace)
         ws.mkdir(parents=True, exist_ok=True)
-        (ws / ".mozart-pause-file-test-job").touch()
+        (ws / ".marianne-pause-file-test-job").touch()
         assert runner._check_pause_signal(state) is True
 
     def test_file_check_tolerates_missing_workspace(self, tmp_path: Path) -> None:
@@ -555,12 +555,12 @@ class TestIPCPauseNoWorkspace:
 
 
 # ===========================================================================
-# Task 7: mozart cancel CLI command
+# Task 7: mzt cancel CLI command
 # ===========================================================================
 
 
 class TestCancelCLI:
-    """mozart cancel command exists and routes to IPC."""
+    """mzt cancel command exists and routes to IPC."""
 
     def test_cancel_command_importable(self) -> None:
         from marianne.cli.commands.cancel import cancel
@@ -577,12 +577,12 @@ class TestCancelCLI:
 
 
 # ===========================================================================
-# Task 8: --force flag on mozart pause
+# Task 8: --force flag on mzt pause
 # ===========================================================================
 
 
 class TestPauseForceFlag:
-    """mozart pause --force routes to cancel."""
+    """mzt pause --force routes to cancel."""
 
     def test_pause_has_force_option(self) -> None:
         import inspect

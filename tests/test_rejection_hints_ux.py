@@ -69,7 +69,7 @@ class TestRejectionHintsShutdown:
         assert result.exit_code != 0
         output = result.output.lower()
         # Must suggest restarting
-        assert "mozart start" in output or "restart" in output
+        assert "mzt start" in output or "restart" in output
 
 
 class TestRejectionHintsPressure:
@@ -124,7 +124,7 @@ class TestRejectionHintsDuplicate:
                 new_callable=AsyncMock,
                 return_value=_mock_rejection(
                     "Job 'test-job' is already running. "
-                    "Use 'mozart pause' or 'mozart cancel' first, "
+                    "Use 'mzt pause' or 'mzt cancel' first, "
                     "or wait for it to finish.",
                     job_id="test-job",
                 ),
@@ -179,7 +179,7 @@ class TestRejectionHintsConfigParse:
     def test_config_parse_failure_hints_mention_validate(
         self, tmp_path: Path
     ) -> None:
-        """Config parse rejection should suggest mozart validate."""
+        """Config parse rejection should suggest mzt validate."""
         config_path = _make_config(tmp_path)
 
         with (
