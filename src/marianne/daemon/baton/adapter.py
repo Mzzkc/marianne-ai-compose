@@ -1255,12 +1255,20 @@ class BatonAdapter:
             # entity's original instrument_name which doesn't change after
             # fallback. Mismatched acquire/release corrupts the pool's
             # in_flight counts.
+            #
+            # Shield from cancellation: if the task is cancelled during
+            # shutdown/modify, CancelledError could interrupt the release
+            # await, leaving the pool's in_flight counter permanently
+            # inflated. Shield ensures the release completes even during
+            # task cancellation.
             if self._backend_pool is not None:
                 try:
-                    await self._backend_pool.release(
-                        actual_instrument, backend
+                    await asyncio.shield(
+                        self._backend_pool.release(
+                            actual_instrument, backend
+                        )
                     )
-                except Exception:
+                except (Exception, asyncio.CancelledError):
                     _logger.warning(
                         "adapter.backend_release_failed",
                         extra={
@@ -1289,6 +1297,23 @@ class BatonAdapter:
         self._active_tasks.pop((job_id, sheet_num), None)
 
         if task.cancelled():
+            # Cancelled tasks never report to the baton — the sheet stays
+            # DISPATCHED, consuming a concurrency slot. Inject a synthetic
+            # failure so the baton's state machine handles cleanup.
+            # Only needed if the job is still registered (not deregistered
+            # during cancel/shutdown, which removes all sheets).
+            state = self._baton.get_sheet_state(job_id, sheet_num)
+            if state is not None and state.status == BatonSheetStatus.DISPATCHED:
+                from marianne.daemon.baton.events import SheetAttemptResult as SAR
+                self._baton.inbox.put_nowait(SAR(
+                    job_id=job_id,
+                    sheet_num=sheet_num,
+                    instrument_name=state.instrument_name or "",
+                    attempt=state.normal_attempts + 1,
+                    execution_success=False,
+                    error_classification="CANCELLED",
+                    error_message="Musician task cancelled",
+                ))
             _logger.debug(
                 "adapter.musician.cancelled",
                 extra={"job_id": job_id, "sheet_num": sheet_num},
