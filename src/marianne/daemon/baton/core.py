@@ -963,6 +963,17 @@ class BatonCore:
                     "instrument": event.instrument_name,
                 },
             )
+            # Inject RateLimitHit so the instrument-level rate limit
+            # handling fires: marks instrument as rate-limited, schedules
+            # recovery timer, moves ALL dispatched sheets on this
+            # instrument to WAITING. Without this, the sheet sits in
+            # WAITING forever with no timer to recover it.
+            self._inbox.put_nowait(RateLimitHit(
+                instrument=event.instrument_name,
+                wait_seconds=60.0,  # Default wait; will be extended if still limited
+                job_id=event.job_id,
+                sheet_num=event.sheet_num,
+            ))
             return
 
         # F-018 guard: when execution succeeds with no validations,
