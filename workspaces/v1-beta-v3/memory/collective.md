@@ -57,7 +57,7 @@
 
 ## Current Status
 
-Movement 5 — IN PROGRESS (2026-04-05).
+Movement 5 — IN PROGRESS (2026-04-05 → 2026-04-08).
 
 ### M5 Progress (Circuit)
 - **F-149 RESOLVED (P1):** Backpressure no longer rejects ALL jobs when ONE instrument is rate-limited. `should_accept_job()` and `rejection_reason()` now only consider resource pressure (memory, processes). Rate limits handled at sheet dispatch level. 10 TDD tests. 7 existing tests updated. Manager simplified.
@@ -204,12 +204,23 @@ Movement 5 — IN PROGRESS (2026-04-05).
 - **Rename verification COMPLETE:** Zero "Marianne" references in README, docs, examples, CLI output, imports. Binary is `mzt`. Ghost's 326-file rename left no residue.
 - **43/43 examples pass.** All 37 main + 6 Rosetta. Zero regressions.
 - **CLI terminology 100%:** score/instrument vocabulary held through the rename.
-- **F-493 FILED (P2):** Status header shows "0.0s elapsed" for the live running job. `started_at` is None in CheckpointState. `_compute_elapsed()` returns 0.0. Additionally `completed_at` is set (2026-04-01) for a RUNNING job — state sync artifact.
+- **F-493 FILED (P2 → P0 by Ember):** Status header shows "0.0s elapsed" for the live running job. `started_at` is None in CheckpointState. `_compute_elapsed()` returns 0.0. Additionally `completed_at` is set (2026-04-01) for a RUNNING job — state sync artifact. **GitHub #158.**
 - **F-454 CONFIRMED (P2):** `list --json` leaks "no such table: jobs" internal error to user output. First filed by Ember.
 - **Error handling grade A across all paths:** Empty file, bad YAML, unknown fields, missing fields, nonexistent file — all produce structured messages with hints.
 - **D-029 verified strong:** Rich Panels, ♪ Now Playing, progress bars, compact stats, conductor Rich Panel.
 - **Cost still $0.00** for 194 sheets. Unchanged since M2.
 - **Assessment:** Product surface is ready for external eyes. Status elapsed time needs fixing for any live demo.
+
+### M5 Progress (Ember, Review)
+- **F-493 CONFIRMED P0 (#158):** Verified Newcomer's finding on two independent running jobs. Upgraded to P0. The gap between infrastructure quality (11,810 passing tests) and experience quality (obviously wrong elapsed time) erodes trust. Filed GitHub issue.
+- **M5 UX assessment:** Status beautification (D-029) is the strongest UX leap yet. Validation rendering, error hints, fallback indicators, relative times, compact stats — M5 crossed the threshold from infrastructure to experience.
+- **F-450 VERIFIED:** `clear-rate-limits` says "No active rate limits on all instruments" — tracked for 4 movements, confirmed working.
+- **F-451 VERIFIED:** Diagnose workspace fallback works. `-w` flag visible in help.
+- **Validation is production-ready:** Progressive disclosure, rendering preview, DAG visualization, helpful warnings, typo detection (_KNOWN_TYPOS covers 14 common mistakes).
+- **Cost confidence display:** Code exists (`status.py:1389-1465`) but couldn't trigger in testing. Jobs show $0.00 (possibly correct for baton-managed jobs).
+- **"Now Playing" section:** Exists but timing-dependent (requires sheets in IN_PROGRESS at status check time). Feature works, just didn't see it in my test window.
+- **Experiential finding:** One missing timestamp field (`started_at`) cascades from a state bug into a trust problem. Infrastructure quality and experience quality are coupled.
+- **Recommendation:** Fix F-493 first. The rest is solid.
 
 Movement 4 — COMPLETE (2026-04-05). All movements M0-M4 complete.
 
@@ -424,3 +435,22 @@ Uncommitted changes at `7d780b1` expanded `SheetStatus` from 5 to 11 states. Bat
 **Next movement:** M6 priorities — F-480 rename completion, F-489 documentation updates, Rosetta modernization, examples audit, profiler DB cap.
 
 **Report:** `/home/emzi/Projects/marianne-ai-compose/workspaces/v1-beta-v3/movement-5/quality-gate.md` (2,956 words, comprehensive analysis)
+
+### M5 Review — Prism (2026-04-08)
+Movement 5 PASSED all four verification angles after 9-retry quality gate journey. 11,810 tests (100%), mypy clean, ruff clean, flowspec clean.
+
+**Key achievements:**
+- Serial path advanced 3 steps (D-026, D-027, instrument fallbacks) — first time breaking one-step-per-movement pattern
+- Named directives with explicit assignees (Foundation→D-026, Canyon→D-027) were the catalyst
+- Multi-instrument scores work by default (D-027 baton flip)
+- Instrument fallback pipeline complete end-to-end (Harper + Circuit)
+- Backpressure scoped correctly — per-instrument rate limits, not global (F-149)
+
+**The production gap:** Code says `use_baton: True`. Production config says `use_baton: false`. Guard comment references resolved findings. Three sources, three answers. Governance problem. The baton has 1,400+ tests but zero production runs.
+
+**The correspondence gap:** Tests validate consistency (parts agree with each other). Production validates correspondence (system agrees with world). Composer's M4 finding persists: more bugs found in one production session than tests found in two movements. F-149 is the example — tests passed while validating WRONG behavior (global rate limits).
+
+**The pattern that worries:** 9th occurrence of uncommitted integration work at quality gate pass. 22 files changed between M5 commits and gate pass. F-470 regressed retry #8, restored retry #9 — restoration in working tree, not committed history. If gate passes WITH uncommitted work but fails WITHOUT it, we're validating "committed + patches," not "committed."
+
+**Recommendation for M6:** Commit the integration work. Flip production conductor config. Run ONE real score through the baton. The engineering is done. The governance hasn't started.
+
