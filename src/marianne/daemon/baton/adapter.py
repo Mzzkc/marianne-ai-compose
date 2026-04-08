@@ -1110,6 +1110,14 @@ class BatonAdapter:
             )
             return
 
+        # Clear stale validation/error details from previous attempts.
+        # Without this, status display shows old validation errors for the
+        # current attempt's failure (misreporting).
+        state.validation_passed = None
+        state.validation_details = None
+        state.error_message = None
+        state.error_code = None
+
         # Build attempt context
         attempt_number = state.normal_attempts + state.completion_attempts + 1
         mode = AttemptMode.NORMAL

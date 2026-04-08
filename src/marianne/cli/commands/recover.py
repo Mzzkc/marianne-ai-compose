@@ -42,6 +42,12 @@ def recover(
         "-s",
         help="Specific sheet number to recover (default: all failed sheets)",
     ),
+    from_sheet: int | None = typer.Option(
+        None,
+        "--from-sheet",
+        "-f",
+        help="Reset all FAILED sheets >= this number to PENDING (cascade recovery)",
+    ),
     workspace: Path | None = typer.Option(
         None,
         "--workspace",
@@ -65,16 +71,131 @@ def recover(
     - Claude CLI returned a non-zero exit code but the work was done
     - A transient error caused failure after files were created
     - You want to check if a failed sheet actually succeeded
+    - A cascade failure wiped out downstream sheets after one failure
 
     Examples:
         mzt recover my-job                    # Recover all failed sheets
         mzt recover my-job --sheet 6         # Recover specific sheet
         mzt recover my-job --dry-run         # Check without modifying
+        mzt recover my-job --from-sheet 211  # Reset cascade from sheet 211+
     """
     from ._shared import validate_job_id
 
     job_id = validate_job_id(job_id)
+
+    if from_sheet is not None:
+        asyncio.run(_recover_cascade(job_id, from_sheet, dry_run))
+        return
+
     asyncio.run(_recover_job(job_id, sheet, workspace, dry_run))
+
+
+async def _recover_cascade(
+    job_id: str,
+    from_sheet: int,
+    dry_run: bool,
+) -> None:
+    """Reset cascaded failures from a specific sheet onward.
+
+    Reads the checkpoint from the conductor registry DB, resets all
+    FAILED sheets >= from_sheet to PENDING, clears their error data,
+    and sets the job to PAUSED for resume.
+
+    Requires the conductor to be stopped (writes to DB directly).
+    """
+    import json
+    import shutil
+    import sqlite3
+
+    configure_global_logging(console)
+
+    db_path = Path("~/.marianne/daemon-state.db").expanduser()
+    if not db_path.exists():
+        output_error(
+            "Conductor registry DB not found",
+            hints=["Start the conductor at least once: mzt start"],
+        )
+        raise typer.Exit(1)
+
+    # Load checkpoint
+    conn = sqlite3.connect(str(db_path))
+    cur = conn.cursor()
+    cur.execute("SELECT checkpoint_json FROM jobs WHERE job_id=?", (job_id,))
+    row = cur.fetchone()
+
+    if not row or not row[0]:
+        conn.close()
+        output_error(
+            f"No checkpoint found for score '{job_id}'",
+            hints=["Run 'mzt list -a' to see available scores."],
+        )
+        raise typer.Exit(1)
+
+    checkpoint = json.loads(row[0])
+    sheets = checkpoint.get("sheets", {})
+
+    # Count before
+    before: dict[str, int] = {}
+    for sdata in sheets.values():
+        st = sdata.get("status", "pending")
+        before[st] = before.get(st, 0) + 1
+
+    # Reset
+    reset_count = 0
+    for snum_str, sdata in sheets.items():
+        snum = int(snum_str)
+        if snum >= from_sheet and sdata.get("status") == "failed":
+            sdata["status"] = "pending"
+            sdata.pop("error_message", None)
+            sdata.pop("error_code", None)
+            sdata.pop("completed_at", None)
+            reset_count += 1
+
+    # Count after
+    after: dict[str, int] = {}
+    for sdata in sheets.values():
+        st = sdata.get("status", "pending")
+        after[st] = after.get(st, 0) + 1
+
+    console.print(Panel(
+        f"[bold]Cascade Recovery: {job_id}[/bold]\n"
+        f"Reset sheets >= {from_sheet} from FAILED to PENDING\n\n"
+        f"Before: {dict(sorted(before.items()))}\n"
+        f"After:  {dict(sorted(after.items()))}\n\n"
+        f"Reset: {reset_count} sheet(s)\n"
+        f"Dry run: {dry_run}",
+        title="Recovery",
+    ))
+
+    if dry_run:
+        conn.close()
+        console.print("\n[yellow]Dry run — no changes made[/yellow]")
+        return
+
+    if reset_count == 0:
+        conn.close()
+        console.print("\n[yellow]No FAILED sheets found >= {from_sheet}[/yellow]")
+        return
+
+    # Backup
+    backup = db_path.with_suffix(".db.bak")
+    shutil.copy2(db_path, backup)
+    console.print(f"Backup: {backup}")
+
+    # Set job status to paused for clean resume
+    checkpoint["status"] = "paused"
+
+    # Save
+    checkpoint_json = json.dumps(checkpoint)
+    cur.execute(
+        "UPDATE jobs SET checkpoint_json=?, status='paused' WHERE job_id=?",
+        (checkpoint_json, job_id),
+    )
+    conn.commit()
+    conn.close()
+
+    console.print(f"\n[green]Reset {reset_count} sheet(s). Resume with:[/green]")
+    console.print(f"  [bold]mzt resume {job_id}[/bold]")
 
 
 async def _recover_job(
