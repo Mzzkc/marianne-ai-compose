@@ -272,6 +272,38 @@ async def _find_job_state_fs(
     return None, None
 
 
+async def _find_job_state_from_registry(
+    job_id: str,
+) -> CheckpointState | None:
+    """Read job state from the daemon registry DB directly.
+
+    Used when the conductor is down but the registry DB exists.
+    The registry DB is always up to date (Phase 2 persist callback
+    writes after every state-dirty event). This replaces workspace
+    file fallback for baton-managed jobs.
+
+    Returns:
+        CheckpointState if found in registry, None otherwise.
+    """
+    import json
+
+    db_path = Path("~/.marianne/daemon-state.db").expanduser()
+    if not db_path.exists():
+        return None
+
+    try:
+        from marianne.daemon.registry import JobRegistry
+
+        async with JobRegistry(db_path) as registry:
+            checkpoint_json = await registry.load_checkpoint(job_id)
+            if checkpoint_json is None:
+                return None
+            data = json.loads(checkpoint_json)
+            return CheckpointState.model_validate(data)
+    except Exception:
+        return None
+
+
 async def _find_job_state_direct(
     job_id: str,
     workspace: Path | None,
