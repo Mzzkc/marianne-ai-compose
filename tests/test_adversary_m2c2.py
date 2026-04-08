@@ -157,10 +157,10 @@ class TestStateMappingCompleteness:
             recovered = checkpoint_to_baton_status(cp_status)
             assert recovered == baton_status
 
-    def test_cancelled_maps_to_failed_in_checkpoint(self) -> None:
-        """CANCELLED has no checkpoint equivalent — must map to 'failed'."""
+    def test_cancelled_maps_to_cancelled_in_checkpoint(self) -> None:
+        """CANCELLED maps 1:1 to 'cancelled' since Phase 1."""
         cp_status = baton_to_checkpoint_status(BatonSheetStatus.CANCELLED)
-        assert cp_status == "failed"
+        assert cp_status == "cancelled"
 
     def test_unknown_checkpoint_status_raises_key_error(self) -> None:
         """An unknown status string must raise KeyError, not silently default."""
@@ -176,16 +176,16 @@ class TestStateMappingCompleteness:
         baton_status = checkpoint_to_baton_status("in_progress")
         assert baton_status == BatonSheetStatus.DISPATCHED
 
-    def test_baton_to_checkpoint_collapses_non_terminal_correctly(self) -> None:
-        """Non-terminal baton states should map to only pending or in_progress."""
+    def test_baton_to_checkpoint_maps_non_terminal_1_to_1(self) -> None:
+        """Non-terminal baton states map 1:1 to checkpoint since Phase 1."""
         non_terminal_mappings = {
             BatonSheetStatus.PENDING: "pending",
-            BatonSheetStatus.READY: "pending",
-            BatonSheetStatus.DISPATCHED: "in_progress",
-            BatonSheetStatus.RUNNING: "in_progress",
-            BatonSheetStatus.WAITING: "in_progress",
-            BatonSheetStatus.RETRY_SCHEDULED: "pending",
-            BatonSheetStatus.FERMATA: "in_progress",
+            BatonSheetStatus.READY: "ready",
+            BatonSheetStatus.DISPATCHED: "dispatched",
+            BatonSheetStatus.IN_PROGRESS: "in_progress",
+            BatonSheetStatus.WAITING: "waiting",
+            BatonSheetStatus.RETRY_SCHEDULED: "retry_scheduled",
+            BatonSheetStatus.FERMATA: "fermata",
         }
         for baton_status, expected_cp in non_terminal_mappings.items():
             actual = baton_to_checkpoint_status(baton_status)
@@ -409,7 +409,7 @@ class TestRecoveryCostInteractions:
         baton.set_job_cost_limit("j1", 10.0)
 
         # Sheet 2 dispatches and produces a high-cost result
-        baton._jobs["j1"].sheets[2].status = BatonSheetStatus.RUNNING
+        baton._jobs["j1"].sheets[2].status = BatonSheetStatus.IN_PROGRESS
         result = _success_result("j1", 2, cost=6.0)  # Total: 5+6 = 11 > 10
         await baton.handle_event(result)
 
@@ -615,7 +615,7 @@ class TestF111RateLimitRegression:
         states = {1: _make_sheet_state(1, max_retries=3)}
         baton.register_job("j1", states, {})
 
-        baton._jobs["j1"].sheets[1].status = BatonSheetStatus.RUNNING
+        baton._jobs["j1"].sheets[1].status = BatonSheetStatus.IN_PROGRESS
         result = _failure_result("j1", 1, rate_limited=True)
         await baton.handle_event(result)
 
@@ -915,7 +915,7 @@ class TestStateSyncCallback:
         """State sync callback must fire when a sheet attempt completes."""
         sync_calls: list[tuple[str, int, str]] = []
 
-        def sync_cb(job_id: str, sheet_num: int, status: str) -> None:
+        def sync_cb(job_id: str, sheet_num: int, status: str, baton_state: Any = None) -> None:
             sync_calls.append((job_id, sheet_num, status))
 
         adapter = BatonAdapter(
@@ -924,7 +924,7 @@ class TestStateSyncCallback:
         )
         states = {1: _make_sheet_state(1)}
         adapter._baton.register_job("j1", states, {})
-        adapter._baton._jobs["j1"].sheets[1].status = BatonSheetStatus.RUNNING
+        adapter._baton._jobs["j1"].sheets[1].status = BatonSheetStatus.IN_PROGRESS
 
         result = _success_result("j1", 1)
         # Handle event through baton, then sync
@@ -943,7 +943,7 @@ class TestStateSyncCallback:
         """State sync callback must fire when a sheet is skipped."""
         sync_calls: list[tuple[str, int, str]] = []
 
-        def sync_cb(job_id: str, sheet_num: int, status: str) -> None:
+        def sync_cb(job_id: str, sheet_num: int, status: str, baton_state: Any = None) -> None:
             sync_calls.append((job_id, sheet_num, status))
 
         adapter = BatonAdapter(
@@ -968,7 +968,7 @@ class TestStateSyncCallback:
         """Non-sheet events (PauseJob, ResumeJob) should not trigger sync."""
         sync_calls: list[tuple[str, int, str]] = []
 
-        def sync_cb(job_id: str, sheet_num: int, status: str) -> None:
+        def sync_cb(job_id: str, sheet_num: int, status: str, baton_state: Any = None) -> None:
             sync_calls.append((job_id, sheet_num, status))
 
         adapter = BatonAdapter(
@@ -1053,7 +1053,7 @@ class TestPauseResumeCostIntegration:
         job = baton._jobs["j1"]
 
         # Step 1: Complete sheet 1 with high cost
-        job.sheets[1].status = BatonSheetStatus.RUNNING
+        job.sheets[1].status = BatonSheetStatus.IN_PROGRESS
         result = _success_result("j1", 1, cost=6.0)
         await baton.handle_event(result)
 

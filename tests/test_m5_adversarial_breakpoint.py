@@ -642,7 +642,7 @@ class TestDeregisterJobCleanup:
         adapter._synced_status = {
             (job_id, 1): "completed",
             (job_id, 2): "pending",
-            ("other-job", 1): "running",
+            ("other-job", 1): "in_progress",
         }
         adapter._active_tasks = {}
 

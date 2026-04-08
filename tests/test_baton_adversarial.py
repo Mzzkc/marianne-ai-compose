@@ -263,7 +263,10 @@ class TestSheetExecutionStateSerialization:
         assert restored.max_completion == 8
         assert restored.total_cost_usd == pytest.approx(3.14159)
         assert restored.total_duration_seconds == pytest.approx(999.999)
-        assert restored.next_retry_at == pytest.approx(12345.678)
+        # next_retry_at is transient (monotonic time, exclude=True) —
+        # not preserved across serialization roundtrips. This is correct:
+        # timers are lost on restart and must be rescheduled.
+        assert restored.next_retry_at is None
 
     @pytest.mark.adversarial
     def test_from_dict_missing_optional_fields_uses_defaults(self) -> None:
@@ -1229,7 +1232,7 @@ class TestBatonJobStateAdversarial:
         """running_sheets returns only RUNNING status sheets."""
         job = BatonJobState(job_id="j1", total_sheets=3)
         for i, status in enumerate(
-            [BatonSheetStatus.RUNNING, BatonSheetStatus.PENDING, BatonSheetStatus.RUNNING],
+            [BatonSheetStatus.IN_PROGRESS, BatonSheetStatus.PENDING, BatonSheetStatus.IN_PROGRESS],
             start=1,
         ):
             s = RichSheetExecutionState(sheet_num=i, instrument_name="t")
@@ -1238,7 +1241,7 @@ class TestBatonJobStateAdversarial:
 
         running = job.running_sheets
         assert len(running) == 2
-        assert all(s.status == BatonSheetStatus.RUNNING for s in running)
+        assert all(s.status == BatonSheetStatus.IN_PROGRESS for s in running)
 
 
 # ===========================================================================

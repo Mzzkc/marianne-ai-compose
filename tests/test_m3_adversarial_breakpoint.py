@@ -311,7 +311,7 @@ class TestRateLimitAutoResume:
             1: _make_state(sheet_num=1, status=BatonSheetStatus.WAITING),
             2: _make_state(sheet_num=2, status=BatonSheetStatus.COMPLETED),
             3: _make_state(sheet_num=3, status=BatonSheetStatus.FAILED),
-            4: _make_state(sheet_num=4, status=BatonSheetStatus.RUNNING),
+            4: _make_state(sheet_num=4, status=BatonSheetStatus.IN_PROGRESS),
             5: _make_state(sheet_num=5, status=BatonSheetStatus.PENDING),
         }
         baton._jobs = {"job-1": _make_job_record(sheets=sheets)}
@@ -321,7 +321,7 @@ class TestRateLimitAutoResume:
         assert sheets[1].status == BatonSheetStatus.PENDING  # moved
         assert sheets[2].status == BatonSheetStatus.COMPLETED  # untouched
         assert sheets[3].status == BatonSheetStatus.FAILED  # untouched
-        assert sheets[4].status == BatonSheetStatus.RUNNING  # untouched
+        assert sheets[4].status == BatonSheetStatus.IN_PROGRESS  # untouched
         assert sheets[5].status == BatonSheetStatus.PENDING  # already pending
 
     def test_rate_limit_expired_unknown_instrument_no_crash(self) -> None:
@@ -1138,7 +1138,7 @@ class TestTerminalStatusInvariants:
                     f"Terminal sheet {original} was moved to {sheet.status}"
                 )
             elif original in (
-                BatonSheetStatus.DISPATCHED, BatonSheetStatus.RUNNING,
+                BatonSheetStatus.DISPATCHED, BatonSheetStatus.IN_PROGRESS,
             ):
                 # DISPATCHED/RUNNING → WAITING
                 assert sheet.status == BatonSheetStatus.WAITING

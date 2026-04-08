@@ -44,7 +44,7 @@ class TestBatonSheetStatus:
         assert BatonSheetStatus.DISPATCHED.value == "dispatched"
 
     def test_has_running(self) -> None:
-        assert BatonSheetStatus.RUNNING.value == "running"
+        assert BatonSheetStatus.IN_PROGRESS.value == "in_progress"
 
     def test_has_completed(self) -> None:
         assert BatonSheetStatus.COMPLETED.value == "completed"
@@ -76,7 +76,7 @@ class TestBatonSheetStatus:
         assert not BatonSheetStatus.PENDING.is_terminal
 
     def test_is_not_terminal_for_running(self) -> None:
-        assert not BatonSheetStatus.RUNNING.is_terminal
+        assert not BatonSheetStatus.IN_PROGRESS.is_terminal
 
 
 # =============================================================================
@@ -282,8 +282,8 @@ class TestSheetExecutionState:
         state.status = BatonSheetStatus.DISPATCHED
         assert state.status == BatonSheetStatus.DISPATCHED
 
-        state.status = BatonSheetStatus.RUNNING
-        assert state.status == BatonSheetStatus.RUNNING
+        state.status = BatonSheetStatus.IN_PROGRESS
+        assert state.status == BatonSheetStatus.IN_PROGRESS
 
         state.status = BatonSheetStatus.COMPLETED
         assert state.status == BatonSheetStatus.COMPLETED
@@ -444,7 +444,7 @@ class TestBatonJobState:
         s2 = SheetExecutionState(sheet_num=2, instrument_name="claude-code")
         s3 = SheetExecutionState(sheet_num=3, instrument_name="claude-code")
         s1.status = BatonSheetStatus.COMPLETED
-        s2.status = BatonSheetStatus.RUNNING
+        s2.status = BatonSheetStatus.IN_PROGRESS
         s3.status = BatonSheetStatus.SKIPPED
         job.register_sheet(s1)
         job.register_sheet(s2)
@@ -467,7 +467,7 @@ class TestBatonJobState:
         s1 = SheetExecutionState(sheet_num=1, instrument_name="claude-code")
         s2 = SheetExecutionState(sheet_num=2, instrument_name="claude-code")
         s1.status = BatonSheetStatus.COMPLETED
-        s2.status = BatonSheetStatus.RUNNING
+        s2.status = BatonSheetStatus.IN_PROGRESS
         job.register_sheet(s1)
         job.register_sheet(s2)
         assert job.is_complete is False
@@ -477,15 +477,15 @@ class TestBatonJobState:
         s1 = SheetExecutionState(sheet_num=1, instrument_name="claude-code")
         s2 = SheetExecutionState(sheet_num=2, instrument_name="claude-code")
         s3 = SheetExecutionState(sheet_num=3, instrument_name="claude-code")
-        s1.status = BatonSheetStatus.RUNNING
+        s1.status = BatonSheetStatus.IN_PROGRESS
         s2.status = BatonSheetStatus.COMPLETED
-        s3.status = BatonSheetStatus.RUNNING
+        s3.status = BatonSheetStatus.IN_PROGRESS
         job.register_sheet(s1)
         job.register_sheet(s2)
         job.register_sheet(s3)
         running = job.running_sheets
         assert len(running) == 2
-        assert all(s.status == BatonSheetStatus.RUNNING for s in running)
+        assert all(s.status == BatonSheetStatus.IN_PROGRESS for s in running)
 
     def test_total_cost_aggregation(self) -> None:
         job = BatonJobState(job_id="j1", total_sheets=2)
@@ -522,19 +522,19 @@ class TestStateSerialization:
             instrument_name="gemini-cli",
             max_retries=10,
         )
-        state.status = BatonSheetStatus.RUNNING
+        state.status = BatonSheetStatus.IN_PROGRESS
         state.normal_attempts = 2
         d = state.to_dict()
         assert d["sheet_num"] == 5
         assert d["instrument_name"] == "gemini-cli"
-        assert d["status"] == "running"
+        assert d["status"] == "in_progress"
         assert d["normal_attempts"] == 2
 
     def test_sheet_state_from_dict(self) -> None:
         d: dict[str, Any] = {
             "sheet_num": 5,
             "instrument_name": "gemini-cli",
-            "status": "running",
+            "status": "in_progress",
             "normal_attempts": 2,
             "completion_attempts": 1,
             "healing_attempts": 0,
@@ -546,7 +546,7 @@ class TestStateSerialization:
         state = SheetExecutionState.from_dict(d)
         assert state.sheet_num == 5
         assert state.instrument_name == "gemini-cli"
-        assert state.status == BatonSheetStatus.RUNNING
+        assert state.status == BatonSheetStatus.IN_PROGRESS
         assert state.normal_attempts == 2
         assert state.max_retries == 10
 

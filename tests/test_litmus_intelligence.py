@@ -91,7 +91,7 @@ Test categories:
 49. F-271 MCP process explosion fix — profile-driven mcp_disable_args
     prevent unwanted MCP servers. _build_command() injects args.
 50. User variables in validations — prompt.variables available during
-    `mozart validate` and `mozart recover`.
+    `mzt validate` and `marianne recover`.
 51. D-029 Status beautification — format_relative_time, edge cases,
     compact relative time formatting.
 52. F-490 Process control — safe kill guards. All os.killpg through
@@ -2396,55 +2396,29 @@ class TestBatonEventStubLogging:
     WITH the fix: `_logger.warning("baton.event.unimplemented", ...)`.
     """
 
-    async def test_stale_check_logs_warning(self) -> None:
-        """StaleCheck event produces a warning log, not silence."""
-        import io
-        import logging
-
+    async def test_stale_check_handled(self) -> None:
+        """StaleCheck event is handled without error (no longer a stub)."""
         from marianne.daemon.baton.events import StaleCheck
 
         baton = BatonCore()
+        # StaleCheck for a non-existent job is a safe no-op
+        await baton.handle_event(StaleCheck(job_id="j1", sheet_num=1))
 
-        log_capture = io.StringIO()
-        handler = logging.StreamHandler(log_capture)
-        handler.setLevel(logging.WARNING)
-        logger = logging.getLogger("marianne.daemon.baton.core")
-        logger.addHandler(handler)
-        try:
-            await baton.handle_event(StaleCheck(job_id="j1", sheet_num=1))
-            log_output = log_capture.getvalue()
-            # The stub should produce a warning — not crash, not silence
-            assert "unimplemented" in log_output or "StaleCheck" in log_output, (
-                "StaleCheck should produce a warning log, not silent drop"
-            )
-        finally:
-            logger.removeHandler(handler)
-
-    async def test_cron_tick_logs_warning(self) -> None:
+    async def test_cron_tick_logs_warning(self, capsys: pytest.CaptureFixture[str]) -> None:
         """CronTick event produces a warning, not silence."""
-        import io
-        import logging
-
         from marianne.daemon.baton.events import CronTick
 
         baton = BatonCore()
+        await baton.handle_event(CronTick(
+            entry_name="test-cron",
+            score_path="/tmp/test.yaml",
+        ))
 
-        log_capture = io.StringIO()
-        handler = logging.StreamHandler(log_capture)
-        handler.setLevel(logging.WARNING)
-        logger = logging.getLogger("marianne.daemon.baton.core")
-        logger.addHandler(handler)
-        try:
-            await baton.handle_event(CronTick(
-                entry_name="test-cron",
-                score_path="/tmp/test.yaml",
-            ))
-            log_output = log_capture.getvalue()
-            assert "unimplemented" in log_output or "CronTick" in log_output, (
-                "CronTick should produce a warning log, not silent drop"
-            )
-        finally:
-            logger.removeHandler(handler)
+        captured = capsys.readouterr()
+        log_output = captured.out + captured.err
+        assert "unimplemented" in log_output or "CronTick" in log_output, (
+            "CronTick should produce a warning log, not silent drop"
+        )
 
 
 # =========================================================================
@@ -2917,7 +2891,8 @@ class TestRateLimitAutoResumeEffectiveness:
         }
         baton._jobs = {}
         baton._state_dirty = False
-        baton._timer = MagicMock(spec=["schedule"])
+        baton._timer = MagicMock(spec=["schedule", "cancel"])
+        baton._rate_limit_timers = {}
 
         event = RateLimitHit(
             instrument="claude-cli",
@@ -2951,6 +2926,7 @@ class TestRateLimitAutoResumeEffectiveness:
             "claude-cli": MagicMock(rate_limited=True, rate_limit_expires_at=100.0),
             "gemini-cli": MagicMock(rate_limited=False, rate_limit_expires_at=None),
         }
+        baton._rate_limit_timers = {}
 
         # Two sheets: one waiting on claude-cli, one waiting on gemini-cli
         claude_sheet = MagicMock(
@@ -2994,6 +2970,7 @@ class TestRateLimitAutoResumeEffectiveness:
         baton._jobs = {}
         baton._state_dirty = False
         baton._timer = None  # No timer wheel
+        baton._rate_limit_timers = {}
 
         event = RateLimitHit(
             instrument="claude-cli",
@@ -4141,10 +4118,10 @@ class TestStateDiffDedup:
         adapter._synced_status = {}
 
         # Simulate first sync
-        adapter._synced_status[("job1", 1)] = "running"
+        adapter._synced_status[("job1", 1)] = "in_progress"
 
         # Same status should be detectable
-        assert adapter._synced_status.get(("job1", 1)) == "running", (
+        assert adapter._synced_status.get(("job1", 1)) == "in_progress", (
             "F-211: _synced_status cache must store and retrieve by (job_id, sheet_num) tuple."
         )
 
@@ -4174,7 +4151,7 @@ class TestStateDiffDedup:
         job_state = MagicMock()
         sheet_state = SheetExecutionState(
             sheet_num=1,
-            status=BatonSheetStatus.RUNNING,
+            status=BatonSheetStatus.IN_PROGRESS,
             instrument_name="claude-code",
         )
         job_state.sheets = {1: sheet_state}
@@ -4209,7 +4186,7 @@ class TestStateDiffDedup:
         job_state = MagicMock()
         sheet_state = SheetExecutionState(
             sheet_num=1,
-            status=BatonSheetStatus.RUNNING,
+            status=BatonSheetStatus.IN_PROGRESS,
             instrument_name="claude-code",
         )
         job_state.sheets = {1: sheet_state}
@@ -4270,7 +4247,7 @@ class TestBatonLegacyFailedSheetParity:
         collected_statuses = {BatonSheetStatus.COMPLETED, BatonSheetStatus.SKIPPED}
         excluded_statuses = {
             BatonSheetStatus.FAILED,
-            BatonSheetStatus.RUNNING,
+            BatonSheetStatus.IN_PROGRESS,
             BatonSheetStatus.PENDING,
             BatonSheetStatus.WAITING,
             BatonSheetStatus.CANCELLED,
@@ -4951,7 +4928,7 @@ class TestMcpProcessExplosionFixIntelligence:
 
 
 class TestUserVariablesInValidationsIntelligence:
-    """Litmus: do prompt.variables resolve during `mozart validate`?
+    """Litmus: do prompt.variables resolve during `mzt validate`?
 
     WITHOUT user variables: validation paths with {my_var} fail as unresolved.
     WITH user variables: prompt.variables are available in the rendering context
@@ -4986,7 +4963,7 @@ class TestUserVariablesInValidationsIntelligence:
             "User variables: generate_preview must read from "
             "config.prompt.variables to populate the path context. "
             "This is how user-defined template variables become available "
-            "during `mozart validate` and `mozart recover`."
+            "during `mzt validate` and `marianne recover`."
         )
 
 
@@ -5133,8 +5110,9 @@ class TestProcessControlSafeKillGuardsIntelligence:
 
         # Files that are ALLOWED to call os.killpg directly
         allowed_files = {
-            "backends/claude_cli.py",  # _safe_killpg definition
+            "backends/claude_cli.py",  # legacy _safe_killpg (pre-refactor)
             "daemon/pgroup.py",        # ProcessGroupManager (SIG_IGN guarded)
+            "utils/process.py",        # _safe_killpg canonical location (F-490)
         }
 
         for py_file in src_root.rglob("*.py"):

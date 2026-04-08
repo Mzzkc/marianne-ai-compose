@@ -35,7 +35,6 @@ See: ``docs/plans/2026-03-26-baton-design.md`` — Single-Attempt Musician
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -45,13 +44,12 @@ import jinja2
 from marianne.backends.base import Backend, ExecutionResult
 from marianne.core.config.job import InjectionCategory, InjectionItem
 from marianne.core.constants import TRUNCATE_STDOUT_TAIL_CHARS
+from marianne.core.logging import get_logger
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import AttemptContext
 from marianne.prompts.preamble import build_preamble
 from marianne.utils.credential_scanner import redact_credentials
-
-from marianne.core.logging import get_logger
 
 _logger = get_logger("daemon.baton.musician")
 
@@ -69,6 +67,7 @@ async def sheet_task(
     preamble: str | None = None,
     cost_per_1k_input: float | None = None,
     cost_per_1k_output: float | None = None,
+    instrument_override: str | None = None,
 ) -> None:
     """Execute a single sheet attempt and report the result.
 
@@ -95,10 +94,18 @@ async def sheet_task(
             instrument profile's ModelCapacity. None uses hardcoded fallback.
         cost_per_1k_output: Cost per 1000 output tokens (USD) from the
             instrument profile's ModelCapacity. None uses hardcoded fallback.
+        instrument_override: When set, used as the instrument_name in the
+            SheetAttemptResult instead of sheet.instrument_name. Required
+            after instrument fallback — the Sheet entity keeps the original
+            instrument but the baton's SheetExecutionState tracks the
+            fallback instrument. Without this, attempt results credit
+            the wrong instrument for success/failure tracking.
 
     Never raises — all exceptions are caught and reported via the inbox.
     """
     start_time = time.monotonic()
+    # Resolve the effective instrument name — fallback may have changed it
+    effective_instrument = instrument_override or sheet.instrument_name
 
     try:
         # Step 1: Build prompt
@@ -141,7 +148,7 @@ async def sheet_task(
         result = SheetAttemptResult(
             job_id=job_id,
             sheet_num=sheet.num,
-            instrument_name=sheet.instrument_name,
+            instrument_name=effective_instrument,
             attempt=attempt_context.attempt_number,
             execution_success=exec_result.success,
             exit_code=exec_result.exit_code,
@@ -188,7 +195,7 @@ async def sheet_task(
         result = SheetAttemptResult(
             job_id=job_id,
             sheet_num=sheet.num,
-            instrument_name=sheet.instrument_name,
+            instrument_name=effective_instrument,
             attempt=attempt_context.attempt_number,
             execution_success=False,
             exit_code=None,

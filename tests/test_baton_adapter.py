@@ -151,7 +151,7 @@ class TestStateSynchronization:
         """RUNNING maps to in_progress."""
         from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
-        result = baton_to_checkpoint_status(BatonSheetStatus.RUNNING)
+        result = baton_to_checkpoint_status(BatonSheetStatus.IN_PROGRESS)
         assert result == "in_progress"
 
     def test_status_mapping_waiting(self) -> None:

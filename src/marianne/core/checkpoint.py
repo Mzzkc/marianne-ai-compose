@@ -426,6 +426,71 @@ class SheetState(BaseModel):
         description="Number of self-healing attempts for this sheet.",
     )
 
+    # --- Baton scheduling fields (Phase 2: unified state model) ---
+    # These fields were previously on SheetExecutionState (baton/state.py).
+    # Moved here so the baton writes to SheetState directly — no sync layer.
+
+    normal_attempts: int = Field(
+        default=0,
+        description="Number of failed execution attempts (excludes rate-limited and "
+        "successful attempts). This is the retry budget counter.",
+    )
+    max_retries: int = Field(
+        default=3,
+        description="Maximum normal retry attempts before exhaustion.",
+    )
+    max_completion: int = Field(
+        default=5,
+        description="Maximum completion mode attempts.",
+    )
+    total_cost_usd: float = Field(
+        default=0.0,
+        description="Cumulative cost across all attempts for this sheet.",
+    )
+    total_duration_seconds: float = Field(
+        default=0.0,
+        description="Cumulative execution duration across all attempts.",
+    )
+    next_retry_at: float | None = Field(
+        default=None,
+        exclude=True,
+        description="Monotonic time when next retry is scheduled. "
+        "Transient — not persisted (timers are lost on restart).",
+    )
+    dispatched_at: float | None = Field(
+        default=None,
+        exclude=True,
+        description="Monotonic time when the sheet was last dispatched. "
+        "Transient — used by StaleCheck for hung sheet detection.",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Model used by this sheet's instrument. For per-model "
+        "concurrency tracking.",
+    )
+
+    # Instrument fallback fields
+    fallback_chain: list[str] = Field(
+        default_factory=list,
+        description="Resolved fallback instrument chain. Empty = no fallbacks.",
+    )
+    current_instrument_index: int = Field(
+        default=0,
+        description="Position in the instrument chain. 0 = primary instrument.",
+    )
+    fallback_attempts: dict[str, int] = Field(
+        default_factory=dict,
+        description="Retry count per instrument in the chain.",
+    )
+
+    # Transient — not persisted (populated during execution, lost on restart)
+    attempt_results: list[Any] = Field(
+        default_factory=list,
+        exclude=True,
+        description="Full SheetAttemptResult for each attempt. Transient — "
+        "enables the conductor's retry/completion/healing decisions.",
+    )
+
     # Display status — derived from status + scheduling fields for human display.
     # Computed at serialization time, not stored. Allows status display to show
     # "retry in 45s" or "rate limited (clears in 12m)" without consumers
@@ -583,6 +648,103 @@ class SheetState(BaseModel):
             self.error_message = "Unknown failure (no error message recorded)"
 
         return self
+
+    # --- Baton scheduling methods (Phase 2: unified state model) ---
+    # These methods were previously on SheetExecutionState (baton/state.py).
+    # Now on SheetState so the baton operates on one shared object.
+
+    def record_attempt(self, result: Any) -> None:
+        """Record an attempt result and update tracking state.
+
+        Only non-successful, non-rate-limited attempts increment
+        ``normal_attempts``. Successes and rate-limited attempts are
+        recorded in ``attempt_results`` for history but don't consume
+        retry budget.
+        """
+        self.attempt_results.append(result)
+        self.total_cost_usd += result.cost_usd
+        self.total_duration_seconds += result.duration_seconds
+
+        if not result.rate_limited and not result.execution_success:
+            self.normal_attempts += 1
+
+    @property
+    def can_retry(self) -> bool:
+        """Whether this sheet has remaining retry budget."""
+        return self.normal_attempts < self.max_retries
+
+    @property
+    def can_complete(self) -> bool:
+        """Whether this sheet has remaining completion mode budget."""
+        return self.completion_attempts < self.max_completion
+
+    @property
+    def is_exhausted(self) -> bool:
+        """Whether both retry and completion budgets are exhausted."""
+        return not self.can_retry and not self.can_complete
+
+    @property
+    def total_attempts(self) -> int:
+        """Total attempts across all modes."""
+        return self.normal_attempts + self.completion_attempts + self.healing_attempts
+
+    @property
+    def has_fallback_available(self) -> bool:
+        """Whether there is another instrument in the fallback chain to try."""
+        return self.current_instrument_index < len(self.fallback_chain)
+
+    def advance_fallback(self, reason: str) -> str | None:
+        """Advance to the next instrument in the fallback chain.
+
+        Records the transition, switches instrument_name, resets retry
+        budget, and increments current_instrument_index.
+
+        Returns the new instrument name, or None if the chain is exhausted.
+        """
+        if not self.has_fallback_available:
+            return None
+
+        from_instrument = self.instrument_name or ""
+        self.fallback_attempts[from_instrument] = self.normal_attempts
+
+        to_instrument = self.fallback_chain[self.current_instrument_index]
+        self.current_instrument_index += 1
+        self.instrument_name = to_instrument
+
+        # Fresh retry budget for the new instrument
+        self.normal_attempts = 0
+        self.completion_attempts = 0
+
+        # Record the transition
+        import datetime as _dt
+
+        self.instrument_fallback_history.append({
+            "from": from_instrument,
+            "to": to_instrument,
+            "reason": reason,
+            "timestamp": _dt.datetime.now(tz=_dt.UTC).isoformat(),
+        })
+
+        # Trim to prevent unbounded growth
+        if len(self.instrument_fallback_history) > MAX_INSTRUMENT_FALLBACK_HISTORY:
+            self.instrument_fallback_history = (
+                self.instrument_fallback_history[-MAX_INSTRUMENT_FALLBACK_HISTORY:]
+            )
+
+        return to_instrument
+
+    # --- Compatibility methods for Phase 2 transition ---
+    # These match the SheetExecutionState dataclass API so the type alias
+    # (SheetExecutionState = SheetState) works without changing callers.
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dict. Compatibility with dataclass SheetExecutionState."""
+        return self.model_dump(mode="json")
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SheetState:
+        """Restore from dict. Compatibility with dataclass SheetExecutionState."""
+        return cls.model_validate(data)
 
     def capture_output(
         self,

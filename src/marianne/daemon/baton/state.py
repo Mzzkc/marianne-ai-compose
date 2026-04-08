@@ -32,47 +32,20 @@ from typing import Any
 # Cap for fallback history per sheet — mirrors MAX_ERROR_HISTORY in checkpoint.py
 MAX_FALLBACK_HISTORY: int = 50
 
-from marianne.daemon.baton.events import SheetAttemptResult
-
 # =============================================================================
 # Enums
 # =============================================================================
+# Phase 2: BatonSheetStatus is now an alias for SheetStatus.
+# SheetStatus has all 11 states (Phase 1 expanded it from 5 to 11).
+# The RUNNING member was renamed to IN_PROGRESS in SheetStatus.
+# Since RUNNING was never assigned to any sheet (DISPATCHED is the
+# de facto running state), the rename has no behavioral impact.
+from marianne.core.checkpoint import SheetStatus
+from marianne.daemon.baton.events import SheetAttemptResult
 
+BatonSheetStatus = SheetStatus
 
-class BatonSheetStatus(str, Enum):
-    """Extended sheet status for the baton's internal tracking.
-
-    The baton needs more states than the existing ``SheetStatus`` enum
-    (pending/in_progress/completed/failed/skipped) to express its
-    scheduling decisions:
-
-    - ``READY`` — dependencies met, eligible for dispatch
-    - ``DISPATCHED`` — sent to a musician, not yet running
-    - ``WAITING`` — blocked on a rate-limited instrument
-    - ``RETRY_SCHEDULED`` — failed, awaiting retry timer
-    - ``FERMATA`` — paused for human/AI escalation decision
-    - ``CANCELLED`` — cancelled by user or timeout
-    """
-
-    PENDING = "pending"
-    READY = "ready"
-    DISPATCHED = "dispatched"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    SKIPPED = "skipped"
-    CANCELLED = "cancelled"
-    WAITING = "waiting"
-    RETRY_SCHEDULED = "retry_scheduled"
-    FERMATA = "fermata"
-
-    @property
-    def is_terminal(self) -> bool:
-        """Whether this status represents a final state (no more transitions)."""
-        return self in _TERMINAL_BATON_STATUSES
-
-
-# Frozenset for O(1) terminal status checks — used by BatonSheetStatus.is_terminal
+# Frozenset for O(1) terminal status checks — used by is_terminal
 # and by core.py for event handler guards.
 _TERMINAL_BATON_STATUSES = frozenset({
     BatonSheetStatus.COMPLETED,
@@ -171,215 +144,30 @@ class AttemptContext:
 
 
 # =============================================================================
-# SheetExecutionState — per-sheet tracking
+# SheetExecutionState — Phase 2 type alias
+# =============================================================================
+#
+# SheetExecutionState was a dataclass that duplicated fields from SheetState
+# (the checkpoint's Pydantic model). Phase 2 of the unified state model
+# (docs/plans/2026-04-07-unified-state-spec.md) eliminates the duplication
+# by aliasing SheetExecutionState to SheetState. All baton scheduling fields
+# and methods (record_attempt, can_retry, advance_fallback, etc.) are now
+# on SheetState directly.
+#
+# The alias preserves backward compatibility: all existing code that imports
+# SheetExecutionState from this module continues to work. Construction via
+# SheetExecutionState(sheet_num=1, instrument_name="x") creates a SheetState.
+# BatonSheetStatus enum values are coerced to SheetStatus via string matching.
+#
+# The original dataclass is preserved below (commented out) for reference
+# during the transition period. It will be removed once all tests are migrated.
 # =============================================================================
 
+from marianne.core.checkpoint import SheetState
 
-@dataclass
-class SheetExecutionState:
-    """The conductor's per-sheet tracking during a performance.
+SheetExecutionState = SheetState
 
-    This is the baton's working memory for each sheet. It tracks attempt
-    counts, status, cost, and timing. The ``attempt_results`` list holds
-    the full ``SheetAttemptResult`` for each attempt, enabling the
-    conductor to make informed retry/completion/healing decisions.
 
-    Rate-limited attempts do NOT increment ``normal_attempts`` — rate
-    limits are tempo changes, not failures.
-    """
-
-    sheet_num: int
-    """The sheet number within the job (1-based)."""
-
-    instrument_name: str
-    """The instrument profile assigned to this sheet (e.g., 'claude-code')."""
-
-    model: str | None = None
-    """The model used by this sheet's instrument (e.g., 'claude-haiku-4-5-20251001').
-
-    Populated from Sheet.instrument_config.get('model') at registration.
-    When set, concurrency and rate limits are tracked per (instrument, model)
-    instead of per instrument alone.
-    """
-
-    status: BatonSheetStatus = BatonSheetStatus.PENDING
-    """Current scheduling status."""
-
-    normal_attempts: int = 0
-    """Number of normal execution attempts (retries). Rate-limited attempts excluded."""
-
-    completion_attempts: int = 0
-    """Number of completion mode attempts."""
-
-    healing_attempts: int = 0
-    """Number of self-healing attempts."""
-
-    max_retries: int = 3
-    """Maximum normal retry attempts (from RetryConfig)."""
-
-    max_completion: int = 5
-    """Maximum completion mode attempts (from RetryConfig)."""
-
-    attempt_results: list[SheetAttemptResult] = field(default_factory=list)
-    """Full results from every attempt (including rate-limited ones)."""
-
-    next_retry_at: float | None = None
-    """Monotonic time when the next retry is scheduled (or None)."""
-
-    total_cost_usd: float = 0.0
-    """Cumulative cost across all attempts for this sheet."""
-
-    total_duration_seconds: float = 0.0
-    """Cumulative execution duration across all attempts."""
-
-    # --- Instrument fallback fields ---
-
-    fallback_chain: list[str] = field(default_factory=list)
-    """Resolved fallback instrument chain from the Sheet entity.
-
-    Empty list means no fallbacks configured. Entries are instrument names
-    resolved at registration time from the Sheet's instrument_fallbacks.
-    """
-
-    current_instrument_index: int = 0
-    """Position in the instrument chain.
-
-    0 = primary instrument (instrument_name at registration time).
-    1 = first fallback (fallback_chain[0]).
-    N = Nth fallback (fallback_chain[N-1]).
-    """
-
-    fallback_attempts: dict[str, int] = field(default_factory=dict)
-    """Retry count per instrument in the chain. Key is instrument name."""
-
-    fallback_history: list[dict[str, str]] = field(default_factory=list)
-    """Records each fallback transition: {from, to, reason, timestamp}."""
-
-    @property
-    def has_fallback_available(self) -> bool:
-        """Whether there is another instrument in the fallback chain to try."""
-        return self.current_instrument_index < len(self.fallback_chain)
-
-    def advance_fallback(self, reason: str) -> str | None:
-        """Advance to the next instrument in the fallback chain.
-
-        Records the transition in fallback_history, switches instrument_name,
-        resets retry budget (normal_attempts and completion_attempts), and
-        increments current_instrument_index.
-
-        Returns the new instrument name, or None if the chain is exhausted.
-        """
-        if not self.has_fallback_available:
-            return None
-
-        from_instrument = self.instrument_name
-        # Save attempts spent on the current instrument
-        self.fallback_attempts[from_instrument] = self.normal_attempts
-
-        to_instrument = self.fallback_chain[self.current_instrument_index]
-        self.current_instrument_index += 1
-        self.instrument_name = to_instrument
-
-        # Fresh retry budget for the new instrument
-        self.normal_attempts = 0
-        self.completion_attempts = 0
-
-        # Record the transition
-        import datetime
-
-        self.fallback_history.append({
-            "from": from_instrument,
-            "to": to_instrument,
-            "reason": reason,
-            "timestamp": datetime.datetime.now(tz=datetime.UTC).isoformat(),
-        })
-
-        # Trim to prevent unbounded growth (F-252)
-        if len(self.fallback_history) > MAX_FALLBACK_HISTORY:
-            self.fallback_history = self.fallback_history[-MAX_FALLBACK_HISTORY:]
-
-        return to_instrument
-
-    def record_attempt(self, result: SheetAttemptResult) -> None:
-        """Record an attempt result and update tracking state.
-
-        Only non-successful, non-rate-limited attempts increment
-        ``normal_attempts``. Successes and rate-limited attempts are
-        recorded in ``attempt_results`` for history but don't consume
-        retry budget. This matches the baton design spec: retry budget
-        tracks failures, not total attempts.
-        """
-        self.attempt_results.append(result)
-        self.total_cost_usd += result.cost_usd
-        self.total_duration_seconds += result.duration_seconds
-
-        # Only count failed, non-rate-limited attempts toward retry budget.
-        # Successful attempts don't consume retries. Rate-limited attempts
-        # are tempo changes, not failures.
-        if not result.rate_limited and not result.execution_success:
-            self.normal_attempts += 1
-
-    @property
-    def can_retry(self) -> bool:
-        """Whether this sheet has remaining retry budget."""
-        return self.normal_attempts < self.max_retries
-
-    @property
-    def can_complete(self) -> bool:
-        """Whether this sheet has remaining completion mode budget."""
-        return self.completion_attempts < self.max_completion
-
-    @property
-    def is_exhausted(self) -> bool:
-        """Whether both retry and completion budgets are exhausted."""
-        return not self.can_retry and not self.can_complete
-
-    @property
-    def total_attempts(self) -> int:
-        """Total attempts across all modes."""
-        return self.normal_attempts + self.completion_attempts + self.healing_attempts
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize to a dict for SQLite persistence."""
-        return {
-            "sheet_num": self.sheet_num,
-            "instrument_name": self.instrument_name,
-            "status": self.status.value,
-            "normal_attempts": self.normal_attempts,
-            "completion_attempts": self.completion_attempts,
-            "healing_attempts": self.healing_attempts,
-            "max_retries": self.max_retries,
-            "max_completion": self.max_completion,
-            "total_cost_usd": self.total_cost_usd,
-            "total_duration_seconds": self.total_duration_seconds,
-            "next_retry_at": self.next_retry_at,
-            "fallback_chain": self.fallback_chain,
-            "current_instrument_index": self.current_instrument_index,
-            "fallback_attempts": self.fallback_attempts,
-            "fallback_history": self.fallback_history,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> SheetExecutionState:
-        """Restore from a serialized dict."""
-        state = cls(
-            sheet_num=data["sheet_num"],
-            instrument_name=data["instrument_name"],
-            max_retries=data.get("max_retries", 3),
-            max_completion=data.get("max_completion", 5),
-        )
-        state.status = BatonSheetStatus(data.get("status", "pending"))
-        state.normal_attempts = data.get("normal_attempts", 0)
-        state.completion_attempts = data.get("completion_attempts", 0)
-        state.healing_attempts = data.get("healing_attempts", 0)
-        state.total_cost_usd = data.get("total_cost_usd", 0.0)
-        state.total_duration_seconds = data.get("total_duration_seconds", 0.0)
-        state.next_retry_at = data.get("next_retry_at")
-        state.fallback_chain = data.get("fallback_chain", [])
-        state.current_instrument_index = data.get("current_instrument_index", 0)
-        state.fallback_attempts = data.get("fallback_attempts", {})
-        state.fallback_history = data.get("fallback_history", [])
-        return state
 
 
 # =============================================================================
@@ -560,7 +348,7 @@ class BatonJobState:
         """Sheets currently in RUNNING status."""
         return [
             s for s in self.sheets.values()
-            if s.status == BatonSheetStatus.RUNNING
+            if s.status == BatonSheetStatus.IN_PROGRESS
         ]
 
     @property

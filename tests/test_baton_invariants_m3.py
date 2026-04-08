@@ -72,7 +72,7 @@ _ALL_FINITE_FLOATS = st.floats(allow_nan=False, allow_infinity=False)
 
 # Baton sheet statuses
 _ALL_BATON_STATUSES = st.sampled_from([
-    "pending", "ready", "dispatched", "running", "completed",
+    "pending", "ready", "dispatched", "in_progress", "completed",
     "failed", "skipped", "cancelled", "waiting", "retry_scheduled", "fermata",
 ])
 
@@ -326,7 +326,7 @@ class TestRateLimitHitTransition:
         )
         baton._handle_rate_limit_hit(event)
 
-        if baton_status in (BatonSheetStatus.DISPATCHED, BatonSheetStatus.RUNNING):
+        if baton_status in (BatonSheetStatus.DISPATCHED, BatonSheetStatus.IN_PROGRESS):
             assert sheet.status == BatonSheetStatus.WAITING
         elif baton_status.is_terminal:
             # Terminal sheets must NEVER regress
@@ -445,7 +445,7 @@ class TestExhaustionDecisionTree:
         sheet = SheetExecutionState(
             sheet_num=1,
             instrument_name="inst",
-            status=BatonSheetStatus.RUNNING,
+            status=BatonSheetStatus.IN_PROGRESS,
             healing_attempts=healing_attempts,
         )
         baton.register_job(
@@ -478,7 +478,7 @@ class TestExhaustionDecisionTree:
         sheet = SheetExecutionState(
             sheet_num=1,
             instrument_name="inst",
-            status=BatonSheetStatus.RUNNING,
+            status=BatonSheetStatus.IN_PROGRESS,
             healing_attempts=0,  # Budget available
         )
         baton.register_job(
@@ -535,14 +535,32 @@ class TestRetryDelayMonotonicity:
 
 
 class TestStateMappingRoundTrip:
-    """checkpoint→baton→checkpoint preserves the original status."""
+    """checkpoint→baton→checkpoint preserves status for stable statuses.
 
-    _CHECKPOINT_STATUSES = ["pending", "in_progress", "completed", "failed", "skipped"]
+    The checkpoint→baton direction intentionally collapses some statuses
+    on resume (e.g., waiting→PENDING, in_progress→DISPATCHED) so not all
+    11 statuses round-trip. Statuses that DO round-trip are those with a
+    1:1 mapping in both directions.
+    """
 
-    @given(status=st.sampled_from(_CHECKPOINT_STATUSES))
+    _ALL_CHECKPOINT_STATUSES = [
+        "pending", "ready", "dispatched", "in_progress",
+        "waiting", "retry_scheduled", "fermata",
+        "completed", "failed", "skipped", "cancelled",
+    ]
+
+    # Statuses that survive checkpoint→baton→checkpoint without collapse.
+    # Excluded: in_progress (→DISPATCHED→dispatched), waiting (→PENDING→pending),
+    # retry_scheduled (→PENDING→pending), fermata (→PENDING→pending).
+    _ROUND_TRIP_STABLE = [
+        "pending", "ready", "dispatched",
+        "completed", "failed", "skipped", "cancelled",
+    ]
+
+    @given(status=st.sampled_from(_ROUND_TRIP_STABLE))
     @settings(max_examples=20)
-    def test_round_trip_preserves_checkpoint(self, status: str) -> None:
-        """checkpoint_to_baton → baton_to_checkpoint recovers the original."""
+    def test_round_trip_preserves_stable_statuses(self, status: str) -> None:
+        """checkpoint_to_baton → baton_to_checkpoint recovers the original for stable statuses."""
         from marianne.daemon.baton.adapter import (
             baton_to_checkpoint_status,
             checkpoint_to_baton_status,
@@ -564,7 +582,7 @@ class TestStateMappingRoundTrip:
             assert isinstance(result, str), (
                 f"{status.value} has no checkpoint mapping"
             )
-            assert result in self._CHECKPOINT_STATUSES, (
+            assert result in self._ALL_CHECKPOINT_STATUSES, (
                 f"{status.value} → {result} is not a valid checkpoint status"
             )
 

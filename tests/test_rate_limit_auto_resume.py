@@ -78,7 +78,7 @@ class TestRateLimitTimerScheduling:
 
         job = baton._jobs["test-job"]
         sheet = job.sheets[1]
-        sheet.status = BatonSheetStatus.RUNNING
+        sheet.status = BatonSheetStatus.IN_PROGRESS
 
         event = RateLimitHit(
             instrument="claude-cli",
@@ -268,7 +268,7 @@ class TestEndToEndRateLimitCycle:
         job = baton._jobs["test-job"]
         sheet = job.sheets[1]
         assert sheet.status == BatonSheetStatus.PENDING
-        sheet.status = BatonSheetStatus.RUNNING
+        sheet.status = BatonSheetStatus.IN_PROGRESS
 
         baton._handle_rate_limit_hit(RateLimitHit(
             instrument="claude-cli", wait_seconds=30.0,

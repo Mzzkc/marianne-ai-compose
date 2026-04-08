@@ -2,7 +2,7 @@
 
 F-490: When a fallback occurs, the baton's SheetExecutionState.instrument_name
 changes but the CheckpointState's SheetState.instrument_name is never updated.
-This means `mozart status` shows the wrong instrument for sheets that have
+This means `mzt status` shows the wrong instrument for sheets that have
 fallen back. Same bug class as F-065, F-068, D-024 — correct internals
 presenting wrong information to the user.
 
@@ -322,7 +322,7 @@ class TestFallbackSyncHistory:
 
             # Set to RUNNING for second failure
             s = adapter._baton._jobs["j1"].sheets[1]
-            s.status = BatonSheetStatus.RUNNING
+            s.status = BatonSheetStatus.IN_PROGRESS
 
             event2 = SheetAttemptResult(
                 job_id="j1",

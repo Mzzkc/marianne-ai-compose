@@ -316,7 +316,7 @@ class TestStateSyncCallbackAdversarial:
         """_sync_sheet_status must fire for SheetAttemptResult events."""
         sync_calls: list[tuple[str, int, str]] = []
 
-        def on_sync(job_id: str, sheet_num: int, status: str) -> None:
+        def on_sync(job_id: str, sheet_num: int, status: str, baton_state: object = None) -> None:
             sync_calls.append((job_id, sheet_num, status))
 
         adapter = BatonAdapter(state_sync_callback=on_sync)
@@ -343,7 +343,7 @@ class TestStateSyncCallbackAdversarial:
         """_sync_sheet_status must fire for SheetSkipped events."""
         sync_calls: list[tuple[str, int, str]] = []
 
-        def on_sync(job_id: str, sheet_num: int, status: str) -> None:
+        def on_sync(job_id: str, sheet_num: int, status: str, baton_state: object = None) -> None:
             sync_calls.append((job_id, sheet_num, status))
 
         adapter = BatonAdapter(state_sync_callback=on_sync)
@@ -360,7 +360,7 @@ class TestStateSyncCallbackAdversarial:
         the callback."""
         sync_calls: list[tuple[str, int, str]] = []
 
-        def on_sync(job_id: str, sheet_num: int, status: str) -> None:
+        def on_sync(job_id: str, sheet_num: int, status: str, baton_state: object = None) -> None:
             sync_calls.append((job_id, sheet_num, status))
 
         adapter = BatonAdapter(state_sync_callback=on_sync)
@@ -373,7 +373,7 @@ class TestStateSyncCallbackAdversarial:
     def test_sync_callback_exception_does_not_crash(self) -> None:
         """If the callback raises, _sync_sheet_status must catch it
         and log a warning — never crash the baton."""
-        def on_sync(job_id: str, sheet_num: int, status: str) -> None:
+        def on_sync(job_id: str, sheet_num: int, status: str, baton_state: object = None) -> None:
             raise RuntimeError("Callback explosion")
 
         adapter = BatonAdapter(state_sync_callback=on_sync)
@@ -399,7 +399,7 @@ class TestStateSyncCallbackAdversarial:
         must not fire."""
         sync_calls: list[tuple[str, int, str]] = []
 
-        def on_sync(job_id: str, sheet_num: int, status: str) -> None:
+        def on_sync(job_id: str, sheet_num: int, status: str, baton_state: object = None) -> None:
             sync_calls.append((job_id, sheet_num, status))
 
         adapter = BatonAdapter(state_sync_callback=on_sync)
@@ -835,7 +835,7 @@ class TestCheckpointStatusMappingBoundary:
         assert baton_to_checkpoint_status(BatonSheetStatus.PENDING) == "pending"
         assert baton_to_checkpoint_status(BatonSheetStatus.READY) == "ready"
         assert baton_to_checkpoint_status(BatonSheetStatus.DISPATCHED) == "dispatched"
-        assert baton_to_checkpoint_status(BatonSheetStatus.RUNNING) == "in_progress"
+        assert baton_to_checkpoint_status(BatonSheetStatus.IN_PROGRESS) == "in_progress"
         assert baton_to_checkpoint_status(BatonSheetStatus.WAITING) == "waiting"
         assert baton_to_checkpoint_status(BatonSheetStatus.RETRY_SCHEDULED) == "retry_scheduled"
         assert baton_to_checkpoint_status(BatonSheetStatus.FERMATA) == "fermata"

@@ -170,11 +170,15 @@ class TestAdapterStateMappingInvariants:
         assert len(result) > 0
 
     @given(status=all_baton_statuses)
-    def test_checkpoint_status_is_one_of_five_known_values(
+    def test_checkpoint_status_is_one_of_eleven_known_values(
         self, status: BatonSheetStatus,
     ) -> None:
-        """CheckpointState only knows 5 statuses. The mapping must produce one."""
-        known = {"pending", "in_progress", "completed", "failed", "skipped"}
+        """CheckpointState knows all 11 statuses (1:1 mapping since Phase 1)."""
+        known = {
+            "pending", "ready", "dispatched", "in_progress",
+            "waiting", "retry_scheduled", "fermata",
+            "completed", "failed", "skipped", "cancelled",
+        }
         result = baton_to_checkpoint_status(status)
         assert result in known, (
             f"BatonSheetStatus.{status.name} maps to '{result}' which is not "
@@ -185,9 +189,9 @@ class TestAdapterStateMappingInvariants:
         """Terminal baton statuses must map to terminal checkpoint statuses.
 
         COMPLETED → completed, FAILED → failed, SKIPPED → skipped,
-        CANCELLED → failed (no cancelled in checkpoint).
+        CANCELLED → cancelled (1:1 since Phase 1).
         """
-        terminal_checkpoint = {"completed", "failed", "skipped"}
+        terminal_checkpoint = {"completed", "failed", "skipped", "cancelled"}
         for status in _TERMINAL_BATON_STATUSES:
             result = baton_to_checkpoint_status(status)
             assert result in terminal_checkpoint, (
@@ -542,9 +546,12 @@ class TestBatonDecisionTreeInvariants:
         )
         baton._handle_attempt_result(result)
 
-        assert sheets[1].status == BatonSheetStatus.PENDING, (
+        # Completion mode now schedules retry with backoff (RETRY_SCHEDULED)
+        # instead of going directly to PENDING. This prevents tight loops
+        # when partial validation failures hammer the API.
+        assert sheets[1].status == BatonSheetStatus.RETRY_SCHEDULED, (
             f"Partial pass (rate={pass_rate}) should enter completion mode "
-            f"(PENDING), got {sheets[1].status.value}"
+            f"(RETRY_SCHEDULED with backoff), got {sheets[1].status.value}"
         )
         assert sheets[1].completion_attempts == 1
 
@@ -826,7 +833,7 @@ class TestStatusSetInvariants:
         all_statuses = set(BatonSheetStatus)
         intermediate = {
             BatonSheetStatus.DISPATCHED,
-            BatonSheetStatus.RUNNING,
+            BatonSheetStatus.IN_PROGRESS,
             BatonSheetStatus.WAITING,
             BatonSheetStatus.RETRY_SCHEDULED,
             BatonSheetStatus.FERMATA,

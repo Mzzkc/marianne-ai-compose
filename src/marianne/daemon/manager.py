@@ -10,10 +10,10 @@ import asyncio
 import os
 import time
 import traceback
-from datetime import datetime, timedelta, timezone
 from collections import deque
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -485,7 +485,6 @@ class JobManager:
     # ─── Helpers ───────────────────────────────────────────────────────
 
     @staticmethod
-    @staticmethod
     def _classify_orphan(orphan: JobRecord) -> DaemonJobStatus:
         """Determine the correct recovery status for an orphaned job.
 
@@ -626,7 +625,7 @@ class JobManager:
             if baton_state.next_retry_at is not None:
                 delta = baton_state.next_retry_at - time.monotonic()
                 sheet_state.fire_at = (
-                    datetime.now(timezone.utc) + timedelta(seconds=delta)
+                    datetime.now(UTC) + timedelta(seconds=delta)
                     if delta > 0 else None
                 )
             else:
@@ -645,7 +644,7 @@ class JobManager:
             ):
                 delta_rl = inst_state.rate_limit_expires_at - time.monotonic()
                 sheet_state.rate_limit_expires_at = (
-                    datetime.now(timezone.utc) + timedelta(seconds=delta_rl)
+                    datetime.now(UTC) + timedelta(seconds=delta_rl)
                     if delta_rl > 0 else None
                 )
             else:
@@ -1172,6 +1171,20 @@ class JobManager:
                 f"(stale status after daemon restart)"
             )
 
+        # Baton path: inject PauseJob event directly into the baton.
+        # The baton sets job.paused=True immediately, which stops dispatch
+        # for this job regardless of whether sheets are active.
+        if self._baton_adapter is not None:
+            from marianne.daemon.baton.events import PauseJob
+            await self._baton_adapter._baton.inbox.put(
+                PauseJob(job_id=job_id)
+            )
+            _logger.info("job.baton_pause_sent", job_id=job_id)
+            # Also update registry so CLI shows PAUSED
+            meta.status = DaemonJobStatus.PAUSED
+            await self._registry.update_status(job_id, DaemonJobStatus.PAUSED.value)
+            return True
+
         # Prefer in-process event (no filesystem access needed)
         event = self._pause_events.get(job_id)
         if event is not None:
@@ -1269,11 +1282,20 @@ class JobManager:
                 f"Job '{job_id}' is {meta.status.value}, cannot modify"
             )
 
-        # Send pause signal via in-process event
+        # Send pause signal
         await self.pause_job(job_id)
 
         # Store pending action — _on_task_done will resume when the job pauses
         meta.pending_modify = (config_path, ws)
+
+        # Baton path: the old task sits on wait_for_completion() and won't
+        # exit just because the baton paused dispatch. Cancel the task so
+        # _on_task_done fires and triggers the deferred resume.
+        if self._baton_adapter is not None:
+            old_task = self._jobs.get(job_id)
+            if old_task is not None and not old_task.done():
+                old_task.cancel(msg=f"modify: paused for config reload on {job_id}")
+                _logger.info("job.modify_cancelled_baton_task", job_id=job_id)
 
         return JobResponse(
             job_id=job_id,
@@ -1470,6 +1492,13 @@ class JobManager:
             baton_cleared = self._baton_adapter.clear_instrument_rate_limit(
                 instrument,
             )
+            # Kick the baton event loop so dispatch_ready() runs for the
+            # newly-PENDING sheets. Without this, the loop blocks on
+            # inbox.get() and cleared sheets sit idle until an unrelated
+            # event arrives.
+            from marianne.daemon.baton.events import DispatchRetry
+
+            self._baton_adapter._baton.inbox.put_nowait(DispatchRetry())
         _logger.info(
             "manager.clear_rate_limits",
             instrument=instrument,
@@ -2278,6 +2307,7 @@ class JobManager:
             prompt_config=config.prompt,
             parallel_enabled=config.parallel.enabled,
             cross_sheet=config.cross_sheet,  # F-210
+            pacing_seconds=float(config.pause_between_sheets_seconds),
         )
 
         try:
@@ -2290,6 +2320,20 @@ class JobManager:
             meta = self._job_meta.get(job_id)
             if meta and adapter.has_completed_sheets(job_id):
                 meta.completed_new_work = True
+
+            # Update job-level status in the live CheckpointState so
+            # mzt status (reads _live_states) agrees with mzt list
+            # (reads registry). Without this, live.status stays RUNNING
+            # after all sheets are terminal.
+            live = self._live_states.get(job_id)
+            if live is not None:
+                from marianne.core.checkpoint import JobStatus as CPJobStatus
+
+                live.status = (
+                    CPJobStatus.COMPLETED if all_success
+                    else CPJobStatus.FAILED
+                )
+                live.completed_at = utc_now()
 
             # Publish completion event
             await adapter.publish_job_event(
@@ -2304,7 +2348,11 @@ class JobManager:
             )
 
         except asyncio.CancelledError:
-            adapter.deregister_job(job_id)
+            # Don't deregister if this is a modify-triggered cancel —
+            # the resume needs the baton state intact.
+            meta = self._job_meta.get(job_id)
+            if meta is None or meta.pending_modify is None:
+                adapter.deregister_job(job_id)
             raise
         except Exception:
             _logger.error(
@@ -2417,13 +2465,14 @@ class JobManager:
             prompt_config=config.prompt,
             parallel_enabled=config.parallel.enabled,
             cross_sheet=config.cross_sheet,  # F-210
+            pacing_seconds=float(config.pause_between_sheets_seconds),
         )
 
         # Reconcile live state with baton's view: recover_job resets
         # in_progress sheets to PENDING (dead musicians), but the live
         # CheckpointState still has them as in_progress with stale times.
         from marianne.core.checkpoint import SheetStatus
-        for sheet_num, sheet_state in checkpoint.sheets.items():
+        for _sheet_num, sheet_state in checkpoint.sheets.items():
             if sheet_state.status == SheetStatus.IN_PROGRESS:
                 sheet_state.status = SheetStatus.PENDING
                 sheet_state.started_at = None
@@ -2436,6 +2485,18 @@ class JobManager:
             # F-145: Set completed_new_work flag for concert chaining.
             if meta and self._baton_adapter.has_completed_sheets(job_id):
                 meta.completed_new_work = True
+
+            # Update job-level status in the live CheckpointState (same
+            # as _run_via_baton — keeps mzt status and mzt list in sync).
+            live = self._live_states.get(job_id)
+            if live is not None:
+                from marianne.core.checkpoint import JobStatus as CPJobStatus
+
+                live.status = (
+                    CPJobStatus.COMPLETED if all_success
+                    else CPJobStatus.FAILED
+                )
+                live.completed_at = utc_now()
 
             await self._baton_adapter.publish_job_event(
                 job_id,

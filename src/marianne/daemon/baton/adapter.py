@@ -38,7 +38,6 @@ See: ``workspaces/v1-beta-v3/movement-2/step-28-wiring-analysis.md``
 from __future__ import annotations
 
 import asyncio
-
 import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
@@ -54,6 +53,7 @@ from marianne.daemon.baton.events import (
     SheetAttemptResult,
     SheetSkipped,
     ShutdownRequested,
+    StaleCheck,
 )
 from marianne.daemon.baton.musician import sheet_task
 from marianne.daemon.baton.state import (
@@ -93,7 +93,7 @@ _BATON_TO_CHECKPOINT: dict[BatonSheetStatus, str] = {
     BatonSheetStatus.PENDING: "pending",
     BatonSheetStatus.READY: "ready",
     BatonSheetStatus.DISPATCHED: "dispatched",
-    BatonSheetStatus.RUNNING: "in_progress",
+    BatonSheetStatus.IN_PROGRESS: "in_progress",
     BatonSheetStatus.COMPLETED: "completed",
     BatonSheetStatus.FAILED: "failed",
     BatonSheetStatus.SKIPPED: "skipped",
@@ -243,10 +243,11 @@ def sheets_to_execution_states(
     """
     states: dict[int, SheetExecutionState] = {}
     for sheet in sheets:
+        raw_model = sheet.instrument_config.get("model")
         states[sheet.num] = SheetExecutionState(
             sheet_num=sheet.num,
             instrument_name=sheet.instrument_name,
-            model=sheet.instrument_config.get("model"),
+            model=str(raw_model) if raw_model is not None else None,
             max_retries=max_retries,
             max_completion=max_completion,
             fallback_chain=list(sheet.instrument_fallbacks),
@@ -344,7 +345,14 @@ class BatonAdapter:
                 (job_id, sheet_num, checkpoint_status_string). Used by the
                 manager to sync baton state changes to CheckpointState.
         """
-        self._baton = BatonCore()
+        from marianne.daemon.baton.timer import TimerWheel
+
+        # Shared inbox breaks the circular dependency: TimerWheel needs
+        # the inbox to deliver fired events, BatonCore needs the timer
+        # to schedule them. Create the inbox first, pass to both.
+        inbox: asyncio.Queue[Any] = asyncio.Queue()
+        self._timer_wheel = TimerWheel(inbox)
+        self._baton = BatonCore(timer=self._timer_wheel, inbox=inbox)
         self._event_bus = event_bus
         self._max_concurrent_sheets = max_concurrent_sheets
         self._state_sync_callback = state_sync_callback
@@ -417,6 +425,7 @@ class BatonAdapter:
         prompt_config: PromptConfig | None = None,
         parallel_enabled: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
+        pacing_seconds: float = 0.0,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -478,6 +487,7 @@ class BatonAdapter:
             dependencies,
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
+            pacing_seconds=pacing_seconds,
         )
 
         # Set cost limits if configured
@@ -552,6 +562,7 @@ class BatonAdapter:
         prompt_config: PromptConfig | None = None,
         parallel_enabled: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
+        pacing_seconds: float = 0.0,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -626,10 +637,11 @@ class BatonAdapter:
                 normal_attempts = 0
                 completion_attempts = 0
 
+            raw_model = sheet.instrument_config.get("model")
             state = SheetExecutionState(
                 sheet_num=sheet.num,
                 instrument_name=sheet.instrument_name,
-                model=sheet.instrument_config.get("model"),
+                model=str(raw_model) if raw_model is not None else None,
                 max_retries=max_retries,
                 max_completion=max_completion,
             )
@@ -646,6 +658,7 @@ class BatonAdapter:
             dependencies,
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
+            pacing_seconds=pacing_seconds,
         )
 
         # Set cost limits if configured
@@ -838,7 +851,7 @@ class BatonAdapter:
         """
         for result in reversed(state.attempt_results):
             if result.execution_success and result.stdout_tail:
-                return result.stdout_tail
+                return str(result.stdout_tail)
         return ""
 
     # =========================================================================
@@ -1017,7 +1030,7 @@ class BatonAdapter:
             )
             self._send_dispatch_failure(
                 job_id, sheet_num,
-                state.instrument_name,
+                state.instrument_name or "",
                 f"Sheet {sheet_num} not found in adapter registry",
                 state=state,
             )
@@ -1036,13 +1049,20 @@ class BatonAdapter:
             )
             return
 
+        # Use the execution state's instrument_name, not the Sheet entity's.
+        # After instrument fallback, state.instrument_name reflects the
+        # fallback instrument while sheet.instrument_name still has the
+        # original. Without this, the baton thinks it switched instruments
+        # but the backend pool acquires the original instrument's backend.
+        effective_instrument = state.instrument_name or ""
+
         try:
             # Acquire backend from pool, passing model from instrument_config
             # if the score author specified one. F-150: this was missing —
             # instrument_config.model was silently ignored at dispatch time.
             model_override = sheet.instrument_config.get("model")
             backend = await self._backend_pool.acquire(
-                sheet.instrument_name,
+                effective_instrument,
                 model=str(model_override) if model_override is not None else None,
                 working_directory=sheet.workspace,
             )
@@ -1055,15 +1075,15 @@ class BatonAdapter:
                 extra={
                     "job_id": job_id,
                     "sheet_num": sheet_num,
-                    "instrument": sheet.instrument_name,
+                    "instrument": effective_instrument,
                     "error": str(exc),
                 },
             )
             self._send_dispatch_failure(
                 job_id, sheet_num,
-                sheet.instrument_name,
+                effective_instrument,
                 f"Backend acquisition failed for instrument "
-                f"'{sheet.instrument_name}': {exc}",
+                f"'{effective_instrument}': {exc}",
                 state=state,
             )
             return
@@ -1105,6 +1125,7 @@ class BatonAdapter:
                 sheet=sheet,
                 backend=backend,
                 context=context,
+                effective_instrument=effective_instrument,
             ),
             name=f"musician-{job_id}-s{sheet_num}",
         )
@@ -1131,6 +1152,7 @@ class BatonAdapter:
         sheet: Sheet,
         backend: Any,
         context: AttemptContext,
+        effective_instrument: str | None = None,
     ) -> None:
         """Wrapper around sheet_task that handles backend release.
 
@@ -1142,7 +1164,15 @@ class BatonAdapter:
             sheet: The sheet to execute.
             backend: The acquired backend.
             context: The attempt context from the baton.
+            effective_instrument: The instrument name to use for acquire/
+                release and attempt result reporting. After instrument
+                fallback, this differs from sheet.instrument_name.
         """
+        # Resolve the instrument name for this execution before try/finally.
+        # After fallback, effective_instrument differs from sheet.instrument_name.
+        # Must be bound before try so it's always available in finally for release.
+        actual_instrument = effective_instrument or sheet.instrument_name
+
         try:
             # The baton inbox accepts BatonEvent (union type), but
             # sheet_task is typed to put SheetAttemptResult specifically.
@@ -1172,7 +1202,7 @@ class BatonAdapter:
                 try:
                     registry = getattr(self._backend_pool, "_registry", None)
                     if registry is not None:
-                        profile = registry.get(sheet.instrument_name)
+                        profile = registry.get(actual_instrument)
                         if (
                             profile is not None
                             and hasattr(profile, "models")
@@ -1206,13 +1236,18 @@ class BatonAdapter:
                 preamble=pre_preamble,
                 cost_per_1k_input=cost_input,
                 cost_per_1k_output=cost_output,
+                instrument_override=actual_instrument,
             )
         finally:
-            # Always release the backend
+            # Always release the backend — use the same instrument name
+            # that was used for acquire (actual_instrument), not the Sheet
+            # entity's original instrument_name which doesn't change after
+            # fallback. Mismatched acquire/release corrupts the pool's
+            # in_flight counts.
             if self._backend_pool is not None:
                 try:
                     await self._backend_pool.release(
-                        sheet.instrument_name, backend
+                        actual_instrument, backend
                     )
                 except Exception:
                     _logger.warning(
@@ -1484,7 +1519,7 @@ class BatonAdapter:
         if state is None:
             _logger.info(
                 "adapter.sync.no_baton_state",
-                job_id=job_id, sheet_num=sheet_num,
+                extra={"job_id": job_id, "sheet_num": sheet_num},
             )
             return
 
@@ -1495,11 +1530,13 @@ class BatonAdapter:
             return  # No change — skip duplicate sync
         _logger.info(
             "adapter.sync.status_changed",
-            job_id=job_id,
-            sheet_num=sheet_num,
-            prev=prev,
-            new=checkpoint_status,
-            baton_status=state.status.value,
+            extra={
+                "job_id": job_id,
+                "sheet_num": sheet_num,
+                "prev": prev,
+                "new": checkpoint_status,
+                "baton_status": state.status.value,
+            },
         )
         self._synced_status[key] = checkpoint_status
         self._invoke_sync_callback(job_id, sheet_num, checkpoint_status, state)
@@ -1577,7 +1614,52 @@ class BatonAdapter:
         self._running = True
         _logger.info("adapter.started")
 
+        # Start the timer wheel drain task — fires scheduled events
+        # (rate limit expiry, retry delays) into the baton's inbox.
+        # Wrapped in a restart loop so a crash doesn't silently kill
+        # all timer-based recovery (rate limit expiry, retry backoff).
+        async def _timer_with_restart() -> None:
+            while not self._baton._shutting_down:
+                try:
+                    await self._timer_wheel.run()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    _logger.error(
+                        "adapter.timer_wheel_crashed",
+                        exc_info=True,
+                    )
+                    await asyncio.sleep(1.0)  # Brief pause before restart
+
+        timer_task = asyncio.create_task(
+            _timer_with_restart(), name="baton-timer-wheel"
+        )
+
         try:
+            # Initial dispatch cycle — pick up PENDING sheets from resume/restart
+            # without waiting for the first event. Without this, sheets mapped
+            # from WAITING→PENDING on restart sit idle until an unrelated event
+            # (e.g., a completion from another job) triggers dispatch.
+            config = self._baton.build_dispatch_config(
+                max_concurrent_sheets=self._max_concurrent_sheets,
+            )
+            initial_result = await dispatch_ready(
+                self._baton, config, self._dispatch_callback
+            )
+            if initial_result.dispatched_sheets:
+                _logger.info(
+                    "adapter.initial_dispatch",
+                    extra={
+                        "count": len(initial_result.dispatched_sheets),
+                        "sheets": [
+                            f"{jid}:{sn}"
+                            for jid, sn in initial_result.dispatched_sheets
+                        ],
+                    },
+                )
+                for d_job_id, d_sheet_num in initial_result.dispatched_sheets:
+                    self._sync_single_sheet(d_job_id, d_sheet_num)
+
             while not self._baton._shutting_down:
                 event = await self._baton.inbox.get()
 
@@ -1608,14 +1690,24 @@ class BatonAdapter:
                 if dispatch_result.dispatched_sheets:
                     _logger.info(
                         "adapter.dispatch_sync",
-                        count=len(dispatch_result.dispatched_sheets),
-                        sheets=[
-                            f"{jid}:{sn}"
-                            for jid, sn in dispatch_result.dispatched_sheets
-                        ],
+                        extra={
+                            "count": len(dispatch_result.dispatched_sheets),
+                            "sheets": [
+                                f"{jid}:{sn}"
+                                for jid, sn in dispatch_result.dispatched_sheets
+                            ],
+                        },
                     )
                 for d_job_id, d_sheet_num in dispatch_result.dispatched_sheets:
                     self._sync_single_sheet(d_job_id, d_sheet_num)
+                    # Schedule stale detection for each dispatched sheet.
+                    # Fires after 1800s (default Sheet timeout) + 60s buffer.
+                    # If the sheet completes normally, the StaleCheck handler
+                    # finds it non-DISPATCHED and is a no-op.
+                    self._timer_wheel.schedule(
+                        1860.0,
+                        StaleCheck(job_id=d_job_id, sheet_num=d_sheet_num),
+                    )
 
                 # Publish any fallback events to EventBus
                 await self._publish_fallback_events()
@@ -1627,6 +1719,8 @@ class BatonAdapter:
             _logger.info("adapter.cancelled")
             raise
         finally:
+            timer_task.cancel()
+            await self._timer_wheel.shutdown()
             self._running = False
             _logger.info("adapter.stopped")
 

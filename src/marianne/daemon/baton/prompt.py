@@ -25,7 +25,6 @@ See: ``docs/plans/2026-03-26-baton-design.md`` — Prompt Assembly
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -246,12 +245,12 @@ class PromptRenderer:
                 if item.as_ == InjectionCategory.CONTEXT:
                     _logger.warning(
                         "prompt_renderer.file_not_found",
-                        file=str(path), category=item.as_.value,
+                        extra={"file": str(path), "category": item.as_.value},
                     )
                 else:
                     _logger.error(
                         "prompt_renderer.file_not_found",
-                        file=str(path), category=item.as_.value,
+                        extra={"file": str(path), "category": item.as_.value},
                     )
                 continue
 

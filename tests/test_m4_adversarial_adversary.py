@@ -488,7 +488,7 @@ class TestCrossSheetContextEdges:
                 _make_sheet_exec_state(i, BatonSheetStatus.SKIPPED)
             )
         job_state.register_sheet(
-            _make_sheet_exec_state(4, BatonSheetStatus.RUNNING)
+            _make_sheet_exec_state(4, BatonSheetStatus.IN_PROGRESS)
         )
 
         adapter._baton._jobs["test-job"] = job_state
@@ -527,7 +527,7 @@ class TestCrossSheetContextEdges:
         )
         # Sheet 4: current
         job_state.register_sheet(
-            _make_sheet_exec_state(4, BatonSheetStatus.RUNNING)
+            _make_sheet_exec_state(4, BatonSheetStatus.IN_PROGRESS)
         )
 
         adapter._baton._jobs["test-job"] = job_state
@@ -774,12 +774,16 @@ class TestBatonStateMappingEdges:
         """Every BatonSheetStatus has a mapping to a checkpoint status."""
         from marianne.daemon.baton.adapter import baton_to_checkpoint_status
 
+        # All 11 SheetStatus values as of M5 (SheetStatus expansion)
+        valid_checkpoint_statuses = {
+            "pending", "ready", "dispatched", "in_progress", "waiting",
+            "retry_scheduled", "fermata", "completed", "failed", "skipped", "cancelled",
+        }
+
         for status in BatonSheetStatus:
             result = baton_to_checkpoint_status(status)
             assert isinstance(result, str), f"No mapping for {status}"
-            assert result in {
-                "pending", "in_progress", "completed", "failed", "skipped",
-            }, f"Unexpected mapping {status} -> {result}"
+            assert result in valid_checkpoint_statuses, f"Unexpected mapping {status} -> {result}"
 
     def test_terminal_statuses_map_to_terminal(self) -> None:
         """Terminal baton statuses map to terminal checkpoint statuses."""
@@ -791,7 +795,8 @@ class TestBatonStateMappingEdges:
             BatonSheetStatus.SKIPPED,
             BatonSheetStatus.CANCELLED,
         }
-        terminal_checkpoint = {"completed", "failed", "skipped"}
+        # All 4 terminal statuses as of M5
+        terminal_checkpoint = {"completed", "failed", "skipped", "cancelled"}
 
         for status in terminal_baton:
             result = baton_to_checkpoint_status(status)
@@ -848,6 +853,6 @@ class TestFeatureInteractions:
     def test_forbid_with_spec_corpus(self) -> None:
         """Spec corpus config works with forbid."""
         data = _minimal_job_config()
-        data["spec"] = {"spec_dir": ".mozart/spec/"}
+        data["spec"] = {"spec_dir": ".marianne/spec/"}
         config = JobConfig(**data)
-        assert config.spec.spec_dir == ".mozart/spec/"
+        assert config.spec.spec_dir == ".marianne/spec/"

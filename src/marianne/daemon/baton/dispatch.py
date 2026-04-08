@@ -27,14 +27,13 @@ See: ``docs/plans/2026-03-26-baton-design.md`` — Dispatch Logic section
 
 from __future__ import annotations
 
-import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+from marianne.core.logging import get_logger
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
-
-from marianne.core.logging import get_logger
 
 _logger = get_logger("daemon.baton.dispatch")
 
@@ -128,11 +127,13 @@ async def dispatch_ready(
         if ready:
             _logger.info(
                 "dispatch.ready_sheets",
-                job_id=job_id,
-                ready_count=len(ready),
-                global_running=global_running,
-                max_concurrent=config.max_concurrent_sheets,
-                rate_limited=list(config.rate_limited_instruments),
+                extra={
+                    "job_id": job_id,
+                    "ready_count": len(ready),
+                    "global_running": global_running,
+                    "max_concurrent": config.max_concurrent_sheets,
+                    "rate_limited": list(config.rate_limited_instruments),
+                },
             )
         for sheet in ready:
             # Check global concurrency
@@ -141,7 +142,7 @@ async def dispatch_ready(
                 return result  # Hard stop — can't dispatch more
 
             # Check per-model concurrency (falls back to per-instrument)
-            instrument = sheet.instrument_name
+            instrument = sheet.instrument_name or ""
             model_key = f"{instrument}:{sheet.model}" if sheet.model else instrument
             model_limit = config.model_concurrency.get(model_key)
             if model_limit is None:
@@ -167,7 +168,7 @@ async def dispatch_ready(
                 or instrument not in baton._instruments
             ):
                 if baton._check_and_fallback_unavailable(sheet, job_id):
-                    instrument = sheet.instrument_name
+                    instrument = sheet.instrument_name or ""
                     # Check if the new instrument is rate-limited
                     if instrument in config.rate_limited_instruments:
                         result.record_skip(f"rate_limited:{instrument}")
@@ -185,6 +186,7 @@ async def dispatch_ready(
             try:
                 await callback(job_id, sheet.sheet_num, sheet)
                 sheet.status = BatonSheetStatus.DISPATCHED
+                sheet.dispatched_at = time.monotonic()
                 result.record_dispatch(job_id, sheet.sheet_num)
                 global_running += 1
                 model_running[model_key] = model_count + 1
@@ -227,10 +229,11 @@ def _count_dispatched_per_model(baton: BatonCore) -> dict[str, int]:
     for job in baton._jobs.values():
         for sheet in job.sheets.values():
             if sheet.status == BatonSheetStatus.DISPATCHED:
+                inst = sheet.instrument_name or ""
                 key = (
-                    f"{sheet.instrument_name}:{sheet.model}"
+                    f"{inst}:{sheet.model}"
                     if sheet.model
-                    else sheet.instrument_name
+                    else inst
                 )
                 counts[key] = counts.get(key, 0) + 1
     return counts

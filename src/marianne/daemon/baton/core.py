@@ -22,7 +22,6 @@ See: ``docs/plans/2026-03-26-baton-design.md`` for the full architecture.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -30,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from marianne.daemon.baton.dispatch import DispatchConfig
 
+from marianne.core.logging import get_logger
 from marianne.daemon.baton.events import (
     BatonEvent,
     CancelJob,
@@ -64,8 +64,6 @@ from marianne.daemon.baton.state import (
     SheetExecutionState,
 )
 
-from marianne.core.logging import get_logger
-
 _logger = get_logger("daemon.baton.core")
 
 
@@ -80,6 +78,8 @@ class _JobRecord:
     user_paused: bool = False  # Tracks user-initiated pause (PauseJob)
     escalation_enabled: bool = False  # Enter fermata on exhaustion
     self_healing_enabled: bool = False  # Try healing on exhaustion
+    pacing_active: bool = False  # Inter-sheet pacing delay in progress
+    pacing_seconds: float = 0.0  # pause_between_sheets_seconds from config
     created_at: float = field(default_factory=time.time)
 
 
@@ -115,6 +115,7 @@ class BatonCore:
         self,
         *,
         timer: Any | None = None,
+        inbox: asyncio.Queue[BatonEvent] | None = None,
     ) -> None:
         """Initialize the baton core.
 
@@ -122,8 +123,12 @@ class BatonCore:
             timer: Optional TimerWheel for scheduling retry delays.
                 When None, retries are set to RETRY_SCHEDULED without
                 actual timer events (tests or manual event injection).
+            inbox: Optional pre-created event queue. When provided, allows
+                the caller to share the queue with other components (e.g.,
+                TimerWheel) before BatonCore is constructed. When None,
+                a new queue is created.
         """
-        self._inbox: asyncio.Queue[BatonEvent] = asyncio.Queue()
+        self._inbox: asyncio.Queue[BatonEvent] = inbox or asyncio.Queue()
         self._jobs: dict[str, _JobRecord] = {}
         self._instruments: dict[str, InstrumentState] = {}
         self._job_cost_limits: dict[str, float] = {}
@@ -132,6 +137,13 @@ class BatonCore:
         self._running = False
         self._state_dirty = False
         self._timer = timer
+
+        # Active rate-limit timer handles per instrument. When a new
+        # RateLimitHit arrives for an instrument that already has a pending
+        # timer, the old timer is cancelled before scheduling the new one.
+        # Without this, stale timers fire prematurely and cause wasted
+        # dispatch→rate_limit→WAITING cycles.
+        self._rate_limit_timers: dict[str, Any] = {}
 
         # Fallback event collection — side effects of event processing.
         # The adapter drains these after each event cycle and publishes
@@ -345,9 +357,10 @@ class BatonCore:
     ) -> None:
         """Auto-register instruments for any sheets using untracked instruments."""
         for sheet in sheets.values():
-            if sheet.instrument_name not in self._instruments:
+            name = sheet.instrument_name or ""
+            if name and name not in self._instruments:
                 self.register_instrument(
-                    sheet.instrument_name,
+                    name,
                     max_concurrent=self._DEFAULT_INSTRUMENT_CONCURRENCY,
                 )
 
@@ -491,7 +504,7 @@ class BatonCore:
         # Path 1: Instrument fallback — try the next instrument in the chain.
         # Each fallback instrument gets a fresh retry budget.
         if sheet.has_fallback_available:
-            from_instrument = sheet.instrument_name
+            from_instrument = sheet.instrument_name or ""
             to_instrument = sheet.advance_fallback("rate_limit_exhausted")
             if to_instrument is not None:
                 # Re-queue for dispatch with the new instrument
@@ -573,11 +586,11 @@ class BatonCore:
         Returns True if a fallback occurred (sheet was re-queued), False
         if no fallback was needed or the chain is exhausted.
         """
-        inst = self._instruments.get(sheet.instrument_name)
+        inst = self._instruments.get(sheet.instrument_name or "")
         if inst is None:
             # Instrument not registered at all — try fallback
             if sheet.has_fallback_available:
-                from_instrument = sheet.instrument_name
+                from_instrument = sheet.instrument_name or ""
                 to_instrument = sheet.advance_fallback("unavailable")
                 if to_instrument is not None:
                     sheet.status = BatonSheetStatus.PENDING
@@ -607,7 +620,7 @@ class BatonCore:
 
         # Instrument is unavailable — try fallback
         if sheet.has_fallback_available:
-            from_instrument = sheet.instrument_name
+            from_instrument = sheet.instrument_name or ""
             to_instrument = sheet.advance_fallback("unavailable")
             if to_instrument is not None:
                 sheet.status = BatonSheetStatus.PENDING
@@ -645,6 +658,7 @@ class BatonCore:
         *,
         escalation_enabled: bool = False,
         self_healing_enabled: bool = False,
+        pacing_seconds: float = 0.0,
     ) -> None:
         """Register a job's sheets with the baton for scheduling.
 
@@ -655,6 +669,8 @@ class BatonCore:
                 Sheets not in this map have no dependencies.
             escalation_enabled: Whether to enter fermata on exhaustion.
             self_healing_enabled: Whether to try healing on exhaustion.
+            pacing_seconds: Inter-sheet delay after each completion (from
+                ``pause_between_sheets_seconds``). 0 = no delay.
         """
         if job_id in self._jobs:
             _logger.warning(
@@ -672,6 +688,7 @@ class BatonCore:
             dependencies=dependencies,
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
+            pacing_seconds=pacing_seconds,
         )
         self._state_dirty = True
 
@@ -754,7 +771,7 @@ class BatonCore:
         3. The job is not paused
         """
         job = self._jobs.get(job_id)
-        if job is None or job.paused:
+        if job is None or job.paused or job.pacing_active:
             return []
 
         ready: list[SheetExecutionState] = []
@@ -818,10 +835,7 @@ class BatonCore:
                     self._handle_retry_due(event)
 
                 case StaleCheck():
-                    _logger.warning(
-                        "baton.event.unimplemented",
-                        extra={"event_type": "StaleCheck"},
-                    )
+                    self._handle_stale_check(event)
 
                 case CronTick():
                     _logger.warning(
@@ -833,10 +847,7 @@ class BatonCore:
                     self._handle_job_timeout(event)
 
                 case PacingComplete():
-                    _logger.warning(
-                        "baton.event.unimplemented",
-                        extra={"event_type": "PacingComplete"},
-                    )
+                    self._handle_pacing_complete(event)
 
                 # === Escalation events ===
                 case EscalationNeeded():
@@ -872,10 +883,7 @@ class BatonCore:
                     self._handle_process_exited(event)
 
                 case ResourceAnomaly():
-                    _logger.warning(
-                        "baton.event.unimplemented",
-                        extra={"event_type": "ResourceAnomaly"},
-                    )
+                    self._handle_resource_anomaly(event)
 
                 # === Instrument fallback events ===
                 case InstrumentFallback():
@@ -983,6 +991,8 @@ class BatonCore:
                     "cost_usd": event.cost_usd,
                 },
             )
+            # Schedule inter-sheet pacing delay if configured
+            self._schedule_pacing(event.job_id)
             # Cost enforcement: even on success, check if job cost exceeded
             self._check_job_cost_limit(event.job_id)
             return
@@ -994,8 +1004,11 @@ class BatonCore:
             self._update_instrument_on_success(event.instrument_name)
             sheet.completion_attempts += 1
             if sheet.can_complete:
-                sheet.status = BatonSheetStatus.PENDING
-                self._state_dirty = True
+                # Schedule completion retry with backoff instead of
+                # setting PENDING directly. Without backoff, partial
+                # validation failures retry in a tight loop, hammering
+                # the backend with no delay between attempts.
+                self._schedule_retry(event.job_id, event.sheet_num, sheet)
                 _logger.info(
                     "baton.sheet.completion_mode",
                     extra={
@@ -1118,8 +1131,17 @@ class BatonCore:
         # Without this, WAITING sheets stay blocked forever unless manually
         # cleared via `mzt clear-rate-limits`. (F-112)
         if self._timer is not None:
+            # Cancel any existing timer for this instrument — a new rate
+            # limit hit supersedes the previous wait period.
+            # getattr guards against __new__-constructed instances in tests.
+            timers = getattr(self, "_rate_limit_timers", {})
+            old_handle = timers.pop(event.instrument, None)
+            if old_handle is not None:
+                self._timer.cancel(old_handle)
+
             expiry_event = RateLimitExpired(instrument=event.instrument)
-            self._timer.schedule(event.wait_seconds, expiry_event)
+            handle = self._timer.schedule(event.wait_seconds, expiry_event)
+            timers[event.instrument] = handle
             _logger.info(
                 "baton.rate_limit.timer_scheduled",
                 extra={
@@ -1137,7 +1159,7 @@ class BatonCore:
                     sheet.instrument_name == event.instrument
                     and sheet.status in (
                         BatonSheetStatus.DISPATCHED,
-                        BatonSheetStatus.RUNNING,
+                        BatonSheetStatus.IN_PROGRESS,
                     )
                 ):
                     sheet.status = BatonSheetStatus.WAITING
@@ -1154,6 +1176,13 @@ class BatonCore:
         if inst is not None:
             inst.rate_limited = False
             inst.rate_limit_expires_at = None
+
+        # Clean up timer handle — timer already fired.
+        # getattr guards against __new__-constructed instances in tests
+        # that bypass __init__ and don't set _rate_limit_timers.
+        timers = getattr(self, "_rate_limit_timers", None)
+        if timers is not None:
+            timers.pop(event.instrument, None)
 
         # Move waiting sheets back to pending
         for job in self._jobs.values():
@@ -1346,7 +1375,7 @@ class BatonCore:
             crash_result = SheetAttemptResult(
                 job_id=event.job_id,
                 sheet_num=event.sheet_num,
-                instrument_name=sheet.instrument_name,
+                instrument_name=sheet.instrument_name or "",
                 attempt=sheet.normal_attempts + 1,
                 execution_success=False,
                 exit_code=event.exit_code,
@@ -1357,7 +1386,7 @@ class BatonCore:
                 + (f" with code {event.exit_code}" if event.exit_code is not None else ""),
             )
             sheet.record_attempt(crash_result)
-            self._update_instrument_on_failure(sheet.instrument_name)
+            self._update_instrument_on_failure(sheet.instrument_name or "")
             if not sheet.can_retry:
                 self._handle_exhaustion(
                     event.job_id, event.sheet_num, sheet
@@ -1365,6 +1394,159 @@ class BatonCore:
             else:
                 self._schedule_retry(event.job_id, event.sheet_num, sheet)
             self._state_dirty = True
+
+    def _handle_stale_check(self, event: StaleCheck) -> None:
+        """Check if a dispatched sheet has gone stale (no result within timeout).
+
+        If the sheet has been in DISPATCHED status longer than its timeout
+        (default 1800s), the musician task likely crashed without reporting.
+        Create a synthetic failure result and route through the normal
+        retry/exhaustion path — same pattern as _handle_process_exited.
+        """
+        job = self._jobs.get(event.job_id)
+        if job is None:
+            return
+        sheet = job.sheets.get(event.sheet_num)
+        if sheet is None:
+            return
+        if sheet.status != BatonSheetStatus.DISPATCHED:
+            return  # Only check dispatched (running) sheets
+        if sheet.dispatched_at is None:
+            return  # No dispatch timestamp — can't determine staleness
+
+        elapsed = time.monotonic() - sheet.dispatched_at
+        # Default stale timeout: 1800s (30 min), matching Sheet.timeout_seconds default.
+        # The actual sheet timeout is enforced by the backend; this catches cases
+        # where the musician task itself hung without the backend timing out.
+        stale_timeout = 1800.0
+        if elapsed < stale_timeout:
+            # Not stale yet — reschedule check for remaining time
+            remaining = stale_timeout - elapsed
+            if self._timer is not None:
+                self._timer.schedule(
+                    remaining + 10.0,  # Small buffer
+                    StaleCheck(
+                        job_id=event.job_id,
+                        sheet_num=event.sheet_num,
+                    ),
+                )
+            return
+
+        # Sheet is stale — create synthetic failure
+        _logger.warning(
+            "baton.sheet.stale_detected",
+            extra={
+                "job_id": event.job_id,
+                "sheet_num": event.sheet_num,
+                "elapsed_seconds": elapsed,
+                "instrument": sheet.instrument_name,
+            },
+        )
+        inst_name = sheet.instrument_name or ""
+        stale_result = SheetAttemptResult(
+            job_id=event.job_id,
+            sheet_num=event.sheet_num,
+            instrument_name=inst_name,
+            attempt=sheet.normal_attempts + 1,
+            execution_success=False,
+            exit_code=None,
+            duration_seconds=elapsed,
+            cost_usd=0.0,
+            error_classification="STALE",
+            error_message=(
+                f"Sheet {event.sheet_num} stale: no result after "
+                f"{elapsed:.0f}s (timeout: {stale_timeout:.0f}s)"
+            ),
+        )
+        sheet.record_attempt(stale_result)
+        self._update_instrument_on_failure(inst_name)
+        if not sheet.can_retry:
+            self._handle_exhaustion(
+                event.job_id, event.sheet_num, sheet
+            )
+        else:
+            self._schedule_retry(event.job_id, event.sheet_num, sheet)
+        self._state_dirty = True
+
+    def _handle_resource_anomaly(self, event: ResourceAnomaly) -> None:
+        """Handle resource pressure events from the monitor.
+
+        When severity is "critical", stop dispatching new sheets by setting
+        _shutting_down. Running sheets continue to completion. When the
+        pressure clears (a subsequent non-critical event), dispatching resumes.
+        """
+        if event.severity == "critical":
+            # Don't set _shutting_down — that's permanent. Instead, pause
+            # all jobs. They'll resume when pressure clears.
+            paused_count = 0
+            for job in self._jobs.values():
+                if not job.paused:
+                    job.paused = True
+                    paused_count += 1
+            if paused_count:
+                self._state_dirty = True
+            _logger.warning(
+                "baton.resource.critical_backpressure",
+                extra={
+                    "metric": event.metric,
+                    "value": event.value,
+                    "jobs_paused": paused_count,
+                },
+            )
+        else:
+            # Non-critical: unpause jobs that were paused by backpressure
+            # (but not user-paused jobs)
+            unpaused_count = 0
+            for job in self._jobs.values():
+                if job.paused and not job.user_paused:
+                    job.paused = False
+                    unpaused_count += 1
+            if unpaused_count:
+                self._state_dirty = True
+            _logger.info(
+                "baton.resource.pressure_eased",
+                extra={
+                    "metric": event.metric,
+                    "value": event.value,
+                    "jobs_unpaused": unpaused_count,
+                },
+            )
+
+    def _handle_pacing_complete(self, event: PacingComplete) -> None:
+        """Inter-sheet pacing delay elapsed — allow dispatch for this job."""
+        job = self._jobs.get(event.job_id)
+        if job is not None:
+            job.pacing_active = False
+            self._state_dirty = True
+            _logger.debug(
+                "baton.pacing.complete",
+                extra={"job_id": event.job_id},
+            )
+
+    def _schedule_pacing(self, job_id: str) -> None:
+        """Schedule an inter-sheet pacing delay after a sheet completes.
+
+        Called after a sheet reaches COMPLETED. If the job has
+        pacing_seconds > 0, sets pacing_active=True and schedules a
+        PacingComplete timer. Dispatch skips pacing-active jobs.
+        """
+        job = self._jobs.get(job_id)
+        if job is None or job.pacing_seconds <= 0:
+            return
+        job.pacing_active = True
+        self._state_dirty = True
+        if self._timer is not None:
+            self._timer.schedule(
+                job.pacing_seconds,
+                PacingComplete(job_id=job_id),
+            )
+            _logger.debug(
+                "baton.pacing.scheduled",
+                extra={
+                    "job_id": job_id,
+                    "delay_seconds": job.pacing_seconds,
+                },
+            )
 
     # =========================================================================
     # Dependency Failure Propagation
@@ -1429,6 +1611,12 @@ class BatonCore:
 
         if visited:
             self._state_dirty = True
+            # Wake the event loop so _check_completions runs. Without this,
+            # if failure propagation made all remaining sheets terminal, the
+            # loop blocks on inbox.get() and the job hangs until an unrelated
+            # event arrives. The DispatchRetry is a no-op for dispatch (nothing
+            # to dispatch) but triggers the completion check in the adapter.
+            self._inbox.put_nowait(DispatchRetry())
 
     # =========================================================================
     # Main Loop
@@ -1475,7 +1663,8 @@ class BatonCore:
         for sheet in job.sheets.values():
             status_key = sheet.status.value
             status_counts[status_key] = status_counts.get(status_key, 0) + 1
-            instruments_used.add(sheet.instrument_name)
+            if sheet.instrument_name:
+                instruments_used.add(sheet.instrument_name)
 
         return {
             "job_id": job_id,

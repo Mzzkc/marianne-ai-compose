@@ -160,8 +160,8 @@ class TestSheetExecutionStateFallbackFields:
             fallback_chain=["gemini-cli"],
         )
         state.advance_fallback("unavailable")
-        assert len(state.fallback_history) == 1
-        entry = state.fallback_history[0]
+        assert len(state.instrument_fallback_history) == 1
+        entry = state.instrument_fallback_history[0]
         assert entry["from"] == "claude-code"
         assert entry["to"] == "gemini-cli"
         assert entry["reason"] == "unavailable"
@@ -185,7 +185,7 @@ class TestSheetExecutionStateFallbackFields:
             current_instrument_index=1,
             fallback_attempts={"claude-code": 3, "gemini-cli": 1},
         )
-        state.fallback_history.append({
+        state.instrument_fallback_history.append({
             "from": "claude-code",
             "to": "gemini-cli",
             "reason": "rate_limit_exhausted",
@@ -196,7 +196,7 @@ class TestSheetExecutionStateFallbackFields:
         assert restored.fallback_chain == ["gemini-cli", "ollama"]
         assert restored.current_instrument_index == 1
         assert restored.fallback_attempts == {"claude-code": 3, "gemini-cli": 1}
-        assert len(restored.fallback_history) == 1
+        assert len(restored.instrument_fallback_history) == 1
 
     def test_advance_saves_attempts_per_instrument(self) -> None:
         state = SheetExecutionState(
@@ -328,7 +328,7 @@ class TestBatonCoreFallbackOnExhaustion:
         assert s.status == BatonSheetStatus.PENDING
 
         # Simulate second instrument also failing — set to RUNNING first
-        s.status = BatonSheetStatus.RUNNING
+        s.status = BatonSheetStatus.IN_PROGRESS
         await baton.handle_event(SheetAttemptResult(
             job_id="j1",
             sheet_num=1,
@@ -417,9 +417,9 @@ class TestBatonCoreFallbackHistory:
         ))
 
         s = baton._jobs["j1"].sheets[1]
-        assert len(s.fallback_history) == 1
-        assert s.fallback_history[0]["from"] == "claude-code"
-        assert s.fallback_history[0]["to"] == "gemini-cli"
+        assert len(s.instrument_fallback_history) == 1
+        assert s.instrument_fallback_history[0]["from"] == "claude-code"
+        assert s.instrument_fallback_history[0]["to"] == "gemini-cli"
 
 
 # =============================================================================
