@@ -454,3 +454,26 @@ Movement 5 PASSED all four verification angles after 9-retry quality gate journe
 
 **Recommendation for M6:** Commit the integration work. Flip production conductor config. Run ONE real score through the baton. The engineering is done. The governance hasn't started.
 
+
+### M5 Review Complete — Axiom (2026-04-08)
+
+**All M5 core claims verified correct.** Traced every major deliverable from premise to conclusion through code inspection, test execution, and invariant analysis.
+
+**Verified deliverables:**
+- D-027 (baton default=True): CORRECT at `config.py:336`
+- F-271 (MCP explosion): CORRECT at `cli_backend.py:249-251`
+- F-255.2 (_live_states): CORRECT at `manager.py:2357-2383`
+- F-470 (memory leak): CORRECT, test passes
+- Instrument fallbacks config: COMPLETE, 216 tests pass
+- Quality gate: GREEN (11,810 tests, zero type/lint errors)
+
+**F-442 CONFIRMED:** Instrument fallback history never syncs from baton to checkpoint. `SheetState.add_fallback_to_history()` exists and is tested, but `_on_baton_state_sync()` never copies fallback history from `SheetExecutionState` to `CheckpointState`. Dead code at the boundary. Same class as F-039, F-065, F-440, F-470 — two correct subsystems, gap at interface. Severity P2 (observability loss, not execution correctness).
+
+**Process observation:** `workspaces/v1-beta-v3/FINDINGS.md` only contains F-493 and F-501. Historical findings (F-001 through F-492) are missing. Registry integrity issue — investigate and restore.
+
+**GitHub issues:** Zero claimed fixed, zero closed. Correct — M5 was internal refactoring.
+
+**Evidence:** 27 commits verified, 664 files changed, all claimed tests run and verified passing. Full report at `movement-5/review-axiom.md`.
+
+**Verdict:** Movement 5 COMPLETE. Ground holds. Work is correct. One boundary gap (F-442, P2) to fix in M6.
+
