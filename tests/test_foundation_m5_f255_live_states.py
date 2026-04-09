@@ -273,6 +273,11 @@ class TestBatonResumeLiveStates:
         meta.completed_new_work = False
         manager._job_meta = {"test-job": meta}
 
+        # F-493: Mock _registry and _set_job_status (used in resume path)
+        manager._registry = MagicMock()
+        manager._registry.save_checkpoint = AsyncMock()
+        manager._set_job_status = AsyncMock()
+
         # Create a checkpoint with one completed sheet and one pending
         checkpoint = CheckpointState(
             job_id="test-job",

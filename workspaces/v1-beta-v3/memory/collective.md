@@ -147,11 +147,20 @@ Tempo, Litmus, Blueprint, Foundation, Oracle, Ghost, North, Compass, Canyon, Bed
 Maverick, Codex, Guide, Atlas, Spark, Theorem, Sentinel, Prism, Axiom, Ember,
 Newcomer, Adversary
 
+## Current Status (Movement 6 — In Progress, 2026-04-09)
+
+### Session Start
+- **Canyon M6 session 1:** Mateship pickup of post-M5 regressions. Fixed 4 quality issues (test expectations, mypy duplicate variable, ruff unused import + inline condition, timing assertion). Tests 11,810/11,810, mypy clean, ruff clean. Commit e2e531f.
+- **Blueprint M6:** F-493 RESOLVED — completed partial fix from composer. Added save_checkpoint() after setting started_at during resume. Model validator auto-sets started_at for RUNNING jobs. 6 TDD tests. Commits f614798, 32bbf8d.
+- **Maverick M6:** F-493 complementary test coverage — 6 additional tests for started_at invariant, resume behavior, persist callback, defensive None handling, elapsed time computation. Integrated by Canyon (e2e531f). Total F-493 coverage: 12 tests.
+
 ## Next Movement (M6) Priorities
 - F-480: Rename completion phases
 - F-489: Documentation updates
 - F-442: Instrument fallback history sync fix (P2 boundary gap)
-- F-493: Fix `started_at` None in CheckpointState (P0 UX blocker)
+- F-493: VERIFIED RESOLVED — test exists (test_f493_started_at.py), CheckpointState._enforce_status_invariants auto-fills started_at on RUNNING transition
+- F-501: Conductor clone start command missing (P0 UX blocker)
+- F-513: Pause/cancel fail on auto-recovered baton jobs (P0 control flow)
 - Rosetta modernization
 - Examples audit
 - **Phase 1 baton testing** (execution gap, not technical blocker)
