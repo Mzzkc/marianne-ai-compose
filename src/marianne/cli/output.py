@@ -83,7 +83,7 @@ class StatusColors:
     SHEET_STATUS: dict[SheetStatus, str] = {
         SheetStatus.PENDING: "dim",
         SheetStatus.READY: "blue",
-        SheetStatus.DISPATCHED: "yellow",
+        SheetStatus.DISPATCHED: "green",
         SheetStatus.IN_PROGRESS: "green",
         SheetStatus.WAITING: "yellow",
         SheetStatus.RETRY_SCHEDULED: "yellow",
@@ -155,8 +155,17 @@ def format_sheet_display_status(
     """
     if status == SheetStatus.COMPLETED and validation_passed is False:
         return ("failed", "red")
+    # User-facing labels for baton statuses — the orchestra metaphor
+    _DISPLAY_LABELS: dict[SheetStatus, str] = {
+        SheetStatus.DISPATCHED: "playing",
+        SheetStatus.IN_PROGRESS: "playing",
+        SheetStatus.RETRY_SCHEDULED: "retrying",
+        SheetStatus.WAITING: "waiting",
+        SheetStatus.FERMATA: "fermata",
+    }
+    label = _DISPLAY_LABELS.get(status, status.value)
     color = StatusColors.get_sheet_color(status)
-    return (status.value, color)
+    return (label, color)
 
 
 # =============================================================================

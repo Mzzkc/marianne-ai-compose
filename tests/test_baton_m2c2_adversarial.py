@@ -1002,8 +1002,8 @@ class TestRecoveryDependencyInteraction:
         s2 = adapter._baton.get_sheet_state("test-job", 2)
 
         assert s1 is not None and s1.status == BatonSheetStatus.FAILED
-        # F-440: child is FAILED (propagated from parent) — not stuck in PENDING
-        assert s2 is not None and s2.status == BatonSheetStatus.FAILED
+        # F-440: child is SKIPPED (blocked by failed dependency) — not stuck in PENDING
+        assert s2 is not None and s2.status == BatonSheetStatus.SKIPPED
 
     def test_recover_completed_parent_in_progress_child(self) -> None:
         """If parent is COMPLETED and child was in_progress, the child
@@ -1029,8 +1029,9 @@ class TestRecoveryDependencyInteraction:
     def test_recover_mixed_dag_preserves_terminal_and_resets_active(self) -> None:
         """Complex DAG: 1→2→4, 1→3→4. Sheet 1 completed, 2 failed,
         3 in_progress, 4 pending. Recovery should preserve 1 and 2,
-        reset 3 to pending, and FAIL 4 (F-440: sheet 4 depends on
-        sheet 2 which is FAILED — propagation cascades on recovery)."""
+        reset 3 to pending. Sheet 4 is SKIPPED immediately because dep 2
+        is FAILED (terminal, unsatisfied) — sheet 4 can never run since
+        ALL deps must be satisfied."""
         adapter = BatonAdapter()
 
         sheets = [_make_sheet(num=i) for i in range(1, 5)]
@@ -1056,8 +1057,11 @@ class TestRecoveryDependencyInteraction:
         assert s2 is not None and s2.status == BatonSheetStatus.FAILED
         assert s3 is not None and s3.status == BatonSheetStatus.PENDING
         assert s3.normal_attempts == 2
-        # F-440: sheet 4 depends on FAILED sheet 2 — propagated to FAILED
-        assert s4 is not None and s4.status == BatonSheetStatus.FAILED
+        # Sheet 4 is SKIPPED: dep 2 is FAILED (unsatisfiable), so sheet 4
+        # can never run. Propagation marks it immediately to prevent zombies.
+        assert s4 is not None and s4.status == BatonSheetStatus.SKIPPED, (
+            "Sheet 4 should be SKIPPED (blocked by failed dependency 2)"
+        )
 
 
 # =========================================================================

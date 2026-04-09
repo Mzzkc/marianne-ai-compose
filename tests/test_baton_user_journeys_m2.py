@@ -496,12 +496,18 @@ class TestCompletionModeEdgeCases:
     @pytest.mark.asyncio
     async def test_completion_exhaustion_fails_without_escalation(self) -> None:
         """When completion mode exhausts WITHOUT escalation,
-        the sheet should FAIL."""
+        the sheet should FAIL.
+
+        After exhaustion handler reordering, normal retries are tried
+        AFTER completion exhaustion (Path 4 — last resort). So we need
+        enough iterations to exhaust both completion budget AND normal
+        retries before the sheet reaches FAILED.
+        """
         baton = _make_baton()
         sheets = _make_sheets(1, max_retries=3)
         baton.register_job("j1", sheets, {})
 
-        for i in range(1, 7):
+        for i in range(1, 12):
             sheets[1].status = BatonSheetStatus.DISPATCHED
             result = _attempt_result(
                 "j1", 1,
@@ -626,10 +632,10 @@ class TestDiamondDependencyPropagation:
 
         # Sheet 1 should be FAILED (max_retries=1, already consumed)
         assert sheets[1].status == BatonSheetStatus.FAILED
-        # All dependents should be FAILED
-        assert sheets[2].status == BatonSheetStatus.FAILED
-        assert sheets[3].status == BatonSheetStatus.FAILED
-        assert sheets[4].status == BatonSheetStatus.FAILED
+        # All dependents should be SKIPPED (blocked by failed dependency)
+        assert sheets[2].status == BatonSheetStatus.SKIPPED
+        assert sheets[3].status == BatonSheetStatus.SKIPPED
+        assert sheets[4].status == BatonSheetStatus.SKIPPED
 
     @pytest.mark.asyncio
     async def test_diamond_partial_completion_preserved(self) -> None:
@@ -652,7 +658,7 @@ class TestDiamondDependencyPropagation:
         assert sheets[1].status == BatonSheetStatus.FAILED
         # Sheet 2 must stay COMPLETED (terminal guard)
         assert sheets[2].status == BatonSheetStatus.COMPLETED
-        # Sheet 3 should be FAILED (depends on failed sheet 1)
-        assert sheets[3].status == BatonSheetStatus.FAILED
-        # Sheet 4 can't run because sheet 3 is failed
-        assert sheets[4].status == BatonSheetStatus.FAILED
+        # Sheet 3 should be SKIPPED (blocked by failed dependency)
+        assert sheets[3].status == BatonSheetStatus.SKIPPED
+        # Sheet 4 can't run because sheet 3 is blocked
+        assert sheets[4].status == BatonSheetStatus.SKIPPED

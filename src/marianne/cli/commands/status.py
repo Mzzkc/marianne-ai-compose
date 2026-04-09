@@ -1203,9 +1203,13 @@ def _render_sheet_summary(job: CheckpointState) -> None:
         label, _ = format_sheet_display_status(sheet.status, sheet.validation_passed)
         status_counts[label] = status_counts.get(label, 0) + 1
 
-        # Collect "interesting" sheets: running, failed, in_progress
+        # Collect "interesting" sheets: playing, retrying, waiting, failed
         if sheet.status in (
+            SheetStatus.DISPATCHED,
             SheetStatus.IN_PROGRESS,
+            SheetStatus.RETRY_SCHEDULED,
+            SheetStatus.WAITING,
+            SheetStatus.FERMATA,
             SheetStatus.FAILED,
         ) or (
             sheet.status == SheetStatus.COMPLETED and sheet.validation_passed is False
@@ -1218,19 +1222,24 @@ def _render_sheet_summary(job: CheckpointState) -> None:
     # Show counts as a compact line
     # Use display labels from format_sheet_display_status for color
     parts: list[str] = []
-    order = ["completed", "failed", "running", "in_progress", "pending", "skipped"]
+    order = [
+        "completed", "playing", "retrying", "waiting", "fermata",
+        "failed", "pending", "skipped", "cancelled",
+    ]
     for label in order:
         count = status_counts.get(label, 0)
         if count == 0:
             continue
-        # Map label back to a color — use the color from format_sheet_display_status
         color_map = {
             "completed": "bright_green",
+            "playing": "green",
+            "retrying": "yellow",
+            "waiting": "yellow",
+            "fermata": "magenta",
             "failed": "red",
-            "running": "green",
-            "in_progress": "blue",
             "pending": "dim",
             "skipped": "dim",
+            "cancelled": "red",
         }
         color = color_map.get(label, "white")
         parts.append(f"[{color}]{count} {label}[/{color}]")
@@ -1263,19 +1272,36 @@ def _render_sheet_summary(job: CheckpointState) -> None:
             display_label, sheet_color = format_sheet_display_status(
                 sheet.status, sheet.validation_passed,
             )
-            status_str = f"[{sheet_color}]{display_label}[/{sheet_color}]"
+            parts: list[str] = [
+                f"  Sheet {sheet_num:>4d}:",
+                f"[{sheet_color}]{display_label}[/{sheet_color}]",
+            ]
 
-            if sheet.status == SheetStatus.IN_PROGRESS and sheet.started_at:
-                elapsed = datetime.now(UTC) - sheet.started_at
-                status_str += f" [dim]({format_duration(elapsed.total_seconds())})[/dim]"
+            # Instrument + model
+            if sheet.instrument_name:
+                inst = sheet.instrument_name
+                if sheet.instrument_model:
+                    inst = f"{inst} ({sheet.instrument_model})"
+                parts.append(f"[dim]{inst}[/dim]")
+
+            # Attempts used
+            attempts = sheet.attempt_count or 0
+            if attempts > 1:
+                parts.append(f"[dim]attempt {attempts}[/dim]")
+
+            # Elapsed time for active sheets
+            if sheet.status in (SheetStatus.DISPATCHED, SheetStatus.IN_PROGRESS):
+                if sheet.started_at:
+                    elapsed = datetime.now(UTC) - sheet.started_at
+                    parts.append(f"[dim]{format_duration(elapsed.total_seconds())}[/dim]")
             elif sheet.execution_duration_seconds is not None:
-                status_str += f" [dim]({format_duration(sheet.execution_duration_seconds)})[/dim]"
+                parts.append(f"[dim]{format_duration(sheet.execution_duration_seconds)}[/dim]")
 
-            error_str = ""
+            # Error message for failed sheets
             if sheet.error_message:
-                error_str = f" — {sheet.error_message[:40]}..."
+                parts.append(f"— {sheet.error_message[:45]}...")
 
-            console.print(f"  Sheet {sheet_num:>4d}: {status_str}{error_str}")
+            console.print(" ".join(parts))
 
         if len(interesting_sheets) > 20:
             console.print(
@@ -1597,10 +1623,13 @@ def _render_now_playing(
     """
     con = target_console or console
 
+    # Musicians are "playing" when DISPATCHED or IN_PROGRESS.
+    # The baton uses DISPATCHED for actively executing sheets.
+    _playing = (SheetStatus.DISPATCHED, SheetStatus.IN_PROGRESS)
     active: list[tuple[int, SheetState]] = []
     for sheet_num in sorted(job.sheets.keys()):
         sheet = job.sheets[sheet_num]
-        if sheet.status == SheetStatus.IN_PROGRESS:
+        if sheet.status in _playing:
             active.append((sheet_num, sheet))
 
     if not active:

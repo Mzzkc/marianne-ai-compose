@@ -316,7 +316,7 @@ class TestEscalationAfterExhaustion:
         ))
         state = baton.get_sheet_state("j1", 1)
         assert state is not None
-        assert state.status == BatonSheetStatus.PENDING
+        assert state.status == BatonSheetStatus.RETRY_SCHEDULED
         assert state.completion_attempts == 1
 
         # Second partial pass — completion budget exhausted → escalation
@@ -510,7 +510,9 @@ class TestPerSheetCostEnforcement:
 
         state2 = baton.get_sheet_state("j1", 2)
         assert state2 is not None
-        assert state2.status == BatonSheetStatus.FAILED
+        assert state2.status == BatonSheetStatus.SKIPPED, (
+            "Dependent sheet should be SKIPPED (blocked by failed dependency)"
+        )
 
 
 # ============================================================================

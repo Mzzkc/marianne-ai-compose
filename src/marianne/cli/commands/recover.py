@@ -149,6 +149,14 @@ async def _recover_cascade(
             sdata.pop("error_message", None)
             sdata.pop("error_code", None)
             sdata.pop("completed_at", None)
+            # Reset retry and completion budgets so the baton gives these
+            # sheets a fresh attempt. Without this, sheets come back as
+            # PENDING with exhausted budgets and immediately re-fail on
+            # the first partial validation result.
+            sdata["normal_attempts"] = 0
+            sdata["completion_attempts"] = 0
+            sdata["attempt_count"] = 0
+            sdata["healing_attempts"] = 0
             reset_count += 1
 
     # Count after

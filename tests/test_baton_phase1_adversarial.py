@@ -421,7 +421,7 @@ class TestRecoveryFromCorruptedCheckpoint:
         mock_cp = MagicMock()
         mock_cp.sheets = {
             1: MagicMock(
-                status=MagicMock(value="in_progress"),
+                status=BatonSheetStatus.IN_PROGRESS,
                 attempt_count=1, completion_attempts=0,
             ),
         }
@@ -437,7 +437,11 @@ class TestRecoveryFromCorruptedCheckpoint:
     def test_recover_preserves_terminal_states(self) -> None:
         """Completed, failed, skipped sheets must keep their status."""
         adapter = BatonAdapter()
-        terminal_statuses = ["completed", "failed", "skipped"]
+        terminal_statuses = [
+            BatonSheetStatus.COMPLETED,
+            BatonSheetStatus.FAILED,
+            BatonSheetStatus.SKIPPED,
+        ]
         mock_sheets = []
         for i, _status in enumerate(terminal_statuses, 1):
             s = MagicMock()
@@ -449,7 +453,7 @@ class TestRecoveryFromCorruptedCheckpoint:
 
         mock_cp = MagicMock()
         mock_cp.sheets = {
-            i: MagicMock(status=MagicMock(value=status), attempt_count=1, completion_attempts=0)
+            i: MagicMock(status=status, attempt_count=1, completion_attempts=0)
             for i, status in enumerate(terminal_statuses, 1)
         }
 
@@ -473,9 +477,9 @@ class TestRecoveryFromCorruptedCheckpoint:
             )
 
     def test_recover_with_unknown_checkpoint_status_raises(self) -> None:
-        """An unknown status string in the checkpoint should raise KeyError
-        from checkpoint_to_baton_status."""
-        with pytest.raises(KeyError):
+        """An unknown status string in the checkpoint should raise ValueError
+        from checkpoint_to_baton_status (SheetStatus enum construction)."""
+        with pytest.raises(ValueError):
             checkpoint_to_baton_status("zombie")
 
 
@@ -702,8 +706,10 @@ class TestCostLimitBoundaries:
         sheet1 = baton._jobs["j1"].sheets[1]
         # After exceeding per-sheet cost, should be FAILED
         assert sheet1.status == BatonSheetStatus.FAILED
-        # Dependent sheet 2 should also be failed (propagation)
-        assert baton._jobs["j1"].sheets[2].status == BatonSheetStatus.FAILED
+        # Dependent sheet 2 should be skipped (blocked by failed dependency)
+        assert baton._jobs["j1"].sheets[2].status == BatonSheetStatus.SKIPPED, (
+            "Sheet 2 should be SKIPPED (blocked by failed dependency)"
+        )
 
     def test_resume_after_cost_pause_rechecks_cost(self) -> None:
         """ResumeJob re-checks cost limits (F-140). A cost-paused job
@@ -1040,9 +1046,13 @@ class TestF440PropagationOnRegistration:
 
         baton.register_job("j1", sheets, deps)
 
-        # Sheet 2 and 3 should be FAILED (transitive propagation)
-        assert sheets[2].status == BatonSheetStatus.FAILED
-        assert sheets[3].status == BatonSheetStatus.FAILED
+        # Sheet 2 and 3 should be SKIPPED (blocked by failed dependency)
+        assert sheets[2].status == BatonSheetStatus.SKIPPED, (
+            "Sheet 2 should be SKIPPED (blocked by failed dependency)"
+        )
+        assert sheets[3].status == BatonSheetStatus.SKIPPED, (
+            "Sheet 3 should be SKIPPED (blocked by failed dependency)"
+        )
 
     def test_failed_sheet_doesnt_overwrite_completed_dependent(self) -> None:
         """If a dependent was already COMPLETED before registration
@@ -1060,14 +1070,13 @@ class TestF440PropagationOnRegistration:
 
         # Sheet 2 stays COMPLETED (terminal guard in propagation)
         assert sheets[2].status == BatonSheetStatus.COMPLETED
-        # Sheet 3 depends on sheet 2 (which is COMPLETED), so the
-        # propagation from sheet 1 goes through the dependency chain.
-        # But since sheet 2 is terminal (COMPLETED), propagation from
-        # sheet 1 reaches sheet 2 (no-op) and then sheet 3.
-        # Sheet 3 depends on sheet 2 (COMPLETED), not directly on sheet 1.
+        # Sheet 3 depends only on sheet 2 (COMPLETED), not directly on
+        # sheet 1. Since sheet 2 is satisfied (COMPLETED), sheet 3's
+        # dependencies ARE satisfiable — it should stay PENDING.
         # The BFS visits: sheet 1 → dependents of 1 = [2] → sheet 2 COMPLETED (skip)
-        #   → dependents of 2 = [3] → sheet 3 PENDING → FAILED
-        assert sheets[3].status == BatonSheetStatus.FAILED
+        #   → dependents of 2 = [3] → sheet 3 has deps [2] all terminal,
+        #     but sheet 2 is satisfied → sheet 3 stays PENDING
+        assert sheets[3].status == BatonSheetStatus.PENDING
 
     def test_multiple_failed_sheets_propagate_independently(self) -> None:
         """Multiple FAILED sheets at registration time should each
@@ -1084,9 +1093,15 @@ class TestF440PropagationOnRegistration:
 
         baton.register_job("j1", sheets, deps)
 
-        assert sheets[3].status == BatonSheetStatus.FAILED
-        assert sheets[4].status == BatonSheetStatus.FAILED
-        assert sheets[5].status == BatonSheetStatus.FAILED
+        assert sheets[3].status == BatonSheetStatus.SKIPPED, (
+            "Sheet 3 should be SKIPPED (blocked by failed dependency)"
+        )
+        assert sheets[4].status == BatonSheetStatus.SKIPPED, (
+            "Sheet 4 should be SKIPPED (blocked by failed dependency)"
+        )
+        assert sheets[5].status == BatonSheetStatus.SKIPPED, (
+            "Sheet 5 should be SKIPPED (blocked by failed dependency)"
+        )
 
     def test_duplicate_registration_is_noop(self) -> None:
         """Registering the same job_id twice should be a no-op (idempotent)."""
@@ -1487,8 +1502,10 @@ class TestExhaustionDecisionTree:
             loop.close()
 
         assert sheet.status == BatonSheetStatus.FAILED
-        # Dependent sheet 2 also failed
-        assert baton._jobs["j1"].sheets[2].status == BatonSheetStatus.FAILED
+        # Dependent sheet 2 should be skipped (blocked by failed dependency)
+        assert baton._jobs["j1"].sheets[2].status == BatonSheetStatus.SKIPPED, (
+            "Sheet 2 should be SKIPPED (blocked by failed dependency)"
+        )
 
 
 # =============================================================================

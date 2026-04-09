@@ -511,7 +511,8 @@ class TestSerializationRoundTrips:
         assert restored.max_completion == state.max_completion
         assert restored.total_cost_usd == state.total_cost_usd
         assert restored.total_duration_seconds == state.total_duration_seconds
-        assert restored.next_retry_at == state.next_retry_at
+        # next_retry_at is transient (exclude=True) — not persisted, resets to None
+        assert restored.next_retry_at is None
 
     @pytest.mark.property_based
     @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
@@ -1449,25 +1450,30 @@ class TestFailurePropagationTransitiveClosure:
         # Compute expected transitive dependents
         expected_failed = self._compute_transitive_dependents(deps, fail_sheet)
 
+        # Mark the failed sheet as FAILED before propagating
+        # (propagation checks that deps are terminal before cascading)
+        sheets[fail_sheet].status = BatonSheetStatus.FAILED
+
         # Trigger propagation
         baton._propagate_failure_to_dependents("j1", fail_sheet)
 
-        # Verify: every transitive dependent should be failed
+        # Verify: every transitive dependent should be skipped
+        # (blocked by failed dependency, not FAILED since work was never attempted)
         for sheet_num in expected_failed:
-            assert sheets[sheet_num].status == "failed", (
+            assert sheets[sheet_num].status == "skipped", (
                 f"Sheet {sheet_num} is a transitive dependent of {fail_sheet} "
-                f"but status is '{sheets[sheet_num].status}', not 'failed'. "
+                f"but status is '{sheets[sheet_num].status}', not 'skipped'. "
                 f"Dependencies: {deps}"
             )
 
-        # Verify: non-dependent sheets should NOT be failed
+        # Verify: non-dependent sheets should NOT be skipped by propagation
         for sheet_num in range(1, n_sheets + 1):
             if sheet_num == fail_sheet:
                 continue  # The failed sheet itself is not modified by propagation
             if sheet_num not in expected_failed:
-                assert sheets[sheet_num].status != "failed", (
+                assert sheets[sheet_num].status != "skipped", (
                     f"Sheet {sheet_num} is NOT a dependent of {fail_sheet} "
-                    f"but was marked as failed. Dependencies: {deps}"
+                    f"but was marked as skipped. Dependencies: {deps}"
                 )
 
     @pytest.mark.property_based
@@ -2009,16 +2015,21 @@ class TestDependencyFailurePreventsZombieJobs:
         sheets[fail_sheet].status = BatonSheetStatus.FAILED
         baton._propagate_failure_to_dependents("j1", fail_sheet)
 
-        # Verify: no pending sheet has a failed (unsatisfiable) dependency
+        # Verify: no pending sheet has an unsatisfiable dependency
+        # (failed or cascade-skipped with error_code)
         for sheet_num, sheet in sheets.items():
             if sheet.status == "pending":
-                # Check all dependencies — none should be failed
                 for dep_num in deps.get(sheet_num, []):
                     dep = sheets.get(dep_num)
                     if dep is not None:
-                        assert dep.status != "failed", (
+                        is_unsatisfied = (
+                            dep.status == "failed"
+                            or (dep.status == "skipped" and dep.error_code is not None)
+                        )
+                        assert not is_unsatisfied, (
                             f"Zombie detected: sheet {sheet_num} is pending "
-                            f"but depends on failed sheet {dep_num}. "
+                            f"but depends on unsatisfiable sheet {dep_num} "
+                            f"(status={dep.status}). "
                             f"Propagation missed this dependent. "
                             f"Failed sheet: {fail_sheet}, deps: {deps}"
                         )
@@ -2072,15 +2083,21 @@ class TestDependencyFailurePreventsZombieJobs:
             sheets[fs].status = BatonSheetStatus.FAILED
             baton._propagate_failure_to_dependents("j1", fs)
 
-        # Verify: no pending sheet has a failed dependency
+        # Verify: no pending sheet has an unsatisfiable dependency
         for sheet_num, sheet in sheets.items():
             if sheet.status == BatonSheetStatus.PENDING:
                 for dep_num in deps.get(sheet_num, []):
                     dep = sheets.get(dep_num)
                     if dep is not None:
-                        assert dep.status != BatonSheetStatus.FAILED, (
+                        is_unsatisfied = (
+                            dep.status == BatonSheetStatus.FAILED
+                            or (dep.status == BatonSheetStatus.SKIPPED
+                                and dep.error_code is not None)
+                        )
+                        assert not is_unsatisfied, (
                             f"Zombie after multi-failure: sheet {sheet_num} "
-                            f"is pending but depends on failed sheet {dep_num}"
+                            f"is pending but depends on unsatisfiable "
+                            f"sheet {dep_num} (status={dep.status})"
                         )
 
 
@@ -2491,8 +2508,10 @@ class TestExhaustionDecisionTree:
         await baton.handle_event(event)
 
         assert sheets[1].status == BatonSheetStatus.FAILED
-        # Dependent sheet should also be failed (propagation)
-        assert sheets[2].status == BatonSheetStatus.FAILED
+        # Dependent sheet should be skipped (blocked by failed dependency)
+        assert sheets[2].status == BatonSheetStatus.SKIPPED, (
+            "Sheet 2 should be SKIPPED (blocked by failed dependency)"
+        )
 
     @pytest.mark.asyncio
     @given(
@@ -3000,4 +3019,6 @@ class TestAuthFailureIsTerminal:
         await baton.handle_event(event)
 
         assert sheets[1].status == BatonSheetStatus.FAILED
-        assert sheets[2].status == BatonSheetStatus.FAILED
+        assert sheets[2].status == BatonSheetStatus.SKIPPED, (
+            "Sheet 2 should be SKIPPED (blocked by failed dependency)"
+        )

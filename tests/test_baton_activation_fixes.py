@@ -479,6 +479,11 @@ def _make_mock_manager() -> MagicMock:
     from marianne.daemon.manager import JobManager
     manager._run_via_baton = JobManager._run_via_baton.__get__(manager)
     manager._resume_via_baton = JobManager._resume_via_baton.__get__(manager)
+    manager._set_job_status = JobManager._set_job_status.__get__(manager)
+
+    # Registry must be async-compatible since _set_job_status awaits it
+    manager._registry = MagicMock()
+    manager._registry.update_status = AsyncMock()
 
     return manager
 

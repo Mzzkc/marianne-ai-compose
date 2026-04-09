@@ -50,6 +50,7 @@ from marianne.daemon.baton.events import (
     ResumeJob,
     RetryDue,
     SheetAttemptResult,
+    SheetDispatched,
     SheetSkipped,
     ShutdownRequested,
     StaleCheck,
@@ -425,6 +426,13 @@ class BatonCore:
 
         if sheet.total_cost_usd > limit:
             sheet.status = BatonSheetStatus.FAILED
+            if not sheet.error_message:
+                sheet.error_message = (
+                    f"Sheet cost ${sheet.total_cost_usd:.2f} exceeded "
+                    f"limit ${limit:.2f}"
+                )
+            if not sheet.error_code:
+                sheet.error_code = "E999"
             self._state_dirty = True
             _logger.warning(
                 "baton.sheet.cost_limit_exceeded",
@@ -489,15 +497,25 @@ class BatonCore:
     ) -> None:
         """Handle retry/completion budget exhaustion.
 
-        The decision tree when budgets are exhausted:
+        The decision tree when a budget is exhausted:
         1. Instrument fallback available → advance to next instrument
         2. Self-healing enabled → schedule a healing attempt
         3. Escalation enabled → enter FERMATA (pause job, await decision)
-        4. Neither → FAILED (propagate to dependents)
+        4. Normal retries still available → schedule a normal retry (last resort)
+        5. Neither → FAILED (propagate to dependents)
+
+        Path 4 matters when completion budget exhausts but normal retries
+        remain. Targeted recovery (fallback, healing, escalation) is tried
+        first because a fresh retry on the same instrument after completion
+        exhaustion usually produces the same partial output. The composer's
+        max_retries budget is honored as a safety net after targeted paths
+        are exhausted.
         """
         job = self._jobs.get(job_id)
         if job is None:
             sheet.status = BatonSheetStatus.FAILED
+            sheet.error_message = f"Job '{job_id}' not found during exhaustion handling"
+            sheet.error_code = "E999"
             self._state_dirty = True
             return
 
@@ -562,8 +580,48 @@ class BatonCore:
             )
             return
 
-        # Path 4: No recovery — fail
+        # Path 4: Normal retries still available (last resort).
+        # When completion mode exhausts, fall back to normal retries
+        # before giving up. Increment normal_attempts to consume the
+        # retry budget. Without this, the retry succeeds with partial
+        # validation, re-enters completion mode, exhausts again, and
+        # Path 4 fires forever because normal_attempts never increments.
+        if sheet.can_retry:
+            sheet.normal_attempts += 1
+            self._schedule_retry(job_id, sheet_num, sheet)
+            _logger.info(
+                "baton.sheet.exhaustion_retry_available",
+                extra={
+                    "job_id": job_id,
+                    "sheet_num": sheet_num,
+                    "normal_attempts": sheet.normal_attempts,
+                    "max_retries": sheet.max_retries,
+                },
+            )
+            return
+
+        # Path 5: No recovery — fail
+        # Preserve the error from the last attempt — it describes the actual
+        # failure (validation details, execution error, etc.). Only set a
+        # generic message if no attempt has left one.
         sheet.status = BatonSheetStatus.FAILED
+        if not sheet.error_message:
+            last = sheet.attempt_results[-1] if sheet.attempt_results else None
+            if last and last.error_message:
+                sheet.error_message = last.error_message
+            elif last and last.validation_pass_rate < 100.0:
+                sheet.error_message = (
+                    f"Validation failed ({last.validation_pass_rate:.0f}% pass rate) "
+                    f"after {sheet.normal_attempts + sheet.completion_attempts} attempts"
+                )
+            else:
+                sheet.error_message = (
+                    f"Retries exhausted "
+                    f"(normal={sheet.normal_attempts}/{sheet.max_retries}, "
+                    f"completion={sheet.completion_attempts}/{sheet.max_completion})"
+                )
+        if not sheet.error_code:
+            sheet.error_code = "E999"
         self._state_dirty = True
         _logger.warning(
             "baton.sheet.retries_exhausted",
@@ -789,8 +847,34 @@ class BatonCore:
 
         return ready
 
+    @staticmethod
+    def _is_dep_satisfied(dep_sheet: SheetExecutionState) -> bool:
+        """Check if a dependency sheet provides usable output.
+
+        A dep satisfies downstream if:
+        - COMPLETED: work was done, output is available
+        - SKIPPED without error_code: user intentionally skipped (skip_when),
+          downstream can proceed per the user's design
+
+        A dep does NOT satisfy if:
+        - FAILED: work attempted and failed
+        - CANCELLED: work aborted
+        - SKIPPED with error_code: cascade-blocked, work was never done
+        """
+        if dep_sheet.status == BatonSheetStatus.COMPLETED:
+            return True
+        if (
+            dep_sheet.status == BatonSheetStatus.SKIPPED
+            and dep_sheet.error_code is None
+        ):
+            return True
+        return False
+
     def _is_dependency_satisfied(self, job: _JobRecord, dep_num: int) -> bool:
-        """Check if a dependency sheet is in a satisfied state."""
+        """Check if a dependency sheet is in a satisfied state.
+
+        Used by get_ready_sheets to determine if a sheet can be dispatched.
+        """
         dep_sheet = job.sheets.get(dep_num)
         if dep_sheet is None:
             # Missing dependency — treat as satisfied (defensive)
@@ -799,7 +883,7 @@ class BatonCore:
                 extra={"job_id": job.job_id, "dep_num": dep_num},
             )
             return True
-        return dep_sheet.status in _SATISFIED_BATON_STATUSES
+        return self._is_dep_satisfied(dep_sheet)
 
     # =========================================================================
     # Event Handling
@@ -822,6 +906,9 @@ class BatonCore:
 
                 case SheetSkipped():
                     self._handle_sheet_skipped(event)
+
+                case SheetDispatched():
+                    self._handle_sheet_dispatched(event)
 
                 # === Rate limit events ===
                 case RateLimitHit():
@@ -1052,6 +1139,8 @@ class BatonCore:
 
             if event.error_classification == "AUTH_FAILURE":
                 sheet.status = BatonSheetStatus.FAILED
+                sheet.error_message = event.error_message or "Authentication failure"
+                sheet.error_code = "E502"
                 self._state_dirty = True
                 _logger.error(
                     "baton.sheet.auth_failure",
@@ -1120,6 +1209,20 @@ class BatonCore:
                 "reason": event.reason,
             },
         )
+
+    def _handle_sheet_dispatched(self, event: SheetDispatched) -> None:
+        """Mark sheet as dispatched to a musician."""
+        job = self._jobs.get(event.job_id)
+        if job is None:
+            return
+        sheet = job.sheets.get(event.sheet_num)
+        if sheet is None:
+            return
+        if sheet.status in _TERMINAL_BATON_STATUSES:
+            return
+        sheet.status = BatonSheetStatus.DISPATCHED
+        sheet.dispatched_at = event.timestamp
+        self._state_dirty = True
 
     def _handle_rate_limit_hit(self, event: RateLimitHit) -> None:
         """Mark instrument as rate-limited. NOT a sheet failure.
@@ -1267,6 +1370,8 @@ class BatonCore:
                 sheet.status = BatonSheetStatus.COMPLETED
             else:
                 sheet.status = BatonSheetStatus.FAILED
+                sheet.error_message = f"Escalation resolved with decision: {event.decision}"
+                sheet.error_code = "E999"
                 self._propagate_failure_to_dependents(
                     event.job_id, event.sheet_num
                 )
@@ -1297,6 +1402,8 @@ class BatonCore:
         sheet = job.sheets.get(event.sheet_num)
         if sheet is not None and sheet.status == BatonSheetStatus.FERMATA:
             sheet.status = BatonSheetStatus.FAILED
+            sheet.error_message = "Escalation timed out with no response"
+            sheet.error_code = "E999"
             self._propagate_failure_to_dependents(
                 event.job_id, event.sheet_num
             )
@@ -1407,12 +1514,18 @@ class BatonCore:
             self._state_dirty = True
 
     def _handle_stale_check(self, event: StaleCheck) -> None:
-        """Check if a dispatched sheet has gone stale (no result within timeout).
+        """Check if a dispatched sheet has gone stale (task dead, no result).
 
-        If the sheet has been in DISPATCHED status longer than its timeout
-        (default 1800s), the musician task likely crashed without reporting.
-        Create a synthetic failure result and route through the normal
-        retry/exhaustion path — same pattern as _handle_process_exited.
+        StaleCheck is a safety net for when a musician task exits without
+        reporting. It fires AFTER timeout + buffer. It does NOT enforce
+        the timeout — the backend does that. StaleCheck only intervenes
+        when the sheet is still DISPATCHED after the timeout, meaning the
+        musician died silently.
+
+        The actual liveness check (is the asyncio Task alive?) happens in
+        the adapter, which has access to _active_tasks. The core handler
+        just logs — the adapter intercepts StaleCheck events before they
+        reach here and handles liveness-aware recovery.
         """
         job = self._jobs.get(event.job_id)
         if job is None:
@@ -1421,63 +1534,18 @@ class BatonCore:
         if sheet is None:
             return
         if sheet.status != BatonSheetStatus.DISPATCHED:
-            return  # Only check dispatched (running) sheets
-        if sheet.dispatched_at is None:
-            return  # No dispatch timestamp — can't determine staleness
+            return  # Already completed/failed — not stale
 
-        elapsed = time.monotonic() - sheet.dispatched_at
-        # Use per-sheet timeout from the Sheet entity (populated at registration).
-        # The backend enforces this timeout for execution; StaleCheck catches cases
-        # where the musician task itself hung without the backend timing out.
-        stale_timeout = getattr(sheet, "sheet_timeout_seconds", 1800.0) or 1800.0
-        if elapsed < stale_timeout:
-            # Not stale yet — reschedule check for remaining time
-            remaining = stale_timeout - elapsed
-            if self._timer is not None:
-                self._timer.schedule(
-                    remaining + 10.0,  # Small buffer
-                    StaleCheck(
-                        job_id=event.job_id,
-                        sheet_num=event.sheet_num,
-                    ),
-                )
-            return
-
-        # Sheet is stale — create synthetic failure
-        _logger.warning(
-            "baton.sheet.stale_detected",
+        # Log for observability. The adapter handles the actual recovery
+        # decision based on whether the musician task is still alive.
+        _logger.info(
+            "baton.stale_check.dispatched",
             extra={
                 "job_id": event.job_id,
                 "sheet_num": event.sheet_num,
-                "elapsed_seconds": elapsed,
                 "instrument": sheet.instrument_name,
             },
         )
-        inst_name = sheet.instrument_name or ""
-        stale_result = SheetAttemptResult(
-            job_id=event.job_id,
-            sheet_num=event.sheet_num,
-            instrument_name=inst_name,
-            attempt=sheet.normal_attempts + 1,
-            execution_success=False,
-            exit_code=None,
-            duration_seconds=elapsed,
-            cost_usd=0.0,
-            error_classification="STALE",
-            error_message=(
-                f"Sheet {event.sheet_num} stale: no result after "
-                f"{elapsed:.0f}s (timeout: {stale_timeout:.0f}s)"
-            ),
-        )
-        sheet.record_attempt(stale_result)
-        self._update_instrument_on_failure(inst_name)
-        if not sheet.can_retry:
-            self._handle_exhaustion(
-                event.job_id, event.sheet_num, sheet
-            )
-        else:
-            self._schedule_retry(event.job_id, event.sheet_num, sheet)
-        self._state_dirty = True
 
     def _handle_resource_anomaly(self, event: ResourceAnomaly) -> None:
         """Handle resource pressure events from the monitor.
@@ -1566,15 +1634,20 @@ class BatonCore:
     def _propagate_failure_to_dependents(
         self, job_id: str, failed_sheet_num: int
     ) -> None:
-        """Mark all transitive dependents of a failed sheet as failed.
+        """Mark downstream sheets as SKIPPED when their dependencies are
+        unsatisfiable AND all sibling dependencies are terminal.
 
-        When a sheet fails (retries exhausted, auth failure, etc.), its
-        dependent sheets can never be satisfied — they'd sit in pending
-        forever, creating zombie jobs. This method cascades the failure
-        to all downstream sheets using iterative BFS.
+        This mirrors the legacy runner's approach: a single sheet failure
+        does NOT cascade instantly. Downstream sheets simply never become
+        "ready" (get_ready_sheets checks _is_dependency_satisfied, which
+        requires COMPLETED or SKIPPED). They sit in PENDING until all
+        their dependencies reach terminal state.
 
-        Only non-terminal sheets are affected. Completed, skipped, and
-        already-failed sheets are left unchanged.
+        When ALL dependencies of a downstream sheet are terminal and at
+        least one is FAILED, that sheet is marked SKIPPED (not FAILED —
+        the work was never attempted, it was blocked). This prevents
+        premature cascade in fan-out stages: 1 of 18 voices failing
+        doesn't kill the other 17 or their downstream.
         """
         job = self._jobs.get(job_id)
         if job is None:
@@ -1589,7 +1662,8 @@ class BatonCore:
                     dependents[dep] = []
                 dependents[dep].append(sheet_num)
 
-        # BFS from the failed sheet to all transitive dependents
+        # Walk downstream from the failed sheet. Only mark sheets whose
+        # dependencies are ALL terminal with at least one FAILED.
         queue = list(dependents.get(failed_sheet_num, []))
         visited: set[int] = set()
 
@@ -1603,16 +1677,51 @@ class BatonCore:
             if sheet is None:
                 continue
 
-            # Only fail non-terminal sheets
-            if sheet.status not in _TERMINAL_BATON_STATUSES:
-                sheet.status = BatonSheetStatus.FAILED
-                sheet.error_message = (
-                    f"Dependency failed: sheet {failed_sheet_num} failed, "
-                    f"blocking this sheet"
-                )
-                sheet.error_code = "E999"
-                _logger.info(
-                    "baton.sheet.dependency_failed",
+            if sheet.status in _TERMINAL_BATON_STATUSES:
+                # Don't modify this sheet (terminal is absorbing), but
+                # still walk through to check its downstream dependents.
+                # Without this, sheets downstream of already-cancelled or
+                # already-failed intermediates are never visited and become
+                # zombies (stuck in PENDING with unsatisfiable deps).
+                for downstream in dependents.get(current, []):
+                    if downstream not in visited:
+                        queue.append(downstream)
+                continue
+
+            # Check if ANY dependency is terminal and unsatisfied
+            # (FAILED, CANCELLED, or cascade-SKIPPED with error_code).
+            # A single unsatisfied terminal dep is enough to block the
+            # sheet permanently — it can never run because ALL deps must
+            # be satisfied for dispatch.
+            deps = job.dependencies.get(current, [])
+            any_unsatisfied = False
+            blocking_dep = failed_sheet_num  # Default for error msg
+            for dep_num in deps:
+                dep_sheet = job.sheets.get(dep_num)
+                if dep_sheet is None:
+                    continue
+                if (
+                    dep_sheet.status in _TERMINAL_BATON_STATUSES
+                    and not self._is_dep_satisfied(dep_sheet)
+                ):
+                    any_unsatisfied = True
+                    blocking_dep = dep_num
+                    break
+
+            if not any_unsatisfied:
+                # No terminal-unsatisfied dependency — this sheet may
+                # still become runnable once its deps complete.
+                continue
+
+            # At least one dep is terminal and unsatisfied → SKIPPED
+            # (not FAILED — the sheet was never attempted, just blocked)
+            sheet.status = BatonSheetStatus.SKIPPED
+            sheet.error_message = (
+                f"Blocked by failed dependency: sheet {blocking_dep}"
+            )
+            sheet.error_code = "E999"
+            _logger.info(
+                "baton.sheet.dependency_blocked",
                     extra={
                         "job_id": job_id,
                         "sheet_num": current,

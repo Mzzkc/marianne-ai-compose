@@ -263,7 +263,7 @@ class TestFallbackHistoryBounded:
         for _ in range(chain_length):
             state.advance_fallback("test")
 
-        assert len(state.fallback_history) <= MAX_FALLBACK_HISTORY
+        assert len(state.instrument_fallback_history) <= MAX_FALLBACK_HISTORY
 
 
 # =============================================================================
@@ -302,14 +302,14 @@ class TestFallbackExhaustionTotality:
         # Capture state after exhaustion
         final_instrument = state.instrument_name
         final_index = state.current_instrument_index
-        final_history_len = len(state.fallback_history)
+        final_history_len = len(state.instrument_fallback_history)
 
         # Additional calls must be no-ops returning None
         for _ in range(extra_calls):
             assert state.advance_fallback("extra") is None
             assert state.instrument_name == final_instrument
             assert state.current_instrument_index == final_index
-            assert len(state.fallback_history) == final_history_len
+            assert len(state.instrument_fallback_history) == final_history_len
 
 
 # =============================================================================
@@ -741,7 +741,7 @@ class TestFallbackStateRoundTrip:
         state.current_instrument_index = index
         state.normal_attempts = normal_attempts
         state.fallback_attempts = {f"inst-{i}": i * 2 for i in range(index)}
-        state.fallback_history = [
+        state.instrument_fallback_history = [
             {"from": f"a-{i}", "to": f"b-{i}", "reason": "test", "timestamp": "T"}
             for i in range(min(index, 5))
         ]
@@ -753,7 +753,7 @@ class TestFallbackStateRoundTrip:
         assert restored.fallback_chain == state.fallback_chain
         assert restored.current_instrument_index == state.current_instrument_index
         assert restored.fallback_attempts == state.fallback_attempts
-        assert restored.fallback_history == state.fallback_history
+        assert restored.instrument_fallback_history == state.instrument_fallback_history
         assert restored.instrument_name == state.instrument_name
         assert restored.normal_attempts == state.normal_attempts
 
@@ -770,7 +770,7 @@ class TestFallbackStateRoundTrip:
         assert restored.fallback_chain == []
         assert restored.current_instrument_index == 0
         assert restored.fallback_attempts == {}
-        assert restored.fallback_history == []
+        assert restored.instrument_fallback_history == []
 
     def test_from_dict_defaults_missing_fallback_fields(self) -> None:
         """Old serialized data (pre-fallback) defaults gracefully."""
@@ -785,4 +785,4 @@ class TestFallbackStateRoundTrip:
         assert restored.fallback_chain == []
         assert restored.current_instrument_index == 0
         assert restored.fallback_attempts == {}
-        assert restored.fallback_history == []
+        assert restored.instrument_fallback_history == []

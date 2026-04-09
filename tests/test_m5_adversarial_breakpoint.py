@@ -286,8 +286,8 @@ class TestFallbackChainAdversarial:
             fallback_chain=["gemini-cli"],
         )
         state.advance_fallback("rate_limit_exhausted")
-        assert len(state.fallback_history) == 1
-        record = state.fallback_history[0]
+        assert len(state.instrument_fallback_history) == 1
+        record = state.instrument_fallback_history[0]
         assert record["from"] == "claude-cli"
         assert record["to"] == "gemini-cli"
         assert record["reason"] == "rate_limit_exhausted"
@@ -352,7 +352,7 @@ class TestFallbackHistoryTrimming:
             if state.has_fallback_available:
                 state.advance_fallback("unavailable")
 
-        assert len(state.fallback_history) <= MAX_FALLBACK_HISTORY
+        assert len(state.instrument_fallback_history) <= MAX_FALLBACK_HISTORY
 
     def test_dual_store_max_constants_match(self) -> None:
         """Both stores use the same max value (50). If they diverge, that's a bug."""

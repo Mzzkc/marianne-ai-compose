@@ -378,8 +378,8 @@ class TestF065ZeroValidationRetryBudget:
             )
         )
 
-        # Partial pass → completion mode (PENDING for re-dispatch)
-        assert sheet.status == BatonSheetStatus.PENDING
+        # Partial pass → completion mode (scheduled for retry with backoff)
+        assert sheet.status == BatonSheetStatus.RETRY_SCHEDULED
         assert sheet.normal_attempts == 0
         assert sheet.completion_attempts == 1
 
@@ -870,11 +870,11 @@ class TestEscalationDecisionEdgeCases:
             )
         )
 
-        # Sheet 1 failed, sheets 2 and 3 should be propagated as failed
+        # Sheet 1 failed, sheets 2 and 3 should be SKIPPED (blocked by failed dependency)
         s2 = baton.get_sheet_state("test-job", 2)
         s3 = baton.get_sheet_state("test-job", 3)
-        assert s2 is not None and s2.status == BatonSheetStatus.FAILED
-        assert s3 is not None and s3.status == BatonSheetStatus.FAILED
+        assert s2 is not None and s2.status == BatonSheetStatus.SKIPPED
+        assert s3 is not None and s3.status == BatonSheetStatus.SKIPPED
 
 
 # =====================================================================

@@ -523,11 +523,11 @@ class TestBatonMultiSheetWorkflows:
             error_classification="AUTH_FAILURE",
         ))
 
-        # Sheet 3 should be FAILED (propagated), not pending
+        # Sheet 3 should be SKIPPED (blocked by failed dependency), not pending
         state3 = baton.get_sheet_state("j1", 3)
         assert state3 is not None
-        assert state3.status == BatonSheetStatus.FAILED, (
-            f"Synthesis should be failed (propagated from voice), "
+        assert state3.status == BatonSheetStatus.SKIPPED, (
+            f"Synthesis should be SKIPPED (blocked by failed dependency), "
             f"got {state3.status}"
         )
         # Job should be complete (all terminal)

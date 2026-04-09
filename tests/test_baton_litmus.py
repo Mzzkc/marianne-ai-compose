@@ -419,9 +419,12 @@ class TestFullLifecycle:
             validations_passed=3, validations_total=5,
             validation_pass_rate=60.0,
         ))
-        # Partial pass enters completion mode — re-dispatch pending
-        assert state.status == BatonSheetStatus.PENDING
+        # Partial pass enters completion mode — scheduled for retry with backoff
+        assert state.status == BatonSheetStatus.RETRY_SCHEDULED
         assert state.completion_attempts == 1
+
+        # Timer fires — sheet moves to PENDING for dispatch
+        await baton.handle_event(RetryDue(job_id="j1", sheet_num=1))
 
         # Attempt 3: 100% pass (success!)
         await baton.handle_event(SheetAttemptResult(

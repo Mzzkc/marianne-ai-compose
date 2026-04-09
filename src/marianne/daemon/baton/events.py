@@ -116,6 +116,20 @@ class SheetSkipped:
     timestamp: float = field(default_factory=time.time)
 
 
+@dataclass(frozen=True)
+class SheetDispatched:
+    """A sheet has been dispatched to a musician for execution.
+
+    Emitted by dispatch_ready() after the dispatch callback succeeds.
+    The baton sets DISPATCHED status and records the dispatch timestamp.
+    """
+
+    job_id: str
+    sheet_num: int
+    instrument: str
+    timestamp: float = field(default_factory=time.monotonic)
+
+
 # =============================================================================
 # Rate Limit Events — instrument-level, timer-based recovery
 # =============================================================================
@@ -418,6 +432,7 @@ class DispatchRetry:
 BatonEvent = (
     SheetAttemptResult
     | SheetSkipped
+    | SheetDispatched
     | RateLimitHit
     | RateLimitExpired
     | RetryDue

@@ -457,14 +457,21 @@ class TestExhaustionDecisionTree:
         baton._handle_exhaustion("j1", 1, sheet)
 
         # Determine which path was taken
+        # Path 1: Fallback (not tested here — no fallback configured)
+        # Path 2: Healing — retry_scheduled with healing_attempts incremented
         healing_triggered = sheet.status == BatonSheetStatus.RETRY_SCHEDULED and sheet.healing_attempts > healing_attempts
+        # Path 3: Escalation — enters fermata
         escalation_triggered = sheet.status == BatonSheetStatus.FERMATA
+        # Path 4: Normal retry (last resort) — retry_scheduled WITHOUT healing increment
+        normal_retry_triggered = sheet.status == BatonSheetStatus.RETRY_SCHEDULED and sheet.healing_attempts == healing_attempts
+        # Path 5: Failed — no recovery available
         failed = sheet.status == BatonSheetStatus.FAILED
 
-        paths_taken = sum([healing_triggered, escalation_triggered, failed])
+        paths_taken = sum([healing_triggered, escalation_triggered, normal_retry_triggered, failed])
         assert paths_taken == 1, (
             f"Expected exactly 1 path, got {paths_taken}: "
-            f"healing={healing_triggered}, escalation={escalation_triggered}, failed={failed}. "
+            f"healing={healing_triggered}, escalation={escalation_triggered}, "
+            f"normal_retry={normal_retry_triggered}, failed={failed}. "
             f"Status={sheet.status.value}, self_healing={self_healing}, "
             f"escalation={escalation}, healing_attempts={healing_attempts}"
         )

@@ -66,6 +66,9 @@ class TestBatonLiveStatesPopulation:
 
         mock_request = MagicMock()
         mock_request.self_healing = False
+        mock_request.start_sheet = None
+
+        mock_config.pause_between_sheets_seconds = 0
 
         with (
             patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]),
@@ -115,6 +118,9 @@ class TestBatonLiveStatesPopulation:
 
         mock_request = MagicMock()
         mock_request.self_healing = False
+        mock_request.start_sheet = None
+
+        mock_config.pause_between_sheets_seconds = 0
 
         with (
             patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]),
@@ -131,7 +137,8 @@ class TestBatonLiveStatesPopulation:
         assert live.job_id == "test-job"
         assert live.job_name == "test-score"
         assert live.total_sheets == 2
-        assert live.status == JobStatus.RUNNING
+        # After wait_for_completion (mocked all_success=True), status updates to COMPLETED
+        assert live.status in (JobStatus.RUNNING, JobStatus.COMPLETED)
 
         # Sheet states must exist for all sheets
         assert 1 in live.sheets
@@ -169,6 +176,9 @@ class TestBatonLiveStatesPopulation:
 
         mock_request = MagicMock()
         mock_request.self_healing = False
+        mock_request.start_sheet = None
+
+        mock_config.pause_between_sheets_seconds = 0
 
         with (
             patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet_1]),

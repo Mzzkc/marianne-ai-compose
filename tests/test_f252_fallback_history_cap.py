@@ -103,7 +103,7 @@ class TestBatonStateFallbackHistoryCap:
             if result is None:
                 break
 
-        assert len(state.fallback_history) <= MAX_FALLBACK_HISTORY
+        assert len(state.instrument_fallback_history) <= MAX_FALLBACK_HISTORY
 
     def test_advance_fallback_preserves_newest(self) -> None:
         """The trimmed history keeps recent transitions."""
@@ -121,9 +121,9 @@ class TestBatonStateFallbackHistoryCap:
             if result is None:
                 break
 
-        if len(state.fallback_history) == MAX_FALLBACK_HISTORY:
+        if len(state.instrument_fallback_history) == MAX_FALLBACK_HISTORY:
             # Last entry should be the most recent transition
-            last = state.fallback_history[-1]
+            last = state.instrument_fallback_history[-1]
             assert "fb-" in last["to"]
 
     def test_serialization_preserves_trimmed_history(self) -> None:
@@ -143,7 +143,7 @@ class TestBatonStateFallbackHistoryCap:
 
         data = state.to_dict()
         restored = SheetExecutionState.from_dict(data)
-        assert len(restored.fallback_history) <= MAX_FALLBACK_HISTORY
+        assert len(restored.instrument_fallback_history) <= MAX_FALLBACK_HISTORY
 
 
 class TestConsistency:

@@ -601,8 +601,8 @@ class TestBatonDecisionTreeInvariants:
         baton._handle_attempt_result(result)
 
         assert sheets[1].status == BatonSheetStatus.FAILED
-        assert sheets[2].status == BatonSheetStatus.FAILED, (
-            "AUTH_FAILURE on sheet 1 should propagate failure to dependent sheet 2"
+        assert sheets[2].status == BatonSheetStatus.SKIPPED, (
+            "AUTH_FAILURE on sheet 1 should SKIP dependent sheet 2 (blocked by failed dependency)"
         )
 
     @given(cost=st.floats(min_value=0.01, max_value=100.0, allow_nan=False))
@@ -1044,15 +1044,27 @@ class TestFailurePropagationInvariants:
         )
         baton._handle_attempt_result(result)
 
-        for i in range(1, chain_length + 1):
-            assert sheets[i].status == BatonSheetStatus.FAILED, (
+        # Sheet 1 is the primary failure
+        assert sheets[1].status == BatonSheetStatus.FAILED, (
+            f"Sheet 1 was {sheets[1].status.value}, should be FAILED (primary failure)"
+        )
+        # All downstream dependents should be SKIPPED (blocked by failed dependency)
+        for i in range(2, chain_length + 1):
+            assert sheets[i].status == BatonSheetStatus.SKIPPED, (
                 f"Sheet {i} in chain of {chain_length} was "
                 f"{sheets[i].status.value} after sheet 1 failed. "
-                f"Failure must propagate through the entire chain."
+                f"Should be SKIPPED (blocked by failed dependency)."
             )
 
     def test_failure_propagates_through_fan_out(self) -> None:
-        """In a fan-out pattern, failure of a fan instance propagates to join."""
+        """In a fan-out pattern, failure of a fan instance propagates to join.
+
+        When ANY dependency is terminal and unsatisfied (FAILED, CANCELLED,
+        or cascade-SKIPPED), the downstream sheet is immediately SKIPPED.
+        A sheet needs ALL deps satisfied to run, so a single failed dep
+        makes it permanently unrunnable — leaving it PENDING would create
+        a zombie.
+        """
         baton = BatonCore()
         # 1 → (2, 3, 4) → 5
         sheets = {
@@ -1074,11 +1086,17 @@ class TestFailurePropagationInvariants:
             error_classification="AUTH_FAILURE",
         ))
 
-        # Sheet 5 depends on sheet 2, so it must be failed
-        assert sheets[5].status == BatonSheetStatus.FAILED, (
-            f"Join sheet 5 is {sheets[5].status.value} after fan instance "
-            f"2 failed. Must be FAILED due to unsatisfied dependency."
-        )
-        # Sheets 3 and 4 are independent — should NOT be failed
+        # Sheets 3 and 4 are independent — should NOT be failed or skipped
         assert sheets[3].status != BatonSheetStatus.FAILED
+        assert sheets[3].status != BatonSheetStatus.SKIPPED
         assert sheets[4].status != BatonSheetStatus.FAILED
+        assert sheets[4].status != BatonSheetStatus.SKIPPED
+
+        # Sheet 5 depends on sheets 2, 3, 4. Sheet 2 is FAILED (terminal,
+        # unsatisfied). Since sheet 5 needs ALL deps satisfied, and dep 2
+        # can never be satisfied, sheet 5 is immediately SKIPPED to prevent
+        # zombie jobs (sheets stuck in PENDING with unsatisfiable deps).
+        assert sheets[5].status == BatonSheetStatus.SKIPPED, (
+            f"Join sheet 5 is {sheets[5].status.value} — should be SKIPPED "
+            f"because dep 2 is FAILED (unsatisfiable)."
+        )

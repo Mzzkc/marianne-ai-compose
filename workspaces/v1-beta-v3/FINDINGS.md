@@ -23,3 +23,18 @@
 3. `mzt start --help` shows no such flag.
 4. `mzt --conductor-clone=test run my-score.yaml` fails with `Error: Marianne conductor is not running.`
 **Impact:** A new user cannot safely or successfully run their first "hello world" example. This is a complete failure of the onboarding experience and blocks any further engagement with the system.
+
+### F-513: Pause/Cancel Fail on Auto-Recovered Baton Jobs After Conductor Restart
+**Found by:** Legion, Event Flow Unification Session
+**Severity:** P0 (critical)
+**Status:** Open
+**GitHub Issue:** #162
+**Description:** After conductor restart, orphaned baton jobs auto-recover through the baton's event loop but no wrapper task is created in `_jobs`. The baton runs independently — sheets dispatch, play, and complete — but `pause_job` and `cancel_job` can't find the task handle and fail. Worse, `pause_job` destructively calls `_set_job_status(FAILED)` (manager.py:1275) when it can't find the task, marking a running job as FAILED.
+**Evidence:**
+- `mzt status score-a2-improve` shows RUNNING with 13 completed, 5 playing
+- `mzt cancel score-a2-improve` returns "not found or already stopped"
+- `mzt pause score-a2-improve` returns E502 "no running process" and marks job FAILED
+- Conductor had been restarted via `kill -9` + `mzt start` during testing
+- `_jobs.get(job_id)` returns None because auto-recovery doesn't create the wrapper task
+**Impact:** Baton jobs become uncontrollable after conductor restart. The operator can see the job running but cannot pause, cancel, or modify it. Attempting to pause actively damages the job by marking it FAILED.
+**Fix:** Auto-recovery must create a wrapper task in `_jobs`. `pause_job` must not set FAILED on jobs the baton is still running — send PauseJob event to the baton instead of checking task liveness.

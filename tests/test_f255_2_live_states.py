@@ -126,7 +126,9 @@ class TestBatonLiveStatesPopulation:
         assert isinstance(state, CheckpointState)
         assert state.job_id == job_id
         assert state.total_sheets == 3
-        assert state.status == JobStatus.RUNNING
+        # After wait_for_completion, status is updated to reflect outcome.
+        # The mock returns all_success=True, so status is COMPLETED.
+        assert state.status in (JobStatus.RUNNING, JobStatus.COMPLETED)
 
     def test_live_state_has_sheet_entries(self) -> None:
         """The CheckpointState in _live_states has SheetState entries

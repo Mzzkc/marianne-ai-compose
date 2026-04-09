@@ -1590,7 +1590,9 @@ class TestAdaptiveRetryStrategy:
         from marianne.execution.retry_strategy import AdaptiveRetryStrategy
 
         strategy = AdaptiveRetryStrategy()
+        # Should not raise when no delay_history is configured
         strategy.record_delay_outcome(ErrorCode.EXECUTION_TIMEOUT, 5.0, succeeded=True)
+        assert strategy is not None  # Survived without error
 
     def test_reset_circuit_breaker(self) -> None:
         from marianne.core.errors import ErrorCode

@@ -93,6 +93,9 @@ class TestBatonPathInstrumentPopulation:
 
         mock_request = MagicMock()
         mock_request.self_healing = False
+        mock_request.start_sheet = None
+
+        mock_config.pause_between_sheets_seconds = 0
 
         with patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet_1, mock_sheet_2]):
             with patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}):
@@ -137,6 +140,9 @@ class TestBatonPathInstrumentPopulation:
 
         mock_request = MagicMock()
         mock_request.self_healing = False
+        mock_request.start_sheet = None
+
+        mock_config.pause_between_sheets_seconds = 0
 
         with patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet]):
             with patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}):

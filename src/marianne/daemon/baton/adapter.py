@@ -517,6 +517,14 @@ class BatonAdapter:
         self._completion_events.pop(job_id, None)
         self._completion_results.pop(job_id, None)
 
+        # Clean up vestigial _synced_status entries (Phase 2: sync layer
+        # removed but dict retained for compatibility). Defensive cleanup
+        # prevents memory leaks if anything accidentally populates it.
+        if hasattr(self, "_synced_status") and self._synced_status:
+            self._synced_status = {
+                k: v for k, v in self._synced_status.items() if k[0] != job_id
+            }
+
         _logger.info("adapter.job_deregistered", extra={"job_id": job_id})
 
     # =========================================================================
@@ -707,6 +715,76 @@ class BatonAdapter:
         return job_sheets.get(sheet_num)
 
     # =========================================================================
+    # =========================================================================
+    # Completion Mode Prompt
+    # =========================================================================
+
+    @staticmethod
+    def _build_completion_suffix(state: SheetExecutionState) -> str:
+        """Build a specific completion suffix from the last attempt's results.
+
+        Instead of the generic "some validations passed but not all," this
+        extracts which validations failed from the last attempt's result
+        so the agent knows exactly what to fix. Without this specificity,
+        agents produce the same partial output every completion attempt.
+
+        Args:
+            state: The sheet's execution state with attempt_results.
+
+        Returns:
+            Completion prompt suffix with specific failure details.
+        """
+        base = (
+            "Some validations passed but not all. "
+            "Review what's done and complete the remaining work."
+        )
+
+        # Try to extract specific failure details from the last attempt
+        if not state.attempt_results:
+            return base
+
+        last = state.attempt_results[-1]
+        details = getattr(last, "validation_details", None)
+        if not details or not isinstance(details, dict):
+            return base
+
+        # Build a specific message listing what failed
+        parts = [base, "", "Specifically, these validations FAILED:"]
+
+        # The validation_details dict may have structured results
+        # from the ValidationEngine, or simple pass/fail counts.
+        # Extract what we can.
+        failed_count = details.get("failed", 0)
+        passed_count = details.get("passed", 0)
+        if failed_count > 0:
+            parts.append(
+                f"  {passed_count} passed, {failed_count} failed "
+                f"(pass rate: {details.get('pass_percentage', 0):.0f}%)"
+            )
+
+        # If the ValidationEngine included per-rule results, show them
+        results = details.get("results")
+        if isinstance(results, list):
+            for r in results:
+                if isinstance(r, dict) and not r.get("passed", True):
+                    desc = r.get("description", "unknown check")
+                    path = r.get("path", "")
+                    pattern = r.get("pattern", "")
+                    msg = f"  - FAILED: {desc}"
+                    if path:
+                        msg += f" (path: {path})"
+                    if pattern:
+                        msg += f" (expected: {pattern})"
+                    parts.append(msg)
+
+        parts.append("")
+        parts.append(
+            "Focus on fixing the FAILED validations above. "
+            "Do not redo work that already passed."
+        )
+
+        return "\n".join(parts)
+
     # Cross-Sheet Context — F-210
     # =========================================================================
 
@@ -1123,12 +1201,13 @@ class BatonAdapter:
         mode = AttemptMode.NORMAL
         completion_suffix: str | None = None
 
-        if state.completion_attempts > 0:
+        if state.completion_attempts > 0 and state.can_complete:
             mode = AttemptMode.COMPLETION
-            completion_suffix = (
-                "Some validations passed but not all. "
-                "Review what's done and complete the remaining work."
-            )
+            # Build a specific completion suffix that tells the agent exactly
+            # which validations failed. Without this, the agent produces the
+            # same partial output every completion attempt because it has no
+            # feedback about what specifically is missing.
+            completion_suffix = self._build_completion_suffix(state)
         elif state.healing_attempts > 0:
             mode = AttemptMode.HEALING
 
@@ -1535,7 +1614,58 @@ class BatonAdapter:
                     queue_size=self._baton.inbox.qsize(),
                 )
 
-                await self._baton.handle_event(event)
+                # Intercept StaleCheck: only fail if the musician task
+                # is actually dead. If the task is alive, the sheet isn't
+                # stale — the backend is still executing. Reschedule.
+                if isinstance(event, StaleCheck):
+                    task_key = (event.job_id, event.sheet_num)
+                    task = self._active_tasks.get(task_key)
+                    if task is not None and not task.done():
+                        # Task alive — not stale, reschedule in 60s
+                        self._timer_wheel.schedule(
+                            60.0,
+                            StaleCheck(
+                                job_id=event.job_id,
+                                sheet_num=event.sheet_num,
+                            ),
+                        )
+                        # Still pass to baton for logging
+                        await self._baton.handle_event(event)
+                    else:
+                        # Task dead with no result — actually stale
+                        state = self._baton.get_sheet_state(
+                            event.job_id, event.sheet_num,
+                        )
+                        if (
+                            state is not None
+                            and state.status == BatonSheetStatus.DISPATCHED
+                        ):
+                            _logger.warning(
+                                "adapter.stale_check.task_dead",
+                                extra={
+                                    "job_id": event.job_id,
+                                    "sheet_num": event.sheet_num,
+                                },
+                            )
+                            # Inject synthetic failure
+                            from marianne.daemon.baton.events import (
+                                SheetAttemptResult as SAR,
+                            )
+                            self._baton.inbox.put_nowait(SAR(
+                                job_id=event.job_id,
+                                sheet_num=event.sheet_num,
+                                instrument_name=state.instrument_name or "",
+                                attempt=state.normal_attempts + 1,
+                                execution_success=False,
+                                error_classification="STALE",
+                                error_message=(
+                                    f"Sheet {event.sheet_num}: musician task "
+                                    f"dead with no result reported"
+                                ),
+                            ))
+                        await self._baton.handle_event(event)
+                else:
+                    await self._baton.handle_event(event)
 
                 # Phase 2: persist to registry if state changed.
                 # The baton writes directly to SheetState objects in

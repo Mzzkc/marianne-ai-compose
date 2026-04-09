@@ -27,12 +27,12 @@ See: ``docs/plans/2026-03-26-baton-design.md`` — Dispatch Logic section
 
 from __future__ import annotations
 
-import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from marianne.core.logging import get_logger
 from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.events import SheetDispatched
 from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
 _logger = get_logger("daemon.baton.dispatch")
@@ -185,8 +185,14 @@ async def dispatch_ready(
             # Dispatch!
             try:
                 await callback(job_id, sheet.sheet_num, sheet)
-                sheet.status = BatonSheetStatus.DISPATCHED
-                sheet.dispatched_at = time.monotonic()
+                # Status set through event handler for traceability.
+                # Called synchronously so concurrency counting works
+                # within this dispatch cycle.
+                baton._handle_sheet_dispatched(SheetDispatched(
+                    job_id=job_id,
+                    sheet_num=sheet.sheet_num,
+                    instrument=instrument,
+                ))
                 result.record_dispatch(job_id, sheet.sheet_num)
                 global_running += 1
                 model_running[model_key] = model_count + 1

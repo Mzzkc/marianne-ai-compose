@@ -20,7 +20,7 @@ from typing import Any
 import yaml
 
 import marianne
-from marianne.core.checkpoint import CheckpointState, SheetState
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState
 from marianne.core.logging import get_logger
 from marianne.daemon.backpressure import BackpressureController
 from marianne.daemon.config import DaemonConfig
@@ -484,6 +484,66 @@ class JobManager:
 
     # ─── Helpers ───────────────────────────────────────────────────────
 
+    async def _set_job_status(
+        self,
+        job_id: str,
+        status: DaemonJobStatus,
+        *,
+        error_message: str | None = None,
+        pid: int | None = None,
+        snapshot_path: str | None = None,
+    ) -> None:
+        """Update job status across all three stores atomically.
+
+        Every job status change MUST go through this method. Direct
+        assignment to meta.status, live.status, or registry.update_status
+        produces divergent state that manifests as contradictory display
+        in mzt list vs mzt status.
+
+        The three stores:
+        1. _job_meta[job_id].status — DaemonJobStatus, serves mzt list
+        2. _live_states[job_id].status — JobStatus, serves mzt status
+        3. registry status column — string, serves historical queries
+
+        Args:
+            job_id: The job to update.
+            status: New DaemonJobStatus.
+            error_message: Optional error for FAILED status.
+            pid: Optional PID for RUNNING status.
+            snapshot_path: Optional snapshot path for terminal statuses.
+        """
+        # 1. In-memory metadata (always available for active jobs)
+        meta = self._job_meta.get(job_id)
+        if meta is not None:
+            meta.status = status
+            if error_message is not None:
+                meta.error_message = error_message
+
+        # 2. Live checkpoint state (may not exist yet for queued jobs)
+        live = self._live_states.get(job_id)
+        if live is not None:
+            _STATUS_MAP: dict[DaemonJobStatus, JobStatus] = {
+                DaemonJobStatus.QUEUED: JobStatus.PENDING,
+                DaemonJobStatus.PENDING: JobStatus.PENDING,
+                DaemonJobStatus.RUNNING: JobStatus.RUNNING,
+                DaemonJobStatus.PAUSED: JobStatus.PAUSED,
+                DaemonJobStatus.COMPLETED: JobStatus.COMPLETED,
+                DaemonJobStatus.FAILED: JobStatus.FAILED,
+                DaemonJobStatus.CANCELLED: JobStatus.CANCELLED,
+            }
+            cp_status = _STATUS_MAP.get(status)
+            if cp_status is not None:
+                live.status = cp_status
+
+        # 3. Persistent registry
+        await self._registry.update_status(
+            job_id,
+            status.value,
+            error_message=error_message,
+            pid=pid,
+            snapshot_path=snapshot_path,
+        )
+
     @staticmethod
     def _classify_orphan(orphan: JobRecord) -> DaemonJobStatus:
         """Determine the correct recovery status for an orphaned job.
@@ -513,14 +573,41 @@ class JobManager:
         """Phase 2 persist callback — save CheckpointState to registry.
 
         The baton writes directly to SheetState objects inside _live_states.
-        This callback serializes the whole CheckpointState and saves it to
-        the registry for crash recovery. No field copying, no status
-        mapping — just persist.
+        This callback refreshes CheckpointState-level metadata from the
+        current sheet states (so mzt status shows accurate progress and
+        timestamps), then serializes and saves to the registry.
         """
         live = self._live_states.get(job_id)
         if live is None:
             return
         try:
+            # Refresh checkpoint metadata from sheet states.
+            # The baton mutates sheet.status in place but doesn't call
+            # CheckpointState convenience methods, so checkpoint-level
+            # fields (updated_at, last_completed_sheet, started_at)
+            # become stale. Refresh them here before serializing.
+            from marianne.core.checkpoint import SheetStatus
+            from marianne.utils.time import utc_now
+
+            live.updated_at = utc_now()
+
+            # Count completed sheets — use count, not sequential index,
+            # because the baton completes sheets concurrently.
+            completed_count = sum(
+                1 for s in live.sheets.values()
+                if s.status == SheetStatus.COMPLETED
+            )
+            live.last_completed_sheet = completed_count
+
+            # Set started_at on first dispatch if not already set
+            if live.started_at is None:
+                any_started = any(
+                    s.status not in (SheetStatus.PENDING, SheetStatus.READY)
+                    for s in live.sheets.values()
+                )
+                if any_started:
+                    live.started_at = utc_now()
+
             checkpoint_json = live.model_dump_json()
             asyncio.get_event_loop().create_task(
                 self._registry.save_checkpoint(job_id, checkpoint_json),
@@ -1053,10 +1140,8 @@ class JobManager:
                 break  # Pressure returned — stop starting jobs
 
             request = self._pending_jobs.pop(job_id)
-            # Transition status from PENDING → QUEUED in metadata
-            meta = self._job_meta.get(job_id)
-            if meta is not None:
-                meta.status = DaemonJobStatus.QUEUED
+            # Transition status from PENDING → QUEUED across all stores
+            await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
             _logger.info(
                 "job.pending_started",
                 job_id=job_id,
@@ -1142,9 +1227,8 @@ class JobManager:
                     "get_job_status.stale_running_corrected",
                     job_id=job_id,
                 )
-                meta.status = DaemonJobStatus.FAILED
-                await self._registry.update_status(
-                    job_id, DaemonJobStatus.FAILED.value,
+                await self._set_job_status(
+                    job_id, DaemonJobStatus.FAILED,
                 )
                 # Now fall through to return the corrected checkpoint
                 # or metadata below.
@@ -1188,8 +1272,7 @@ class JobManager:
         # "running" status restored from registry after daemon restart)
         task = self._jobs.get(job_id)
         if task is None or task.done():
-            meta.status = DaemonJobStatus.FAILED
-            await self._registry.update_status(job_id, DaemonJobStatus.FAILED.value)
+            await self._set_job_status(job_id, DaemonJobStatus.FAILED)
             raise JobSubmissionError(
                 f"Job '{job_id}' has no running process "
                 f"(stale status after daemon restart)"
@@ -1204,13 +1287,7 @@ class JobManager:
                 PauseJob(job_id=job_id)
             )
             _logger.info("job.baton_pause_sent", job_id=job_id)
-            # Update ALL state stores: meta, live state, registry
-            meta.status = DaemonJobStatus.PAUSED
-            live = self._live_states.get(job_id)
-            if live is not None:
-                from marianne.core.checkpoint import JobStatus as CPJobStatus
-                live.status = CPJobStatus.PAUSED
-            await self._registry.update_status(job_id, DaemonJobStatus.PAUSED.value)
+            await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
             return True
 
         # Prefer in-process event (no filesystem access needed)
@@ -1265,12 +1342,7 @@ class JobManager:
             meta.config_path = config_path
 
         ws = workspace or meta.workspace
-        meta.status = DaemonJobStatus.QUEUED
-        # Update live state for consistency
-        live = self._live_states.get(job_id)
-        if live is not None:
-            from marianne.core.checkpoint import JobStatus as CPJobStatus
-            live.status = CPJobStatus.RUNNING  # Will be running shortly
+        await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
 
         task = asyncio.create_task(
             self._resume_job_task(job_id, ws, no_reload=no_reload),
@@ -1359,10 +1431,8 @@ class JobManager:
         # Check pending jobs first (not yet started)
         if job_id in self._pending_jobs:
             del self._pending_jobs[job_id]
-            meta = self._job_meta.get(job_id)
-            if meta:
-                meta.status = DaemonJobStatus.CANCELLED
-            # Update registry
+            await self._set_job_status(job_id, DaemonJobStatus.CANCELLED)
+            # Defer scheduler cleanup
             cleanup = asyncio.create_task(
                 self._cancel_cleanup(job_id),
                 name=f"cancel-cleanup-{job_id}",
@@ -1378,16 +1448,9 @@ class JobManager:
             return False
 
         task.cancel(msg=f"explicit cancel_job({job_id}) via IPC")
-        meta = self._job_meta.get(job_id)
-        if meta:
-            meta.status = DaemonJobStatus.CANCELLED
-        # Update live state so mzt status agrees with mzt list
-        live = self._live_states.get(job_id)
-        if live is not None:
-            from marianne.core.checkpoint import JobStatus as CPJobStatus
-            live.status = CPJobStatus.CANCELLED
+        await self._set_job_status(job_id, DaemonJobStatus.CANCELLED)
 
-        # Defer registry + scheduler cleanup so the IPC handler can
+        # Defer scheduler cleanup so the IPC handler can
         # respond immediately.  In-memory meta is already authoritative.
         cleanup = asyncio.create_task(
             self._cancel_cleanup(job_id),
@@ -2070,10 +2133,9 @@ class JobManager:
             pause_event = asyncio.Event()
             self._pause_events[job_id] = pause_event
 
-            meta.status = DaemonJobStatus.RUNNING
             meta.started_at = time.time()
-            await self._registry.update_status(
-                job_id, "running", pid=os.getpid(),
+            await self._set_job_status(
+                job_id, DaemonJobStatus.RUNNING, pid=os.getpid(),
             )
             _logger.info(start_event, job_id=job_id, timeout_seconds=timeout)
 
@@ -2082,10 +2144,10 @@ class JobManager:
 
             try:
                 result_status = await asyncio.wait_for(coro, timeout=timeout)
-                if isinstance(result_status, DaemonJobStatus):
-                    meta.status = result_status
-                else:
-                    meta.status = DaemonJobStatus.COMPLETED
+                final_status = (
+                    result_status if isinstance(result_status, DaemonJobStatus)
+                    else DaemonJobStatus.COMPLETED
+                )
 
                 # Flush observer recorder to ensure JSONL is complete before snapshot
                 if self._observer_recorder is not None:
@@ -2100,31 +2162,30 @@ class JobManager:
 
                 # Capture completion snapshot for terminal statuses
                 snapshot_path: str | None = None
-                if meta.status in (DaemonJobStatus.COMPLETED, DaemonJobStatus.FAILED):
+                if final_status in (DaemonJobStatus.COMPLETED, DaemonJobStatus.FAILED):
                     snapshot_path = self._snapshot_manager.capture(
                         job_id, meta.workspace,
                         config_path=meta.config_path,
                     )
 
-                await self._registry.update_status(
-                    job_id, meta.status.value,
-                    snapshot_path=snapshot_path,
+                await self._set_job_status(
+                    job_id, final_status, snapshot_path=snapshot_path,
                 )
                 _logger.info(
-                    "job.paused" if meta.status == DaemonJobStatus.PAUSED
+                    "job.paused" if final_status == DaemonJobStatus.PAUSED
                     else "job.completed",
                     job_id=job_id,
                 )
 
             except TimeoutError:
-                meta.status = DaemonJobStatus.FAILED
                 elapsed = time.monotonic() - (meta.started_at or 0)
-                meta.error_message = (
+                error_msg = (
                     f"Job exceeded timeout of {timeout:.0f}s "
                     f"(ran for {elapsed:.0f}s)"
                 )
-                await self._registry.update_status(
-                    job_id, "failed", error_message=meta.error_message,
+                meta.error_traceback = None
+                await self._set_job_status(
+                    job_id, DaemonJobStatus.FAILED, error_message=error_msg,
                 )
                 self._recent_failures.append(time.monotonic())
                 _logger.error(
@@ -2135,11 +2196,12 @@ class JobManager:
                 )
 
             except asyncio.CancelledError as cancel_exc:
-                # cancel_job() already set meta.status = CANCELLED and
-                # deferred the registry write to _cancel_cleanup().
-                # Only update meta if it wasn't set yet (e.g. external cancel).
+                # cancel_job() already called _set_job_status(CANCELLED).
+                # Only update if it wasn't set yet (e.g. external cancel).
                 if meta.status != DaemonJobStatus.CANCELLED:
-                    meta.status = DaemonJobStatus.CANCELLED
+                    await self._set_job_status(
+                        job_id, DaemonJobStatus.CANCELLED,
+                    )
                 cancel_reason = str(cancel_exc) if str(cancel_exc) else "unknown"
                 _logger.error(
                     "job.cancelled_during_execution",
@@ -2151,22 +2213,19 @@ class JobManager:
             except (OSError, ValueError, DaemonError) as exc:
                 # Expected operational errors: workspace issues, config errors,
                 # permission denied, missing directories, etc.
-                meta.status = DaemonJobStatus.FAILED
-                meta.error_message = str(exc)
                 meta.error_traceback = traceback.format_exc()
-                await self._registry.update_status(
-                    job_id, "failed", error_message=meta.error_message,
+                await self._set_job_status(
+                    job_id, DaemonJobStatus.FAILED, error_message=str(exc),
                 )
                 self._recent_failures.append(time.monotonic())
                 _logger.error(fail_event, job_id=job_id, error=str(exc))
 
             except Exception as exc:
                 # Unexpected programming bugs — log with full traceback
-                meta.status = DaemonJobStatus.FAILED
-                meta.error_message = f"Unexpected internal error: {exc}"
                 meta.error_traceback = traceback.format_exc()
-                await self._registry.update_status(
-                    job_id, "failed", error_message=meta.error_message,
+                await self._set_job_status(
+                    job_id, DaemonJobStatus.FAILED,
+                    error_message=f"Unexpected internal error: {exc}",
                 )
                 self._recent_failures.append(time.monotonic())
                 _logger.exception(
@@ -2371,17 +2430,15 @@ class JobManager:
                 meta.completed_new_work = True
 
             # Update job-level status in the live CheckpointState so
-            # mzt status (reads _live_states) agrees with mzt list
-            # (reads registry). Without this, live.status stays RUNNING
-            # after all sheets are terminal.
+            # Update job-level status so mzt status agrees with mzt list.
+            baton_final = (
+                DaemonJobStatus.COMPLETED if all_success
+                else DaemonJobStatus.FAILED
+            )
+            await self._set_job_status(job_id, baton_final)
+            # Set completion timestamp on live state
             live = self._live_states.get(job_id)
             if live is not None:
-                from marianne.core.checkpoint import JobStatus as CPJobStatus
-
-                live.status = (
-                    CPJobStatus.COMPLETED if all_success
-                    else CPJobStatus.FAILED
-                )
                 live.completed_at = utc_now()
 
             # Publish completion event
@@ -2502,6 +2559,14 @@ class JobManager:
         # status display and state_sync_callback work during resumed execution.
         self._live_states[job_id] = checkpoint
 
+        # Now that _live_states exists, set RUNNING across all three stores.
+        # _run_managed_task already set meta + registry to RUNNING, but
+        # _live_states was created after that with the checkpoint's stale
+        # status (paused/failed). This ensures consistency.
+        await self._set_job_status(
+            job_id, DaemonJobStatus.RUNNING, pid=os.getpid(),
+        )
+
         # Recover job with checkpoint state
         # F-158: Pass prompt_config and parallel_enabled (same as _run_via_baton)
         # Phase 2: pass checkpoint.sheets so the baton writes to the same
@@ -2538,16 +2603,14 @@ class JobManager:
             if meta and self._baton_adapter.has_completed_sheets(job_id):
                 meta.completed_new_work = True
 
-            # Update job-level status in the live CheckpointState (same
-            # as _run_via_baton — keeps mzt status and mzt list in sync).
+            # Update job-level status across all three stores.
+            resume_final = (
+                DaemonJobStatus.COMPLETED if all_success
+                else DaemonJobStatus.FAILED
+            )
+            await self._set_job_status(job_id, resume_final)
             live = self._live_states.get(job_id)
             if live is not None:
-                from marianne.core.checkpoint import JobStatus as CPJobStatus
-
-                live.status = (
-                    CPJobStatus.COMPLETED if all_success
-                    else CPJobStatus.FAILED
-                )
                 live.completed_at = utc_now()
 
             await self._baton_adapter.publish_job_event(
@@ -2773,11 +2836,9 @@ class JobManager:
 
         # If any hook failed, downgrade job from COMPLETED to FAILED
         if any_failed and meta.status == DaemonJobStatus.COMPLETED:
-            meta.status = DaemonJobStatus.FAILED
-            meta.error_message = "Post-success hook failed"
             try:
-                await self._registry.update_status(
-                    job_id, "failed",
+                await self._set_job_status(
+                    job_id, DaemonJobStatus.FAILED,
                     error_message="Post-success hook failed",
                 )
             except Exception:
@@ -2997,13 +3058,16 @@ class JobManager:
             if exc:
                 meta = self._job_meta.get(job_id)
                 if meta and meta.status == DaemonJobStatus.RUNNING:
+                    # _on_task_done is sync; set meta immediately, schedule
+                    # the async registry + live_state update via _set_job_status.
                     meta.status = DaemonJobStatus.FAILED
                     meta.error_message = str(exc)
                     update_task = asyncio.create_task(
-                        self._registry.update_status(
-                            job_id, "failed", error_message=str(exc),
+                        self._set_job_status(
+                            job_id, DaemonJobStatus.FAILED,
+                            error_message=str(exc),
                         ),
-                        name=f"registry-update-{job_id}",
+                        name=f"status-update-{job_id}",
                     )
                     update_task.add_done_callback(
                         lambda t: log_task_exception(

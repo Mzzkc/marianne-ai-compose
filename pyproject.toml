@@ -29,7 +29,7 @@ dependencies = [
 
     # HTTP (for API backend + notifications)
     "httpx>=0.27.0",
-    "anthropic>=0.18.0",
+    "anthropic>=0.87.0",         # CVE-2026-34450, CVE-2026-34452
 
     # Dashboard
     "fastapi>=0.109.0",
@@ -109,8 +109,8 @@ warn_unused_ignores = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 timeout = 30  # Safety net: kill any test that runs >30s (prevents orphaned processes)
-addopts = "-q --tb=short"
-# Coverage: run explicitly with `pytest --cov=marianne --cov-report=term-missing:skip-covered --cov-report=json:coverage.json --no-cov-on-fail`
+addopts = "-q --tb=short -n auto"
+# Coverage: run explicitly with `pytest --cov=mzt --cov-report=term-missing:skip-covered --cov-report=json:coverage.json --no-cov-on-fail`
 markers = [
     "adversarial: tests with adversarial/garbage inputs",
     "smoke: basic smoke tests for critical paths",

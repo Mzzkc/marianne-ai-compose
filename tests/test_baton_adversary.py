@@ -317,12 +317,16 @@ class TestDependencyPropagationComplex:
         # Fail sheet 1
         await baton.handle_event(_failure_event(job_id="j", sheet_num=1))
 
-        # All should be failed
-        for i in range(1, 5):
-            assert baton.get_sheet_state("j", i).status == "failed", f"Sheet {i}"
+        # Sheet 1 is the primary failure
+        assert baton.get_sheet_state("j", 1).status == "failed", "Sheet 1"
+        # Dependents should be SKIPPED (blocked by failed dependency)
+        for i in range(2, 5):
+            assert baton.get_sheet_state("j", i).status == "skipped", (
+                f"Sheet {i} should be SKIPPED (blocked by failed dependency)"
+            )
 
     async def test_wide_fan_out_propagation(self) -> None:
-        """Sheet 1 has 50 direct dependents. All should fail when 1 fails."""
+        """Sheet 1 has 50 direct dependents. All should be blocked when 1 fails."""
         baton = BatonCore()
         sheets = {
             i: SheetExecutionState(sheet_num=i, instrument_name="x", max_retries=1)
@@ -333,8 +337,13 @@ class TestDependencyPropagationComplex:
 
         await baton.handle_event(_failure_event(job_id="j", sheet_num=1))
 
-        for i in range(1, 52):
-            assert baton.get_sheet_state("j", i).status == "failed", f"Sheet {i}"
+        # Sheet 1 is the primary failure
+        assert baton.get_sheet_state("j", 1).status == "failed", "Sheet 1"
+        # All dependents should be SKIPPED (blocked by failed dependency)
+        for i in range(2, 52):
+            assert baton.get_sheet_state("j", i).status == "skipped", (
+                f"Sheet {i} should be SKIPPED (blocked by failed dependency)"
+            )
 
     async def test_propagation_skips_already_completed(self) -> None:
         """If a dependent is already completed, propagation doesn't touch it."""
@@ -350,7 +359,7 @@ class TestDependencyPropagationComplex:
         await baton.handle_event(_failure_event(job_id="j", sheet_num=1))
 
         assert baton.get_sheet_state("j", 2).status == "completed"  # preserved
-        assert baton.get_sheet_state("j", 3).status == "failed"  # propagated
+        assert baton.get_sheet_state("j", 3).status == "skipped"  # blocked by failed dependency
 
     async def test_propagation_with_no_dependents(self) -> None:
         """Failing a leaf sheet should not affect siblings."""
@@ -387,7 +396,7 @@ class TestDependencyPropagationComplex:
         await baton.handle_event(_failure_event(job_id="j", sheet_num=1))
 
         assert baton.get_sheet_state("j", 1).status == "failed"
-        assert baton.get_sheet_state("j", 2).status == "failed"
+        assert baton.get_sheet_state("j", 2).status == "skipped"  # blocked by failed dependency
 
     async def test_deep_chain_propagation(self) -> None:
         """Chain: 1 → 2 → 3 → ... → 100. Failing 1 propagates to all."""
@@ -402,8 +411,13 @@ class TestDependencyPropagationComplex:
 
         await baton.handle_event(_failure_event(job_id="j", sheet_num=1))
 
-        for i in range(1, n + 1):
-            assert baton.get_sheet_state("j", i).status == "failed", f"Sheet {i}"
+        # Sheet 1 is the primary failure
+        assert baton.get_sheet_state("j", 1).status == "failed", "Sheet 1"
+        # All dependents should be SKIPPED (blocked by failed dependency)
+        for i in range(2, n + 1):
+            assert baton.get_sheet_state("j", i).status == "skipped", (
+                f"Sheet {i} should be SKIPPED (blocked by failed dependency)"
+            )
 
         # Verify job is complete (all terminal)
         assert baton.is_job_complete("j")

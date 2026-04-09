@@ -186,8 +186,8 @@ class TestZeroPassRateRetryBudget:
 
         # Partial pass uses completion budget, not retry budget
         assert sheets[1].completion_attempts > 0
-        # Status should be PENDING (ready for completion mode redispatch)
-        assert sheets[1].status == BatonSheetStatus.PENDING
+        # Status should be RETRY_SCHEDULED (completion retry with backoff)
+        assert sheets[1].status == BatonSheetStatus.RETRY_SCHEDULED
 
 
 # =============================================================================

@@ -353,13 +353,14 @@ class TestCompletionMode:
         )
 
     async def test_completion_exhausted_fails_sheet(self) -> None:
-        """When completion attempts are exhausted, sheet fails."""
+        """When completion attempts are exhausted and no retries remain,
+        the sheet fails."""
         baton = _make_baton_with_instruments(
             instruments={"claude-code": 4}
         )
         sheets = _make_sheets(1, instrument="claude-code")
         sheets[1].status = BatonSheetStatus.DISPATCHED
-        sheets[1].max_retries = 3
+        sheets[1].max_retries = 0  # No normal retries — completion exhaustion is terminal
         sheets[1].max_completion = 1  # Only 1 completion attempt
         sheets[1].completion_attempts = 0
         baton.register_job("j1", sheets, {2: [1]})
@@ -394,8 +395,9 @@ class TestCompletionMode:
             validation_pass_rate=66.7,
         ))
 
-        # Should be failed now (completion exhausted + retries available
-        # doesn't matter for completion mode)
+        # Completion exhausted + no normal retries → FAILED
+        # (with max_retries > 0, Path 4 would fire and the sheet
+        # would get RETRY_SCHEDULED as a last resort)
         assert sheet.status == BatonSheetStatus.FAILED
 
 

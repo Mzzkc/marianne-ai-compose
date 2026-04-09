@@ -191,7 +191,7 @@ class TestSerializationRoundtrip:
         sheet = _make_sheet(1, "gemini-cli", ["ollama", "local"])
         sheet.current_instrument_index = 1
         sheet.fallback_attempts = {"claude-code": 3}
-        sheet.fallback_history = [
+        sheet.instrument_fallback_history = [
             {"from": "claude-code", "to": "gemini-cli",
              "reason": "rate_limit_exhausted",
              "timestamp": "2026-04-06T00:00:00"},
@@ -203,8 +203,8 @@ class TestSerializationRoundtrip:
         assert restored.fallback_chain == ["ollama", "local"]
         assert restored.current_instrument_index == 1
         assert restored.fallback_attempts == {"claude-code": 3}
-        assert len(restored.fallback_history) == 1
-        assert restored.fallback_history[0]["from"] == "claude-code"
+        assert len(restored.instrument_fallback_history) == 1
+        assert restored.instrument_fallback_history[0]["from"] == "claude-code"
 
     def test_empty_fallback_fields_roundtrip(self) -> None:
         sheet = _make_sheet(1, "claude-code")
@@ -214,7 +214,7 @@ class TestSerializationRoundtrip:
         assert restored.fallback_chain == []
         assert restored.current_instrument_index == 0
         assert restored.fallback_attempts == {}
-        assert restored.fallback_history == []
+        assert restored.instrument_fallback_history == []
 
 
 class TestAdvanceFallbackEdgeCases:
@@ -244,13 +244,13 @@ class TestAdvanceFallbackEdgeCases:
         sheet.advance_fallback("unavailable")
         sheet.advance_fallback("rate_limit_exhausted")
 
-        assert len(sheet.fallback_history) == 2
-        assert sheet.fallback_history[0]["from"] == "claude-code"
-        assert sheet.fallback_history[0]["to"] == "gemini-cli"
-        assert sheet.fallback_history[0]["reason"] == "unavailable"
-        assert sheet.fallback_history[1]["from"] == "gemini-cli"
-        assert sheet.fallback_history[1]["to"] == "ollama"
-        assert sheet.fallback_history[1]["reason"] == "rate_limit_exhausted"
+        assert len(sheet.instrument_fallback_history) == 2
+        assert sheet.instrument_fallback_history[0]["from"] == "claude-code"
+        assert sheet.instrument_fallback_history[0]["to"] == "gemini-cli"
+        assert sheet.instrument_fallback_history[0]["reason"] == "unavailable"
+        assert sheet.instrument_fallback_history[1]["from"] == "gemini-cli"
+        assert sheet.instrument_fallback_history[1]["to"] == "ollama"
+        assert sheet.instrument_fallback_history[1]["reason"] == "rate_limit_exhausted"
 
     def test_advance_preserves_attempt_count(self) -> None:
         """fallback_attempts tracks attempts per instrument."""

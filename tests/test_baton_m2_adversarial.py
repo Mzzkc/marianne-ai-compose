@@ -289,8 +289,12 @@ class TestCostEnforcementAdversarial:
         assert sheet2 is not None
         assert sheet3 is not None
         assert sheet1.status == BatonSheetStatus.FAILED
-        assert sheet2.status == BatonSheetStatus.FAILED
-        assert sheet3.status == BatonSheetStatus.FAILED
+        assert sheet2.status == BatonSheetStatus.SKIPPED, (
+            "Sheet 2 should be SKIPPED (blocked by failed dependency)"
+        )
+        assert sheet3.status == BatonSheetStatus.SKIPPED, (
+            "Sheet 3 should be SKIPPED (blocked by failed dependency)"
+        )
 
     @pytest.mark.asyncio
     async def test_cost_accumulates_across_retries(self) -> None:
@@ -438,7 +442,8 @@ class TestCompletionModeAdversarial:
 
         sheet = baton.get_sheet_state("j1", 1)
         assert sheet is not None
-        assert sheet.status == BatonSheetStatus.PENDING
+        # Completion mode now schedules retry with backoff (not direct PENDING)
+        assert sheet.status == BatonSheetStatus.RETRY_SCHEDULED
         assert sheet.completion_attempts == 1
 
     @pytest.mark.asyncio
@@ -458,7 +463,7 @@ class TestCompletionModeAdversarial:
         await baton.handle_event(_partial_success_event(attempt=1))
         sheet = baton.get_sheet_state("j1", 1)
         assert sheet is not None
-        assert sheet.status == BatonSheetStatus.PENDING
+        assert sheet.status == BatonSheetStatus.RETRY_SCHEDULED
 
         await baton.handle_event(_partial_success_event(attempt=2))
         # max_completion=2, completion_attempts now 2, can_complete=False
@@ -497,11 +502,14 @@ class TestCompletionModeAdversarial:
         )}
         baton.register_job("j1", sheets, {})
 
-        # First: partial success → completion mode
+        # First: partial success → completion mode (scheduled for retry with backoff)
         await baton.handle_event(_partial_success_event(attempt=1))
         sheet = baton.get_sheet_state("j1", 1)
         assert sheet is not None
-        assert sheet.status == BatonSheetStatus.PENDING
+        assert sheet.status == BatonSheetStatus.RETRY_SCHEDULED
+
+        # Timer fires — sheet moves to PENDING for dispatch
+        await baton.handle_event(RetryDue(job_id="j1", sheet_num=1))
 
         # Second: full success → completed
         await baton.handle_event(_success_event(attempt=2))
@@ -559,11 +567,16 @@ class TestFailurePropagationAdversarial:
         # Fail sheet 1 — should propagate to 2, 3, 4
         await baton.handle_event(_fail_event(sheet_num=1))
 
-        for i in range(1, 5):
+        sheet1 = baton.get_sheet_state("j1", 1)
+        assert sheet1 is not None
+        assert sheet1.status == BatonSheetStatus.FAILED, (
+            "Sheet 1 should be FAILED (primary failure)"
+        )
+        for i in range(2, 5):
             sheet = baton.get_sheet_state("j1", i)
             assert sheet is not None
-            assert sheet.status == BatonSheetStatus.FAILED, (
-                f"Sheet {i} should be FAILED"
+            assert sheet.status == BatonSheetStatus.SKIPPED, (
+                f"Sheet {i} should be SKIPPED (blocked by failed dependency)"
             )
 
     @pytest.mark.asyncio
@@ -585,7 +598,9 @@ class TestFailurePropagationAdversarial:
         assert sheet2.status == BatonSheetStatus.COMPLETED
         sheet3 = baton.get_sheet_state("j1", 3)
         assert sheet3 is not None
-        assert sheet3.status == BatonSheetStatus.FAILED
+        assert sheet3.status == BatonSheetStatus.SKIPPED, (
+            "Sheet 3 should be SKIPPED (blocked by failed dependency)"
+        )
 
     @pytest.mark.asyncio
     async def test_wide_fan_out_propagation(self) -> None:
@@ -597,10 +612,17 @@ class TestFailurePropagationAdversarial:
 
         await baton.handle_event(_fail_event(sheet_num=1))
 
-        for i in range(1, 21):
+        sheet1 = baton.get_sheet_state("j1", 1)
+        assert sheet1 is not None
+        assert sheet1.status == BatonSheetStatus.FAILED, (
+            "Sheet 1 should be FAILED (primary failure)"
+        )
+        for i in range(2, 21):
             sheet = baton.get_sheet_state("j1", i)
             assert sheet is not None
-            assert sheet.status == BatonSheetStatus.FAILED
+            assert sheet.status == BatonSheetStatus.SKIPPED, (
+                f"Sheet {i} should be SKIPPED (blocked by failed dependency)"
+            )
 
     @pytest.mark.asyncio
     async def test_concurrent_failures_in_parallel_branches(self) -> None:
@@ -617,7 +639,9 @@ class TestFailurePropagationAdversarial:
 
         sheet3 = baton.get_sheet_state("j1", 3)
         assert sheet3 is not None
-        assert sheet3.status == BatonSheetStatus.FAILED
+        assert sheet3.status == BatonSheetStatus.SKIPPED, (
+            "Sheet 3 should be SKIPPED (blocked by failed dependency)"
+        )
 
     @pytest.mark.asyncio
     async def test_propagation_through_intermediate_terminal(self) -> None:
@@ -640,7 +664,9 @@ class TestFailurePropagationAdversarial:
         assert sheet2.status == BatonSheetStatus.CANCELLED
         sheet3 = baton.get_sheet_state("j1", 3)
         assert sheet3 is not None
-        assert sheet3.status == BatonSheetStatus.FAILED
+        assert sheet3.status == BatonSheetStatus.SKIPPED, (
+            "Sheet 3 should be SKIPPED (blocked by failed dependency)"
+        )
 
     @pytest.mark.asyncio
     async def test_auth_failure_triggers_propagation(self) -> None:
@@ -666,7 +692,9 @@ class TestFailurePropagationAdversarial:
         assert sheet1 is not None
         assert sheet2 is not None
         assert sheet1.status == BatonSheetStatus.FAILED
-        assert sheet2.status == BatonSheetStatus.FAILED
+        assert sheet2.status == BatonSheetStatus.SKIPPED, (
+            "Sheet 2 should be SKIPPED (blocked by failed dependency)"
+        )
 
 
 # =============================================================================
@@ -755,7 +783,9 @@ class TestProcessCrashExhaustion:
         assert sheet1.status == BatonSheetStatus.FAILED
         sheet2 = baton.get_sheet_state("j1", 2)
         assert sheet2 is not None
-        assert sheet2.status == BatonSheetStatus.FAILED
+        assert sheet2.status == BatonSheetStatus.SKIPPED, (
+            "Sheet 2 should be SKIPPED (blocked by failed dependency)"
+        )
 
 
 # =============================================================================
@@ -950,7 +980,8 @@ class TestSerializationM2Fields:
         assert restored.max_completion == 8
         assert restored.total_cost_usd == pytest.approx(2.50)
         assert restored.total_duration_seconds == pytest.approx(120.5)
-        assert restored.next_retry_at == pytest.approx(12345.678)
+        # next_retry_at is transient (exclude=True) — not persisted, resets to None
+        assert restored.next_retry_at is None
 
     def test_instrument_state_with_open_breaker(self) -> None:
         """InstrumentState with open circuit breaker and rate limit
@@ -1274,7 +1305,9 @@ class TestEscalationDecisionVariants:
         assert sheet1.status == BatonSheetStatus.FAILED
         sheet2 = baton.get_sheet_state("j1", 2)
         assert sheet2 is not None
-        assert sheet2.status == BatonSheetStatus.FAILED
+        assert sheet2.status == BatonSheetStatus.SKIPPED, (
+            "Sheet 2 should be SKIPPED (blocked by failed dependency)"
+        )
 
     @pytest.mark.asyncio
     async def test_escalation_resolved_on_non_fermata_is_noop(self) -> None:
