@@ -922,7 +922,7 @@ def _build_movement_groups(
             mv_status = "completed"
         elif any(s == "failed" for s in statuses):
             mv_status = "failed"
-        elif any(s in ("in_progress", "running") for s in statuses):
+        elif any(s in ("playing", "retrying", "waiting", "fermata") for s in statuses):
             mv_status = "running"
         elif all(s == "skipped" for s in statuses):
             mv_status = "skipped"
@@ -1274,7 +1274,7 @@ def _render_sheet_summary(job: CheckpointState) -> None:
             display_label, sheet_color = format_sheet_display_status(
                 sheet.status, sheet.validation_passed,
             )
-            parts: list[str] = [
+            sheet_parts: list[str] = [
                 f"  Sheet {sheet_num:>4d}:",
                 f"[{sheet_color}]{display_label}[/{sheet_color}]",
             ]
@@ -1284,26 +1284,26 @@ def _render_sheet_summary(job: CheckpointState) -> None:
                 inst = sheet.instrument_name
                 if sheet.instrument_model:
                     inst = f"{inst} ({sheet.instrument_model})"
-                parts.append(f"[dim]{inst}[/dim]")
+                sheet_parts.append(f"[dim]{inst}[/dim]")
 
             # Attempts used
             attempts = sheet.attempt_count or 0
             if attempts > 1:
-                parts.append(f"[dim]attempt {attempts}[/dim]")
+                sheet_parts.append(f"[dim]attempt {attempts}[/dim]")
 
             # Elapsed time for active sheets
             if sheet.status in (SheetStatus.DISPATCHED, SheetStatus.IN_PROGRESS):
                 if sheet.started_at:
                     elapsed = datetime.now(UTC) - sheet.started_at
-                    parts.append(f"[dim]{format_duration(elapsed.total_seconds())}[/dim]")
+                    sheet_parts.append(f"[dim]{format_duration(elapsed.total_seconds())}[/dim]")
             elif sheet.execution_duration_seconds is not None:
-                parts.append(f"[dim]{format_duration(sheet.execution_duration_seconds)}[/dim]")
+                sheet_parts.append(f"[dim]{format_duration(sheet.execution_duration_seconds)}[/dim]")
 
             # Error message for failed sheets
             if sheet.error_message:
-                parts.append(f"— {sheet.error_message[:45]}...")
+                sheet_parts.append(f"— {sheet.error_message[:45]}...")
 
-            console.print(" ".join(parts))
+            console.print(" ".join(sheet_parts))
 
         if len(interesting_sheets) > 20:
             console.print(

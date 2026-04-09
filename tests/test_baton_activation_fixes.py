@@ -484,6 +484,7 @@ def _make_mock_manager() -> MagicMock:
     # Registry must be async-compatible since _set_job_status awaits it
     manager._registry = MagicMock()
     manager._registry.update_status = AsyncMock()
+    manager._registry.save_checkpoint = AsyncMock()  # F-493: resume path persists started_at
 
     return manager
 

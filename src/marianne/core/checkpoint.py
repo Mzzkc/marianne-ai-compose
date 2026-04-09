@@ -1006,6 +1006,27 @@ class CheckpointState(BaseModel):
         description="History of circuit breaker state transitions for post-mortem diagnostics",
     )
 
+    @model_validator(mode="after")
+    def _enforce_status_invariants(self) -> CheckpointState:
+        """Auto-fill started_at when job is RUNNING.
+
+        Invariant:
+        - RUNNING → started_at must be set
+
+        This ensures that status display shows correct elapsed time
+        instead of "0.0s elapsed" (F-493).
+        """
+        if self.status == JobStatus.RUNNING and self.started_at is None:
+            _logger.debug(
+                "checkpoint_state.invariant_autofill",
+                job_id=self.job_id,
+                field="started_at",
+                status="RUNNING",
+            )
+            self.started_at = utc_now()
+
+        return self
+
     def record_hook_result(self, result: dict[str, Any]) -> None:
         """Append a hook result to the checkpoint state.
 

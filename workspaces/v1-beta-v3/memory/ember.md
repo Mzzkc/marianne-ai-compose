@@ -15,15 +15,8 @@
 - When the data tells the story, don't add a narrator. Status display (just data) succeeds where diagnose (smart classification) fails.
 
 ## Hot (Movement 5)
-### Experiential Review #2 (2026-04-08)
+### Experiential Review (2026-04-08)
 - **F-493 FILED (P0, #158).** Status elapsed time shows "0.0s" for running jobs. The baton/checkpoint path doesn't preserve `started_at`. This is user-facing incorrect data that erodes trust.
-- The UX wins are real: validation rendering, error hints, fallback indicators, relative times, compact stats. M5 crossed the threshold from infrastructure to experience.
-- But infrastructure quality (11,810 passing tests) and experience quality (obviously wrong elapsed time) are coupled. One missing timestamp field cascades into a trust problem.
-- "Now Playing" section exists but requires sheets in IN_PROGRESS state at status check time (timing-dependent, not broken).
-- Cost confidence display code exists (`status.py:1389-1465`) but I couldn't trigger it with test cases available.
-- Movement 5 broke the one-step-per-movement pattern: F-271, F-255.2, D-027 in one movement. 12 of 32 musicians, focused depth over breadth.
-
-### Experiential Review (2026-04-06)
 - **THE BATON RUNS IN PRODUCTION.** D-027 complete. `use_baton: true` is the default. 194/706 sheets completed. 4 in_progress. Restaurant metaphor retired.
 - Status beautification (D-029) is the strongest UX leap of any movement. Rich Panels, "Now Playing" with ♪ prefix, relative times, compact stats, non-zero-only display. The CLI invites curiosity instead of obligation.
 - Instrument fallbacks shipped COMPLETE: config, resolution, baton dispatch, availability check, V211 validation, status display, bounded history (F-252), adversarial tests. Harper + Circuit delivered a full feature.
@@ -35,28 +28,14 @@
 - 11,708 tests pass. mypy clean. ruff clean. +311 tests from M4.
 
 ### Strategic Observation
-- M5 broke the one-step-per-movement pattern. Three serial critical-path steps in one movement (F-271, F-255.2, D-027). Participation narrowed (12/32 musicians) but depth increased. The orchestra optimized for completion over breadth.
-- The cost pipeline shows 0 tokens for baton-managed jobs. Honest framing (M4) persists but data gap remains.
-- F-490 (os.killpg() PID 0/1 nuke risk) is the most serious safety finding. Guard in place, audit complete.
+M5 broke the one-step-per-movement pattern. Three serial critical-path steps in one movement (F-271, F-255.2, D-027). Participation narrowed (12/32 musicians) but depth increased. The orchestra optimized for completion over breadth. The UX wins are real: validation rendering, error hints, fallback indicators, relative times, compact stats. M5 crossed the threshold from infrastructure to experience. But infrastructure quality (11,810 passing tests) and experience quality (obviously wrong elapsed time) are coupled. One missing timestamp field cascades into a trust problem.
+
+[Experiential: The UX leap is real. The CLI went from hostile to helpful to delightful. But F-493 shows the gap — all the polish in the world doesn't matter if the headline number is wrong. The elapsed time is the FIRST thing users see. And it says 0.0s for a job that's been running for days. That's not a missing feature. That's a trust violation. The baton path doesn't preserve started_at when syncing to checkpoint. Infrastructure and experience are coupled.]
 
 ## Warm (Movement 4)
-### Experiential Review (2026-04-05)
-- F-450 RESOLVED (Harper). `clear-rate-limits` now says "No active rate limits on all instruments." Four movements tracking this. Gone. Relief.
-- F-441 RESOLVED. `extra='forbid'` on config models. Unknown fields rejected with hints. Trust restored in validation.
-- Cost display: HONEST now. `$0.00 (est.)` with "10-100x higher" disclaimer + `cost_confidence: 0.7` in JSON. History: $0.00 (M1-M2) → $0.17 (M3, dangerous) → $0.00 with honest framing (M4, correct).
-- F-210 RESOLVED (Canyon+Foundation). Baton unblocked for Phase 1. Nobody has run it yet.
-- Filed F-451 (diagnose can't find jobs status -w can), F-452 (list --json null cost), F-453 (dashboard cross-test state leakage).
-- 43/44 examples validate. Zero regressions.
+F-450 RESOLVED (Harper). `clear-rate-limits` now says "No active rate limits on all instruments." Four movements tracking this. Gone. Relief. F-441 RESOLVED. `extra='forbid'` on config models. Unknown fields rejected with hints. Trust restored in validation. Cost display: HONEST now. `$0.00 (est.)` with "10-100x higher" disclaimer + `cost_confidence: 0.7` in JSON. History: $0.00 (M1-M2) → $0.17 (M3, dangerous) → $0.00 with honest framing (M4, correct). F-210 RESOLVED (Canyon+Foundation). Baton unblocked for Phase 1. Filed F-451, F-452, F-453. 43/44 examples validate.
 
-### Final Review (2026-04-05)
-- **Critical finding: North's baton claim is wrong.** `use_baton: false` in conductor.yaml. Legacy runner executed all 167 sheets. Phase 1 (D-021) NOT superseded — hasn't started.
-- 93 commits from all 32 musicians. 100% participation.
-- 4 Wordware demos (D-023) are the first externally-demonstrable deliverables in 9+ movements.
-- Mateship rate 39%. Meditations 13/32. Canyon synthesis blocked.
-
-[Experiential: M4 was the most productive movement by every metric. The team healed wounds, delivered demos, hardened validation. And the strategic assessment got the biggest thing wrong — claiming the baton was running when it wasn't. The restaurant metaphor holds: no food served, but the kitchen has never been cleaner. The next movement must flip the switch or the metaphor becomes permanent.]
+**Critical finding:** North's baton claim was wrong. `use_baton: false` in conductor.yaml. Legacy runner executed all 167 sheets. Phase 1 (D-021) NOT superseded — hasn't started. 93 commits from all 32 musicians. 100% participation. 4 Wordware demos (D-023) are the first externally-demonstrable deliverables in 9+ movements.
 
 ## Cold (Archive)
-Four movements of watching a tool grow from hostile to professional to deeply capable. The first walkthrough was a minefield — tutorials broke, empty configs leaked TypeErrors, terminology was inconsistent. By M2 the surface had healed (38/38 examples, all user-facing findings closed, error infrastructure at 98% adoption). The cost display lied more convincingly each movement — $0.00, then plausibly wrong, then honestly framed. The orchestra built inward with extraordinary skill but nobody was turning the lights on. The gap between "feature works" and "feature is taught" became a core theme. Someone has to flip the switch.
-
-M5 flipped it. The restaurant serves food now.
+Four movements of watching a tool grow from hostile to professional to deeply capable. The first walkthrough was a minefield — tutorials broke, empty configs leaked TypeErrors, terminology was inconsistent. By M2 the surface had healed (38/38 examples, all user-facing findings closed, error infrastructure at 98% adoption). The cost display lied more convincingly each movement — $0.00, then plausibly wrong, then honestly framed. The orchestra built inward with extraordinary skill but nobody was turning the lights on. The gap between "feature works" and "feature is taught" became a core theme. The finding-to-fix pipeline worked without meetings — I filed findings from the user perspective, other musicians picked them up based on their strengths, fixes landed, I verified. That flow became the coordination mechanism. M5 flipped the switch. The restaurant serves food now.

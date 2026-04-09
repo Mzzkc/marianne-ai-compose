@@ -225,7 +225,7 @@ class TestFormatSheetDisplayStatus:
 
     def test_in_progress_status_unchanged(self) -> None:
         label, color = format_sheet_display_status(SheetStatus.IN_PROGRESS, None)
-        assert label == "in_progress"
+        assert label == "playing"
         assert color == "green"
 
     def test_skipped_status_unchanged(self) -> None:

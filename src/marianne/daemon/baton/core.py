@@ -57,7 +57,6 @@ from marianne.daemon.baton.events import (
 )
 from marianne.daemon.baton.state import (
     _DISPATCHABLE_BATON_STATUSES,
-    _SATISFIED_BATON_STATUSES,
     _TERMINAL_BATON_STATUSES,
     BatonSheetStatus,
     CircuitBreakerState,
@@ -863,12 +862,10 @@ class BatonCore:
         """
         if dep_sheet.status == BatonSheetStatus.COMPLETED:
             return True
-        if (
+        return (
             dep_sheet.status == BatonSheetStatus.SKIPPED
             and dep_sheet.error_code is None
-        ):
-            return True
-        return False
+        )
 
     def _is_dependency_satisfied(self, job: _JobRecord, dep_num: int) -> bool:
         """Check if a dependency sheet is in a satisfied state.

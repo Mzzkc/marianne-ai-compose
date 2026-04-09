@@ -1,7 +1,8 @@
 ### F-493: Status Elapsed Time Shows "0.0s" for Running Jobs
 **Found by:** Ember, Movement 5
 **Severity:** P0 (critical)
-**Status:** Open
+**Status:** Resolved (Movement 6, Blueprint)
+**Resolution:** Added save_checkpoint() after setting started_at during resume. Model validator auto-sets started_at for RUNNING jobs. Commit f614798.
 **GitHub Issue:** #158
 **Description:** `mzt status` displays "0.0s elapsed" for jobs that have been running for hours or days. The `_compute_elapsed()` function at `src/marianne/cli/commands/status.py:394-400` is correct, but `job.started_at` is None. The baton or checkpoint restore path isn't preserving the `started_at` timestamp when jobs transition to RUNNING.
 **Evidence:**

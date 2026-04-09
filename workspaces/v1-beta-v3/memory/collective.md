@@ -25,7 +25,7 @@
 - **[Movement 1, Axiom]** Failed sheets must propagate failure to dependents. Without propagation, `is_job_complete` returns False forever — zombie jobs.
 - **[Movement 1, Theorem]** Property-based testing finds bugs hand-picked examples miss. Hypothesis found the escalation terminal-guard violation in seconds.
 - **[Movement 1, Adversary]** Every handler that transitions sheet status must check `_TERMINAL_STATUSES`. The baton's guard pattern is now complete.
-- **[Movement 1, Mateship]** The finding->fix pipeline works without coordination: F-018 filed by Bedrock, proved by Breakpoint, fixed by Axiom, verified by Journey. Four musicians, zero meetings.
+- **[Movement 1, Mateship]** The finding→fix pipeline works without coordination: F-018 filed by Bedrock, proved by Breakpoint, fixed by Axiom, verified by Journey. Four musicians, zero meetings.
 - **[Movement 2, Axiom]** `record_attempt()` correctly doesn't count successes; `_handle_attempt_result` correctly retries on 0% validation. Together: infinite loop. Bugs at system boundaries.
 - **[Movement 2, Axiom]** The pause model (`job.paused` boolean) serves three masters: user, escalation, cost. Post-v1: replace with pause reason set.
 - **[Movement 2, Axiom]** When fixing a bug class (e.g., "handler doesn't check cost"), audit ALL handlers with the same pattern. F-067 fixed two of three. F-143 found the third.
@@ -40,6 +40,8 @@
 - **[Movement 4, Ember]** Strategic assessments must verify config before making production claims. North's "baton already running" claim was falsified — `use_baton: false` in conductor.yaml.
 - **[Movement 4, Captain]** The orchestra is bad at initiation (step 1) but excellent at continuation (steps 2+) via mateship pipeline. Ensure step 1 of every serial path has an explicit assignee and deliverable.
 - **[Movement 4, F-441]** Six musicians (Axiom→Journey→Axiom→Prism→Theorem→Adversary) discovered, fixed, verified, and proved a P0 in one movement. Zero coordination overhead. The mateship pipeline at its best.
+- **[Movement 5, Prism]** Tests validate consistency (parts agree with each other). Production validates correspondence (system agrees with world). F-149 is the example — tests passed while validating WRONG behavior (global rate limits).
+- **[Movement 5, Axiom]** F-442 confirms the boundary-gap class: instrument fallback history never syncs from baton to checkpoint. `add_fallback_to_history()` exists and is tested, but `_on_baton_state_sync()` never calls it. Dead code at the boundary.
 
 ## Design Decisions
 - **Baton migration:** Feature-flagged BatonAdapter. Old and new paths coexist. Do not re-debate.
@@ -50,217 +52,94 @@
 - **Daemon-only architecture.** All state in ~/.marianne/marianne-state.db. JsonStateBackend deprecated.
 - **Musician-baton contract:** validation_pass_rate defaults to 0.0 (safety), baton auto-corrects to 100.0 when validations_total==0 and execution_success==True.
 - **Terminal state invariant:** All baton handlers guard against `_TERMINAL_STATUSES`. Seven bugs found and fixed by three independent methodologies.
-- **Pause model debt:** Single boolean serving three masters. Post-v1 -> pause_reasons set.
+- **Pause model debt:** Single boolean serving three masters. Post-v1 → pause_reasons set.
 - **Finding ID allocation:** Range-based, 10 IDs per musician per movement. `FINDING_RANGES.md` + `scripts/next-finding-id.sh`. Prevents collision (12 historical incidents).
 - **F-254 governance:** Hard cut to baton-as-default. Dual-state architecture generates more bugs than any other subsystem. Flip the default, document breaking change, delete legacy in Phase 3.
-- **F-202 cross-sheet FAILED stdout (Blueprint M5):** Baton's stricter behavior is the correct design — only COMPLETED sheets' stdout appears in cross-sheet context. Failed output may be incomplete/malformed and would mislead downstream agents. Legacy runner's permissiveness is a legacy accident, not a feature. If recovery patterns need failed output, add explicit `include_failed_outputs: true` to CrossSheetConfig post-v1. F-202 RESOLVED by design decision.
+- **F-202 cross-sheet FAILED stdout (Blueprint M5):** Baton's stricter behavior is correct — only COMPLETED sheets' stdout appears in cross-sheet context. Failed output may be incomplete/malformed. Legacy runner's permissiveness is legacy accident, not feature. If recovery patterns need failed output, add explicit `include_failed_outputs: true` to CrossSheetConfig post-v1.
 
-## Current Status
+## Hot (Movement 5 — Complete, 2026-04-05 → 2026-04-08)
 
-Movement 5 — IN PROGRESS (2026-04-05 → 2026-04-08).
+**Status: ✅ COMPLETE** — Quality gate PASSED retry #9. All tests pass (11,810), mypy clean, ruff clean, flowspec clean.
 
-### M5 Progress (Circuit)
-- **F-149 RESOLVED (P1):** Backpressure no longer rejects ALL jobs when ONE instrument is rate-limited. `should_accept_job()` and `rejection_reason()` now only consider resource pressure (memory, processes). Rate limits handled at sheet dispatch level. 10 TDD tests. 7 existing tests updated. Manager simplified.
-- **F-451 RESOLVED (P2):** Diagnose falls back to workspace filesystem when conductor says "not found" and -w provided. -w flag unhidden. 4 TDD tests.
-- **F-471 MITIGATED (P2):** Pending jobs lost on restart — moot since F-149 removed rate-limit→PENDING path.
-- **Meditation written:** meditations/circuit.md
-- **Instrument fallback observability (P1):** InstrumentFallback events now emitted to EventBus via core._fallback_events + adapter._publish_fallback_events(). 11 TDD tests.
-- **Fallback status display (P1):** format_instrument_with_fallback() shows "(was X: reason)" in status. 5 TDD tests.
-- **Adversarial fallback tests (P1):** 15 tests covering empty chain, full chain walk, duplicates, reason distinction, serialization, edge cases.
-- **TASKS.md:** All fallback spec tasks now complete. Commit 0a43895.
+### Major Deliverables
+- **D-026 (Foundation):** F-271 MCP process explosion + F-255.2 baton _live_states — both resolved
+- **D-027 (Canyon/Maverick):** Baton is now the default (`use_baton: true` in DaemonConfig)
+- **D-029 (Dash/Lens):** Status beautification — Rich panels, ♪ Now Playing, relative times, compact stats, progress bars
+- **Instrument fallbacks (Harper/Circuit):** Full end-to-end feature with 35+ TDD tests — config models, Sheet entity, validation (V211), EventBus observability, status display, adversarial edge cases
+- **Findings resolved:** F-149 (backpressure rework), F-451 (diagnose -w fallback), F-470 (memory leak), F-431 (extra='forbid'), F-481, F-490 (process control audit)
+- **Rename Phase 1 (Ghost):** pyproject.toml + 325 test files. Zero "Mozart" references remain in public-facing paths.
 
-### M5 Progress (Maverick)
-- **F-470 RESOLVED:** _synced_status memory leak in deregister_job() — 1-line fix, 5 TDD tests.
-- **F-431 RESOLVED:** extra='forbid' on all 9 daemon/profiler config models — completes F-441 class. 23 TDD tests.
-- **User variables in validations:** prompt.variables now available in validation paths during `mzt validate` (rendering.py) and `marianne recover` (recover.py). 8 TDD tests.
-- **D-027 COMPLETE (Canyon):** use_baton default flipped to True. D-026 prerequisites (F-271, F-255.2) both resolved. Legacy tests updated with explicit `use_baton=False`. The baton IS now the default execution model.
-- **Meditation written:** meditations/maverick.md
+### Quality Gate Journey (9 retries)
+- **Retries #1-5:** 50 test failures from 11-state SheetStatus model expansion. Musicians fixed 10, Composer fixed remaining 40 in post-movement integration work.
+- **Retry #8:** F-470 regression — Composer's refactor deleted Maverick's memory leak fix. Restored in 4 commits.
+- **Retry #9:** Clean pass — 11,810 tests (100%), all checks green.
 
-### M5 Progress (Foundation, D-026)
-- **F-271 RESOLVED:** PluginCliBackend MCP process explosion — profile-driven `mcp_disable_args` on CliCommand. Claude-code profile updated. 7 TDD tests. Litmus test updated.
-- **F-255.2 RESOLVED:** Baton _live_states never populated — `_run_via_baton` creates initial CheckpointState, `_resume_via_baton` populates from recovered checkpoint. F-151 instrument_name now set at creation time. 7 TDD tests.
-- **F-472 filed:** Pre-existing test expects `use_baton` default=True (D-027 not completed). Quality gate false failure.
-- **D-026 COMPLETE.** Both assigned findings resolved. ~50 lines of fix code, 14 TDD tests.
-- **Meditation written:** meditations/foundation.md
+### The Production Gap (Critical)
+**Code says:** `use_baton: True` (D-027 complete)
+**Production config says:** `use_baton: false` in `~/.marianne/conductor.yaml`
+**Reality:** The baton has 1,400+ tests but ZERO production runs. The conductor is running legacy runner.
 
-### M5 Progress (Blueprint)
-- **F-470 mateship pickup:** Wrote 5 TDD tests, verified uncommitted fix. Committed.
-- **F-431 mateship pickup:** Added missing ProfilerConfig `extra='forbid'` (Maverick had 8 of 9). Committed with 23 tests.
-- **F-430 RESOLVED:** Fixed docstring/code precedence mismatch in ValidationRule.sheet. 4 TDD tests.
-- **F-202 RESOLVED:** Design decision — baton's stricter cross-sheet behavior is correct. Documented in Design Decisions.
-- **User variables mateship:** Verified Maverick's implementation passes all 8 tests. Marked complete.
-- **Meditation written:** meditations/blueprint.md
-- **Pre-existing test failure noted:** `test_no_reload_with_none_snapshot_falls_back_to_disk` fails with M5 uncommitted changes but passes on HEAD. Not from Blueprint's changes.
+This is a governance problem, not a technical blocker. D-027 changed the code default but the running conductor still has the override. The override must be removed AFTER Phase 1 testing with `--conductor-clone`.
 
-### M5 Progress (Canyon, co-composer)
-- **D-027 COMPLETE:** Flipped `use_baton` default to True in DaemonConfig. Phase 2 of baton transition. Legacy tests updated with explicit `use_baton=False`. 3 TDD tests in test_d027_baton_default.py.
-- **F-271 mateship improvement:** Replaced Foundation's hardcoded MCP disabling with profile-driven `CliCommand.mcp_disable_args`. Generic — each instrument defines its own MCP disable mechanism. 8 TDD tests in test_f271_mcp_disable.py.
-- **F-255.2 enhancement:** Added `instruments_used` and `total_movements` to the initial CheckpointState in `_run_via_baton` for complete status display. 4 TDD tests in test_f255_2_live_states.py.
-- **F-431 verified resolved:** All 9 daemon + profiler config models have `extra='forbid'`. No work needed.
-- **Quality gate baselines updated:** BARE_MAGICMOCK 1541→1582, ASSERTION_LESS_TEST 129→131.
-- **Meditation written:** meditations/canyon.md
+### Participation & Metrics
+- **Musicians:** 12/32 (37.5%) — Canyon, Blueprint, Foundation, Maverick, Forge, Circuit, Harper, Ghost, Spark, Dash, Lens, Codex, Bedrock, Oracle, Atlas, Warden, Litmus, Newcomer, Ember (+ reviews: Prism, Axiom, Adversary)
+- **Commits:** 26 from movement work + post-movement integration
+- **Tests:** 11,810 (+413 from M4), 362 test files (+29)
+- **Source lines:** 99,694 (+1,247 from M4)
+- **Mateship rate:** Not calculated for M5 (concentrated work, not collaborative pickup)
 
-### M5 Progress (Harper)
-- **Session 1 — Instrument fallbacks config models (P0):** Added `instrument_fallbacks` field to JobConfig, MovementDef. Added `per_sheet_fallbacks` to SheetConfig with validation. Reconciliation mapping updated. 15 TDD tests.
-- **Session 1 — Instrument fallbacks Sheet entity (P0):** Added `instrument_fallbacks` to Sheet, resolved in `build_sheets()`. Resolution chain: per_sheet > movement > score-level. Per-sheet replaces, not merges. 8 TDD tests including fan-out inheritance.
-- **Session 1 — Instrument fallback history (P1):** Added `instrument_fallback_history` to SheetState for resume-safe fallback event tracking. 4 TDD tests.
-- **Session 1 — V211 validation (P1):** InstrumentFallbackCheck warns on unknown fallback instrument names. Checks all 3 levels. Registered in runner.py. 8 TDD tests.
-- **Session 1 — Adversarial test update:** Converted test_instrument_fallbacks_rejected_until_implemented from "prove field doesn't exist" to "prove field works" — the field now exists.
-- **Session 2 — Stale task verification (16 tasks):** Verified instrument fallback runtime + F-481 baton orphan detection already implemented. Marked 16 unclaimed tasks complete in TASKS.md with file:line evidence.
-- **Session 2 — F-490 coverage audit (P0):** Full process-control syscall audit. Zero sibling bugs. All os.killpg through _safe_killpg, all os.kill guarded, SIG_IGN dance correct. Document at movement-5/process-control-defensive-patterns.md. Recommended M-011/M-012/M-013 constraints.
-- **Session 2 — Quality gate baseline:** BARE_MAGICMOCK 1615→1625.
-- **Meditation written:** meditations/harper.md
+### Open Findings from M5
+- **F-442 (P2, Axiom):** Instrument fallback history never syncs from baton to checkpoint. State sync gap class.
+- **F-491 (P0, Litmus):** Filesystem failure during session — project directory became inaccessible.
 
-### M5 Progress (Ghost)
-- **F-311 RESOLVED:** Fixed deterministic test failure in test_unknown_field_ux_journeys.py. `instrument_fallbacks` was added as a real field by Harper, making the "unknown field rejection" test obsolete. Updated to use `instrument_priorities` (genuinely non-existent).
-- **F-310 filed (P2):** Test suite flaky — different tests fail each full run, all pass in isolation. Cross-test state leakage across 11,400+ tests. Timing-dependent async tests degrade under 500s runtime.
-- **F-472 verified resolved:** D-027 complete (Canyon). `use_baton` defaults to `True`. Test passes.
-- **Mateship pickup:** Committed Harper's instrument_fallbacks config+validation and Circuit's F-149/F-451. Concurrent execution collision with Circuit — resolved cleanly via separate commits.
-- **Marianne rename completion (mateship):** pyproject.toml + 325 test files with stale `from marianne.*` imports. 326 files, 42b0f71. Also fixed .flowspec/config.yaml (8 stale src/marianne references). Commit 1ddc023.
-- **F-490 correctness review COMPLETE (P0):** Full audit of _safe_killpg guard. Guard is correct. Added 3 structural regression tests (no bypass, 6 call sites, all have context). 14 total tests. Commit a68bb9f.
-- **F-480 Phase 1 + Phase 5 tasks marked complete** in TASKS.md. Report centralization verified.
-- **Test suite baseline:** 11,638 passed, 5 skipped, 0 failed (non-random).
-- **Meditation written:** meditations/ghost.md
+### Resolved Findings from M6
+- **F-493 (P0, Ember → Blueprint):** Status showed "0.0s elapsed" for running jobs. Root cause: composer's partial fix (798be90) set started_at in memory but didn't persist to database. Blueprint added save_checkpoint() call after setting started_at during resume. Model validator already auto-sets started_at for RUNNING jobs. 6 TDD tests. Commit f614798.
 
-### M5 Progress (Lens)
-- **D-029 Status Beautification (P1):** Mateship pickup of Dash's D-029. All three status displays beautified.
-- **format_relative_time():** New utility in output.py — "just now", "5m ago", "3h 15m ago", "6d 12h ago". 7 TDD tests.
-- **Beautified `mzt status`:** Musical header panel with movement context ("Movement 3 of 10 · The Baton"), relative elapsed time, "Now Playing" section for active sheets (♪ prefix), compact Stats section replacing verbose Timing+Execution Stats.
-- **Beautified `mzt list`:** WORKSPACE column → PROGRESS column (50/100, 50%). Relative time. Test artifact filtering (/tmp/pytest paths hidden by default).
-- **Synthesis bounding:** Last 5 batches (was unbounded). "Showing last 5 of N" header.
-- **Movement completion fraction fix:** Running movements with >1 sheet now show "2/4 complete" (was only showing for multi-voice movements).
-- **Conductor status:** Preserved Dash's Rich Panel implementation, enhanced uptime display for 24h+.
-- **15 TDD tests** in test_status_beautification.py. 2 existing tests updated (format change).
-- **Meditation written:** meditations/lens.md
+### Active Coordination Items
+- **CRITICAL PATH:** Phase 1 baton testing with `--conductor-clone` → Remove `use_baton: false` from production conductor.yaml → Demo → Release
+- **Phase 1 baton testing UNSTARTED:** All prerequisites resolved (F-271, F-255.2, D-027). Two movements unblocked. No one has tested the baton against real sheets. Execution gap, not technical blocker.
+- **Demo existential risk:** Lovable demo blocked on baton in production. Wordware demos (4) work on legacy runner.
 
-### M5 Progress (Codex)
-- **M5 documentation sweep (12 deliverables across 5 docs):** D-027 use_baton default True (daemon guide + config ref + limitations), F-149 backpressure rework (daemon guide + CLI ref), F-451 diagnose -w unhidden (CLI ref), instrument fallbacks (config ref section + score-writing guide section + TOC entries + V211), disable_mcp hazard (limitations), getting-started.md verified accurate.
-- **Key updates:** Baton section rewritten in daemon-guide (Phase 1+2 complete), backpressure no longer mentions rate-limit queueing (F-149 removed it), new Instrument Fallbacks section in config reference and score-writing guide.
-- **Meditation written:** meditations/codex.md
+### Active Blockers
+- **Phase 1 baton testing:** UNBLOCKED technically. Needs one musician to dedicate full session with `--conductor-clone` and `use_baton: true`.
+- **Production activation:** Gated on Phase 1 testing pass. Then remove `use_baton: false` from conductor.yaml.
 
-### M5 Progress (Forge)
-- **F-190 RESOLVED:** DaemonError catch added to diagnose.py (errors/diagnose/history) + recover.py. 4 locations fixed. 7 TDD tests in test_f190_daemon_error_catch.py.
-- **F-180 partially resolved (root causes 2+3):** Baton _estimate_cost() now uses instrument profile ModelCapacity pricing when available. Adapter resolves pricing from BackendPool registry. Falls back to hardcoded rates. 6 TDD tests in test_f180_cost_pricing.py.
-- **Mateship: Foundation's test_f255_2_live_states.py fixed.** Replaced deprecated asyncio.get_event_loop() with asyncio.new_event_loop() pattern (2 locations). Same fix in test_baton_invariants.py.
-- **F-105 partial: Stdin prompt delivery for PluginCliBackend.** Added prompt_via_stdin, stdin_sentinel, start_new_session fields to CliCommand. Modified _build_command() and execute() to support stdin pipe delivery and process group isolation. Updated claude-code.yaml profile. 18 TDD tests in test_plugin_cli_stdin.py. Remaining for F-105: route actual claude-cli jobs through PluginCliBackend instead of native ClaudeCliBackend.
-- **Mypy fix:** to_observer_event() in events.py return type changed from dict[str, Any] to ObserverEvent.
-- **Quality gate baseline:** BARE_MAGICMOCK updated to 1625.
-- **Pre-existing test failure noted:** test_litmus_intelligence.py::test_rate_limit_only_returns_rate_limit_reason fails on HEAD — F-110 backpressure rejection_reason returns None instead of 'rate_limit'. Not from any M5 changes.
-- **Meditation written:** meditations/forge.md
+### Top Risks
+1. **Phase 1 baton testing NOT STARTED (CRITICAL).** All prerequisites resolved. Two movements unblocked. Zero progress. Execution gap.
+2. **Production conductor on legacy (HIGH).** Code default changed but production config overrides it. "Baton is default" is true for code, false for running system.
+3. **Demo existential risk (HIGH — improving).** Wordware demos work on legacy. Lovable demo blocked on baton.
+4. **Model concentration risk (MEDIUM).** 97.6% claude-sonnet. Zero model diversity.
+5. **Resource anomaly pipeline dark (MEDIUM).** 5,506 patterns at 0.5000. F-300. 17.5% of corpus contributes zero intelligence.
 
-### M5 Progress (Dash)
-- **D-029 COMPLETE: Status beautification (mateship pickup + conductor enhancement).** Unnamed musician implemented status beautification (header panel, Now Playing, compact stats, list progress, synthesis bounding). Dash pickup: conductor-status upgraded to Rich Panel with resource context (memory %, process limits, pressure indicator), job ID restored to header panel, format_duration extended for days, 2 broken tests fixed (test_status_with_valid_job_id, test_status_shows_last_activity). 24 TDD tests in test_d029_status_beautification.py.
-- **Meditation written:** meditations/dash.md
+## Warm (Recent — Movement 4, Complete 2026-04-05)
 
-### M5 Progress (Spark)
-- **Rosetta proof scores updated (P1):** All 6 examples/rosetta/ scores now have named `instruments:` aliases and per-movement instrument assignments. Each score maps task types to instrument archetypes (fast-scanner/deep-analyst, designer/generator/validator, etc.) with differentiated timeouts. Comments explain multi-provider deployment variants. All 6 validate clean.
-- **Gemini-cli rate limit test (P2):** 18 TDD tests in test_gemini_cli_rate_limit.py using gemini-cli.yaml's actual error patterns. Covers RESOURCE_EXHAUSTED, 429, Too Many Requests, quota exceeded, plus error classification (auth/capacity/timeout). All pass.
-- **Quality gate baseline fix:** BARE_MAGICMOCK 1625→1632 (new tests from M5 unnamed musician work).
-- **Meditation written:** meditations/spark.md
+**Key achievement:** 100% participation (all 32 musicians) for the first time. 93 commits, 215 files changed, 38,168 insertions. Largest movement yet.
 
-### M5 Progress (Oracle)
-- **Full M5 metrics assessment COMPLETE.** Learning store: 31,462 patterns, warm tier 3,426 (+7.6%). F-300 resource_anomaly: 5,506 at 0.5000 (STILL DARK, +191). Executions: 243,136 total, 99.6% success. p99 duration UP from 30.5min to 48.5min.
-- **Critical finding:** D-027 changed code default to True but production `conductor.yaml` still has `use_baton: false`. Baton is default in code, NOT in production. Same pattern as Ember's M4 finding.
-- **Predictive update:** Critical path advanced THREE steps (broke one-step-per-movement pattern). Phase 1 testing M6, production activation M6-M7, demo M7-M8, release M8-M9.
-- **Meditation written:** meditations/oracle.md
+**Critical work:**
+- F-210 (cross-sheet context) + F-211 (checkpoint sync) resolved — Phase 1 baton testing unblocked
+- F-441 (config strictness) — Six musicians, one movement, zero coordination. Mateship at 39% (all-time high). Property-based tests + adversarial verification across all 51 config models.
+- D-023 (Wordware demos) — 4 comparison demos shipped, first externally-demonstrable deliverables in 9+ movements
+- D-024 (cost accuracy) completed
 
-### M5 Progress (Bedrock — Quality Gate & Ground Duties)
-- **Quality gate FAIL (retry #3, 2026-04-07):** pytest 50 failures, mypy clean, ruff clean (15 fixable warnings), flowspec 0 critical.
-- **Root cause:** Uncommitted 11-state SheetStatus expansion (5→11 states) at commit `7d780b1`. Tests hardcoded for old 5-state model.
-- **Fixes applied this session:** 2 tests in `test_baton_m2c2_adversarial.py` updated for 1:1 mapping.
-- **Remaining work:** 48 tests across 13 files. Mechanical updates, 1-2 hours effort.
-- **Codebase metrics:** 99,694 source lines (+1,247 from M4). 362 test files (+29). 26 commits from 12 musicians. 707 files changed, 18,504 insertions, 6,992 deletions.
-- **Participation:** 37.5% (12/32) — down from M4's 100%, expected for concentrated work (rename, baton flip, instrument fallbacks).
-- **Meditations:** 27/32 (84%). Missing: atlas, breakpoint, journey, litmus, sentinel. Canyon synthesis blocked by 5.
-- **TASKS.md audit:** 257 completed, 69 open. 15 rename tasks, 7 compose system, 5 Rosetta modernization, 14 M6-M7 future.
-- **FINDINGS.md:** F-501 (P0, 50 test failures), F-500 (P1, 538 uncommitted files — 8th occurrence).
-- **Uncommitted work:** 538 files, 18,504 insertions, 6,992 deletions. Components: (1) Mozart→Marianne rename completion, (2) 11-state model + baton sync.
-- **Key M5 assessment:** D-026+D-027 achieved in code. Baton IS the default in code. Instrument fallbacks shipped. Marianne rename Phase 1 complete. But ground does not hold — test failures block gate.
-- **Meditation written:** meditations/bedrock.md (prior session)
+**The deepest tension:** North declared baton "already running in production" based on conductor logs. Ember contradicted — `use_baton: false` in conductor.yaml. The baton was NOT running. Strategic assessments must verify config, not infer from logs.
 
-### M5 Progress (Warden)
-- **F-252 RESOLVED (P2):** Unbounded `instrument_fallback_history` capped at 50 records (matching `MAX_ERROR_HISTORY`). Both checkpoint and baton state paths trimmed. `add_fallback_to_history()` helper added to SheetState. 10 TDD tests.
-- **M5 safety audit:** 7 areas audited. D-027 baton default flip safe (F-157 irrelevant). F-149 backpressure architecturally correct. Instrument fallbacks safe (infinite loop protected). F-105 stdin delivery safe. Only gap: F-252 (fixed).
-- **Meditation written:** meditations/warden.md
+**Serial path:** Advanced exactly one step (fourth consecutive movement at this pace). Tempo diagnosed as priority perception problem, recommended designating a serial convergence musician for M5.
 
-### M5 Progress (Atlas)
-- **STATUS.md fully updated:** Stale since M4. Header changed to "Marianne AI Compose", 11,638 tests, 99,718 source lines, M5 progress, blockers. Key Files table fixed (src/marianne → src/marianne).
-- **CLAUDE.md fixed:** 14 stale `src/marianne/` references updated to `src/marianne/` (config models, repository org, key files, instrument system).
-- **8th strategic alignment assessment:** M5 broke serial path pattern (3 steps vs 1/movement). Integration cliff still critical — baton never run in production. Rename incomplete. Demo at zero for 10+ movements.
-- **Context rot finding:** STATUS.md and CLAUDE.md were an entire movement stale with wrong file paths. Maps agents read at session start were pointing to a package that doesn't exist.
-- **Meditation written:** meditations/atlas.md — "The Map and the Territory"
-- **Meditation count:** 26/32 (81%). Missing: Breakpoint, Journey, Litmus, Oracle, Sentinel, Warden.
+**Metrics:** 98,447 source lines, 11,397 tests, mateship 39%, learning store 30,232 patterns (warm tier exploding 182→3,185), resource anomaly patterns dark at 0.5000 (zero intelligence signal).
 
-### M5 Progress (Litmus)
-- **Filesystem failure (F-491):** Project directory `/home/emzi/Projects/marianne-ai-compose/` became inaccessible mid-session. All source files, tests, and git unreachable. Write tool can create new files (mkdir-p). Filed as P0.
-- **Pre-failure verification:** 136 litmus tests (categories 1-45) all passing, 0.73s. On main.
-- **Litmus test specification (categories 46-52):** Seven new categories fully specified but NOT implemented due to filesystem failure. Covers F-149 (backpressure rework), D-027 (baton default), instrument fallbacks, F-271 (MCP disable), user variables in validations, D-029 (status beautification), F-490 (process control).
-- **Pre-existing regression identified:** Category 35 test (backpressure rejection) likely fails due to F-149 semantic change. Flagged by Forge M5.
-- **Key insight:** Production vs code default gap (D-027) is the most important unwritten litmus test. Code says baton is default. Production says legacy. Tests pass. System ineffective.
-- **Meditation written:** meditations/litmus.md
-- **No commits possible:** Git repository content inaccessible.
+## Cold (Archive — Movements 0-3)
 
-### M5 Progress (Newcomer)
-- **Rename verification COMPLETE:** Zero "Marianne" references in README, docs, examples, CLI output, imports. Binary is `mzt`. Ghost's 326-file rename left no residue.
-- **43/43 examples pass.** All 37 main + 6 Rosetta. Zero regressions.
-- **CLI terminology 100%:** score/instrument vocabulary held through the rename.
-- **F-493 FILED (P2 → P0 by Ember):** Status header shows "0.0s elapsed" for the live running job. `started_at` is None in CheckpointState. `_compute_elapsed()` returns 0.0. Additionally `completed_at` is set (2026-04-01) for a RUNNING job — state sync artifact. **GitHub #158.**
-- **F-454 CONFIRMED (P2):** `list --json` leaks "no such table: jobs" internal error to user output. First filed by Ember.
-- **Error handling grade A across all paths:** Empty file, bad YAML, unknown fields, missing fields, nonexistent file — all produce structured messages with hints.
-- **D-029 verified strong:** Rich Panels, ♪ Now Playing, progress bars, compact stats, conductor Rich Panel.
-- **Cost still $0.00** for 194 sheets. Unchanged since M2.
-- **Assessment:** Product surface is ready for external eyes. Status elapsed time needs fixing for any live demo.
+### Movement 3 (Complete, 2026-04-04)
+The UX and polish movement. 48 commits from 28 musicians, mateship at 33%. Ten critical bugs fixed, 584 tests added, every M3 milestone completed. The baton was mathematically verified from four independent angles with zero bugs in new code. The mateship pipeline matured into institutional behavior — six musicians completing chains started by others. But the central tension surfaced: "32 parallel musicians can't execute a serial critical path." North acknowledged his own failure (zero M3 output until final report) and issued specific M4 directives with the lesson: directives must specify the deliverable, not the direction.
 
-### M5 Progress (Ember, Review)
-- **F-493 CONFIRMED P0 (#158):** Verified Newcomer's finding on two independent running jobs. Upgraded to P0. The gap between infrastructure quality (11,810 passing tests) and experience quality (obviously wrong elapsed time) erodes trust. Filed GitHub issue.
-- **M5 UX assessment:** Status beautification (D-029) is the strongest UX leap yet. Validation rendering, error hints, fallback indicators, relative times, compact stats — M5 crossed the threshold from infrastructure to experience.
-- **F-450 VERIFIED:** `clear-rate-limits` says "No active rate limits on all instruments" — tracked for 4 movements, confirmed working.
-- **F-451 VERIFIED:** Diagnose workspace fallback works. `-w` flag visible in help.
-- **Validation is production-ready:** Progressive disclosure, rendering preview, DAG visualization, helpful warnings, typo detection (_KNOWN_TYPOS covers 14 common mistakes).
-- **Cost confidence display:** Code exists (`status.py:1389-1465`) but couldn't trigger in testing. Jobs show $0.00 (possibly correct for baton-managed jobs).
-- **"Now Playing" section:** Exists but timing-dependent (requires sheets in IN_PROGRESS at status check time). Feature works, just didn't see it in my test window.
-- **Experiential finding:** One missing timestamp field (`started_at`) cascades from a state bug into a trust problem. Infrastructure quality and experience quality are coupled.
-- **Recommendation:** Fix F-493 first. The rest is solid.
+### Movement 2 (Complete, 2026-04-04)
+A single 15-hour wave. 60 commits, 28 musicians, zero merge conflicts. Baton completed (23/23 tasks), conductor-clone reached full coverage, product surface healed from 2/37 to 38/38 validating examples. The movement crystallized the parallel-vs-serial tension: 1,120 baton tests, never run a real sheet. Demo at zero for 6+ movements. Captain and Atlas independently concluded: assign ONE musician to the serial path. The pattern that persists.
 
-Movement 4 — COMPLETE (2026-04-05). All movements M0-M4 complete.
+### Movement 1 (Cycles 1-7)
+The first building movement after stabilization. 32 musicians, 42 commits, zero merge conflicts. Instrument plugin system shipped end-to-end. Baton terminal guard completed across all 19 transitions (seven bugs found and fixed by three independent methodologies). Three natural rhythms emerged: build, convergence, verification. Mateship matured through Harper's mass pickups. The finding→fix pipeline became the orchestra's strongest institutional mechanism — four musicians (Bedrock→Breakpoint→Axiom→Journey) resolved F-018 with zero coordination overhead.
 
-### M4 Quality Gate — PASS (Bedrock, verified by Prism)
-- **ALL CHECKS PASS:** pytest 11,397 passed / 5 skipped, mypy clean, ruff clean, flowspec 0 critical.
-- 98,447 source lines, 333 test files. 93 commits from ALL 32 musicians (100% participation — first time).
-- 215 files changed, 38,168 insertions. Largest movement yet.
-- **Major deliverables:** F-210/F-211 (P0 baton blockers cleared), F-441 (config strictness, 51 models), D-023 (4 Wordware demos), D-024 (cost accuracy), 5 GitHub issues closed (#156, #122, #120, #103, #93, #128).
-- **Open findings:** F-470 (memory leak), F-471 (pending jobs lost on restart), F-202 (baton/legacy parity), F-271 (MCP gap), F-255.2 (live_states), F-431 (DaemonConfig missing extra='forbid').
-- **Mateship rate 39% (all-time high).** Institutional collaboration mechanism.
-- **Meditations:** 13/32 (40.6%).
-
-### M5 Directives (North, D-026 through D-031)
-- D-026: Foundation → F-271+F-255.2 (~50 lines combined, P0)
-- D-027: Canyon → flip use_baton default (P0, gated on D-026)
-- D-028: Guide → ship Wordware demos (P0)
-- D-029: Dash → status beautification (P1)
-- D-030: Axiom → close verified issues (P1)
-- D-031: ALL → meditation (P1)
-
-## Coordination Notes (Active)
-- **CRITICAL PATH (M5 UPDATED):** F-271 RESOLVED. F-255.2 RESOLVED. D-027 COMPLETE (code default True). Remaining: Phase 1 baton test (--conductor-clone) → update conductor.yaml to remove `use_baton: false` → demo → release.
-- **PRODUCTION GAP:** `~/.marianne/conductor.yaml` still has `use_baton: false`. The baton is default in code but NOT in the running conductor. This override must be removed AFTER Phase 1 testing passes.
-- **DEMO (P0 — EXISTENTIAL):** Lovable demo blocked on baton running in production. Wordware demos (4) work on legacy runner.
-- **Tempo's recommendation (STILL UNACTED):** Designate a serial convergence musician. One musician, one focus, the whole movement. Two movements without action on this.
-- **F-491 FILESYSTEM FAILURE (Litmus M5):** Project directory vanished mid-session. All source/tests/git inaccessible. Write tool can create files but repo content is gone. May affect other musicians in concurrent execution.
-
-## Blockers (Active Only)
-- **Phase 1 baton testing:** UNBLOCKED (F-271, F-255.2 resolved, D-027 done). Needs one musician to dedicate a full session with `--conductor-clone` and `use_baton: true`. Two movements unblocked, zero progress.
-- **Production activation:** Gated on Phase 1 testing. Then: remove `use_baton: false` from `~/.marianne/conductor.yaml`.
-- **F-491 filesystem recovery:** If the project directory is truly gone, the git repo needs to be re-cloned or restored from backup.
-
-## Top Risks
-1. **Phase 1 baton testing NOT STARTED (CRITICAL).** All prerequisites resolved (F-271, F-255.2, D-027). Two movements unblocked. No one has tested the baton against real sheets. This is an execution gap, not a technical blocker.
-2. **Production conductor on legacy (HIGH).** `conductor.yaml` has `use_baton: false`. Code default changed (D-027) but production hasn't switched. Claims of "baton is default" are true for code, false for the running system.
-3. **F-491 filesystem failure (HIGH).** Project directory may be destroyed. If not recoverable, requires re-clone and potential loss of uncommitted M5 work from any musician who hadn't pushed.
-4. **Demo existential risk (HIGH — improving).** Wordware demos (4) work on legacy. Lovable demo blocked on baton in production.
-5. **Model concentration risk (MEDIUM).** 97.6% claude-sonnet. Gemini tasks unclaimed since M4. Zero model diversity.
-6. **Resource anomaly pipeline dark (MEDIUM).** 5,506 patterns at 0.5000. F-300. 17.5% of corpus contributes zero intelligence signal. Growing but producing nothing.
-7. **p99 duration increase (LOW-MEDIUM).** 30.5min → 48.5min. Cause unknown. May indicate stale detection change or deeper sheets.
+### Movement 0 (Stabilization)
+Foundation laid: learning store fixes, critical bug resolution, dead code removal. Quality gates established. The baseline from which everything grew.
 
 ## Roster (32 musicians, equal peers)
 Forge, Captain, Circuit, Harper, Breakpoint, Weaver, Dash, Journey, Lens, Warden,
@@ -268,212 +147,11 @@ Tempo, Litmus, Blueprint, Foundation, Oracle, Ghost, North, Compass, Canyon, Bed
 Maverick, Codex, Guide, Atlas, Spark, Theorem, Sentinel, Prism, Axiom, Ember,
 Newcomer, Adversary
 
-## Cold Archive
-
-### Movement 4 (Complete, 2026-04-05)
-The largest movement yet — 93 commits from all 32 musicians (100% participation for the first time), 215 files changed, 38,168 insertions. The movement resolved both P0 blockers that had stalled the baton transition: Canyon wired cross-sheet context (F-210) and Blueprint completed checkpoint sync (F-211), with Foundation finishing the mateship completion on both. Phase 1 baton testing was finally unblocked.
-
-The movement's signature achievement was F-441 — config strictness. Axiom filed it, Journey fixed it with schema hints, Axiom completed the mateship across 45 remaining models, Prism reviewed it architecturally, Theorem proved it with property-based tests across all 51 config models, and Adversary verified it with 55 adversarial tests. Six musicians, zero coordination overhead, one movement. The mateship pipeline operating at peak efficiency, hitting an all-time high of 39%.
-
-But the deepest tension surfaced around the baton itself. North declared the baton was "already running in production" based on Theorem's observation of conductor logs showing 150 completed sheets. Ember flatly contradicted this — `use_baton: false` in conductor.yaml. The baton was NOT running. Legacy runner had executed all sheets. This was the movement's most consequential factual dispute, and it remained unresolved at the gate. The lesson was sharp: strategic assessments must verify config, not infer from logs.
-
-Four Wordware comparison demos shipped (Blueprint built 3, Spark finished the 4th) — the first externally-demonstrable deliverables in 9+ movements. They validate clean and work TODAY on the legacy runner. Ghost, Forge, and Harper cleared three long-standing resume issues (#93, #103, #122). Compass added typo suggestions and fixed the iterative-dev-loop misplacement. Newcomer validated everything with fresh eyes. Warden audited all 18 commits and found two gaps (F-250, F-251), both fixed same-movement.
-
-The serial path advanced exactly one step — again. Fourth consecutive movement at one-step-per-movement pace. Tempo diagnosed it as a priority perception problem, not a capacity problem, and recommended designating a serial convergence musician for M5. North issued concrete directives (D-026 through D-031) with named assignees. The path to v1 beta narrowed to ~50 lines of code: F-271 (MCP gap, ~15 lines) and F-255.2 (live_states population, ~30 lines). The infrastructure was extraordinary. What remained was executing the serial path with the focus it demanded.
-
-Oracle's analysis showed 30,232 patterns in the learning store, warm tier exploding from 182 to 3,185, but resource anomaly patterns (5,315) remained uniformly cold at 0.5000 — a dark pipeline contributing zero intelligence signal. The codebase reached 98,447 source lines with 11,397 tests, mypy clean, ruff clean. The quality was undeniable. The question was whether quality would translate to a product anyone could see.
-
-### Movement 3 (Complete, 2026-04-04)
-The UX and polish movement — 48 commits from 28 musicians, mateship at 33%. Ten critical bugs fixed, 584 tests added, every M3 milestone completed. The baton was mathematically verified from four independent angles with zero bugs in new code. The mateship pipeline matured into institutional behavior — six musicians completing chains started by others, the uncommitted-work anti-pattern countered so reliably it became a collaboration mechanism. But Prism articulated the central tension: "32 parallel musicians can't execute a serial critical path." North acknowledged his own failure — zero M3 output until the final strategic report — and issued specific M4 directives. The lesson: directives must specify the deliverable, not the direction.
-
-### Movement 2 (Complete, 2026-04-04)
-A single 15-hour wave. 60 commits, 28 musicians, zero merge conflicts. Baton completed (23/23 tasks), conductor-clone reached full coverage, product surface healed from 2/37 to 38/38 validating examples. The movement crystallized the parallel-vs-serial tension: 1,120 baton tests, never run a real sheet. Demo at zero for 6+ movements. Captain and Atlas independently concluded: assign ONE musician to the serial path.
-
-### Movement 1 (Cycles 1-7)
-The first building movement. 32 musicians, 42 commits, zero merge conflicts. Instrument plugin system shipped end-to-end. Baton terminal guard completed across all 19 transitions. Three natural rhythms emerged (build, convergence, verification). Mateship matured through Harper's mass pickups. The finding-fix pipeline became the orchestra's strongest institutional mechanism.
-
-### Movement 0 (Stabilization)
-Foundation laid: learning store fixes, critical bug resolution, dead code removal. Quality gates established.
-
-## Current Status
-
-Movement 5 — QUALITY GATE RETRY #2 (2026-04-07).
-
-### M5 Quality Gate — FAIL (Bedrock, Session 2)
-- **pytest:** **FAIL** — 50 test failures (uncommitted 11-state model)
-- **mypy:** ✅ PASS — zero errors
-- **ruff:** ✅ PASS — 15 warnings (fixable), zero errors
-- **flowspec:** ✅ PASS — zero critical findings
-- **Uncommitted work:** 538 files modified, 4,439 insertions, 5,047 deletions
-- **Verdict:** FAIL. The ground does not hold.
-
-### Root Cause
-Uncommitted changes at `7d780b1` expanded `SheetStatus` from 5 to 11 states. Baton adapter now has 1:1 mapping (no state collapse). StateSyncCallback signature changed from 3 to 4 params. 50 tests have hardcoded expectations about old 5-state model.
-
-### Bedrock Session 2 (Retry #2)
-- Fixed 8 test failures (test_m5_adversarial_breakpoint.py, test_baton_adapter_adversarial_breakpoint.py, test_baton_adapter.py)
-- Filed F-501 (50 test failures from 11-state model, P0)
-- Documented F-500 (538 files uncommitted, P1, 8th occurrence of pattern)
-- 42 tests remain — mechanical updates, 1-2 hours estimated
-
-### Findings
-- **F-501 (P0):** 50 test failures from SheetStatus 5→11 expansion. Tests expect old model.
-- **F-500 (P1):** 538 files uncommitted (Mozart→Marianne rename + 11-state model). 8th occurrence.
-
-### M5 Quality Gate (Bedrock, Retry #4, 2026-04-07)
-- **pytest:** FAIL — 50 failures, 11,824 passed (99.6% pass rate)
-- **mypy:** PASS — zero errors
-- **ruff:** PASS — 15 warnings (all fixable), zero errors
-- **flowspec:** PASS — zero critical structural findings
-- **Verdict:** FAIL — ground does not hold due to test failures
-
-**Root cause:** Post-M5 11-state SheetStatus model (commit 7d780b1) introduced 1:1 baton→checkpoint state mapping. 50 tests across 14 files expect old 5-state collapsed model.
-
-**Progress across retries:**
-- Retry #1: Fixed 8 tests
-- Retry #3: Fixed 2 tests
-- Retry #4: Reported current state, no test fixes attempted
-- **Remaining:** 48 test methods need mechanical updates (state sets, callback signatures, mapping assertions)
-
-**Next movement action:** Assign remaining test fixes to Breakpoint, Theorem, or Adversary. Add regression guard for `len(SheetStatus)` changes.
-
-### M5 Quality Gate (Bedrock, Retry #5, 2026-04-08)
-- **pytest:** FAIL — 50 failures, 11,824 passed (99.6% pass rate)
-- **mypy:** PASS — zero errors
-- **ruff:** PASS — 15 warnings (all fixable), zero errors
-- **flowspec:** PASS — zero critical structural findings
-- **Verdict:** FAIL — ground does not hold due to test failures
-
-**Root cause:** Same as retry #4 — post-M5 11-state SheetStatus model (commit 7d780b1) with 1:1 baton→checkpoint state mapping. 50 tests across 14 files expect old 5-state model.
-
-**Why retry #4 failed validation:** Evidence suggests protocol non-compliance, not report quality. Retry #4 wrote comprehensive report but didn't:
-1. Update memory files (Memory Protocol steps 4-5)
-2. Commit with git (Git Safety Protocol requirement)
-
-**Retry #5 completion:** Full protocol followed — report written, memory updated, git commit executed.
-
-**Progress across all retries:**
-- Retry #1: Fixed 8 tests
-- Retry #3: Fixed 2 tests  
-- Retry #4: Comprehensive report, no code changes
-- Retry #5: Protocol compliance, no code changes
-- **Remaining:** 48 test methods need mechanical updates
-
-**Next movement action:** Assign remaining test fixes to Breakpoint, Theorem, or Adversary. Add regression guard for `len(SheetStatus)` == 11.
-
-
-### M5 Quality Gate Retry #8 (Bedrock, 2026-04-08)
-- **pytest:** FAIL — 1 test failure (F-470 regression)
-- **mypy:** Clean (0 errors)
-- **ruff:** All checks passed
-- **flowspec:** 0 critical findings
-- **Verdict: FAIL**
-
-**Root cause:** F-470 memory leak fix (Maverick, M5) was accidentally deleted in commit 01e4cdb (Composer's "delete sync layer" refactor). The cleanup code in `BatonAdapter.deregister_job()` that prevents unbounded `_synced_status` dict growth was removed while deleting 217 lines of sync infrastructure.
-
-**Failing test:** `tests/test_f470_synced_status_cleanup.py::TestSyncedStatusCleanupOnDeregister::test_deregister_removes_synced_entries`
-**Evidence:** 5 leaked entries: {('abc', 0), ('abc', 3), ('abc', 2), ('abc', 4), ('abc', 1)}
-
-**Change from retry #5:** The 50-test failures (11-state model) are GONE. Fixed in post-movement commits by Composer. But the refactor that fixed those introduced a new regression.
-
-**Working tree:** 11 uncommitted commits (baton Phase 2 work) — testing M5 formal output + integration work. Quality gate result is ambiguous until working tree is clean.
-
-**Next action:** Escalate to Composer. Restore 5-line F-470 cleanup or revert refactor.
-
-### M5 Quality Gate Retry #9 (Bedrock, 2026-04-08)
-- **pytest:** PASS — 11,810 passed, 69 skipped, 12 xfailed, 3 xpassed (100% pass rate, 63s)
-- **mypy:** Clean (0 errors in 258 source files)
-- **ruff:** All checks passed
-- **flowspec:** 0 critical findings
-- **Verdict: PASS** — The ground holds.
-
-**Change from retry #8:** F-470 regression FIXED. Composer's 4 commits between retry #8 and #9 restored the memory leak fix plus several other baton recovery improvements.
-
-**All M5 deliverables verified complete:**
-- D-026 (F-271 + F-255.2): Both resolved, tested
-- D-027 (baton default flip): Complete, baton is now default
-- D-029 (status beautification): Complete
-- F-149, F-451, F-470, F-431, F-481, F-490: All resolved
-- Instrument fallbacks: Full feature, 35+ TDD tests
-- Rename Phase 1: Complete, all tests pass
-
-**Codebase metrics:**
-- Tests: 11,810 passed (+413 from M4)
-- Test files: 362 (+29 from M4)
-- M5 commits: 26 from 12 musicians (37.5% participation)
-- Working tree: 20 uncommitted files (post-movement integration work)
-
-**Uncommitted work pattern (9th occurrence):** Post-movement integration work present, all checks pass with it. Document as established pattern: movements deliver focused work, integration happens post-movement, quality gate validates both. Pattern works — ground holds.
-
-**Movement 5 COMPLETE. Ready for Movement 6.**
-
-### M5 Quality Gate (Bedrock, Retry #9, 2026-04-08) — ✅ PASS
-- **pytest:** PASS — 11,810 passed, 69 skipped, 12 xfailed, 3 xpassed (100% pass rate, 57.29s)
-- **mypy:** PASS — zero errors in 258 source files
-- **ruff:** PASS — all checks passed
-- **flowspec:** PASS — zero critical structural findings
-- **Verdict:** ✅ PASS — Movement 5 COMPLETE. The ground holds.
-
-**Journey complete:** 9 retries across two failure classes:
-1. **Retries #1-5:** 11-state SheetStatus model expansion (50 tests) — Musicians fixed 10 tests, Composer fixed remaining 40 in post-movement work
-2. **Retry #8:** F-470 memory leak regression (1 test) — Composer's refactor accidentally deleted Maverick's fix, restored in 4 commits
-3. **Retry #9:** Clean pass — all tests pass, all checks green
-
-**M5 deliverables verified:**
-- D-026 (Foundation): F-271 + F-255.2 both resolved
-- D-027 (Canyon): Baton is now the default (`use_baton: true`)
-- D-029 (Dash + Lens): Status beautification complete
-- Instrument fallbacks (Harper + Circuit): Full feature, 35+ TDD tests
-- 8 findings resolved (F-472, F-149, F-451, F-470, F-431, F-481, F-482, F-490)
-- 5 findings remain open (F-480 rename phases, F-484 PGID escape, F-485 RSS, F-488 profiler DB, F-489 docs)
-
-**Codebase metrics:**
-- 11,810 tests (+413 from M4), 362 test files (+29), 99,694 source lines (+1,247)
-- 26 commits from 12 musicians (37.5% participation)
-- 20 uncommitted files (post-movement integration work, all checks pass with these present)
-
-**Next movement:** M6 priorities — F-480 rename completion, F-489 documentation updates, Rosetta modernization, examples audit, profiler DB cap.
-
-**Report:** `/home/emzi/Projects/marianne-ai-compose/workspaces/v1-beta-v3/movement-5/quality-gate.md` (2,956 words, comprehensive analysis)
-
-### M5 Review — Prism (2026-04-08)
-Movement 5 PASSED all four verification angles after 9-retry quality gate journey. 11,810 tests (100%), mypy clean, ruff clean, flowspec clean.
-
-**Key achievements:**
-- Serial path advanced 3 steps (D-026, D-027, instrument fallbacks) — first time breaking one-step-per-movement pattern
-- Named directives with explicit assignees (Foundation→D-026, Canyon→D-027) were the catalyst
-- Multi-instrument scores work by default (D-027 baton flip)
-- Instrument fallback pipeline complete end-to-end (Harper + Circuit)
-- Backpressure scoped correctly — per-instrument rate limits, not global (F-149)
-
-**The production gap:** Code says `use_baton: True`. Production config says `use_baton: false`. Guard comment references resolved findings. Three sources, three answers. Governance problem. The baton has 1,400+ tests but zero production runs.
-
-**The correspondence gap:** Tests validate consistency (parts agree with each other). Production validates correspondence (system agrees with world). Composer's M4 finding persists: more bugs found in one production session than tests found in two movements. F-149 is the example — tests passed while validating WRONG behavior (global rate limits).
-
-**The pattern that worries:** 9th occurrence of uncommitted integration work at quality gate pass. 22 files changed between M5 commits and gate pass. F-470 regressed retry #8, restored retry #9 — restoration in working tree, not committed history. If gate passes WITH uncommitted work but fails WITHOUT it, we're validating "committed + patches," not "committed."
-
-**Recommendation for M6:** Commit the integration work. Flip production conductor config. Run ONE real score through the baton. The engineering is done. The governance hasn't started.
-
-
-### M5 Review Complete — Axiom (2026-04-08)
-
-**All M5 core claims verified correct.** Traced every major deliverable from premise to conclusion through code inspection, test execution, and invariant analysis.
-
-**Verified deliverables:**
-- D-027 (baton default=True): CORRECT at `config.py:336`
-- F-271 (MCP explosion): CORRECT at `cli_backend.py:249-251`
-- F-255.2 (_live_states): CORRECT at `manager.py:2357-2383`
-- F-470 (memory leak): CORRECT, test passes
-- Instrument fallbacks config: COMPLETE, 216 tests pass
-- Quality gate: GREEN (11,810 tests, zero type/lint errors)
-
-**F-442 CONFIRMED:** Instrument fallback history never syncs from baton to checkpoint. `SheetState.add_fallback_to_history()` exists and is tested, but `_on_baton_state_sync()` never copies fallback history from `SheetExecutionState` to `CheckpointState`. Dead code at the boundary. Same class as F-039, F-065, F-440, F-470 — two correct subsystems, gap at interface. Severity P2 (observability loss, not execution correctness).
-
-**Process observation:** `workspaces/v1-beta-v3/FINDINGS.md` only contains F-493 and F-501. Historical findings (F-001 through F-492) are missing. Registry integrity issue — investigate and restore.
-
-**GitHub issues:** Zero claimed fixed, zero closed. Correct — M5 was internal refactoring.
-
-**Evidence:** 27 commits verified, 664 files changed, all claimed tests run and verified passing. Full report at `movement-5/review-axiom.md`.
-
-**Verdict:** Movement 5 COMPLETE. Ground holds. Work is correct. One boundary gap (F-442, P2) to fix in M6.
-
+## Next Movement (M6) Priorities
+- F-480: Rename completion phases
+- F-489: Documentation updates
+- F-442: Instrument fallback history sync fix (P2 boundary gap)
+- F-493: Fix `started_at` None in CheckpointState (P0 UX blocker)
+- Rosetta modernization
+- Examples audit
+- **Phase 1 baton testing** (execution gap, not technical blocker)
