@@ -342,6 +342,20 @@ def _render_template(
     return ""
 
 
+# Binary file extensions for directory cadenza classification
+_BINARY_EXTENSIONS: dict[str, str] = {
+    ".pdf": "PDF document",
+    ".png": "image",
+    ".jpg": "image",
+    ".jpeg": "image",
+    ".gif": "image",
+    ".webp": "image",
+    ".docx": "Word document",
+    ".xlsx": "spreadsheet",
+    ".xls": "spreadsheet",
+}
+
+
 def _resolve_injections(
     sheet: Sheet,
     template_vars: dict[str, Any],
@@ -349,7 +363,8 @@ def _resolve_injections(
     """Resolve prelude and cadenza injection items.
 
     Reads file content for each injection item, expanding Jinja2 variables
-    in file paths. Groups results by category (context, skill, tool).
+    in file/directory paths. Supports both single-file injection and
+    directory cadenzas (glob all files in a directory).
 
     Missing context files are skipped with a warning. Missing skill/tool
     files are logged as errors but do not crash the musician.
@@ -370,57 +385,160 @@ def _resolve_injections(
     if not items:
         return injected_context, injected_skills, injected_tools
 
-    # Lenient Jinja env for path expansion — missing vars become empty
     path_env = jinja2.Environment(
         undefined=jinja2.Undefined,
         autoescape=False,
     )
 
     for item in items:
-        try:
-            tmpl = path_env.from_string(item.file)
-            expanded_path = tmpl.render(**template_vars)
-        except jinja2.TemplateError as e:
-            _logger.warning(
-                "musician.injection.path_expansion_error",
-                extra={"file": item.file, "error": str(e)},
+        if item.directory is not None:
+            _resolve_directory_cadenza(
+                item, sheet, path_env, template_vars,
+                injected_context, injected_skills, injected_tools,
             )
-            continue
-
-        path = Path(expanded_path)
-        if not path.is_absolute():
-            path = sheet.workspace / path
-
-        if not path.is_file():
-            if item.as_ == InjectionCategory.CONTEXT:
-                _logger.warning(
-                    "musician.injection.file_not_found",
-                    extra={"file": str(path), "category": item.as_.value},
-                )
-            else:
-                _logger.error(
-                    "musician.injection.required_file_not_found",
-                    extra={"file": str(path), "category": item.as_.value},
-                )
-            continue
-
-        try:
-            content = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as e:
-            _logger.warning(
-                "musician.injection.file_read_error",
-                extra={"file": str(path), "error": str(e)},
+        else:
+            _resolve_file_injection(
+                item, sheet, path_env, template_vars,
+                injected_context, injected_skills, injected_tools,
             )
-            continue
-
-        if item.as_ == InjectionCategory.CONTEXT:
-            injected_context.append(content)
-        elif item.as_ == InjectionCategory.SKILL:
-            injected_skills.append(content)
-        elif item.as_ == InjectionCategory.TOOL:
-            injected_tools.append(content)
 
     return injected_context, injected_skills, injected_tools
+
+
+def _resolve_directory_cadenza(
+    item: InjectionItem,
+    sheet: Sheet,
+    env: jinja2.Environment,
+    template_vars: dict[str, Any],
+    injected_context: list[str],
+    injected_skills: list[str],
+    injected_tools: list[str],
+) -> None:
+    """Resolve a directory cadenza — glob files, classify, inject."""
+    assert item.directory is not None  # guaranteed by caller
+    try:
+        tmpl = env.from_string(item.directory)
+        expanded_path = tmpl.render(**template_vars)
+    except jinja2.TemplateError as e:
+        _logger.warning(
+            "musician.injection.path_expansion_error",
+            extra={"directory": item.directory, "error": str(e)},
+        )
+        return
+
+    dir_path = Path(expanded_path)
+    if not dir_path.is_absolute():
+        dir_path = sheet.workspace / dir_path
+
+    if not dir_path.is_dir():
+        if item.as_ == InjectionCategory.CONTEXT:
+            _logger.info(
+                "musician.injection.directory_not_found",
+                extra={"directory": str(dir_path), "category": item.as_.value},
+            )
+        else:
+            _logger.error(
+                "musician.injection.required_directory_not_found",
+                extra={"directory": str(dir_path), "category": item.as_.value},
+            )
+        return
+
+    files = sorted(f for f in dir_path.glob("*") if f.is_file())
+    if not files:
+        _logger.info(
+            "musician.injection.directory_empty",
+            extra={"directory": str(dir_path)},
+        )
+        return
+
+    for file_path in files:
+        _inject_single_file(
+            item, file_path, injected_context, injected_skills, injected_tools,
+            from_directory=True,
+        )
+
+
+def _resolve_file_injection(
+    item: InjectionItem,
+    sheet: Sheet,
+    env: jinja2.Environment,
+    template_vars: dict[str, Any],
+    injected_context: list[str],
+    injected_skills: list[str],
+    injected_tools: list[str],
+) -> None:
+    """Resolve a single-file injection."""
+    assert item.file is not None  # guaranteed by caller
+    try:
+        tmpl = env.from_string(item.file)
+        expanded_path = tmpl.render(**template_vars)
+    except jinja2.TemplateError as e:
+        _logger.warning(
+            "musician.injection.path_expansion_error",
+            extra={"file": item.file, "error": str(e)},
+        )
+        return
+
+    path = Path(expanded_path)
+    if not path.is_absolute():
+        path = sheet.workspace / path
+
+    if not path.is_file():
+        if item.as_ == InjectionCategory.CONTEXT:
+            _logger.warning(
+                "musician.injection.file_not_found",
+                extra={"file": str(path), "category": item.as_.value},
+            )
+        else:
+            _logger.error(
+                "musician.injection.required_file_not_found",
+                extra={"file": str(path), "category": item.as_.value},
+            )
+        return
+
+    _inject_single_file(
+        item, path, injected_context, injected_skills, injected_tools,
+    )
+
+
+def _inject_single_file(
+    item: InjectionItem,
+    path: Path,
+    injected_context: list[str],
+    injected_skills: list[str],
+    injected_tools: list[str],
+    *,
+    from_directory: bool = False,
+) -> None:
+    """Inject a single file, classifying as text or binary."""
+    try:
+        content = path.read_text(encoding="utf-8")
+        if from_directory:
+            header = f"--- Input: {path.name} ---\n\n"
+            full_content = header + content
+        else:
+            full_content = content
+    except UnicodeDecodeError:
+        ext = path.suffix.lower()
+        file_kind = _BINARY_EXTENSIONS.get(ext, "file")
+        full_content = (
+            f"--- Input: {path.name} (binary — {file_kind}, read with your tools) ---\n\n"
+            f"This file cannot be displayed inline. Read it using your file reading tools.\n"
+            f"Path: {path.resolve()}\n"
+        )
+    except OSError as e:
+        _logger.warning(
+            "musician.injection.file_read_error",
+            extra={"file": str(path), "error": str(e)},
+        )
+        return
+
+    if item.as_ == InjectionCategory.CONTEXT:
+        injected_context.append(full_content)
+    elif item.as_ == InjectionCategory.SKILL:
+        injected_skills.append(full_content)
+    elif item.as_ == InjectionCategory.TOOL:
+        injected_tools.append(full_content)
 
 
 def _format_injection_section(

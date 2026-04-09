@@ -64,23 +64,43 @@ class InjectionCategory(str, Enum):
 
 
 class InjectionItem(BaseModel):
-    """A single injection item referencing a file with a category.
+    """A single injection item referencing a file or directory with a category.
 
     Used in prelude (all sheets) and cadenzas (per-sheet) to inject
     file content into prompts at category-appropriate locations.
+
+    Supports two mutually exclusive modes:
+    - ``file``: inject a single file's content
+    - ``directory``: inject all files in a directory (directory cadenza)
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    file: str = Field(
-        description="Path to the file to inject. Supports Jinja templating "
-        "(e.g., '{{ workspace }}/context.md').",
+    file: str | None = Field(
+        default=None,
+        description="Path to a single file to inject. Supports Jinja templating.",
+    )
+    directory: str | None = Field(
+        default=None,
+        description="Path to a directory. All files in the directory are injected. "
+        "Text files are injected inline. Binary files are injected as "
+        "structured read instructions with absolute paths. "
+        "Supports Jinja templating.",
     )
     as_: InjectionCategory = Field(
         alias="as",
         description="Category determining prompt placement: "
         "'context' (background), 'skill' (methodology), or 'tool' (actions).",
     )
+
+    @model_validator(mode="after")
+    def exactly_one_source(self) -> "InjectionItem":
+        """Ensure exactly one of file or directory is specified."""
+        if self.file and self.directory:
+            raise ValueError("Specify 'file' or 'directory', not both.")
+        if not self.file and not self.directory:
+            raise ValueError("One of 'file' or 'directory' is required.")
+        return self
 
 
 class InstrumentDef(BaseModel):

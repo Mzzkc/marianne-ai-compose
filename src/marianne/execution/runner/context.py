@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import glob
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import jinja2
 
@@ -94,12 +94,19 @@ class ContextBuildingMixin:
         """Resolve prelude & cadenza injections for a sheet.
 
         Collects prelude items (applied to all sheets) plus cadenza items
-        for this specific sheet. Expands Jinja templates in file paths,
-        reads file contents, and populates the SheetContext injection fields.
+        for this specific sheet. Expands Jinja templates in file/directory
+        paths, reads file contents, and populates the SheetContext injection
+        fields.
 
-        Missing files are handled based on category:
+        Supports two injection modes:
+        - ``file``: inject a single file's content
+        - ``directory`` (directory cadenza): glob all files in a directory,
+          inject text files inline, inject binary files as structured read
+          instructions with absolute paths.
+
+        Missing files/directories are handled based on category:
         - context: warn and skip (non-critical background info)
-        - skill/tool: raise error (critical for correct execution)
+        - skill/tool: log error and skip (critical for correct execution)
 
         Args:
             context: SheetContext to populate with injection content.
@@ -121,53 +128,166 @@ class ContextBuildingMixin:
         )
 
         for item in items:
-            try:
-                # Expand Jinja templates in file path
-                tmpl = env.from_string(item.file)
-                expanded_path = tmpl.render(**template_vars)
-            except jinja2.TemplateError as e:
-                self._logger.warning(
-                    "injection.path_expansion_error",
-                    file=item.file,
-                    error=str(e),
-                )
-                continue
+            if item.directory is not None:
+                self._resolve_directory_cadenza(item, context, env, template_vars)
+            else:
+                self._resolve_file_injection(item, context, env, template_vars)
 
-            path = Path(expanded_path)
-            if not path.is_absolute():
-                path = self.config.workspace / path
+    # Binary file extensions and their human-readable descriptions
+    _BINARY_EXTENSIONS: ClassVar[dict[str, str]] = {
+        ".pdf": "PDF document",
+        ".png": "image",
+        ".jpg": "image",
+        ".jpeg": "image",
+        ".gif": "image",
+        ".webp": "image",
+        ".docx": "Word document",
+        ".xlsx": "spreadsheet",
+        ".xls": "spreadsheet",
+    }
 
-            if not path.is_file():
-                if item.as_ == InjectionCategory.CONTEXT:
-                    self._logger.warning(
-                        "injection.file_not_found",
-                        file=str(path),
-                        category=item.as_.value,
-                    )
-                else:
-                    self._logger.error(
-                        "injection.required_file_not_found",
-                        file=str(path),
-                        category=item.as_.value,
-                    )
-                continue
+    def _resolve_directory_cadenza(
+        self,
+        item: InjectionItem,
+        context: SheetContext,
+        env: jinja2.Environment,
+        template_vars: dict[str, Any],
+    ) -> None:
+        """Resolve a directory cadenza injection.
 
-            try:
-                content = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError) as e:
-                self._logger.warning(
-                    "injection.file_read_error",
-                    file=str(path),
-                    error=str(e),
-                )
-                continue
+        Globs all files (non-recursive) in the directory, classifies each
+        as text or binary, and injects appropriate content.
+        """
+        assert item.directory is not None  # guaranteed by caller
+        try:
+            tmpl = env.from_string(item.directory)
+            expanded_path = tmpl.render(**template_vars)
+        except jinja2.TemplateError as e:
+            self._logger.warning(
+                "injection.path_expansion_error",
+                directory=item.directory,
+                error=str(e),
+            )
+            return
 
+        dir_path = Path(expanded_path)
+        if not dir_path.is_absolute():
+            dir_path = self.config.workspace / dir_path
+
+        if not dir_path.is_dir():
+            # Directory missing or empty is expected for demo mode
             if item.as_ == InjectionCategory.CONTEXT:
-                context.injected_context.append(content)
-            elif item.as_ == InjectionCategory.SKILL:
-                context.injected_skills.append(content)
-            elif item.as_ == InjectionCategory.TOOL:
-                context.injected_tools.append(content)
+                self._logger.info(
+                    "injection.directory_not_found",
+                    directory=str(dir_path),
+                    category=item.as_.value,
+                )
+            else:
+                self._logger.error(
+                    "injection.required_directory_not_found",
+                    directory=str(dir_path),
+                    category=item.as_.value,
+                )
+            return
+
+        # Non-recursive glob, files only, sorted alphabetically
+        files = sorted(
+            f for f in dir_path.glob("*") if f.is_file()
+        )
+
+        if not files:
+            self._logger.info(
+                "injection.directory_empty",
+                directory=str(dir_path),
+            )
+            return
+
+        for file_path in files:
+            self._inject_single_file(item, context, file_path, from_directory=True)
+
+    def _resolve_file_injection(
+        self,
+        item: InjectionItem,
+        context: SheetContext,
+        env: jinja2.Environment,
+        template_vars: dict[str, Any],
+    ) -> None:
+        """Resolve a single-file injection."""
+        assert item.file is not None  # guaranteed by caller
+        try:
+            tmpl = env.from_string(item.file)
+            expanded_path = tmpl.render(**template_vars)
+        except jinja2.TemplateError as e:
+            self._logger.warning(
+                "injection.path_expansion_error",
+                file=item.file,
+                error=str(e),
+            )
+            return
+
+        path = Path(expanded_path)
+        if not path.is_absolute():
+            path = self.config.workspace / path
+
+        if not path.is_file():
+            if item.as_ == InjectionCategory.CONTEXT:
+                self._logger.warning(
+                    "injection.file_not_found",
+                    file=str(path),
+                    category=item.as_.value,
+                )
+            else:
+                self._logger.error(
+                    "injection.required_file_not_found",
+                    file=str(path),
+                    category=item.as_.value,
+                )
+            return
+
+        self._inject_single_file(item, context, path)
+
+    def _inject_single_file(
+        self,
+        item: InjectionItem,
+        context: SheetContext,
+        path: Path,
+        *,
+        from_directory: bool = False,
+    ) -> None:
+        """Inject a single file, classifying as text or binary."""
+        try:
+            content = path.read_text(encoding="utf-8")
+            # Text file — inject inline, with header only for directory cadenzas
+            if from_directory:
+                header = f"--- Input: {path.name} ---\n\n"
+                full_content = header + content
+            else:
+                full_content = content
+        except UnicodeDecodeError:
+            # Binary file — inject structured read instruction
+            ext = path.suffix.lower()
+            file_kind = self._BINARY_EXTENSIONS.get(ext, "file")
+            instruction = (
+                f"--- Input: {path.name} (binary — {file_kind}, read with your tools) ---\n\n"
+                f"This file cannot be displayed inline. Read it using your file reading tools.\n"
+                f"Path: {path.resolve()}\n"
+            )
+            full_content = instruction
+        except OSError as e:
+            self._logger.warning(
+                "injection.file_read_error",
+                file=str(path),
+                error=str(e),
+            )
+            return
+
+        # Route to the appropriate injection list
+        if item.as_ == InjectionCategory.CONTEXT:
+            context.injected_context.append(full_content)
+        elif item.as_ == InjectionCategory.SKILL:
+            context.injected_skills.append(full_content)
+        elif item.as_ == InjectionCategory.TOOL:
+            context.injected_tools.append(full_content)
 
     def _populate_cross_sheet_context(
         self,

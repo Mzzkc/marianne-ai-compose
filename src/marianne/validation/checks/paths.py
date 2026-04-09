@@ -6,6 +6,7 @@ Validates that paths referenced in the configuration exist and are accessible.
 from pathlib import Path
 
 from marianne.core.config import JobConfig
+from marianne.core.config.job import InjectionCategory, InjectionItem
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml, resolve_path
 
@@ -243,37 +244,69 @@ class PreludeCadenzaFileCheck:
         config_path: Path,
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        """Check prelude and cadenza file paths."""
+        """Check prelude and cadenza file/directory paths."""
         issues: list[ValidationIssue] = []
 
-        all_items: list[tuple[str, str]] = []
         for item in config.sheet.prelude:
-            all_items.append((item.file, "prelude"))
+            issues.extend(self._check_item(item, "prelude", config, config_path, raw_yaml))
         for sheet_num, items in config.sheet.cadenzas.items():
             for item in items:
-                all_items.append((item.file, f"cadenza (sheet {sheet_num})"))
+                issues.extend(
+                    self._check_item(item, f"cadenza (sheet {sheet_num})", config, config_path, raw_yaml)
+                )
 
-        for file_path, source in all_items:
-            # Skip Jinja-templated paths — can't resolve statically
-            if "{{" in file_path:
-                continue
+        return issues
 
-            path = resolve_path(Path(file_path), config_path)
+    def _check_item(
+        self,
+        item: InjectionItem,
+        source: str,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        """Check a single injection item (file or directory)."""
+        issues: list[ValidationIssue] = []
 
-            if not path.exists():
+        if item.directory is not None:
+            # Directory cadenza — check directory exists
+            directory = item.directory
+            if "{{" in directory:
+                return issues  # Skip templated paths
+            dir_path = resolve_path(Path(directory), config_path)
+            if not dir_path.is_dir():
+                # INFO for context (demo mode), WARNING for skill/tool
+                severity = (
+                    ValidationSeverity.INFO
+                    if item.as_ == InjectionCategory.CONTEXT
+                    else ValidationSeverity.WARNING
+                )
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=severity,
+                        message=f"Injection directory from {source} not found: {dir_path}",
+                        line=find_line_in_yaml(raw_yaml, directory),
+                        suggestion="Create the directory or fix the path",
+                        metadata={"source": source, "path": str(dir_path)},
+                    )
+                )
+        else:
+            # File injection — check file exists
+            file_val = item.file
+            assert file_val is not None  # guaranteed by Pydantic validator
+            if "{{" in file_val:
+                return issues
+            file_path = resolve_path(Path(file_val), config_path)
+            if not file_path.exists():
                 issues.append(
                     ValidationIssue(
                         check_id=self.check_id,
                         severity=self.severity,
-                        message=(
-                            f"Injection file from {source} not found: {path}"
-                        ),
-                        line=find_line_in_yaml(raw_yaml, file_path),
+                        message=f"Injection file from {source} not found: {file_path}",
+                        line=find_line_in_yaml(raw_yaml, file_val),
                         suggestion="Create the file or fix the path",
-                        metadata={
-                            "source": source,
-                            "path": str(path),
-                        },
+                        metadata={"source": source, "path": str(file_path)},
                     )
                 )
 

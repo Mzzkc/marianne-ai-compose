@@ -170,34 +170,64 @@ def _resolve_injections_preview(
     )
 
     for item in items:
-        try:
-            tmpl = env.from_string(item.file)
-            expanded_path = tmpl.render(**template_vars)
-        except jinja2.TemplateError as exc:
-            warnings.append(f"Jinja error expanding '{item.file}': {exc}")
-            continue
+        if item.directory is not None:
+            # Directory cadenza — resolve path, glob files
+            try:
+                tmpl = env.from_string(item.directory)
+                expanded_path = tmpl.render(**template_vars)
+            except jinja2.TemplateError as exc:
+                warnings.append(f"Jinja error expanding '{item.directory}': {exc}")
+                continue
 
-        path = Path(expanded_path)
-        if not path.is_absolute():
-            path = Path(str(template_vars.get("workspace", "."))) / path
+            dir_path = Path(expanded_path)
+            if not dir_path.is_absolute():
+                dir_path = Path(str(template_vars.get("workspace", "."))) / dir_path
 
-        if not path.is_file():
-            # At preview time files may not exist yet — skip gracefully
-            continue
+            if not dir_path.is_dir():
+                # At preview time directory may not exist — skip gracefully
+                continue
 
-        try:
-            content = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
+            for file_path in sorted(f for f in dir_path.glob("*") if f.is_file()):
+                _inject_file_preview(item, context, file_path)
+        else:
+            # Single file injection — item.file is guaranteed non-None by validator
+            assert item.file is not None
+            try:
+                tmpl = env.from_string(item.file)
+                expanded_path = tmpl.render(**template_vars)
+            except jinja2.TemplateError as exc:
+                warnings.append(f"Jinja error expanding '{item.file}': {exc}")
+                continue
 
-        if item.as_ == InjectionCategory.CONTEXT:
-            context.injected_context.append(content)
-        elif item.as_ == InjectionCategory.SKILL:
-            context.injected_skills.append(content)
-        elif item.as_ == InjectionCategory.TOOL:
-            context.injected_tools.append(content)
+            path = Path(expanded_path)
+            if not path.is_absolute():
+                path = Path(str(template_vars.get("workspace", "."))) / path
+
+            if not path.is_file():
+                continue
+
+            _inject_file_preview(item, context, path)
 
     return warnings
+
+
+def _inject_file_preview(
+    item: InjectionItem,
+    context: SheetContext,
+    path: Path,
+) -> None:
+    """Inject a single file for preview (graceful — no raises)."""
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return
+
+    if item.as_ == InjectionCategory.CONTEXT:
+        context.injected_context.append(content)
+    elif item.as_ == InjectionCategory.SKILL:
+        context.injected_skills.append(content)
+    elif item.as_ == InjectionCategory.TOOL:
+        context.injected_tools.append(content)
 
 
 # ---------------------------------------------------------------------------
