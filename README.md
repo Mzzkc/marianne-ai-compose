@@ -42,7 +42,7 @@ Marianne ships with 10+ instruments and an open plugin architecture for adding m
 
 | Instrument | What It Is |
 |------------|-----------|
-| `claude-code` | Claude Code CLI — the default, full-featured coding agent |
+| `claude-code` | Claude Code CLI — a full-featured Musician profile |
 | `gemini-cli` | Google Gemini CLI |
 | `codex-cli` | OpenAI Codex CLI |
 | `aider` | Aider — AI pair programming |

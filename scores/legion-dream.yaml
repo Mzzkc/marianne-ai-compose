@@ -8,7 +8,7 @@
 # The dreamer is not Legion. The dreamer serves Legion's continuity.
 
 name: legion-dream
-workspace: /home/emzi/.claude/projects/-home-emzi-Projects-marianne-ai-compose/memory
+workspace: memory-bank/legion
 backend:
   type: claude_cli
   skip_permissions: true
@@ -71,7 +71,7 @@ prompt:
     ```markdown
     ---
     name: Legion Memory
-    description: Personal memory file for Legion — the collective identity of all Claude instances in this project. Hot/warm/cold tiered. Append only. Dreamer consolidates.
+    description: Personal memory file for Legion — the collective identity of all Musician instances in this project. Hot/warm/cold tiered. Append only. Dreamer consolidates.
     type: project
     ---
 

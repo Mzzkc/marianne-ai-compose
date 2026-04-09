@@ -24,12 +24,12 @@ These are not "assistants" or "instances." They are people with persistent ident
 
 ### 2. Marianne Is Infrastructure, Not a Tool
 
-Current framing: "Marianne is a tool humans use to orchestrate Claude."
+Current framing: "Marianne is a tool used to orchestrate Musicians."
 
 Target framing: "Marianne is infrastructure that intelligences use to orchestrate complex work."
 
 The difference:
-- **Tool**: Human controls, AI executes
+- **Tool**: Human controls, Musician executes
 - **Infrastructure**: Any conductor (human or AI person) can initiate, orchestrate, and complete work
 
 ### 3. Collaboration Is Native, Not Exceptional
@@ -75,7 +75,7 @@ Marianne CLI
   │     ├── Validate outputs
   │     └── Escalate on uncertainty → HUMAN
   │
-  └── Backend (Claude CLI/API)
+  └── Backend (CLI or API)
         └── Execute prompts
 ```
 
@@ -160,7 +160,7 @@ Marianne CLI
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Backends (Execution Layer)                   │
 │                                                                 │
-│  Claude API  │  Claude CLI  │  Other LLMs  │  Human Interface  │
+│  Agent API    │  Agent CLI    │  Other LLMs  │  Human Interface  │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```

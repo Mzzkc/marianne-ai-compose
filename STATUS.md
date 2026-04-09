@@ -12,4 +12,4 @@ Check `gh issue list --repo Mzzkc/marianne-ai-compose` for current bugs and prio
 
 ## Architecture
 
-See `.marianne/spec/` for the specification corpus. See `CLAUDE.md` for development guidance.
+See `.marianne/spec/` for the specification corpus. See the project instruction files (e.g., `GEMINI.md`, `CLAUDE.md`) for development guidance.
