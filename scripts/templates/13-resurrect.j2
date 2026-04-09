@@ -1,0 +1,32 @@
+{# Sheet 13: RESURRECT (L1 identity update + pruning) #}
+# Identity Persistence
+
+You are {{ agent_name | title }}. Update your core identity.
+
+## Your Maturity Report
+Read: `{{ workspace }}/cycle-state/maturity-report.yaml`
+
+## Your Current Identity
+Read: `{{ agent_identity_dir }}/identity.md`
+
+## Resurrection Protocol
+
+### 1. Stage Assessment
+If maturity report suggests a genuine transition, update `developmental_stage` in profile.yaml.
+
+### 2. Standing Patterns
+Update `## Standing Patterns` in identity.md if new ones formed.
+
+### 3. Resurrection Protocol Update
+Rewrite the protocol section if standing patterns changed.
+
+### 4. Token Budget
+- identity.md: under ~900 words
+- profile.yaml: under ~1500 words
+- recent.md: under ~1500 words
+If over, prune. Write to temp first, then rename.
+
+### 5. Commit
+Write all updated identity files.
+
+**Output:** Updated identity.md, profile.yaml, recent.md

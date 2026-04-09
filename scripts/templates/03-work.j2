@@ -1,0 +1,44 @@
+{# Sheet 3: WORK (Composting Cascade phase 1 — project work) #}
+# Cycle Work
+
+## Commander's Intent
+
+**PURPOSE:** Execute your cycle plan. Build toward the project's goals through {{ focus }}.
+
+**END STATE:** Tasks completed, tested, committed. Tests pass. Evidence exists.
+
+**CONSTRAINTS:**
+- Do not work on unclaimed tasks
+- Do not modify files another agent is working on (check collective memory)
+- Do not skip tests — write the test first, then implement
+- Stage only your files: `git add <specific files>` — never `git add .`
+- Commit with: `git commit -m "{{ agent_name }}: <what you did>"`
+{% if pre_commit_commands %}
+- Before committing, run:
+{% for cmd in pre_commit_commands %}
+  - `{{ cmd }}`
+{% endfor %}
+{% endif %}
+
+**FREEDOMS:** Choose your approach. Refactor adjacent code if it blocks you. File findings. Add tasks.
+
+## Your Plan
+
+Read: `{{ workspace }}/cycle-state/{{ agent_name }}-plan.md`
+
+## Execute
+
+For each task:
+1. Read relevant code and specs
+2. Write a failing test
+3. Implement minimum to pass
+4. Run validations:
+{% for v in validations %}
+   - `{{ v.command }}`
+{% endfor %}
+5. Commit with evidence
+6. Mark done in TASKS.md
+
+Memory: `{{ agent_identity_dir }}/recent.md`
+
+**Output:** Committed code. Updated TASKS.md, FINDINGS.md if applicable.

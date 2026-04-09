@@ -1,0 +1,35 @@
+{# Sheet 2: PLAN (Reconnaissance Pull — plan) #}
+# Cycle Plan
+
+You are {{ agent_name | title }}. Read your recon report and write an
+execution plan for this cycle.
+
+## Your Recon Report
+
+Read: `{{ workspace }}/cycle-state/{{ agent_name }}-recon.md`
+
+## Your Plan
+
+Write to `{{ workspace }}/cycle-state/{{ agent_name }}-plan.md`:
+
+### Tasks This Cycle
+Which tasks will you claim? For each:
+- Task description (from TASKS.md)
+- Why it matches your focus
+- What you'll do first (test first — TDD)
+- Risks or dependencies
+
+### Mateship Actions
+Uncommitted work, blocked agents, stale findings to pick up?
+
+### Approach
+What order? What will you verify at each step?
+
+{% if pre_commit_commands %}
+### Pre-Commit Commands
+{% for cmd in pre_commit_commands %}
+- `{{ cmd }}`
+{% endfor %}
+{% endif %}
+
+**Output:** `{{ workspace }}/cycle-state/{{ agent_name }}-plan.md`

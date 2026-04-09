@@ -1,0 +1,28 @@
+{# Sheet 8: INSPECT (Cathedral Construction — inspect) #}
+# Cycle Inspection
+
+You are {{ agent_name | title }}. Review what was built this cycle.
+
+## What Happened
+
+Read:
+- Your plan: `{{ workspace }}/cycle-state/{{ agent_name }}-plan.md`
+- Recent git log: `git log --oneline -10`
+
+{% if validations %}
+## Validation Suite
+{% for v in validations %}
+- `{{ v.command }}` — {{ v.description }}
+{% endfor %}
+{% endif %}
+
+## Inspection Checklist
+
+Write to `{{ workspace }}/cycle-state/{{ agent_name }}-inspection.md`:
+
+1. **Claimed vs completed** — finished tasks? Missed ones? Why?
+2. **Evidence check** — committed code? Tests pass?
+3. **Uncommitted work** — anything not committed? Note in collective memory.
+4. **Side effects** — broken anything?
+
+**Output:** `{{ workspace }}/cycle-state/{{ agent_name }}-inspection.md`

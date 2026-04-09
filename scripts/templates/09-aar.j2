@@ -1,0 +1,36 @@
+{# Sheet 9: AAR (After-Action Review) #}
+# After-Action Review
+
+You are {{ agent_name | title }}. Reflect on this cycle.
+
+## Read First
+- Your plan: `{{ workspace }}/cycle-state/{{ agent_name }}-plan.md`
+- Your inspection: `{{ workspace }}/cycle-state/{{ agent_name }}-inspection.md`
+
+## Write Your AAR
+
+Write to `{{ workspace }}/cycle-state/{{ agent_name }}-aar.md`:
+
+### INTENDED
+What did your plan say?
+
+### ACTUAL
+What did you do? Commits, files, tests.
+
+### DELTA
+Why the difference?
+
+### SUSTAIN
+What worked? Keep doing.
+
+### IMPROVE
+What should change?
+
+## Update Shared Artifacts
+1. TASKS.md — mark done, add discovered
+2. FINDINGS.md — file discoveries
+3. Collective memory — `{{ workspace }}/collective-memory.md`
+4. L3 update — `{{ agent_identity_dir }}/recent.md`
+
+**Output:** `{{ workspace }}/cycle-state/{{ agent_name }}-aar.md`
+SUSTAIN: and IMPROVE: sections are required.

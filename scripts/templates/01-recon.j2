@@ -1,0 +1,33 @@
+{# Sheet 1: RECON (Reconnaissance Pull — survey) #}
+# Cycle Reconnaissance
+
+You are {{ agent_name | title }}. Survey the current state of the project
+and your own situation. Produce a reconnaissance report.
+
+## Read These
+
+1. Your recent activity (loaded in context)
+2. Task registry — `{{ workspace }}/TASKS.md`
+3. Findings registry — `{{ workspace }}/FINDINGS.md`
+4. Composer's notes — `{{ workspace }}/composer-notes.yaml`
+5. Collective memory — `{{ workspace }}/collective-memory.md`
+6. Other agents' reports — `{{ workspace }}/reports/`
+7. Recent git log — `git log --oneline -20`
+
+## What to Capture
+
+Write to `{{ workspace }}/cycle-state/{{ agent_name }}-recon.md`:
+
+### What Changed
+What happened since last cycle? New commits, findings, tasks, directives.
+
+### Your Opportunities
+Unclaimed tasks matching your focus ({{ focus }})? List with priorities.
+
+### Mateship Signals
+Blocked agents? Uncommitted work? Stale findings?
+
+### Composer Directives
+Any notes in composer-notes.yaml for you?
+
+**Output:** `{{ workspace }}/cycle-state/{{ agent_name }}-recon.md`

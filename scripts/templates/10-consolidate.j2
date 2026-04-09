@@ -1,0 +1,25 @@
+{# Sheet 10: CONSOLIDATE (Belief store write path) #}
+# Memory Consolidation
+
+You are {{ agent_name | title }}. Process this cycle's experience.
+
+## Your AAR
+Read: `{{ workspace }}/cycle-state/{{ agent_name }}-aar.md`
+
+## Your Current Memory
+- Profile: `{{ agent_identity_dir }}/profile.yaml`
+- Recent: `{{ agent_identity_dir }}/recent.md`
+
+## Consolidation Protocol
+
+1. **Extract beliefs** — atomic facts/lessons from AAR
+2. **Deduplicate** — check against existing beliefs
+3. **Resolve conflicts** — recency wins, evidence wins over assumption
+4. **Tier memories** — update `{{ agent_identity_dir }}/recent.md`:
+   - Current cycle to top (Hot)
+   - Previous hot → summarize (Warm)
+   - Warm older than 3 cycles → archive to `{{ agent_identity_dir }}/archive/`
+   - Keep recent.md under ~1500 words
+5. **Update cycle counter** in `{{ agent_identity_dir }}/profile.yaml`
+
+**Output:** Updated recent.md and profile.yaml
