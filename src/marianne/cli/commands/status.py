@@ -395,8 +395,10 @@ def _compute_elapsed(job: CheckpointState) -> float:
     """Compute elapsed seconds for a job, preferring actual duration for finished jobs."""
     if job.started_at:
         if job.completed_at:
-            return (job.completed_at - job.started_at).total_seconds()
-        return (datetime.now(UTC) - job.started_at).total_seconds()
+            elapsed = (job.completed_at - job.started_at).total_seconds()
+        else:
+            elapsed = (datetime.now(UTC) - job.started_at).total_seconds()
+        return max(elapsed, 0.0)  # Clamp: stale timestamps can go negative
     return 0.0
 
 

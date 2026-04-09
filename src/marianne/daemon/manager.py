@@ -599,14 +599,13 @@ class JobManager:
             )
             live.last_completed_sheet = completed_count
 
-            # Set started_at on first dispatch if not already set
-            if live.started_at is None:
-                any_started = any(
-                    s.status not in (SheetStatus.PENDING, SheetStatus.READY)
-                    for s in live.sheets.values()
-                )
-                if any_started:
-                    live.started_at = utc_now()
+            # Set started_at on first activity if not set or stale
+            any_started = any(
+                s.status not in (SheetStatus.PENDING, SheetStatus.READY)
+                for s in live.sheets.values()
+            )
+            if any_started and live.started_at is None:
+                live.started_at = utc_now()
 
             checkpoint_json = live.model_dump_json()
             asyncio.get_event_loop().create_task(
@@ -2558,6 +2557,10 @@ class JobManager:
         # F-255.2: Populate _live_states with recovered checkpoint so
         # status display and state_sync_callback work during resumed execution.
         self._live_states[job_id] = checkpoint
+
+        # Reset started_at for the new run so elapsed time is accurate.
+        # The checkpoint's started_at is from the previous run.
+        checkpoint.started_at = utc_now()
 
         # Now that _live_states exists, set RUNNING across all three stores.
         # _run_managed_task already set meta + registry to RUNNING, but
