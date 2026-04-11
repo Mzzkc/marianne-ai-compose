@@ -80,3 +80,38 @@
 - `src/marianne/daemon/manager.py` (1 instance via sed)
 - `src/marianne/daemon/semantic_analyzer.py:139` (field access)
 
+
+
+### F-517: Test Suite Isolation Gaps — Ordering-Dependent Failures
+**Found by:** Warden, Movement 6
+**Severity:** P2 (medium)
+**Status:** Open
+**Description:** Six tests fail when run in the full test suite but pass when run in isolation. This indicates test isolation gaps - likely shared state pollution, mock cleanup issues, or teardown problems.
+**Evidence:**
+```bash
+# Full suite (6 failures)
+$ cd /home/emzi/Projects/marianne-ai-compose && python -m pytest tests/ -x -q --tb=short 2>&1 | tail -40
+FAILED tests/test_cli.py::TestResumeCommand::test_resume_pending_job_blocked
+FAILED tests/test_f502_conductor_only_enforcement.py::test_status_routes_through_conductor
+FAILED tests/test_cli.py::TestFindJobState::test_find_job_state_completed_blocked
+FAILED tests/test_cli_run_resume.py::TestResumeScoreTerminology::test_success_message_uses_score
+FAILED tests/test_recover_command.py::TestRecoverCommand::test_recover_dry_run_does_not_modify_state
+FAILED tests/test_conductor_first_routing.py::TestStatusRoutesThruConductor::test_status_workspace_override_falls_back
+
+# Isolated run (passes)
+$ cd /home/emzi/Projects/marianne-ai-compose && python -m pytest tests/test_cli.py::TestResumeCommand::test_resume_pending_job_blocked -xvs 2>&1 | tail -60
+============================== 1 passed in 9.39s ===============================
+```
+**Impact:** Quality gate will fail despite code correctness. Test isolation gaps create false negatives and block commits. CI/CD pipeline cannot rely on test suite results.
+**Root cause:** Likely related to F-502 workspace fallback removal (commit e879996, Lens M6). Tests may be:
+1. Asserting on behavior that changed (workspace parameter removed)
+2. Relying on mocked state that isn't properly cleaned up between tests
+3. Sharing state via module-level variables or fixtures
+4. Depending on execution order for setup/teardown
+**Fix:** For each failing test:
+1. Check if it asserts on removed workspace parameter behavior - update assertions
+2. Verify fixture teardown properly resets shared state
+3. Check for module-level state pollution
+4. Add explicit cleanup in teardown
+5. Convert to use --conductor-clone or appropriate mocking per daemon isolation protocol
+**Note:** F-516 (Lens M6) is a duplicate entry describing the same failures.
