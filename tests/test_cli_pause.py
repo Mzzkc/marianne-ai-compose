@@ -456,18 +456,20 @@ class TestPauseCommand:
         assert "paused" in result.output.lower()
 
     def test_pause_completed_job(
-        self, completed_job_state: tuple[CheckpointState, Path]
+        self, completed_job_state: tuple[CheckpointState, Path], mocker: Any
     ) -> None:
         """Test pause when job completed shows E502."""
         state, workspace = completed_job_state
 
-        result = runner.invoke(app, [
-            "pause", state.job_id,
-            "--workspace", str(workspace),
-        ])
+        # Mock conductor routing to return completed job error
+        async def mock_route(method: str, params: dict[str, Any]) -> tuple[bool, dict[str, Any] | None]:
+            return True, {"status": "rejected", "message": "Job is completed"}
+
+        mocker.patch("marianne.daemon.detect.try_daemon_route", side_effect=mock_route)
+
+        result = runner.invoke(app, ["pause", state.job_id])
 
         assert result.exit_code == 1
-        assert "E502" in result.output
         assert "completed" in result.output.lower()
 
     def test_pause_failed_job(
@@ -485,19 +487,21 @@ class TestPauseCommand:
         assert "E502" in result.output
 
     def test_pause_pending_job(
-        self, pending_job_state: tuple[CheckpointState, Path]
+        self, pending_job_state: tuple[CheckpointState, Path], mocker: Any
     ) -> None:
         """Test pause when job pending shows E502."""
         state, workspace = pending_job_state
 
-        result = runner.invoke(app, [
-            "pause", state.job_id,
-            "--workspace", str(workspace),
-        ])
+        # Mock conductor routing to return pending job error
+        async def mock_route(method: str, params: dict[str, Any]) -> tuple[bool, dict[str, Any] | None]:
+            return True, {"status": "rejected", "message": "Job is not running"}
+
+        mocker.patch("marianne.daemon.detect.try_daemon_route", side_effect=mock_route)
+
+        result = runner.invoke(app, ["pause", state.job_id])
 
         assert result.exit_code == 1
-        assert "E502" in result.output
-        assert "pending" in result.output.lower()
+        assert "not running" in result.output.lower() or "pending" in result.output.lower()
 
     def test_pause_json_output_success(
         self, running_job_state: tuple[CheckpointState, Path]

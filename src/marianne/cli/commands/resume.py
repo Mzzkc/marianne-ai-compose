@@ -55,6 +55,7 @@ class ResumeContext:
 
     job_id: str
     config_file: Path | None
+    workspace: Path | None
     force: bool
     escalation: bool = False
     no_reload: bool = False
@@ -73,6 +74,13 @@ def resume(
         help="Path to config file (optional if config_snapshot exists in state)",
         exists=True,
         readable=True,
+    ),
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+        help="Workspace directory to search for score state (debug override)",
+        hidden=True,
     ),
     force: bool = typer.Option(
         False,
@@ -121,7 +129,7 @@ def resume(
     job_id = validate_job_id(job_id)
     asyncio.run(
         _resume_job(
-            job_id, config_file, force, escalation,
+            job_id, config_file, workspace, force, escalation,
             no_reload, self_healing, yes
         )
     )
@@ -129,6 +137,7 @@ def resume(
 
 async def _find_job_state(
     job_id: str,
+    workspace: Path | None,
     force: bool,
 ) -> tuple[CheckpointState, StateBackend]:
     """Find and validate job state from available backends.
@@ -138,6 +147,7 @@ async def _find_job_state(
 
     Args:
         job_id: Job ID to find.
+        workspace: Optional workspace directory to search.
         force: Allow resuming completed jobs.
 
     Returns:
@@ -146,7 +156,7 @@ async def _find_job_state(
     Raises:
         typer.Exit: If job not found or not in resumable state.
     """
-    found_state, found_backend = await require_job_state(job_id)
+    found_state, found_backend = await require_job_state(job_id, workspace)
 
     # Check if job is in a resumable state
     resumable_statuses = {
@@ -266,6 +276,7 @@ def _reconstruct_config(
 async def _resume_job(
     job_id: str,
     config_file: Path | None,
+    workspace: Path | None,
     force: bool,
     escalation: bool = False,
     no_reload: bool = False,
@@ -274,11 +285,14 @@ async def _resume_job(
 ) -> None:
     """Resume a paused or failed job.
 
-    Routes through the conductor. Requires conductor to be running.
+    Routes through the conductor by default. The conductor's
+    ``JobManager.resume_job()`` handles the full execution lifecycle.
+    Falls back to direct execution only with explicit --workspace.
 
     Args:
         job_id: Job ID to resume.
         config_file: Optional path to config file.
+        workspace: Optional workspace directory to search.
         force: Force resume even if job appears completed.
         escalation: Enable human-in-the-loop escalation for low-confidence sheets.
         no_reload: If True, skip auto-reload and use cached config snapshot.
@@ -289,8 +303,11 @@ async def _resume_job(
 
     configure_global_logging(console)
 
+    # Try conductor first (unless workspace override forces direct execution)
+    ws_str = str(workspace) if workspace else None
     params = {
         "job_id": job_id,
+        "workspace": ws_str,
         "config_path": str(config_file) if config_file else None,
         "no_reload": no_reload,
     }
@@ -344,9 +361,24 @@ async def _resume_job(
                 raise typer.Exit(1)
         return
 
-    # Conductor not available - require it
-    require_conductor(routed)
-    return  # unreachable
+    # Conductor not available
+    if workspace is None:
+        # No workspace override — conductor is required
+        require_conductor(routed)
+        return  # unreachable
+
+    # Fallback to direct execution with workspace override
+    ctx = ResumeContext(
+        job_id=job_id,
+        config_file=config_file,
+        workspace=workspace,
+        force=force,
+        escalation=escalation,
+        no_reload=no_reload,
+        self_healing=self_healing,
+        auto_confirm=auto_confirm,
+    )
+    await _resume_job_direct(ctx)
 
 
 async def _resume_job_direct(ctx: ResumeContext) -> None:
@@ -358,7 +390,7 @@ async def _resume_job_direct(ctx: ResumeContext) -> None:
     from marianne.execution.runner import FatalError, GracefulShutdownError, JobRunner
 
     # Phase 1: Find and validate job state
-    found_state, found_backend = await _find_job_state(ctx.job_id, ctx.force)
+    found_state, found_backend = await _find_job_state(ctx.job_id, ctx.workspace, ctx.force)
 
     # Phase 2: Reconstruct config
     config, config_was_reloaded = _reconstruct_config(
