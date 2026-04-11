@@ -1,3 +1,20 @@
+### F-515: MovementDef.voices Field Documented but Not Implemented
+**Found by:** Spark, Movement 6
+**Severity:** P2 (medium)
+**Status:** Open
+**Description:** The `MovementDef.voices` field is documented in configuration-reference.md as "shorthand for `fan_out: {N: voices}`" but there is no implementation code that actually uses this field to populate the fan_out configuration. The field exists in the Pydantic model (`src/marianne/core/config/job.py:270-276`) and has validation tests (`tests/test_m4_multi_instrument_models.py`) but no code reads or processes the `voices` value.
+**Evidence:**
+- `docs/configuration-reference.md:201` documents `voices` field: "Number of parallel voices in this movement. Shorthand for `fan_out: {N: voices}`."
+- `src/marianne/core/config/job.py:270-276` defines the field with description
+- `grep -r "\.voices" src/ --include="*.py"` returns zero results (excluding tests and model definition)
+- Test case at `tests/test_m4_multi_instrument_models.py` shows `voices: 3` validates but doesn't verify actual fan-out expansion
+- Attempted to modernize `examples/dinner-party.yaml` by replacing `fan_out: {2: 4}` with movement-level `voices: 4` — score validated but `mzt validate` showed only 3 sheets instead of expected 7 (1 + 4 fan-out + 2)
+**Impact:** Users reading the documentation may try to use `movements.N.voices: 4` instead of `fan_out: {N: 4}` and it will validate without error but won't expand the fan-out. Silent feature gap - the score runs but produces wrong execution structure (missing parallel sheets).
+**Fix:** Implement the voices → fan_out translation. Options:
+1. Add a `@model_validator` to `JobConfig` that reads `movements.N.voices` and populates `sheet.fan_out[N]` before validation
+2. Add the translation in the sheet construction logic where fan_out is currently processed
+3. Mark the field as not-yet-implemented in docs with a warning until code is written
+
 ### F-493: Status Elapsed Time Shows "0.0s" for Running Jobs
 **Found by:** Ember, Movement 5
 **Severity:** P0 (critical)
