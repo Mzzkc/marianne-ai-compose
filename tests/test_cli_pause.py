@@ -457,7 +457,7 @@ class TestPauseCommand:
         assert "paused" in result.output.lower()
 
     def test_pause_completed_job(
-        self, completed_job_state: tuple[CheckpointState, Path], mocker: Any
+        self, completed_job_state: tuple[CheckpointState, Path]
     ) -> None:
         """Test pause when job completed shows E502."""
         state, workspace = completed_job_state
@@ -466,9 +466,8 @@ class TestPauseCommand:
         async def mock_route(method: str, params: dict[str, Any]) -> tuple[bool, dict[str, Any] | None]:
             return True, {"status": "rejected", "message": "Job is completed"}
 
-        mocker.patch("marianne.daemon.detect.try_daemon_route", side_effect=mock_route)
-
-        result = runner.invoke(app, ["pause", state.job_id])
+        with patch("marianne.daemon.detect.try_daemon_route", side_effect=mock_route):
+            result = runner.invoke(app, ["pause", state.job_id])
 
         assert result.exit_code == 1
         assert "completed" in result.output.lower()
@@ -488,7 +487,7 @@ class TestPauseCommand:
         assert "E502" in result.output
 
     def test_pause_pending_job(
-        self, pending_job_state: tuple[CheckpointState, Path], mocker: Any
+        self, pending_job_state: tuple[CheckpointState, Path]
     ) -> None:
         """Test pause when job pending shows E502."""
         state, workspace = pending_job_state
@@ -497,9 +496,8 @@ class TestPauseCommand:
         async def mock_route(method: str, params: dict[str, Any]) -> tuple[bool, dict[str, Any] | None]:
             return True, {"status": "rejected", "message": "Job is not running"}
 
-        mocker.patch("marianne.daemon.detect.try_daemon_route", side_effect=mock_route)
-
-        result = runner.invoke(app, ["pause", state.job_id])
+        with patch("marianne.daemon.detect.try_daemon_route", side_effect=mock_route):
+            result = runner.invoke(app, ["pause", state.job_id])
 
         assert result.exit_code == 1
         assert "not running" in result.output.lower() or "pending" in result.output.lower()
