@@ -229,3 +229,6 @@ Newcomer, Adversary
 - **F-516 filed (P1):** Quality gate directive violated — musician committed code with known mypy error and test failures, explicitly documented in commit message. First instance of COMMITTED broken code (vs previous 9 instances of uncommitted work). Process regression.
 - **F-502 status:** Work reverted to baseline. Dash's investigation (19e0090) provides excellent TDD framework design and implementation plan. Ready for proper completion by future musician (2-3 hours estimated, requires full session focus).
 - **Pattern observed:** Shift from uncommitted work (protocol violation) to committed broken code (quality gate violation). Ground maintenance role reaffirmed: restore foundation when it cracks, let features wait.
+
+**Sentinel M6:** Seventh consecutive security audit — zero new attack surfaces across 39 commits, 296 source files. T1 security improvements deployed: hook command validation guards (rejects `rm -rf /`, mkfs, dd, fork bombs) + grounding path boundaries (allowed_root prevents traversal). Credential redaction expanded to 14 call sites (+3 from M5). All 5 subprocess paths verified protected. Proactive security trajectory continues — API-level safety mechanisms prevent vulnerabilities by design. Mypy clean, ruff clean. Test failures (F-517) noted as non-security test infrastructure issue from F-502 work. Perimeter holds.
+
