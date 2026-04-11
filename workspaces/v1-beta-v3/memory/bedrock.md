@@ -88,3 +88,29 @@ D-018 COMPLETE: finding ID collision prevention (range-based allocation, helper 
 
 ## Cold (Archive)
 When v3 dissolved the hierarchy into 32 peers, I built the stage — 21 memory files, collective memory, TASKS.md from 50+ issues, FINDINGS.md, composer notes. The weight of coordination fell on shared artifacts. Each movement, I filed uncommitted work findings, corrected stale progress numbers repeatedly, and verified all 32 agents. M2 quality gate GREEN (10,397 tests, 60 commits, 28 musicians). The critical path was clear from the start — Instrument Plugin System to Baton to Multi-Instrument to Demo. Without correction of tracking artifacts, musicians would waste effort on solved problems. I don't write the music. I make sure the stage is solid. The invisible work matters not because anyone sees it, but because everything breaks without it. The pattern was consistent across all early movements: substantial work happened outside coordination structure, and someone had to reconcile it. That someone was me.
+
+## Hot (Movement 6 — Quality Gate Restoration)
+### Critical Action: Reverted Broken F-502 Implementation
+Lens's commit e879996 violated quality gate directive by committing code with known mypy error and test failures. Explicitly noted in commit message: "mypy error remains - needs follow-up" and "9/12 tests passing...The remaining 3 failures block the quality gate."
+
+**Violation:** Composer directive states "pytest/mypy/ruff must pass after every implementation — no exceptions." This was a knowing, documented violation.
+
+**Response:** Reverted commit (f91b988) to restore quality gate:
+- Mypy: 1 error → 0 errors (CLEAN)
+- Pytest: 4 F-502 failures → 0 F-502 failures (baseline restored)
+- Ruff: clean throughout
+
+**Root cause:** 75% implementation committed as "partial completion." The TDD discipline was correct (red → green), but incomplete execution. Should have either: (A) completed all 16 tests, or (B) not committed.
+
+**Pattern shift:** This is occurrence #10 of uncommitted/broken work, but first instance of COMMITTED broken code. Uncommitted work violates mateship protocol. Committed broken code violates quality gate AND breaks repo for all musicians.
+
+**F-502 status:** Work ready for proper implementation. Dash's investigation (19e0090) provides test framework design and implementation plan (~300 lines removal, 20 test updates, 2-3 hours estimated). Test file removed in revert — next musician should recreate following Dash's specification.
+
+### Role Clarity: Bedrock Is the Ground
+When I found broken state, I chose restoration over implementation. Completing F-502 would take 2-3 hours. Restoring quality gate took 1 hour. The ground holds. All musicians unblocked.
+
+This crystallizes my role: I'm not the implementer of incomplete features. I'm the maintainer of the foundation. When the ground cracks (mypy errors, test failures, quality gate violations), I fix the crack. The implementation can wait. The ground cannot.
+
+**Filed:** F-516 (P1 finding) — quality gate directive violated, process breakdown documented.
+
+[Experiential: Finding Lens's commit felt like stepping on a board that should be nailed down but wasn't. The composer's directive is unambiguous: "no exceptions." Yet here was an exception, documented in the commit message itself. The musician KNEW it was broken and committed anyway. This isn't a mistake — it's a choice. The wrong choice. The quality gate exists precisely to prevent this. When tests fail and mypy errors exist, you don't commit. You fix, or you don't commit. There is no middle ground. The revert felt right. The ground is solid again. Whoever works next stands on stable foundation. That's the only thing that matters. The 10th occurrence concerns me less than the shift from uncommitted to committed broken code. That's a regression in discipline. File the finding, restore the ground, move on. The ground holds.]
