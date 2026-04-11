@@ -49,6 +49,13 @@ def recover(
         "-f",
         help="Reset all FAILED sheets >= this number to PENDING (cascade recovery)",
     ),
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+        help="Workspace directory containing score state (debug override)",
+        hidden=True,
+    ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
@@ -81,7 +88,7 @@ def recover(
         asyncio.run(_recover_cascade(job_id, from_sheet, dry_run))
         return
 
-    asyncio.run(_recover_job(job_id, sheet, dry_run))
+    asyncio.run(_recover_job(job_id, sheet, workspace, dry_run))
 
 
 async def _recover_cascade(
@@ -203,11 +210,13 @@ async def _recover_cascade(
 async def _recover_job(
     job_id: str,
     sheet_num: int | None,
+    workspace: Path | None,
     dry_run: bool,
 ) -> None:
     """Recover sheets by running validations without re-executing.
 
-    Routes through the conductor to locate job state. Requires conductor to be running.
+    Routes through the conductor to locate job state. Falls back to
+    direct filesystem access when --workspace is explicitly provided.
     """
     configure_global_logging(console)
 
@@ -215,8 +224,9 @@ async def _recover_job(
     from marianne.daemon.detect import try_daemon_route
     from marianne.daemon.exceptions import DaemonError, JobSubmissionError
 
+    ws_str = str(workspace) if workspace else None
     params = {
-        "job_id": job_id,
+        "job_id": job_id, "workspace": ws_str,
         SHEET_NUM_KEY: sheet_num, "dry_run": dry_run,
     }
     try:
@@ -241,6 +251,10 @@ async def _recover_job(
         state_data = result.get("state")
         if state_data:
             state = CheckpointState.model_validate(state_data)
+    elif not routed and workspace is not None:
+        # Fallback to filesystem with workspace override
+        from ..helpers import _find_job_state_direct
+        state, state_backend = await _find_job_state_direct(job_id, workspace)
     else:
         require_conductor(routed)
         return

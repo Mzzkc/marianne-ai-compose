@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 import typer
@@ -49,6 +50,12 @@ from ..helpers import (
     ErrorMessages,
     get_last_activity_time,
     require_conductor,
+)
+from ..helpers import (
+    _find_job_state_direct as require_job_state,
+)
+from ..helpers import (
+    _find_job_state_fs as find_job_state,
 )
 from ..output import (
     StatusColors,
@@ -130,6 +137,13 @@ def status(
         "-i",
         help="Refresh interval in seconds for --watch mode (default: 5)",
     ),
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+        help="Workspace directory to search for score state (debug override)",
+        hidden=True,
+    ),
 ) -> None:
     """Show score status. Run with no arguments for an overview of all scores.
 
@@ -150,9 +164,9 @@ def status(
 
     job_id = validate_job_id(job_id)
     if watch:
-        asyncio.run(_status_job_watch(job_id, json_output, watch_interval))
+        asyncio.run(_status_job_watch(job_id, json_output, watch_interval, workspace))
     else:
-        asyncio.run(_status_job(job_id, json_output))
+        asyncio.run(_status_job(job_id, json_output, workspace))
 
 
 def list_jobs(
@@ -179,13 +193,20 @@ def list_jobs(
         "--json",
         help="Output as JSON array for machine parsing",
     ),
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+        help="Reserved for future per-workspace filtering.",
+        hidden=True,
+    ),
 ) -> None:
     """List scores from the conductor.
 
     By default shows only active scores (queued, running, paused).
     Use --all to include completed, failed, and cancelled scores.
     """
-    asyncio.run(_list_jobs(all_jobs, status_filter, limit, json_output))
+    asyncio.run(_list_jobs(all_jobs, status_filter, limit, workspace, json_output))
 
 
 # =============================================================================
@@ -196,15 +217,20 @@ def list_jobs(
 async def _status_job(
     job_id: str,
     json_output: bool,
+    workspace: Path | None,
 ) -> None:
     """Asynchronously get and display status for a specific job.
 
-    Routes through the conductor. Requires conductor to be running.
+    Routes through the conductor by default. Falls back to direct filesystem
+    access only if --workspace is explicitly provided (debug override).
     """
     from marianne.daemon.detect import try_daemon_route
     from marianne.daemon.exceptions import JobSubmissionError
 
-    params = {"job_id": job_id}
+    # Try conductor first (unless workspace override is given)
+    ws_str = str(workspace) if workspace else None
+
+    params = {"job_id": job_id, "workspace": ws_str}
     try:
         routed, result = await try_daemon_route("job.status", params)
     except JobSubmissionError:
@@ -245,9 +271,14 @@ async def _status_job(
         )
         raise typer.Exit(1)
     else:
-        # Conductor not available — require it
-        require_conductor(routed, json_output=json_output)
-        return  # unreachable, require_conductor raises
+        # Conductor not available — require it unless workspace is given
+        if workspace is None:
+            require_conductor(routed, json_output=json_output)
+            return  # unreachable, require_conductor raises
+        # Fallback to direct filesystem access with workspace override
+        found_job, _ = await require_job_state(
+            job_id, workspace, json_output=json_output,
+        )
 
     # Output as JSON if requested
     if json_output:
@@ -262,15 +293,18 @@ async def _status_job_watch(
     job_id: str,
     json_output: bool,
     interval: int,
+    workspace: Path | None,
 ) -> None:
     """Continuously monitor job status with live updates.
 
-    Routes through the conductor for each poll. Requires conductor to be running.
+    Routes through the conductor for each poll. Falls back to direct
+    filesystem access only if --workspace is explicitly provided.
 
     Args:
         job_id: Job ID to monitor.
         json_output: Output as JSON instead of rich formatting.
         interval: Refresh interval in seconds.
+        workspace: Optional workspace directory to search.
     """
     from marianne.daemon.detect import try_daemon_route
     from marianne.daemon.exceptions import JobSubmissionError
@@ -281,8 +315,9 @@ async def _status_job_watch(
         while True:
             found_job: CheckpointState | None = None
 
-            # Try conductor
-            params = {"job_id": job_id}
+            # Try conductor first
+            ws_str = str(workspace) if workspace else None
+            params = {"job_id": job_id, "workspace": ws_str}
             try:
                 routed, result = await try_daemon_route("job.status", params)
             except JobSubmissionError:
@@ -312,6 +347,9 @@ async def _status_job_watch(
                     _output_meta_status(result, json_output)
                     await asyncio.sleep(interval)
                     continue
+            elif not routed and workspace is not None:
+                # Fallback to filesystem with workspace override
+                found_job, _ = await find_job_state(job_id, workspace)
             elif not routed:
                 require_conductor(routed, json_output=json_output)
                 return  # unreachable
@@ -508,10 +546,13 @@ async def _list_jobs(
     all_jobs: bool,
     status_filter: str | None,
     limit: int,
+    workspace: Path | None,
     json_output: bool = False,
 ) -> None:
     """List jobs from the daemon's persistent registry."""
     from marianne.daemon.detect import try_daemon_route
+
+    _ = workspace  # Reserved for future per-workspace filtering
 
     routed, result = await try_daemon_route("job.list", {})
     if not routed:
