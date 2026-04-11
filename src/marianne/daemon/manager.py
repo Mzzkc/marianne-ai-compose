@@ -1243,7 +1243,11 @@ class JobManager:
                         data["status"] = "failed"
                         return data
                 except Exception:
-                    pass
+                    _logger.debug(
+                        "get_job_status.checkpoint_load_after_fail",
+                        job_id=job_id,
+                        exc_info=True,
+                    )
 
         # 3. Basic metadata (job never produced a checkpoint, or active job
         #    whose registry checkpoint is stale)
@@ -1471,6 +1475,8 @@ class JobManager:
         """
         try:
             await self._registry.update_status(job_id, "cancelled")
+        except asyncio.CancelledError:
+            raise
         except Exception:
             _logger.error(
                 "cancel_cleanup.registry_failed",
@@ -1481,6 +1487,8 @@ class JobManager:
         try:
             if self._scheduler_instance is not None:
                 await self._scheduler_instance.deregister_job(job_id)
+        except asyncio.CancelledError:
+            raise
         except Exception:
             _logger.error(
                 "cancel_cleanup.scheduler_failed",
@@ -3032,6 +3040,8 @@ class JobManager:
                 await proc.wait()
                 result["error_message"] = f"Timeout after {timeout}s"
 
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             result["error_message"] = str(exc)
 
@@ -3127,6 +3137,8 @@ class JobManager:
                         self._deferred_resume(job_id, ws or meta.workspace),
                         name=f"modify-resume-{job_id}",
                     )
+        except asyncio.CancelledError:
+            raise
         except Exception:
             _logger.error(
                 "task_done_modify_resume_failed", job_id=job_id, exc_info=True,
@@ -3161,6 +3173,8 @@ class JobManager:
                         " — skipping hooks to prevent infinite self-chaining"
                     ),
                 )
+        except asyncio.CancelledError:
+            raise
         except Exception:
             _logger.error(
                 "task_done_hooks_spawn_failed", job_id=job_id, exc_info=True,
@@ -3202,6 +3216,8 @@ class JobManager:
         try:
             if self._entropy_check_callback is not None:
                 self._entropy_check_callback()
+        except asyncio.CancelledError:
+            raise
         except Exception:
             _logger.error(
                 "task_done_entropy_check_failed", job_id=job_id, exc_info=True,
