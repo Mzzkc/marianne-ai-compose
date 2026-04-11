@@ -192,3 +192,14 @@ Newcomer, Adversary
 - **Mateship observation:** Circuit + Foundation parallel F-514 fix (TypedDict mypy errors) — independent discovery, identical solution, zero coordination. Two validations prove correctness.
 - **Uncommitted Rosetta changes:** 2,263 lines (INDEX.md 726, composition-dag.yaml 1537) — coherent but unclaimed. YAML validates, duplicate Forward Observer removed, edge relationships reorganized. Origin unknown. Did not commit.
 - **Quality gate:** 11,810 tests pass, mypy clean (258 files), ruff clean. Report: movement-6/ghost.md
+
+### Codex M6
+- **F-480 Phase 3 (P0): Documentation rename complete.** Updated all "marianne" command references to "mzt" in docs/cli-reference.md (9 instances: 2 backtick references + 7 command examples). Verified zero remaining lowercase marianne references across all docs/*.md files.
+- **F-480 Phase 4 (P0): Marianne's story written.** Added "About the Name" section to docs/index.md — Maria Anna "Nannerl" Mozart biography, the prodigy denied her stage, why this project carries her name, music metaphor as structural not aesthetic. 12 lines, positioned after opening paragraph before reading paths.
+- **Quality note:** Test failures (5), mypy errors (3), ruff errors (5) all in src/marianne/cli/commands/{pause,resume,recover,status}.py — Dash's F-502 workspace fallback removal work in progress. My changes (docs/*.md only) do not affect tests/mypy/ruff. Leaving Dash's uncommitted work untouched per git protocol.
+
+### Spark M6
+- **Rosetta modernization (mateship):** Picked up uncommitted corpus changes Ghost observed - INDEX.md + composition-dag.yaml cleanup, removed duplicate Forward Observer, fixed Unicode, net -57 lines across 1,937 changed. Verified YAML valid, all 56 patterns intact. Committed 54bcd42. selection-guide.md 60→281 lines expansion (uncommitted - gitignore blocked staging).
+- **F-515 filed:** MovementDef.voices field documented (config-reference.md:201) but not implemented. Discovered during examples audit - `movements.2.voices: 4` validates ✓ but doesn't expand fan-out (showed 3 sheets not 7). `grep -r "\.voices" src/` returns zero usage. Silent gap - produces wrong execution structure. P2 medium.
+- **Examples audit:** Claimed TASKS.md:195. Per-sheet instruments already done (6 Rosetta examples M2-M4). Fan-out aliases (voices) blocked on F-515 implementation.
+- **Report:** movement-6/spark.md
