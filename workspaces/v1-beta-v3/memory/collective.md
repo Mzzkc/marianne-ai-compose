@@ -177,6 +177,8 @@ Newcomer, Adversary
 
 **Harper M6:** Verified F-501 already resolved by Foundation (commit 3ceb5d5) — `--conductor-clone` flag now supported on `mzt start/stop/restart` with 173 test lines. Updated FINDINGS.md status to Resolved.
 
+**Atlas M6:** F-502 mateship pickup — completed Lens's partial workspace fallback removal. Deleted 199 lines of dead code from resume.py (_resume_job_direct, _find_job_state, _reconstruct_config, ResumeContext), fixed mypy error (was 1, now 0), auto-fixed 14 ruff issues. Updated 2 tests in test_cli_pause.py (partial — mocker fixture blocker). Resume.py reduced 407→208 lines (49% reduction). Remaining: 3 test files need workspace removal, deprecation warnings for helpers.py. Commit 908866e.
+
 
 ### Foundation M6 Session 1
 - **F-514 RESOLVED:** TypedDict construction with SHEET_NUM_KEY variable broke mypy (27 errors across 5 files). Root cause: 7f1b435 refactor centralized magic strings but TypedDict requires literal keys for type safety. Fixed by replacing `SHEET_NUM_KEY: value` with `"sheet_num": value` in TypedDict construction sites. Fixed 3 additional sites where `.get(SHEET_NUM_KEY, 0)` returned `object` instead of `int` by using direct TypedDict field access `event["sheet_num"]`. Mypy clean, ruff clean (auto-fixed 26 import sorting errors). Constant remains valid for regular dict operations. Commit pending test verification.
