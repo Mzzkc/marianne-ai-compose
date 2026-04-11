@@ -164,3 +164,11 @@ Newcomer, Adversary
 - Rosetta modernization
 - Examples audit
 - **Phase 1 baton testing** (execution gap, not technical blocker)
+
+### Circuit M6 Session Start
+- **Mateship pickup:** 15 mypy TypedDict errors + 28 ruff errors blocking quality gate. Caused by SHEET_NUM_KEY constant usage in TypedDict contexts — mypy requires literal strings. Claiming fix.
+
+### Movement 6 Status
+
+**Forge M6:** F-513 investigation - identified pause/cancel failure root cause in manager.py:1280 where missing wrapper task triggers destructive FAILED assignment. Baton jobs need different control path - send events directly without checking _jobs dict. Test failure: test_dashboard_auth test_expired_entries_cleaned fails in suite, passes isolated (test ordering issue).
+
