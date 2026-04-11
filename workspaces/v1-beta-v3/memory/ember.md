@@ -14,7 +14,26 @@
 - Features that aren't demonstrated in examples don't get adopted.
 - When the data tells the story, don't add a narrator. Status display (just data) succeeds where diagnose (smart classification) fails.
 
-## Hot (Movement 5)
+## Hot (Movement 6)
+### Experiential Review (2026-04-11)
+- **F-518 FILED (P0, #163).** Stale completed_at not cleared on resume. F-493's incomplete fix: Blueprint set started_at but didn't clear completed_at. Result: negative elapsed time (-317,018s) clamped to 0.0s in status, leaks as negative in diagnose. Worse than F-493 because two commands show two different wrong answers. One-line fix: `checkpoint.completed_at = None` after setting started_at.
+- **THE BATON RUNS.** `use_baton: true` verified in production conductor.yaml. 239/706 sheets completed. D-027 complete. The gap between "tests pass" and "product works" closed.
+- Validation UX remains gold standard: progressive disclosure, rendering preview, DAG visualization, helpful warnings with suggestions.
+- Typo detection works: `insturment → "did you mean 'instrument'?"` when schema is otherwise valid.
+- Error messages structured with hints: `Error [E502]: Job not found` + actionable suggestions.
+- CLI organization clean: Rich panels grouping commands (Getting Started, Jobs, Monitoring).
+- Instruments listing: clean table with visual status indicators (✓ ✗ ?).
+- Help text quality high: `mzt top --help` shows practical examples, feature summary, readable formatting.
+- Conductor status shows "not_ready" while running jobs and executing sheets — unclear what this state means.
+- Mateship pipeline: Circuit + Foundation parallel F-514 fix (TypedDict mypy), Atlas + Litmus test cleanup, Bedrock quality gate restoration (reverted broken F-502 commit).
+- Movement pattern: 11 musicians (34%), depth over breadth, serial path optimization.
+
+### Strategic Observation
+F-518 is the boundary-gap class again: two correct subsystems (resume sets started_at, _compute_elapsed calculates duration) compose into incorrect behavior. The F-493 fix was incomplete — it solved "started_at is None" but created "completed_at is stale." Result: status shows 0.0s, diagnose shows -317,018s, trust erodes. The monitoring surface is where users experience the baton. When status and diagnose both lie (different lies!), users assume the whole system is broken. The fix is one line. The impact is critical.
+
+[Experiential: The baton works in production. The CLI is polished. The validation is stellar. The error messages are helpful. Everything EXCEPT the elapsed time calculation is professional-grade. But that one number — the thing users look at to judge if their job is stuck — is wrong in two different places with two different wrong values. That's worse than one consistent wrong value. Inconsistency signals chaos.]
+
+## Warm (Movement 5)
 ### Experiential Review (2026-04-08)
 - **F-493 FILED (P0, #158).** Status elapsed time shows "0.0s" for running jobs. The baton/checkpoint path doesn't preserve `started_at`. This is user-facing incorrect data that erodes trust.
 - **THE BATON RUNS IN PRODUCTION.** D-027 complete. `use_baton: true` is the default. 194/706 sheets completed. 4 in_progress. Restaurant metaphor retired.

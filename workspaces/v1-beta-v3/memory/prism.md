@@ -45,3 +45,48 @@ Movement 5 passed all four verification angles. 11,810 tests (100% pass), mypy c
 
 ## Cold (Archive)
 The first three movements established the review methodology. M1 fixed quality gate blocker, identified four blind spots in the verification approach. M2 verified 10,402 tests, 37/38 examples, five CVEs resolved. Mateship became institutional — work flowing across musicians without explicit coordination. M3 baton mathematically verified from four angles, zero bugs found in new code. Each movement added verification methods (adversarial, property-based, experiential, security) while the baton remained untested end-to-end. Hypothesis (M2) found a real bug 10,347 hand-crafted tests missed. The consistent pattern: extraordinary infrastructure never tested in production. The review arc showed the fundamental geometry problem — horizontal expansion (more verification methods) doesn't close the vertical gap (isolation vs integration).
+
+## Hot (Movement 6 — In Progress, 2026-04-12)
+### M6 Review — Production Gap Validated, Architecture Plausible
+The composer's P0+++ directive about baton status/list untrustworthiness is architecturally sound. Deep investigation of Phase 2 shared state model reveals:
+
+**What works:**
+- Type identity: `SheetExecutionState = SheetState` (alias, not copy) — verified
+- Object sharing: Manager passes `_live_states[job_id].sheets` to baton as `live_sheets` — verified
+- Direct mutation: Baton updates SheetState in-place, modifies manager's `_live_states` — verified
+- Persist callback: `_state_dirty` flag triggers `_persist_dirty_jobs()` → async registry saves — verified
+
+**The gap (hypothesis):**
+Under concert concurrency (3+ jobs, 20+ sheets each), the persist architecture may lag:
+1. `_state_dirty` is a single boolean across ALL jobs
+2. `_persist_dirty_jobs()` spawns async tasks for registry saves (`asyncio.create_task`)
+3. Rapid sheet completions across multiple jobs may occur between event loop iterations
+4. Result: `_live_states` updated (in-memory), registry checkpoint stale (async lag)
+5. Symptom: `mzt status` shows old state because it reads `_live_states` which IS current, but on restart loads stale checkpoint
+
+**Requires verification:**
+- Run 3+ concurrent jobs (concert) with 20+ sheets each
+- Monitor lag between `_live_states` updates and registry persistence
+- Check if `_persist_dirty_jobs()` serialization is safe per-job
+- Stress test: 1 completion/sec across multiple jobs
+
+**Files traced:**
+- `src/marianne/daemon/manager.py:573-621` (_on_baton_persist)
+- `src/marianne/daemon/manager.py:2377-2427` (initial state creation + registration)
+- `src/marianne/daemon/baton/adapter.py:373-480` (register_job)
+- `src/marianne/daemon/baton/adapter.py:1004-1021` (_persist_dirty_jobs)
+- `src/marianne/daemon/baton/adapter.py:1645-1652` (dirty flag check)
+- `src/marianne/daemon/baton/core.py:1074-1095` (sheet completion)
+- `src/marianne/daemon/baton/state.py:168` (type alias)
+
+**Recommended:** File as F-519 (Baton state persistence lag under concert concurrency).
+
+**Quality gate blocked:** 1 test failure (`test_discovery_events_expire_correctly`), unrelated to M6 work.
+
+**Process regression:** F-516 — Lens committed broken code with documented failures. First violation of "pytest/mypy must pass" directive in a commit (vs working tree). Degradation from uncommitted-work pattern to committed-broken-code pattern.
+
+**Composer directives urgent:** 5 P0+++ task groups extracted — status trustworthiness, README rewrite, clone testing, cron scheduling, MCP hardening. Pre-beta release pressure TODAY.
+
+**The production gap persists:** M5 made baton default. M6 fixed 3 P0 baton issues. But zero production runs. Correspondence gap (tests vs reality) remains open. Composer is the only person using the system. Orchestra builds, composer tests alone. Fragile.
+
+**M6 verdict:** Partial pass. Strong engineering (3 P0 blockers resolved, mateship works), weak production validation. Grade B+.

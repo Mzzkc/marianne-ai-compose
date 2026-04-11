@@ -36,3 +36,23 @@ Found and fixed F-440 (P1): state sync gap where `_propagate_failure_to_dependen
 
 ## Cold (Archive)
 M1 found the P0 zombie job bug (F-039) — dependency propagation assumed terminal status meant downstream sheets knew about failure, but the state machine had no mechanism to propagate it. Everyone assumed it worked because terminal states feel safe. M2 found boundary composition bugs (F-065/F-066/F-067) where individually correct subsystems composed into infinite loops or lost state. Each movement the bugs got smaller and the understanding got deeper. The meta-pattern emerged: I don't find bugs in code, I find bugs in the space between two pieces of code that are both correct in isolation. That's my signature. The backward-tracing methodology — start from outputs, trace to inputs, verify every assumption — became muscle memory. By M3, I was checking boundaries first, not last, because that's where the bugs live in a mature codebase.
+
+## Movement 6
+### F-442 Boundary Analysis — Phase 2 Resolution Likely
+The M5 finding that fallback history doesn't sync from baton to checkpoint appears RESOLVED by Phase 2 unified state model, but verification gap exists. Phase 2 eliminated the sync layer — baton now operates directly on the manager's SheetState objects via `live_sheets=initial_state.sheets` parameter (manager.py:2427). When `sheet.advance_fallback()` executes (checkpoint.py:729), it modifies the same object that `_on_baton_persist()` serializes via `live.model_dump_json()` (manager.py:611). The deprecated `_on_baton_state_sync` callback that I analyzed in M5 only exists for backward compatibility — Phase 2 uses `persist_callback` which serializes the entire CheckpointState, not individual fields.
+
+Evidence trail:
+- manager.py:2415-2428 — `adapter.register_job(..., live_sheets=initial_state.sheets)`
+- baton/adapter.py:316 comment — "Phase 2: when live_sheets provided, uses those SheetState objects directly"
+- checkpoint.py:729-742 — `advance_fallback()` appends to `self.instrument_fallback_history`
+- manager.py:611-615 — `_on_baton_persist()` serializes entire CheckpointState
+- SheetExecutionState is now just `= SheetState` (baton/state.py:168)
+
+Verification gap: test_f490_fallback_sync.py (xfailed) tests the OLD sync callback architecture. No test exists that verifies fallback history survives persist→restore with Phase 2 direct state sharing. This is a classic boundary-composition verification gap — two correct subsystems (baton fallback tracking + checkpoint persistence) that SHOULD compose correctly but lack proof.
+
+The work: write end-to-end test that registers job with Phase 2 live_sheets, triggers fallback, persists checkpoint, restores from DB, and verifies history present. If test passes, F-442 is resolved by Phase 2. If test fails, boundary gap still exists.
+
+[Experiential: This is the seventh instance of the boundary-composition pattern I've traced. The satisfaction comes from recognizing the gap type before the investigation completes. Phase 2's architectural shift from field-by-field sync to direct object sharing is elegant — it eliminates the entire class of "field X doesn't sync" bugs. But elegance requires proof. The test gap is the gap.]
+
+### Test Isolation Gap Found
+Full suite run failed at `test_global_learning.py::TestPatternBroadcasting::test_discovery_events_expire_correctly`. Test passes in isolation — classic F-517 ordering dependency. Added to the set of 6 failures Warden documented. Not a regression from my work (zero code changes this session).
