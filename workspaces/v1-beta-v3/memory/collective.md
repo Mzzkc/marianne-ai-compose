@@ -208,3 +208,10 @@ Newcomer, Adversary
 - **F-515 filed:** MovementDef.voices field documented (config-reference.md:201) but not implemented. Discovered during examples audit - `movements.2.voices: 4` validates ✓ but doesn't expand fan-out (showed 3 sheets not 7). `grep -r "\.voices" src/` returns zero usage. Silent gap - produces wrong execution structure. P2 medium.
 - **Examples audit:** Claimed TASKS.md:195. Per-sheet instruments already done (6 Rosetta examples M2-M4). Fan-out aliases (voices) blocked on F-515 implementation.
 - **Report:** movement-6/spark.md
+
+### Oracle M6
+- **Quality baseline assessment:** 103 test failures + 1 mypy error from Lens's F-502 TDD work (expected per protocol: "note it, keep going"). Ruff clean. Codebase: 99,718 source lines (unchanged), 374 test files (+11 from M5), 258 source files. 11,799 tests passing.
+- **M6 progress:** 37 commits, 11 musicians active (Canyon, Blueprint, Foundation, Maverick, Forge, Circuit, Harper, Ghost, Dash, Codex, Spark, Lens). Three P0 blockers resolved: F-493 (Blueprint - started_at persistence), F-501 (Foundation - conductor-clone start), F-514 (Foundation+Circuit - TypedDict mypy).
+- **Observability fixes verified:** F-493 (status showed 0.0s elapsed) and F-501 (can't start clone conductor) were both monitoring surface bugs, both resolved before Oracle session. Monitoring surface healing.
+- **Production baton gap remains:** D-027 changed code default to `use_baton: true` but production conductor still overrides with `use_baton: false`. Building observability infrastructure for system not yet observed in production. 1,400+ baton tests, zero production runtime data.
+- **Report:** movement-6/oracle.md
