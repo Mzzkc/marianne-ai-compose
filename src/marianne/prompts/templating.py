@@ -254,28 +254,46 @@ class PromptBuilder:
         template_context["stakes"] = self.config.stakes or ""
         template_context["thinking_method"] = self.config.thinking_method or ""
 
-        if self.config.template:
-            template = self.env.from_string(self.config.template)
-            prompt = template.render(**template_context)
-        elif self.config.template_file and self.config.template_file.exists():
-            template_content = self.config.template_file.read_text()
-            template = self.env.from_string(template_content)
-            prompt = template.render(**template_context)
-        else:
-            prompt = self._build_default_prompt(context)
+        # PROMPT ASSEMBLY ORDER (optimized for prompt caching):
+        # 1. Static prelude/cadenza content first (better cache hits)
+        # 2. Dynamic template content second (changes on retries)
+        # 3. Additional context/patterns/validations last
 
-        # Inject skills/tools early (before template body content matters less
-        # than being present — place them right after the rendered template)
+        # Inject skills/tools FIRST (static content from prelude/cadenza)
+        # These are typically unchanged across retries, so placing them
+        # at the front maximizes prompt cache utility.
         skills_tools_section = self._format_injection_section(
             context.injected_skills, context.injected_tools
         )
-        if skills_tools_section:
-            prompt = f"{prompt}\n\n{skills_tools_section}"
+        prompt = skills_tools_section if skills_tools_section else ""
 
-        # Inject context after template body
+        # Inject context SECOND (static content from prelude/cadenza)
         if context.injected_context:
             context_parts = "\n\n".join(context.injected_context)
-            prompt = f"{prompt}\n\n## Injected Context\n\n{context_parts}"
+            context_section = f"## Injected Context\n\n{context_parts}"
+            if prompt:
+                prompt = f"{prompt}\n\n{context_section}"
+            else:
+                prompt = context_section
+
+        # Render template THIRD (dynamic content that changes on retries)
+        # Template contains per-attempt variables, sheet-specific logic,
+        # and retry-specific state. By placing this after static prelude/cadenza,
+        # we maximize the cacheable prefix.
+        if self.config.template:
+            template = self.env.from_string(self.config.template)
+            template_body = template.render(**template_context)
+        elif self.config.template_file and self.config.template_file.exists():
+            template_content = self.config.template_file.read_text()
+            template = self.env.from_string(template_content)
+            template_body = template.render(**template_context)
+        else:
+            template_body = self._build_default_prompt(context)
+
+        if prompt:
+            prompt = f"{prompt}\n\n{template_body}"
+        else:
+            prompt = template_body
 
         # Inject spec corpus fragments (Phase 1: Spec Corpus Pipeline)
         # Placed after injected context, before failure history — aligns with

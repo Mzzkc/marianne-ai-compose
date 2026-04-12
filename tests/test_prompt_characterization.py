@@ -500,7 +500,8 @@ class TestFullAssemblyOrder:
             validation_rules=rules,
         )
 
-        # Verify ordering: template → skills → context → specs → history → patterns → validations
+        # Verify ordering (cache-optimized):
+        # skills → context → template → specs → history → patterns → validations
         positions = {
             "template": prompt.index("TEMPLATE_CONTENT"),
             "skills": prompt.index("SKILL_CONTENT"),
@@ -512,7 +513,7 @@ class TestFullAssemblyOrder:
         }
 
         expected_order = [
-            "template", "skills", "context", "specs",
+            "skills", "context", "template", "specs",
             "history", "patterns", "validations",
         ]
 

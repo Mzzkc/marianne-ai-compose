@@ -214,10 +214,11 @@ class TestPromptAssemblyOrder:
         assert pattern_pos >= 0, "Patterns section missing"
         assert validation_pos >= 0, "Validation section missing"
 
-        # Verify ORDER: template < skills < context < specs < failures < patterns < validations
-        assert task_pos < skill_pos, "Task must come before skills"
+        # Verify ORDER (cache-optimized):
+        # skills < context < template < specs < failures < patterns < validations
         assert skill_pos < context_pos, "Skills must come before context"
-        assert context_pos < spec_pos, "Context must come before specs"
+        assert context_pos < task_pos, "Context must come before task (template)"
+        assert task_pos < spec_pos, "Task must come before specs"
         assert spec_pos < failure_pos, "Specs must come before failure history"
         assert failure_pos < pattern_pos, "Failures must come before patterns"
         assert pattern_pos < validation_pos, "Patterns must come before validations"

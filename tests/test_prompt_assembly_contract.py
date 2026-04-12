@@ -7,16 +7,20 @@ code depends on.
 
 Directive: D-003 (North, Movement 1) — write characterization tests BEFORE step 28.
 
-The prompt assembly order (from architecture.yaml) is:
+The prompt assembly order (optimized for prompt caching):
   1. Preamble (positional identity)
   2. Overture (organizational identity — not yet implemented)
-  3. Rendered Template (the task)
-  4. Skills/Tools (prelude/cadenza injections with category=skill/tool)
-  5. Injected Context (prelude/cadenza with category=context)
+  3. Skills/Tools (static prelude/cadenza injections with category=skill/tool)
+  4. Injected Context (static prelude/cadenza with category=context)
+  5. Rendered Template (dynamic content that changes on retries)
   6. Spec Fragments (specification corpus passages)
   7. Failure History (lessons from previous sheets)
   8. Learned Patterns (trust-scored patterns from learning store)
   9. Success Requirements (validation rules as agent-readable checklist)
+
+Rationale: Static prelude/cadenza content (skills/tools/context) comes BEFORE
+the dynamic template to maximize prompt cache hits. Template variables change
+on retries, but prelude/cadenza content is typically constant across retries.
 
 Tests here verify that this order is maintained and that each section
 produces deterministic output.
@@ -268,10 +272,10 @@ class TestSheetContextContract:
 class TestAssemblyOrderContract:
     """The order of sections in the final prompt is a contract.
 
-    Architecture.yaml specifies:
-      template → skills/tools → context → specs → failures → patterns → validations
+    Cache-optimized order (static prelude/cadenza before dynamic template):
+      skills/tools → context → template → specs → failures → patterns → validations
 
-    Changing this order changes agent behavior. These tests pin it.
+    Changing this order changes agent behavior and cache performance. These tests pin it.
     """
 
     def test_full_assembly_order(self, workspace: Path) -> None:
@@ -336,10 +340,11 @@ class TestAssemblyOrderContract:
         assert pattern_pos >= 0, "Pattern section missing"
         assert validation_pos >= 0, "Validation section missing"
 
-        # Order: template < skills < context < spec < failures < patterns < validations
-        assert template_pos < skills_pos, "Template must come before skills"
+        # NEW ORDER (cache-optimized):
+        # skills < context < template < specs < failures < patterns < validations
         assert skills_pos < context_pos, "Skills must come before context"
-        assert context_pos < spec_pos, "Context must come before specs"
+        assert context_pos < template_pos, "Context must come before template (caching)"
+        assert template_pos < spec_pos, "Template must come before specs"
         assert spec_pos < failure_pos, "Specs must come before failures"
         assert failure_pos < pattern_pos, "Failures must come before patterns"
         assert pattern_pos < validation_pos, "Patterns must come before validations"
