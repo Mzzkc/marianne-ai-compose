@@ -329,21 +329,21 @@ class TestResumeCommand:
     """Tests for resume command entry point validation."""
 
     def test_resume_nonexistent_workspace(self, tmp_path: Path) -> None:
-        """Resume with nonexistent workspace should fail."""
+        """Resume with nonexistent job should fail (workspace param removed in F-502)."""
+        # Note: --workspace flag removed in F-502. This now tests job not found behavior.
         result = runner.invoke(
             app,
-            ["resume", "my-job", "--workspace", str(tmp_path / "does_not_exist")],
+            ["resume", "nonexistent-job"],
         )
         assert result.exit_code == 1
-        assert "Workspace not found" in result.stdout or "not found" in result.stdout.lower()
+        assert "not found" in result.stdout.lower()
 
     def test_resume_job_not_found(self, tmp_path: Path) -> None:
         """Resume with job ID that doesn't exist should fail."""
-        workspace = tmp_path / "empty"
-        workspace.mkdir()
+        # Note: --workspace flag removed in F-502
         result = runner.invoke(
             app,
-            ["resume", "nonexistent-job", "--workspace", str(workspace)],
+            ["resume", "nonexistent-job"],
         )
         assert result.exit_code == 1
         assert "not found" in result.stdout.lower()
@@ -360,7 +360,7 @@ class TestFindJobState:
         from marianne.cli.commands.resume import _find_job_state
 
         with pytest.raises(typer.Exit):
-            await _find_job_state("job-1", Path("/nonexistent"), force=False)
+            await _find_job_state("job-1", force=False)
 
     @pytest.mark.asyncio
     async def test_find_job_state_job_not_found(self, tmp_path: Path) -> None:
@@ -373,7 +373,7 @@ class TestFindJobState:
         workspace.mkdir()
 
         with pytest.raises(typer.Exit):
-            await _find_job_state("nonexistent", workspace, force=False)
+            await _find_job_state("nonexistent", force=False)
 
     @pytest.mark.asyncio
     async def test_find_job_state_completed_without_force(self, tmp_path: Path) -> None:
@@ -395,7 +395,7 @@ class TestFindJobState:
             new_callable=AsyncMock,
             return_value=(state, AsyncMock()),
         ), pytest.raises(typer.Exit):
-            await _find_job_state("completed-job", tmp_path, force=False)
+            await _find_job_state("completed-job", force=False)
 
     @pytest.mark.asyncio
     async def test_find_job_state_pending_job(self, tmp_path: Path) -> None:
@@ -416,7 +416,7 @@ class TestFindJobState:
             new_callable=AsyncMock,
             return_value=(state, AsyncMock()),
         ), pytest.raises(typer.Exit):
-            await _find_job_state("pending-job", tmp_path, force=False)
+            await _find_job_state("pending-job", force=False)
 
     @pytest.mark.asyncio
     async def test_find_job_state_paused_job_succeeds(self) -> None:
@@ -438,7 +438,7 @@ class TestFindJobState:
             return_value=(state, mock_backend),
         ):
             found_state, _ = await _find_job_state(
-                "paused-job", None, force=False
+                "paused-job", force=False
             )
             assert found_state.job_id == "paused-job"
             assert found_state.status == JobStatus.PAUSED
@@ -747,7 +747,7 @@ class TestResumeErrorMessages:
         ), patch(
             "marianne.cli.commands.resume.output_error"
         ) as mock_err, pytest.raises(typer.Exit):
-            await _find_job_state("done-job", tmp_path, force=False)
+            await _find_job_state("done-job", force=False)
 
         mock_err.assert_called_once()
         call_kwargs = mock_err.call_args
@@ -776,7 +776,7 @@ class TestResumeErrorMessages:
         ), patch(
             "marianne.cli.commands.resume.output_error"
         ) as mock_err, pytest.raises(typer.Exit):
-            await _find_job_state("pending-job", tmp_path, force=False)
+            await _find_job_state("pending-job", force=False)
 
         mock_err.assert_called_once()
         call_kwargs = mock_err.call_args
@@ -818,7 +818,7 @@ class TestResumeRejectedHints:
             "marianne.cli.commands.resume.output_error"
         ) as mock_err, pytest.raises(typer.Exit):
             await _resume_job(
-                "nonexistent", None, None, False, False, False, False, False
+                "nonexistent", None, False, False, False, False, False
             )
 
         mock_err.assert_called_once()
@@ -850,7 +850,7 @@ class TestResumeRejectedHints:
             "marianne.cli.commands.resume.output_error"
         ) as mock_err, pytest.raises(typer.Exit):
             await _resume_job(
-                "my-job", None, None, False, False, False, False, False
+                "my-job", None, False, False, False, False, False
             )
 
         mock_err.assert_called_once()
@@ -884,7 +884,7 @@ class TestResumeScoreTerminology:
             "marianne.cli.commands.resume.console"
         ) as mock_console:
             await _resume_job(
-                "my-score", None, None, False, False, False, False, False
+                "my-score", None, False, False, False, False, False
             )
 
         # Check that the success message uses "score" not "job"

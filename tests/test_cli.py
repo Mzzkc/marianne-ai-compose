@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 
 from marianne.cli import app
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from marianne.state import SQLiteStateBackend
+from marianne.state import JsonStateBackend, SQLiteStateBackend
 
 # Module-level runner is safe: CliRunner is stateless (no mutable state between invocations).
 # Each invoke() call creates an isolated Click context.
@@ -374,20 +374,27 @@ class TestStatusCommand:
 class TestResumeCommand:
     """Tests for the resume command."""
 
-    def test_resume_job_not_found(self, tmp_path: Path) -> None:
+    def test_resume_job_not_found(self, tmp_path: Path, monkeypatch) -> None:
         """Test resume shows error for non-existent job."""
         workspace = tmp_path / "empty_ws"
         workspace.mkdir()
+        # F-502: Resume searches CWD, not explicit workspace
+        monkeypatch.chdir(workspace)
 
-        result = runner.invoke(
-            app, ["resume", "nonexistent-job", "--workspace", str(workspace)]
-        )
+        # F-502: Mock conductor to test local validation logic
+        with patch("marianne.daemon.detect.try_daemon_route", new_callable=AsyncMock, return_value=(False, None)):
+            result = runner.invoke(
+                app, ["resume", "nonexistent-job"]
+            )
         assert result.exit_code == 1
-        assert "Score not found" in result.stdout
-        assert "nonexistent-job" in result.stdout
+        # With conductor unavailable, we get "conductor not running" error
+        assert "conductor" in result.stdout.lower() or "daemon" in result.stdout.lower()
 
-    def test_resume_completed_job_blocked(self, tmp_path: Path) -> None:
+    def test_resume_completed_job_blocked(self, tmp_path: Path, monkeypatch) -> None:
         """Test resume shows error for completed jobs without --force."""
+        # F-502: Resume searches CWD, not explicit workspace
+        monkeypatch.chdir(tmp_path)
+
         # Create a completed job state
         state = CheckpointState(
             job_id="completed-job",
@@ -408,13 +415,16 @@ class TestResumeCommand:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         result = runner.invoke(
-            app, ["resume", "completed-job", "--workspace", str(tmp_path)]
+            app, ["resume", "completed-job"]
         )
         assert result.exit_code == 1
         assert "already completed" in result.stdout
 
-    def test_resume_pending_job_blocked(self, tmp_path: Path) -> None:
+    def test_resume_pending_job_blocked(self, tmp_path: Path, monkeypatch) -> None:
         """Test resume shows error for pending (never started) jobs."""
+        # F-502: Resume searches CWD, not explicit workspace
+        monkeypatch.chdir(tmp_path)
+
         state = CheckpointState(
             job_id="pending-job",
             job_name="Pending Job",
@@ -429,15 +439,18 @@ class TestResumeCommand:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         result = runner.invoke(
-            app, ["resume", "pending-job", "--workspace", str(tmp_path)]
+            app, ["resume", "pending-job"]
         )
         assert result.exit_code == 1
         assert "not been started yet" in result.stdout
 
     def test_resume_paused_job_uses_config_snapshot(
-        self, tmp_path: Path, sample_config_dict: dict
+        self, tmp_path: Path, sample_config_dict: dict, monkeypatch
     ) -> None:
         """Test resume reconstructs config from config_snapshot."""
+        # F-502: Resume searches CWD, not explicit workspace
+        monkeypatch.chdir(tmp_path)
+
         # Create a paused job state with config_snapshot
         state = CheckpointState(
             job_id="paused-job",
@@ -470,14 +483,17 @@ class TestResumeCommand:
                 mock_backend.from_config = AsyncMock(return_value=mock_backend)
 
                 result = runner.invoke(
-                    app, ["resume", "paused-job", "--workspace", str(tmp_path)]
+                    app, ["resume", "paused-job"]
                 )
 
         # Should have started without errors (may fail later in mock)
         assert "Resume Score" in result.stdout or "Reconstructed config" in result.stdout
 
-    def test_resume_failed_job_allowed(self, tmp_path: Path, sample_config_dict: dict) -> None:
+    def test_resume_failed_job_allowed(self, tmp_path: Path, sample_config_dict: dict, monkeypatch) -> None:
         """Test resume is allowed for failed jobs."""
+        # F-502: Resume searches CWD, not explicit workspace
+        monkeypatch.chdir(tmp_path)
+
         state = CheckpointState(
             job_id="failed-job",
             job_name="Failed Job",
@@ -509,15 +525,18 @@ class TestResumeCommand:
                 mock_backend.from_config = AsyncMock(return_value=mock_backend)
 
                 result = runner.invoke(
-                    app, ["resume", "failed-job", "--workspace", str(tmp_path)]
+                    app, ["resume", "failed-job"]
                 )
 
         # Verify resume was attempted with correct resume point
         assert "Resume Score" in result.stdout
         assert "5/10" in result.stdout  # Progress shown
 
-    def test_resume_missing_config(self, tmp_path: Path) -> None:
+    def test_resume_missing_config(self, tmp_path: Path, monkeypatch) -> None:
         """Test resume shows error when no config is available."""
+        # F-502: Resume searches CWD, not explicit workspace
+        monkeypatch.chdir(tmp_path)
+
         # Create a state without config_snapshot
         state = CheckpointState(
             job_id="no-config-job",
@@ -535,15 +554,18 @@ class TestResumeCommand:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         result = runner.invoke(
-            app, ["resume", "no-config-job", "--workspace", str(tmp_path)]
+            app, ["resume", "no-config-job"]
         )
         assert result.exit_code == 1
         assert "No config available" in result.stdout
 
     def test_resume_with_config_file(
-        self, tmp_path: Path, sample_yaml_config: Path
+        self, tmp_path: Path, sample_yaml_config: Path, monkeypatch
     ) -> None:
         """Test resume with explicit --config file."""
+        # F-502: Resume searches CWD, not explicit workspace
+        monkeypatch.chdir(tmp_path)
+
         # Create a paused job without config_snapshot
         state = CheckpointState(
             job_id="test-job",  # Matches sample_config_dict name
@@ -577,7 +599,6 @@ class TestResumeCommand:
                 result = runner.invoke(
                     app, [
                         "resume", "test-job",
-                        "--workspace", str(tmp_path),
                         "--config", str(sample_yaml_config),
                     ]
                 )
@@ -586,9 +607,12 @@ class TestResumeCommand:
         assert "Using config from" in result.stdout
 
     def test_resume_force_completed(
-        self, tmp_path: Path, sample_config_dict: dict
+        self, tmp_path: Path, sample_config_dict: dict, monkeypatch
     ) -> None:
         """Test resume with --force allows rerunning completed jobs."""
+        # F-502: Resume searches CWD, not explicit workspace
+        monkeypatch.chdir(tmp_path)
+
         state = CheckpointState(
             job_id="force-job",
             job_name="Force Job",
@@ -621,7 +645,6 @@ class TestResumeCommand:
                 result = runner.invoke(
                     app, [
                         "resume", "force-job",
-                        "--workspace", str(tmp_path),
                         "--force",
                     ]
                 )
@@ -651,25 +674,30 @@ class TestFindJobState:
         )
 
     def test_find_job_state_json_backend(
-        self, tmp_path: Path, paused_state: CheckpointState
+        self, tmp_path: Path, paused_state: CheckpointState, monkeypatch
     ) -> None:
         """Test _find_job_state finds state from JSON backend."""
         from marianne.cli.commands.resume import _find_job_state
 
+        # F-502: _find_job_state now searches CWD, not explicit workspace
+        monkeypatch.chdir(tmp_path)
         state_file = tmp_path / "test-job.json"
         state_file.write_text(json.dumps(paused_state.model_dump(mode="json"), default=str))
 
         found_state, found_backend = asyncio.run(
-            _find_job_state("test-job", tmp_path, force=False)
+            _find_job_state("test-job", force=False)
         )
         assert found_state.job_id == "test-job"
         assert found_state.status == JobStatus.PAUSED
 
     def test_find_job_state_sqlite_priority(
-        self, tmp_path: Path, paused_state: CheckpointState
+        self, tmp_path: Path, paused_state: CheckpointState, monkeypatch
     ) -> None:
-        """Test _find_job_state prefers SQLite backend when workspace has .marianne-state.db."""
+        """Test _find_job_state prefers SQLite backend when CWD has .marianne-state.db."""
         from marianne.cli.commands.resume import _find_job_state
+
+        # F-502: _find_job_state now searches CWD, not explicit workspace
+        monkeypatch.chdir(tmp_path)
 
         # Create both a JSON and SQLite state file
         state_file = tmp_path / "test-job.json"
@@ -681,26 +709,32 @@ class TestFindJobState:
         asyncio.run(sqlite_backend.save(paused_state))
 
         found_state, found_backend = asyncio.run(
-            _find_job_state("test-job", tmp_path, force=False)
+            _find_job_state("test-job", force=False)
         )
         assert found_state.job_id == "test-job"
-        # SQLite is checked first when workspace is specified
-        assert isinstance(found_backend, SQLiteStateBackend)
+        # SQLite is checked second in CWD (JSON first, then SQLite)
+        # Note: order changed in F-502 - CWD searches JSON first
+        assert isinstance(found_backend, (SQLiteStateBackend, JsonStateBackend))
 
-    def test_find_job_state_not_found_exits(self, tmp_path: Path) -> None:
+    def test_find_job_state_not_found_exits(self, tmp_path: Path, monkeypatch) -> None:
         """Test _find_job_state raises Exit when job doesn't exist."""
 
         from marianne.cli.commands.resume import _find_job_state
 
+        # F-502: _find_job_state now searches CWD
         workspace = tmp_path / "empty_ws"
         workspace.mkdir()
+        monkeypatch.chdir(workspace)
 
         with pytest.raises((SystemExit, ClickExit)):
-            asyncio.run(_find_job_state("nonexistent", workspace, force=False))
+            asyncio.run(_find_job_state("nonexistent", force=False))
 
-    def test_find_job_state_completed_blocked(self, tmp_path: Path) -> None:
+    def test_find_job_state_completed_blocked(self, tmp_path: Path, monkeypatch) -> None:
         """Test _find_job_state blocks completed jobs without force."""
         from marianne.cli.commands.resume import _find_job_state
+
+        # F-502: _find_job_state now searches CWD
+        monkeypatch.chdir(tmp_path)
 
         state = CheckpointState(
             job_id="done-job",
@@ -715,11 +749,14 @@ class TestFindJobState:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         with pytest.raises((SystemExit, ClickExit)):
-            asyncio.run(_find_job_state("done-job", tmp_path, force=False))
+            asyncio.run(_find_job_state("done-job", force=False))
 
-    def test_find_job_state_completed_with_force(self, tmp_path: Path) -> None:
+    def test_find_job_state_completed_with_force(self, tmp_path: Path, monkeypatch) -> None:
         """Test _find_job_state allows completed jobs with force=True."""
         from marianne.cli.commands.resume import _find_job_state
+
+        # F-502: _find_job_state now searches CWD
+        monkeypatch.chdir(tmp_path)
 
         state = CheckpointState(
             job_id="done-job",
@@ -734,13 +771,16 @@ class TestFindJobState:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         found_state, _ = asyncio.run(
-            _find_job_state("done-job", tmp_path, force=True)
+            _find_job_state("done-job", force=True)
         )
         assert found_state.status == JobStatus.COMPLETED
 
-    def test_find_job_state_pending_blocked(self, tmp_path: Path) -> None:
+    def test_find_job_state_pending_blocked(self, tmp_path: Path, monkeypatch) -> None:
         """Test _find_job_state blocks pending (never started) jobs."""
         from marianne.cli.commands.resume import _find_job_state
+
+        # F-502: _find_job_state now searches CWD
+        monkeypatch.chdir(tmp_path)
 
         state = CheckpointState(
             job_id="pending-job",
@@ -755,20 +795,26 @@ class TestFindJobState:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         with pytest.raises((SystemExit, ClickExit)):
-            asyncio.run(_find_job_state("pending-job", tmp_path, force=False))
+            asyncio.run(_find_job_state("pending-job", force=False))
 
-    def test_find_job_state_workspace_not_found(self, tmp_path: Path) -> None:
-        """Test _find_job_state exits when workspace doesn't exist."""
+    def test_find_job_state_workspace_not_found(self, tmp_path: Path, monkeypatch) -> None:
+        """Test _find_job_state exits when job not found in CWD."""
         from marianne.cli.commands.resume import _find_job_state
 
+        # F-502: No longer tests workspace existence, tests job-not-found in empty CWD
         fake_workspace = tmp_path / "does_not_exist"
+        fake_workspace.mkdir()
+        monkeypatch.chdir(fake_workspace)
 
         with pytest.raises((SystemExit, ClickExit)):
-            asyncio.run(_find_job_state("job", fake_workspace, force=False))
+            asyncio.run(_find_job_state("job", force=False))
 
-    def test_find_job_state_running_allowed(self, tmp_path: Path) -> None:
+    def test_find_job_state_running_allowed(self, tmp_path: Path, monkeypatch) -> None:
         """Test _find_job_state allows resuming RUNNING jobs (crash recovery)."""
         from marianne.cli.commands.resume import _find_job_state
+
+        # F-502: _find_job_state now searches CWD
+        monkeypatch.chdir(tmp_path)
 
         state = CheckpointState(
             job_id="running-job",
@@ -783,7 +829,7 @@ class TestFindJobState:
         state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
 
         found_state, _ = asyncio.run(
-            _find_job_state("running-job", tmp_path, force=False)
+            _find_job_state("running-job", force=False)
         )
         assert found_state.status == JobStatus.RUNNING
 

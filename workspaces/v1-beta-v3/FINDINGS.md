@@ -1,4 +1,17 @@
 
+### F-531: Broken resume.py — Undefined ctx References Block Quality Gate
+**Found by:** Warden, Movement 7
+**Severity:** P0 (critical)
+**Status:** Resolved (Movement 7, Atlas)
+**Resolution:** Atlas's F-502 completion (commit 040f0c9) completely rewrote resume.py to remove workspace fallback, eliminating all ctx references in the process. The file was reduced from 590→348 lines. No ctx references remain. Mypy clean, ruff clean. Warden investigated the issue but Atlas had already resolved it via architectural refactor.
+**Description:** The `src/marianne/cli/commands/resume.py` file had 10 undefined variable references causing mypy to fail with "Name 'ctx' is not defined" errors. This completely blocked the quality gate - no commits could proceed.
+**Evidence:**
+- `python -m mypy src/marianne/cli/commands/resume.py` showed 10 errors (lines 352, 367, 412, 425, 426, 442, 448, 449, 461, 465, 471, 484, 487, 494, 495, 510, 518)
+- All errors: `Name "ctx" is not defined  [name-defined]`
+- Root cause: Commit e879996 (Lens M6) and 3416e83 (Atlas M6) removed the `ResumeContext` dataclass as part of F-502 workspace fallback removal, but left all references to `ctx` object intact
+**Impact:** P0 quality gate blocker. Mypy fails, ruff fails, no code can be committed. The entire orchestra is blocked until this is fixed.
+**Fix:** Replace all `ctx.field` references with the actual parameter names that `_resume_job()` now takes directly: `job_id`, `config_file`, `force`, `escalation`, `self_healing`, `auto_confirm`.
+
 ### F-523: Critical Onboarding Failure: Sandbox + Schema Hostility Makes System Unusable
 **Found by:** Adversary, Movement 6
 **Severity:** P0 (critical)
@@ -358,3 +371,24 @@ Additionally, Ember's memory referenced "F-523: Elapsed time semantic confusion"
 3. Add explicit state reset in test setup
 4. Convert to use temporary database per test run
 5. Investigate what state the failing tests depend on and ensure it's set up in the test itself, not relying on previous tests
+
+### F-532: F-502 Resume Implementation Incomplete — Filesystem Fallback Remains
+**Found by:** Breakpoint, Movement 7
+**Severity:** P1 (high)
+**Status:** Open
+**Description:** Atlas's F-502 completion (commit 040f0c9) removed workspace parameters and `_resume_job_direct()` but left `_find_job_state()` filesystem read at line 127 of resume.py. Resume still searches filesystem BEFORE checking conductor, violating conductor-only architecture.
+**Evidence:**
+- `src/marianne/cli/commands/resume.py:244-330` — `_resume_job()` function
+- Line 127 (inside `_find_job_state`): `found_state, found_backend = await require_job_state(job_id, None)` ← reads from CWD filesystem
+- Line 279: `routed, result = await try_daemon_route("job.resume", params)` ← tries conductor AFTER filesystem
+- F-502 test failure: `test_f502_conductor_only_enforcement.py::TestResumeCommand::test_resume_requires_conductor` expects "conductor" error, gets "Score not found" from filesystem check
+- Flow is: (1) read filesystem → (2) validate status → (3) try conductor → (4) error if no conductor
+- Correct F-502 flow should be: (1) try conductor → (2) error if no conductor (no filesystem fallback)
+**Impact:** Resume command still has dual-path architecture (filesystem + conductor) that F-502 was supposed to eliminate. Tests fail because they expect conductor-only behavior but get filesystem-first behavior. This is the same dual-path class that caused F-493, F-518, F-501.
+**Root Cause:** Atlas removed `_resume_job_direct()` fallback function and workspace parameter but didn't remove the `_find_job_state()` call that reads job state from filesystem. The filesystem read needs to be removed entirely - conductor should be the ONLY source of job state.
+**Fix:** Resume should route to conductor FIRST, not read filesystem first. Either:
+1. Remove `_find_job_state()` call entirely, let conductor handle all validation
+2. Only call `_find_job_state()` if `try_daemon_route` returns (False, None) AND we want to show better error (but this reintroduces dual-path)
+Option 1 is cleaner F-502 enforcement.
+**Blocked work:** 8 TestResumeCommand integration tests in test_cli.py fail because they expect F-502 conductor-only behavior but code still reads filesystem. Tests need rewrite after architecture is fully fixed.
+

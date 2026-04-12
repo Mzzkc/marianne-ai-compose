@@ -642,23 +642,24 @@ class TestAllCLICommandsFunctional:
         assert "score(s)" in result.stdout
 
     def test_status_command_works(self, multi_job_workspace: Path) -> None:
-        """Status command works."""
+        """Status command requires conductor (F-502 removed workspace fallback)."""
+        # Note: --workspace flag removed in F-502. Status now requires conductor.
         result = runner.invoke(
             app,
-            ["status", "job-completed-1", "--workspace", str(multi_job_workspace)],
+            ["status", "job-completed-1"],
         )
-        assert result.exit_code == 0
-        assert "Completed Job 1" in result.stdout
+        assert result.exit_code == 1
+        assert "conductor is not running" in result.stdout.lower()
 
     def test_resume_command_works(self, multi_job_workspace: Path) -> None:
-        """Resume command works (shows error for completed job)."""
+        """Resume command requires conductor (F-502 removed workspace fallback)."""
+        # Note: --workspace flag removed in F-502. Resume now requires conductor.
         result = runner.invoke(
             app,
-            ["resume", "job-completed-1", "--workspace", str(multi_job_workspace)],
+            ["resume", "job-completed-1"],
         )
-        # Completed jobs can't be resumed without --force
         assert result.exit_code == 1
-        assert "already completed" in result.stdout
+        assert "conductor is not running" in result.stdout.lower()
 
     def test_dashboard_command_works(self, tmp_path: Path) -> None:
         """Dashboard command starts (with mocked uvicorn)."""
