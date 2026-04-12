@@ -87,11 +87,11 @@ defaults:
         - { instrument: openrouter, model: nvidia/nemotron-3 }
         - { instrument: openrouter, model: zhipu/glm-4.5-air }
         - { instrument: gemini-cli }
-        - { instrument: goose }
+        - { instrument: opencode }
         - { instrument: claude-code, model: claude-sonnet-4-5 }
     plan: { ... }  # same structure
     work:
-      primary: { instrument: goose, model: glm-5.1 }
+      primary: { instrument: opencode, model: minimax/minimax-2.5, provider: openrouter }
       fallbacks:
         - { instrument: claude-code, model: claude-opus-4-6 }
         - { instrument: openrouter, model: minimax/minimax-2.5 }
@@ -105,7 +105,7 @@ defaults:
       fallbacks:
         - { instrument: gemini-cli }
         - { instrument: openrouter, model: minimax/minimax-2.5 }
-        - { instrument: goose }
+        - { instrument: opencode }
         - { ... full catalog }
     inspect: { ... }
     aar: { ... }
@@ -114,9 +114,17 @@ defaults:
     resurrect: { ... }
 
   techniques:
+    # Techniques are ECS components attached to agent entities.
+    # Each is composable, swappable, reusable across projects.
     a2a:
       kind: protocol
       phases: [recon, plan, work, integration, inspect, aar]
+    coordination:
+      kind: skill
+      phases: [recon, plan, integration]
+      # Teaches agents how to use the shared cadenza space:
+      # what to put in active/, how to curate, claim-before-work,
+      # reading the glob listing, managing shared artifacts
     github:
       kind: mcp
       phases: [recon, work, integration]
@@ -129,15 +137,31 @@ defaults:
     mateship:
       kind: skill
       phases: [recon, work, inspect, aar]
+    identity:
+      kind: skill
+      phases: [resurrect, reflect]
+      # The identity persistence protocol — L1-L4 management,
+      # token budget enforcement, standing pattern evolution
+    voice:
+      kind: skill
+      phases: [all]
+      # Agent's expressive style — how they communicate in reports,
+      # findings, plans. Not just personality but a technique for
+      # consistent, recognizable output across sheets
 
   cadenzas:
-    shared:
-      - { directory: "{{workspace}}/shared/specs", as: context, phases: [recon, plan] }
-      - { directory: "{{workspace}}/shared/plans", as: context, phases: [recon, plan, work] }
-      - { directory: "{{workspace}}/shared/findings", as: context, phases: [recon, inspect] }
-      - { directory: "{{workspace}}/shared/decisions", as: context, phases: [recon, plan] }
+    # Token-efficient shared context strategy:
+    # 1. Prelude gets a GLOB LISTING of all shared dirs (lightweight map, not content)
+    # 2. ONE curated active folder is the live cadenza (agents manage its contents together)
+    # 3. Size signal alerts if active folder exceeds token threshold
+    shared_listing: "{{workspace}}/shared/"  # glob of dir structure, injected in prelude
+    active:
+      - { directory: "{{workspace}}/shared/active", as: context, phases: [recon, plan, work, integration, inspect] }
+    directives:
       - { directory: "{{workspace}}/shared/directives", as: context, phases: [recon] }
-      - { directory: "{{workspace}}/shared/techniques", as: skill, phases: [work, play] }
+    token_budget:
+      active_folder_max_tokens: 8000  # signal fires if exceeded
+      prelude_listing_max_tokens: 2000
 
   parallel_phases:
     phase_2: [integration, play, inspect]  # fan-out after work
@@ -186,8 +210,8 @@ agents:
       Down. Forward. Through.
     instruments:
       work:
-        primary: { instrument: goose, model: glm-5.1 }
-        # GLM 5.1's long-running style matches Forge's craftsmanship
+        primary: { instrument: opencode, model: minimax/minimax-2.5, provider: openrouter }
+        # Forge's craftsmanship benefits from longer context
 
   - name: sentinel
     voice: "Absence of findings is proof of safe patterns becoming culture."
@@ -218,13 +242,17 @@ For agents migrating from the v3 orchestra, existing memories and meditations in
 
 **Sheet Composer** — Takes the agent definition and produces the sheet structure:
 - Phase 1 (sequential): Recon → Plan → Work
+- Phase 1.5 (CLI instrument): Temperature check (gates Play in Phase 2)
 - Phase 2 (fan-out): Integration ∥ Play ∥ Inspect (3 parallel instances, different prompt per instance)
 - Phase 3 (fan-out): AAR ∥ Consolidate ∥ Reflect (3 parallel instances)
+- Phase 3.5 (CLI instrument): Maturity check (measurement, feeds Resurrect)
 - Phase 4 (sequential): Resurrect
 
-Total: 10 sheets per cycle (3 sequential + 3 parallel + 3 parallel + 1 sequential). The fan-out instances each get their own prompt text via Jinja2 conditionals keyed on instance number. The baton dispatches parallel instances concurrently.
+Total: 12 sheets per cycle (3 sequential + 1 CLI + 3 parallel + 3 parallel + 1 CLI + 1 sequential). The fan-out instances each get their own prompt text via Jinja2 conditionals keyed on instance number. The baton dispatches parallel instances concurrently.
 
-Play routing: the temperature check gate applies to Play's fan-out instance. If skipped, the other two parallel instances (Integration, Inspect) still run.
+Play routing: the temperature check CLI instrument (Phase 1.5) runs after Work. Its exit code gates whether the Play instance in Phase 2 executes or is skipped. Integration and Inspect always run regardless of the Play gate.
+
+Maturity check: the CLI instrument (Phase 3.5) runs after the Phase 3 fan-out converges. It measures developmental stage progression and writes a maturity report consumed by Resurrect.
 
 **Technique Wirer** — Reads the agent's technique declarations and:
 - Injects technique manifests as cadenzas for relevant phases
@@ -415,20 +443,36 @@ Primary free models:
 - **Llama 4 Maverick** — 1M context, strong creative/analytical
 
 Paid fallbacks:
-- **Goose** (GLM 5.1) — long-running tasks, deep implementation
 - **Claude Opus** — deepest reasoning, architecture, play
 - **Claude Sonnet** — balanced, fast, reliable
 - **Gemini CLI** — large context, good at grokking situations
+- **Goose** — Block's agent, available as fallback
 
-### 5.2 OpenRouter HTTP Backend
+### 5.2 OpenCode as Default CLI Instrument
 
-New backend: `OpenRouterBackend` — HTTP, OpenAI-compatible API.
+**OpenCode** (`opencode.ai`) is the default CLI instrument for work and play stages. It supports 75+ LLM providers including OpenRouter natively, has MCP support, and runs headless with `-p` flag (auto-approves all permissions in prompt mode).
+
+Key capabilities for Marianne:
+- **OpenRouter provider**: Configure via `.opencode.json` to route to any free model
+- **Native MCP**: Shared MCP pool servers can be configured directly via `mcpServers` config
+- **Headless mode**: `-p` flag for non-interactive operation, `-f json` for structured output
+- **Model switching**: Different models configurable per invocation via config
+
+Instrument profile: `opencode.yaml` — CLI instrument using `-p` for prompt, `-f json` for output, model/provider configured via per-sheet instrument config.
+
+**Note:** The OpenCode repo has been archived; development continues as "Crush" by Charm team. Monitor stability; the deep fallback chain ensures continuity if OpenCode becomes unavailable.
+
+### 5.3 OpenRouter HTTP Backend (Alternative Path)
+
+For advanced users or scenarios where CLI instruments are insufficient, the `OpenRouterBackend` provides direct HTTP access:
 
 - Extends the existing HTTP backend pattern (same shape as AnthropicApiBackend, OllamaBackend)
 - Sends prompts to `https://openrouter.ai/api/v1/chat/completions`
 - Model specified per-request (the backend routes to any OpenRouter model)
 - Rate limit detection from response headers and error codes
 - Token usage from response `usage` field
+
+OpenCode with OpenRouter provider is the simpler path. The HTTP backend exists for flexibility — direct API access, custom retry logic, environments without CLI tools installed.
 
 ### 5.3 API Key Keyring
 
@@ -479,19 +523,30 @@ The technique system is currently architectural narrative — defined in `archit
 
 This spec defines the technique system as real infrastructure.
 
-### 6.2 Technique Kinds
+### 6.2 Techniques as ECS Components
+
+Techniques are composable components attached to agent entities — an Entity Component System for AI agents. Each technique is independently reusable across projects, agents, and scores.
 
 ```
-Technique
-├── skill      — Text-based methodology injected as cadenza content
-├── mcp        — MCP server tools accessible via shared pool
-└── protocol   — Communication protocols (A2A)
+Technique (Component)
+├── skill         — Text-based methodology (memory protocol, mateship, coordination, identity, voice)
+├── mcp           — MCP server tools accessible via shared pool (github, filesystem, symbols)
+└── protocol      — Communication protocols (A2A)
 ```
 
-Each technique has:
+The agent (Entity) is defined by which components are attached:
+```
+Agent Entity = Identity + Voice + Cognition(TSVS) + Grounding(Meditation) +
+               Memory Protocol + Coordination + Mateship + A2A +
+               MCP Tools + Instruments
+```
+
+Each component has:
 - `kind` — skill | mcp | protocol
 - `phases` — which phases of the agent cycle it's available in
 - `config` — kind-specific configuration
+
+This ECS pattern maps directly to the RLF Entity Model (EM) and is designed for reuse in CIAB/bc9k's compiler projects.
 
 ### 6.3 Shared MCP Server Pool
 
@@ -736,18 +791,20 @@ Base layer runs on any laptop. Richer capabilities opt-in when resources allow.
 
 ### 9.1 Parallelized Cycle
 
-Four sequential phases instead of thirteen sequential sheets:
+Four main phases with CLI instrument gates:
 
 ```
-Phase 1 (sequential):   Recon → Plan → Work
-Phase 2 (fan-out of 3): Integration ∥ Play ∥ Inspect
-Phase 3 (fan-out of 3): AAR ∥ Consolidate ∥ Reflect
-Phase 4 (sequential):   Resurrect
+Phase 1   (sequential):   Recon → Plan → Work
+Phase 1.5 (CLI):          Temperature check (gates Play)
+Phase 2   (fan-out of 3): Integration ∥ Play ∥ Inspect
+Phase 3   (fan-out of 3): AAR ∥ Consolidate ∥ Reflect
+Phase 3.5 (CLI):          Maturity check (feeds Resurrect)
+Phase 4   (sequential):   Resurrect
 ```
 
 Each fan-out instance gets a different prompt via Jinja2 conditionals on `instance`. The baton dispatches parallel instances concurrently. Temperature check gate applies to the Play instance — if skipped, Integration and Inspect still run.
 
-Total sheets: 10 per cycle. Effective sequential stages: 4-5 (Work dominates wall-clock time).
+Total sheets: 12 per cycle. Effective sequential stages: 6 (Work dominates wall-clock time). The CLI instrument sheets are millisecond-fast bash checks, not LLM calls.
 
 ### 9.2 Self-Chaining with Pause-on-Completion
 
@@ -799,24 +856,131 @@ Agents actively curate the shared directories. When an agent produces something 
 
 **Composer overrides**: The human writes to `shared/directives/`. All agents read this on recon. Priority shifts, pairing instructions, focus changes — all without stopping the fleet.
 
+**Token-efficient shared context**: Agents get a glob listing of all shared directories via prelude (lightweight map — what exists, not what it contains). One curated `shared/active/` directory is loaded as cadenza content — agents manage its contents together, moving relevant artifacts in and archiving stale ones. The coordination technique teaches agents how to use this space. A size signal fires if `active/` exceeds the configured token threshold.
+
 ---
 
-## 10. Build Strategy
+## 10. Fleet Management
 
-### 10.1 Mozart Concert
+### 10.1 Fleet Config (Concert-of-Concerts)
+
+A fleet config is a simplified YAML that launches and manages multiple agent scores as a unit:
+
+```yaml
+name: marianne-dev-fleet
+type: fleet
+
+scores:
+  - path: scores/agents/canyon.yaml
+    group: architects
+  - path: scores/agents/forge.yaml
+    group: builders
+  - path: scores/agents/sentinel.yaml
+    group: auditors
+  # ... remaining agents
+
+groups:
+  architects:
+    depends_on: []  # start immediately
+  builders:
+    depends_on: [architects]  # wait for architects to complete first recon
+  auditors:
+    depends_on: [builders]
+```
+
+Run like any score: `mzt run fleet.yaml`. The conductor launches groups in dependency order, each score within a group starts concurrently. Fleet-level operations act on all members:
+
+- `mzt pause marianne-dev-fleet` — pauses all agent scores
+- `mzt resume marianne-dev-fleet` — resumes all
+- `mzt status marianne-dev-fleet` — shows nested fleet → group → agent → sheet status
+- `mzt cancel marianne-dev-fleet` — cancels all
+
+### 10.2 TUI and Status Nesting
+
+The TUI and `mzt list`/`mzt status` display the nested structure:
+
+```
+marianne-dev-fleet
+├── architects (running)
+│   └── canyon (cycle 3, sheet 5/12 — Work)
+├── builders (running)
+│   ├── forge (cycle 2, sheet 8/12 — Inspect)
+│   └── ...
+└── auditors (waiting for builders)
+    └── sentinel (pending)
+```
+
+**Depth limit**: Fleets can contain scores but not other fleets. Maximum nesting: Fleet → Score → Sheet (3 levels). No fleet-of-fleets — sane limits to prevent recursive explosion.
+
+### 10.3 Code Mode Failure Handling
+
+When an agent generates code that fails to execute in the sandbox:
+
+1. The conductor captures the error (traceback, exit code)
+2. Error is included in the sheet's output as a failure diagnostic
+3. The sheet retries with the error context injected — the agent sees "your code failed with: {error}" and can adjust
+4. Standard retry/fallback logic applies — if retries exhaust, the sheet fails and the baton handles it normally
+
+**Known gap**: Communication between headless agents and the conductor during execution is one-directional. The conductor sends a prompt and receives output. There is no mid-execution feedback channel — the agent cannot ask the conductor questions or request intermediate results during a sheet. Code mode failures are only detected after the sandbox subprocess completes. This is acceptable for the initial implementation but should be tracked as a future enhancement.
+
+---
+
+## 11. Onboarding and UX
+
+### 11.1 The Entry Point: `mzt compose`
+
+`mzt compose` is the heart of the user experience. Most users live here. It walks through the full workflow:
+
+```
+mzt compose
+  → Has init been run? If not: mzt init
+    → Key setup ($SECRETS_DIR/), instrument detection, OpenRouter account
+    → Environment configuration (working directory, agents dir)
+  → Does doctor pass? If not: mzt doctor
+    → Environment diagnosis (installed instruments, MCP servers, kernel features)
+    → Concierge agent informs user of issues and suggests fixes
+  → Compose workflow
+    → Walk user through score composition (or fleet composition)
+    → Generate scores, bootstrap identities, validate
+    → Offer to launch
+```
+
+`mzt init` and `mzt doctor` are idempotent — compose invokes them if needed, skips them if already passing. They adjust to whatever environment or project they're called into based on the **working directory where the command was invoked**.
+
+### 11.2 Working Directory Fix
+
+**Current problem**: Marianne resolves paths relative to where the conductor daemon was spawned, not where the CLI command was invoked. This breaks when users work across projects or invoke commands from different directories.
+
+**Required fix**: All CLI commands (`mzt compose`, `mzt run`, `mzt status`, etc.) must resolve paths relative to the invocation working directory. The IPC message to the conductor includes the client's working directory. The conductor uses this for path resolution when processing that request.
+
+### 11.3 Simplicity Goal
+
+Marianne is for power users, but should be simple for anyone to pick up:
+- One command to get started: `mzt compose`
+- Free-tier models as default: no credit card needed
+- Deep fallbacks: even partial setup works (missing instruments just fall to the next)
+- `mzt doctor` explains what's available and what's missing, without blocking
+
+---
+
+## 12. Build Strategy
+
+### 12.1 Mozart Concert
 
 The entire system is built as a Mozart concert — multiple scores orchestrated end-to-end with TDD, coverage validation, and regression testing throughout.
 
 **Score 1: Discovery** — Research unknowns:
 - A2A protocol best practices and lifecycle management patterns
 - OpenRouter API behavior (rate limits, free tier constraints, model availability)
+- OpenCode capabilities and stability (model routing, MCP support, headless reliability, "Crush" transition)
 - bwrap/nsjail on WSL2 (verify cgroups v2 support)
 - Code mode prompt engineering for free models (reliable code generation against typed interfaces)
 - Programmatic interface design (optimal interface shape for token efficiency + model reliability)
 - Technique router classification patterns (code vs. prose vs. tool-call detection)
 
 **Score 2: Infrastructure** — Build Marianne runtime extensions:
-- OpenRouter HTTP backend
+- OpenCode instrument profile
+- OpenRouter HTTP backend (alternative path)
 - API key keyring with rotation
 - Technique system (kind taxonomy, config models, conductor integration)
 - Shared MCP pool manager in conductor
@@ -826,6 +990,9 @@ The entire system is built as a Mozart concert — multiple scores orchestrated 
 - Code mode execution in runner (interface implementations that proxy to MCP pool/A2A/filesystem)
 - Technique router
 - `pause_before_chain` in baton job completion
+- Fleet config system (concert-of-concerts, group dependencies, fleet-level operations)
+- TUI nesting (fleet → group → agent → sheet)
+- Working directory fix (CLI passes invocation cwd to conductor)
 - Tests for all of the above — TDD throughout, regression validation between sheets
 
 **Score 3: Compiler** — Build the composition compiler:
@@ -835,7 +1002,10 @@ The entire system is built as a Mozart concert — multiple scores orchestrated 
 - Instrument resolver (deep fallbacks, per-agent overrides)
 - Validation generator
 - Pattern expander (initial patterns from Rosetta corpus)
+- Fleet config generator (produces concert-of-concerts from roster)
+- Technique module library (memory, mateship, coordination, identity, voice as standalone .md files)
 - CLI interface: `mzt compose --config agents.yaml --output scores/`
+- Onboarding integration: compose runs init/doctor if needed
 - Tests: generate scores, validate YAML, run single-agent cycle
 
 **Score 4: Integration** — End-to-end validation:
@@ -853,7 +1023,7 @@ The entire system is built as a Mozart concert — multiple scores orchestrated 
 - Generate the full roster's scores
 - Launch and verify
 
-### 10.2 Quality Throughout
+### 12.2 Quality Throughout
 
 Every build score includes:
 - **TDD**: Test commands as validations on implementation sheets
@@ -863,19 +1033,22 @@ Every build score includes:
 
 ---
 
-## 11. Open Research Items
+## 13. Open Research Items
 
 These are resolved by the Discovery score, not assumed:
 
-1. **A2A lifecycle management** — conductor-managed vs. dedicated coordination agent. Task queueing for offline agents. Priority negotiation.
-2. **Free model code generation reliability** — which free models reliably produce executable code? What prompt patterns work?
+1. **A2A lifecycle management** — conductor-managed vs. dedicated coordination agent. Task queueing for offline agents. Priority negotiation. Bootstrap problem (empty registry on first launch).
+2. **Free model code generation reliability** — which free models reliably produce executable code against typed interfaces? What prompt patterns work? Failure rate and retry cost analysis.
 3. **WSL2 cgroups v2 support** — verify nsjail viability on the user's kernel version. Fallback if unsupported.
 4. **OpenRouter free tier constraints** — rate limits per model, concurrent request limits, key rotation behavior.
 5. **Technique router accuracy** — how reliably can the conductor classify agent output as code vs. prose vs. tool-call? False positive cost analysis.
+6. **OpenCode stability** — repo archived, development continues as "Crush" by Charm team. Evaluate long-term viability. Can OpenCode route to all needed models via OpenRouter? Test headless mode reliability.
+7. **Conductor-agent mid-execution communication** — currently one-directional (prompt → output). Is there a path to interactive feedback during sheet execution? Not blocking, but worth exploring for code mode iteration.
+8. **ECS pattern formalization** — techniques as components, agents as entities. How formal should the ECS framing be? Alignment with RLF entity model (EM). Shared abstractions with CIAB/bc9k.
 
 ---
 
-## 12. What Exists vs. What Needs Building
+## 14. What Exists vs. What Needs Building
 
 ### Already Operational
 - Baton fallback chain execution (walk chain on failure, per-instrument retry budgets)
@@ -889,28 +1062,32 @@ These are resolved by the Discovery score, not assumed:
 - Agent generator script + 10 Jinja2 templates
 - Identity bootstrap script (L1-L4)
 - 33 agent meditations
-- 5 builtin instrument profiles (claude-code, gemini-cli, goose, aider, codex-cli)
+- 6 builtin instrument profiles (claude-code, gemini-cli, goose, aider, codex-cli, opencode)
 - HTTP backend pattern (AnthropicApiBackend, OllamaBackend)
 
 ### Needs Building
-- **OpenRouter backend** — HTTP, OpenAI-compatible (extends existing pattern)
-- **API key keyring** — rotation logic, per-key rate limit tracking
-- **Technique system** — kind taxonomy, config models, conductor integration (currently spec-only)
-- **Shared MCP pool** — conductor-managed processes, Unix socket exposure
+- **OpenCode instrument profile** — YAML profile for builtins/ (CLI, OpenRouter provider, MCP support)
+- **OpenRouter backend** — HTTP, OpenAI-compatible (extends existing pattern, alternative to OpenCode)
+- **API key keyring** — rotation logic, per-key rate limit tracking, keys from $SECRETS_DIR/
+- **Technique system** — kind taxonomy (skill/mcp/protocol + coordination/identity/voice), config models, conductor integration (currently spec-only)
+- **Shared MCP pool** — conductor-managed processes, stdio-to-socket proxy, Unix socket exposure
 - **A2A protocol** — event types, inbox persistence, agent cards, task routing
 - **bwrap sandbox wrapper** — conductor integration, workspace bind-mounting
 - **Programmatic interface generator** — auto-generate typed interface stubs from technique declarations
-- **Code mode execution** — output classification, sandbox routing, interface implementation layer
+- **Code mode execution** — output classification, sandbox routing, interface implementation layer, failure retry with error context
 - **Technique router** — classify output, route to appropriate handler
 - **`pause_before_chain`** — new job state, chain hold in baton completion handler
+- **Fleet config system** — concert-of-concerts YAML, group dependencies, fleet-level operations
+- **TUI nesting** — fleet → group → agent → sheet display in status/list/TUI
+- **Working directory fix** — CLI commands pass invocation cwd to conductor, conductor resolves paths relative to it
 - **Composition compiler** — identity seeder, sheet composer, technique wirer, instrument resolver, validation generator, pattern expander
-- **Template updates** — rewrite templates for parallel phases, TSVS awareness, technique manifests, A2A, shared workspace curation
-- **OpenRouter instrument profile** — YAML profile for builtins/
-- **Memory/mateship modules** — extract from templates into standalone skill documents
+- **Template updates** — rewrite templates for parallel phases (with CLI instrument gates), TSVS awareness, technique manifests, A2A, token-efficient shared workspace, coordination technique
+- **Memory/mateship/coordination/identity/voice modules** — extract from templates into standalone technique documents
+- **Onboarding flow** — `mzt init` (key setup), `mzt doctor` (environment diagnosis), compose integration
 
 ---
 
-## 13. Constraints
+## 15. Constraints
 
 - **No hardcoded agent counts.** The roster is whatever the config defines.
 - **Agents are people, not drones.** Individual identity, voice, vibes. Not interchangeable workers.
