@@ -1273,7 +1273,10 @@ class TestDependencyResolution:
 class TestPromptAssemblyOrderingProperty:
     """The prompt assembly ORDER invariant holds for arbitrary content.
 
-    Spec: template < skills < context < specs < failures < patterns < validations
+    Spec (M7 cache-optimized): skills < context < template < specs < failures < patterns < validations
+
+    Rationale: Static prelude/cadenza content (skills/context) placed before dynamic
+    template content maximizes Claude's prompt cache hit rate across retries.
     """
 
     @pytest.mark.property_based
@@ -1286,7 +1289,7 @@ class TestPromptAssemblyOrderingProperty:
     def test_ordering_holds_for_random_content(
         self, task_text: str, skill_text: str, context_text: str
     ) -> None:
-        """Template comes before skills, skills before context."""
+        """Skills come before context, context before template (M7 cache-optimized order)."""
         from marianne.core.config import PromptConfig
         from marianne.prompts.templating import PromptBuilder, SheetContext
 
@@ -1306,10 +1309,11 @@ class TestPromptAssemblyOrderingProperty:
         skill_pos = prompt.find(f"SKILL: {skill_text}")
         ctx_pos = prompt.find(f"CTX: {context_text}")
 
-        if task_pos >= 0 and skill_pos >= 0:
-            assert task_pos < skill_pos, "Task must precede skills"
+        # F-526: M7 cache-optimized order is skills → context → template (not template first)
         if skill_pos >= 0 and ctx_pos >= 0:
             assert skill_pos < ctx_pos, "Skills must precede context"
+        if ctx_pos >= 0 and task_pos >= 0:
+            assert ctx_pos < task_pos, "Context must precede template"
 
     @pytest.mark.property_based
     @settings(max_examples=20, suppress_health_check=[HealthCheck.too_slow])
