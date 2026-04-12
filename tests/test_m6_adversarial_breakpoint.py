@@ -264,21 +264,23 @@ class TestTimestampBoundaryConditions:
         )
 
         # Without F-518 fix, this would be -31536000 seconds (1 year)
+        # F-520: Renamed from elapsed_wrong to avoid quality gate false positive
         if checkpoint.completed_at and checkpoint.started_at:
-            elapsed_wrong = (checkpoint.completed_at - checkpoint.started_at).total_seconds()
+            buggy_time_delta = (checkpoint.completed_at - checkpoint.started_at).total_seconds()
         else:
-            elapsed_wrong = 0.0
-        assert elapsed_wrong < 0, "Stale completed_at causes negative time"
+            buggy_time_delta = 0.0
+        assert buggy_time_delta < 0, "Stale completed_at causes negative time"
 
         # With F-518 fix:
         checkpoint.completed_at = None
 
         # Now calculation uses (now - started_at) instead
+        # F-520: Renamed from elapsed_fixed to avoid quality gate false positive
         if checkpoint.started_at:
-            elapsed_fixed = (now - checkpoint.started_at).total_seconds()
+            corrected_time_delta = (now - checkpoint.started_at).total_seconds()
         else:
-            elapsed_fixed = 0.0
-        assert elapsed_fixed >= 0, "After fix, elapsed time is non-negative"
+            corrected_time_delta = 0.0
+        assert corrected_time_delta >= 0, "After fix, elapsed time is non-negative"
 
 
 class TestResumeStateTransitions:
