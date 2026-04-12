@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any
 
 import typer
 import yaml
@@ -34,7 +33,6 @@ from marianne.core.config import JobConfig
 from marianne.daemon.exceptions import DaemonError
 
 from ..helpers import (
-    _find_job_workspace,
     configure_global_logging,
     require_conductor,
 )
@@ -43,13 +41,6 @@ from ..output import console, output_error
 
 def pause(
     job_id: str = typer.Argument(..., help="Score ID to pause"),
-    workspace: Path | None = typer.Option(
-        None,
-        "--workspace",
-        "-w",
-        help="Workspace directory containing score state (debug override)",
-        hidden=True,
-    ),
     wait: bool = typer.Option(
         False,
         "--wait",
@@ -96,24 +87,21 @@ def pause(
         asyncio.run(_cancel_job(job_id, json_output))
         return
 
-    asyncio.run(_pause_job(job_id, workspace, wait, timeout, json_output))
+    asyncio.run(_pause_job(job_id, wait, timeout, json_output))
 
 
 async def _pause_job(
     job_id: str,
-    workspace: Path | None,
     wait: bool,
     timeout: int,
     json_output: bool,
 ) -> None:
     """Pause a running job via the conductor.
 
-    Routes through ``job.pause`` RPC. Falls back to filesystem-based
-    pause when conductor is unavailable and --workspace is given.
+    Routes through ``job.pause`` RPC. Requires conductor to be running.
 
     Args:
         job_id: Job ID to pause.
-        workspace: Optional workspace directory (debug override).
         wait: Whether to wait for pause acknowledgment.
         timeout: Timeout in seconds for wait.
         json_output: Output in JSON format.
@@ -175,121 +163,9 @@ async def _pause_job(
             )
         return
 
-    # Conductor not available
-    if workspace is None:
-        # No workspace override — conductor is required
-        require_conductor(routed, json_output=json_output)
-        return  # unreachable
-
-    # Fallback: filesystem-based pause with workspace override
-    await _pause_job_direct(job_id, workspace, wait, timeout, json_output)
-
-
-async def _pause_job_direct(
-    job_id: str,
-    workspace: Path,
-    wait: bool,
-    timeout: int,
-    json_output: bool,
-) -> None:
-    """Filesystem-based pause fallback when conductor is unavailable.
-
-    Used when --workspace is explicitly provided as a debug override.
-    """
-    from ..helpers import (
-        _create_pause_signal as create_pause_signal,
-    )
-    from ..helpers import (
-        _find_job_state_direct as require_job_state,
-    )
-    from ..helpers import (
-        _wait_for_pause_ack as wait_for_pause_ack,
-    )
-
-    found_state, found_backend = await require_job_state(
-        job_id, workspace, json_output=json_output,
-    )
-
-    found_workspace = _find_job_workspace(job_id, workspace)
-    if not found_workspace:
-        raise typer.Exit(1)
-
-    if found_state.status != JobStatus.RUNNING:
-        status_str = found_state.status.value
-        hints: list[str] = []
-        if found_state.status == JobStatus.PAUSED:
-            hints.append("Score is already paused.")
-            hints.append(f"Use 'mzt resume {job_id}' to resume.")
-        elif found_state.status == JobStatus.PENDING:
-            hints.append("Use 'mzt run' to start the score.")
-        elif found_state.status == JobStatus.COMPLETED:
-            hints.append("Score has already completed.")
-        output_error(
-            f"Score '{job_id}' is {status_str}, not running.",
-            error_code="E502",
-            hints=hints,
-            json_output=json_output,
-            job_id=job_id,
-            status=status_str,
-        )
-        raise typer.Exit(1)
-
-    try:
-        signal_file = create_pause_signal(found_workspace, job_id)
-    except (PermissionError, OSError) as e:
-        output_error(
-            f"Cannot create pause signal: {e}",
-            error_code="E503",
-            hints=["Check workspace write permissions"],
-            json_output=json_output,
-            job_id=job_id,
-        )
-        raise typer.Exit(1) from None
-
-    was_acknowledged = False
-    if wait and found_backend:
-        if not json_output:
-            console.print(
-                f"[dim]Waiting for score to pause (timeout: {timeout}s)...[/dim]"
-            )
-        was_acknowledged = await wait_for_pause_ack(found_backend, job_id, timeout)
-        if not was_acknowledged:
-            output_error(
-                f"Pause not acknowledged within {timeout}s.",
-                error_code="E504",
-                severity="warning",
-                hints=[
-                    "The score may still pause at the next sheet boundary.",
-                    f"Check status: mzt status {job_id}",
-                ],
-                json_output=json_output,
-                job_id=job_id,
-                signal_file=str(signal_file),
-            )
-            raise typer.Exit(2)
-
-    if json_output:
-        out = {
-            "success": True,
-            "job_id": job_id,
-            "status": "running" if not was_acknowledged else "paused",
-            "message": "Pause signal sent. Score will pause at next sheet boundary.",
-            "signal_file": str(signal_file),
-            "acknowledged": was_acknowledged,
-        }
-        console.print(json.dumps(out, indent=2))
-    else:
-        if was_acknowledged:
-            console.print(f"[green]Score '{job_id}' paused successfully.[/green]")
-        else:
-            console.print(f"Pause signal sent to score '[cyan]{job_id}[/cyan]'.")
-            console.print("Score will pause at next sheet boundary.")
-        console.print()
-        console.print(f"To resume: [bold]mzt resume {job_id}[/bold]")
-        console.print(
-            f"To resume with new config: "
-            f"[bold]mzt resume {job_id} --config new.yaml[/bold]"
-        )
+    # Conductor not available — required for pause
+    require_conductor(routed, json_output=json_output)
+    return  # unreachable
 
 
 async def _pause_via_conductor(
@@ -362,63 +238,6 @@ async def _pause_via_conductor(
     return paused
 
 
-async def _pause_via_filesystem(
-    job_id: str,
-    workspace: Path,
-    wait: bool,
-    resume_flag: bool,
-    timeout: int,
-    json_output: bool,
-    found_backend: Any,
-) -> None:
-    """Pause a running job via filesystem signal file.
-
-    Raises typer.Exit on failure.
-    """
-    from ..helpers import (
-        _create_pause_signal as create_pause_signal,
-    )
-    from ..helpers import (
-        _wait_for_pause_ack as wait_for_pause_ack,
-    )
-
-    try:
-        create_pause_signal(workspace, job_id)
-        if not json_output:
-            console.print(
-                f"Pause signal sent to score '[cyan]{job_id}[/cyan]'."
-            )
-    except (PermissionError, OSError) as e:
-        output_error(
-            f"Cannot create pause signal: {e}",
-            error_code="E503",
-            hints=["Check workspace directory permissions."],
-            json_output=json_output,
-            job_id=job_id,
-        )
-        raise typer.Exit(1) from None
-
-    if wait and resume_flag and found_backend:
-        if not json_output:
-            console.print(
-                f"[dim]Waiting for score to pause (timeout: {timeout}s)...[/dim]"
-            )
-        was_acknowledged = await wait_for_pause_ack(found_backend, job_id, timeout)
-        if not was_acknowledged:
-            output_error(
-                f"Pause not acknowledged within {timeout}s.",
-                error_code="E504",
-                severity="warning",
-                hints=[
-                    "The score may still pause at the next sheet boundary.",
-                    f"Check status: mzt status {job_id}",
-                ],
-                json_output=json_output,
-                job_id=job_id,
-            )
-            raise typer.Exit(2)
-
-
 def modify(
     job_id: str = typer.Argument(..., help="Score ID to modify"),
     config: Path = typer.Option(
@@ -428,13 +247,6 @@ def modify(
         help="New configuration file",
         exists=True,
         readable=True,
-    ),
-    workspace: Path | None = typer.Option(
-        None,
-        "--workspace",
-        "-w",
-        help="Workspace directory containing score state (debug override)",
-        hidden=True,
     ),
     resume_flag: bool = typer.Option(
         False,
@@ -475,25 +287,23 @@ def modify(
 
     job_id = validate_job_id(job_id)
     asyncio.run(
-        _modify_job(job_id, config, workspace, resume_flag, wait, timeout, json_output)
+        _modify_job(job_id, config, resume_flag, wait, timeout, json_output)
     )
 
 
 async def _modify_job(
     job_id: str,
     config_file: Path,
-    workspace: Path | None,
     resume_flag: bool,
     wait: bool,
     timeout: int,
     json_output: bool,
 ) -> None:
-    """Modify a job's configuration.
+    """Modify a job's configuration via conductor.
 
     Args:
         job_id: Job ID to modify.
         config_file: New config file path.
-        workspace: Optional workspace directory.
         resume_flag: Whether to resume after pausing.
         wait: Whether to wait for pause acknowledgment before resuming.
         timeout: Timeout in seconds for pause wait.
@@ -519,13 +329,8 @@ async def _modify_job(
 
     from marianne.daemon.detect import try_daemon_route
 
-    from ..helpers import (
-        _find_job_state_direct as require_job_state,
-    )
-
-    # Try conductor first for status check
-    ws_str = str(workspace) if workspace else None
-    params = {"job_id": job_id, "workspace": ws_str}
+    # Try conductor for status check
+    params: dict[str, str | None] = {"job_id": job_id}
     try:
         routed, status_result = await try_daemon_route("job.status", params)
     except (OSError, ConnectionError, DaemonError) as exc:
@@ -542,23 +347,12 @@ async def _modify_job(
         )
         raise typer.Exit(1) from None
 
-    if routed and status_result:
-        from marianne.core.checkpoint import CheckpointState
-        found_state = CheckpointState.model_validate(status_result)
-        found_backend = None
-    elif workspace is not None:
-        # Fallback to filesystem with workspace override
-        found_state, found_backend = await require_job_state(
-            job_id, workspace, json_output=json_output,
-        )
-    else:
+    if not routed or not status_result:
         require_conductor(routed, json_output=json_output)
         return  # unreachable
 
-    # Resolve workspace directory for resume (needed by _resume_job)
-    found_workspace = _find_job_workspace(job_id, workspace)
-    if not found_workspace:
-        found_workspace = workspace or Path.cwd()
+    from marianne.core.checkpoint import CheckpointState
+    found_state = CheckpointState.model_validate(status_result)
 
     # Handle job based on its current state
     _resumable_statuses = {JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED}
@@ -566,17 +360,10 @@ async def _modify_job(
     pause_ok = False
 
     if job_was_running:
-        # Pause through conductor if available, otherwise filesystem
-        pause_ok = True
-        if routed:
-            pause_ok = await _pause_via_conductor(
-                job_id, params, json_output, quiet=resume_flag,
-            )
-        else:
-            await _pause_via_filesystem(
-                job_id, found_workspace, wait, resume_flag,
-                timeout, json_output, found_backend,
-            )
+        # Pause through conductor (required)
+        pause_ok = await _pause_via_conductor(
+            job_id, params, json_output, quiet=resume_flag,
+        )
 
         if not pause_ok and resume_flag and routed:
             # Pause failed — the job likely already transitioned to a
@@ -620,7 +407,6 @@ async def _modify_job(
             modify_params = {
                 "job_id": job_id,
                 "config_path": str(config_file),
-                "workspace": ws_str,
             }
             try:
                 _, modify_result = await try_daemon_route("job.modify", modify_params)
@@ -661,29 +447,7 @@ async def _modify_job(
                     console.print(f"\nMonitor: [bold]mzt status {job_id}[/bold]")
             return
 
-        # Non-daemon fallback: poll for pause then resume directly
-        if job_was_running:
-            # Filesystem pause already sent above — wait for it
-            if found_backend:
-                from ..helpers import _wait_for_pause_ack as wait_for_pause_ack
-                if not json_output:
-                    console.print(
-                        f"[dim]Waiting for score to pause (timeout: {timeout}s)...[/dim]"
-                    )
-                paused_ok = await wait_for_pause_ack(found_backend, job_id, timeout)
-                if not paused_ok:
-                    output_error(
-                        f"Timed out waiting for score '{job_id}' to pause ({timeout}s).",
-                        error_code="E504",
-                        hints=[
-                            "The score may still pause at the next sheet boundary.",
-                            f"Check status: mzt status {job_id}",
-                        ],
-                        json_output=json_output,
-                        job_id=job_id,
-                    )
-                    raise typer.Exit(1)
-
+        # Resume through conductor
         if not json_output:
             console.print()
             console.print("[cyan]Resuming with new config...[/cyan]")
@@ -691,7 +455,7 @@ async def _modify_job(
         await _resume_job(
             job_id=job_id,
             config_file=config_file,
-            workspace=workspace,
+            workspace=None,  # F-502: workspace parameter will be removed from resume.py
             force=False,
             escalation=False,
             no_reload=False,

@@ -22,12 +22,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 
 import typer
-from rich.panel import Panel
-from rich.progress import TaskID
 
 from marianne.core.checkpoint import CheckpointState, JobStatus
 from marianne.core.config import JobConfig
@@ -38,29 +35,9 @@ from ..helpers import (
 )
 from ..helpers import (
     configure_global_logging,
-    is_quiet,
     require_conductor,
 )
-from ..output import console, format_duration, output_error
-from ._shared import (
-    create_progress_bar,
-    handle_job_completion,
-    setup_all,
-)
-
-
-@dataclass
-class ResumeContext:
-    """Bundled parameters for direct resume execution."""
-
-    job_id: str
-    config_file: Path | None
-    workspace: Path | None
-    force: bool
-    escalation: bool = False
-    no_reload: bool = False
-    self_healing: bool = False
-    auto_confirm: bool = False
+from ..output import console, output_error
 
 _logger = logging.getLogger(__name__)
 
@@ -74,13 +51,6 @@ def resume(
         help="Path to config file (optional if config_snapshot exists in state)",
         exists=True,
         readable=True,
-    ),
-    workspace: Path | None = typer.Option(
-        None,
-        "--workspace",
-        "-w",
-        help="Workspace directory to search for score state (debug override)",
-        hidden=True,
     ),
     force: bool = typer.Option(
         False,
@@ -129,7 +99,7 @@ def resume(
     job_id = validate_job_id(job_id)
     asyncio.run(
         _resume_job(
-            job_id, config_file, workspace, force, escalation,
+            job_id, config_file, force, escalation,
             no_reload, self_healing, yes
         )
     )
@@ -137,7 +107,6 @@ def resume(
 
 async def _find_job_state(
     job_id: str,
-    workspace: Path | None,
     force: bool,
 ) -> tuple[CheckpointState, StateBackend]:
     """Find and validate job state from available backends.
@@ -147,7 +116,6 @@ async def _find_job_state(
 
     Args:
         job_id: Job ID to find.
-        workspace: Optional workspace directory to search.
         force: Allow resuming completed jobs.
 
     Returns:
@@ -156,7 +124,7 @@ async def _find_job_state(
     Raises:
         typer.Exit: If job not found or not in resumable state.
     """
-    found_state, found_backend = await require_job_state(job_id, workspace)
+    found_state, found_backend = await require_job_state(job_id, None)
 
     # Check if job is in a resumable state
     resumable_statuses = {
@@ -276,7 +244,6 @@ def _reconstruct_config(
 async def _resume_job(
     job_id: str,
     config_file: Path | None,
-    workspace: Path | None,
     force: bool,
     escalation: bool = False,
     no_reload: bool = False,
@@ -285,14 +252,12 @@ async def _resume_job(
 ) -> None:
     """Resume a paused or failed job.
 
-    Routes through the conductor by default. The conductor's
-    ``JobManager.resume_job()`` handles the full execution lifecycle.
-    Falls back to direct execution only with explicit --workspace.
+    Routes through the conductor. The conductor's ``JobManager.resume_job()``
+    handles the full execution lifecycle. Requires conductor to be running.
 
     Args:
         job_id: Job ID to resume.
         config_file: Optional path to config file.
-        workspace: Optional workspace directory to search.
         force: Force resume even if job appears completed.
         escalation: Enable human-in-the-loop escalation for low-confidence sheets.
         no_reload: If True, skip auto-reload and use cached config snapshot.
@@ -303,11 +268,10 @@ async def _resume_job(
 
     configure_global_logging(console)
 
-    # Try conductor first (unless workspace override forces direct execution)
-    ws_str = str(workspace) if workspace else None
+    # Route through conductor
     params = {
         "job_id": job_id,
-        "workspace": ws_str,
+        "workspace": None,
         "config_path": str(config_file) if config_file else None,
         "no_reload": no_reload,
     }
@@ -361,224 +325,9 @@ async def _resume_job(
                 raise typer.Exit(1)
         return
 
-    # Conductor not available
-    if workspace is None:
-        # No workspace override — conductor is required
-        require_conductor(routed)
-        return  # unreachable
-
-    # Fallback to direct execution with workspace override
-    ctx = ResumeContext(
-        job_id=job_id,
-        config_file=config_file,
-        workspace=workspace,
-        force=force,
-        escalation=escalation,
-        no_reload=no_reload,
-        self_healing=self_healing,
-        auto_confirm=auto_confirm,
-    )
-    await _resume_job_direct(ctx)
-
-
-async def _resume_job_direct(ctx: ResumeContext) -> None:
-    """Direct resume execution (fallback when conductor is unavailable).
-
-    This is the original resume logic, used when --workspace is explicitly
-    provided as a debug override.
-    """
-    from marianne.execution.runner import FatalError, GracefulShutdownError, JobRunner
-
-    # Phase 1: Find and validate job state
-    found_state, found_backend = await _find_job_state(ctx.job_id, ctx.workspace, ctx.force)
-
-    # Phase 2: Reconstruct config
-    config, config_was_reloaded = _reconstruct_config(
-        found_state, ctx.config_file, ctx.no_reload
-    )
-
-    # Reconcile stale state if config was reloaded
-    if config_was_reloaded:
-        from marianne.execution.reconciliation import reconcile_config
-
-        report = reconcile_config(found_state, config)
-        found_state.config_snapshot = config.model_dump(mode="json")
-        if report.has_changes:
-            console.print(f"[dim]{report.summary()}[/dim]")
-
-    # Calculate resume point
-    resume_sheet = found_state.last_completed_sheet + 1
-    if resume_sheet > found_state.total_sheets:
-        if ctx.force:
-            # For force resume, restart from last sheet
-            resume_sheet = found_state.total_sheets
-            console.print(
-                f"[yellow]Score was completed. Force restarting sheet {resume_sheet}.[/yellow]"
-            )
-        else:
-            console.print("[green]Score is already fully completed.[/green]")
-            return
-
-    # Display resume info with clear separation between previous state
-    # and the new resume attempt (#122 — clarity on resume with config reload)
-    previous_status = found_state.status.value
-    previous_error = found_state.error_message
-
-    panel_lines = [
-        f"[bold]{config.name}[/bold]",
-        f"Previous status: [yellow]{previous_status}[/yellow]",
-    ]
-    if previous_error:
-        # Truncate long error messages for the panel
-        max_len = 120
-        error_display = (
-            previous_error[:max_len] + "..."
-            if len(previous_error) > max_len
-            else previous_error
-        )
-        panel_lines.append(f"Previous error: [dim]{error_display}[/dim]")
-    panel_lines.extend([
-        f"Progress: {found_state.last_completed_sheet}/{found_state.total_sheets} sheets completed",
-        "",
-        f"[green]Resuming from sheet {resume_sheet}[/green]",
-    ])
-    if config_was_reloaded:
-        panel_lines.append("[cyan]Config reloaded from disk[/cyan]")
-
-    console.print(Panel("\n".join(panel_lines), title="Resume Score"))
-
-    # Reset job status to RUNNING for resume
-    found_state.status = JobStatus.RUNNING
-    found_state.error_message = None  # Clear previous error
-    await found_backend.save(found_state)
-
-    # Phase 3: Setup backends and features for execution (shared with run.py)
-    components = setup_all(
-        config, escalation=ctx.escalation, console=console,
-    )
-    backend = components.backend
-    outcome_store = components.outcome_store
-    global_learning_store = components.global_learning_store
-    notification_manager = components.notification_manager
-    escalation_handler = components.escalation_handler
-    grounding_engine = components.grounding_engine
-
-    # Create progress bar for sheet tracking
-    progress = create_progress_bar(console=console)
-
-    # Progress callback to update the progress bar
-    progress_task_id: TaskID | None = None
-
-    def update_progress(completed: int, total: int, eta_seconds: float | None) -> None:
-        """Update progress bar with current sheet progress."""
-        nonlocal progress_task_id
-        if progress_task_id is not None:
-            eta_str = format_duration(eta_seconds) if eta_seconds else "calculating..."
-            progress.update(
-                progress_task_id,
-                completed=completed,
-                total=total,
-                eta=eta_str,
-            )
-
-    # Create runner context with all optional components
-    from marianne.execution.runner import RunnerContext
-    runner_context = RunnerContext(
-        console=console,
-        outcome_store=outcome_store,
-        escalation_handler=escalation_handler,
-        progress_callback=update_progress,
-        global_learning_store=global_learning_store,
-        grounding_engine=grounding_engine,
-        self_healing_enabled=ctx.self_healing,
-        self_healing_auto_confirm=ctx.auto_confirm,
-    )
-
-    # Create runner with progress callback
-    runner = JobRunner(
-        config=config,
-        backend=backend,
-        state_backend=found_backend,
-        context=runner_context,
-    )
-
-    try:
-        # Send job resume notification (use job_start event)
-        if notification_manager:
-            remaining_sheets = found_state.total_sheets - found_state.last_completed_sheet
-            await notification_manager.notify_job_start(
-                job_id=ctx.job_id,
-                job_name=config.name,
-                total_sheets=remaining_sheets,
-            )
-
-        # Start progress display
-        progress.start()
-        progress_task_id = progress.add_task(
-            f"[cyan]{config.name}[/cyan] (resuming)",
-            total=found_state.total_sheets,
-            completed=found_state.last_completed_sheet,
-            eta="calculating...",
-        )
-
-        # Resume from the next sheet
-        if not is_quiet():
-            console.print(f"\n[green]Resuming from sheet {resume_sheet}...[/green]")
-        state, summary = await runner.run(
-            start_sheet=resume_sheet,
-            config_path=str(ctx.config_file) if ctx.config_file else found_state.config_path,
-        )
-
-        # Stop progress and show final state
-        progress.stop()
-
-        await handle_job_completion(
-            state=state,
-            summary=summary,
-            notification_manager=notification_manager,
-            job_id=ctx.job_id,
-            job_name=config.name,
-            console=console,
-        )
-
-    except GracefulShutdownError:
-        # Graceful shutdown already saved state and printed resume hint
-        progress.stop()
-        console.print("[yellow]Score paused. Exiting gracefully.[/yellow]")
-        raise typer.Exit(0) from None
-
-    except FatalError as e:
-        progress.stop()
-        output_error(
-            f"Fatal error: {e}",
-            hints=[
-                f"Run 'mzt diagnose {ctx.job_id}' for a detailed failure report.",
-            ],
-        )
-
-        # Send failure notification (must not mask the original error)
-        if notification_manager:
-            try:
-                await notification_manager.notify_job_failed(
-                    job_id=ctx.job_id,
-                    job_name=config.name,
-                    error_message=str(e),
-                )
-            except Exception:
-                _logger.debug("Notification failed during error handling", exc_info=True)
-
-        raise typer.Exit(1) from None
-
-    finally:
-        # Ensure progress is stopped
-        if progress.live.is_started:
-            progress.stop()
-
-        if notification_manager:
-            try:
-                await notification_manager.close()
-            except OSError:
-                _logger.debug("notification manager close failed", exc_info=True)
+    # Conductor not available - require it
+    require_conductor(routed)
+    return  # unreachable
 
 
 # =============================================================================
