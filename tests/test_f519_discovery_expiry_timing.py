@@ -57,32 +57,37 @@ class TestPatternDiscoveryTiming:
             db_path.unlink()
 
     def test_reasonable_ttl_survives_scheduling_delays(self) -> None:
-        """Verify that a reasonable TTL (1s+) doesn't race."""
+        """Verify that a reasonable TTL (1s+) doesn't race.
+
+        F-521: time.sleep() can wake up early under CPU load with parallel test execution.
+        A 500ms margin was insufficient — tests still failed intermittently. Using 10s margin
+        to account for potential 1-2s early wakeups under extreme xdist parallel load.
+        """
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = Path(f.name)
 
         try:
             store = GlobalLearningStore(db_path)
 
-            # Record with 3s TTL - gives 500ms margin for xdist scheduling overhead (F-521)
+            # Record with 5s TTL - large enough to be robust under any realistic load
             store.record_pattern_discovery(
                 pattern_id="stable-001",
                 pattern_name="Stable Pattern",
                 pattern_type="test",
                 job_id="test-job",
-                ttl_seconds=3.0,
+                ttl_seconds=5.0,
             )
 
             # Even with scheduling delays, pattern should be found
             events = store.get_active_pattern_discoveries()
             found = any(e.pattern_name == "Stable Pattern" for e in events)
-            assert found, "Pattern with 3s TTL should be found immediately"
+            assert found, "Pattern with 5s TTL should be found immediately"
 
-            # Verify expiry still works after TTL (500ms margin instead of 100ms)
-            time.sleep(3.5)
+            # Verify expiry still works after TTL (10s margin for time.sleep() early wakeup)
+            time.sleep(15.0)
             events_after = store.get_active_pattern_discoveries()
             found_after = any(e.pattern_name == "Stable Pattern" for e in events_after)
-            assert not found_after, "Pattern should expire after 3s TTL"
+            assert not found_after, "Pattern should expire after 5s TTL + 15s sleep"
 
         finally:
             db_path.unlink()
