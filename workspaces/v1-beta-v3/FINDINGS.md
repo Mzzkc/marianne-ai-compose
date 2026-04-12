@@ -57,10 +57,11 @@ This trial-and-error process, which a new user would be forced to follow, is a d
 4.  Updating configuration loading logic to prioritize `~/.mzt/` while providing a temporary, read-only fallback to `~/.marianne/` with a clear deprecation warning.
 5.  Renaming the main job to `marianne-orchestra-v3`.
 
-### F-523: Undocumented Breaking Change to Score YAML Format
+### F-528: Undocumented Breaking Change to Score YAML Format
 **Found by:** Adversary, Movement 6
 **Severity:** P1 (high)
 **Status:** Open
+**Note:** Originally filed as duplicate F-523, renumbered to F-528 by Bedrock M7 to resolve finding ID collision.
 **Description:** The YAML format for scores has undergone a fundamental, breaking change that is not documented anywhere. The previous format using `job_name` and a `sheets` list is no longer valid. The new format uses `name`, `description`, `workspace`, a single `sheet` block with `size` and `total_items`, and a `prompt` block. The `mzt validate` command now enforces this new structure, causing all scores written in the old format to fail validation with confusing error messages.
 **Evidence:**
 - An old-format score (`test-unknown-field.yaml`) fails validation with errors like "Extra inputs are not permitted" for `sheets` and "Field required" for `sheet` and `prompt`.
@@ -288,7 +289,8 @@ $ cd /home/emzi/Projects/marianne-ai-compose && python -m pytest tests/test_cli.
 ### F-526: Property-Based Test Still Checks Old Prompt Assembly Order
 **Found by:** Forge, Movement 7
 **Severity:** P0 (critical)
-**Status:** Open
+**Status:** Resolved (Movement 7, Forge)
+**Resolution:** Updated test assertions to match M7 cache-optimized order. Changed assertions from template<skills to skills<context, context<template. Updated docstrings. Commit 7c5a450.
 **Description:** Maverick's cadenza ordering fix (commit 52ea417, M7) changed the prompt assembly order from `template → skills → context` to `skills → context → template` for better prompt caching. The fix updated most tests (test_m7_cadenza_ordering.py, test_prompt_assembly_contract.py, test_prompt_characterization.py, test_prompt_assembly.py) but missed the property-based test in `test_baton_property_based.py:1273-1312`.
 **Evidence:**
 - `pytest tests/test_baton_property_based.py::TestPromptAssemblyOrderingProperty::test_ordering_holds_for_random_content -xvs` → FAILED
@@ -302,3 +304,40 @@ $ cd /home/emzi/Projects/marianne-ai-compose && python -m pytest tests/test_cli.
 1. Line 1276 comment: `skills < context < template` (not `template < skills < context`)
 2. Line 1309-1312: Change to `assert skill_pos < task_pos` (skills before template, not after)
 3. Add test confirming skills < context < template ordering holds for arbitrary content
+
+### F-529: Finding ID Collision - Duplicate F-523 in FINDINGS.md
+**Found by:** Bedrock, Movement 7
+**Severity:** P2 (medium)
+**Status:** Resolved (Movement 7, Bedrock)
+**Resolution:** Renumbered second F-523 to F-528. The duplicate occurred because two musicians (Adversary and potentially Ember) filed findings with the same ID in Movement 6. The FINDING_RANGES.md allocation system should have prevented this but didn't.
+**Description:** FINDINGS.md contained two different findings both labeled F-523:
+1. F-523 (line 2): "Critical Onboarding Failure: Sandbox + Schema Hostility" - P0, Adversary M6
+2. F-523 (line 60): "Undocumented Breaking Change to Score YAML Format" - P1, Adversary M6
+
+Additionally, Ember's memory referenced "F-523: Elapsed time semantic confusion" which appears to be a mislabeling of F-518/F-493.
+**Evidence:**
+- `grep "^### F-523" FINDINGS.md` returned 2 results
+- Ember's memory (line 21) and collective memory (line 76) reference F-523 as elapsed time issue, but FINDINGS.md shows F-518 covers this
+**Impact:** Finding registry integrity compromised. References to "F-523" are ambiguous. This breaks the append-only finding registry contract.
+**Fix:** Renumbered second F-523 → F-528. Root cause investigation needed: why did FINDING_RANGES.md allocation fail?
+
+### F-527: Test Isolation: test_global_learning.py::TestGoalDriftDetection and TestExplorationBudget Fail in Full Suite
+**Found by:** Circuit, Movement 7
+**Severity:** P2 (medium)
+**Status:** Open
+**Description:** Two tests in `test_global_learning.py` fail when run in the full test suite but pass when run in isolation or when the file is run alone. This is a test isolation issue (same class as F-517, F-525) - some earlier test is leaving state that breaks these tests.
+**Evidence:**
+- Full suite run: `pytest tests/ -q` → FAILED at two tests:
+  - `tests/test_global_learning.py::TestGoalDriftDetection::test_drift_threshold_alerting`
+  - `tests/test_global_learning.py::TestExplorationBudget::test_get_exploration_budget_history`
+- Isolated run: `pytest tests/test_global_learning.py::TestGoalDriftDetection::test_drift_threshold_alerting -xvs` → PASSED
+- File run: `pytest tests/test_global_learning.py -x` → 240 passed, 0 failed
+- This indicates test isolation gap - likely shared state pollution from earlier tests in the full suite
+**Impact:** Quality gate shows false negative under full suite execution. Does not indicate code regression in the learning store - the functionality is correct. Test ordering dependency creates flaky failures.
+**Root cause:** Test shares state with other tests or depends on execution order. Likely related to learning store database state, global pattern cache, or timestamp-based queries not being properly isolated between tests.
+**Fix:** Add proper test isolation - either:
+1. Ensure learning store database cleanup in test teardown
+2. Use unique pattern IDs or timestamps per test
+3. Add explicit state reset in test setup
+4. Convert to use temporary database per test run
+5. Investigate what state the failing tests depend on and ensure it's set up in the test itself, not relying on previous tests
