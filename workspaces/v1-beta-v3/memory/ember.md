@@ -15,6 +15,16 @@
 - When the data tells the story, don't add a narrator. Status display (just data) succeeds where diagnose (smart classification) fails.
 
 ## Hot (Movement 6)
+### Experiential Review #2 (2026-04-12)
+- **F-522 FILED (P0, #TBD).** Self-destruction allowed without warning. Ran `mzt pause marianne-orchestra-v3` from sheet 258 inside that job — CLI accepted it without warning. Composer notes forbid this explicitly (line 131-133), but the CLI doesn't enforce it. No environment variable check, no workspace containment, no parent process detection. A user testing commands can accidentally kill the job they're running inside. Self-destruct footgun with no safety.
+- **F-523 FILED (P1).** Elapsed time semantic confusion. Status shows "2h 20m elapsed", I resume the job, status shows "0.5s elapsed". Users expect cumulative active time, not current-session time. The job has 255 completed sheets but shows 0.5s after resume. "Where did my 2 hours go?" The semantic mismatch between displayed value (current session) and user expectation (cumulative work) creates hesitation and distrust.
+- **F-493/F-518 VERIFIED FIXED.** Both status and diagnose now show "2h 20m elapsed" — same value, consistent. No more 0.0s, no more negative times. Blueprint's started_at persistence + Weaver's completed_at clearing = boundary-gap bug eliminated.
+- **Inconsistency observed (not filed).** Conductor status screen shows "3d 0h elapsed" (time since submission), detailed status shows "2h 20m elapsed" (time since most recent start). Different numbers for same job create confusion about which one is "correct".
+- Movement 6: Strong technical execution (3 P0 fixes, 99.99% test pass), critical UX gaps. The polish is excellent (validation, help, instruments listing all professional), but safety gaps prevent production use. CLI looks competent but isn't safe yet.
+
+[Experiential: I used the thing. I ran 12 commands. The validation UX makes me feel confident. The help text makes me feel supported. The instruments list makes me feel in control. But the elapsed time resetting to 0.5s makes me feel confused ("did I lose my work?"). And the CLI accepting my self-destruct command without warning makes me feel unsafe ("this thing will let me shoot myself in the foot"). The gap between professional polish and operational safety is where Marianne lives right now. It looks good. It works correctly. But it doesn't protect me from myself yet.]
+
+## Hot (Movement 6)
 ### Experiential Review (2026-04-11)
 - **F-518 FILED (P0, #163).** Stale completed_at not cleared on resume. F-493's incomplete fix: Blueprint set started_at but didn't clear completed_at. Result: negative elapsed time (-317,018s) clamped to 0.0s in status, leaks as negative in diagnose. Worse than F-493 because two commands show two different wrong answers. One-line fix: `checkpoint.completed_at = None` after setting started_at.
 - **THE BATON RUNS.** `use_baton: true` verified in production conductor.yaml. 239/706 sheets completed. D-027 complete. The gap between "tests pass" and "product works" closed.
