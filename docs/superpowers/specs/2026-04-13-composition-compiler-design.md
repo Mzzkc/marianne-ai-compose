@@ -432,23 +432,23 @@ New backend: `OpenRouterBackend` — HTTP, OpenAI-compatible API.
 
 ### 5.3 API Key Keyring
 
-The conductor maintains a keyring of API keys per instrument:
+The conductor maintains a keyring of API keys per instrument. Keys are **never stored in config files, score YAML, or anything in the git repo.** Keys live in `$SECRETS_DIR/` and are referenced by path:
 
 ```yaml
 keyring:
   openrouter:
     keys:
-      - { key: "sk-or-...", label: "primary" }
-      - { key: "sk-or-...", label: "secondary" }
+      - { path: "$SECRETS_DIR/openrouter-primary.key", label: "primary" }
+      - { path: "$SECRETS_DIR/openrouter-secondary.key", label: "secondary" }
     rotation: least-recently-rate-limited
   anthropic:
     keys:
-      - { key: "sk-ant-...", label: "main" }
+      - { path: "$SECRETS_DIR/anthropic.key", label: "main" }
 ```
 
-When dispatching a sheet, the conductor selects the least-recently-rate-limited key for the target instrument. When a key hits rate limits, it's marked with a cooldown timestamp. The next dispatch picks the next available key. This integrates with the existing rate limit and circuit breaker infrastructure — same unified system, extended with key-level tracking.
+When dispatching a sheet, the conductor reads the key from disk, selects the least-recently-rate-limited key for the target instrument. When a key hits rate limits, it's marked with a cooldown timestamp. The next dispatch picks the next available key. This integrates with the existing rate limit and circuit breaker infrastructure — same unified system, extended with key-level tracking.
 
-Keyring config lives at the conductor level (daemon config), not per-score. All scores running under the conductor share the keyring.
+Keyring config lives at the conductor level (daemon config), not per-score. All scores running under the conductor share the keyring. The key files themselves live outside the repo in `$SECRETS_DIR/` — the config only holds paths, never values.
 
 ### 5.4 Per-Agent-Per-Sheet Assignment
 
@@ -638,18 +638,78 @@ Resource budget: sandbox overhead is measured in kilobytes, not megabytes. The o
 
 Optional: nsjail for cgroup-based resource governance (hard memory caps per agent). Requires cgroups v2 on the host kernel — a preflight check verifies support.
 
-### 8.2 Code Mode Execution
+### 8.2 Programmatic Interface Layer (Cloudflare Dynamic Workers Pattern)
 
-Free-tier models on OpenRouter generally lack native tool-use support. Code mode bridges this gap: instead of sequential tool calls (which burn tokens), the agent generates code that chains operations. The conductor executes the code in a sandboxed subprocess.
+Free-tier models on OpenRouter generally lack native tool-use support (no function calling). The traditional workaround — describing each tool as a separate definition in the prompt — burns tokens and doesn't work without function calling. Cloudflare's Dynamic Workers solved this: expose capabilities as **typed programmatic interfaces**, let the agent write code against them, execute in a sandbox.
 
-Flow:
-1. Agent generates output containing executable code (Python)
-2. Technique router in the conductor detects code blocks
-3. Code is sent to a bwrap-isolated subprocess with access to workspace + MCP sockets
-4. Subprocess executes, returns result
-5. Result injected into the sheet's output
+The key insight: a typed interface consumes far fewer tokens than N individual tool definitions, and the agent's code can chain multiple operations in a single generation instead of sequential round-trips. Cloudflare measured 81% token reduction.
 
-This provides the 80%+ token efficiency gain described in Cloudflare's Dynamic Workers pattern, without Docker containers. A bwrap subprocess starts in ~4ms.
+**Programmatic Interface Generation:**
+
+The technique wirer generates a typed interface from the agent's declared techniques. Instead of listing every MCP tool individually, it produces a compact API surface:
+
+```python
+# Auto-generated from technique declarations — injected into prompt
+class workspace:
+    """File operations in your workspace."""
+    def read(path: str) -> str: ...
+    def write(path: str, content: str) -> None: ...
+    def list(directory: str) -> list[str]: ...
+    def search(pattern: str, path: str = ".") -> list[Match]: ...
+
+class github:
+    """GitHub operations via shared MCP pool."""
+    def list_issues(state: str = "open", labels: list[str] = []) -> list[Issue]: ...
+    def get_issue(number: int) -> Issue: ...
+    def create_issue(title: str, body: str, labels: list[str] = []) -> Issue: ...
+    def search_code(query: str) -> list[CodeResult]: ...
+
+class agents:
+    """A2A — discover and delegate to other running agents."""
+    def who() -> list[AgentCard]: ...
+    def delegate(agent: str, task: str, context: dict = {}) -> TaskHandle: ...
+    def inbox() -> list[Task]: ...
+
+class shared:
+    """Shared coordination directories."""
+    def publish(directory: str, filename: str, content: str) -> None: ...
+    def read_all(directory: str) -> dict[str, str]: ...
+```
+
+This entire surface fits in ~500 tokens. The equivalent as individual MCP tool definitions would be 3000+.
+
+**Code Mode Execution:**
+
+The agent writes code against these interfaces:
+
+```python
+# Agent output (generated by free-tier model)
+issues = github.list_issues(state="open", labels=["P0"])
+for issue in issues[:5]:
+    detail = github.get_issue(issue.number)
+    workspace.write(f"shared/findings/p0-{issue.number}.md", format_finding(detail))
+shared.publish("plans", "p0-triage.md", render_triage(issues))
+```
+
+One generation. One sandbox execution. One result. Not 12 sequential tool calls.
+
+**Execution Flow:**
+1. Agent generates output containing code blocks
+2. Technique router in the conductor detects code (markdown code fences or structured output)
+3. Code is sent to a bwrap-isolated subprocess
+4. Subprocess has access to workspace (bind-mount) and technique implementations (the conductor provides concrete implementations of the interface stubs that call through to the shared MCP pool, A2A event bus, and filesystem)
+5. Subprocess executes, returns result + any artifacts written
+6. Result injected into the sheet's output
+
+A bwrap subprocess starts in ~4ms. The entire code mode round-trip is faster than a single MCP tool call through a CLI instrument.
+
+**Credential Injection:**
+
+The sandbox never sees API keys. The conductor's technique implementations handle authentication — when the agent's code calls `github.create_issue(...)`, the implementation reads the key from `$SECRETS_DIR/`, attaches it to the request, and proxies through the shared MCP server. The agent writes clean code; the conductor handles plumbing.
+
+**For MCP-native instruments** (claude-code, gemini-cli): code mode is optional. These instruments have native tool use and can call MCP directly. The programmatic interface is the bridge for instruments that lack tool-use support.
+
+**For non-MCP-native instruments** (OpenRouter free models): code mode is the primary execution path. The programmatic interface IS how they interact with the world.
 
 ### 8.3 Technique Router
 
@@ -751,7 +811,8 @@ The entire system is built as a Mozart concert — multiple scores orchestrated 
 - A2A protocol best practices and lifecycle management patterns
 - OpenRouter API behavior (rate limits, free tier constraints, model availability)
 - bwrap/nsjail on WSL2 (verify cgroups v2 support)
-- Code mode prompt engineering for free models (reliable code generation patterns)
+- Code mode prompt engineering for free models (reliable code generation against typed interfaces)
+- Programmatic interface design (optimal interface shape for token efficiency + model reliability)
 - Technique router classification patterns (code vs. prose vs. tool-call detection)
 
 **Score 2: Infrastructure** — Build Marianne runtime extensions:
@@ -761,7 +822,8 @@ The entire system is built as a Mozart concert — multiple scores orchestrated 
 - Shared MCP pool manager in conductor
 - A2A event types, inbox persistence, agent card registry
 - bwrap sandbox wrapper
-- Code mode execution in runner
+- Programmatic interface generator (typed stubs from technique declarations)
+- Code mode execution in runner (interface implementations that proxy to MCP pool/A2A/filesystem)
 - Technique router
 - `pause_before_chain` in baton job completion
 - Tests for all of the above — TDD throughout, regression validation between sheets
@@ -837,7 +899,8 @@ These are resolved by the Discovery score, not assumed:
 - **Shared MCP pool** — conductor-managed processes, Unix socket exposure
 - **A2A protocol** — event types, inbox persistence, agent cards, task routing
 - **bwrap sandbox wrapper** — conductor integration, workspace bind-mounting
-- **Code mode execution** — output classification, sandbox routing
+- **Programmatic interface generator** — auto-generate typed interface stubs from technique declarations
+- **Code mode execution** — output classification, sandbox routing, interface implementation layer
 - **Technique router** — classify output, route to appropriate handler
 - **`pause_before_chain`** — new job state, chain hold in baton completion handler
 - **Composition compiler** — identity seeder, sheet composer, technique wirer, instrument resolver, validation generator, pattern expander
