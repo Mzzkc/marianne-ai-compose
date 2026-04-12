@@ -25,7 +25,7 @@ class TestPatternDiscoveryTiming:
             store = GlobalLearningStore(db_path)
 
             # Record with 0.1s TTL (100ms) - the problematic value
-            record_id = store.record_pattern_discovery(
+            store.record_pattern_discovery(
                 pattern_id="race-001",
                 pattern_name="Race Condition Pattern",
                 pattern_type="test",
@@ -33,9 +33,9 @@ class TestPatternDiscoveryTiming:
                 ttl_seconds=0.1,
             )
 
-            # Under normal conditions, this passes
+            # Under normal conditions, this passes (but we don't assert - would be flaky)
             events = store.get_active_pattern_discoveries()
-            immediate_found = any(e.pattern_name == "Race Condition Pattern" for e in events)
+            _ = any(e.pattern_name == "Race Condition Pattern" for e in events)
 
             # But with even a tiny delay (simulating xdist scheduling overhead)
             time.sleep(0.15)  # 150ms - exceeds the 100ms TTL
@@ -65,7 +65,7 @@ class TestPatternDiscoveryTiming:
             store = GlobalLearningStore(db_path)
 
             # Record with 3s TTL - gives 500ms margin for xdist scheduling overhead (F-521)
-            record_id = store.record_pattern_discovery(
+            store.record_pattern_discovery(
                 pattern_id="stable-001",
                 pattern_name="Stable Pattern",
                 pattern_type="test",
