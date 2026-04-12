@@ -127,7 +127,7 @@ class TestEscalationNotSupportedHints:
 class TestPauseDaemonErrorHints:
     """All daemon communication errors in pause commands should have hints."""
 
-    def test_pause_daemon_oserror_has_hints(self, tmp_path: Path) -> None:
+    def test_pause_daemon_oserror_has_hints(self) -> None:
         """When pause fails due to conductor communication, hints guide recovery."""
         captured, spy = _make_spy()
 
@@ -137,13 +137,13 @@ class TestPauseDaemonErrorHints:
              patch("marianne.cli.commands.pause.output_error", side_effect=spy):
             runner.invoke(
                 app,
-                ["pause", "test-job", "--workspace", str(tmp_path)],
+                ["pause", "test-job"],
                 catch_exceptions=True,
             )
 
-        _assert_hints_present(captured, "pause.py daemon OSError (line 321)")
+        _assert_hints_present(captured, "pause.py daemon OSError")
 
-    def test_pause_failed_response_has_hints(self, tmp_path: Path) -> None:
+    def test_pause_failed_response_has_hints(self) -> None:
         """When conductor says pause failed, hints explain possible reasons."""
         captured, spy = _make_spy()
 
@@ -153,11 +153,11 @@ class TestPauseDaemonErrorHints:
              patch("marianne.cli.commands.pause.output_error", side_effect=spy):
             runner.invoke(
                 app,
-                ["pause", "test-job", "--workspace", str(tmp_path)],
+                ["pause", "test-job"],
                 catch_exceptions=True,
             )
 
-        _assert_hints_present(captured, "pause.py pause failed (line 348)")
+        _assert_hints_present(captured, "pause.py pause failed")
 
     def test_pause_status_check_error_has_hints(self) -> None:
         """When pause's internal status-check IPC call fails, hints guide recovery."""

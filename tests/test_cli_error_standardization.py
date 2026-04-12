@@ -435,31 +435,34 @@ class TestRecoverErrorStandardization:
     """recover command: missing config snapshot uses output_error with hints."""
 
     def test_no_config_snapshot_includes_hint(
-        self, tmp_path: Path,
+        self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Missing config snapshot error suggests re-running."""
         from datetime import UTC, datetime
 
         from marianne.core.checkpoint import CheckpointState, JobStatus
 
-        workspace = tmp_path / "ws"
-        workspace.mkdir()
-        state = CheckpointState(
-            job_id="no-snap",
-            job_name="No Snapshot",
-            total_sheets=3,
-            status=JobStatus.FAILED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        state_file = workspace / "no-snap.json"
-        state_file.write_text(
-            json.dumps(state.model_dump(mode="json"), default=str),
-        )
+        async def _no_snapshot(
+            method: str, params: dict, *, socket_path: Path | None = None,
+        ) -> tuple[bool, dict]:
+            if method == "job.recover":
+                # Return a state without config_snapshot
+                state = CheckpointState(
+                    job_id="test-job",
+                    job_name="No Snapshot",
+                    total_sheets=3,
+                    status=JobStatus.FAILED,
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                    config_snapshot=None,  # Missing snapshot triggers the error
+                )
+                return True, {"state": state.model_dump(mode="json")}
+            return True, {}
 
-        result = runner.invoke(
-            app, ["recover", "no-snap", "-w", str(workspace)],
+        monkeypatch.setattr(
+            "marianne.daemon.detect.try_daemon_route", _no_snapshot,
         )
+        result = runner.invoke(app, ["recover", "test-job"])
         assert result.exit_code != 0
         output_lower = result.output.lower()
         assert "config snapshot" in output_lower or "cannot run" in output_lower
@@ -580,30 +583,21 @@ class TestPauseRemainingStandardization:
     """Remaining pause error paths migrated from raw console.print."""
 
     def test_pause_not_running_uses_output_error(
-        self, tmp_path: Path,
+        self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Pausing a non-running job uses output_error() with hints."""
-        from datetime import UTC, datetime
 
-        from marianne.core.checkpoint import CheckpointState, JobStatus
+        async def _not_running(
+            method: str, params: dict, *, socket_path: Path | None = None,
+        ) -> tuple[bool, dict]:
+            if method == "job.pause":
+                return True, {"paused": False, "error": "Score is not running"}
+            return True, {}
 
-        workspace = tmp_path / "ws"
-        workspace.mkdir()
-        state = CheckpointState(
-            job_id="paused-job",
-            job_name="Already Paused",
-            total_sheets=3,
-            status=JobStatus.PAUSED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+        monkeypatch.setattr(
+            "marianne.daemon.detect.try_daemon_route", _not_running,
         )
-        state_file = workspace / "paused-job.json"
-        state_file.write_text(
-            json.dumps(state.model_dump(mode="json"), default=str),
-        )
-        result = runner.invoke(
-            app, ["pause", "paused-job", "-w", str(workspace)],
-        )
+        result = runner.invoke(app, ["pause", "test-job"])
         assert result.exit_code != 0
         # Should use output_error format with E502 code
         assert "E502" in result.output or "not running" in result.output.lower()

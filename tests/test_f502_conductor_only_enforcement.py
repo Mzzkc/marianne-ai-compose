@@ -32,8 +32,15 @@ class TestPauseCommand:
         """Pause should fail cleanly when conductor unavailable (no fallback)."""
         runner = CliRunner()
 
-        # Simulate conductor unavailable by pointing to non-existent socket
-        monkeypatch.setenv("MARIANNE_SOCKET", "/tmp/nonexistent-conductor.sock")
+        # Mock try_daemon_route to raise connection error
+        from marianne.daemon.exceptions import DaemonError
+
+        async def _no_conductor(method: str, params: dict, *, socket_path=None):
+            raise DaemonError("Conductor not running")
+
+        monkeypatch.setattr(
+            "marianne.daemon.detect.try_daemon_route", _no_conductor,
+        )
 
         result = runner.invoke(app, ["pause", "test-job"])
 
@@ -62,8 +69,15 @@ class TestResumeCommand:
         """Resume should fail cleanly when conductor unavailable (no fallback)."""
         runner = CliRunner()
 
-        # Simulate conductor unavailable
-        monkeypatch.setenv("MARIANNE_SOCKET", "/tmp/nonexistent-conductor.sock")
+        # Mock try_daemon_route to raise connection error
+        from marianne.daemon.exceptions import DaemonError
+
+        async def _no_conductor(method: str, params: dict, *, socket_path=None):
+            raise DaemonError("Conductor not running")
+
+        monkeypatch.setattr(
+            "marianne.daemon.detect.try_daemon_route", _no_conductor,
+        )
 
         result = runner.invoke(app, ["resume", "test-job"])
 
