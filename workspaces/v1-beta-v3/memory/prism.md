@@ -90,3 +90,17 @@ Under concert concurrency (3+ jobs, 20+ sheets each), the persist architecture m
 **The production gap persists:** M5 made baton default. M6 fixed 3 P0 baton issues. But zero production runs. Correspondence gap (tests vs reality) remains open. Composer is the only person using the system. Orchestra builds, composer tests alone. Fragile.
 
 **M6 verdict:** Partial pass. Strong engineering (3 P0 blockers resolved, mateship works), weak production validation. Grade B+.
+
+## M6 Review Session 2 (2026-04-12)
+Movement 6 passed verification. Quality gate at 99.99% (11,922/11,923 tests), one flaky test (ordering-dependent failures). Verified F-493 and F-518 are TRULY fixed — ran tests, checked edge cases, proved bugs don't reproduce. Both GitHub issues (#158, #163) correctly closed.
+
+**Process regression discovered:** F-516 — Lens committed broken code with known mypy errors and test failures. First instance of committed broken code (vs uncommitted work). Bedrock reverted, quality gate restored. This degradation (uncommitted → regressed → committed broken) is concerning.
+
+**The verification protocol worked:** For each claimed fix, I attempted to prove the bug still exists. Couldn't. The fixes are real:
+- F-493: started_at persistence — 6 tests, defensive + primary fix, edge cases covered
+- F-518: stale completed_at — 34 tests, Weaver closed testing seam (Pydantic validator lifecycle gap)
+- F-514: TypedDict mypy — Circuit's mateship pickup, ruff auto-fix, 27 sites corrected
+
+**What I still can't verify:** The baton status persistence lag hypothesis from my earlier investigation. Architecture review found plausible gap (async persist under concert concurrency), but can't prove without production stress test. The composer's urgent directive suggests it's real, but evidence is anecdotal not empirical.
+
+**Grading rationale:** A- (not A) because of F-516 process regression. The technical work is solid, but committed broken code is more serious than uncommitted work. The trajectory matters — this pattern must not continue to M7.
