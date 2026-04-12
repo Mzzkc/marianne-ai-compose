@@ -321,6 +321,25 @@ Additionally, Ember's memory referenced "F-523: Elapsed time semantic confusion"
 **Impact:** Finding registry integrity compromised. References to "F-523" are ambiguous. This breaks the append-only finding registry contract.
 **Fix:** Renumbered second F-523 → F-528. Root cause investigation needed: why did FINDING_RANGES.md allocation fail?
 
+### F-530: Test Isolation: test_global_learning.py::TestPatternBroadcasting::test_discovery_events_expire_correctly
+**Found by:** Bedrock, Movement 7 (Quality Gate)
+**Severity:** P2 (medium)
+**Status:** Open
+**Description:** The test `test_global_learning.py::TestPatternBroadcasting::test_discovery_events_expire_correctly` fails when run in the full test suite but passes when run in isolation. This is a test isolation issue (same class as F-517, F-525, F-527) - some earlier test is leaving state that breaks this test.
+**Evidence:**
+- Full suite run: `pytest tests/ -x` → FAILED at test_global_learning.py::TestPatternBroadcasting::test_discovery_events_expire_correctly
+- Isolated run: `pytest tests/test_global_learning.py::TestPatternBroadcasting::test_discovery_events_expire_correctly -xvs` → PASSED (1 passed in 12.32s)
+- This is NOT the same as F-519 or F-521 (which are about the F-519 regression test with timing margins)
+- This is the ORIGINAL pattern discovery expiry test, not the regression test
+**Impact:** Quality gate blocked - full test suite fails on first run. False negative under full suite execution. Does not indicate code regression in the learning store - the functionality is correct.
+**Root cause:** Test shares state with other tests or depends on execution order. Likely related to learning store database state, global pattern cache, or timestamp-based queries not being properly isolated between tests.
+**Fix:** Add proper test isolation - either:
+1. Ensure learning store database cleanup in test teardown
+2. Use unique pattern IDs or timestamps per test
+3. Add explicit state reset in test setup
+4. Convert to use temporary database per test run
+5. Investigate what state the test depends on and ensure it's set up in the test itself, not relying on previous tests
+
 ### F-527: Test Isolation: test_global_learning.py::TestGoalDriftDetection and TestExplorationBudget Fail in Full Suite
 **Found by:** Circuit, Movement 7
 **Severity:** P2 (medium)
