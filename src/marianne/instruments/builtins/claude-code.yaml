@@ -40,6 +40,7 @@ default_timeout_seconds: 1800
 # a version has a much larger context window that changes cost profile).
 # Tier rationale: Haiku (cheap, fast) → 8, Sonnet (mid) → 6, Opus (expensive) → 4.
 models:
+  # ── Sonnet tier (mid-range: fast, capable, cost-effective) ──
   - name: claude-sonnet-4-20250514
     context_window: 200000
     cost_per_1k_input: 0.003
@@ -52,6 +53,14 @@ models:
     cost_per_1k_output: 0.015
     max_output_tokens: 64000
     max_concurrent: 6
+  - name: claude-sonnet-4-6
+    context_window: 200000
+    cost_per_1k_input: 0.003
+    cost_per_1k_output: 0.015
+    max_output_tokens: 64000
+    max_concurrent: 6
+
+  # ── Opus tier (premium: deep reasoning, largest context) ──
   - name: claude-opus-4-20250514
     context_window: 200000
     cost_per_1k_input: 0.015
@@ -64,6 +73,8 @@ models:
     cost_per_1k_output: 0.075
     max_output_tokens: 32000
     max_concurrent: 4
+
+  # ── Haiku tier (lightweight: fast, cheap, high concurrency) ──
   - name: claude-haiku-4-5-20251001
     context_window: 200000
     cost_per_1k_input: 0.0008
