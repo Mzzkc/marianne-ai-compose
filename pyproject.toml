@@ -118,6 +118,12 @@ markers = [
     "overnight: long-running tests for cron execution",
     "property_based: hypothesis property-based tests",
 ]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::RuntimeWarning",
+    "ignore::UserWarning:pydantic.*:",
+    "ignore::pytest.PytestWarning",
+]
 
 [tool.coverage.run]
 source = ["src/marianne"]

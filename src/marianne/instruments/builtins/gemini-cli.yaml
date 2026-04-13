@@ -27,10 +27,30 @@ capabilities:
   - vision
   - structured_output
 
-default_model: gemini-2.5-pro
+default_model: gemini-3.1-pro-preview
 default_timeout_seconds: 1800
 
 models:
+  # ── Current generation ──
+  - name: gemini-3.1-pro-preview
+    context_window: 1000000
+    cost_per_1k_input: 0.00125
+    cost_per_1k_output: 0.005
+    max_output_tokens: 65536
+    max_concurrent: 4
+  - name: gemini-3-flash-preview
+    context_window: 1000000
+    cost_per_1k_input: 0.00015
+    cost_per_1k_output: 0.0006
+    max_output_tokens: 65536
+    max_concurrent: 8
+  - name: gemini-3.1-flash-lite-preview
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 8
+  # ── Previous generation ──
   - name: gemini-2.5-pro
     context_window: 1000000
     cost_per_1k_input: 0.00125
@@ -43,10 +63,10 @@ models:
     cost_per_1k_output: 0.0006
     max_output_tokens: 65536
     max_concurrent: 8
-  - name: gemini-3-flash-preview
+  - name: gemini-2.5-flash-lite
     context_window: 1000000
-    cost_per_1k_input: 0.00015
-    cost_per_1k_output: 0.0006
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
     max_output_tokens: 65536
     max_concurrent: 8
 

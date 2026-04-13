@@ -1,0 +1,105 @@
+# Crush — Glamorous terminal-first AI coding agent by Charm
+#
+# Crush (charm.sh/crush) is the successor to OpenCode. It's a terminal-first
+# AI coding assistant supporting multiple LLM providers. Uses 'crush run'
+# for non-interactive prompt execution with text output to stdout.
+#
+# Supports stdin piping:
+#   cat README.md | crush run "summarize this"
+#
+# Auth: Provider-specific API keys (OPENAI_API_KEY, etc.) configured
+#       via 'crush login' or environment variables.
+#
+# Default provider: OpenAI (configurable via crush settings)
+# Headless mode: 'crush run' for non-interactive execution
+
+name: crush
+display_name: "Crush"
+description: "Charm's terminal-first AI coding agent (successor to OpenCode)"
+kind: cli
+
+capabilities:
+  - tool_use
+  - file_editing
+  - shell_access
+  - session_resume
+
+default_model: "google/gemma-4-31b-it:free"
+default_timeout_seconds: 1800
+
+models:
+  # ── Free-tier models (OpenRouter) ──
+  # Tier 1: Recommended for code gen
+  - name: "qwen/qwen3-coder:free"
+    context_window: 262000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 262000
+    max_concurrent: 8
+  - name: "google/gemma-4-31b-it:free"
+    context_window: 262144
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 32768
+    max_concurrent: 8
+  - name: "minimax/minimax-m2.5:free"
+    context_window: 196608
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 8192
+    max_concurrent: 8
+  # Tier 2: Free GPT + viable general-purpose
+  - name: "openai/gpt-oss-120b:free"
+    context_window: 131072
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 131072
+    max_concurrent: 8
+  - name: "openai/gpt-oss-20b:free"
+    context_window: 131072
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 8192
+    max_concurrent: 8
+  - name: "nvidia/nemotron-3-super-120b-a12b:free"
+    context_window: 262144
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 262144
+    max_concurrent: 8
+  - name: "z-ai/glm-4.5-air:free"
+    context_window: 131072
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 96000
+    max_concurrent: 8
+
+cli:
+  command:
+    executable: crush
+    subcommand: "run"
+    # prompt_flag omitted — crush run takes prompt as positional arg
+    model_flag: "--model"
+    auto_approve_flag: "--yolo"
+    working_dir_flag: "--cwd"
+    extra_flags:
+      - "--quiet"
+  output:
+    format: text
+  errors:
+    success_exit_codes: [0]
+    rate_limit_patterns:
+      - "rate.?limit"
+      - "(?:error|status|code)[^\\w]*429"
+      - "too many requests"
+    auth_error_patterns:
+      - "unauthorized"
+      - "invalid.*api.*key"
+      - "authentication.*failed"
+    capacity_patterns:
+      - "overloaded"
+      - "503"
+      - "capacity"
+    timeout_patterns:
+      - "timed?.?out"
+      - "timeout"
