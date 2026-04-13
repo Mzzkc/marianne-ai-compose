@@ -110,7 +110,7 @@ warn_unused_ignores = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 timeout = 30  # Safety net: kill any test that runs >30s (prevents orphaned processes)
-addopts = "-q --tb=short -n auto"
+addopts = "--tb=short -n auto"
 # Coverage: run explicitly with `pytest --cov=mzt --cov-report=term-missing:skip-covered --cov-report=json:coverage.json --no-cov-on-fail`
 markers = [
     "adversarial: tests with adversarial/garbage inputs",
@@ -122,7 +122,10 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::RuntimeWarning",
     "ignore::UserWarning:pydantic.*:",
+    "ignore::UserWarning:rich.*:",
     "ignore::pytest.PytestWarning",
+    "ignore::FutureWarning",
+    "ignore::UnicodeWarning",
 ]
 
 [tool.coverage.run]
