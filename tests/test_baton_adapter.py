@@ -655,6 +655,61 @@ class TestDependencyExtraction:
         # Sheet 4 (stage 2): depends on ALL of stage 1 (sheets 1,2,3)
         assert sorted(deps.get(4, [])) == [1, 2, 3]
 
+    def test_extract_dependencies_pre_expanded_fan_out(self) -> None:
+        """Regression: pre-expanded deps from config model must not be re-expanded.
+
+        When SheetConfig._expand_fan_out runs at parse time, it:
+        1. Expands stage-level deps to sheet-level
+        2. Clears fan_out={} to prevent re-expansion
+
+        extract_dependencies must detect this and use the pre-expanded deps
+        directly. Without this fix, a 3-stage score with fan_out={2: 7} and
+        deps={2: [1], 3: [2]} produces sheet 9 depending on [1] instead of
+        [2,3,4,5,6,7,8] — the synthesis sheet dispatches before all research
+        streams complete.
+
+        Bug: GH#167 variant — double expansion of already-expanded deps.
+        """
+        from marianne.daemon.baton.adapter import extract_dependencies
+
+        # Simulate a config where fan_out already ran:
+        # 3 stages, stage 2 fanned out to 7 → 9 total sheets
+        # Config model already expanded deps and cleared fan_out={}
+        mock_config = MagicMock()
+        mock_config.sheet.total_sheets = 9
+        mock_config.sheet.fan_out = {}  # cleared by _expand_fan_out
+
+        # Pre-expanded dependencies (as config model produces them)
+        mock_config.sheet.dependencies = {
+            2: [1], 3: [1], 4: [1], 5: [1], 6: [1], 7: [1], 8: [1],
+            9: [2, 3, 4, 5, 6, 7, 8],  # synthesis depends on ALL fan-out sheets
+        }
+
+        def get_meta(n: int) -> MagicMock:
+            if n == 1:
+                return MagicMock(stage=1, instance=1, fan_count=1)
+            elif n <= 8:
+                return MagicMock(stage=2, instance=n - 1, fan_count=7)
+            else:
+                return MagicMock(stage=3, instance=1, fan_count=1)
+
+        mock_config.sheet.get_fan_out_metadata = get_meta
+
+        deps = extract_dependencies(mock_config)
+
+        # Sheet 1: no deps
+        assert deps[1] == []
+
+        # Sheets 2-8 (fan-out of stage 2): each depends on sheet 1
+        for i in range(2, 9):
+            assert deps[i] == [1], f"Sheet {i} should depend on [1], got {deps[i]}"
+
+        # Sheet 9 (synthesis): depends on ALL of sheets 2-8
+        assert sorted(deps[9]) == [2, 3, 4, 5, 6, 7, 8], (
+            f"Sheet 9 (synthesis) must depend on all fan-out sheets [2-8], "
+            f"got {sorted(deps[9])}"
+        )
+
 
 # =========================================================================
 # Completion Signaling

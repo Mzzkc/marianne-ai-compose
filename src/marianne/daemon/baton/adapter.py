@@ -251,13 +251,38 @@ def extract_dependencies(config: Any) -> dict[int, list[int]]:
     )
 
     if yaml_deps:
-        # Use the YAML dependency graph.  Dependencies are stage-based:
-        # expand each stage-level dep to the sheet level.
+        # Check if dependencies are already expanded to sheet-level.
+        # The config model expands stage-level deps to sheet-level at parse
+        # time (SheetConfig._expand_fan_out) and clears fan_out={} to prevent
+        # re-expansion.  When that has happened, the dep keys are sheet nums
+        # (potentially > total_stages) and the values reference sheet nums.
+        # We must NOT re-expand already-expanded deps — that produces wrong
+        # results (GH#167 variant: double expansion).
+        fan_out = getattr(config.sheet, "fan_out", None)
+        already_expanded = not fan_out  # fan_out cleared → deps are sheet-level
+
+        if already_expanded:
+            _logger.debug(
+                "extract_dependencies.using_pre_expanded",
+                extra={
+                    "sheet_count": total,
+                    "dep_entries": len(yaml_deps),
+                },
+            )
+            # Deps are already sheet-level.  Ensure every sheet has an entry
+            # (sheets not in the map have no dependencies).
+            deps: dict[int, list[int]] = {}
+            for num in range(1, total + 1):
+                deps[num] = list(yaml_deps.get(num, []))
+            return deps
+
+        # Dependencies are still stage-level (fan_out not yet applied, or
+        # no fan-out declared).  Expand each stage-level dep to sheet level.
         _logger.debug(
-            "extract_dependencies.using_yaml_dag",
+            "extract_dependencies.expanding_stage_deps",
             extra={"stage_count": len(stage_sheets), "dep_edges": len(yaml_deps)},
         )
-        deps: dict[int, list[int]] = {}
+        deps = {}
         for stage, sheet_nums in stage_sheets.items():
             stage_deps: list[int] = yaml_deps.get(stage, [])
             # Expand: replace each dep-stage with ALL sheets in that stage
