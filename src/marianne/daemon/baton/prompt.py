@@ -17,7 +17,7 @@ the full 9-layer prompt assembly:
 The renderer is intentionally stateless — create one per job, call
 ``render()`` per sheet. No runner dependency, no mixin inheritance.
 
-This is the F-104 fix. Without it, ``use_baton: true`` produces raw
+This is the F-104 fix. Without it, the baton produces raw
 templates instead of rendered prompts.
 
 See: ``docs/plans/2026-03-26-baton-design.md`` — Prompt Assembly

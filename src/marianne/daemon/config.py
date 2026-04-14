@@ -276,6 +276,11 @@ class SemanticLearningConfig(BaseModel):
         return v
 
 
+# Deprecated DaemonConfig fields stripped during model validation.
+# Existing conductor.yaml files may still contain these after upgrades.
+_DAEMON_DEPRECATED_FIELDS: frozenset[str] = frozenset({"use_baton"})
+
+
 class DaemonConfig(BaseModel):
     """Top-level configuration for the Marianne conductor.
 
@@ -285,6 +290,27 @@ class DaemonConfig(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _strip_deprecated_fields(cls, data: dict[str, object]) -> dict[str, object]:
+        """Remove deprecated fields from raw config data with a warning.
+
+        Existing conductor.yaml files may still contain fields that have
+        been removed (e.g. ``use_baton``). The validator logs a warning and
+        strips them so ``extra="forbid"`` does not reject the config.
+        """
+        if not isinstance(data, dict):
+            return data
+        for field_name in _DAEMON_DEPRECATED_FIELDS:
+            if field_name in data:
+                _logger.warning(
+                    "deprecated_config_field",
+                    field=field_name,
+                    hint="This field is no longer used and will be ignored.",
+                )
+                data.pop(field_name)
+        return data
 
     socket: SocketConfig = Field(
         default_factory=SocketConfig,
@@ -385,12 +411,6 @@ class DaemonConfig(BaseModel):
         description="Pre-flight prompt analysis thresholds. "
         "Controls when prompts are warned or rejected based on estimated token count. "
         "Set higher for large-context instruments (1M+ context windows).",
-    )
-    use_baton: bool = Field(
-        default=True,
-        description="Enable the baton execution model (D-027, Phase 2). "
-        "Uses the event-driven BatonCore for multi-instrument support. "
-        "Set to false to fall back to the legacy monolithic runner.",
     )
     config_file: Path | None = Field(
         default=None,

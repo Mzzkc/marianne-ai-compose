@@ -233,9 +233,8 @@ class JobManager:
         # Initialized eagerly, started in start() after event bus.
         self._observer_recorder: ObserverRecorder | None = None
 
-        # Step 28: Baton adapter — feature-flagged replacement for monolithic execution.
-        # Lazy-initialized in start() when use_baton is True.
-        # Import deferred to avoid circular import at module level.
+        # Baton adapter — the execution engine for all jobs.
+        # Initialized in start(). Import deferred to avoid circular import.
         from marianne.daemon.baton.adapter import BatonAdapter
         self._baton_adapter: BatonAdapter | None = None
         self._baton_loop_task: asyncio.Task[Any] | None = None
@@ -355,54 +354,52 @@ class JobManager:
             )
             await self._observer_recorder.start(self._event_bus)
 
-        # Step 28: Initialize baton adapter when use_baton is enabled.
-        if self._config.use_baton:
-            from marianne.daemon.baton.adapter import BatonAdapter
-            from marianne.daemon.baton.backend_pool import BackendPool
-            from marianne.instruments.loader import load_all_profiles
-            from marianne.instruments.registry import InstrumentRegistry
+        # Initialize the baton execution engine.
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.instruments.loader import load_all_profiles
+        from marianne.instruments.registry import InstrumentRegistry
 
-            # Build instrument registry with all available profiles
-            profiles = load_all_profiles()
-            registry = InstrumentRegistry()
-            for profile in profiles.values():
-                registry.register(profile, override=True)
+        # Build instrument registry with all available profiles
+        profiles = load_all_profiles()
+        registry = InstrumentRegistry()
+        for profile in profiles.values():
+            registry.register(profile, override=True)
 
-            self._baton_adapter = BatonAdapter(
-                event_bus=self._event_bus,
-                max_concurrent_sheets=self._config.max_concurrent_sheets,
-                persist_callback=self._on_baton_persist,
-            )
-            self._baton_adapter.set_backend_pool(
-                BackendPool(registry, pgroup=self._pgroup)
-            )
+        self._baton_adapter = BatonAdapter(
+            event_bus=self._event_bus,
+            max_concurrent_sheets=self._config.max_concurrent_sheets,
+            persist_callback=self._on_baton_persist,
+        )
+        self._baton_adapter.set_backend_pool(
+            BackendPool(registry, pgroup=self._pgroup)
+        )
 
-            # Populate per-model concurrency from instrument profiles
-            for profile in profiles.values():
-                for model in profile.models:
-                    self._baton_adapter._baton.set_model_concurrency(
-                        profile.name, model.name, model.max_concurrent,
-                    )
+        # Populate per-model concurrency from instrument profiles
+        for profile in profiles.values():
+            for model in profile.models:
+                self._baton_adapter._baton.set_model_concurrency(
+                    profile.name, model.name, model.max_concurrent,
+                )
 
-            # Start the baton's event loop as a background task
-            self._baton_loop_task = asyncio.create_task(
-                self._baton_adapter.run(),
-                name="baton-loop",
-            )
-            _logger.info("manager.baton_adapter_started")
+        # Start the baton's event loop as a background task
+        self._baton_loop_task = asyncio.create_task(
+            self._baton_adapter.run(),
+            name="baton-loop",
+        )
+        _logger.info("manager.baton_adapter_started")
 
-            # Step 29: Recover paused orphans through the baton.
-            # Orphans were classified earlier — PAUSED ones are resumable.
-            await self._recover_baton_orphans()
+        # Recover paused orphans through the baton.
+        await self._recover_baton_orphans()
 
         _logger.info(
             "manager.started",
             scheduler_status="lazy_not_wired",
             scheduler_note="Phase 3 scheduler is lazily initialized and not "
-            "yet driving execution. Jobs run monolithically via JobService.",
+            "yet driving execution. Jobs run through the baton engine.",
             semantic_analyzer="active" if self._semantic_analyzer else "unavailable",
             observer_recorder="active" if self._observer_recorder else "unavailable",
-            baton_adapter="active" if self._baton_adapter else "disabled",
+            baton_adapter="active",
         )
 
     @property
@@ -2350,23 +2347,8 @@ class JobManager:
                 if self._observer_recorder is not None:
                     self._observer_recorder.unregister_job(job_id)
 
-    @staticmethod
-    def _map_job_status(final_status: Any) -> DaemonJobStatus:
-        """Map runner JobStatus to DaemonJobStatus."""
-        from marianne.core.checkpoint import JobStatus
-
-        if final_status == JobStatus.PAUSED:
-            return DaemonJobStatus.PAUSED
-        if final_status == JobStatus.FAILED:
-            return DaemonJobStatus.FAILED
-        return DaemonJobStatus.COMPLETED
-
     async def _run_job_task(self, job_id: str, request: JobRequest) -> None:
-        """Task coroutine that runs a single job.
-
-        Routes through the BatonAdapter when use_baton is enabled,
-        otherwise falls back to monolithic JobService.start_job().
-        """
+        """Task coroutine that runs a single job through the baton engine."""
 
         async def _execute() -> DaemonJobStatus:
             from marianne.core.config import JobConfig
@@ -2397,31 +2379,8 @@ class JobManager:
                     },
                 )
 
-            # Step 28: Route through baton when enabled
-            if self._baton_adapter is not None:
-                return await self._run_via_baton(job_id, config, request)
-
-            # Monolithic execution (default — pre-baton path)
-            summary = await self._checked_service.start_job(
-                config,
-                conductor_job_id=job_id,
-                fresh=request.fresh,
-                start_sheet=request.start_sheet,
-                self_healing=request.self_healing,
-                self_healing_auto_confirm=request.self_healing_auto_confirm,
-                dry_run=request.dry_run,
-                pause_event=self._pause_events.get(job_id),
-                config_path=str(request.config_path),
-                resource_checker=DaemonResourceChecker(self._monitor),
-            )
-
-            # Track whether this run actually completed new sheets
-            # (used by zero-work guard to prevent infinite self-chaining)
-            meta = self._job_meta.get(job_id)
-            if meta and summary.completed_sheets > 0:
-                meta.completed_new_work = True
-
-            return self._map_job_status(summary.final_status)
+            # Route through the baton execution engine.
+            return await self._run_via_baton(job_id, config, request)
 
         await self._run_managed_task(job_id, _execute())
 
@@ -2499,9 +2458,11 @@ class JobManager:
         # as SKIPPED so the baton doesn't dispatch them.
         if request.start_sheet and request.start_sheet > 1:
             from marianne.core.checkpoint import SheetStatus
-            for snum, sstate in initial_sheets.items():
+            for snum in list(initial_sheets):
                 if snum < request.start_sheet:
-                    sstate.status = SheetStatus.SKIPPED
+                    initial_sheets[snum] = initial_sheets[snum].model_copy(
+                        update={"status": SheetStatus.SKIPPED},
+                    )
 
         # Deregister stale baton state if this job_id was previously
         # registered (e.g., --fresh resubmit, or cancelled job restarted).
@@ -2717,10 +2678,11 @@ class JobManager:
         # in_progress sheets to PENDING (dead musicians), but the live
         # CheckpointState still has them as in_progress with stale times.
         from marianne.core.checkpoint import SheetStatus
-        for _sheet_num, sheet_state in checkpoint.sheets.items():
+        for sheet_num, sheet_state in checkpoint.sheets.items():
             if sheet_state.status == SheetStatus.IN_PROGRESS:
-                sheet_state.status = SheetStatus.PENDING
-                sheet_state.started_at = None
+                checkpoint.sheets[sheet_num] = sheet_state.model_copy(
+                    update={"status": SheetStatus.PENDING, "started_at": None},
+                )
         checkpoint.current_sheet = None
 
         try:
@@ -2808,41 +2770,10 @@ class JobManager:
         """Task coroutine that resumes a paused job."""
 
         async def _execute() -> DaemonJobStatus:
-            # Step 29: Route through baton when enabled
-            if self._baton_adapter is not None:
-                return await self._resume_via_baton(
-                    job_id, workspace, no_reload=no_reload,
-                )
-
-            meta = self._job_meta.get(job_id)
-            summary = await self._checked_service.resume_job(
-                job_id, workspace,
-                conductor_job_id=job_id,
-                config_path=meta.config_path if meta else None,
-                no_reload=no_reload,
-                pause_event=self._pause_events.get(job_id),
-                resource_checker=DaemonResourceChecker(self._monitor),
+            # Route through the baton execution engine.
+            return await self._resume_via_baton(
+                job_id, workspace, no_reload=no_reload,
             )
-
-            # Track whether this run actually completed new sheets
-            # (used by zero-work guard to prevent infinite self-chaining)
-            if meta and summary.completed_sheets > 0:
-                meta.completed_new_work = True
-
-            # Update in-memory JobMeta with any config-derived changes.
-            # The registry was already updated by JobService.resume_job()
-            # during reconciliation; this keeps the in-memory map in sync.
-            live = self._live_states.get(job_id)
-            if live and live.config_snapshot:
-                snap_ws = live.config_snapshot.get("workspace")
-                snap_cp = live.config_path
-                self.update_job_config_metadata(
-                    job_id,
-                    workspace=Path(snap_ws) if snap_ws else None,
-                    config_path=Path(snap_cp) if snap_cp else None,
-                )
-
-            return self._map_job_status(summary.final_status)
 
         await self._run_managed_task(
             job_id, _execute(),
@@ -3240,10 +3171,8 @@ class JobManager:
             if exc:
                 meta = self._job_meta.get(job_id)
                 if meta and meta.status == DaemonJobStatus.RUNNING:
-                    # _on_task_done is sync; set meta immediately, schedule
-                    # the async registry + live_state update via _set_job_status.
-                    meta.status = DaemonJobStatus.FAILED
-                    meta.error_message = str(exc)
+                    # Route through _set_job_status to update meta,
+                    # live state, and registry atomically.
                     update_task = asyncio.create_task(
                         self._set_job_status(
                             job_id, DaemonJobStatus.FAILED,

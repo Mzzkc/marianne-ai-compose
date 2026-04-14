@@ -23,8 +23,8 @@ The adapter is the bridge between the conductor (JobManager) and the baton
 6. **Rate limit callback bridge** (Surface 6)
    Musician extracts wait time → SheetAttemptResult → baton handles
 
-7. **Feature flag** (Surface 8)
-   DaemonConfig.use_baton controls whether the adapter is active
+7. **Lifecycle** (Surface 8)
+   The adapter is always initialized by the conductor at startup
 
 Design decisions:
 - Checkpoint is source of truth. Baton rebuilds from checkpoint on restart.
