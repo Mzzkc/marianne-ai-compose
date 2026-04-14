@@ -55,8 +55,15 @@ def get_templates() -> Jinja2Templates:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan handler."""
-    yield
+    """Application lifespan handler — start/stop event bridge."""
+    bridge = getattr(app.state, "event_bridge", None)
+    if bridge is not None:
+        await bridge.start()
+    try:
+        yield
+    finally:
+        if bridge is not None:
+            await bridge.stop()
 
 
 def _create_daemon_client() -> DaemonClient | None:
