@@ -560,28 +560,13 @@ class TestRecoveryDependencyPropagation:
 class TestF111RateLimitRegression:
     """Verify the F-111 fix in the parallel executor still holds."""
 
+    @pytest.mark.skip(reason="Runner removed — ParallelBatchResult no longer exists")
     def test_parallel_batch_result_preserves_exception_types(self) -> None:
-        """ParallelBatchResult.exceptions must preserve exception types."""
-        from marianne.execution.parallel import ParallelBatchResult
-        from marianne.execution.runner.lifecycle import RateLimitExhaustedError
-
-        error = RateLimitExhaustedError(
-            "Rate limit exceeded",
-            resume_after=time.time() + 300,
-        )
-
-        result = ParallelBatchResult(
-            completed=[],
-            failed=[1],
-            exceptions={1: error},
-        )
-
-        assert isinstance(result.exceptions[1], RateLimitExhaustedError)
-        assert result.exceptions[1].resume_after is not None
+        """Obsolete: ParallelBatchResult no longer exists."""
 
     def test_rate_limit_error_resume_after_survives_storage(self) -> None:
         """The resume_after timestamp must survive being stored and retrieved."""
-        from marianne.execution.runner.lifecycle import RateLimitExhaustedError
+        from marianne.core.errors import RateLimitExhaustedError
 
         future_time = time.time() + 600
         error = RateLimitExhaustedError(
@@ -611,8 +596,9 @@ class TestF111RateLimitRegression:
 # 7. F-113 Failure Propagation Regression (Parallel Executor)
 # =========================================================================
 
+@pytest.mark.skip(reason="Runner removed — ParallelExecutor no longer exists")
 class TestF113FailurePropagationRegression:
-    """Verify F-113 fix holds: failed deps are propagated in parallel executor."""
+    """Verify F-113 fix holds — obsolete after runner removal."""
 
     @staticmethod
     def _make_executor(deps: dict[int, list[int]], total: int = 5) -> Any:

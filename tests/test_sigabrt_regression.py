@@ -259,12 +259,12 @@ class TestKillOrphanedProcessAcceptsBaseException:
 
 
 
+@pytest.mark.skip(reason="Runner removed — ParallelExecutor no longer exists")
 class TestParallelCancellationNoCrash:
-    """Verify that when one parallel sheet dies (SIGABRT), the other sheets
-    are cancelled cleanly without RuntimeError: Event loop is closed.
+    """Verify parallel cancellation — obsolete after runner removal.
 
-    Previously, CancelledError bypassed cleanup in sibling tasks, leaving
-    asyncio transports open when the event loop closed.
+    The parallel executor has been removed. The baton handles parallel
+    execution differently.
     """
 
     @pytest.fixture

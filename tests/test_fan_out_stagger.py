@@ -14,7 +14,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from marianne.core.config.execution import ParallelConfig
-from marianne.execution.parallel import ParallelExecutionConfig, ParallelExecutor
+
+try:
+    from marianne.execution.parallel import ParallelExecutionConfig, ParallelExecutor
+except ImportError:
+    ParallelExecutionConfig = None  # type: ignore[assignment,misc]
+    ParallelExecutor = None  # type: ignore[assignment,misc]
+
+_skip_parallel = pytest.mark.skipif(
+    ParallelExecutor is None,
+    reason="execution.parallel removed (baton is sole executor)",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +82,7 @@ class TestParallelConfigStagger:
 # ---------------------------------------------------------------------------
 
 
+@_skip_parallel
 class TestParallelExecConfigStagger:
     """ParallelExecutionConfig dataclass must carry stagger_delay_ms."""
 
@@ -91,6 +102,7 @@ class TestParallelExecConfigStagger:
 # ---------------------------------------------------------------------------
 
 
+@_skip_parallel
 class TestParallelExecutorStagger:
     """ParallelExecutor must delay between sheet launches when stagger > 0."""
 

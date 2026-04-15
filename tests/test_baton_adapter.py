@@ -540,22 +540,23 @@ class TestJobCompletionDetection:
 
 
 class TestUseBatonFeatureFlag:
-    """The use_baton flag in DaemonConfig controls execution path."""
+    """The use_baton flag has been removed — baton is the only path."""
 
     def test_daemon_config_has_use_baton_field(self) -> None:
-        """DaemonConfig has a use_baton field defaulting to True (D-027)."""
+        """use_baton is no longer a DaemonConfig field."""
         from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()
-        assert hasattr(config, "use_baton")
-        assert config.use_baton is True
+        assert not hasattr(config, "use_baton")
 
-    def test_daemon_config_use_baton_true(self) -> None:
-        """use_baton can be set to True."""
+    def test_daemon_config_legacy_fields_rejected(self) -> None:
+        """YAML containing unknown fields is rejected by strict config."""
+        from pydantic import ValidationError
+
         from marianne.daemon.config import DaemonConfig
 
-        config = DaemonConfig(use_baton=True)
-        assert config.use_baton is True
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            DaemonConfig.model_validate({"unknown_legacy_field": True})
 
 
 # =========================================================================

@@ -312,102 +312,15 @@ prompt:
 class TestF048CostTrackingWithoutLimits:
     """F-048: Cost should be tracked even when cost limits are disabled.
 
-    The cost tracking and cost limit enforcement are currently bundled in
-    _enforce_cost_limits(). When cost_limits.enabled=False, the entire
-    method returns early — skipping _track_cost(). This means
-    total_estimated_cost is always 0.00 for jobs without cost limits.
-
-    The fix: always track costs, only gate limit enforcement.
+    The runner's CostMixin was removed — cost tracking now lives in the
+    baton's Musician. These tests validated the runner's implementation
+    and are no longer applicable.
     """
 
+    @pytest.mark.skip(reason="Runner removed — cost tracking now in baton Musician")
     def test_enforce_cost_limits_tracks_cost_when_disabled(self) -> None:
-        """The _enforce_cost_limits method should track costs even with limits off.
+        """Obsolete: runner's SheetExecutionMixin no longer exists."""
 
-        Verifies the fix by inspecting the source code structure:
-        the await _track_cost call must appear BEFORE the cost_limits.enabled return.
-        """
-        import inspect
-        from marianne.execution.runner.sheet import SheetExecutionMixin
-
-        source = inspect.getsource(SheetExecutionMixin._enforce_cost_limits)
-        # Strip docstring — only look at executable code
-        # Find the closing triple-quote of the docstring
-        lines = source.split("\n")
-        code_lines = []
-        in_docstring = False
-        docstring_done = False
-        for line in lines:
-            stripped = line.strip()
-            if not docstring_done:
-                if '"""' in stripped:
-                    if in_docstring:
-                        docstring_done = True
-                    elif stripped.count('"""') == 1:
-                        in_docstring = True
-                    else:
-                        # Single-line docstring
-                        docstring_done = True
-                continue
-            code_lines.append(line)
-        code_only = "\n".join(code_lines)
-
-        # In the executable code, await self._track_cost must appear
-        # BEFORE if not self.config.cost_limits.enabled
-        track_pos = code_only.find("await self._track_cost")
-        enabled_check_pos = code_only.find("cost_limits.enabled")
-
-        assert track_pos != -1, "_track_cost call not found in _enforce_cost_limits code"
-        assert enabled_check_pos != -1, "cost_limits.enabled check not found in code"
-        assert track_pos < enabled_check_pos, (
-            "_track_cost must be called BEFORE checking cost_limits.enabled. "
-            "Cost tracking should always happen; only enforcement is gated."
-        )
-
-    @pytest.mark.asyncio
+    @pytest.mark.skip(reason="Runner removed — cost tracking now in baton Musician")
     async def test_cost_tracked_in_state_when_limits_disabled(self) -> None:
-        """Integration: cost tracking populates state even with limits off."""
-        from marianne.backends.base import ExecutionResult
-        from marianne.core.checkpoint import CheckpointState, SheetState
-        from marianne.core.config.job import CostLimitConfig, JobConfig
-        from marianne.execution.runner.cost import CostMixin
-
-        # Create a minimal CostMixin with disabled cost limits
-        mixin = CostMixin.__new__(CostMixin)
-        mixin.config = MagicMock(spec=JobConfig)
-        mixin.config.cost_limits = CostLimitConfig(enabled=False)
-        mixin.config.cost_limits.cost_per_1k_input_tokens = 0.003
-        mixin.config.cost_limits.cost_per_1k_output_tokens = 0.015
-        mixin._circuit_breaker = None
-        mixin._summary = None
-        mixin._logger = MagicMock(spec=["warning", "info", "debug", "error"])
-        mixin.console = MagicMock(spec=["print", "log"])
-        mixin._fire_event = AsyncMock()
-
-        # Create a mock result with tokens
-        result = MagicMock(spec=ExecutionResult)
-        result.input_tokens = 1000
-        result.output_tokens = 500
-        result.tokens_used = None
-        result.stdout = ""
-        result.stderr = ""
-
-        # Create real state objects
-        sheet_state = MagicMock(spec=SheetState)
-        sheet_state.input_tokens = None
-        sheet_state.output_tokens = None
-        sheet_state.estimated_cost = None
-
-        state = MagicMock(spec=CheckpointState)
-        state.total_input_tokens = 0
-        state.total_output_tokens = 0
-        state.total_estimated_cost = 0.0
-
-        # Call _track_cost directly — this should always work
-        await mixin._track_cost(result, sheet_state, state)
-
-        # Verify state was updated with cost data
-        assert state.total_input_tokens == 1000
-        assert state.total_output_tokens == 500
-        assert state.total_estimated_cost > 0, (
-            "total_estimated_cost should be > 0 after tracking"
-        )
+        """Obsolete: runner's CostMixin no longer exists."""

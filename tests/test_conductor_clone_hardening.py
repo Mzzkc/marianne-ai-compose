@@ -116,14 +116,6 @@ class TestCloneConfigInheritance:
         clone = build_clone_config("test", base_config=base)
         assert clone.max_concurrent_jobs == 10
 
-    def test_use_baton_preserved(self) -> None:
-        """use_baton flag from base config survives clone."""
-        from marianne.daemon.clone import build_clone_config
-
-        base = DaemonConfig(use_baton=True)
-        clone = build_clone_config("test", base_config=base)
-        assert clone.use_baton is True
-
     def test_max_concurrent_sheets_preserved(self) -> None:
         """max_concurrent_sheets from base config survives clone."""
         from marianne.daemon.clone import build_clone_config

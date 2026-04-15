@@ -347,9 +347,9 @@ class TestF118ValidationContextGap:
 # ─── F-113: Failed dependencies as "done" ──────────────────────────
 
 
+@pytest.mark.skip(reason="Runner removed — ParallelExecutor no longer exists")
 class TestF113FailedDepsAsDone:
-    """Permanently failed sheets should NOT unblock downstream sheets.
-    A failed dependency is not a completed dependency."""
+    """Permanently failed sheets — obsolete after runner removal."""
 
     def test_permanently_failed_sheets_unblock_downstream(self) -> None:
         """CURRENT BUG: failed sheets are in done_for_dag, unblocking
@@ -419,22 +419,13 @@ class TestF111RateLimitLostInParallel:
     """The parallel executor catches RateLimitExhaustedError as generic
     exception and stores only the message string. Jobs FAIL not PAUSE."""
 
+    @pytest.mark.skip(reason="Runner removed — ParallelBatchResult no longer exists")
     def test_error_details_loses_exception_type(self) -> None:
-        """ParallelBatchResult.error_details stores string, not exception."""
-        from marianne.execution.parallel import ParallelBatchResult
-
-        result = ParallelBatchResult(sheets=[1, 2])
-        result.failed.append(1)
-        result.error_details[1] = (
-            "RateLimitExhaustedError: Exceeded maximum rate limit waits (5)"
-        )
-
-        assert isinstance(result.error_details[1], str)
-        assert not hasattr(result.error_details[1], "resume_after")
+        """Obsolete: ParallelBatchResult no longer exists."""
 
     def test_lifecycle_raises_fatal_not_rate_limit(self) -> None:
         """lifecycle.py:1169 raises FatalError, not RateLimitExhaustedError."""
-        from marianne.execution.runner.models import (
+        from marianne.core.errors import (
             FatalError,
             RateLimitExhaustedError,
         )
@@ -451,7 +442,7 @@ class TestF111RateLimitLostInParallel:
         """RateLimitExhaustedError carries resume_after data that is lost."""
         from datetime import UTC, datetime, timedelta
 
-        from marianne.execution.runner.models import RateLimitExhaustedError
+        from marianne.core.errors import RateLimitExhaustedError
 
         resume_at = datetime.now(UTC) + timedelta(seconds=3600)
         err = RateLimitExhaustedError(

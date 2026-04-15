@@ -13,11 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from marianne.core.config.backend import BackendConfig
 from marianne.core.config.execution import PreflightConfig
-from marianne.core.logging import get_logger
 from marianne.daemon.keyring_config import KeyringConfig
 from marianne.daemon.profiler.models import ProfilerConfig
-
-_logger = get_logger("daemon.config")
 
 
 class McpServerEntry(BaseModel):
@@ -276,11 +273,6 @@ class SemanticLearningConfig(BaseModel):
         return v
 
 
-# Deprecated DaemonConfig fields stripped during model validation.
-# Existing conductor.yaml files may still contain these after upgrades.
-_DAEMON_DEPRECATED_FIELDS: frozenset[str] = frozenset({"use_baton"})
-
-
 class DaemonConfig(BaseModel):
     """Top-level configuration for the Marianne conductor.
 
@@ -290,27 +282,6 @@ class DaemonConfig(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode="before")
-    @classmethod
-    def _strip_deprecated_fields(cls, data: dict[str, object]) -> dict[str, object]:
-        """Remove deprecated fields from raw config data with a warning.
-
-        Existing conductor.yaml files may still contain fields that have
-        been removed (e.g. ``use_baton``). The validator logs a warning and
-        strips them so ``extra="forbid"`` does not reject the config.
-        """
-        if not isinstance(data, dict):
-            return data
-        for field_name in _DAEMON_DEPRECATED_FIELDS:
-            if field_name in data:
-                _logger.warning(
-                    "deprecated_config_field",
-                    field=field_name,
-                    hint="This field is no longer used and will be ignored.",
-                )
-                data.pop(field_name)
-        return data
 
     socket: SocketConfig = Field(
         default_factory=SocketConfig,

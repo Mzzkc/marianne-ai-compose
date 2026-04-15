@@ -1,7 +1,6 @@
 """Execution layer for Marianne jobs.
 
-Contains validation, retry logic, circuit breaker, adaptive retry strategy,
-and the main runner.
+Contains validation, retry logic, circuit breaker, and adaptive retry strategy.
 """
 
 from marianne.core.errors.exceptions import FatalError

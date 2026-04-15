@@ -14,7 +14,7 @@ import pytest
 from rich.console import Console
 
 from marianne.core.checkpoint import JobStatus
-from marianne.execution.runner.models import RunSummary
+from marianne.core.summary import RunSummary
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────

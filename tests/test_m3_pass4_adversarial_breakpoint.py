@@ -458,32 +458,13 @@ class TestResumeViaBatonNoReloadFallback:
 class TestStaggerTimingBoundary:
     """ParallelExecutor stagger behavior at boundaries."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.skip(reason="Runner removed — ParallelExecutionConfig no longer exists")
     async def test_zero_stagger_no_sleep(self) -> None:
-        """stagger_delay_ms=0 must not call asyncio.sleep()."""
-        from marianne.execution.parallel import ParallelExecutionConfig
+        """Obsolete: ParallelExecutionConfig no longer exists."""
 
-        config = ParallelExecutionConfig(stagger_delay_ms=0)
-
-        # Verify from code: i > 0 and stagger_seconds > 0
-        # When stagger_delay_ms=0, stagger_seconds=0.0, guard is False
-        assert config.stagger_delay_ms == 0
-        stagger_seconds = config.stagger_delay_ms / 1000.0
-        assert stagger_seconds == 0.0
-        assert not (True and stagger_seconds > 0)  # Guard is False
-
-    @pytest.mark.asyncio
+    @pytest.mark.skip(reason="Runner removed — ParallelExecutionConfig no longer exists")
     async def test_stagger_with_single_sheet(self) -> None:
-        """Single sheet batch must not sleep regardless of stagger_delay_ms."""
-        from marianne.execution.parallel import ParallelExecutionConfig
-
-        config = ParallelExecutionConfig(stagger_delay_ms=5000)
-
-        # For a single sheet, i=0 always, so "i > 0" is False → no sleep
-        stagger_seconds = config.stagger_delay_ms / 1000.0
-        assert stagger_seconds == 5.0
-        # First sheet: i=0, guard "i > 0" is False
-        assert not (0 > 0 and stagger_seconds > 0)
+        """Obsolete: ParallelExecutionConfig no longer exists."""
 
     def test_stagger_boundary_value_4999(self) -> None:
         """stagger_delay_ms=4999 (just under max 5000) is valid."""
@@ -517,15 +498,9 @@ class TestStaggerTimingBoundary:
         with pytest.raises(ValidationError):
             ParallelConfig(stagger_delay_ms=-1)
 
+    @pytest.mark.skip(reason="Runner removed — ParallelExecutionConfig no longer exists")
     def test_stagger_converts_to_seconds_correctly(self) -> None:
-        """Milliseconds-to-seconds conversion is exact for typical values."""
-        from marianne.execution.parallel import ParallelExecutionConfig
-
-        config = ParallelExecutionConfig(stagger_delay_ms=150)
-        assert config.stagger_delay_ms / 1000.0 == 0.15
-
-        config2 = ParallelExecutionConfig(stagger_delay_ms=1)
-        assert config2.stagger_delay_ms / 1000.0 == 0.001
+        """Obsolete: ParallelExecutionConfig no longer exists."""
 
 
 # ---------------------------------------------------------------------------

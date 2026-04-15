@@ -614,112 +614,31 @@ class TestCompletedNewWork:
 # =========================================================================
 
 
+@pytest.mark.skip(reason="Runner removed — build_semantic_context_tags no longer exists")
 class TestSemanticContextTags:
-    """build_semantic_context_tags() must produce tags that match stored format.
+    """build_semantic_context_tags() — obsolete after runner removal.
 
-    F-009/F-144: Query tags (sheet:N, job:X) had ZERO overlap with stored
-    tags (validation:TYPE, retry:effective). 91% of 28K+ patterns never applied.
+    The runner's PatternsMixin and build_semantic_context_tags have been
+    removed. Pattern management is now in the baton.
     """
 
     def test_empty_validations_produce_broad_tags_only(self) -> None:
-        """Config with no validations should still produce 3 broad tags."""
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        config = MagicMock()
-        config.validations = []
-
-        tags = build_semantic_context_tags(config)
-
-        assert "success:first_attempt" in tags
-        assert "retry:effective" in tags
-        assert "completion:used" in tags
-        assert len(tags) == 3
+        """Obsolete."""
 
     def test_validation_types_become_tags(self) -> None:
-        """Each validation rule type becomes a validation:TYPE tag."""
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        rule1 = MagicMock()
-        rule1.type = "file_exists"
-        rule2 = MagicMock()
-        rule2.type = "command_succeeds"
-
-        config = MagicMock()
-        config.validations = [rule1, rule2]
-
-        tags = build_semantic_context_tags(config)
-
-        assert "validation:file_exists" in tags
-        assert "validation:command_succeeds" in tags
+        """Obsolete."""
 
     def test_duplicate_validation_types_deduplicated(self) -> None:
-        """Two rules with same type should produce only one tag."""
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        rule1 = MagicMock()
-        rule1.type = "file_exists"
-        rule2 = MagicMock()
-        rule2.type = "file_exists"
-
-        config = MagicMock()
-        config.validations = [rule1, rule2]
-
-        tags = build_semantic_context_tags(config)
-
-        validation_tags = [t for t in tags if t.startswith("validation:")]
-        assert len(validation_tags) == 1
-        assert validation_tags[0] == "validation:file_exists"
+        """Obsolete."""
 
     def test_tags_match_stored_format(self) -> None:
-        """Generated tags must use colon-separated format matching storage.
-
-        The stored format is "validation:TYPE", "retry:effective", etc.
-        NOT "validation_TYPE" or "validation-TYPE" or "validation TYPE".
-        """
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        rule = MagicMock()
-        rule.type = "contains_text"
-        config = MagicMock()
-        config.validations = [rule]
-
-        tags = build_semantic_context_tags(config)
-
-        for tag in tags:
-            assert ":" in tag, f"Tag '{tag}' missing colon separator"
-            parts = tag.split(":")
-            assert len(parts) == 2, f"Tag '{tag}' has unexpected format"
-            assert parts[0] != "", f"Tag '{tag}' has empty namespace"
-            assert parts[1] != "", f"Tag '{tag}' has empty value"
+        """Obsolete."""
 
     def test_no_positional_tags_in_output(self) -> None:
-        """Output must NOT contain old-format positional tags (sheet:N, job:X).
-
-        This was the entire root cause of F-009.
-        """
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        rule = MagicMock()
-        rule.type = "file_exists"
-        config = MagicMock()
-        config.validations = [rule]
-
-        tags = build_semantic_context_tags(config)
-
-        for tag in tags:
-            assert not tag.startswith("sheet:"), f"Positional tag found: {tag}"
-            assert not tag.startswith("job:"), f"Positional tag found: {tag}"
+        """Obsolete."""
 
     def test_broad_tags_always_present(self) -> None:
-        """Broad category tags are always present regardless of validation config."""
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        config = MagicMock()
-        config.validations = []
-
-        tags = build_semantic_context_tags(config)
-        required = {"success:first_attempt", "retry:effective", "completion:used"}
-        assert required.issubset(set(tags))
+        """Obsolete."""
 
 
 # =========================================================================

@@ -101,7 +101,7 @@ async def _try_daemon_submit(
 ) -> tuple[bool, str | None]:
     """Attempt to submit a chained job through the daemon IPC.
 
-    Lazy imports avoid circular deps (hooks -> daemon -> runner -> hooks).
+    Lazy imports avoid circular deps (hooks -> daemon -> hooks).
 
     Error handling strategy:
     - Daemon unavailable (DaemonNotRunningError, OSError): fall back to Popen.
@@ -111,7 +111,7 @@ async def _try_daemon_submit(
     - Other DaemonError subclasses: fall back with warning (protocol issues).
     - Non-daemon exceptions: re-raise (programming bugs must not be swallowed).
     """
-    # Lazy imports — avoid circular deps (hooks -> daemon -> runner -> hooks)
+    # Lazy imports — avoid circular deps (hooks -> daemon -> hooks)
     from marianne.daemon.detect import _resolve_socket_path, is_daemon_available
     from marianne.daemon.exceptions import (
         DaemonError,

@@ -642,81 +642,8 @@ prompt:
 # =============================================================================
 
 
-class TestRunnerIntegration:
-    """Tests for DAG integration with JobRunner."""
-
-    def test_runner_builds_dag_from_config(self) -> None:
-        """JobRunner builds DAG when dependencies configured."""
-        from unittest.mock import MagicMock
-
-        from marianne.core.config import JobConfig
-        from marianne.execution.runner import JobRunner
-
-        config = JobConfig.from_yaml_string("""
-name: test-job
-sheet:
-  size: 1
-  total_items: 4
-  dependencies:
-    2: [1]
-    3: [1]
-    4: [2, 3]
-prompt:
-  template: "Process sheet {{ sheet_num }}"
-""")
-
-        # Create minimal mocks
-        backend = MagicMock()
-        state_backend = MagicMock()
-
-        runner = JobRunner(config, backend, state_backend)
-
-        assert runner.dependency_dag is not None
-        assert runner.dependency_dag.total_sheets == 4
-        assert runner.dependency_dag.has_dependencies()
-
-    def test_runner_no_dag_without_dependencies(self) -> None:
-        """JobRunner has no DAG when no dependencies configured."""
-        from unittest.mock import MagicMock
-
-        from marianne.core.config import JobConfig
-        from marianne.execution.runner import JobRunner
-
-        config = JobConfig.from_yaml_string("""
-name: test-job
-sheet:
-  size: 1
-  total_items: 4
-prompt:
-  template: "Process sheet {{ sheet_num }}"
-""")
-
-        backend = MagicMock()
-        state_backend = MagicMock()
-
-        runner = JobRunner(config, backend, state_backend)
-
-        assert runner.dependency_dag is None
-
-    def test_runner_raises_on_invalid_dag(self) -> None:
-        """Out-of-range dependency is caught at config parse time."""
-        from pydantic import ValidationError
-
-        from marianne.core.config import JobConfig
-
-        # Out-of-range dependency (sheet 10 doesn't exist in a 3-sheet job)
-        # is now caught by SheetConfig.validate_dependency_range at parse time.
-        with pytest.raises(ValidationError, match="out of range"):
-            JobConfig.from_yaml_string("""
-name: test-job
-sheet:
-  size: 1
-  total_items: 3
-  dependencies:
-    2: [10]  # Sheet 10 doesn't exist
-prompt:
-  template: "Process sheet {{ sheet_num }}"
-""")
+# TestRunnerIntegration removed — tested JobRunner DAG integration
+# which no longer exists (runner package deleted).
 
 
 # =============================================================================

@@ -1,35 +1,26 @@
-"""Tests for D-027: use_baton defaults to True.
+"""Tests for D-027: baton is the only execution model.
 
-The baton is the conductor's event-driven execution model.
-D-027 makes it the default, replacing the legacy monolithic runner.
-
-TDD: Tests define the contract. Implementation fulfills it.
+The legacy runner has been fully removed. The baton is the sole execution
+path and the old feature flag no longer exists in any form.
 """
+
+import pytest
+from pydantic import ValidationError
 
 from marianne.daemon.config import DaemonConfig
 
 
 class TestBatonDefault:
-    """D-027: use_baton must default to True (Phase 2 of baton transition)."""
+    """D-027: baton is the only execution path — no feature flag needed."""
 
-    def test_use_baton_defaults_to_true(self) -> None:
-        """DaemonConfig.use_baton defaults to True."""
+    def test_no_legacy_feature_flag(self) -> None:
+        """DaemonConfig has no legacy runner feature flag."""
         config = DaemonConfig()
-        assert config.use_baton is True, (
-            "D-027: use_baton must default to True. "
-            "The baton IS how the conductor runs."
-        )
+        # No runner-related fields should exist
+        field_names = set(config.model_fields.keys())
+        assert "use_baton" not in field_names
 
-    def test_use_baton_can_be_disabled(self) -> None:
-        """Explicit use_baton: false remains supported as fallback."""
-        config = DaemonConfig(use_baton=False)
-        assert config.use_baton is False
-
-    def test_use_baton_in_yaml_override(self) -> None:
-        """YAML config can override use_baton to False for legacy fallback."""
-        import yaml
-
-        yaml_str = "use_baton: false"
-        data = yaml.safe_load(yaml_str)
-        config = DaemonConfig(**data)
-        assert config.use_baton is False
+    def test_unknown_fields_rejected(self) -> None:
+        """DaemonConfig rejects unknown fields (extra='forbid')."""
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            DaemonConfig(**{"unknown_field": True})

@@ -33,6 +33,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import hypothesis.strategies as st
+import pytest
 from hypothesis import HealthCheck, assume, given, settings
 
 from marianne.daemon.baton.state import (
@@ -665,41 +666,27 @@ class TestBackpressureCriticalExclusivity:
 
 
 class TestUseBatonDefaultTotality:
-    """DaemonConfig() always has use_baton=True.
+    """DaemonConfig() use_baton field has been removed.
 
-    Invariant: The default value of use_baton is True (D-027).
-    Explicit False overrides it. The field always exists.
+    The baton is now the only execution path — the feature flag is gone.
+    These tests verify the deprecated field is stripped gracefully.
     """
 
-    def test_default_is_true(self) -> None:
-        """Default construction → use_baton=True."""
+    def test_use_baton_field_removed(self) -> None:
+        """use_baton is no longer a DaemonConfig field."""
         from marianne.daemon.config import DaemonConfig
 
         config = DaemonConfig()
-        assert config.use_baton is True
+        assert not hasattr(config, "use_baton")
 
-    @given(value=st.booleans())
-    @settings(max_examples=10)
-    def test_explicit_override(self, value: bool) -> None:
-        """Explicit value is respected."""
+    def test_legacy_fields_in_yaml_rejected(self) -> None:
+        """YAML containing unknown fields is rejected by strict config."""
+        from pydantic import ValidationError
+
         from marianne.daemon.config import DaemonConfig
 
-        config = DaemonConfig(use_baton=value)
-        assert config.use_baton is value
-
-    def test_from_yaml_without_field(self) -> None:
-        """YAML that omits use_baton still gets True."""
-        from marianne.daemon.config import DaemonConfig
-
-        config = DaemonConfig.model_validate({})
-        assert config.use_baton is True
-
-    def test_from_yaml_with_false(self) -> None:
-        """YAML with use_baton: false gets False."""
-        from marianne.daemon.config import DaemonConfig
-
-        config = DaemonConfig.model_validate({"use_baton": False})
-        assert config.use_baton is False
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            DaemonConfig.model_validate({"unknown_legacy_field": True})
 
 
 # =============================================================================

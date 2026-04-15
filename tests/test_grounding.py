@@ -381,7 +381,7 @@ class TestGroundingDecisionContext:
 
     def test_disabled_context(self):
         """Test disabled() factory method."""
-        from marianne.execution.runner import GroundingDecisionContext
+        from marianne.core.summary import GroundingDecisionContext
 
         ctx = GroundingDecisionContext.disabled()
         assert ctx.passed is True
@@ -391,7 +391,7 @@ class TestGroundingDecisionContext:
 
     def test_from_empty_results(self):
         """Test from_results with empty list."""
-        from marianne.execution.runner import GroundingDecisionContext
+        from marianne.core.summary import GroundingDecisionContext
 
         ctx = GroundingDecisionContext.from_results([])
         assert ctx.passed is True
@@ -400,7 +400,7 @@ class TestGroundingDecisionContext:
 
     def test_from_single_passing_result(self):
         """Test from_results with single passing result."""
-        from marianne.execution.runner import GroundingDecisionContext
+        from marianne.core.summary import GroundingDecisionContext
 
         result = GroundingResult(
             passed=True,
@@ -418,7 +418,7 @@ class TestGroundingDecisionContext:
 
     def test_from_single_failing_result(self):
         """Test from_results with single failing result."""
-        from marianne.execution.runner import GroundingDecisionContext
+        from marianne.core.summary import GroundingDecisionContext
 
         result = GroundingResult(
             passed=False,
@@ -438,7 +438,7 @@ class TestGroundingDecisionContext:
 
     def test_from_mixed_results(self):
         """Test from_results with mixed pass/fail."""
-        from marianne.execution.runner import GroundingDecisionContext
+        from marianne.core.summary import GroundingDecisionContext
 
         results = [
             GroundingResult(passed=True, hook_name="hook1", confidence=0.9),
@@ -455,7 +455,7 @@ class TestGroundingDecisionContext:
 
     def test_escalation_flag_propagates(self):
         """Test that should_escalate propagates from any result."""
-        from marianne.execution.runner import GroundingDecisionContext
+        from marianne.core.summary import GroundingDecisionContext
 
         results = [
             GroundingResult(passed=True, hook_name="hook1"),
@@ -469,7 +469,7 @@ class TestGroundingDecisionContext:
 
     def test_multiple_recovery_guidance_combined(self):
         """Test that recovery guidance from multiple failures is combined."""
-        from marianne.execution.runner import GroundingDecisionContext
+        from marianne.core.summary import GroundingDecisionContext
 
         results = [
             GroundingResult(
@@ -488,178 +488,3 @@ class TestGroundingDecisionContext:
         assert ctx.recovery_guidance is not None
         assert "Fix A" in ctx.recovery_guidance
         assert "Fix B" in ctx.recovery_guidance
-
-
-class TestGroundingCompletionIntegration:
-    """Tests for grounding→completion mode integration.
-
-    v10 Evolution: Verifies grounding confidence affects decision-making.
-    """
-
-    def test_decide_next_action_without_grounding(self):
-        """Test _decide_next_action works without grounding context."""
-        from unittest.mock import MagicMock
-
-        from marianne.execution.runner import JobRunner
-
-        # Create minimal JobRunner mock
-        config = MagicMock()
-        config.retry.completion_threshold_percent = 60.0
-        config.retry.max_completion_attempts = 3
-        config.learning.high_confidence_threshold = 0.8
-        config.learning.min_confidence_threshold = 0.3
-        config.learning.escalation_enabled = False
-
-        validation_result = MagicMock()
-        validation_result.aggregate_confidence = 0.75
-        validation_result.executed_pass_percentage = 70.0
-        validation_result.get_semantic_summary.return_value = {}
-        validation_result.get_actionable_hints.return_value = []
-
-        runner = MagicMock(spec=JobRunner)
-        runner.config = config
-        runner.escalation_handler = None
-
-        # Call the method directly (not through mock)
-        mode, reason, hints = JobRunner._decide_next_action(
-            runner,
-            validation_result=validation_result,
-            normal_attempts=1,
-            completion_attempts=0,
-            grounding_context=None,
-        )
-
-        # Should work without grounding
-        assert mode is not None
-        assert reason is not None
-
-    def test_decide_next_action_with_grounding_adjusts_confidence(self):
-        """Test grounding confidence adjusts overall confidence."""
-        from unittest.mock import MagicMock
-
-        from marianne.execution.runner import GroundingDecisionContext, JobRunner
-
-        config = MagicMock()
-        config.retry.completion_threshold_percent = 60.0
-        config.retry.max_completion_attempts = 3
-        config.learning.high_confidence_threshold = 0.8
-        config.learning.min_confidence_threshold = 0.3
-        config.learning.escalation_enabled = False
-
-        # High validation confidence (0.85) but low grounding confidence (0.4)
-        validation_result = MagicMock()
-        validation_result.aggregate_confidence = 0.85
-        validation_result.executed_pass_percentage = 80.0
-        validation_result.get_semantic_summary.return_value = {}
-        validation_result.get_actionable_hints.return_value = []
-
-        grounding_ctx = GroundingDecisionContext(
-            passed=False,
-            message="Checksum mismatch",
-            confidence=0.4,
-            hooks_executed=1,
-        )
-
-        runner = MagicMock(spec=JobRunner)
-        runner.config = config
-        runner.escalation_handler = None
-
-        mode, reason, hints = JobRunner._decide_next_action(
-            runner,
-            validation_result=validation_result,
-            normal_attempts=1,
-            completion_attempts=0,
-            grounding_context=grounding_ctx,
-        )
-
-        # Combined confidence = 0.85 * 0.7 + 0.4 * 0.3 = 0.715
-        # Should include grounding info in reason
-        assert "grounding" in reason.lower()
-
-    def test_decide_next_action_grounding_triggers_escalation(self):
-        """Test grounding should_escalate triggers escalation mode."""
-        from unittest.mock import MagicMock
-
-        from marianne.execution.runner import (
-            GroundingDecisionContext,
-            JobRunner,
-            SheetExecutionMode,
-        )
-
-        config = MagicMock()
-        config.retry.completion_threshold_percent = 60.0
-        config.retry.max_completion_attempts = 3
-        config.learning.high_confidence_threshold = 0.8
-        config.learning.min_confidence_threshold = 0.3
-        config.learning.escalation_enabled = True
-
-        validation_result = MagicMock()
-        validation_result.aggregate_confidence = 0.85
-        validation_result.executed_pass_percentage = 80.0
-        validation_result.get_semantic_summary.return_value = {}
-        validation_result.get_actionable_hints.return_value = []
-
-        grounding_ctx = GroundingDecisionContext(
-            passed=False,
-            message="Critical grounding failure",
-            confidence=0.5,
-            should_escalate=True,
-            hooks_executed=1,
-        )
-
-        runner = MagicMock(spec=JobRunner)
-        runner.config = config
-        runner.escalation_handler = MagicMock()  # Handler available
-
-        mode, reason, hints = JobRunner._decide_next_action(
-            runner,
-            validation_result=validation_result,
-            normal_attempts=1,
-            completion_attempts=0,
-            grounding_context=grounding_ctx,
-        )
-
-        assert mode == SheetExecutionMode.ESCALATE
-        assert "escalation" in reason.lower()
-
-    def test_grounding_recovery_guidance_in_hints(self):
-        """Test grounding recovery guidance is included in hints."""
-        from unittest.mock import MagicMock
-
-        from marianne.execution.runner import GroundingDecisionContext, JobRunner
-
-        config = MagicMock()
-        config.retry.completion_threshold_percent = 60.0
-        config.retry.max_completion_attempts = 3
-        config.learning.high_confidence_threshold = 0.8
-        config.learning.min_confidence_threshold = 0.3
-        config.learning.escalation_enabled = False
-
-        validation_result = MagicMock()
-        validation_result.aggregate_confidence = 0.75
-        validation_result.executed_pass_percentage = 70.0
-        validation_result.get_semantic_summary.return_value = {}
-        validation_result.get_actionable_hints.return_value = ["existing hint"]
-
-        grounding_ctx = GroundingDecisionContext(
-            passed=False,
-            message="Hash mismatch",
-            confidence=0.6,
-            recovery_guidance="Update expected checksums",
-            hooks_executed=1,
-        )
-
-        runner = MagicMock(spec=JobRunner)
-        runner.config = config
-        runner.escalation_handler = None
-
-        mode, reason, hints = JobRunner._decide_next_action(
-            runner,
-            validation_result=validation_result,
-            normal_attempts=1,
-            completion_attempts=0,
-            grounding_context=grounding_ctx,
-        )
-
-        # Recovery guidance should be in hints
-        assert any("Grounding" in h and "Update expected checksums" in h for h in hints)

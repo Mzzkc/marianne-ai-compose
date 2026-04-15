@@ -346,7 +346,10 @@ class TestResumeCommand:
             ["resume", "nonexistent-job"],
         )
         assert result.exit_code == 1
-        assert "not found" in result.stdout.lower()
+        # Either "not found" (conductor running but job missing) or
+        # "not running" (conductor not available) are valid failures.
+        output = result.stdout.lower()
+        assert "not found" in output or "not running" in output
 
 
 class TestFindJobState:

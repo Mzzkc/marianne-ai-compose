@@ -22,7 +22,10 @@ from marianne.core.config.workspace import IsolationConfig
 import pytest
 
 from marianne.core.checkpoint import CheckpointState
-from marianne.execution.parallel import ParallelBatchResult
+try:
+    from marianne.execution.parallel import ParallelBatchResult
+except ImportError:
+    ParallelBatchResult = None  # type: ignore[assignment,misc]
 from marianne.execution.synthesizer import (
     ResultSynthesizer,
     SynthesisConfig,
@@ -571,6 +574,7 @@ class TestCheckpointStateSynthesis:
 # =============================================================================
 
 
+@pytest.mark.skipif(ParallelBatchResult is None, reason="ParallelBatchResult removed with runner")
 class TestParallelBatchResultSynthesis:
     """Tests for ParallelBatchResult synthesis-related fields."""
 
@@ -668,26 +672,14 @@ class TestSynthesizerErrorHandling:
 
 
 class TestSynthesizerRunnerIntegration:
-    """Tests for synthesizer integration with runner."""
+    """Tests for synthesizer integration with runner.
 
-    @pytest.mark.asyncio
+    The runner has been removed — synthesis is now handled by the baton.
+    """
+
+    @pytest.mark.skip(reason="Runner removed — synthesis now in baton")
     async def test_runner_synthesize_batch_outputs(self):
-        """Test _synthesize_batch_outputs method integration."""
-        from marianne.execution.runner import JobRunner
-
-        # This is a smoke test to ensure the method exists and can be called
-        # Full integration requires backend setup
-
-        # Create minimal mocks
-        mock_config = MagicMock(spec=JobConfig)
-        mock_config.workspace = "."
-        mock_config.parallel = MagicMock(spec=ParallelConfig)
-        mock_config.parallel.enabled = False
-        mock_config.isolation = MagicMock(spec=IsolationConfig)
-        mock_config.isolation.enabled = False
-
-        # Verify method exists
-        assert hasattr(JobRunner, "_synthesize_batch_outputs")
+        """Obsolete: JobRunner no longer exists."""
 
 
 # =============================================================================

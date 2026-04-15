@@ -748,64 +748,38 @@ class TestCircuitBreaker:
 
 
 class TestParallelExecutionError:
-    """Tests for ParallelExecutionError."""
+    """Tests for ParallelExecutionError — runner removed."""
 
+    @pytest.mark.skip(reason="Runner removed — ParallelExecutionError no longer exists")
     def test_creation(self) -> None:
-        from marianne.execution.parallel import ParallelExecutionError
-
-        err = ParallelExecutionError(
-            failed_sheet=3, error=ValueError("bad"),
-            completed_sheets=[1, 2], cancelled_sheets=[4],
-        )
-        assert err.failed_sheet == 3
-        assert len(err.completed_sheets) == 2
-        assert "sheet 3" in str(err)
+        """Obsolete: parallel module no longer exists."""
 
 
+@pytest.mark.skip(reason="Runner removed — parallel module no longer exists")
 class TestParallelBatchResult:
-    """Tests for ParallelBatchResult."""
+    """Tests for ParallelBatchResult — obsolete after runner removal."""
 
     def test_success_when_no_failures(self) -> None:
-        from marianne.execution.parallel import ParallelBatchResult
-
-        result = ParallelBatchResult(sheets=[1, 2], completed=[1, 2])
-        assert result.success is True
-        assert result.partial_success is True
+        """Obsolete."""
 
     def test_not_success_with_failures(self) -> None:
-        from marianne.execution.parallel import ParallelBatchResult
-
-        result = ParallelBatchResult(
-            sheets=[1, 2], completed=[1], failed=[2],
-            error_details={2: "error"},
-        )
-        assert result.success is False
-        assert result.partial_success is True
+        """Obsolete."""
 
     def test_to_dict(self) -> None:
-        from marianne.execution.parallel import ParallelBatchResult
-
-        result = ParallelBatchResult(sheets=[1], completed=[1])
-        d = result.to_dict()
-        assert d["success"] is True
-        assert "sheets" in d
-        assert "sheet_outputs" in d
+        """Obsolete."""
 
 
+@pytest.mark.skip(reason="Runner removed — parallel module no longer exists")
 class TestParallelExecutionConfig:
-    """Tests for ParallelExecutionConfig."""
+    """Tests for ParallelExecutionConfig — obsolete after runner removal."""
 
     def test_defaults(self) -> None:
-        from marianne.execution.parallel import ParallelExecutionConfig
-
-        config = ParallelExecutionConfig()
-        assert config.enabled is False
-        assert config.max_concurrent == 3
-        assert config.fail_fast is True
+        """Obsolete."""
 
 
+@pytest.mark.skip(reason="Runner removed — parallel module no longer exists")
 class TestLockingStateBackend:
-    """Tests for _LockingStateBackend."""
+    """Tests for _LockingStateBackend — obsolete after runner removal."""
 
     async def test_save_under_lock(self) -> None:
         from marianne.execution.parallel import _LockingStateBackend
@@ -899,8 +873,9 @@ class TestLockingStateBackend:
         assert result == 3
 
 
+@pytest.mark.skip(reason="Runner removed — parallel module no longer exists")
 class TestParallelExecutorGetNextBatch:
-    """Tests for ParallelExecutor.get_next_parallel_batch()."""
+    """Tests for ParallelExecutor.get_next_parallel_batch() — obsolete."""
 
     def _make_executor(
         self, *, max_concurrent: int = 3, fail_fast: bool = True

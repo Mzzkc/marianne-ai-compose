@@ -964,6 +964,10 @@ def _load_config(
         profile_data = get_profile(profile)
         data = deep_merge(data, profile_data)
 
+    # use_baton was removed — baton is now the sole executor.
+    # Strip it from loaded config to avoid breaking existing conductor.yaml files.
+    data.pop("use_baton", None)
+
     config = DaemonConfig.model_validate(data)
     if resolved_config_file is not None:
         config.config_file = resolved_config_file

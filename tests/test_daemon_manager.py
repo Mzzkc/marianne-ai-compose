@@ -366,6 +366,10 @@ class TestOnTaskDone:
 
         manager._on_task_done("job-fail", task)
 
+        # _on_task_done now creates an async task for _set_job_status;
+        # yield control so the status-update task runs.
+        await asyncio.sleep(0.05)
+
         assert "job-fail" not in manager._jobs
         assert manager._job_meta["job-fail"].status == "failed"
 

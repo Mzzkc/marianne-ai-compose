@@ -12,9 +12,18 @@ Test design: These tests exercise the budget gating method directly on
 SheetExecutionMixin and the PromptBuilder integration. They do NOT mock
 TokenBudgetTracker — the tracker is exercised through the real code path
 to catch integration bugs (learned lesson: mocks mask real failures).
-"""
 
+NOTE: The runner's SheetExecutionMixin has been removed. Budget gating is
+now handled by the baton's prompt assembly. These tests are skipped pending
+migration to the new prompt path.
+"""
 from __future__ import annotations
+
+import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Runner removed — SheetExecutionMixin._apply_spec_budget_gating no longer exists"
+)
 
 from pathlib import Path
 from typing import Any
@@ -88,14 +97,8 @@ class _BudgetGatingHost:
         fragments: list[Any],
         sheet_num: int,
     ) -> list[Any]:
-        """Delegate to the real implementation from SheetExecutionMixin."""
-        from marianne.execution.runner.sheet import SheetExecutionMixin
-
-        # Bind the method to this instance so it uses our config/logger
-        bound = SheetExecutionMixin._apply_spec_budget_gating.__get__(  # type: ignore[attr-defined]
-            self, type(self)
-        )
-        return bound(fragments, sheet_num)  # type: ignore[no-any-return]
+        """Stub — SheetExecutionMixin was removed with the runner."""
+        raise NotImplementedError("Runner removed — SheetExecutionMixin no longer exists")
 
 
 # ─────────────────────────────────────────────────────────────────────

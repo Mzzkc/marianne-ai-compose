@@ -2190,49 +2190,22 @@ class TestInstrumentValidationWithAliases:
 class TestSuccessOutcomeAfterRestart:
     """Does diagnose correctly classify sheets that took many attempts?
 
-    The litmus question: after a conductor restart + resume, does a sheet
-    with 18 cumulative attempts show SUCCESS_RETRY (correct) or
-    SUCCESS_FIRST_TRY (misleading)?
-
-    WITHOUT the fix: _classify_success_outcome uses session-local counter
-    that resets to 0 on restart, so everything looks like first_try.
-    WITH the fix: uses persisted SheetState.attempt_count (cumulative).
+    The runner's SheetExecutionMixin._classify_success_outcome has been
+    removed — outcome classification now lives in the baton's Musician.
+    These tests validated the runner's implementation.
     """
 
+    @pytest.mark.skip(reason="Runner removed — classification now in baton")
     def test_18_attempts_classifies_as_retry(self) -> None:
-        """F-127: 18 cumulative attempts must NOT be success_first_try."""
-        from marianne.execution.runner.sheet import SheetExecutionMixin
+        """Obsolete: SheetExecutionMixin no longer exists."""
 
-        outcome, first_try = SheetExecutionMixin._classify_success_outcome(
-            cumulative_attempts=18,
-            completion_attempts=0,
-        )
-        assert not first_try, "18 attempts is not first_try"
-        assert outcome.value == "success_retry", (
-            f"18 attempts should be SUCCESS_RETRY, got {outcome.value}"
-        )
-
+    @pytest.mark.skip(reason="Runner removed — classification now in baton")
     def test_1_attempt_classifies_as_first_try(self) -> None:
-        """Single attempt is genuinely first_try."""
-        from marianne.execution.runner.sheet import SheetExecutionMixin
+        """Obsolete: SheetExecutionMixin no longer exists."""
 
-        outcome, first_try = SheetExecutionMixin._classify_success_outcome(
-            cumulative_attempts=1,
-            completion_attempts=0,
-        )
-        assert first_try
-        assert outcome.value == "success_first_try"
-
+    @pytest.mark.skip(reason="Runner removed — classification now in baton")
     def test_completion_mode_classifies_correctly(self) -> None:
-        """Sheet that needed completion mode is SUCCESS_COMPLETION."""
-        from marianne.execution.runner.sheet import SheetExecutionMixin
-
-        outcome, first_try = SheetExecutionMixin._classify_success_outcome(
-            cumulative_attempts=3,
-            completion_attempts=2,
-        )
-        assert not first_try
-        assert outcome.value == "success_completion"
+        """Obsolete: SheetExecutionMixin no longer exists."""
 
 # =========================================================================
 # Category 21: F-111 Parallel Executor Preserves Exception Types
@@ -2241,70 +2214,27 @@ class TestSuccessOutcomeAfterRestart:
 class TestParallelExceptionPreservation:
     """Does the parallel batch preserve exception types for intelligent routing?
 
-    The litmus question: when a RateLimitExhaustedError occurs in a parallel
-    batch, can the lifecycle handler still isinstance() check it?
-
-    WITHOUT the fix: exception was converted to string in error_details.
-    isinstance() is impossible on strings. Job FAILS instead of PAUSING.
-    WITH the fix: original exception preserved in result.exceptions dict.
+    The runner's ParallelExecutor and LifecycleMixin have been removed.
+    The baton handles parallel execution and exception routing differently.
     """
 
+    @pytest.mark.skip(reason="Runner removed — ParallelBatchResult no longer exists")
     def test_exceptions_dict_exists_on_batch_result(self) -> None:
-        """ParallelBatchResult has an exceptions dict for type preservation."""
-        from marianne.execution.parallel import ParallelBatchResult
+        """Obsolete: ParallelBatchResult no longer exists."""
 
-        result = ParallelBatchResult(sheets=[1, 2])
-        assert hasattr(result, "exceptions"), (
-            "ParallelBatchResult must have 'exceptions' dict for F-111"
-        )
-        assert isinstance(result.exceptions, dict)
-
+    @pytest.mark.skip(reason="Runner removed — LifecycleMixin no longer exists")
     def test_find_rate_limit_in_batch_extracts_correct_type(self) -> None:
-        """_find_rate_limit_in_batch can find the exception by type."""
-        from datetime import datetime, timezone
+        """Obsolete: LifecycleMixin no longer exists."""
 
-        from marianne.execution.parallel import ParallelBatchResult
-        from marianne.execution.runner.lifecycle import LifecycleMixin
-        from marianne.execution.runner.models import RateLimitExhaustedError
-
-        resume_time = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
-        exc = RateLimitExhaustedError(
-            "Rate limit exceeded",
-            resume_after=resume_time,
-            backend_type="claude-cli",
-        )
-        result = ParallelBatchResult(
-            sheets=[1, 2, 3],
-            failed=[2],
-            completed=[1, 3],
-            exceptions={2: exc},
-        )
-
-        found = LifecycleMixin._find_rate_limit_in_batch(result)
-        assert found is not None, "Should find RateLimitExhaustedError"
-        assert isinstance(found, RateLimitExhaustedError)
-        assert found.resume_after == resume_time, (
-            "resume_after timestamp must survive the parallel batch"
-        )
-
+    @pytest.mark.skip(reason="Runner removed — LifecycleMixin no longer exists")
     def test_non_rate_limit_error_not_found(self) -> None:
-        """Non-rate-limit exceptions are not misidentified."""
-        from marianne.execution.parallel import ParallelBatchResult
-        from marianne.execution.runner.lifecycle import LifecycleMixin
-
-        result = ParallelBatchResult(
-            sheets=[1],
-            failed=[1],
-            exceptions={1: ValueError("something broke")},
-        )
-
-        found = LifecycleMixin._find_rate_limit_in_batch(result)
-        assert found is None, "ValueError is not a rate limit error"
+        """Obsolete: LifecycleMixin no longer exists."""
 
 # =========================================================================
 # Category 22: F-113 Failure Propagation Through Dependencies
 # =========================================================================
 
+@pytest.mark.skip(reason="Runner removed — ParallelExecutor no longer exists")
 class TestFailurePropagationIntelligence:
     """Does failure propagation prevent downstream sheets from running?
 
@@ -2465,125 +2395,8 @@ class TestCredentialRedactionDefenseInDepth:
 # 25. SEMANTIC CONTEXT TAGS — F-009/F-144 FIX EFFECTIVENESS
 # =============================================================================
 
-class TestSemanticContextTagEffectiveness:
-    """Does the F-009/F-144 fix actually produce tags that MATCH stored patterns?
-
-    The root cause: query tags (sheet:N, job:X) lived in a different namespace
-    from storage tags (validation:TYPE, retry:effective). 91% of 28K+ patterns
-    were never applied. The fix generates semantic tags that match the stored
-    namespace.
-
-    The litmus: given a JobConfig with validation rules, do the generated tags
-    overlap with the kinds of tags that patterns are stored with?
-    """
-
-    def test_semantic_tags_match_stored_validation_namespace(self) -> None:
-        """Tags from build_semantic_context_tags contain validation:TYPE
-        entries that match the pattern storage format."""
-        from marianne.core.config.job import JobConfig, PromptConfig, ValidationRule
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        config = JobConfig(
-            name="tag-test",
-            sheet={"size": 1, "total_items": 3},
-            prompt=PromptConfig(template="test"),
-            validations=[
-                ValidationRule(type="file_exists", path="{workspace}/out.py"),
-                ValidationRule(type="command_succeeds", command="echo ok"),
-            ],
-        )
-
-        tags = build_semantic_context_tags(config)
-
-        # Tags must match the format used by pattern storage
-        # (learning/patterns.py:411 — context_tags=[f"validation:{vtype}"])
-        assert "validation:file_exists" in tags, (
-            "Semantic tags must contain validation:file_exists for a config "
-            "with file_exists validation rules"
-        )
-        assert "validation:command_succeeds" in tags
-
-    def test_semantic_tags_include_broad_categories(self) -> None:
-        """Tags include broad categories (success, retry, completion) that
-        match patterns discovered from any execution context."""
-        from marianne.core.config.job import JobConfig, PromptConfig
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        config = JobConfig(
-            name="broad-tag-test",
-            sheet={"size": 1, "total_items": 1},
-            prompt=PromptConfig(template="test"),
-        )
-
-        tags = build_semantic_context_tags(config)
-
-        # These broad tags match patterns.py:514, :445, :483
-        assert "success:first_attempt" in tags, (
-            "Tags must include success:first_attempt — matches patterns that "
-            "worked on first try"
-        )
-        assert "retry:effective" in tags
-        assert "completion:used" in tags
-
-    def test_old_positional_tags_are_gone(self) -> None:
-        """The old positional tags (sheet:N, job:X) that caused F-009 no longer
-        appear in semantic tag output."""
-        from marianne.core.config.job import JobConfig, PromptConfig
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        config = JobConfig(
-            name="positional-tag-test",
-            sheet={"size": 1, "total_items": 5},
-            prompt=PromptConfig(template="test"),
-        )
-
-        tags = build_semantic_context_tags(config)
-
-        # Positional tags caused the 91% non-application rate
-        for tag in tags:
-            assert not tag.startswith("sheet:"), (
-                f"Positional tag '{tag}' must not appear — this is the F-009 root cause"
-            )
-            assert not tag.startswith("job:"), (
-                f"Positional tag '{tag}' must not appear — this is the F-009 root cause"
-            )
-
-    def test_semantic_tags_enable_pattern_query_overlap(self) -> None:
-        """When querying get_patterns() with semantic tags, the tag filtering
-        has a non-empty intersection with realistic stored tags.
-
-        The A/B comparison: positional tags would have ZERO overlap with stored
-        tags. Semantic tags should have >0 overlap.
-        """
-        from marianne.core.config.job import JobConfig, PromptConfig, ValidationRule
-        from marianne.execution.runner.patterns import build_semantic_context_tags
-
-        config = JobConfig(
-            name="overlap-test",
-            sheet={"size": 1, "total_items": 3},
-            prompt=PromptConfig(template="test"),
-            validations=[
-                ValidationRule(type="file_exists", path="{workspace}/x.py"),
-            ],
-        )
-
-        query_tags = build_semantic_context_tags(config)
-
-        # Simulate stored pattern tags (the actual format used by patterns.py)
-        stored_tags = [
-            "validation:file_exists",
-            "validation:command_succeeds",
-            "success:first_attempt",
-            "retry:effective",
-            "error_code:E001",
-        ]
-
-        overlap = set(query_tags) & set(stored_tags)
-        assert len(overlap) >= 2, (
-            f"Semantic tags must overlap with stored pattern tags. "
-            f"Query: {query_tags}, Stored: {stored_tags}, Overlap: {overlap}. "
-            f"The old positional tags had ZERO overlap — this must be > 0."
-        )
+# TestSemanticContextTagEffectiveness removed — tested build_semantic_context_tags
+# which lived in runner.patterns (deleted as part of runner removal).
 
 # =============================================================================
 # 26. PROMPT RENDERER WIRING — F-158 FIX EFFECTIVENESS
@@ -4268,25 +4081,15 @@ class TestCrossSheetCredentialPipelineEndToEnd:
         assert "AKIA" not in (redacted or ""), "AWS key must be blocked"
         assert "eyJhbGci" not in (redacted or ""), "Bearer token must be blocked"
 
-    def test_redaction_is_applied_on_both_execution_paths(self) -> None:
-        """Both legacy runner (context.py) and baton (adapter.py) call
-        redact_credentials on captured file content.
+    def test_redaction_is_applied_on_baton_execution_path(self) -> None:
+        """Baton adapter (adapter.py) calls redact_credentials on captured
+        file content.
 
         This verifies the wiring, not the redaction logic.
+        The legacy runner path was removed; only the baton path remains.
         """
         import inspect
 
-        # Legacy runner path
-        from marianne.execution.runner.context import ContextBuildingMixin
-
-        context_source = inspect.getsource(ContextBuildingMixin)
-        assert "redact_credentials" in context_source, (
-            "F-250: Legacy runner (ContextBuildingMixin) MUST call "
-            "redact_credentials on captured file content. Without this, "
-            "the legacy path leaks credentials through cross-sheet context."
-        )
-
-        # Baton adapter path
         from marianne.daemon.baton.adapter import BatonAdapter
 
         adapter_source = inspect.getsource(BatonAdapter._collect_cross_sheet_context)
@@ -4413,53 +4216,10 @@ class TestBackpressureReworkIntelligence:
         )
 
 # =============================================================================
-# 47. D-027 BATON DEFAULT FLIP
+# 47. D-027 BATON DEFAULT FLIP — COMPLETED
 # =============================================================================
-
-class TestBatonDefaultFlipIntelligence:
-    """D-027 litmus: does the baton activate by default without explicit config?
-
-    WITHOUT D-027: DaemonConfig().use_baton defaults to False. The legacy
-    runner executes all sheets. All baton work is theoretical.
-    WITH D-027: DaemonConfig().use_baton defaults to True. The baton IS
-    the default execution model.
-
-    The litmus: a bare DaemonConfig() must have use_baton=True.
-    """
-
-    def test_daemon_config_default_use_baton_is_true(self) -> None:
-        """DaemonConfig() with no args must have use_baton=True."""
-        from marianne.daemon.config import DaemonConfig
-
-        config = DaemonConfig()
-
-        assert config.use_baton is True, (
-            "D-027: DaemonConfig().use_baton MUST default to True. "
-            "The baton is the default execution model as of Phase 2. "
-            "If this is False, ALL baton work is theoretical."
-        )
-
-    def test_use_baton_field_has_correct_description(self) -> None:
-        """The field description must reference D-027 and Phase 2."""
-        from marianne.daemon.config import DaemonConfig
-
-        field_info = DaemonConfig.model_fields["use_baton"]
-
-        assert "D-027" in (field_info.description or ""), (
-            "D-027: use_baton field description should reference the directive "
-            "that established this default."
-        )
-
-    def test_explicit_false_overrides_default(self) -> None:
-        """use_baton=False must still work for opting out."""
-        from marianne.daemon.config import DaemonConfig
-
-        config = DaemonConfig(use_baton=False)
-
-        assert config.use_baton is False, (
-            "D-027: Explicit use_baton=False must override the True default. "
-            "Operators need an opt-out path."
-        )
+# Baton is now the sole executor. The use_baton field has been removed from
+# DaemonConfig. D-027 is permanently resolved; these tests are deleted.
 
 # =============================================================================
 # 48. INSTRUMENT FALLBACK CHAIN — THREE-LEVEL RESOLUTION

@@ -23,7 +23,7 @@ from marianne.backends.base import ExecutionResult
 from marianne.cli import app
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.dashboard import create_app
-from marianne.execution.runner import RunSummary
+from marianne.core.summary import RunSummary
 from marianne.state.json_backend import JsonStateBackend
 
 runner = CliRunner()

@@ -24,7 +24,6 @@ from marianne.daemon.profiler.models import (
     RetentionConfig,
 )
 
-
 # All 9 models that should reject unknown fields
 _DAEMON_MODELS = [
     ResourceLimitConfig,
@@ -120,7 +119,6 @@ class TestDaemonConfigTypoDetection:
             max_job_history=1000,
             log_file="/tmp/test.log",
             resource_limits=ResourceLimitConfig(max_processes=200),
-            use_baton=False,
         )
         assert config.job_timeout_seconds == 86400
         assert config.resource_limits.max_processes == 200
