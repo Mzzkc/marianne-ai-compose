@@ -28,7 +28,6 @@ from marianne.daemon.baton.events import (
 from marianne.daemon.baton.state import (
     BatonSheetStatus,
     CircuitBreakerState,
-    InstrumentState,
     SheetExecutionState,
 )
 from marianne.daemon.baton.timer import TimerWheel

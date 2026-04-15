@@ -168,11 +168,14 @@ cli:
     # Run `opencode providers login` to configure providers.
     # Keys stored in ~/.local/share/opencode/auth.json
   output:
-    format: json
-    result_path: "result"
-    error_path: "error"
-    input_tokens_path: "usage.input_tokens"
-    output_tokens_path: "usage.output_tokens"
+    # OpenCode outputs NDJSON (one JSON event per line), not a single JSON object.
+    # Events: step_start, tool_use, text (result), step_finish (tokens).
+    format: jsonl
+    completion_event_type: "text"
+    result_path: "part.text"
+    error_path: "part.text"
+    input_tokens_path: "part.tokens.input"
+    output_tokens_path: "part.tokens.output"
     aggregate_tokens: false
   errors:
     success_exit_codes: [0]

@@ -146,7 +146,7 @@ async def _recover_cascade(
     for snum_str, sdata in sheets.items():
         snum = int(snum_str)
         status = sdata.get("status")
-        if snum >= from_sheet and status in ("failed", "skipped"):
+        if snum >= from_sheet and status in ("failed", "skipped", "dispatched"):
             sdata["status"] = "pending"
             sdata.pop("error_message", None)
             sdata.pop("error_code", None)
@@ -159,6 +159,10 @@ async def _recover_cascade(
             sdata["completion_attempts"] = 0
             sdata["attempt_count"] = 0
             sdata["healing_attempts"] = 0
+            # Reset instrument to primary. A recovered sheet MUST start
+            # from the top of the instrument chain, not stay stuck on
+            # whatever fallback it died on.
+            sdata["current_instrument_index"] = 0
             reset_count += 1
 
     # Count after
@@ -339,6 +343,7 @@ async def _recover_job(
             sdata["completion_attempts"] = 0
             sdata["attempt_count"] = 0
             sdata["healing_attempts"] = 0
+            sdata["current_instrument_index"] = 0
         reset_count += 1
 
     # Count after

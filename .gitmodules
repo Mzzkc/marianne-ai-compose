@@ -4,3 +4,6 @@
 [submodule "scores/rosetta-corpus"]
 	path = scores/rosetta-corpus
 	url = git@github.com:Mzzkc/marianne-rosetta-corpus.git
+[submodule "compiler"]
+	path = compiler
+	url = https://github.com/Mzzkc/marianne-compiler.git

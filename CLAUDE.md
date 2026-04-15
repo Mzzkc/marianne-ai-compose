@@ -44,7 +44,6 @@ Core skills for orchestrating work with Marianne are documented in `plugins/`. R
 | **Score Authoring** | `plugins/marianne/skills/score-authoring/SKILL.md` | Crafting declarative YAML scores and sheet logic. |
 | **Command Guide** | `plugins/marianne/skills/command/SKILL.md` | Operational reference for running, monitoring, and debugging jobs. |
 | **Composing** | `plugins/marianne/skills/composing/SKILL.md` | High-level generative score composition from intent. |
-| **Compose Command** | `plugins/marianne/commands/compose.md` | Reference for the `mzt compose` command. |
 
 
 ## Constraints — The Short Version

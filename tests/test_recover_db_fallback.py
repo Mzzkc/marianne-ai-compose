@@ -108,7 +108,6 @@ def _mock_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # commands/__init__.py re-exports recover as function, shadowing the module.
     # Use sys.modules to get the actual module.
     import sys
-    import marianne.cli.commands.recover  # noqa: F811
     recover_mod = sys.modules["marianne.cli.commands.recover"]
     monkeypatch.setattr(recover_mod, "_get_db_path", lambda: db_path)
 

@@ -718,6 +718,18 @@ class BatonAdapter:
             state.status = baton_status
             state.normal_attempts = normal_attempts
             state.completion_attempts = completion_attempts
+            # Reset instrument fallback position for non-terminal sheets.
+            # A recovered/resumed sheet must start from the primary
+            # instrument, not stay stuck on whatever fallback it died on.
+            # Terminal sheets (COMPLETED, SKIPPED) keep their instrument
+            # history for diagnostics.
+            _TERMINAL = {
+                BatonSheetStatus.COMPLETED,
+                BatonSheetStatus.SKIPPED,
+                BatonSheetStatus.CANCELLED,
+            }
+            if baton_status not in _TERMINAL:
+                state.current_instrument_index = 0
 
             states[sheet.num] = state
 
