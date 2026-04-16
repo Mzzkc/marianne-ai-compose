@@ -18,6 +18,7 @@ Attack surfaces:
 from __future__ import annotations
 
 import time
+from datetime import UTC
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -28,7 +29,6 @@ from marianne.core.config.workspace import CrossSheetConfig
 from marianne.daemon.manager import _MTIME_TOLERANCE_SECONDS, _should_auto_fresh
 from marianne.prompts.templating import SheetContext
 from marianne.utils.credential_scanner import redact_credentials
-
 
 # =============================================================================
 # Helpers
@@ -47,9 +47,9 @@ def _make_checkpoint(
         total_sheets=total,
     )
     if started_at is not None:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        state.started_at = datetime.fromtimestamp(started_at, tz=timezone.utc)
+        state.started_at = datetime.fromtimestamp(started_at, tz=UTC)
     for num, (status, stdout) in sheet_data.items():
         ss = SheetState(sheet_num=num)
         ss.status = SheetStatus(status)
@@ -87,9 +87,7 @@ def _populate_cross_sheet(
     )
 
     if cs.auto_capture_stdout:
-        start_sheet = (
-            max(1, sheet_num - cs.lookback_sheets) if cs.lookback_sheets > 0 else 1
-        )
+        start_sheet = max(1, sheet_num - cs.lookback_sheets) if cs.lookback_sheets > 0 else 1
 
         for prev_num in range(start_sheet, sheet_num):
             prev_state = state.sheets.get(prev_num)
@@ -214,11 +212,9 @@ class TestPendingJobWorkspaceNone:
         config.preflight.token_warning_threshold = 800000
         config.preflight.token_error_threshold = 200000
         config.log_level = "INFO"
-        config.use_baton = False
 
         mgr = JobManager(config)
 
-        # Manually place a job in pending without corresponding meta
         request = MagicMock(spec=JobRequest)
         request.config_path = Path("/tmp/fake.yaml")
         request.workspace = None
@@ -256,7 +252,6 @@ class TestPendingJobCancellation:
         config.preflight.token_warning_threshold = 800000
         config.preflight.token_error_threshold = 200000
         config.log_level = "INFO"
-        config.use_baton = False
 
         mgr = JobManager(config)
 
@@ -291,7 +286,6 @@ class TestBackpressureReassertionDuringPendingStart:
         config.preflight.token_warning_threshold = 800000
         config.preflight.token_error_threshold = 200000
         config.log_level = "INFO"
-        config.use_baton = False
 
         mgr = JobManager(config)
 
@@ -330,10 +324,13 @@ class TestCrossSheetSkippedWithStdout:
 
     def test_skipped_sheet_with_stdout_uses_placeholder(self) -> None:
         """SKIPPED sheet with stdout_tail → [SKIPPED] wins over stdout."""
-        state = _make_checkpoint(3, {
-            1: ("skipped", "I ran partially and wrote some output"),
-            2: ("completed", "sheet 2 complete"),
-        })
+        state = _make_checkpoint(
+            3,
+            {
+                1: ("skipped", "I ran partially and wrote some output"),
+                2: ("completed", "sheet 2 complete"),
+            },
+        )
         context = _make_context(3)
         _populate_cross_sheet(context, state, 3)
 
@@ -343,10 +340,13 @@ class TestCrossSheetSkippedWithStdout:
 
     def test_skipped_sheet_stdout_none_uses_placeholder(self) -> None:
         """SKIPPED sheet with stdout_tail=None → [SKIPPED] still set."""
-        state = _make_checkpoint(3, {
-            1: ("skipped", None),
-            2: ("completed", "done"),
-        })
+        state = _make_checkpoint(
+            3,
+            {
+                1: ("skipped", None),
+                2: ("completed", "done"),
+            },
+        )
         context = _make_context(3)
         _populate_cross_sheet(context, state, 3)
 
@@ -360,10 +360,13 @@ class TestCrossSheetFailedSheetBehavior:
 
     def test_failed_sheet_with_stdout_included(self) -> None:
         """FAILED sheet with stdout → output IS included."""
-        state = _make_checkpoint(3, {
-            1: ("failed", "I failed but here is my partial output"),
-            2: ("completed", "success"),
-        })
+        state = _make_checkpoint(
+            3,
+            {
+                1: ("failed", "I failed but here is my partial output"),
+                2: ("completed", "success"),
+            },
+        )
         context = _make_context(3)
         _populate_cross_sheet(context, state, 3)
 
@@ -372,10 +375,13 @@ class TestCrossSheetFailedSheetBehavior:
 
     def test_failed_sheet_without_stdout_not_in_outputs(self) -> None:
         """FAILED sheet with no stdout → no entry in previous_outputs."""
-        state = _make_checkpoint(3, {
-            1: ("failed", None),
-            2: ("completed", "success"),
-        })
+        state = _make_checkpoint(
+            3,
+            {
+                1: ("failed", None),
+                2: ("completed", "success"),
+            },
+        )
         context = _make_context(3)
         _populate_cross_sheet(context, state, 3)
 
@@ -383,10 +389,13 @@ class TestCrossSheetFailedSheetBehavior:
 
     def test_running_sheet_with_stdout_included(self) -> None:
         """In-progress sheet with stdout → output IS included (live data)."""
-        state = _make_checkpoint(3, {
-            1: ("in_progress", "still running, partial output"),
-            2: ("completed", "done"),
-        })
+        state = _make_checkpoint(
+            3,
+            {
+                1: ("in_progress", "still running, partial output"),
+                2: ("completed", "done"),
+            },
+        )
         context = _make_context(3)
         _populate_cross_sheet(context, state, 3)
 
@@ -404,9 +413,12 @@ class TestCrossSheetMaxCharsEdgeCases:
             lookback_sheets=0,
             max_output_chars=10,
         )
-        state = _make_checkpoint(2, {
-            1: ("completed", "0123456789"),  # exactly 10 chars
-        })
+        state = _make_checkpoint(
+            2,
+            {
+                1: ("completed", "0123456789"),  # exactly 10 chars
+            },
+        )
         context = _make_context(2)
         _populate_cross_sheet(context, state, 2, cross_sheet=cs)
 
@@ -420,9 +432,12 @@ class TestCrossSheetMaxCharsEdgeCases:
             lookback_sheets=0,
             max_output_chars=10,
         )
-        state = _make_checkpoint(2, {
-            1: ("completed", "01234567890"),  # 11 chars
-        })
+        state = _make_checkpoint(
+            2,
+            {
+                1: ("completed", "01234567890"),  # 11 chars
+            },
+        )
         context = _make_context(2)
         _populate_cross_sheet(context, state, 2, cross_sheet=cs)
 
@@ -450,9 +465,12 @@ class TestCrossSheetMaxCharsEdgeCases:
             lookback_sheets=0,
             max_output_chars=1,
         )
-        state = _make_checkpoint(2, {
-            1: ("completed", "AB"),  # 2 chars > 1
-        })
+        state = _make_checkpoint(
+            2,
+            {
+                1: ("completed", "AB"),  # 2 chars > 1
+            },
+        )
         context = _make_context(2)
         _populate_cross_sheet(context, state, 2, cross_sheet=cs)
 
@@ -469,11 +487,14 @@ class TestCrossSheetLookbackEdgeCases:
             lookback_sheets=1,
             max_output_chars=10000,
         )
-        state = _make_checkpoint(4, {
-            1: ("completed", "old"),
-            2: ("completed", "older"),
-            3: ("completed", "recent"),
-        })
+        state = _make_checkpoint(
+            4,
+            {
+                1: ("completed", "old"),
+                2: ("completed", "older"),
+                3: ("completed", "recent"),
+            },
+        )
         context = _make_context(4)
         _populate_cross_sheet(context, state, 4, cross_sheet=cs)
 
@@ -488,10 +509,13 @@ class TestCrossSheetLookbackEdgeCases:
             lookback_sheets=100,  # Way more than total sheets
             max_output_chars=10000,
         )
-        state = _make_checkpoint(3, {
-            1: ("completed", "first"),
-            2: ("completed", "second"),
-        })
+        state = _make_checkpoint(
+            3,
+            {
+                1: ("completed", "first"),
+                2: ("completed", "second"),
+            },
+        )
         context = _make_context(3)
         _populate_cross_sheet(context, state, 3, cross_sheet=cs)
 
@@ -505,12 +529,15 @@ class TestCrossSheetLookbackEdgeCases:
             lookback_sheets=0,
             max_output_chars=10000,
         )
-        state = _make_checkpoint(5, {
-            1: ("completed", "A"),
-            2: ("completed", "B"),
-            3: ("completed", "C"),
-            4: ("completed", "D"),
-        })
+        state = _make_checkpoint(
+            5,
+            {
+                1: ("completed", "A"),
+                2: ("completed", "B"),
+                3: ("completed", "C"),
+                4: ("completed", "D"),
+            },
+        )
         context = _make_context(5)
         _populate_cross_sheet(context, state, 5, cross_sheet=cs)
 
@@ -538,11 +565,14 @@ class TestCrossSheetAllSkipped:
 
     def test_all_upstream_skipped(self) -> None:
         """Every previous sheet SKIPPED → all [SKIPPED], full list."""
-        state = _make_checkpoint(4, {
-            1: ("skipped", None),
-            2: ("skipped", None),
-            3: ("skipped", None),
-        })
+        state = _make_checkpoint(
+            4,
+            {
+                1: ("skipped", None),
+                2: ("skipped", None),
+                3: ("skipped", None),
+            },
+        )
         context = _make_context(4)
         _populate_cross_sheet(context, state, 4)
 
@@ -568,9 +598,12 @@ class TestCrossSheetCredentialInStdout:
 
     def test_skipped_never_exposes_stdout_with_creds(self) -> None:
         """SKIPPED sheet with cred in stdout → [SKIPPED], no cred leaked."""
-        state = _make_checkpoint(2, {
-            1: ("skipped", "secret: sk-ant-api03-AAAABBBBCCCCDDDDEEEE1234567890"),
-        })
+        state = _make_checkpoint(
+            2,
+            {
+                1: ("skipped", "secret: sk-ant-api03-AAAABBBBCCCCDDDDEEEE1234567890"),
+            },
+        )
         context = _make_context(2)
         _populate_cross_sheet(context, state, 2)
 
@@ -590,8 +623,8 @@ class TestMethodNotFoundErrorCodeMapping:
         """MethodNotFoundError → METHOD_NOT_FOUND code → MethodNotFoundError."""
         from marianne.daemon.exceptions import MethodNotFoundError
         from marianne.daemon.ipc.errors import (
-            METHOD_NOT_FOUND,
             _CODE_EXCEPTION_MAP,
+            METHOD_NOT_FOUND,
             rpc_error_to_exception,
         )
 
@@ -842,11 +875,14 @@ class TestSheetContextToDict:
 
     def test_skipped_upstream_in_to_dict_after_population(self) -> None:
         """After cross-sheet population with skipped sheets, to_dict has them."""
-        state = _make_checkpoint(4, {
-            1: ("completed", "A"),
-            2: ("skipped", None),
-            3: ("completed", "C"),
-        })
+        state = _make_checkpoint(
+            4,
+            {
+                1: ("completed", "A"),
+                2: ("skipped", None),
+                3: ("completed", "C"),
+            },
+        )
         context = _make_context(4)
         _populate_cross_sheet(context, state, 4)
 
@@ -886,10 +922,13 @@ class TestBatonLegacySkippedParity:
         of stdout_tail content.
         """
         # Legacy path (inlined from context.py)
-        state = _make_checkpoint(3, {
-            1: ("skipped", "noise that should be ignored"),
-            2: ("completed", "real output"),
-        })
+        state = _make_checkpoint(
+            3,
+            {
+                1: ("skipped", "noise that should be ignored"),
+                2: ("completed", "real output"),
+            },
+        )
         context_legacy = _make_context(3)
         _populate_cross_sheet(context_legacy, state, 3)
 
@@ -913,10 +952,13 @@ class TestBatonLegacySkippedParity:
         may be intentional. But it's worth noting in findings.
         """
         # Legacy includes FAILED sheets with stdout
-        state = _make_checkpoint(3, {
-            1: ("failed", "I failed but here is output"),
-            2: ("completed", "success"),
-        })
+        state = _make_checkpoint(
+            3,
+            {
+                1: ("failed", "I failed but here is output"),
+                2: ("completed", "success"),
+            },
+        )
         context = _make_context(3)
         _populate_cross_sheet(context, state, 3)
 

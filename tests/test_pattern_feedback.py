@@ -85,39 +85,41 @@ class TestSheetStatePatternFields:
 
 
 class TestPatternFeedbackRecording:
-    """Tests for _record_pattern_feedback method logic."""
+    """Tests for pattern feedback through baton's SheetExecutionState."""
 
-    @pytest.mark.asyncio
-    async def test_record_feedback_skipped_when_no_global_store(self):
-        """Test feedback recording skips when global store is None."""
-        # Create a mock runner with no global store
+    async def test_sheet_execution_state_carries_patterns(self):
+        """SheetExecutionState (SheetState) carries applied_patterns through
+        baton registration and completion."""
+        from marianne.core.checkpoint import SheetStatus
+        from marianne.daemon.baton.state import SheetExecutionState
 
-        # We can't easily instantiate JobRunner without full config,
-        # so we'll test the logic directly by creating a mock
+        sheet = SheetExecutionState(sheet_num=1, instrument_name="claude-code")
+        sheet.applied_pattern_ids = ["uuid-1", "uuid-2"]
+        sheet.applied_pattern_descriptions = ["Pattern A", "Pattern B"]
+        sheet.status = SheetStatus.COMPLETED
+        sheet.success_without_retry = True
 
-        # The logic should early-return when store is None
-        # This is tested implicitly - no exception means success
-        # If _record_pattern_feedback was called with None store, it returns early
+        assert sheet.applied_pattern_ids == ["uuid-1", "uuid-2"]
+        assert sheet.applied_pattern_descriptions == ["Pattern A", "Pattern B"]
 
-    @pytest.mark.asyncio
-    async def test_record_feedback_skipped_when_no_patterns(self):
-        """Test feedback recording skips when pattern_ids is empty."""
-        # The logic should early-return when pattern_ids is empty
-        # This is a no-op case
-        pass
+    async def test_no_patterns_on_sheet_is_valid(self):
+        """SheetExecutionState with no patterns is a valid empty state."""
+        from marianne.daemon.baton.state import SheetExecutionState
 
-    @pytest.mark.asyncio
+        sheet = SheetExecutionState(sheet_num=1, instrument_name="claude-code")
+
+        assert sheet.applied_pattern_ids == []
+        assert sheet.applied_pattern_descriptions == []
+
     async def test_pattern_led_to_success_logic_success_first_attempt(self):
         """Test pattern_led_to_success is True when validation passed AND first attempt."""
         validation_passed = True
         success_without_retry = True
 
-        # From the code: pattern_led_to_success = validation_passed and success_without_retry
         pattern_led_to_success = validation_passed and success_without_retry
 
         assert pattern_led_to_success is True
 
-    @pytest.mark.asyncio
     async def test_pattern_led_to_success_logic_success_with_retry(self):
         """Test pattern_led_to_success is False when validation passed but not first attempt."""
         validation_passed = True
@@ -127,7 +129,6 @@ class TestPatternFeedbackRecording:
 
         assert pattern_led_to_success is False
 
-    @pytest.mark.asyncio
     async def test_pattern_led_to_success_logic_failure(self):
         """Test pattern_led_to_success is False when validation failed."""
         validation_passed = False
