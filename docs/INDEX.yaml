@@ -236,6 +236,10 @@ directories:
         source: "docs/superpowers/specs/ (relocated)"
       - name: 2026-04-13-instrument-forge-spec.md
         added: 2026-04-13
+      - name: 2026-04-16-process-lifecycle-design.md
+        added: 2026-04-16
+      - name: 2026-04-16-rate-limit-primary-design.md
+        added: 2026-04-16
 
   guides:
     description: "Methodology and reference guides"
@@ -331,7 +335,8 @@ semantic_index:
   config-reload: [plans/infrastructure/2026-02-23-config-reload-and-reconciliation-design.md, plans/infrastructure/2026-02-25-daemon-owned-hooks-and-config-reload-design.md]
   workspace: [plans/architecture/2026-03-04-workspace-archaeology-design.md, plans/infrastructure/2026-02-25-workspace-independent-job-control-design.md]
   scheduler: [plans/infrastructure/2026-03-26-scheduler-conductor-wiring-design.md]
-  rate-limiting: [plans/infrastructure/2026-04-08-rate-limit-intelligence.md]
+  rate-limiting: [plans/infrastructure/2026-04-08-rate-limit-intelligence.md, specs/2026-04-16-rate-limit-primary-design.md]
+  process-lifecycle: [specs/2026-04-16-process-lifecycle-design.md]
   composition-compiler: [specs/2026-04-13-composition-compiler-design.md]
   iteration: [plans/features/2026-03-08-iterative-dev-loop-design.md, plans/features/2026-03-08-iterative-dev-loop-implementation.md]
   handoffs: [handoffs]

@@ -14,3 +14,11 @@ files:
   - name: 2026-04-13-instrument-forge-spec.md
     purpose: "Instrument Forge — dynamic provider discovery and profile generation system"
     status: draft
+  - name: 2026-04-16-process-lifecycle-design.md
+    purpose: "Process lifecycle architecture — subprocess kill-on-exit via process groups, monitor pause distinction, PID tracking, restart recovery. Phase 1 unblocks runner-removal."
+    status: draft
+    related: [2026-04-16-rate-limit-primary-design.md]
+  - name: 2026-04-16-rate-limit-primary-design.md
+    purpose: "Rate limit primary flag — separate detection from causation on ExecutionResult; prevents false-positive rate limit cascades from incidental 429s in stderr."
+    status: draft
+    related: [2026-04-16-process-lifecycle-design.md]
