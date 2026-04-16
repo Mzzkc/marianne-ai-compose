@@ -17,6 +17,7 @@ from marianne.core.config.instruments import (
     InstrumentProfile,
     ModelCapacity,
 )
+from marianne.execution.instruments.cli_backend import PluginCliBackend
 
 # ---------------------------------------------------------------------------
 # Fixtures — mirrors gemini-cli.yaml error patterns
@@ -215,7 +216,10 @@ class TestGeminiErrorClassification:
         """UNAVAILABLE classified as capacity."""
         backend = _make_backend()
         result = backend._parse_output(
-            stdout='{"error": {"type": "UNAVAILABLE", "message": "The service is currently unavailable"}}',
+            stdout=(
+                '{"error": {"type": "UNAVAILABLE", '
+                '"message": "The service is currently unavailable"}}'
+            ),
             stderr="",
             exit_code=1,
         )

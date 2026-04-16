@@ -639,7 +639,7 @@ class TestSpecLoaderAdversarial:
         )
 
         fragments = SpecCorpusLoader.load(spec_dir)
-        with pytest.raises(Exception):  # Pydantic frozen model rejects mutation
+        with pytest.raises((AttributeError, Exception)):  # frozen model rejects mutation
             fragments[0].name = "mutated"  # type: ignore[misc]
 
     @pytest.mark.adversarial

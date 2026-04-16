@@ -45,8 +45,8 @@ class TestDiscoverInstruments:
         )
         profiles = InstrumentProfileLoader.load_directory(builtins_dir)
 
-        # All 8 should load
-        assert len(profiles) == 8
+        # All 9 should load
+        assert len(profiles) == 9
         expected_names = {
             "claude-code",
             "gemini-cli",
@@ -56,6 +56,7 @@ class TestDiscoverInstruments:
             "goose",
             "opencode",
             "crush",
+            "cli",
         }
         assert set(profiles.keys()) == expected_names
 
@@ -114,9 +115,9 @@ class TestDiscoverInstruments:
         for profile in profiles.values():
             registry.register(profile)
 
-        # 4 native + 8 built-in = 12
+        # 4 native + 9 built-in = 13
         all_instruments = registry.list_all()
-        assert len(all_instruments) == 12
+        assert len(all_instruments) == 13
 
 
 # =============================================================================

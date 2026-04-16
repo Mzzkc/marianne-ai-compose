@@ -146,12 +146,15 @@ class TestProfileDetails:
             assert model.cost_per_1k_output == 0.0, f"{model.name} is not free"
 
     def test_all_profiles_have_rate_limit_patterns(self) -> None:
-        """Every profile should have rate limit detection patterns."""
+        """Every API-backed profile should have rate limit detection patterns."""
+        skip_no_rate_limit = {"cli.yaml"}
         for f in BUILTINS_DIR.glob("*.yaml"):
             with open(f) as fh:
                 data = yaml.safe_load(fh)
             profile = InstrumentProfile.model_validate(data)
             assert profile.cli is not None
+            if f.name in skip_no_rate_limit:
+                continue
             assert len(profile.cli.errors.rate_limit_patterns) > 0, (
                 f"{f.name} has no rate limit patterns"
             )
