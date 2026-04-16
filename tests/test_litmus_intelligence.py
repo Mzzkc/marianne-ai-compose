@@ -2257,11 +2257,11 @@ class TestCostLimitWiringIntelligence:
 
 
 # =========================================================================
-# Category 17: Baton-Runner State Mapping Totality
+# Category 17: Baton State Mapping Totality
 # =========================================================================
 
 
-class TestBatonRunnerStateMappingTotality:
+class TestBatonStateMappingTotality:
     """Does the baton ↔ checkpoint status mapping cover ALL states?
 
     The adapter maps between BatonSheetStatus and SheetStatus. If any
@@ -2467,9 +2467,8 @@ class TestInstrumentValidationWithAliases:
 class TestSuccessOutcomeAfterRestart:
     """Does diagnose correctly classify sheets that took many attempts?
 
-    The runner's SheetExecutionMixin._classify_success_outcome has been
-    removed — outcome classification now lives in the baton's Musician.
-    These tests validated the runner's implementation.
+    Outcome classification now lives in the baton's Musician.
+    These tests were rewritten for the baton path.
     """
 
     @pytest.mark.skip(reason="Runner removed — classification now in baton")
@@ -2907,7 +2906,7 @@ class TestCredentialRedactionDefenseInDepth:
 # =============================================================================
 
 # TestSemanticContextTagEffectiveness removed — tested build_semantic_context_tags
-# which lived in runner.patterns (deleted as part of runner removal).
+# which was part of the removed runner package.
 
 # =============================================================================
 # 26. PROMPT RENDERER WIRING — F-158 FIX EFFECTIVENESS
@@ -3355,7 +3354,7 @@ class TestModelOverrideEffectiveness:
 class TestConcertChainingEffectiveness:
     """Does the baton path correctly detect completed_new_work for concerts?
 
-    under use_baton would chain forever even when no sheet completed new work.
+    Previously, chaining could loop forever even when no sheet completed new work.
 
     The litmus: has_completed_sheets returns True when sheets complete,
     False when they all fail, and the manager wires this into
@@ -4238,7 +4237,7 @@ class TestPluginCliBackendMcpGap:
             "F-255.3: ClaudeCliBackend.disable_mcp defaults to True — this "
             "is the protection that PluginCliBackend lacks. The baton uses "
             "PluginCliBackend, which means baton-managed sheets spawn MCP "
-            "servers while legacy runner sheets don't."
+            "servers."
         )
 
 
@@ -4375,9 +4374,9 @@ class TestCheckpointSyncDuckTyping:
 # =============================================================================
 
 
-class TestBatonLegacyFailedSheetParity:
+class TestBatonFailedSheetParity:
     """F-202 litmus: does the baton handle FAILED sheets in cross-sheet
-    context the same way as the legacy runner?
+    context correctly?
 
     LEGACY BEHAVIOR: FAILED sheets with stdout ARE included in cross-sheet
     previous_outputs. Downstream sheets can see what the failed sheet produced.
@@ -4403,7 +4402,7 @@ class TestBatonLegacyFailedSheetParity:
         # 2. COMPLETED → collect stdout
         # 3. Everything else (FAILED, RUNNING, etc.) → skip
         #
-        # This is different from legacy runner which includes FAILED stdout.
+        # FAILED stdout is excluded from cross-sheet context.
         # The status check at adapter.py line 738 is:
         #   if prev_state.status != BatonSheetStatus.COMPLETED: continue
 
@@ -4425,8 +4424,7 @@ class TestBatonLegacyFailedSheetParity:
         # The gap: FAILED is excluded from cross-sheet context
         assert BatonSheetStatus.FAILED not in collected_statuses, (
             "F-202 GAP: The baton EXCLUDES FAILED sheets from cross-sheet "
-            "context. The legacy runner INCLUDES them. When the baton becomes "
-            "default, downstream sheets will lose visibility into what failed "
+            "context. Downstream sheets will lose visibility into what failed "
             "upstream sheets produced. See adapter.py:738."
         )
 
@@ -4637,7 +4635,7 @@ class TestCrossSheetCredentialPipelineEndToEnd:
         file content.
 
         This verifies the wiring, not the redaction logic.
-        The legacy runner path was removed; only the baton path remains.
+        The legacy runner path was removed; only the baton path exists.
         """
         import inspect
 
