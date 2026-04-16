@@ -149,14 +149,16 @@ class TestBatonPathInstrumentPopulation:
 
         mock_config.pause_between_sheets_seconds = 0
 
-        with patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet]):
-            with patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}):
-                await JobManager._run_via_baton(
-                    manager,
-                    "test-job",
-                    mock_config,
-                    mock_request,
-                )
+        with (
+            patch("marianne.core.sheet.build_sheets", return_value=[mock_sheet]),
+            patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={}),
+        ):
+            await JobManager._run_via_baton(
+                manager,
+                "test-job",
+                mock_config,
+                mock_request,
+            )
 
         # instrument_name comes from the Sheet entity
         live = manager._live_states["test-job"]

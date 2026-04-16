@@ -74,8 +74,6 @@ class TestDetectCycleCyclic:
 
     def test_cycle_with_non_cyclic_branch(self) -> None:
         """Graph has a cycle (2→3→2) plus a non-cyclic branch (4→1)."""
-        deps = {2: {1}, 3: {2}, 2: {3}, 4: {1}}
-        # Rebuild deps properly — dict keys must be unique
         deps = {3: {2}, 4: {1}}
         # Add cycle: 2 depends on 3 and 3 depends on 2
         deps[2] = {3}

@@ -118,7 +118,7 @@ class TestStoreProperty:
     def test_store_raises_when_not_started(self, hub: LearningHub):
         """Accessing store before start() raises RuntimeError."""
         with pytest.raises(RuntimeError, match="LearningHub not started"):
-            hub.store
+            hub.store  # noqa: B018
 
     @pytest.mark.asyncio
     async def test_store_raises_after_stop(self, hub: LearningHub):
@@ -127,7 +127,7 @@ class TestStoreProperty:
         await hub.stop()
 
         with pytest.raises(RuntimeError, match="LearningHub not started"):
-            hub.store
+            hub.store  # noqa: B018
 
 
 # ─── Persistence Loop ────────────────────────────────────────────────

@@ -743,7 +743,8 @@ def test_skip_when_sheet_range_invariant(
 @given(data=st.just({}))
 @settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
 def test_workspace_config_models_roundtrip(data: dict[str, Any]) -> None:
-    """AIReviewConfig, CrossSheetConfig, FeedbackConfig, LogConfig, IsolationConfig, WorkspaceLifecycleConfig survive round-trip."""
+    """AIReviewConfig, CrossSheetConfig, FeedbackConfig, LogConfig,
+    IsolationConfig, WorkspaceLifecycleConfig survive round-trip."""
     from marianne.core.config.workspace import (
         AIReviewConfig,
         CrossSheetConfig,
@@ -777,7 +778,8 @@ def test_workspace_config_models_roundtrip(data: dict[str, Any]) -> None:
 @given(data=st.just({}))
 @settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
 def test_execution_config_models_roundtrip(data: dict[str, Any]) -> None:
-    """CircuitBreakerConfig, CostLimitConfig, ParallelConfig, RateLimitConfig, RetryConfig, StaleDetectionConfig survive round-trip."""
+    """CircuitBreakerConfig, CostLimitConfig, ParallelConfig, RateLimitConfig,
+    RetryConfig, StaleDetectionConfig survive round-trip."""
     from marianne.core.config.execution import (
         CircuitBreakerConfig,
         CostLimitConfig,
@@ -871,7 +873,8 @@ def test_hook_notification_config_roundtrip(hook_type: str, notif_type: str) -> 
 @given(data=st.just({}))
 @settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
 def test_learning_config_models_roundtrip(data: dict[str, Any]) -> None:
-    """AutoApplyConfig, CheckpointConfig, EntropyResponseConfig, ExplorationBudgetConfig, GroundingConfig, LearningConfig survive round-trip."""
+    """AutoApplyConfig, CheckpointConfig, EntropyResponseConfig,
+    ExplorationBudgetConfig, GroundingConfig, LearningConfig survive round-trip."""
     from marianne.core.config.learning import (
         AutoApplyConfig,
         CheckpointConfig,
@@ -920,7 +923,8 @@ def test_checkpoint_trigger_grounding_hook_roundtrip(sheet_num: int) -> None:
 @given(data=st.just({}))
 @settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
 def test_backend_config_models_roundtrip(data: dict[str, Any]) -> None:
-    """BackendConfig, BridgeConfig, OllamaConfig, RecursiveLightConfig, SheetBackendOverride survive round-trip."""
+    """BackendConfig, BridgeConfig, OllamaConfig, RecursiveLightConfig,
+    SheetBackendOverride survive round-trip."""
     from marianne.core.config.backend import (
         BackendConfig,
         BridgeConfig,

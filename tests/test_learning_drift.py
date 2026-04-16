@@ -534,7 +534,8 @@ class TestPatternRetirement:
         # Retire it directly by setting priority_score=0
         with store._get_connection() as conn:
             conn.execute(
-                "UPDATE patterns SET priority_score = 0, suggested_action = 'test retirement' WHERE id = ?",
+                "UPDATE patterns SET priority_score = 0, "
+                "suggested_action = 'test retirement' WHERE id = ?",
                 (pid,),
             )
 

@@ -448,7 +448,8 @@ class TestGetSimilarExecutions:
             workspace_path,
         )
 
-        # sheet_id "job-sheet1" -> sheet_num 1, "job-sheet1a" -> sheet_num 0 (no trailing digit match? let me check)
+        # sheet_id "job-sheet1" -> sheet_num 1, "job-sheet1a" -> sheet_num 0
+        # (no trailing digit match? let me check)
         # Actually "job-sheet1a" ends with "a" not a digit, so _extract_sheet_num returns 0
         # "job-sheet1" ends with "1" -> sheet_num 1
         # "job-sheet2" ends with "2" -> sheet_num 2

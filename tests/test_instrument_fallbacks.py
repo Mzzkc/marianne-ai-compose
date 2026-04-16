@@ -16,6 +16,7 @@ from textwrap import dedent
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from marianne.core.checkpoint import SheetState
 from marianne.core.config import JobConfig
@@ -233,7 +234,7 @@ class TestSheetConfigFallbacks:
 
     def test_per_sheet_fallback_invalid_key_rejected(self) -> None:
         """Sheet number must be positive integer."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             JobConfig.from_yaml_string(
                 dedent("""
                 name: invalid-key

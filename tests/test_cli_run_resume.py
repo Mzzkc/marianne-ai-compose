@@ -886,7 +886,10 @@ class TestResumeRejectedHints:
 
         result_dict = {
             "status": "rejected",
-            "message": "Score 'my-job' is completed, only PAUSED, FAILED, or CANCELLED scores can be resumed",
+            "message": (
+                "Score 'my-job' is completed, "
+                "only PAUSED, FAILED, or CANCELLED scores can be resumed"
+            ),
             "job_id": "my-job",
         }
 

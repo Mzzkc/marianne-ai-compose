@@ -501,9 +501,11 @@ class TestConnectionErrors:
             side_effect=RuntimeError("something unexpected"),
         )
 
-        with patch.object(backend, "_get_client", return_value=mock_client):
-            with pytest.raises(RuntimeError, match="something unexpected"):
-                await backend.execute("test")
+        with (
+            patch.object(backend, "_get_client", return_value=mock_client),
+            pytest.raises(RuntimeError, match="something unexpected"),
+        ):
+            await backend.execute("test")
 
 
 # ============================================================================

@@ -145,7 +145,7 @@ class TestMovementGrouping:
 
         # Movement 1 should have a completion indicator
         lines = output.split("\n")
-        m1_line = [l for l in lines if "Movement 1" in l][0]
+        m1_line = [line for line in lines if "Movement 1" in line][0]
         assert "completed" in m1_line.lower() or "\u2713" in m1_line
 
     def test_running_movement_shows_progress(self) -> None:
@@ -165,7 +165,7 @@ class TestMovementGrouping:
         output = buf.getvalue()
 
         lines = output.split("\n")
-        m2_line = [l for l in lines if "Movement 2" in l][0]
+        m2_line = [line for line in lines if "Movement 2" in line][0]
         # Should show partial completion: 1/3 or similar
         assert "1/3" in m2_line or "running" in m2_line.lower()
 
@@ -222,8 +222,8 @@ class TestMovementGrouping:
 
         # Instrument should not clutter the display when all the same
         # Count occurrences — the name may appear in the header but not per-movement
-        lines = [l for l in output.split("\n") if "Movement" in l]
-        instrument_mentions = sum(1 for l in lines if "claude-code" in l)
+        lines = [line for line in output.split("\n") if "Movement" in line]
+        instrument_mentions = sum(1 for line in lines if "claude-code" in line)
         assert instrument_mentions == 0
 
     def test_failed_movement_shows_error(self) -> None:
@@ -247,7 +247,7 @@ class TestMovementGrouping:
         output = buf.getvalue()
 
         lines = output.split("\n")
-        m2_line = [l for l in lines if "Movement 2" in l][0]
+        m2_line = [line for line in lines if "Movement 2" in line][0]
         assert "failed" in m2_line.lower()
 
     def test_descriptions_from_config_snapshot(self) -> None:

@@ -164,7 +164,7 @@ class TestBuildPromptJinja2Rendering:
         context = _make_context()
         # The musician catches exceptions and reports via inbox, but
         # _build_prompt itself should raise
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="undefined"):
             _build_prompt(sheet, context, total_sheets=1, total_movements=1)
 
 

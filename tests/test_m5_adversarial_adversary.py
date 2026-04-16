@@ -496,10 +496,12 @@ class TestSafeKillpgGuard:
         """os.killpg raising (e.g. no such process) propagates up."""
         from marianne.backends.claude_cli import _safe_killpg
 
-        with patch("os.killpg", side_effect=ProcessLookupError("No process")):
-            with patch("os.getpgid", return_value=12345):
-                with pytest.raises(ProcessLookupError):
-                    _safe_killpg(99999, signal.SIGTERM, context="test")
+        with (
+            patch("os.killpg", side_effect=ProcessLookupError("No process")),
+            patch("os.getpgid", return_value=12345),
+            pytest.raises(ProcessLookupError),
+        ):
+            _safe_killpg(99999, signal.SIGTERM, context="test")
 
 
 # =============================================================================

@@ -284,9 +284,11 @@ class TestReapOrphanedBackends:
             "uids": MagicMock(real=os.getuid()),
         }
 
-        with patch("psutil.process_iter", return_value=[mock_proc]):
-            with patch("os.kill", side_effect=OSError("No such process")):
-                killed = mgr.reap_orphaned_backends()
+        with (
+            patch("psutil.process_iter", return_value=[mock_proc]),
+            patch("os.kill", side_effect=OSError("No such process")),
+        ):
+            killed = mgr.reap_orphaned_backends()
 
         assert 12345 in killed
         mock_proc.kill.assert_called_once()
@@ -359,9 +361,11 @@ class TestReapOrphanedBackends:
         }
         mock_proc.kill.side_effect = psutil.NoSuchProcess(12345)
 
-        with patch("psutil.process_iter", return_value=[mock_proc]):
-            with patch("os.kill", side_effect=OSError("No such process")):
-                killed = mgr.reap_orphaned_backends()
+        with (
+            patch("psutil.process_iter", return_value=[mock_proc]),
+            patch("os.kill", side_effect=OSError("No such process")),
+        ):
+            killed = mgr.reap_orphaned_backends()
 
         # Process disappeared before kill — no crash, not counted as killed
         assert killed == []

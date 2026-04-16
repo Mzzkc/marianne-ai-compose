@@ -16,6 +16,8 @@ from textwrap import dedent
 from rich.console import Console
 
 from marianne.core.config import JobConfig
+from marianne.core.config.job import InjectionItem
+from marianne.prompts.templating import SheetContext
 from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks.best_practices import (
     FanOutWithoutDependenciesCheck,

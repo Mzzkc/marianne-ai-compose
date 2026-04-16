@@ -51,7 +51,8 @@ class TestBasicRendering:
               size: 10
               total_items: 30
             prompt:
-              template: "Process sheet {{{{ sheet_num }}}} items {{{{ start_item }}}}-{{{{ end_item }}}}"
+              template: >-
+                Process sheet {{{{ sheet_num }}}} items {{{{ start_item }}}}-{{{{ end_item }}}}
 
         """).format(workspace=tmp_path / "ws")
 

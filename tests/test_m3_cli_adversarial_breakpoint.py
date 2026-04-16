@@ -230,9 +230,9 @@ class TestFormatRateLimitInfoAdversarial:
         }
         lines = format_rate_limit_info(backends)
         assert len(lines) == 2
-        instruments_in_output = [l for l in lines if "claude-cli" in l]
+        instruments_in_output = [line for line in lines if "claude-cli" in line]
         assert len(instruments_in_output) == 1
-        instruments_in_output = [l for l in lines if "ollama" in l]
+        instruments_in_output = [line for line in lines if "ollama" in line]
         assert len(instruments_in_output) == 1
 
     @pytest.mark.adversarial

@@ -140,27 +140,30 @@ class TestCallResponseParsing:
             "id": 1,
         }
 
-        with _mock_connection(client, [_json_line(response)]):
-            with pytest.raises(JobSubmissionError, match="no such job"):
-                await client.call("job.status")
+        with (
+            _mock_connection(client, [_json_line(response)]),
+            pytest.raises(JobSubmissionError, match="no such job"),
+        ):
+            await client.call("job.status")
 
     @pytest.mark.asyncio
     async def test_malformed_json_raises(self, tmp_path: Path) -> None:
         """Non-JSON response raises json.JSONDecodeError."""
         client = _make_client(tmp_path)
 
-        with _mock_connection(client, [b"this is not json\n"]):
-            with pytest.raises(json.JSONDecodeError):
-                await client.call("test.method")
+        with _mock_connection(client, [b"this is not json\n"]), pytest.raises(json.JSONDecodeError):
+            await client.call("test.method")
 
     @pytest.mark.asyncio
     async def test_empty_response_raises_not_running(self, tmp_path: Path) -> None:
         """Empty response (connection closed) raises DaemonNotRunningError."""
         client = _make_client(tmp_path)
 
-        with _mock_connection(client, []):
-            with pytest.raises(DaemonNotRunningError, match="closed connection"):
-                await client.call("test.method")
+        with (
+            _mock_connection(client, []),
+            pytest.raises(DaemonNotRunningError, match="closed connection"),
+        ):
+            await client.call("test.method")
 
     @pytest.mark.asyncio
     async def test_error_missing_code_uses_default(self, tmp_path: Path) -> None:
@@ -172,9 +175,11 @@ class TestCallResponseParsing:
             "id": 1,
         }
 
-        with _mock_connection(client, [_json_line(response)]):
-            with pytest.raises(DaemonError, match="something went wrong"):
-                await client.call("test.method")
+        with (
+            _mock_connection(client, [_json_line(response)]),
+            pytest.raises(DaemonError, match="something went wrong"),
+        ):
+            await client.call("test.method")
 
     @pytest.mark.asyncio
     async def test_error_missing_message_uses_default(self, tmp_path: Path) -> None:
@@ -186,9 +191,11 @@ class TestCallResponseParsing:
             "id": 1,
         }
 
-        with _mock_connection(client, [_json_line(response)]):
-            with pytest.raises(JobSubmissionError, match="Unknown error"):
-                await client.call("test.method")
+        with (
+            _mock_connection(client, [_json_line(response)]),
+            pytest.raises(JobSubmissionError, match="Unknown error"),
+        ):
+            await client.call("test.method")
 
 
 # ---------------------------------------------------------------------------
@@ -245,10 +252,9 @@ class TestStreamResponseParsing:
             ),
         ]
 
-        with _mock_connection(client, lines):
-            with pytest.raises(JobSubmissionError, match="gone"):
-                async for _ in client.stream("test.stream"):
-                    pass
+        with _mock_connection(client, lines), pytest.raises(JobSubmissionError, match="gone"):
+            async for _ in client.stream("test.stream"):
+                pass
 
     @pytest.mark.asyncio
     async def test_stream_connection_closes_early(self, tmp_path: Path) -> None:
@@ -271,10 +277,9 @@ class TestStreamResponseParsing:
         """Malformed JSON in a notification line raises JSONDecodeError."""
         client = _make_client(tmp_path)
 
-        with _mock_connection(client, [b"not valid json\n"]):
-            with pytest.raises(json.JSONDecodeError):
-                async for _ in client.stream("test.stream"):
-                    pass
+        with _mock_connection(client, [b"not valid json\n"]), pytest.raises(json.JSONDecodeError):
+            async for _ in client.stream("test.stream"):
+                pass
 
     @pytest.mark.asyncio
     async def test_stream_empty_yields_nothing(self, tmp_path: Path) -> None:

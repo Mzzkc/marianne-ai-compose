@@ -125,9 +125,11 @@ class TestExecute:
         mock_client = AsyncMock()
         mock_client.post.side_effect = RuntimeError("Something went wrong")
 
-        with patch.object(backend, "_get_client", return_value=mock_client):
-            with pytest.raises(RuntimeError, match="Something went wrong"):
-                await backend.execute("test prompt")
+        with (
+            patch.object(backend, "_get_client", return_value=mock_client),
+            pytest.raises(RuntimeError, match="Something went wrong"),
+        ):
+            await backend.execute("test prompt")
 
     async def test_timeout_override_logged(self, backend: RecursiveLightBackend) -> None:
         """Per-call timeout_seconds is logged but not enforced."""

@@ -197,9 +197,9 @@ class TestGenerateCreateTable:
         # Original model field names should NOT appear as columns
         lines = sql.split("\n")
         column_lines = [
-            l.strip() for l in lines if l.strip() and not l.strip().startswith(("CREATE", ")"))
+            ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith(("CREATE", ")"))
         ]
-        col_names = [l.split()[0] for l in column_lines]
+        col_names = [ln.split()[0] for ln in column_lines]
         assert "job_id" not in col_names
         assert "job_name" not in col_names
 

@@ -215,7 +215,7 @@ class TestClearRateLimitSpecificity:
         baton = self._make_baton_with_instruments(names, limited)
 
         # Pick one rate-limited instrument to clear
-        limited_names = [n for n, l in zip(names, limited, strict=False) if l]
+        limited_names = [n for n, lim in zip(names, limited, strict=False) if lim]
         target = data.draw(st.sampled_from(limited_names))
 
         baton.clear_instrument_rate_limit(target)

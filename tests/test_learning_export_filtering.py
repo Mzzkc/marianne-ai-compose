@@ -113,20 +113,22 @@ class TestPendingPatternFiltering:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("marianne.cli.commands.learning._export.console"):
-            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
-                learning_export(output_dir="/tmp/test", include_pending=True)
+        with (
+            patch("marianne.cli.commands.learning._export.console"),
+            patch("marianne.cli.commands.learning._export._write_file") as mock_write,
+        ):
+            learning_export(output_dir="/tmp/test", include_pending=True)
 
-                # Check semantic-insights.md was written with patterns
-                semantic_calls = [
-                    call
-                    for call in mock_write.call_args_list
-                    if "semantic-insights.md" in str(call[0][0])
-                ]
-                assert len(semantic_calls) == 1
-                content = semantic_calls[0][0][1]
-                assert "Pattern 1" in content
-                assert "Pattern 2" in content
+            # Check semantic-insights.md was written with patterns
+            semantic_calls = [
+                call
+                for call in mock_write.call_args_list
+                if "semantic-insights.md" in str(call[0][0])
+            ]
+            assert len(semantic_calls) == 1
+            content = semantic_calls[0][0][1]
+            assert "Pattern 1" in content
+            assert "Pattern 2" in content
 
     @patch("marianne.learning.global_store.get_global_store")
     def test_include_pending_false_excludes_pending_patterns(self, mock_store_factory):
@@ -153,19 +155,21 @@ class TestPendingPatternFiltering:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("marianne.cli.commands.learning._export.console"):
-            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
-                learning_export(output_dir="/tmp/test", include_pending=False)
+        with (
+            patch("marianne.cli.commands.learning._export.console"),
+            patch("marianne.cli.commands.learning._export._write_file") as mock_write,
+        ):
+            learning_export(output_dir="/tmp/test", include_pending=False)
 
-                # Check semantic-insights.md shows no patterns
-                semantic_calls = [
-                    call
-                    for call in mock_write.call_args_list
-                    if "semantic-insights.md" in str(call[0][0])
-                ]
-                assert len(semantic_calls) == 1
-                content = semantic_calls[0][0][1]
-                assert "No semantic insights found" in content
+            # Check semantic-insights.md shows no patterns
+            semantic_calls = [
+                call
+                for call in mock_write.call_args_list
+                if "semantic-insights.md" in str(call[0][0])
+            ]
+            assert len(semantic_calls) == 1
+            content = semantic_calls[0][0][1]
+            assert "No semantic insights found" in content
 
 
 class TestEffectivenessFiltering:
@@ -217,21 +221,23 @@ class TestEffectivenessFiltering:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("marianne.cli.commands.learning._export.console"):
-            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
-                learning_export(output_dir="/tmp/test", min_effectiveness=0.6)
+        with (
+            patch("marianne.cli.commands.learning._export.console"),
+            patch("marianne.cli.commands.learning._export._write_file") as mock_write,
+        ):
+            learning_export(output_dir="/tmp/test", min_effectiveness=0.6)
 
-                # Check semantic-insights.md only has patterns >= 0.6
-                semantic_calls = [
-                    call
-                    for call in mock_write.call_args_list
-                    if "semantic-insights.md" in str(call[0][0])
-                ]
-                assert len(semantic_calls) == 1
-                content = semantic_calls[0][0][1]
-                assert "Pattern p1" not in content  # 0.4 < 0.6
-                assert "Pattern p2" in content  # 0.6 >= 0.6
-                assert "Pattern p3" in content  # 0.8 >= 0.6
+            # Check semantic-insights.md only has patterns >= 0.6
+            semantic_calls = [
+                call
+                for call in mock_write.call_args_list
+                if "semantic-insights.md" in str(call[0][0])
+            ]
+            assert len(semantic_calls) == 1
+            content = semantic_calls[0][0][1]
+            assert "Pattern p1" not in content  # 0.4 < 0.6
+            assert "Pattern p2" in content  # 0.6 >= 0.6
+            assert "Pattern p3" in content  # 0.8 >= 0.6
 
     @patch("marianne.learning.global_store.get_global_store")
     def test_min_effectiveness_zero_includes_all_patterns(self, mock_store_factory):
@@ -259,21 +265,23 @@ class TestEffectivenessFiltering:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("marianne.cli.commands.learning._export.console"):
-            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
-                learning_export(output_dir="/tmp/test", min_effectiveness=0.0)
+        with (
+            patch("marianne.cli.commands.learning._export.console"),
+            patch("marianne.cli.commands.learning._export._write_file") as mock_write,
+        ):
+            learning_export(output_dir="/tmp/test", min_effectiveness=0.0)
 
-                # Check semantic-insights.md has all patterns
-                semantic_calls = [
-                    call
-                    for call in mock_write.call_args_list
-                    if "semantic-insights.md" in str(call[0][0])
-                ]
-                assert len(semantic_calls) == 1
-                content = semantic_calls[0][0][1]
-                assert "Pattern p1" in content
-                assert "Pattern p2" in content
-                assert "Pattern p3" in content
+            # Check semantic-insights.md has all patterns
+            semantic_calls = [
+                call
+                for call in mock_write.call_args_list
+                if "semantic-insights.md" in str(call[0][0])
+            ]
+            assert len(semantic_calls) == 1
+            content = semantic_calls[0][0][1]
+            assert "Pattern p1" in content
+            assert "Pattern p2" in content
+            assert "Pattern p3" in content
 
 
 class TestFilterDocumentation:
@@ -300,19 +308,21 @@ class TestFilterDocumentation:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("marianne.cli.commands.learning._export.console"):
-            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
-                learning_export(output_dir="/tmp/test", include_pending=True, min_effectiveness=0.0)
+        with (
+            patch("marianne.cli.commands.learning._export.console"),
+            patch("marianne.cli.commands.learning._export._write_file") as mock_write,
+        ):
+            learning_export(output_dir="/tmp/test", include_pending=True, min_effectiveness=0.0)
 
-                # Check headers
-                semantic_calls = [
-                    call
-                    for call in mock_write.call_args_list
-                    if "semantic-insights.md" in str(call[0][0])
-                ]
-                assert len(semantic_calls) == 1
-                content = semantic_calls[0][0][1]
-                assert "No filters applied" in content
+            # Check headers
+            semantic_calls = [
+                call
+                for call in mock_write.call_args_list
+                if "semantic-insights.md" in str(call[0][0])
+            ]
+            assert len(semantic_calls) == 1
+            content = semantic_calls[0][0][1]
+            assert "No filters applied" in content
 
     @patch("marianne.learning.global_store.get_global_store")
     def test_pending_filter_documented_in_header(self, mock_store_factory):
@@ -335,18 +345,20 @@ class TestFilterDocumentation:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("marianne.cli.commands.learning._export.console"):
-            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
-                learning_export(output_dir="/tmp/test", include_pending=False)
+        with (
+            patch("marianne.cli.commands.learning._export.console"),
+            patch("marianne.cli.commands.learning._export._write_file") as mock_write,
+        ):
+            learning_export(output_dir="/tmp/test", include_pending=False)
 
-                semantic_calls = [
-                    call
-                    for call in mock_write.call_args_list
-                    if "semantic-insights.md" in str(call[0][0])
-                ]
-                assert len(semantic_calls) == 1
-                content = semantic_calls[0][0][1]
-                assert "excluding PENDING patterns" in content
+            semantic_calls = [
+                call
+                for call in mock_write.call_args_list
+                if "semantic-insights.md" in str(call[0][0])
+            ]
+            assert len(semantic_calls) == 1
+            content = semantic_calls[0][0][1]
+            assert "excluding PENDING patterns" in content
 
     @patch("marianne.learning.global_store.get_global_store")
     def test_effectiveness_filter_documented_in_header(self, mock_store_factory):
@@ -369,18 +381,20 @@ class TestFilterDocumentation:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("marianne.cli.commands.learning._export.console"):
-            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
-                learning_export(output_dir="/tmp/test", min_effectiveness=0.6)
+        with (
+            patch("marianne.cli.commands.learning._export.console"),
+            patch("marianne.cli.commands.learning._export._write_file") as mock_write,
+        ):
+            learning_export(output_dir="/tmp/test", min_effectiveness=0.6)
 
-                semantic_calls = [
-                    call
-                    for call in mock_write.call_args_list
-                    if "semantic-insights.md" in str(call[0][0])
-                ]
-                assert len(semantic_calls) == 1
-                content = semantic_calls[0][0][1]
-                assert "min_effectiveness >= 60.0%" in content
+            semantic_calls = [
+                call
+                for call in mock_write.call_args_list
+                if "semantic-insights.md" in str(call[0][0])
+            ]
+            assert len(semantic_calls) == 1
+            content = semantic_calls[0][0][1]
+            assert "min_effectiveness >= 60.0%" in content
 
 
 class TestPatternHealthPendingReporting:
@@ -437,24 +451,24 @@ class TestPatternHealthPendingReporting:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("marianne.cli.commands.learning._export.console"):
-            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
-                learning_export(output_dir="/tmp/test")
+        with (
+            patch("marianne.cli.commands.learning._export.console"),
+            patch("marianne.cli.commands.learning._export._write_file") as mock_write,
+        ):
+            learning_export(output_dir="/tmp/test")
 
-                # Find pattern-health.md call
-                health_calls = [
-                    call
-                    for call in mock_write.call_args_list
-                    if "pattern-health.md" in str(call[0][0])
-                ]
-                assert len(health_calls) == 1
-                content = health_calls[0][0][1]
+            # Find pattern-health.md call
+            health_calls = [
+                call for call in mock_write.call_args_list if "pattern-health.md" in str(call[0][0])
+            ]
+            assert len(health_calls) == 1
+            content = health_calls[0][0][1]
 
-                # Should have sections for both quarantined and pending
-                assert "## Quarantined Patterns (1)" in content
-                assert "## Pending Validation Patterns (2)" in content
-                assert "Pattern p1" in content
-                assert "Pattern p2" in content
+            # Should have sections for both quarantined and pending
+            assert "## Quarantined Patterns (1)" in content
+            assert "## Pending Validation Patterns (2)" in content
+            assert "Pattern p1" in content
+            assert "Pattern p2" in content
 
     @patch("marianne.learning.global_store.get_global_store")
     def test_quarantine_status_enum_comparison(self, mock_store_factory):
@@ -522,29 +536,31 @@ class TestFilterCombinations:
         mock_store.get_execution_stats.return_value = {}
         mock_store_factory.return_value = mock_store
 
-        with patch("marianne.cli.commands.learning._export.console"):
-            with patch("marianne.cli.commands.learning._export._write_file") as mock_write:
-                learning_export(
-                    output_dir="/tmp/test",
-                    include_pending=False,
-                    min_effectiveness=0.6,
-                )
+        with (
+            patch("marianne.cli.commands.learning._export.console"),
+            patch("marianne.cli.commands.learning._export._write_file") as mock_write,
+        ):
+            learning_export(
+                output_dir="/tmp/test",
+                include_pending=False,
+                min_effectiveness=0.6,
+            )
 
-                semantic_calls = [
-                    call
-                    for call in mock_write.call_args_list
-                    if "semantic-insights.md" in str(call[0][0])
-                ]
-                assert len(semantic_calls) == 1
-                content = semantic_calls[0][0][1]
+            semantic_calls = [
+                call
+                for call in mock_write.call_args_list
+                if "semantic-insights.md" in str(call[0][0])
+            ]
+            assert len(semantic_calls) == 1
+            content = semantic_calls[0][0][1]
 
-                # p1: excluded (PENDING + low effectiveness)
-                # p2: excluded (PENDING, even though eff >= 0.6)
-                # p3: included (VALIDATED + eff >= 0.6)
-                assert "Pattern p1" not in content
-                assert "Pattern p2" not in content
-                assert "Pattern p3" in content
+            # p1: excluded (PENDING + low effectiveness)
+            # p2: excluded (PENDING, even though eff >= 0.6)
+            # p3: included (VALIDATED + eff >= 0.6)
+            assert "Pattern p1" not in content
+            assert "Pattern p2" not in content
+            assert "Pattern p3" in content
 
-                # Header should document both filters
-                assert "excluding PENDING patterns" in content
-                assert "min_effectiveness >= 60.0%" in content
+            # Header should document both filters
+            assert "excluding PENDING patterns" in content
+            assert "min_effectiveness >= 60.0%" in content

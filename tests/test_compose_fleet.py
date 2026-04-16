@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from marianne.compose.fleet import FleetGenerator
 from marianne.core.config.fleet import FleetConfig, FleetGroupConfig
@@ -219,7 +220,7 @@ class TestFleetGenerator:
         # A FleetConfig cannot contain nested fleet entries — it only holds
         # FleetScoreEntry items with path + optional group. There is no
         # sub-fleet field. Attempting to add nested fleet structure fails.
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             FleetConfig(
                 name="outer",
                 type="fleet",

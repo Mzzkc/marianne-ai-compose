@@ -139,9 +139,11 @@ class TestGitDiffProvider:
     def test_get_diff_git_not_found(self, tmp_path: Path):
         """Missing git raises RuntimeError."""
         provider = GitDiffProvider(since_commit="abc")
-        with patch("subprocess.run", side_effect=FileNotFoundError):
-            with pytest.raises(RuntimeError, match="Git is not installed"):
-                provider.get_diff(tmp_path)
+        with (
+            patch("subprocess.run", side_effect=FileNotFoundError),
+            pytest.raises(RuntimeError, match="Git is not installed"),
+        ):
+            provider.get_diff(tmp_path)
 
     def test_get_diff_subprocess_error(self, tmp_path: Path):
         """Other subprocess errors return empty string."""

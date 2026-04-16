@@ -664,24 +664,25 @@ class TestPromptRendererWiring:
 
         prompt_config = MagicMock()
 
-        with patch("marianne.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls:
-            # Patch inside the lazy import path
-            with patch.dict(
+        with (
+            patch("marianne.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls,
+            patch.dict(
                 "sys.modules",
                 {"marianne.daemon.baton.prompt": MagicMock(PromptRenderer=mock_cls)},
-            ):
-                adapter.register_job(
-                    job_id="test-job",
-                    sheets=[sheet1, sheet2],
-                    dependencies={},
-                    prompt_config=prompt_config,
-                )
+            ),
+        ):
+            adapter.register_job(
+                job_id="test-job",
+                sheets=[sheet1, sheet2],
+                dependencies={},
+                prompt_config=prompt_config,
+            )
 
-                mock_cls.assert_called_once()
-                call_kwargs = mock_cls.call_args
-                assert call_kwargs.kwargs.get("total_sheets") == 2
-                # 2 sheets, 2 different movements → total_stages = 2
-                assert call_kwargs.kwargs.get("total_stages") == 2
+            mock_cls.assert_called_once()
+            call_kwargs = mock_cls.call_args
+            assert call_kwargs.kwargs.get("total_sheets") == 2
+            # 2 sheets, 2 different movements → total_stages = 2
+            assert call_kwargs.kwargs.get("total_stages") == 2
 
     def test_total_stages_single_movement(self) -> None:
         """All sheets in same movement → total_stages = 1."""
@@ -702,19 +703,21 @@ class TestPromptRendererWiring:
             s.instrument_name = "claude-code"
             sheets.append(s)
 
-        with patch("marianne.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls:
-            with patch.dict(
+        with (
+            patch("marianne.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls,
+            patch.dict(
                 "sys.modules",
                 {"marianne.daemon.baton.prompt": MagicMock(PromptRenderer=mock_cls)},
-            ):
-                adapter.register_job(
-                    job_id="test-job",
-                    sheets=sheets,
-                    dependencies={},
-                    prompt_config=MagicMock(),
-                )
+            ),
+        ):
+            adapter.register_job(
+                job_id="test-job",
+                sheets=sheets,
+                dependencies={},
+                prompt_config=MagicMock(),
+            )
 
-                assert mock_cls.call_args.kwargs.get("total_stages") == 1
+            assert mock_cls.call_args.kwargs.get("total_stages") == 1
 
     def test_total_stages_none_movement_counted(self) -> None:
         """Sheets with movement=None should still produce total_stages >= 1.
@@ -736,20 +739,22 @@ class TestPromptRendererWiring:
         sheet.movement = None
         sheet.instrument_name = "claude-code"
 
-        with patch("marianne.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls:
-            with patch.dict(
+        with (
+            patch("marianne.daemon.baton.adapter.PromptRenderer", create=True) as mock_cls,
+            patch.dict(
                 "sys.modules",
                 {"marianne.daemon.baton.prompt": MagicMock(PromptRenderer=mock_cls)},
-            ):
-                adapter.register_job(
-                    job_id="test-job",
-                    sheets=[sheet],
-                    dependencies={},
-                    prompt_config=MagicMock(),
-                )
+            ),
+        ):
+            adapter.register_job(
+                job_id="test-job",
+                sheets=[sheet],
+                dependencies={},
+                prompt_config=MagicMock(),
+            )
 
-                total_stages = mock_cls.call_args.kwargs.get("total_stages")
-                assert total_stages >= 1
+            total_stages = mock_cls.call_args.kwargs.get("total_stages")
+            assert total_stages >= 1
 
 
 # =========================================================================

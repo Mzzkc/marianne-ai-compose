@@ -159,10 +159,9 @@ class TestMigrationFailure:
             # This migration will fail (t1 already exists, IF NOT EXISTS not used)
             "CREATE TABLE t1 (id INTEGER PRIMARY KEY)",
         ]
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="already exists"):
             await apply_migrations(db, migrations, db_name="test")
 
-        # First migration should have succeeded (version = 1)
         assert await get_version(db) == 1
         await db.close()
 
@@ -176,10 +175,8 @@ class TestMigrationFailure:
             # Third migration fails with invalid SQL
             "THIS IS NOT VALID SQL",
         ]
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="syntax error"):
             await apply_migrations(db, migrations, db_name="test")
-
-        # Should stop at version 2
         assert await get_version(db) == 2
         await db.close()
 

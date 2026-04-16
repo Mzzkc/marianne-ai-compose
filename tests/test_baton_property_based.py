@@ -1357,7 +1357,8 @@ class TestDependencyResolution:
 class TestPromptAssemblyOrderingProperty:
     """The prompt assembly ORDER invariant holds for arbitrary content.
 
-    Spec (M7 cache-optimized): skills < context < template < specs < failures < patterns < validations
+    Spec (M7 cache-optimized):
+    skills < context < template < specs < failures < patterns < validations
 
     Rationale: Static prelude/cadenza content (skills/context) placed before dynamic
     template content maximizes Claude's prompt cache hit rate across retries.

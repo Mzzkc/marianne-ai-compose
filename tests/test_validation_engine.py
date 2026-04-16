@@ -1028,7 +1028,7 @@ class TestCommandSucceedsValidation:
         """High-risk command patterns trigger a warning log."""
         rule = _rule_no_retry(
             type="command_succeeds",
-            command="sudo echo hi",
+            command="sudo -n echo hi",
         )
         engine = _make_engine(temp_workspace)
         with caplog.at_level("WARNING", logger="marianne.execution.validation"):

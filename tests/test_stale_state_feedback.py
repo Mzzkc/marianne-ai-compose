@@ -69,15 +69,13 @@ class TestStalePidDetection:
             ),
             patch("marianne.daemon.process._read_pid", return_value=88888),
             patch("marianne.daemon.process._pid_alive", return_value=False),
-            # After stale cleanup, PID file is deleted so lock check skipped.
-            # Stop at configure_logging to prevent full startup.
             patch(
                 "marianne.core.logging.configure_logging",
                 side_effect=RuntimeError("test stop"),
             ),
+            pytest.raises(RuntimeError, match="test stop"),
         ):
-            with pytest.raises(RuntimeError, match="test stop"):
-                start_conductor(foreground=True)
+            start_conductor(foreground=True)
 
         captured = capsys.readouterr()
         assert "stale" in captured.out.lower(), f"Expected 'stale' in output, got: {captured.out!r}"
