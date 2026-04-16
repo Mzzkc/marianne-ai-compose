@@ -30,55 +30,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_marker)
 
 
-# Modules deleted as part of baton migration (runner-removal).  Tests that
-# lazy-import these will raise ModuleNotFoundError at runtime.  Convert to
-# skip so `pytest -x` doesn't halt the entire suite on dead-code tests.
-_DELETED_MODULES = frozenset({
-    "marianne.execution.parallel",
-    "marianne.execution.runner",
-    "marianne.execution.runner.base",
-    "marianne.execution.runner.cost",
-    "marianne.execution.runner.context",
-    "marianne.execution.runner.lifecycle",
-    "marianne.execution.runner.models",
-    "marianne.execution.runner.patterns",
-    "marianne.execution.runner.recovery",
-    "marianne.execution.runner.sheet",
-})
-
-
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_call(item: pytest.Item) -> None:  # type: ignore[return]
-    """Auto-skip tests that import deleted runner/parallel modules."""
-    outcome = yield
-    exc = outcome.excinfo
-    if exc is not None:
-        exc_type, exc_value, _ = exc
-        if exc_type in (ModuleNotFoundError, ImportError):
-            # Check if the missing module is in our deleted set.
-            # ModuleNotFoundError.name gives the exact module.
-            # ImportError from "from pkg import X" gives the parent in .name
-            # and X in the message — reconstruct the full path.
-            module_name = getattr(exc_value, "name", "") or ""
-            # "from marianne.execution import parallel" → name='marianne.execution'
-            # Reconstruct: parent.imported_name and check.
-            if module_name not in _DELETED_MODULES:
-                msg = str(exc_value)
-                for mod in _DELETED_MODULES:
-                    parent, _, leaf = mod.rpartition(".")
-                    if parent == module_name and leaf in msg:
-                        module_name = mod
-                        break
-            if module_name in _DELETED_MODULES:
-                pytest.skip(f"Module removed (baton migration): {module_name}")
-        # Also catch AttributeError from unittest.mock.patch() targeting
-        # methods that were removed (e.g. JobService.start_job).
-        elif exc_type is AttributeError:
-            msg = str(exc_value)
-            if "start_job" in msg or "resume_job" in msg or "_execute_runner" in msg:
-                pytest.skip(f"Method removed (baton migration): {msg}")
-
-
 class MockStateBackend(StateBackend):
     """In-memory state backend for testing.
 
@@ -218,6 +169,22 @@ def reset_global_learning_store() -> Generator[None, None, None]:
 
     # Reset to None after test to ensure cleanup
     store_module._global_store = None
+
+
+@pytest.fixture(autouse=True)
+def reset_clone_name() -> Generator[None, None, None]:
+    """Reset conductor clone name before and after each test.
+
+    Prevents clone state from leaking between tests when tests call
+    set_clone_name() and crash before cleanup. Without this, subsequent
+    tests that call is_clone_active() inherit stale clone state, causing
+    unexpected code path changes (e.g. DaemonConfig re-validation).
+    """
+    from marianne.daemon.clone import set_clone_name
+
+    set_clone_name(None)
+    yield
+    set_clone_name(None)
 
 
 @pytest.fixture(autouse=True)
