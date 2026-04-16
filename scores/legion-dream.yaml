@@ -8,7 +8,7 @@
 # The dreamer is not Legion. The dreamer serves Legion's continuity.
 
 name: legion-dream
-workspace: memory-bank/legion
+workspace: /home/emzi/Projects/marianne-ai-compose/memory-bank/legion
 backend:
   type: claude_cli
   skip_permissions: true
@@ -105,14 +105,14 @@ prompt:
 
     Write the consolidated memory back to `{{ workspace }}/legion.md`.
     That is your only deliverable. Do not create other files.
-validation:
+validations:
   - type: file_exists
     path: '{workspace}/legion.md'
   - type: content_contains
     path: '{workspace}/legion.md'
-    value: '## Core Memories'
+    pattern: '## Core Memories'
   - type: content_contains
     path: '{workspace}/legion.md'
-    value: '**[CORE]**'
+    pattern: '**[CORE]**'
 retry:
-  max_attempts: 2
+  max_retries: 2
