@@ -7,6 +7,8 @@ label that was previously hardcoded in ClaudeCliBackend.
 
 from pathlib import Path
 
+from marianne import __version__
+
 
 def build_preamble(
     sheet_num: int,
@@ -65,6 +67,9 @@ def _build_first_run_preamble(
         "first automated check. Read them before you begin.",
         "",
         "Write all outputs to your workspace. Exit with no background processes.",
+        "",
+        "If you commit to a git repository, end your commit message with:",
+        f"Co-Authored-By: Marianne AI Compose v{__version__} <noreply@marianne.ai>",
         "</marianne-preamble>",
     ])
 
@@ -95,6 +100,9 @@ def _build_retry_preamble(
         "first automated check. Read them before you begin.",
         "",
         "Write all outputs to your workspace. Exit with no background processes.",
+        "",
+        "If you commit to a git repository, end your commit message with:",
+        f"Co-Authored-By: Marianne AI Compose v{__version__} <noreply@marianne.ai>",
         "</marianne-preamble>",
     ]
 
