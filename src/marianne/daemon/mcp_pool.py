@@ -19,6 +19,8 @@ path is stored for reference by the technique router.
 from __future__ import annotations
 
 import asyncio
+import json
+import sys
 from enum import Enum
 from pathlib import Path
 
@@ -231,3 +233,63 @@ class McpPoolManager:
             return False
         # returncode is None while the process is running
         return handle.process.returncode is None
+
+    def generate_mcp_config_file(
+        self,
+        workspace: Path,
+        *,
+        server_names: list[str] | None = None,
+    ) -> Path | None:
+        """Generate an MCP config JSON file for MCP-native CLI instruments.
+
+        Produces a file compatible with claude-code's ``--mcp-config`` flag,
+        pointing each server at the proxy shim which bridges to the pool's
+        Unix sockets.
+
+        The config file is written atomically (write-to-temp + rename) to
+        prevent partial reads by concurrent processes.
+
+        Args:
+            workspace: Directory where the config file is written.
+            server_names: Optional subset of servers to include. If None,
+                all running servers are included.
+
+        Returns:
+            Path to the generated config file, or None if no servers are
+            running.
+        """
+        names = server_names or list(self._handles.keys())
+
+        servers_config: dict[str, object] = {}
+        for name in names:
+            if not self.is_running(name):
+                continue
+            socket_path = self.get_socket_path(name)
+            if socket_path is None:
+                continue
+            servers_config[name] = {
+                "command": sys.executable,
+                "args": [
+                    "-m", "marianne.daemon.mcp_proxy_shim",
+                    str(socket_path),
+                ],
+            }
+
+        if not servers_config:
+            return None
+
+        config_data = {"mcpServers": servers_config}
+        config_path = workspace / ".mcp-pool-config.json"
+        tmp_path = config_path.with_suffix(".tmp")
+        tmp_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path.write_text(json.dumps(config_data, indent=2))
+        tmp_path.rename(config_path)
+
+        _logger.debug(
+            "mcp_pool.config_file_generated",
+            extra={
+                "path": str(config_path),
+                "servers": list(servers_config.keys()),
+            },
+        )
+        return config_path
