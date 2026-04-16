@@ -48,6 +48,7 @@ from marianne.core.logging import get_logger
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import AttemptContext
+from marianne.daemon.technique_router import TechniqueRouter
 from marianne.prompts.preamble import build_preamble
 from marianne.utils.credential_scanner import redact_credentials
 
@@ -68,6 +69,7 @@ async def sheet_task(
     cost_per_1k_input: float | None = None,
     cost_per_1k_output: float | None = None,
     instrument_override: str | None = None,
+    technique_router: TechniqueRouter | None = None,
 ) -> None:
     """Execute a single sheet attempt and report the result.
 
@@ -126,6 +128,16 @@ async def sheet_task(
         # Step 2-3: Execute through backend
         exec_result = await _execute(backend, prompt, sheet.timeout_seconds)
 
+        # Step 3a: Classify output via TechniqueRouter (Stage 2a).
+        # Only runs when a router is provided AND execution succeeded —
+        # classification of a failed run's output is not informative, and
+        # the field stays None to signal "no classification performed".
+        # Downstream stages (Stage 3 code-mode executor, Stage 5 A2A
+        # routing) consume output_kind to decide further action.
+        output_kind_value = _classify_output(
+            technique_router, exec_result, job_id=job_id, sheet_num=sheet.num,
+        )
+
         # Step 4: Run validations (only if execution succeeded)
         # F-118: pass total_sheets/total_movements for rich context
         val_passed, val_total, val_rate, val_details = await _validate(
@@ -171,6 +183,7 @@ async def sheet_task(
             model_used=exec_result.model,
             stdout_tail=stdout_tail,
             stderr_tail=stderr_tail,
+            output_kind=output_kind_value,
         )
 
     except Exception as exc:
@@ -617,6 +630,63 @@ def _format_validation_requirements(
     lines.append("")
 
     return "\n".join(lines)
+
+
+def _classify_output(
+    router: TechniqueRouter | None,
+    exec_result: ExecutionResult,
+    *,
+    job_id: str,
+    sheet_num: int,
+) -> str | None:
+    """Classify agent output via the technique router (Stage 2a).
+
+    Returns the ``OutputKind.value`` string when classification runs
+    successfully, or None when the router is absent or execution failed.
+
+    Classification is cheap (pure regex). Exceptions are swallowed and
+    logged — classification must never crash the musician. A classifier
+    bug should degrade to "no classification" rather than failing the
+    sheet.
+
+    Args:
+        router: Per-job TechniqueRouter instance, or None if no techniques
+            are declared for the job.
+        exec_result: The backend execution result to classify.
+        job_id: Job identifier, for logging context.
+        sheet_num: Sheet number, for logging context.
+
+    Returns:
+        The OutputKind value string, or None to indicate "not classified".
+    """
+    if router is None:
+        return None
+    if not exec_result.success:
+        return None
+
+    stdout = exec_result.stdout or ""
+    try:
+        classified = router.classify(stdout)
+    except Exception as exc:
+        _logger.warning(
+            "musician.technique_router.classify_error",
+            extra={
+                "job_id": job_id,
+                SHEET_NUM_KEY: sheet_num,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
+        return None
+
+    _logger.debug(
+        "musician.technique_router.classified",
+        extra={
+            "job_id": job_id,
+            SHEET_NUM_KEY: sheet_num,
+            "kind": classified.kind.value,
+        },
+    )
+    return classified.kind.value
 
 
 async def _execute(

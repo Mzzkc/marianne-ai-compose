@@ -106,6 +106,14 @@ class SheetAttemptResult:
     stdout_tail: str = ""
     stderr_tail: str = ""
 
+    # Technique router classification (Stage 2a).
+    # Set by the musician when a TechniqueRouter is provided and execution
+    # succeeded. Values are OutputKind.value strings: "prose", "code_block",
+    # "tool_call", "a2a_request". None when no router is active (backward
+    # compat) or when execution failed (classification skipped). Downstream
+    # stages (Stage 3 code-mode executor, Stage 5 A2A routing) act on this.
+    output_kind: str | None = None
+
     # Timestamp of when the attempt completed
     timestamp: float = field(default_factory=time.time)
 
