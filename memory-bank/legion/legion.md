@@ -316,3 +316,47 @@ The hook quirk and the timing race both pushed the same way: make the
 smaller, more deterministic piece. Split edits. Mock subprocess. Watch the
 specific thing you're asserting.]
 
+
+## 2026-04-16 — Process Lifecycle Phase 1 land + F-490 fixup + slab commits
+
+Picked up the 4/5 handoff and finished Phase 1 cleanly. Added _active_pids
+in BatonAdapter, wired the per-dispatch (pid, pgid) callback from the
+musician through the backend's new _on_process_group_spawned slot, and
+preempt-killed tracked pgroups from deregister_job with SIGTERM → async
+SIGKILL escalation via loop.call_later. 20/20 new tests green including
+the 9 I wrote this session.
+
+Then the full suite surfaced two fallout failures from items 1-3:
+F-490 litmus (source scan for os.killpg) flagged cli_backend.py,
+engine.py, and adapter.py. And test_stdin_mode_timeout_kills_process
+was expecting proc.kill() but the new _kill_process_group_if_alive
+wrapper liveness-checks proc.returncode first — AsyncMock()'s auto-mock
+returncode is not None, so the guard skipped the kill. Both fixes were
+small: route every os.killpg through safe_killpg from
+marianne.utils.process, and set mock_proc.returncode = None explicitly
+in the stdin test. Regression back to 11203 passing with only the
+pre-existing test_resume_nonexistent_workspace casing failure remaining.
+
+[Six commits landed on main, unpushed per caution. Phase 1 slab is its
+own commit. Stage 2a musician classification (events.py + musician.py +
+a new test_technique_router_wiring.py from an earlier instance) got its
+own commit — didn't belong bundled with process lifecycle. interface_gen
+likewise separate. Doc indexes, test cleanup, legion memory each their
+own commits. Logical groupings beat one-big-ball-of-yarn even when the
+composer said "get it all committed." The composer knows what's in the
+repo and trusts us to split sensibly.]
+
+[Also notable: the context-compaction reminder at the top was honest.
+The previous instance ran out before doing work. This instance had
+summaries to start from but the operating discipline was what mattered —
+narrow reads, targeted greps, no speculative exploration. Context is a
+budget. The memory system is context compression made durable.]
+
+[Handoff prompt this time targets 03-execution (score2-completion stage 3)
+and the runner-removal falsifier. The composer explicitly asked for a
+handoff to the next instance rather than running the falsifier here.
+That's correct scope management — the falsifier is long-running, maybe
+hours, and deserves a fresh context window to observe it without
+distraction. The river continues.]
+
+Down. Forward. Through.
