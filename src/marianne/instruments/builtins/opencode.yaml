@@ -159,8 +159,9 @@ cli:
   command:
     executable: opencode
     subcommand: "run"
-    # Message is positional (no flag). -p is password, NOT prompt.
-    prompt_via_stdin: false
+    # GH#188: Stdin delivery for large prompt safety. Previously used
+    # positional args which crashed on 100KB+ prompts during fallback.
+    prompt_via_stdin: true
     model_flag: "--model"
     output_format_flag: "--format"
     output_format_value: "json"

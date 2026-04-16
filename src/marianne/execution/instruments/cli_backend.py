@@ -179,6 +179,7 @@ class PluginCliBackend(Backend):
         prompt: str,
         *,
         timeout_seconds: float | None,
+        force_stdin: bool = False,
     ) -> list[str]:
         """Build the CLI command from the profile configuration.
 
@@ -190,6 +191,8 @@ class PluginCliBackend(Backend):
         Args:
             prompt: The prompt text (already assembled with preamble/extensions).
             timeout_seconds: Per-execution timeout, or None.
+            force_stdin: GH#188 — when True, omit prompt from args even if the
+                profile uses positional delivery. Caller handles stdin.
 
         Returns:
             List of command arguments for subprocess.
@@ -226,8 +229,10 @@ class PluginCliBackend(Backend):
             args.append(cmd.working_dir_flag)
             args.append(str(self._working_directory))
 
-        # Prompt delivery — stdin mode or CLI arg
-        if cmd.prompt_via_stdin:
+        # Prompt delivery — stdin mode or CLI arg.
+        # GH#188: force_stdin overrides positional delivery for large prompts.
+        effective_stdin = cmd.prompt_via_stdin or force_stdin
+        if effective_stdin:
             # Prompt will be written to subprocess stdin in execute().
             # If a sentinel is configured, include the flag + sentinel in args
             # (e.g. '-p -' for Claude Code's stdin mode).
@@ -495,21 +500,24 @@ class PluginCliBackend(Backend):
     ) -> bool:
         """Check for rate limiting using profile patterns.
 
-        When the execution succeeded (exit code in success_exit_codes),
-        only scan stderr — stdout contains the result and may include
-        incidental rate limit text from the tool's internal retry handling
-        (e.g., Claude Code retries rate limits internally and exits 0, but
-        leaves rate limit messages in the result output).
+        GH#189: ALWAYS scan only stderr for rate limit patterns.
+        Rate limit errors from CLI instruments appear on stderr or in
+        structured error responses, not in the agent's work output on
+        stdout. Previously, failed executions scanned stdout too, causing
+        false positives when agents wrote about rate limiting (e.g.,
+        building rate-limit infrastructure, documenting API behavior).
+        False rate limit classification triggers the instrument fallback
+        cascade, which combined with GH#188 causes job failure.
 
         Args:
-            stdout: Standard output text.
-            stderr: Standard error text.
+            stdout: Standard output text (NOT scanned — contains agent work).
+            stderr: Standard error text (scanned for rate limit patterns).
             is_success: Whether the execution exited with a success code.
 
         Returns:
             True if rate limiting was detected.
         """
-        text = stderr if is_success else f"{stdout}\n{stderr}"
+        text = stderr
         for pattern in self._cli.errors.rate_limit_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
@@ -598,9 +606,27 @@ class PluginCliBackend(Backend):
             ExecutionResult with parsed output and metadata.
         """
         effective_timeout = timeout_seconds or self._profile.default_timeout_seconds
-        cmd = self._build_command(prompt, timeout_seconds=effective_timeout)
-        env = self._build_env()
+
+        # GH#188: Force stdin delivery when the assembled prompt is large.
+        # CLI tools crash when receiving 100KB+ prompts as positional
+        # arguments. Marianne prompts routinely exceed this with
+        # cadenza/prelude injection. 32KB is a conservative threshold.
+        full_prompt_for_size = self._build_prompt(prompt)
         use_stdin = self._cli.command.prompt_via_stdin
+        if not use_stdin and len(full_prompt_for_size.encode("utf-8")) > 32_768:
+            _logger.info(
+                "plugin_cli_stdin_forced",
+                instrument=self._profile.name,
+                prompt_bytes=len(full_prompt_for_size.encode("utf-8")),
+                reason="prompt exceeds 32KB safe limit for CLI arguments",
+            )
+            use_stdin = True
+
+        cmd = self._build_command(
+            prompt, timeout_seconds=effective_timeout,
+            force_stdin=use_stdin and not self._cli.command.prompt_via_stdin,
+        )
+        env = self._build_env()
 
         _logger.info(
             "plugin_cli_execute_start",

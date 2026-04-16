@@ -207,12 +207,15 @@ class CliCommand(BaseModel):
 
     # Prompt delivery mode — stdin vs CLI arg
     prompt_via_stdin: bool = Field(
-        default=False,
-        description="When True, pass the prompt via subprocess stdin instead of "
-        "as a CLI argument. This avoids ARG_MAX limits on large prompts. "
-        "When a stdin_sentinel is also set, the sentinel replaces the prompt "
-        "in the CLI args (e.g. '-p -' for Claude Code). When no sentinel is "
-        "set, the prompt flag and prompt are omitted from args entirely.",
+        default=True,
+        description="When True (default), pass the prompt via subprocess stdin "
+        "instead of as a CLI argument. This avoids ARG_MAX and CLI tool limits "
+        "on large prompts — Marianne prompts routinely exceed 100KB with "
+        "cadenza/prelude injection (GH#188). When a stdin_sentinel is also "
+        "set, the sentinel replaces the prompt in CLI args (e.g. '-p -' for "
+        "Claude Code). When no sentinel is set, the prompt flag and prompt "
+        "are omitted from args entirely. Set to False only for instruments "
+        "that cannot read from stdin (rare).",
     )
     stdin_sentinel: str | None = Field(
         default=None,

@@ -39,6 +39,7 @@ def _make_profile(
     *,
     executable: str = "echo",
     prompt_flag: str | None = "-p",
+    prompt_via_stdin: bool = False,
     output_format: str = "text",
     result_path: str | None = None,
     error_path: str | None = None,
@@ -79,6 +80,7 @@ def _make_profile(
             command=CliCommand(
                 executable=executable,
                 prompt_flag=prompt_flag,
+                prompt_via_stdin=prompt_via_stdin,
                 auto_approve_flag=auto_approve_flag,
                 output_format_flag=output_format_flag,
                 output_format_value=output_format_value,
@@ -344,18 +346,25 @@ class TestErrorClassification:
         )
         assert result.rate_limited is True
 
-    def test_rate_limit_pattern_detected_in_stdout(self) -> None:
-        """Rate limit patterns in stdout are also detected."""
+    def test_rate_limit_in_stdout_only_not_detected(self) -> None:
+        """GH#189: Rate limit text in stdout must NOT trigger rate_limited.
+
+        Agent work output may contain prose about rate limiting. Only
+        stderr is scanned to prevent false classification that triggers
+        the instrument fallback cascade.
+        """
         from marianne.execution.instruments.cli_backend import PluginCliBackend
 
         profile = _make_profile(
-            rate_limit_patterns=[r"429 Too Many Requests"],
+            rate_limit_patterns=[r"rate.?limit", r"429"],
         )
         backend = PluginCliBackend(profile)
         result = backend._parse_output(
-            "429 Too Many Requests", "", exit_code=1,
+            "The rate limit handler should retry after backoff",
+            "",
+            exit_code=1,
         )
-        assert result.rate_limited is True
+        assert result.rate_limited is False
 
     def test_auth_error_pattern_sets_error_type(self) -> None:
         """Auth error patterns from the profile should set error_type='auth'."""

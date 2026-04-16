@@ -50,6 +50,7 @@ def _make_profile(
             command=CliCommand(
                 executable="test-cli",
                 prompt_flag="-p",
+                prompt_via_stdin=False,
                 mcp_config_flag=mcp_config_flag,
                 mcp_disable_args=mcp_disable_args or [],
                 extra_flags=extra_flags or [],
