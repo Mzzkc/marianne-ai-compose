@@ -48,7 +48,13 @@ from marianne.core.logging import get_logger
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import AttemptContext
-from marianne.daemon.technique_router import TechniqueRouter
+from marianne.daemon.technique_router import ClassifiedOutput, OutputKind, TechniqueRouter
+from marianne.execution.code_mode import (
+    CodeExecutionResult,
+    CodeExecutionStatus,
+    CodeModeExecutor,
+    render_code_mode_error,
+)
 from marianne.prompts.preamble import build_preamble
 from marianne.utils.credential_scanner import redact_credentials
 
@@ -70,6 +76,7 @@ async def sheet_task(
     cost_per_1k_output: float | None = None,
     instrument_override: str | None = None,
     technique_router: TechniqueRouter | None = None,
+    code_executor: CodeModeExecutor | None = None,
 ) -> None:
     """Execute a single sheet attempt and report the result.
 
@@ -133,10 +140,41 @@ async def sheet_task(
         # classification of a failed run's output is not informative, and
         # the field stays None to signal "no classification performed".
         # Downstream stages (Stage 3 code-mode executor, Stage 5 A2A
-        # routing) consume output_kind to decide further action.
-        output_kind_value = _classify_output(
+        # routing) consume classified.kind to decide further action.
+        classified = _classify_output(
             technique_router, exec_result, job_id=job_id, sheet_num=sheet.num,
         )
+        output_kind_value = classified.kind.value if classified is not None else None
+
+        # Step 3b: Code mode execution (Stage 3).
+        # When the classified output contains code blocks AND a code
+        # executor is wired into this sheet, run each block in the
+        # sandbox. The sandbox output (stdout, stderr, exit code,
+        # artifacts summary) is appended to exec_result.stdout so
+        # validations can see both the agent's reasoning and the
+        # real execution result. On failure, a diagnostic block is
+        # appended — the baton's normal retry logic handles the
+        # retry path via the standard validation/error flow.
+        if (
+            code_executor is not None
+            and classified is not None
+            and classified.kind == OutputKind.CODE_BLOCK
+            and classified.code_blocks
+            and exec_result.success
+        ):
+            sandbox_section = await _execute_code_blocks(
+                classified.code_blocks,
+                code_executor,
+                job_id=job_id,
+                sheet_num=sheet.num,
+            )
+            # Append sandbox output to stdout so validations and
+            # capture_output see it. ExecutionResult is a mutable
+            # dataclass — append in place.
+            separator = "" if exec_result.stdout.endswith("\n") else "\n"
+            exec_result.stdout = (
+                f"{exec_result.stdout}{separator}\n{sandbox_section}"
+            )
 
         # Step 4: Run validations (only if execution succeeded)
         # F-118: pass total_sheets/total_movements for rich context
@@ -638,11 +676,13 @@ def _classify_output(
     *,
     job_id: str,
     sheet_num: int,
-) -> str | None:
-    """Classify agent output via the technique router (Stage 2a).
+) -> ClassifiedOutput | None:
+    """Classify agent output via the technique router (Stage 2a/3).
 
-    Returns the ``OutputKind.value`` string when classification runs
+    Returns the ``ClassifiedOutput`` object when classification runs
     successfully, or None when the router is absent or execution failed.
+    Callers extract ``.kind.value`` for ``output_kind`` reporting and
+    ``.code_blocks`` for Stage 3 code-mode execution.
 
     Classification is cheap (pure regex). Exceptions are swallowed and
     logged — classification must never crash the musician. A classifier
@@ -657,7 +697,7 @@ def _classify_output(
         sheet_num: Sheet number, for logging context.
 
     Returns:
-        The OutputKind value string, or None to indicate "not classified".
+        The ClassifiedOutput object, or None to indicate "not classified".
     """
     if router is None:
         return None
@@ -684,9 +724,105 @@ def _classify_output(
             "job_id": job_id,
             SHEET_NUM_KEY: sheet_num,
             "kind": classified.kind.value,
+            "code_block_count": len(classified.code_blocks),
         },
     )
-    return classified.kind.value
+    return classified
+
+
+async def _execute_code_blocks(
+    blocks: list[Any],
+    executor: CodeModeExecutor,
+    *,
+    job_id: str,
+    sheet_num: int,
+) -> str:
+    """Run classified code blocks through the sandboxed executor (Stage 3).
+
+    Delegates to ``CodeModeExecutor.execute_all()`` and formats the
+    results into a markdown section suitable for appending to the
+    agent's stdout. Each block's stdout, stderr, and exit code are
+    captured so downstream validations and the stdout_tail diagnostic
+    see the real execution output.
+
+    Failures are NOT fatal — spec section 10.3 says the sheet's retry
+    loop sees the error context and tries again. Each failed block
+    renders a ``render_code_mode_error()`` block. Success blocks render
+    a compact status + stdout/stderr summary.
+
+    Args:
+        blocks: The ``CodeBlock`` objects extracted by the router.
+        executor: The sandboxed code mode executor.
+        job_id: Job identifier, for logging.
+        sheet_num: Sheet number, for logging.
+
+    Returns:
+        Markdown-formatted sandbox output section. Safe to append
+        directly to ``exec_result.stdout``.
+    """
+    try:
+        results = await executor.execute_all(blocks)
+    except Exception as exc:
+        # A bug in the executor itself must not crash the musician —
+        # fall through to a diagnostic block so the agent can retry.
+        _logger.error(
+            "musician.code_mode.executor_error",
+            extra={
+                "job_id": job_id,
+                SHEET_NUM_KEY: sheet_num,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+            exc_info=True,
+        )
+        return (
+            "## Sandbox Output\n\n"
+            f"**Status:** executor_error\n"
+            f"**Error:** {type(exc).__name__}: {exc}\n"
+        )
+
+    _logger.info(
+        "musician.code_mode.executed",
+        extra={
+            "job_id": job_id,
+            SHEET_NUM_KEY: sheet_num,
+            "block_count": len(results),
+            "success_count": sum(
+                1 for r in results if r.status == CodeExecutionStatus.SUCCESS
+            ),
+        },
+    )
+    return _format_sandbox_results(results)
+
+
+def _format_sandbox_results(results: list[CodeExecutionResult]) -> str:
+    """Format code mode results as a markdown stdout section.
+
+    Success blocks render stdout. Failure blocks render the full error
+    diagnostic so the agent has actionable context on retry.
+    """
+    sections: list[str] = ["## Sandbox Output"]
+    for idx, result in enumerate(results, start=1):
+        sections.append("")
+        sections.append(f"### Block {idx}")
+        sections.append("")
+        if result.status == CodeExecutionStatus.SUCCESS:
+            sections.append(f"**Status:** {result.status.value}")
+            sections.append(f"**Exit code:** {result.exit_code}")
+            if result.stdout:
+                sections.append("")
+                sections.append("**stdout:**")
+                sections.append("```")
+                sections.append(result.stdout.rstrip())
+                sections.append("```")
+            if result.stderr:
+                sections.append("")
+                sections.append("**stderr:**")
+                sections.append("```")
+                sections.append(result.stderr.rstrip())
+                sections.append("```")
+        else:
+            sections.append(render_code_mode_error(result))
+    return "\n".join(sections)
 
 
 async def _execute(

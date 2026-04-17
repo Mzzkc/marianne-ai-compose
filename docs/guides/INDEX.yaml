@@ -1,7 +1,9 @@
 description: "Methodology and reference guides"
 context: |
   Guides for score authors and Marianne developers. The score composition
-  guide is the canonical reference for writing effective scores.
+  guide is the canonical reference for writing effective scores. The
+  technique, MCP pool, code mode, and A2A guides document the agent
+  execution infrastructure.
 status: active
 
 files:
@@ -9,3 +11,18 @@ files:
     purpose: "Score composition guide — patterns, anti-patterns, and best practices for score authoring"
     status: active
     source: "Promoted from scores-internal/rosetta-modernize/"
+  - name: technique-guide.md
+    purpose: "Technique system — skill/MCP/protocol kinds, config schema, phase filtering"
+    status: active
+  - name: mcp-pool-guide.md
+    purpose: "Shared MCP server pool — conductor-managed MCP processes, socket forwarding"
+    status: active
+  - name: a2a-guide.md
+    purpose: "Agent-to-agent protocol — task delegation, agent cards, inbox persistence"
+    status: active
+  - name: code-mode-guide.md
+    purpose: "Code mode execution — sandbox routing, failure handling, security model"
+    status: active
+  - name: interface-reference.md
+    purpose: "Programmatic interface generator — typed stubs, runtime module, JSON-RPC contract"
+    status: active
