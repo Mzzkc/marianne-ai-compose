@@ -179,6 +179,7 @@ All documentation lives in `docs/`. A two-tier YAML index system provides discov
 | Pre-execution validation | `src/marianne/validation/` |
 | Dashboard | `src/marianne/dashboard/` |
 | TUI (terminal UI) | `src/marianne/cli/tui/` |
+| Composition compiler | `compiler/` (git submodule) |
 
 ---
 
