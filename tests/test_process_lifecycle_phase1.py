@@ -13,7 +13,6 @@ Phase 1 items:
 from __future__ import annotations
 
 import asyncio
-import os
 import signal
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -195,9 +194,8 @@ class TestDaemonOwnGroupSafety:
         with patch(
             "marianne.execution.instruments.cli_backend.os.getpgid",
             side_effect=fake_getpgid,
-        ):
-            with pytest.raises(RuntimeError, match="shares daemon pgid"):
-                await backend.execute("test prompt")
+        ), pytest.raises(RuntimeError, match="shares daemon pgid"):
+            await backend.execute("test prompt")
 
 
 # ============================================================

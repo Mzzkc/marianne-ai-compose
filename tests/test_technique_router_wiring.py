@@ -31,7 +31,6 @@ from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import AttemptContext, AttemptMode
 from marianne.daemon.technique_router import OutputKind, TechniqueRouter
 
-
 # =========================================================================
 # Helpers
 # =========================================================================
