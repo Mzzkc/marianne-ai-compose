@@ -662,12 +662,12 @@ async def _list_jobs(
     # Rows
     for row in rows:
         color = _colors.get(row[1], "white")
-        styled = fmt.format(row[0], row[1], row[2], row[3])
+        display_status = row[1].upper()
+        styled = fmt.format(row[0], display_status, row[2], row[3])
         # Apply color to the status portion only
-        plain_status = row[1]
         styled = styled.replace(
-            plain_status,
-            f"[{color}]{plain_status}[/{color}]",
+            display_status,
+            f"[{color}]{display_status}[/{color}]",
             1,
         )
         console.print(styled, soft_wrap=True)
