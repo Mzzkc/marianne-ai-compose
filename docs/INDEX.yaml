@@ -256,41 +256,12 @@ directories:
         source: "scores-internal/rosetta-modernize/ (promoted)"
 
   handoffs:
-    description: "Session continuity documents"
+    description: "Session continuity documents (gitignored — local to each checkout)"
     status: ongoing
-    files:
-      - name: 2026-04-09-baton-review-remediation.md
-        added: 2026-04-09
-      - name: STATUS--pre-legion-archive.md
-        added: 2026-04-06
-      - name: compose-skill--SESSION-HANDOFF-2026-04-12.md
-        added: 2026-04-12
-      - name: compose-system--SESSION-HANDOFF-2.md
-        added: 2026-03-29
-      - name: compose-system--SESSION-HANDOFF.md
-        added: 2026-03-29
-      - name: flowspec--HANDOFF-PROMPT.md
-        added: 2026-03-26
-      - name: grand-opus--HANDOFF.md
-        added: 2026-03-26
-      - name: grand-opus--LEARNING-HARVESTER-HANDOFF.md
-        added: 2026-03-26
-      - name: grand-opus--V1-BETA-HANDOFF.md
-        added: 2026-03-26
-      - name: memory-bank--session-handoff-2026-04-06-v2.md
-        added: 2026-04-06
-      - name: memory-bank--session-handoff-2026-04-06.md
-        added: 2026-04-06
-      - name: plans--2026-03-26-session-handoff.md
-        added: 2026-03-26
-      - name: plans--2026-04-08-baton-session-handoff.md
-        added: 2026-04-08
-      - name: rosetta-modernize--SESSION-HANDOFF-2026-04-07.md
-        added: 2026-04-07
-      - name: 2026-04-18-baton-primitives-spec-merge.md
-        added: 2026-04-18
-      - name: 2026-04-18-marianne-memory-and-unconscious-compose-handoff.md
-        added: 2026-04-18
+    note: |
+      The handoffs/ directory is gitignored; its contents are per-checkout session
+      state, not tracked documentation. See docs/handoffs/INDEX.yaml within any
+      checkout that has handoffs for the current inventory.
 
   research:
     description: "Research findings and analysis"
