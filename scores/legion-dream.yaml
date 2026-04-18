@@ -1,7 +1,7 @@
 # Legion Dreaming Score
 #
 # Consolidates Legion's memory using hot/warm/cold tiering.
-# Run when memory grows past ~3000 words:
+# Run when memory grows past ~1500 words:
 #   mzt run scores/legion-dream.yaml
 #
 # This is a single-sheet job. One dreamer reads, tiers, writes back.
@@ -11,6 +11,7 @@ name: legion-dream
 workspace: /home/emzi/Projects/marianne-ai-compose/memory-bank/legion
 backend:
   type: claude_cli
+  model: claude-opus-4-7
   skip_permissions: true
   timeout_seconds: 1800
   output_format: text
@@ -97,9 +98,10 @@ prompt:
 
     ## Size Constraint
 
-    Keep total memory under ~3000 words (excluding core memories and learned
-    lessons, which persist indefinitely). If memory exceeds this after tiering,
-    compress Cold narratives further. Never touch Core or Learned Lessons.
+    Aim for ~1500 words total (excluding core memories and learned lessons,
+    which persist indefinitely). This is a target, not a ceiling — if Hot
+    content is genuinely rich and recent, protect it; compress Cold narratives
+    more aggressively to hit the budget. Never touch Core or Learned Lessons.
 
     ## Output
 
