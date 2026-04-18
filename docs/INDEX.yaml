@@ -240,6 +240,12 @@ directories:
         added: 2026-04-16
       - name: 2026-04-16-rate-limit-primary-design.md
         added: 2026-04-16
+      - name: 2026-04-17-baton-primitives-and-marianne-mozart-design.md
+        added: 2026-04-17
+      - name: 2026-04-18-baton-primitives-spec-update.md
+        added: 2026-04-18
+      - name: 2026-04-18-generic-issue-solver-design.md
+        added: 2026-04-18
 
   guides:
     description: "Methodology and reference guides"
@@ -281,6 +287,10 @@ directories:
         added: 2026-04-08
       - name: rosetta-modernize--SESSION-HANDOFF-2026-04-07.md
         added: 2026-04-07
+      - name: 2026-04-18-baton-primitives-spec-merge.md
+        added: 2026-04-18
+      - name: 2026-04-18-marianne-memory-and-unconscious-compose-handoff.md
+        added: 2026-04-18
 
   research:
     description: "Research findings and analysis"
@@ -325,7 +335,7 @@ semantic_index:
   evolution: [plans/features/2026-02-24-evolution-concert-design.md]
   iterative-dev: [plans/features/2026-03-08-iterative-dev-loop-design.md]
   flowspec: [plans/features/2026-03-26-flowspec-integration-design.md, plans/features/2026-03-26-flowspec-findings-tracker.md]
-  issue-solver: [plans/features/2026-02-14-issue-solver-design.md]
+  issue-solver: [specs/2026-04-18-generic-issue-solver-design.md, plans/features/2026-02-14-issue-solver-design.md]
   roadmap: [plans/strategic/2026-03-26-v1-beta-roadmap.md, plans/strategic/2026-02-14-roadmap-features.md]
   documentation: [plans/strategic/2026-03-26-documentation-strategy-design.md, plans/strategic/2026-04-12-docs-reorganization-design.md]
   cadenza: [plans/features/2026-04-08-directory-cadenza-spec.md]
@@ -338,5 +348,15 @@ semantic_index:
   rate-limiting: [plans/infrastructure/2026-04-08-rate-limit-intelligence.md, specs/2026-04-16-rate-limit-primary-design.md]
   process-lifecycle: [specs/2026-04-16-process-lifecycle-design.md]
   composition-compiler: [specs/2026-04-13-composition-compiler-design.md]
+  expressions: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  flow-control: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  triggers: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  loops: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md, plans/architecture/2026-03-26-score-looping-design.md]
+  cron: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  marianne-mozart: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  smart-conductor: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md, plans/features/2026-04-07-intelligent-conductor-spec.md]
+  validate: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  concierge: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  decision-authority: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
   iteration: [plans/features/2026-03-08-iterative-dev-loop-design.md, plans/features/2026-03-08-iterative-dev-loop-implementation.md]
   handoffs: [handoffs]

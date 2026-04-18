@@ -22,3 +22,16 @@ files:
     purpose: "Rate limit primary flag — separate detection from causation on ExecutionResult; prevents false-positive rate limit cascades from incidental 429s in stderr."
     status: draft
     related: [2026-04-16-process-lifecycle-design.md]
+  - name: 2026-04-17-baton-primitives-and-marianne-mozart-design.md
+    purpose: "Six grouped subsystems: expression language, baton flow control (triggers/loops/goto), validate overhaul, variables in validations, cron scheduling, and Marianne Mozart (identity, memory, smart conductor, compose integration, TUI, concierge). Revised 2026-04-18 incorporating 4-model review."
+    status: draft
+    revised: 2026-04-18
+    related: [2026-04-16-process-lifecycle-design.md, 2026-04-18-baton-primitives-spec-update.md]
+  - name: 2026-04-18-baton-primitives-spec-update.md
+    purpose: "Spec update document — TDF analysis of 4-model review findings (GLM 5.1, Gemini 3 Pro, Gemma 4, Gemini via OpenCode), composer direction, and resulting changes to the baton primitives and Marianne Mozart spec. Findings have been merged into the main spec."
+    status: incorporated
+    related: [2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  - name: 2026-04-18-generic-issue-solver-design.md
+    purpose: "Generic issue solver — two-score concert (triage + solver) for any project's GitHub issues. Source Triangulation for dependency DAG, Cisco skill scanner for safe triage, self-chaining solver with Fix+Completion Pass pattern."
+    status: draft
+    replaces: "examples/engineering/issue-solver.yaml (Marianne-specific version)"
