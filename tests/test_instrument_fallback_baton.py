@@ -210,6 +210,27 @@ class TestSheetExecutionStateFallbackFields:
         state.advance_fallback("rate_limit_exhausted")
         assert state.fallback_attempts["claude-code"] == 3
 
+    def test_advance_fallback_resets_model_gh337(self) -> None:
+        """GH#337: advance_fallback must clear model so fallback uses own default.
+
+        When a sheet falls back from instrument A (configured with model X) to
+        instrument B (which does not support model X), the fallback must not
+        carry model X forward. Otherwise BackendPool.acquire dispatches B with
+        an incompatible -m flag and the CLI exits immediately.
+        """
+        state = SheetExecutionState(
+            sheet_num=1,
+            instrument_name="gemini-cli",
+            model="gemini-3.1-pro-preview",
+            fallback_chain=["goose", "claude-code"],
+        )
+        state.advance_fallback("rate_limit_exhausted")
+        assert state.instrument_name == "goose"
+        assert state.model is None, (
+            "model must reset so BackendPool.acquire uses the fallback "
+            "profile's default_model instead of inheriting the primary's model"
+        )
+
 
 # =============================================================================
 # sheets_to_execution_states — copies fallback chain from Sheet entity

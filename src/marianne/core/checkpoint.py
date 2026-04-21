@@ -720,6 +720,12 @@ class SheetState(BaseModel):
         self.current_instrument_index += 1
         self.instrument_name = to_instrument
 
+        # GH#337: clear model so the fallback instrument uses its own default.
+        # The primary's model (e.g. "gemini-3.1-pro-preview") may not be valid
+        # for the fallback (e.g. claude-code), and inheriting it across the
+        # boundary causes the CLI to reject the -m flag and exit immediately.
+        self.model = None
+
         # Fresh retry budget for the new instrument
         self.normal_attempts = 0
         self.completion_attempts = 0

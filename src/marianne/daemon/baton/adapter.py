@@ -1408,10 +1408,13 @@ class BatonAdapter:
         effective_instrument = state.instrument_name or ""
 
         try:
-            # Acquire backend from pool, passing model from instrument_config
-            # if the score author specified one. F-150: this was missing —
-            # instrument_config.model was silently ignored at dispatch time.
-            model_override = sheet.instrument_config.get("model")
+            # Acquire backend from pool, passing model from the execution state.
+            # F-150: instrument_config.model was silently ignored at dispatch.
+            # GH#337: read model from state.model (not sheet.instrument_config)
+            # so that after advance_fallback clears the model, the fallback
+            # instrument acquires a backend with its profile's default_model
+            # instead of inheriting the primary's (possibly incompatible) model.
+            model_override = state.model
             backend = await self._backend_pool.acquire(
                 effective_instrument,
                 model=str(model_override) if model_override is not None else None,
