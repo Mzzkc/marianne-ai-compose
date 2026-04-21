@@ -216,8 +216,8 @@ retry:
 
 prompt:
   variables:
-    repo: "[CHANGE THIS: GitHub repo, e.g. Mzzkc/marianne-ai-compose]"
-    triage_workspace: "[CHANGE THIS: ABSOLUTE path to triage workspace, e.g. /abs/path/to/workspaces/issue-triage-workspace]"
+    repo: "Mzzkc/marianne-ai-compose"
+    triage_workspace: "/home/emzi/Projects/marianne-ai-compose/workspaces/quality-triage-workspace"
     project_root: "."
     preamble: |
       ╔══════════════════════════════════════════════════════════════════════════╗
@@ -1847,7 +1847,7 @@ validations:
 # previous workspace is archived (archive_on_fresh) and a fresh one is created.
 on_success:
   - type: run_job
-    job_path: "[CHANGE THIS: ABSOLUTE path to this score, e.g. /abs/path/to/examples/engineering/issue-solver.yaml]"
+    job_path: "/home/emzi/Projects/marianne-ai-compose/examples/engineering/issue-solver.yaml"
     description: "Chain to solve next issue from the DAG"
     detached: true
     fresh: true
