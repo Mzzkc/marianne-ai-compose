@@ -458,12 +458,24 @@ prompt:
     cat {{ workspace }}/handoff/section-{{ "%02d"|format(prev_section) }}.md
     ```
 
-    You now know everything. Plan your opening move. What's your first pattern?
-    Think about it NOW — before the GO signal.
+    You now know everything. Plan your opening move NOW.
 
-    **WAIT for GO signal.** When this appears, you write IMMEDIATELY.
-    No reading, no thinking. Your first pattern hits the file within SECONDS.
-    The audience must not hear hesitation.
+    **PRE-STAGE your opening pattern.** Write it to a staging file BEFORE
+    the GO signal arrives. Study the previous musician's final pattern at
+    `{{ workspace }}/handoff/section-{{ "%02d"|format(prev_section) }}-final.strudel`
+    — include fading references to their layers in your opening.
+    ```bash
+    # Write your planned opening pattern:
+    cat > {{ workspace }}/live/staged.strudel << 'STAGED'
+    [YOUR OPENING PATTERN HERE — include crossfade from previous layers]
+    STAGED
+    ```
+
+    **WAIT for GO signal.** When it arrives, deploy INSTANTLY — no composing:
+    ```bash
+    cp {{ workspace }}/live/staged.strudel {{ workspace }}/live/current.strudel
+    ```
+    The audience hears your pattern within milliseconds. THEN start evolving.
     ```bash
     DEADLINE=$(($(date +%s) + 300))
     while [ ! -f {{ workspace }}/handoff/section-{{ "%02d"|format(prev_section) }}-complete.signal ]; do
@@ -524,6 +536,15 @@ prompt:
 
     **YOUR PERFORMANCE LOOP:**
 
+    **SAFETY: Before each write, back up the current working pattern:**
+    ```bash
+    cp {{ workspace }}/live/current.strudel {{ workspace }}/live/last-working.strudel
+    ```
+    If you write something broken, restore immediately:
+    ```bash
+    cp {{ workspace }}/live/last-working.strudel {{ workspace }}/live/current.strudel
+    ```
+
     Write a pattern. Let it breathe (sleep 15-20 seconds). Write the next
     evolution. Check your clock between writes — like a DJ glancing at
     the CDJ timer. This informs your pacing, not dictates it.
@@ -549,35 +570,38 @@ prompt:
 
     **Phase 1: MEMORY HANDOFF** (while still performing transition patterns)
 
-    Write your handoff — 4 lines, real values, not placeholders:
+    Write your handoff notes — real values, not placeholders:
     - BPM: [actual] | Key: [actual] | Energy: [0-100]
     - Layers: [what's actually sounding right now]
     - Felt: [one sentence — the trajectory, what you were reaching for]
     - Next: [one sentence — where to take it]
 
-    Write it to `{{ workspace }}/handoff/section-{{ "%02d"|format(section_num) }}.md`
-    using echo/cat with your ACTUAL values. Then append 1-2 sentences to
-    `{{ workspace }}/performance-log.md` summarizing what you created.
+    Write to `{{ workspace }}/handoff/section-{{ "%02d"|format(section_num) }}.md`.
+
+    ALSO: copy your current pattern as-is to the handoff directory.
+    The next musician reads your CODE, not just your description:
+    ```bash
+    cp {{ workspace }}/live/current.strudel {{ workspace }}/handoff/section-{{ "%02d"|format(section_num) }}-final.strudel
+    ```
+
+    Append 1-2 sentences to `{{ workspace }}/performance-log.md`.
 
     Signal memory ready:
     ```bash
     touch {{ workspace }}/handoff/section-{{ "%02d"|format(section_num) }}-memory.signal
-    echo "Memory signal sent. Next musician is reading your handoff now."
     ```
 
-    **Phase 2: FINAL PATTERNS + GO**
+    **Phase 2: FINAL PATTERNS + PRE-STAGE + GO**
 
     Keep performing transition patterns. Your next self is absorbing
-    your handoff right now. Give them time — 30-60 seconds of transition
-    music. Write 2-3 more pattern evolutions that settle into a clean loop.
+    your handoff right now. Write 2-3 more evolutions that settle into
+    a clean, loopable state.
 
-    When you feel the transition is complete (check your clock — you should
-    be near your section's target end time):
+    When you feel the transition is complete:
     ```bash
     ELAPSED=$(( $(date +%s) - SECTION_START ))
-    echo "Section {{ section_num }} performed for $((ELAPSED/60))m ${((ELAPSED%60))}s (target: ${SECTION_DURATION}m)"
+    echo "Section {{ section_num }}: $((ELAPSED/60))m$((ELAPSED%60))s (target: ${SECTION_DURATION}m)"
     touch {{ workspace }}/handoff/section-{{ "%02d"|format(section_num) }}-complete.signal
-    echo "GO signal sent. Section {{ section_num }} complete."
     ```
 
     {% elif stage == 10 %}
