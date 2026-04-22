@@ -341,14 +341,18 @@ class TestCloseAll:
 class TestHttpSingleton:
     """HTTP instruments share a singleton backend."""
 
-    async def test_http_not_yet_supported(self) -> None:
-        """HTTP instruments raise NotImplementedError for now."""
+    async def test_http_openai_family_is_dispatched(self) -> None:
+        """After Phase 3, HTTP profiles with schema_family='openai' dispatch
+        through the generic OpenAI-compat handler rather than raising
+        NotImplementedError (Atlas Doctrine RULE: "Generic HTTP instrument
+        dispatch must work for all HttpProfile schema families")."""
         profile = _make_http_profile()
         registry = _make_registry(profile)
         pool = BackendPool(registry)
 
-        with pytest.raises(NotImplementedError, match="HTTP"):
-            await pool.acquire("test-http")
+        backend = await pool.acquire("test-http")
+        assert backend is not None
+        await pool.close_all()
 
 
 # =============================================================================
@@ -410,10 +414,11 @@ class TestCreateBackendForProfile:
         backend = _create_backend_for_profile(profile)
         assert isinstance(backend, PluginCliBackend)
 
-    async def test_http_profile_raises_not_implemented(self) -> None:
+    async def test_http_profile_dispatches_via_schema_family(self) -> None:
+        """Phase 3: HTTP profiles dispatch by schema_family, not name."""
         profile = _make_http_profile()
-        with pytest.raises(NotImplementedError, match="HTTP"):
-            _create_backend_for_profile(profile)
+        backend = _create_backend_for_profile(profile)
+        assert backend is not None
 
     async def test_cli_profile_with_working_directory(self) -> None:
         profile = _make_cli_profile()

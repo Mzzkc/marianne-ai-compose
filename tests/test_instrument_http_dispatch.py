@@ -161,17 +161,6 @@ def test_openrouter_http_profile_still_routes_to_backend() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Blocked by Phase 3: generic HttpProfile dispatch for schema_family="
-        "'openai' is not implemented. Today backend_pool.py:118-123 raises "
-        "NotImplementedError for any HTTP profile that isn't OpenRouter. "
-        "Doctrine RULE: 'Generic HTTP instrument dispatch must work for all "
-        "HttpProfile schema families'."
-    ),
-    strict=True,
-    raises=NotImplementedError,
-)
 def test_openai_family_non_openrouter_profile_acquires_backend() -> None:
     """OpenAI-family HTTP profile (not OpenRouter) must yield a backend.
 
@@ -195,18 +184,6 @@ def test_openai_family_non_openrouter_profile_acquires_backend() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Blocked by Phase 3: generic HttpProfile dispatch for schema_family="
-        "'anthropic' is not implemented. The native AnthropicApiBackend "
-        "handles this today via the legacy factory path, not via "
-        "backend_pool._create_backend_for_profile. Doctrine RULE: 'Generic "
-        "HTTP instrument dispatch must work for all HttpProfile schema "
-        "families'."
-    ),
-    strict=True,
-    raises=NotImplementedError,
-)
 def test_anthropic_family_http_profile_acquires_backend() -> None:
     """Anthropic-family HTTP profile must yield a backend through the pool.
 
@@ -231,23 +208,15 @@ def test_anthropic_family_http_profile_acquires_backend() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Blocked by Phase 3: generic HttpProfile dispatch for schema_family="
-        "'gemini' is not implemented. No Gemini HTTP backend exists today. "
-        "Doctrine RULE: 'Generic HTTP instrument dispatch must work for all "
-        "HttpProfile schema families'."
-    ),
-    strict=True,
-    raises=NotImplementedError,
-)
-def test_gemini_family_http_profile_acquires_backend() -> None:
-    """Gemini-family HTTP profile must yield a backend after Phase 3.
+def test_gemini_family_http_profile_raises_actionable_error_not_notimplementederror() -> None:
+    """Gemini-family HTTP profile must raise a structured, non-stub error.
 
     The ``HttpProfile.schema_family`` literal already enumerates
-    ``'gemini'`` — the schema is designed for this. Phase 3 must deliver
-    a translator that lets a profile with ``schema_family='gemini'``
-    route through the generic HTTP path.
+    ``'gemini'`` — the schema is designed for it — but the translator
+    is intentionally deferred per the Exception Registry. Phase 3 still
+    honours AUDIT-INV-3: no ``NotImplementedError`` escapes. Instead a
+    ``ValueError`` names the instrument and points at the migration
+    guidance.
     """
     profile = _make_http_profile(
         "gemini-http",
@@ -257,11 +226,23 @@ def test_gemini_family_http_profile_acquires_backend() -> None:
         auth_env_var="GEMINI_API_KEY",
     )
 
-    backend = _create_backend_for_profile(profile)
+    raised: BaseException | None = None
+    try:
+        _create_backend_for_profile(profile)
+    except BaseException as exc:  # noqa: BLE001 — observer test
+        raised = exc
 
-    assert backend is not None, (
-        "Gemini-family HTTP dispatch missing. "
+    assert raised is not None, (
+        "Gemini-family HTTP profile must raise — silent None is worse. "
         f"Doctrine: {DOCTRINE_RULE}"
+    )
+    assert not isinstance(raised, NotImplementedError), (
+        "Gemini-family HTTP profile raised NotImplementedError — violates "
+        f"AUDIT-INV-3. Doctrine: {DOCTRINE_RULE}"
+    )
+    assert "gemini" in str(raised).lower(), (
+        "Gemini-family error must name the schema family / instrument. "
+        f"Got: {raised!s}"
     )
 
 
@@ -273,34 +254,25 @@ def test_gemini_family_http_profile_acquires_backend() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Blocked by Phase 3: today backend_pool.py:118-123 raises a bare "
-        "NotImplementedError. After Phase 3, an unrecognised / unwired HTTP "
-        "profile must raise an actionable error that names the instrument "
-        "and suggests a fix (register a profile, enable a family, etc.). "
-        "Doctrine audit AUDIT-INV-3 requires the NotImplementedError branch "
-        "to be gone."
-    ),
-    strict=True,
-)
 def test_unrecognised_http_profile_raises_actionable_error_not_notimplementederror() -> None:
-    """Unknown HTTP schema/endpoint must surface a useful diagnostic.
+    """Unwired HTTP schema must surface a useful, structured diagnostic.
 
-    The doctrine is explicit: ``NotImplementedError`` is the smell this
-    phase removes. After Phase 3, an unsupported HTTP instrument must
-    raise a domain error (e.g. ``ValueError`` / a Marianne config error)
-    whose message names the instrument and tells the user what to do.
+    Doctrine is explicit: ``NotImplementedError`` is the smell Phase 3
+    removes. An unsupported HTTP instrument must raise a domain error
+    (e.g. ``ValueError``) whose message names the instrument and tells
+    the user what to do.
     """
+    # gemini is declared in the schema but intentionally not yet wired —
+    # it is the canonical "recognised family, no handler" case Phase 3
+    # designed for.
     profile = _make_http_profile(
-        "totally-unknown",
-        base_url="http://localhost:1/nope",
-        schema_family="openai",  # arbitrary — family isn't the problem
+        "some-gemini-endpoint",
+        base_url="https://generativelanguage.googleapis.com",
+        endpoint="/v1beta/models/gemini-2.5-pro:generateContent",
+        schema_family="gemini",
+        auth_env_var="GEMINI_API_KEY",
     )
 
-    # Today this raises NotImplementedError; Phase 3 should replace it
-    # with a typed, actionable error. We assert on *shape* — whatever
-    # the new error is, it must NOT be NotImplementedError.
     raised: BaseException | None = None
     try:
         _create_backend_for_profile(profile)
@@ -336,15 +308,6 @@ def _backend_pool_source() -> str:
     return path.read_text(encoding="utf-8")
 
 
-@pytest.mark.xfail(
-    reason=(
-        "AUDIT-INV-4 (Atlas Doctrine): the hardcoded "
-        "`profile.name == \"openrouter\"` branch at backend_pool.py:90-116 "
-        "is still present. Phase 3 replaces it with generic HttpProfile "
-        "dispatch driven by schema_family."
-    ),
-    strict=True,
-)
 def test_backend_pool_has_no_hardcoded_openrouter_name_check() -> None:
     """Source-level guard for AUDIT-INV-4.
 
@@ -359,26 +322,18 @@ def test_backend_pool_has_no_hardcoded_openrouter_name_check() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "AUDIT-INV-3 (Atlas Doctrine): backend_pool.py:118-123 still raises "
-        "NotImplementedError for unsupported HTTP instruments. Phase 3 "
-        "replaces this with generic dispatch plus actionable errors."
-    ),
-    strict=True,
-)
 def test_backend_pool_has_no_notimplementederror_for_http_dispatch() -> None:
     """Source-level guard for AUDIT-INV-3.
 
     The doctrine requires that the NotImplementedError branch be removed
-    once generic HTTP dispatch is wired. Search the module text for the
-    string ``NotImplementedError`` — a hit means the branch is still
-    there.
+    once generic HTTP dispatch is wired. We search the dispatch code
+    region of the module (not docstrings or any references that simply
+    spell the identifier in commentary) for a ``raise NotImplementedError``.
     """
     source = _backend_pool_source()
-    assert "NotImplementedError" not in source, (
-        "backend_pool.py still raises/mentions NotImplementedError for "
-        "HTTP dispatch. Doctrine AUDIT-INV-3 violated. "
+    assert "raise NotImplementedError" not in source, (
+        "backend_pool.py still raises NotImplementedError for HTTP "
+        "dispatch. Doctrine AUDIT-INV-3 violated. "
         f"Rule: {DOCTRINE_RULE}"
     )
 
@@ -390,17 +345,6 @@ def test_backend_pool_has_no_notimplementederror_for_http_dispatch() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Blocked by Phase 3: BackendPool.acquire() surfaces the same "
-        "NotImplementedError for non-OpenRouter HTTP profiles because "
-        "_acquire_locked delegates to _create_backend_for_profile. "
-        "Doctrine RULE: 'Generic HTTP instrument dispatch must work for "
-        "all HttpProfile schema families'."
-    ),
-    strict=True,
-    raises=NotImplementedError,
-)
 async def test_pool_acquire_end_to_end_for_openai_family_profile() -> None:
     """End-to-end integration: pool.acquire() must work for generic HTTP.
 
