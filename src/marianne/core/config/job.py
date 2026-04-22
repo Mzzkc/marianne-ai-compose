@@ -933,8 +933,9 @@ class JobConfig(BaseModel):
         )
 
     @classmethod
-    def from_yaml(cls, path: Path) -> JobConfig:
+    def from_yaml(cls, path: Path | str) -> JobConfig:
         """Load job configuration from a YAML file."""
+        path = Path(path)
         with open(path) as f:
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
