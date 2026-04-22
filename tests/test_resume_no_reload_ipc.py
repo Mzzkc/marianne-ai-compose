@@ -263,109 +263,11 @@ class TestServiceResumeNoReload:
 
 
 # ---------------------------------------------------------------------------
-# 4. Regression: #96 cost_limit_reached reset on config reload
+# 4. Baton resume path: no_reload forwarded (#98 baton fix)
 # ---------------------------------------------------------------------------
-
-
-class TestCostLimitResetOnReload:
-    """Regression test for #96: cost_limit_reached must be reset when
-    cost_limits config changes during resume with config reload."""
-
-    def test_cost_limit_reached_reset_when_cost_limits_change(self) -> None:
-        """cost_limit_reached must be reset when cost_limits section changes."""
-        from marianne.core.config import JobConfig
-        from marianne.execution.reconciliation import reconcile_config
-
-        old_snapshot = {
-            "name": "test",
-            "backend": {"type": "claude_cli"},
-            "sheet": {"size": 3, "total_items": 9},
-            "prompt": {"template": "Test {{ sheet_num }}"},
-            "cost_limits": {
-                "enabled": True,
-                "max_cost_per_sheet": 5.0,
-            },
-        }
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="test-job",
-            total_sheets=3,
-            config_snapshot=old_snapshot,
-            cost_limit_reached=True,
-            total_estimated_cost=15.0,
-            total_input_tokens=100000,
-            total_output_tokens=50000,
-        )
-
-        new_config = JobConfig.model_validate(
-            {
-                "name": "test",
-                "backend": {"type": "claude_cli"},
-                "sheet": {"size": 3, "total_items": 9},
-                "prompt": {"template": "Test {{ sheet_num }}"},
-                "cost_limits": {
-                    "enabled": False,
-                },
-            }
-        )
-
-        report = reconcile_config(state, new_config)
-
-        assert report.has_changes, "cost_limits change should be detected"
-        assert "cost_limits" in report.sections_changed
-        assert state.cost_limit_reached is False, (
-            "cost_limit_reached must be reset when cost_limits change"
-        )
-        assert state.total_estimated_cost == 0.0, (
-            "total_estimated_cost must be reset when cost_limits change"
-        )
-
-    def test_cost_limit_not_reset_when_cost_limits_unchanged(self) -> None:
-        """cost_limit_reached should NOT be reset when cost_limits don't change."""
-        from marianne.core.config import JobConfig
-        from marianne.execution.reconciliation import reconcile_config
-
-        # Use a full model dump as snapshot so all defaults match
-        base_config = JobConfig.model_validate(
-            {
-                "name": "test",
-                "backend": {"type": "claude_cli"},
-                "sheet": {"size": 3, "total_items": 9},
-                "prompt": {"template": "Test {{ sheet_num }}"},
-                "cost_limits": {
-                    "enabled": True,
-                    "max_cost_per_sheet": 5.0,
-                },
-            }
-        )
-        full_snapshot = base_config.model_dump(mode="json")
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="test-job",
-            total_sheets=3,
-            config_snapshot=full_snapshot,
-            cost_limit_reached=True,
-            total_estimated_cost=15.0,
-        )
-
-        # Same config — no change
-        new_config = JobConfig.model_validate(full_snapshot)
-
-        report = reconcile_config(state, new_config)
-
-        assert "cost_limits" not in report.sections_changed, (
-            "cost_limits should not be in changed sections when unchanged"
-        )
-        assert state.cost_limit_reached is True, (
-            "cost_limit_reached should remain True when cost_limits unchanged"
-        )
-
-
-# ---------------------------------------------------------------------------
-# 5. Baton resume path: no_reload forwarded (#98 baton fix)
-# ---------------------------------------------------------------------------
+# (Phase 6a: TestCostLimitResetOnReload removed — exercised the dead
+#  execution/reconciliation.py module. The cost-limit reset behavior
+#  is now covered in tests for the baton/checkpoint reconciliation.)
 
 
 class TestBatonResumeNoReload:

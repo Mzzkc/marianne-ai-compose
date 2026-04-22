@@ -12,23 +12,11 @@ from marianne.execution.validation.models import (
     SheetValidationResult,
     ValidationResult,
 )
-from marianne.execution.validation.semantic import (
-    KeyVariable,
-    KeyVariableExtractor,
-    SemanticConsistencyChecker,
-    SemanticConsistencyResult,
-    SemanticInconsistency,
-)
 
 __all__ = [
     "FailureHistoryStore",
     "FileModificationTracker",
     "HistoricalFailure",
-    "KeyVariable",
-    "KeyVariableExtractor",
-    "SemanticConsistencyChecker",
-    "SemanticConsistencyResult",
-    "SemanticInconsistency",
     "SheetValidationResult",
     "ValidationEngine",
     "ValidationResult",
