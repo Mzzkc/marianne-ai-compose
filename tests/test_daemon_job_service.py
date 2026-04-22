@@ -304,19 +304,22 @@ class TestCreateBackend:
             create_backend(mock_config)
             mock_from_config.assert_called_once_with(mock_config.backend)
 
-    def test_recursive_light_backend(self):
-        """Test create_backend creates RecursiveLightBackend for recursive_light."""
+    def test_recursive_light_backend_raises(self):
+        """Phase 4a: 'recursive_light' backend type is no longer supported.
+
+        The native RecursiveLightBackend was deleted in the Phase 4 backend
+        atlas migration. create_backend now raises ValueError with migration
+        guidance instead of constructing a backend.
+        """
+        import pytest
+
         from marianne.execution.setup import create_backend
 
         mock_config = MagicMock()
         mock_config.backend.type = "recursive_light"
 
-        with patch(
-            "marianne.backends.recursive_light.RecursiveLightBackend.from_config"
-        ) as mock_from_config:
-            mock_from_config.return_value = MagicMock()
+        with pytest.raises(ValueError, match="recursive_light"):
             create_backend(mock_config)
-            mock_from_config.assert_called_once_with(mock_config.backend)
 
     def test_unknown_backend_falls_back_to_claude_cli(self):
         """Test create_backend defaults to ClaudeCliBackend for unknown types."""

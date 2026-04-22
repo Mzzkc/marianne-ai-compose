@@ -89,9 +89,18 @@ def create_backend_via_registry(
     )
 
     if instrument_name == "recursive_light":
-        from marianne.backends.recursive_light import RecursiveLightBackend
-
-        return RecursiveLightBackend.from_config(backend_config)
+        # Phase 4a: the native RecursiveLightBackend has been removed.
+        # The registry profile for ``recursive_light`` is a stub — no live
+        # YAML-profile HTTP plugin speaks the RL server's ``/api/process``
+        # protocol. Callers still using ``backend.type: recursive_light``
+        # must migrate to an instrument plugin.
+        raise ValueError(
+            "Backend type 'recursive_light' was removed in Phase 4 of the "
+            "backend atlas migration. The native RecursiveLightBackend has "
+            "been deleted. Migrate to the 'instrument:' path with a "
+            "registered HTTP instrument profile that speaks the RL "
+            "/api/process protocol."
+        )
     if instrument_name == "anthropic_api":
         from marianne.backends.anthropic_api import AnthropicApiBackend
 

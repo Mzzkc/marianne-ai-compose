@@ -28,7 +28,8 @@ if TYPE_CHECKING:
 def create_backend_from_config(backend_config: BackendConfig) -> Backend:
     """Create the appropriate execution backend from a BackendConfig.
 
-    Supports: claude_cli, anthropic_api, recursive_light, ollama.
+    Supports: claude_cli, anthropic_api, ollama. (Phase 4a: recursive_light
+    removed — use the instrument: path with an HTTP profile.)
 
     Args:
         backend_config: Backend configuration with type and settings.
@@ -39,10 +40,14 @@ def create_backend_from_config(backend_config: BackendConfig) -> Backend:
     from marianne.backends.anthropic_api import AnthropicApiBackend
     from marianne.backends.claude_cli import ClaudeCliBackend
     from marianne.backends.ollama import OllamaBackend
-    from marianne.backends.recursive_light import RecursiveLightBackend
 
     if backend_config.type == "recursive_light":
-        return RecursiveLightBackend.from_config(backend_config)
+        raise ValueError(
+            "Backend type 'recursive_light' was removed in Phase 4 of the "
+            "backend atlas migration. The native RecursiveLightBackend has "
+            "been deleted. Migrate to the 'instrument:' path with a "
+            "registered HTTP instrument profile."
+        )
     elif backend_config.type == "anthropic_api":
         return AnthropicApiBackend.from_config(backend_config)
     elif backend_config.type == "ollama":

@@ -58,13 +58,14 @@ class TestCreateBackend:
         backend = create_backend(config)
         assert backend.name == "anthropic-api"
 
-    def test_recursive_light_backend(self, base_config_dict: dict) -> None:
+    def test_recursive_light_backend_raises(self, base_config_dict: dict) -> None:
+        """Phase 4a: 'recursive_light' backend type was removed."""
         config = _make_config(
             base_config_dict,
             backend={"type": "recursive_light", "model": "claude-sonnet-4-5-20250929"},
         )
-        backend = create_backend(config)
-        assert backend.name == "recursive-light"
+        with pytest.raises(ValueError, match="recursive_light"):
+            create_backend(config)
 
     def test_unknown_type_falls_through_to_cli(self, base_config_dict: dict) -> None:
         """Unrecognized type falls through to ClaudeCliBackend (else branch)."""
