@@ -8,6 +8,18 @@ Phase 2 of AGI Evolution: Confidence-Based Execution
 v21 Evolution: Proactive Checkpoint System - adds pre-execution checkpoints
 that ask for confirmation BEFORE dangerous operations, complementing the
 reactive escalation system.
+
+TODO (Pre-Instrument Execution Atlas, Phase 6 — DEFERRED):
+    This module has zero production callers. The atlas classified it as
+    dead code, but deletion is deferred pending the fermata escalation
+    feature described in ``.marianne/spec/intent.yaml``. Once the baton
+    implements fermata via its own event types (see
+    ``daemon/baton/events.py``), this module should be deleted. Until
+    then it is retained so that the ``CheckpointTrigger`` /
+    ``EscalationDecision`` vocabulary is discoverable by future
+    contributors. Do NOT add new imports of this module — the baton
+    event types are the forward path. See phase-6-report.md for the
+    full rationale.
 """
 
 from dataclasses import dataclass, field
