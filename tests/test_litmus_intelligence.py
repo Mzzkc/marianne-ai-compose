@@ -5164,7 +5164,7 @@ class TestProcessControlSafeKillGuardsIntelligence:
         """_safe_killpg MUST refuse pgid <= 1."""
         import signal
 
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         for bad_pgid in [0, 1, -1]:
             result = _safe_killpg(bad_pgid, signal.SIGTERM, context="test")
@@ -5180,7 +5180,7 @@ class TestProcessControlSafeKillGuardsIntelligence:
         import os
         import signal
 
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         own_pgid = os.getpgid(0)
         result = _safe_killpg(own_pgid, signal.SIGTERM, context="test")
@@ -5224,7 +5224,7 @@ class TestProcessControlSafeKillGuardsIntelligence:
         """Source inspection: _safe_killpg MUST check pgid > 1."""
         import inspect
 
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         source = inspect.getsource(_safe_killpg)
 
@@ -5238,7 +5238,7 @@ class TestProcessControlSafeKillGuardsIntelligence:
         """Source inspection: _safe_killpg MUST check own process group."""
         import inspect
 
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         source = inspect.getsource(_safe_killpg)
 

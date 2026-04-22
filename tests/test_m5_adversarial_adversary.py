@@ -440,28 +440,28 @@ class TestSafeKillpgGuard:
 
     def test_pgid_zero_refused(self) -> None:
         """pgid=0 is refused (would target own process group)."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         result = _safe_killpg(0, signal.SIGTERM, context="test")
         assert result is False
 
     def test_pgid_one_refused(self) -> None:
         """pgid=1 is refused (init — kernel translates to kill(-1,sig))."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         result = _safe_killpg(1, signal.SIGTERM, context="test")
         assert result is False
 
     def test_pgid_negative_refused(self) -> None:
         """pgid=-1 is refused (negative values are invalid/dangerous)."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         result = _safe_killpg(-1, signal.SIGTERM, context="test")
         assert result is False
 
     def test_pgid_own_pgroup_refused(self) -> None:
         """pgid matching our own process group is refused."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         own_pgid = os.getpgid(0)
         # Don't actually call os.killpg — just verify the guard blocks it
@@ -470,7 +470,7 @@ class TestSafeKillpgGuard:
 
     def test_pgid_valid_calls_killpg(self) -> None:
         """A valid pgid (not 0/1/own) calls os.killpg."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         with patch("os.killpg") as mock_killpg, patch("os.getpgid", return_value=12345):
             result = _safe_killpg(99999, signal.SIGTERM, context="test")
@@ -480,7 +480,7 @@ class TestSafeKillpgGuard:
     def test_getpgid_oserror_allows_call(self) -> None:
         """If os.getpgid(0) raises OSError, the own-pgroup check is skipped
         but the pgid<=1 check still applies."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         with patch("os.getpgid", side_effect=OSError("not supported")):
             with patch("os.killpg"):
@@ -494,7 +494,7 @@ class TestSafeKillpgGuard:
 
     def test_killpg_oserror_propagates(self) -> None:
         """os.killpg raising (e.g. no such process) propagates up."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
             patch("os.killpg", side_effect=ProcessLookupError("No process")),

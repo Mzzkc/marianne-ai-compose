@@ -22,7 +22,7 @@ from unittest.mock import patch
 
 import pytest
 
-from marianne.backends.claude_cli import _safe_killpg
+from marianne.utils.process import safe_killpg as _safe_killpg
 
 
 class TestSafeKillpgGuardBlocks:
@@ -168,17 +168,19 @@ class TestCallSiteStructuralAudit:
         )
 
     def test_exactly_six_call_sites(self) -> None:
-        """Exactly 6 _safe_killpg call sites exist (not counting the def).
+        """Exactly 6 _safe_killpg call sites exist in claude_cli.py.
 
-        If you add or remove a call site, update this count.
-        Call sites (as of M5+):
-          1. reap_descendant (line ~98)
-          2. timeout_escalation (line ~421)
-          3. kill_orphaned_process (line ~637)
-          4. await_exit_graceful (line ~956)
-          5. await_exit_force (line ~965)
-          6. cancel_graceful (line ~1043)
-          7. cancel_force (line ~1051)
+        Phase 4c moved ``_reap_descendant_trees`` and its ``_safe_killpg``
+        call to ``marianne.utils.process``, so claude_cli.py lost one call
+        site (count went from 7 to 6).
+
+        Remaining call sites (as of Phase 4c):
+          1. timeout_escalation  (~line 421 before the refactor)
+          2. kill_orphaned_process
+          3. await_exit_graceful
+          4. await_exit_force
+          5. cancel_graceful
+          6. cancel_force
         """
         import inspect
 
@@ -188,8 +190,8 @@ class TestCallSiteStructuralAudit:
 
         # Count _safe_killpg( call sites (definition moved to utils.process)
         call_count = source.count("_safe_killpg(")
-        assert call_count == 7, (
-            f"Expected 7 _safe_killpg call sites, found {call_count}. "
+        assert call_count == 6, (
+            f"Expected 6 _safe_killpg call sites, found {call_count}. "
             f"If you added a call, update this count. If you removed one, "
             f"verify the cleanup path still kills orphans correctly."
         )

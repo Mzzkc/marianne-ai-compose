@@ -335,7 +335,7 @@ class TestSafeKillpgGuard:
         """pgid ≤ 1 is always refused regardless of own_pgid."""
         assume(pgid <= 1)
 
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
             patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
@@ -351,7 +351,7 @@ class TestSafeKillpgGuard:
     @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_pgid_eq_own_group_refused(self, own_pgid: int) -> None:
         """pgid == own process group is refused."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
             patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
@@ -370,7 +370,7 @@ class TestSafeKillpgGuard:
         """pgid > 1 and pgid ≠ own_pgid → signal sent, returns True."""
         assume(pgid != own_pgid)
 
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
             patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
@@ -398,7 +398,7 @@ class TestSafeKillpgExceptionTolerance:
     @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_getpgid_failure_permits_valid_pgid(self, pgid: int) -> None:
         """With os.getpgid raising, valid pgid > 1 is still permitted."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
             patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
@@ -412,7 +412,7 @@ class TestSafeKillpgExceptionTolerance:
     @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_getpgid_failure_still_blocks_le_1(self, pgid: int) -> None:
         """With os.getpgid raising, pgid ≤ 1 is still refused."""
-        from marianne.backends.claude_cli import _safe_killpg
+        from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
             patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
