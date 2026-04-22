@@ -89,7 +89,8 @@ IMPORTABLE_MODULES = [
     "marianne.state.sqlite_backend",
     # Execution
     "marianne.execution",
-    "marianne.execution.hooks",
+    # marianne.execution.hooks removed in Phase 6b — HookExecutor was dead
+    # code; the live expand_hook_variables() was relocated to daemon/manager.py.
     "marianne.execution.validation",
     "marianne.execution.validation.engine",
     # Learning

@@ -621,19 +621,9 @@ class TestReconstructConfig:
 class TestSharedHelpers:
     """Tests for _shared.py helper functions."""
 
-    def test_create_backend_claude_cli(self) -> None:
-        """create_backend should return ClaudeCliBackend for claude_cli type."""
-        from marianne.cli.commands._shared import create_backend
-        from marianne.core.config import BackendConfig, JobConfig
-
-        config = MagicMock(spec=JobConfig)
-        # Use real BackendConfig to ensure all fields are available
-        config.backend = BackendConfig(type="claude_cli")
-
-        backend = create_backend(config)
-        from marianne.backends.claude_cli import ClaudeCliBackend
-
-        assert isinstance(backend, ClaudeCliBackend)
+    # test_create_backend_claude_cli removed in Phase 1 — create_backend() was
+    # part of the dead _shared.py cluster. Backend creation now flows through
+    # the instrument registry (marianne.instruments.native_factory).
 
     def test_create_progress_bar_default(self) -> None:
         """create_progress_bar should return a Progress instance."""
@@ -656,44 +646,12 @@ class TestSharedHelpers:
         default = create_progress_bar(include_exec_status=False)
         assert len(progress.columns) > len(default.columns)
 
-    def test_setup_learning_disabled(self) -> None:
-        """setup_learning should return (None, None) when learning is disabled."""
-        from marianne.cli.commands._shared import setup_learning
-
-        config = MagicMock()
-        config.learning.enabled = False
-
-        outcome_store, global_store = setup_learning(config)
-        assert outcome_store is None
-        assert global_store is None
-
-    def test_setup_notifications_none_config(self) -> None:
-        """setup_notifications should return None when no notifications configured."""
-        from marianne.cli.commands._shared import setup_notifications
-
-        config = MagicMock()
-        config.notifications = None
-
-        result = setup_notifications(config)
-        assert result is None
-
-    def test_setup_escalation_disabled(self) -> None:
-        """setup_escalation should return None when not enabled."""
-        from marianne.cli.commands._shared import setup_escalation
-
-        config = MagicMock()
-        result = setup_escalation(config, enabled=False)
-        assert result is None
-
-    def test_setup_grounding_disabled(self) -> None:
-        """setup_grounding should return None when grounding is disabled."""
-        from marianne.cli.commands._shared import setup_grounding
-
-        config = MagicMock()
-        config.grounding.enabled = False
-
-        result = setup_grounding(config)
-        assert result is None
+    # setup_learning / setup_notifications / setup_escalation / setup_grounding
+    # tests removed in Phase 1 — all four helpers were part of the dead
+    # _shared.py cluster that the daemon replaced via the baton adapter.
+    # Equivalent logic now lives in marianne.execution.setup (setup_learning,
+    # setup_notifications) and the baton's native event handling (grounding,
+    # escalation).
 
     @pytest.mark.asyncio
     async def test_handle_job_completion_completed(self) -> None:

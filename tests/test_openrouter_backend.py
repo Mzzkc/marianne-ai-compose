@@ -890,19 +890,28 @@ class TestBackendPoolIntegration:
         assert isinstance(backend, OpenRouterBackend)
 
     def test_unknown_http_raises(self) -> None:
-        """Unknown HTTP instrument raises NotImplementedError."""
+        """HTTP instrument without a wired schema_family translator raises.
+
+        Phase 3 of the backend atlas migration replaced the per-instrument
+        ``NotImplementedError("not recognized")`` dispatch with generic
+        schema_family-based routing. ``openai`` and ``anthropic`` families
+        now resolve through generic handlers; ``gemini`` is the family that
+        is designed but not yet wired, so it raises ``ValueError`` with
+        migration guidance. This test keeps the unknown-instrument safety
+        net alive under the new dispatch model.
+        """
         from marianne.core.config.instruments import HttpProfile, InstrumentProfile
         from marianne.daemon.baton.backend_pool import _create_backend_for_profile
 
         profile = InstrumentProfile(
-            name="unknown-api",
-            display_name="Unknown API",
+            name="unknown-gemini",
+            display_name="Unknown Gemini",
             kind="http",
             http=HttpProfile(
                 base_url="https://unknown.example.com/api",
-                schema_family="openai",
+                schema_family="gemini",
             ),
         )
 
-        with pytest.raises(NotImplementedError, match="not recognized"):
+        with pytest.raises(ValueError, match="Gemini translator"):
             _create_backend_for_profile(profile)

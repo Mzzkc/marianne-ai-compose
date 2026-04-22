@@ -108,19 +108,40 @@ class TestF122IpcCloneBypass:
 
     @pytest.mark.adversarial
     def test_hooks_uses_resolve_socket_path(self):
-        """hooks.py must use _resolve_socket_path for clone-aware routing."""
+        """CLI job submission must route through the clone-aware helper.
+
+        F-122 originally lived in execution/hooks.py; that module was removed in
+        Phase 6b of the backend atlas migration. The _try_daemon_submit helper
+        was relocated to cli/commands/run.py, which delegates socket resolution
+        to try_daemon_route() in marianne.daemon.detect. That function is the
+        single choke point that calls _resolve_socket_path — the regression
+        guard here ensures _try_daemon_submit continues to go through it (and
+        does not fall back to a hardcoded SocketConfig()).
+        """
+        import importlib
         import inspect
 
-        from marianne.execution import hooks
+        # marianne.cli.commands re-exports `run` as a function, which shadows
+        # the underlying module at the same name. Load the module explicitly.
+        run_module = importlib.import_module("marianne.cli.commands.run")
+        detect_module = importlib.import_module("marianne.daemon.detect")
 
-        source = inspect.getsource(hooks._try_daemon_submit)
-        assert "_resolve_socket_path" in source, (
-            "F-122 regression: hooks._try_daemon_submit must use "
-            "_resolve_socket_path for clone-aware socket resolution"
+        submit_source = inspect.getsource(run_module._try_daemon_submit)
+        assert "try_daemon_route" in submit_source, (
+            "F-122 regression: run._try_daemon_submit must delegate to "
+            "try_daemon_route for clone-aware socket resolution"
         )
-        assert "SocketConfig()" not in source, (
-            "F-122 regression: hooks._try_daemon_submit must not "
-            "hardcode SocketConfig() — use _resolve_socket_path instead"
+        assert "SocketConfig()" not in submit_source, (
+            "F-122 regression: run._try_daemon_submit must not "
+            "hardcode SocketConfig() — go through try_daemon_route instead"
+        )
+
+        # try_daemon_route itself must reach _resolve_socket_path — otherwise
+        # the delegation above does not buy us clone-aware routing.
+        route_source = inspect.getsource(detect_module.try_daemon_route)
+        assert "_resolve_socket_path" in route_source, (
+            "F-122 regression: try_daemon_route must use _resolve_socket_path "
+            "for clone-aware socket resolution"
         )
 
     @pytest.mark.adversarial
