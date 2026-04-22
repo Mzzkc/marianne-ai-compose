@@ -766,12 +766,12 @@ class TestOpenRouterBackend:
     """OpenRouterBackend — HTTP backend for OpenRouter API."""
 
     def test_backend_importable(self) -> None:
-        from marianne.backends.openrouter import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
 
         assert OpenRouterBackend is not None
 
     def test_from_config(self) -> None:
-        from marianne.backends.openrouter import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
         from marianne.core.config import BackendConfig
 
         # BackendConfig.type doesn't include "openrouter" yet, but from_config
@@ -785,7 +785,7 @@ class TestOpenRouterBackend:
         assert backend.timeout_seconds == 120.0
 
     def test_default_model(self) -> None:
-        from marianne.backends.openrouter import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
 
         backend = OpenRouterBackend()
         assert backend.model == "minimax/minimax-m1-80k"

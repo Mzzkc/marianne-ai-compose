@@ -1,8 +1,15 @@
-"""OpenRouter HTTP backend for multi-model access via OpenAI-compatible API.
+"""OpenAI-compatible HTTP backend used by schema_family='openai' instruments.
 
-Enables Marianne to use any model available on OpenRouter (free and paid)
-through a single HTTP backend. Uses the OpenAI-compatible chat completions
-endpoint at https://openrouter.ai/api/v1/chat/completions.
+Relocated from ``marianne.backends.openrouter`` in Phase 4b of the backend
+atlas migration. The class name ``OpenRouterBackend`` is preserved for
+compatibility with tests and internal callers, but conceptually this is
+the generic OpenAI-compatible handler: it speaks the standard OpenAI
+chat/completions protocol and works against any HTTP service that exposes
+one (OpenRouter, OpenAI proper, self-hosted vLLM, etc.).
+
+Usage is internal only — it is constructed by
+``marianne.daemon.baton.backend_pool._build_openai_family_backend``
+when dispatching an ``HttpProfile`` whose ``schema_family`` is ``openai``.
 
 Key design decisions:
 - Extends Backend ABC with HttpxClientMixin for lazy httpx client lifecycle.

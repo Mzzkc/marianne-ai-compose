@@ -426,14 +426,14 @@ class TestCreateBackendForProfile:
         assert backend.working_directory == Path("/tmp/test")
 
     async def test_openrouter_profile_creates_openrouter_backend(self) -> None:
-        from marianne.backends.openrouter import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
 
         profile = _make_openrouter_profile()
         backend = _create_backend_for_profile(profile)
         assert isinstance(backend, OpenRouterBackend)
 
     async def test_openrouter_profile_with_api_key(self) -> None:
-        from marianne.backends.openrouter import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
 
         profile = _make_openrouter_profile()
         backend = _create_backend_for_profile(
@@ -444,7 +444,7 @@ class TestCreateBackendForProfile:
         assert backend._api_key == "sk-test-injected-key"
 
     async def test_openrouter_profile_with_model_override(self) -> None:
-        from marianne.backends.openrouter import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
 
         profile = _make_openrouter_profile()
         backend = _create_backend_for_profile(
@@ -496,7 +496,7 @@ class TestKeyringIntegration:
     """BackendPool uses keyring for HTTP backend API keys."""
 
     async def test_keyring_injects_api_key(self, tmp_path: Path) -> None:
-        from marianne.backends.openrouter import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
 
         # Set up key file
         key_file = tmp_path / "openrouter.key"

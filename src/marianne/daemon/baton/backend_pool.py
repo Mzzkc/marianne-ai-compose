@@ -178,7 +178,7 @@ def _build_openai_family_backend(
     for any profile whose schema family is 'openai', including OpenRouter
     itself, OpenAI proper, and self-hosted OpenAI-compat servers.
     """
-    from marianne.backends.openrouter import OpenRouterBackend
+    from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
 
     assert profile.http is not None  # narrowed by dispatcher
 
