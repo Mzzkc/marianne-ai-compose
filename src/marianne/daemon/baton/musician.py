@@ -215,6 +215,7 @@ async def sheet_task(
                 exec_result,
                 cost_per_1k_input=cost_per_1k_input,
                 cost_per_1k_output=cost_per_1k_output,
+                instrument_name=effective_instrument,
             ),
             input_tokens=exec_result.input_tokens or 0,
             output_tokens=exec_result.output_tokens or 0,
@@ -979,12 +980,18 @@ def _estimate_cost(
     exec_result: ExecutionResult,
     cost_per_1k_input: float | None = None,
     cost_per_1k_output: float | None = None,
+    instrument_name: str | None = None,
 ) -> float:
     """Estimate cost from token counts and instrument pricing.
 
     When profile pricing is provided (from InstrumentProfile.ModelCapacity),
     uses that for accurate per-instrument cost tracking. Falls back to
-    conservative Claude Sonnet estimates when no pricing is available.
+    conservative Claude Sonnet estimates when no pricing is available —
+    the fallback is doctrine-flagged (RULE "cost tracking must use
+    instrument profile pricing") so the fallback branch now emits a
+    warning that names the instrument whose pricing is missing. Phase 5
+    wires the warning; follow-up phases must wire pricing into every
+    instrument profile so the fallback stops firing in production.
 
     Args:
         exec_result: The execution result with token counts.
@@ -992,6 +999,9 @@ def _estimate_cost(
             profile. None falls back to hardcoded estimate.
         cost_per_1k_output: Cost per 1000 output tokens (USD) from instrument
             profile. None falls back to hardcoded estimate.
+        instrument_name: Name of the instrument whose pricing is being
+            estimated. Used only to enrich the fallback warning — the
+            numeric fallback is independent of the name today.
     """
     input_tokens = exec_result.input_tokens or 0
     output_tokens = exec_result.output_tokens or 0
@@ -1002,8 +1012,27 @@ def _estimate_cost(
             output_tokens * cost_per_1k_output / 1_000
         )
     else:
-        # Fallback: conservative Claude Sonnet pricing ($3/1M input, $15/1M output)
+        # Fallback: conservative Claude Sonnet pricing ($3/1M input,
+        # $15/1M output). Doctrine-flagged — emit a warning that names
+        # the instrument whose pricing is missing so the gap is visible
+        # in logs. This satisfies the xfail guard in
+        # tests/test_instrument_cost_tracking.py and Doctrine RULE
+        # "Cost tracking must use instrument profile pricing".
         cost = (input_tokens * 3.0 / 1_000_000) + (
             output_tokens * 15.0 / 1_000_000
+        )
+        _logger.warning(
+            "musician.cost_pricing_fallback",
+            extra={
+                "instrument": instrument_name or "unknown",
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "estimated_cost_usd": cost,
+                "note": (
+                    "Instrument profile pricing missing — falling back "
+                    "to hardcoded Claude Sonnet rates. Add ModelCapacity "
+                    "pricing to the instrument profile to fix."
+                ),
+            },
         )
     return cost

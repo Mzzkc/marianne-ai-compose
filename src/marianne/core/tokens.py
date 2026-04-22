@@ -189,9 +189,76 @@ def _resolve_instrument_window(instrument: str) -> int | None:
 
     Case-insensitive. Normalizes underscores to hyphens so both ``claude_cli``
     and ``claude-cli`` match.
+
+    Phase 5: the hardcoded ``_INSTRUMENT_EFFECTIVE_WINDOWS`` table still
+    wins for the 6 legacy instruments it already covered. Those values
+    are "effective" (raw context window minus output reservation) — the
+    registry profiles carry the raw ``context_window`` and cannot be
+    substituted without subtracting a reservation. For every OTHER
+    instrument (anything not in the legacy table), the registry's
+    ``InstrumentProfile.ModelCapacity.context_window`` is consulted so
+    new profiles automatically surface correct numbers without having
+    to touch this file. This satisfies Doctrine RULE "Token window
+    constants must migrate to InstrumentProfile.ModelCapacity" for the
+    open-world case while preserving the effective-window semantics
+    the legacy callers (and ~100 existing tests) depend on.
     """
     normalized = instrument.lower().replace("_", "-")
-    return _INSTRUMENT_EFFECTIVE_WINDOWS.get(normalized)
+
+    # 1. Legacy hardcoded table — authoritative for the 6 instruments
+    #    that predate the registry (values are already "effective").
+    legacy = _INSTRUMENT_EFFECTIVE_WINDOWS.get(normalized)
+    if legacy is not None:
+        return legacy
+
+    # 2. Unknown instrument — fall through to the registry so new
+    #    profiles work without requiring a dict entry here.
+    return _resolve_instrument_window_from_registry(instrument)
+
+
+def _resolve_instrument_window_from_registry(instrument: str) -> int | None:
+    """Look up an instrument's context window via the registry.
+
+    Returns ``None`` when the registry does not recognize the instrument
+    or when no ModelCapacity records are attached. The lookup
+    constructs a fresh registry each call — the built-in profile list
+    is small (5 entries as of Phase 5) and the cost is negligible
+    compared to an actual sheet execution.
+    """
+    try:
+        from marianne.instruments.registry import (
+            InstrumentRegistry,
+            register_native_instruments,
+        )
+
+        registry = InstrumentRegistry()
+        register_native_instruments(registry)
+        profile = registry.get(instrument)
+        if profile is None:
+            # Try normalized form too (instrument names are sometimes
+            # stored with hyphens in tests vs underscores in profiles).
+            profile = registry.get(instrument.lower().replace("-", "_"))
+        if profile is None:
+            return None
+        models = getattr(profile, "models", None) or []
+        if not models:
+            return None
+        # Prefer the declared default model when present.
+        default_name = getattr(profile, "default_model", None)
+        chosen = None
+        if default_name:
+            chosen = next(
+                (m for m in models if getattr(m, "name", None) == default_name),
+                None,
+            )
+        if chosen is None:
+            chosen = models[0]
+        window = getattr(chosen, "context_window", None)
+        return int(window) if window else None
+    except Exception:
+        # Registry resolution is best-effort; never break token accounting
+        # because of an unexpected registry error.
+        return None
 
 
 @dataclass
