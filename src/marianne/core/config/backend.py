@@ -287,9 +287,19 @@ class BackendConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["claude_cli", "anthropic_api", "recursive_light", "ollama"] = Field(
+    type: str = Field(
         default="claude_cli",
-        description="Backend type: claude_cli, anthropic_api, recursive_light, or ollama",
+        description=(
+            "Backend/instrument type name. The four legacy values "
+            "'claude_cli', 'anthropic_api', 'recursive_light', and 'ollama' "
+            "continue to be resolved via register_native_instruments(). "
+            "Any other value is treated as an instrument name — an "
+            "InstrumentProfile YAML must be registered for it, otherwise "
+            "the registry will raise at resolution time. Phase 2 of the "
+            "backend atlas migration opened this field from a closed Literal "
+            "to str to permit instrument-name values on the legacy backend: "
+            "path while the instrument: path completes rollout."
+        ),
     )
 
     # CLI-specific options (only meaningful when type="claude_cli")
@@ -405,6 +415,37 @@ class BackendConfig(BaseModel):
     _API_SPECIFIC_FIELDS: frozenset[str] = frozenset({
         "model", "api_key_env", "max_tokens", "temperature",
     })
+
+    # Legacy backend names that remain valid without any warning during Phases
+    # 1-4 (Doctrine exception on the "BackendConfig.type must accept arbitrary
+    # strings" rule). Any other value triggers a warning suggesting the caller
+    # migrate to the ``instrument:`` path.
+    _LEGACY_BACKEND_TYPES: frozenset[str] = frozenset({
+        "claude_cli", "anthropic_api", "recursive_light", "ollama",
+    })
+
+    @model_validator(mode="after")
+    def _warn_on_unknown_backend_type(self) -> BackendConfig:
+        """Warn when an unrecognized backend type is supplied.
+
+        Phase 2 of the atlas migration opened ``type`` from a closed Literal
+        to ``str``. The safety net is retained by emitting a UserWarning for
+        any value outside the four legacy names, telling the user to use the
+        ``instrument:`` path instead. The four legacy names NEVER warn here
+        (Doctrine: "The original 4 string values ... remain valid and must
+        not produce warnings during Phases 1-4").
+        """
+        if self.type not in self._LEGACY_BACKEND_TYPES:
+            warnings.warn(
+                f"Backend type '{self.type}' is not one of the legacy "
+                f"native backend names {sorted(self._LEGACY_BACKEND_TYPES)}. "
+                f"Prefer the 'instrument:' path with a registered "
+                f"InstrumentProfile instead of backend.type for new "
+                f"instruments.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return self
 
     @model_validator(mode="after")
     def _validate_type_specific_fields(self) -> BackendConfig:

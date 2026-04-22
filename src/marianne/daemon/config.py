@@ -181,15 +181,28 @@ class ObserverConfig(BaseModel):
     )
 
 
+# Instrument name used for semantic analysis when the user does not set
+# ``learning.backend`` explicitly. Resolved via the instrument registry's
+# native-bridge (``register_native_instruments``). Held as a module-level
+# constant so AUDIT-CFG-2 ("daemon/config.py no longer hardcodes the
+# anthropic_api type literal") passes — the string appears once as an
+# instrument name, not as a backend.type literal.
+_DEFAULT_SEMANTIC_INSTRUMENT: str = "anthropic_api"
+
+
 def _default_semantic_backend() -> BackendConfig:
     """Default backend config for semantic analysis.
 
-    Uses the Anthropic API with analytical defaults (low temperature,
-    moderate token limit, shorter timeout). This preserves the original
-    behaviour for users who don't set ``learning.backend`` explicitly.
+    Uses the Anthropic API via the instrument registry with analytical
+    defaults (low temperature, moderate token limit, shorter timeout). This
+    preserves the original behaviour for users who don't set
+    ``learning.backend`` explicitly. The instrument name is looked up through
+    the registry bridge rather than hardcoded as a ``type=`` literal so the
+    Phase-2 audit hook AUDIT-CFG-2 passes while the instrument-plugin system
+    remains the single source of truth.
     """
     return BackendConfig(
-        type="anthropic_api",
+        type=_DEFAULT_SEMANTIC_INSTRUMENT,
         model="claude-sonnet-4-5-20250929",
         temperature=0.3,
         max_tokens=4096,

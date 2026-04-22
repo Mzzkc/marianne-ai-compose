@@ -184,29 +184,13 @@ class TestNovelTypeAcceptedWithWarning:
     keeps this strict.
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Blocked by Phase 2: BackendConfig.type is still a closed "
-            "Literal. Atlas Doctrine RULE: BackendConfig.type must accept "
-            "arbitrary strings after Phase 2. Flip this test to expected-"
-            "pass once the union opens at core/config/backend.py:290-291."
-        ),
-    )
     def test_novel_type_is_accepted(self) -> None:
         """A made-up backend type string must parse without raising."""
-        cfg = BackendConfig(type="custom_cli")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            cfg = BackendConfig(type="custom_cli")
         assert cfg.type == "custom_cli"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Blocked by Phase 2: warning validator that suggests the "
-            "instrument: path has not yet been added. Atlas Doctrine RULE: "
-            "BackendConfig.type must accept arbitrary strings after Phase 2 "
-            "with a warning pointing at instrument:."
-        ),
-    )
     def test_novel_type_emits_instrument_suggestion(self) -> None:
         """After Phase 2, novel types must nudge users toward instrument:."""
         with warnings.catch_warnings(record=True) as captured:
@@ -219,16 +203,20 @@ class TestNovelTypeAcceptedWithWarning:
             f"{messages}"
         )
 
-    def test_novel_type_is_currently_rejected(self) -> None:
-        """Today, the closed Literal rejects unknown strings.
+    def test_novel_type_post_phase2_is_accepted_not_rejected(self) -> None:
+        """Phase-2 post-condition: previously-rejected novel types now succeed.
 
-        This is the regression guard that trips IF someone opens the
-        union WITHOUT adding the warning validator required by Phase 2.
-        Once Phase 2 lands fully, this test is expected to be deleted
-        (and the two xfails above should flip to passing).
+        The original closed Literal rejected anything outside the four
+        native names. Phase 2 opened the union to ``str`` with a warning
+        rather than a ValidationError, so this test now asserts that no
+        ValidationError is raised. If this test ever starts raising, the
+        Literal was re-closed (Doctrine RULE violation).
         """
-        with pytest.raises(ValidationError):
-            BackendConfig(type="custom_cli")
+        # Must NOT raise — Phase 2 opened the type system.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            cfg = BackendConfig(type="custom_cli")
+        assert cfg.type == "custom_cli"
 
 
 # ---------------------------------------------------------------------------
