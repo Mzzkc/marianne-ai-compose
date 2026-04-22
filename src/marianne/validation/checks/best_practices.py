@@ -218,9 +218,14 @@ class MissingSkipPermissionsCheck:
         config_path: Path,
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        """Fire when Claude CLI backend lacks skip_permissions."""
+        """Fire when Claude CLI instrument lacks skip_permissions.
+
+        Phase 5: instrument-aware — compares against the effective
+        instrument name so scores using ``instrument: claude_cli`` get
+        the same warning as scores using ``backend.type: claude_cli``.
+        """
         if (
-            config.backend.type == "claude_cli"
+            config.effective_instrument_name == "claude_cli"
             and config.backend.skip_permissions is False
         ):
             return [
@@ -228,7 +233,7 @@ class MissingSkipPermissionsCheck:
                     check_id=self.check_id,
                     severity=self.severity,
                     message=(
-                        "Claude CLI backend without skip_permissions"
+                        "Claude CLI instrument without skip_permissions"
                         " will hang waiting for permission approval"
                     ),
                     line=find_line_in_yaml(raw_yaml, "skip_permissions"),
@@ -237,7 +242,7 @@ class MissingSkipPermissionsCheck:
                         " for unattended execution"
                     ),
                     metadata={
-                        "backend_type": config.backend.type,
+                        "instrument": config.effective_instrument_name,
                     },
                 )
             ]
@@ -545,9 +550,15 @@ class MissingDisableMcpCheck:
         config_path: Path,
         raw_yaml: str,
     ) -> list[ValidationIssue]:
-        """Fire when Claude CLI backend lacks disable_mcp."""
+        """Fire when Claude CLI instrument lacks disable_mcp.
+
+        Phase 5: instrument-aware — compares against the effective
+        instrument name so the warning fires for ``instrument:
+        claude_cli`` scores as well as legacy ``backend.type:
+        claude_cli`` scores.
+        """
         if (
-            config.backend.type == "claude_cli"
+            config.effective_instrument_name == "claude_cli"
             and config.backend.disable_mcp is False
         ):
             return [
@@ -555,7 +566,7 @@ class MissingDisableMcpCheck:
                     check_id=self.check_id,
                     severity=self.severity,
                     message=(
-                        "Claude CLI backend without disable_mcp"
+                        "Claude CLI instrument without disable_mcp"
                         " may experience MCP deadlocks"
                     ),
                     line=find_line_in_yaml(raw_yaml, "disable_mcp"),
@@ -564,7 +575,7 @@ class MissingDisableMcpCheck:
                         " to prevent MCP deadlocks"
                     ),
                     metadata={
-                        "backend_type": config.backend.type,
+                        "instrument": config.effective_instrument_name,
                     },
                 )
             ]
