@@ -177,10 +177,17 @@ def build_config_summary(config: JobConfig) -> dict[str, Any]:
     Returns:
         Dictionary with configuration summary information
     """
+    # Phase 5: expose the effective instrument name (which may come from
+    # the score's ``instrument:`` field or the legacy ``backend.type``
+    # value). The ``backend_type`` key is retained as an alias for
+    # backward compatibility with dashboard clients that pre-date the
+    # instrument system.
+    instrument_name = config.effective_instrument_name
     return {
         "name": config.name,
         "total_sheets": config.sheet.total_sheets,
-        "backend_type": config.backend.type,
+        "instrument": instrument_name,
+        "backend_type": instrument_name,
         "validation_count": len(config.validations),
         "notification_count": len(config.notifications),
         "has_dependencies": bool(config.sheet.dependencies),
