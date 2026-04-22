@@ -1,14 +1,16 @@
-"""Shared execution setup logic for run and resume commands.
+"""Shared helpers for run and resume commands.
 
-Extracts the common infrastructure setup that both _run_job() and _resume_job()
-need: backend creation, learning stores, notification manager, escalation handler,
-grounding engine, and summary display.
+Provides summary display, progress-bar construction, completion handling,
+and CLI input validation. Backend and infrastructure setup now lives in
+the daemon's baton/backend pool path — the legacy CLI factory cluster
+(``create_backend``, ``setup_learning``, ``setup_notifications``,
+``setup_escalation``, ``setup_grounding``, ``SetupComponents``,
+``setup_all``) was removed in Phase 1 of the backend atlas migration.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rich.console import Console
@@ -31,220 +33,7 @@ from ..helpers import (
 from ..output import console as default_console
 
 if TYPE_CHECKING:
-    from marianne.backends.base import Backend
-    from marianne.core.config import JobConfig
     from marianne.core.models import JobCompletionSummary
-    from marianne.execution.escalation import ConsoleEscalationHandler
-    from marianne.execution.grounding import GroundingEngine
-    from marianne.learning.global_store import GlobalLearningStore
-    from marianne.learning.outcomes import OutcomeStore
-
-
-def create_backend(
-    config: JobConfig,
-    *,
-    quiet: bool = False,
-    console: Console | None = None,
-) -> Backend:
-    """Create the appropriate execution backend from job config.
-
-    Delegates to ``execution.setup.create_backend()`` for core logic,
-    then adds verbose CLI console output.
-
-    Args:
-        config: Job configuration with backend settings.
-        quiet: If True, suppress verbose logging.
-        console: Console for verbose output.
-
-    Returns:
-        Configured Backend instance.
-    """
-    from marianne.execution.setup import create_backend as _create_backend
-
-    backend = _create_backend(config)
-
-    if not quiet and is_verbose() and console:
-        if config.backend.type == "recursive_light":
-            rl_config = config.backend.recursive_light
-            console.print(f"[dim]Using Recursive Light backend at {rl_config.endpoint}[/dim]")
-        elif config.backend.type == "anthropic_api":
-            console.print(
-                f"[dim]Using Anthropic API backend with model {config.backend.model}[/dim]"
-            )
-
-    return backend
-
-
-def setup_learning(
-    config: JobConfig,
-    *,
-    quiet: bool = False,
-    console: Console | None = None,
-) -> tuple[OutcomeStore | None, GlobalLearningStore | None]:
-    """Setup outcome store and global learning store if learning is enabled.
-
-    Delegates to ``execution.setup.setup_learning()`` for core logic,
-    then adds verbose CLI console output.
-
-    Args:
-        config: Job configuration with learning settings.
-        quiet: If True, suppress verbose logging.
-        console: Console for verbose output.
-
-    Returns:
-        Tuple of (outcome_store, global_learning_store), either may be None.
-    """
-    from marianne.execution.setup import setup_learning as _setup_learning
-
-    outcome_store, global_learning_store = _setup_learning(config)
-
-    if outcome_store is not None and not quiet and is_verbose() and console:
-        outcome_store_path = config.get_outcome_store_path()
-        console.print(f"[dim]Learning enabled: outcomes at {outcome_store_path}[/dim]")
-        console.print("[dim]Global learning enabled: cross-workspace patterns active[/dim]")
-
-    return outcome_store, global_learning_store
-
-
-def setup_notifications(
-    config: JobConfig,
-    *,
-    quiet: bool = False,
-    console: Console | None = None,
-) -> NotificationManager | None:
-    """Setup notification manager from config.
-
-    Delegates to ``execution.setup.setup_notifications()`` for core logic,
-    then adds verbose CLI console output.
-
-    Args:
-        config: Job configuration with notification settings.
-        quiet: If True, suppress verbose logging.
-        console: Console for verbose output.
-
-    Returns:
-        NotificationManager if notifications configured, else None.
-    """
-    from marianne.execution.setup import setup_notifications as _setup_notifications
-
-    notification_manager = _setup_notifications(config)
-
-    if notification_manager is not None and not quiet and is_verbose() and console:
-        console.print("[dim]Notifications enabled[/dim]")
-    return notification_manager
-
-
-def setup_escalation(
-    config: JobConfig,
-    *,
-    enabled: bool = False,
-    quiet: bool = False,
-    console: Console | None = None,
-) -> ConsoleEscalationHandler | None:
-    """Setup escalation handler if enabled.
-
-    Args:
-        config: Job configuration with learning settings.
-        enabled: Whether escalation is explicitly enabled via CLI flag.
-        quiet: If True, suppress verbose logging.
-        console: Console for verbose output.
-
-    Returns:
-        ConsoleEscalationHandler if enabled, else None.
-    """
-    if not enabled:
-        return None
-
-    from marianne.execution.escalation import ConsoleEscalationHandler
-
-    config.learning.escalation_enabled = True
-    handler = ConsoleEscalationHandler(
-        confidence_threshold=config.learning.min_confidence_threshold,
-        auto_retry_on_first_failure=True,
-    )
-    if not quiet and is_verbose() and console:
-        console.print(
-            "[dim]Escalation enabled: low-confidence sheets will prompt for decisions[/dim]"
-        )
-    return handler
-
-
-def setup_grounding(
-    config: JobConfig,
-    *,
-    quiet: bool = False,
-    console: Console | None = None,
-) -> GroundingEngine | None:
-    """Setup grounding engine with hooks from config.
-
-    Delegates to ``execution.setup.setup_grounding()`` for core logic,
-    then adds verbose CLI console output.
-
-    Args:
-        config: Job configuration with grounding settings.
-        quiet: If True, suppress verbose logging.
-        console: Console for verbose output.
-
-    Returns:
-        GroundingEngine if grounding enabled, else None.
-    """
-    from marianne.execution.setup import setup_grounding as _setup_grounding
-
-    engine = _setup_grounding(config)
-
-    if engine is not None and not quiet and is_verbose() and console:
-        hook_count = engine.get_hook_count()
-        console.print(f"[dim]Grounding enabled: {hook_count} hook(s) registered[/dim]")
-
-    return engine
-
-
-@dataclass
-class SetupComponents:
-    """All infrastructure components needed by both run and resume commands."""
-
-    backend: Backend
-    outcome_store: OutcomeStore | None
-    global_learning_store: GlobalLearningStore | None
-    notification_manager: NotificationManager | None
-    escalation_handler: ConsoleEscalationHandler | None
-    grounding_engine: GroundingEngine | None
-
-
-def setup_all(
-    config: JobConfig,
-    *,
-    escalation: bool = False,
-    quiet: bool = False,
-    console: Console | None = None,
-) -> SetupComponents:
-    """Setup all infrastructure components for job execution.
-
-    Consolidates the 5-function setup sequence used by both run and resume
-    commands into a single call, preventing drift between the two paths.
-
-    Args:
-        config: Job configuration.
-        escalation: Whether escalation is explicitly enabled via CLI flag.
-        quiet: If True, suppress verbose logging.
-        console: Console for verbose output.
-
-    Returns:
-        SetupComponents with all configured infrastructure.
-    """
-    backend = create_backend(config, quiet=quiet, console=console)
-    outcome_store, global_learning_store = setup_learning(config, quiet=quiet, console=console)
-    notification_manager = setup_notifications(config, quiet=quiet, console=console)
-    escalation_handler = setup_escalation(config, enabled=escalation, quiet=quiet, console=console)
-    grounding_engine = setup_grounding(config, quiet=quiet, console=console)
-    return SetupComponents(
-        backend=backend,
-        outcome_store=outcome_store,
-        global_learning_store=global_learning_store,
-        notification_manager=notification_manager,
-        escalation_handler=escalation_handler,
-        grounding_engine=grounding_engine,
-    )
 
 
 def display_run_summary(summary: JobCompletionSummary) -> None:

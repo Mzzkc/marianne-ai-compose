@@ -14,7 +14,7 @@ import asyncio
 import sqlite3
 from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any
 
 from marianne.core.checkpoint import CheckpointState, JobStatus
 from marianne.core.logging import get_logger
@@ -22,13 +22,10 @@ from marianne.daemon.exceptions import JobSubmissionError
 from marianne.daemon.output import NullOutput, OutputProtocol
 
 if TYPE_CHECKING:
-    from marianne.backends.base import Backend
     from marianne.core.config import JobConfig
     from marianne.daemon.pgroup import ProcessGroupManager
     from marianne.daemon.registry import JobRegistry
-    from marianne.execution.grounding import GroundingEngine
     from marianne.learning.global_store import GlobalLearningStore
-    from marianne.learning.outcomes import OutcomeStore
     from marianne.notifications.base import NotificationManager
     from marianne.state.base import StateBackend
 
@@ -80,17 +77,6 @@ class _PublishingBackend:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
-
-
-class _JobComponents(TypedDict):
-    """Typed container for execution components created by _setup_components."""
-
-    backend: Backend
-    outcome_store: OutcomeStore | None
-    global_learning_store: GlobalLearningStore | None
-    notification_manager: NotificationManager | None
-    escalation_handler: None
-    grounding_engine: GroundingEngine | None
 
 
 class JobService:
@@ -280,47 +266,6 @@ class JobService:
         from marianne.execution.setup import create_state_backend
 
         return create_state_backend(workspace, backend_type)
-
-    def _setup_components(self, config: JobConfig) -> _JobComponents:
-        """Setup all execution components for a job.
-
-        Delegates to shared ``execution.setup`` functions, which are also
-        used by the CLI (``cli/commands/_shared.py``).  This eliminates
-        the duplicated "mirrors _shared.py" setup logic.
-        """
-        from marianne.execution.setup import (
-            create_backend,
-            setup_grounding,
-            setup_learning,
-            setup_notifications,
-        )
-
-        backend = create_backend(config)
-
-        # Wire PID tracking for orphan detection when running under daemon.
-        if self._pgroup_manager is not None:
-            if hasattr(backend, "_on_process_spawned"):
-                backend._on_process_spawned = self._pgroup_manager.track_backend_pid
-            if hasattr(backend, "_on_process_exited"):
-                backend._on_process_exited = self._pgroup_manager.untrack_backend_pid
-
-        outcome_store, global_learning_store = setup_learning(
-            config,
-            global_learning_store_override=self._learning_store,
-        )
-
-        notification_manager = setup_notifications(config)
-
-        grounding_engine = setup_grounding(config)
-
-        return {
-            "backend": backend,
-            "outcome_store": outcome_store,
-            "global_learning_store": global_learning_store,
-            "notification_manager": notification_manager,
-            "escalation_handler": None,  # Interactive-only
-            "grounding_engine": grounding_engine,
-        }
 
     async def _find_job_state(
         self,

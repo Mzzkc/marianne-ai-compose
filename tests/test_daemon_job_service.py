@@ -551,46 +551,12 @@ class TestReconstructConfig:
 # TestResumeJobExecution — removed (replaced by baton)
 
 
-# ─── _setup_components ───────────────────────────────────────────────────
-
-
-class TestSetupComponents:
-    """Tests for JobService._setup_components()."""
-
-    def test_basic_setup_no_learning_no_notifications(
-        self,
-        job_service: JobService,
-        sample_job_config: JobConfig,
-    ):
-        """Test _setup_components with learning/notifications/grounding disabled."""
-        components = job_service._setup_components(sample_job_config)
-
-        assert components["backend"] is not None
-        assert components["outcome_store"] is None
-        assert components["global_learning_store"] is None
-        assert components["notification_manager"] is None
-        assert components["escalation_handler"] is None
-        assert components["grounding_engine"] is None
-
-    def test_setup_with_learning_enabled(
-        self,
-        job_service: JobService,
-        sample_job_config: JobConfig,
-    ):
-        """Test _setup_components creates learning stores when enabled."""
-        config = sample_job_config.model_copy(
-            update={
-                "learning": sample_job_config.learning.model_copy(
-                    update={"enabled": True},
-                )
-            },
-        )
-        components = job_service._setup_components(config)
-
-        from marianne.learning.outcomes import JsonOutcomeStore
-
-        assert isinstance(components["outcome_store"], JsonOutcomeStore)
-        assert components["global_learning_store"] is not None
+# TestSetupComponents — removed in Phase 1 of the backend atlas
+# migration. The _setup_components() method and _JobComponents TypedDict
+# were deleted from JobService; component wiring now flows through the
+# baton adapter + instrument registry path. See docs/atlas-doctrine.md
+# RULE 1 ("All model invocations must route through the instrument
+# plugin system after Phase 1").
 
 
 # TestRealComponentWiring — removed (replaced by baton)

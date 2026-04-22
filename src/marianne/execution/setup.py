@@ -16,18 +16,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from marianne.core.logging import get_logger
-
 if TYPE_CHECKING:
     from marianne.backends.base import Backend
     from marianne.core.config import BackendConfig, JobConfig
-    from marianne.execution.grounding import GroundingEngine
     from marianne.learning.global_store import GlobalLearningStore
     from marianne.learning.outcomes import OutcomeStore
     from marianne.notifications.base import NotificationManager
     from marianne.state.base import StateBackend
-
-_logger = get_logger("execution.setup")
 
 
 def create_backend_from_config(backend_config: BackendConfig) -> Backend:
@@ -132,47 +127,6 @@ def setup_notifications(config: JobConfig) -> NotificationManager | None:
     return NotificationManager(notifiers)
 
 
-def setup_grounding(config: JobConfig) -> GroundingEngine | None:
-    """Setup grounding engine with hooks from config.
-
-    Args:
-        config: Job configuration with grounding settings.
-
-    Returns:
-        GroundingEngine if grounding enabled, else None.
-    """
-    if not config.grounding.enabled:
-        return None
-
-    from marianne.execution.grounding import GroundingEngine, create_hook_from_config
-
-    engine = GroundingEngine(hooks=[], config=config.grounding)
-    failed_count = 0
-
-    for hook_config in config.grounding.hooks:
-        try:
-            hook = create_hook_from_config(hook_config)
-            engine.add_hook(hook)
-        except ValueError as e:
-            failed_count += 1
-            _logger.warning(
-                "failed_to_create_hook",
-                hook_type=getattr(hook_config, "type", "unknown"),
-                error=str(e),
-                exc_info=True,
-            )
-
-    if failed_count:
-        _logger.error(
-            "grounding_hooks_partial_failure",
-            failed=failed_count,
-            total=len(config.grounding.hooks),
-            loaded=len(config.grounding.hooks) - failed_count,
-        )
-
-    return engine
-
-
 def create_state_backend(
     workspace: Path,
     backend_type: str = "json",
@@ -198,7 +152,6 @@ __all__ = [
     "create_backend",
     "create_backend_from_config",
     "create_state_backend",
-    "setup_grounding",
     "setup_learning",
     "setup_notifications",
 ]

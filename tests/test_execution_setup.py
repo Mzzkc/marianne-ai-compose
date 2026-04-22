@@ -15,7 +15,6 @@ from marianne.core.config import JobConfig
 from marianne.execution.setup import (
     create_backend,
     create_state_backend,
-    setup_grounding,
     setup_learning,
     setup_notifications,
 )
@@ -133,43 +132,9 @@ class TestSetupNotifications:
         assert manager is not None
 
 
-# ── setup_grounding ─────────────────────────────────────────────────────
-
-
-class TestSetupGrounding:
-    """Test grounding engine setup."""
-
-    def test_disabled_returns_none(self, base_config_dict: dict) -> None:
-        config = _make_config(base_config_dict)
-        # grounding.enabled defaults to False
-        result = setup_grounding(config)
-        assert result is None
-
-    def test_enabled_creates_engine(self, base_config_dict: dict) -> None:
-        config = _make_config(
-            base_config_dict,
-            grounding={
-                "enabled": True,
-                "hooks": [
-                    {
-                        "type": "file_checksum",
-                        "expected_checksums": {"test.txt": "abc123"},
-                    },
-                ],
-            },
-        )
-        engine = setup_grounding(config)
-        assert engine is not None
-
-    def test_enabled_without_hooks_raises(self, base_config_dict: dict) -> None:
-        """Enabled grounding with no hooks should raise at config time."""
-        import pytest
-
-        with pytest.raises(Exception, match="no hooks configured"):
-            _make_config(
-                base_config_dict,
-                grounding={"enabled": True, "hooks": []},
-            )
+# setup_grounding tests removed in Phase 6a — grounding.py and the
+# associated setup_grounding() helper were deleted. The baton emits
+# grounding events natively; see docs/atlas-doctrine.md RULE 6.
 
 
 # ── create_state_backend ────────────────────────────────────────────────
