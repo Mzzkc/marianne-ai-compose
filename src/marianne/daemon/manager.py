@@ -326,12 +326,28 @@ class JobManager:
             token_error_threshold=self._config.preflight.token_error_threshold,
             pgroup_manager=self._pgroup,
         )
+        # Build the instrument registry up-front. After Phase 1 of the
+        # backend atlas migration, all non-baton backend creation must
+        # route through the registry (Doctrine RULE: "All model invocations
+        # must route through the instrument plugin system after Phase 1").
+        # The semantic analyzer and the baton adapter share a single
+        # registry instance so that both observe the same set of profiles.
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.instruments.loader import load_all_profiles
+        from marianne.instruments.native_factory import create_backend_via_registry
+        from marianne.instruments.registry import InstrumentRegistry
+
+        profiles = load_all_profiles()
+        registry = InstrumentRegistry()
+        for profile in profiles.values():
+            registry.register(profile, override=True)
+
         # Start semantic analyzer after event bus (needs bus for subscription).
         # Failure must not prevent the conductor from starting.
         try:
-            from marianne.execution.setup import create_backend_from_config
-
-            semantic_backend = create_backend_from_config(
+            semantic_backend = create_backend_via_registry(
+                registry,
                 self._config.learning.backend,
             )
             self._semantic_analyzer = SemanticAnalyzer(
@@ -357,18 +373,7 @@ class JobManager:
             )
             await self._observer_recorder.start(self._event_bus)
 
-        # Initialize the baton execution engine.
-        from marianne.daemon.baton.adapter import BatonAdapter
-        from marianne.daemon.baton.backend_pool import BackendPool
-        from marianne.instruments.loader import load_all_profiles
-        from marianne.instruments.registry import InstrumentRegistry
-
-        # Build instrument registry with all available profiles
-        profiles = load_all_profiles()
-        registry = InstrumentRegistry()
-        for profile in profiles.values():
-            registry.register(profile, override=True)
-
+        # Initialize the baton execution engine with the shared registry.
         self._baton_adapter = BatonAdapter(
             event_bus=self._event_bus,
             max_concurrent_sheets=self._config.max_concurrent_sheets,
@@ -3191,9 +3196,9 @@ class JobManager:
         """Expand template variables in hook paths/commands.
 
         Delegates to the shared expand_hook_variables() utility in
-        execution/hooks.py to avoid reimplementing variable expansion.
+        utils/hooks.py to avoid reimplementing variable expansion.
         """
-        from marianne.execution.hooks import expand_hook_variables
+        from marianne.utils.hooks import expand_hook_variables
 
         return expand_hook_variables(
             template,
