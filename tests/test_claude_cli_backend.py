@@ -1,4 +1,4 @@
-"""Tests for marianne.backends.claude_cli module.
+"""Tests for marianne.execution.instruments.claude_cli_legacy module.
 
 Covers ClaudeCliBackend: initialization, from_config, _build_command,
 _inject_preamble_and_extensions, set_preamble, _parse_returncode,
@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from marianne.backends.base import ExecutionResult
-from marianne.backends.claude_cli import ClaudeCliBackend
+from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
 

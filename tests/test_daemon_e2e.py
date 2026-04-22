@@ -968,7 +968,7 @@ class TestRealE2EExecution:
             patch.object(dp._pgroup, "cleanup_orphans", return_value=[]),
             # Patch at the lowest possible level — the actual CLI execution
             patch(
-                "marianne.backends.claude_cli.ClaudeCliBackend.execute",
+                "marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.execute",
                 new_callable=AsyncMock,
                 return_value=mock_result,
             ),
@@ -1187,7 +1187,7 @@ class TestCrossJobLearning:
             patch.object(dp._pgroup, "kill_all_children"),
             patch.object(dp._pgroup, "cleanup_orphans", return_value=[]),
             patch(
-                "marianne.backends.claude_cli.ClaudeCliBackend.execute",
+                "marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.execute",
                 new_callable=AsyncMock,
                 return_value=mock_result,
             ),

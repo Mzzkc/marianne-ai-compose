@@ -338,8 +338,8 @@ class TestSafeKillpgGuard:
         from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
-            patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
-            patch("marianne.backends.claude_cli.os.getpgid", return_value=9999),
+            patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg,
+            patch("marianne.execution.instruments.claude_cli_legacy.os.getpgid", return_value=9999),
         ):
             result = _safe_killpg(pgid, signal.SIGTERM, context="test")
             assert result is False
@@ -354,8 +354,8 @@ class TestSafeKillpgGuard:
         from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
-            patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
-            patch("marianne.backends.claude_cli.os.getpgid", return_value=own_pgid),
+            patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg,
+            patch("marianne.execution.instruments.claude_cli_legacy.os.getpgid", return_value=own_pgid),
         ):
             result = _safe_killpg(own_pgid, signal.SIGTERM, context="test")
             assert result is False
@@ -373,8 +373,8 @@ class TestSafeKillpgGuard:
         from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
-            patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
-            patch("marianne.backends.claude_cli.os.getpgid", return_value=own_pgid),
+            patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg,
+            patch("marianne.execution.instruments.claude_cli_legacy.os.getpgid", return_value=own_pgid),
         ):
             result = _safe_killpg(pgid, signal.SIGTERM, context="test")
             assert result is True
@@ -401,8 +401,8 @@ class TestSafeKillpgExceptionTolerance:
         from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
-            patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
-            patch("marianne.backends.claude_cli.os.getpgid", side_effect=OSError("no pgid")),
+            patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg,
+            patch("marianne.execution.instruments.claude_cli_legacy.os.getpgid", side_effect=OSError("no pgid")),
         ):
             result = _safe_killpg(pgid, signal.SIGTERM, context="test")
             assert result is True
@@ -415,8 +415,8 @@ class TestSafeKillpgExceptionTolerance:
         from marianne.utils.process import safe_killpg as _safe_killpg
 
         with (
-            patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
-            patch("marianne.backends.claude_cli.os.getpgid", side_effect=OSError("no pgid")),
+            patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg,
+            patch("marianne.execution.instruments.claude_cli_legacy.os.getpgid", side_effect=OSError("no pgid")),
         ):
             result = _safe_killpg(pgid, signal.SIGTERM, context="test")
             assert result is False

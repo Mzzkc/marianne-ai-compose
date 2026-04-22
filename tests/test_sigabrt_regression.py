@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from marianne.backends.claude_cli import ClaudeCliBackend
+from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
 
 def _make_mock_process(

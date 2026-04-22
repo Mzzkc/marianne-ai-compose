@@ -73,7 +73,7 @@ def reap_descendant_trees(pid: int) -> None:
     commands from Claude Code's Bash tool (``shell-snapshot`` in cmdline),
     so there is no risk of signalling unrelated processes.
 
-    Relocated from ``marianne.backends.claude_cli._reap_descendant_trees``
+    Relocated from ``marianne.execution.instruments.claude_cli_legacy._reap_descendant_trees``
     in Phase 4c of the backend atlas migration so the helper survives
     retirement of the native Claude CLI backend class.
     """

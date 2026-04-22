@@ -113,7 +113,7 @@ def create_backend_via_registry(
     # Default to claude_cli for any other registered instrument whose kind
     # is CLI. This preserves the legacy factory's fallthrough semantics
     # for the remaining native instrument.
-    from marianne.backends.claude_cli import ClaudeCliBackend
+    from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
     return ClaudeCliBackend.from_config(backend_config)
 

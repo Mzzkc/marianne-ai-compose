@@ -20,7 +20,7 @@ import pytest
 
 from marianne.backends.anthropic_api import AnthropicApiBackend
 from marianne.backends.base import ExecutionResult
-from marianne.backends.claude_cli import ClaudeCliBackend
+from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 from marianne.core.config import BackendConfig
 
 # ============================================================================

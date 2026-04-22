@@ -4031,7 +4031,7 @@ class TestCostJsonExtractionEffectiveness:
 
     def test_json_extraction_finds_tokens(self) -> None:
         """JSON output with usage field yields actual token counts."""
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "json"
@@ -4059,7 +4059,7 @@ class TestCostJsonExtractionEffectiveness:
 
     def test_non_json_format_returns_none(self) -> None:
         """When output_format is not 'json', extraction returns None."""
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "text"
@@ -4075,7 +4075,7 @@ class TestCostJsonExtractionEffectiveness:
 
     def test_malformed_json_returns_none_gracefully(self) -> None:
         """Broken JSON doesn't crash — returns None."""
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "json"
@@ -4094,7 +4094,7 @@ class TestCostJsonExtractionEffectiveness:
         be estimated as ~143 tokens by char estimation (500 chars / 3.5).
         The JSON path is 100x more accurate for this case.
         """
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "json"
@@ -4208,7 +4208,7 @@ class TestPluginCliBackendMcpGap:
 
     def test_legacy_backend_disables_mcp_by_default(self) -> None:
         """ClaudeCliBackend has disable_mcp=True — the behavior PluginCliBackend lacks."""
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         _backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         import inspect

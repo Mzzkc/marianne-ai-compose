@@ -30,21 +30,21 @@ class TestSafeKillpgGuardBlocks:
 
     def test_pgid_one_is_blocked(self) -> None:
         """pgid=1 is the F-490 trigger — killpg(1, SIGKILL) == kill(-1, SIGKILL)."""
-        with patch("marianne.backends.claude_cli.os.killpg") as mock_killpg:
+        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
             result = _safe_killpg(1, signal.SIGKILL, context="test")
         assert result is False, "guard must return False when blocking"
         mock_killpg.assert_not_called()
 
     def test_pgid_zero_is_blocked(self) -> None:
         """pgid=0 would signal the caller's own pgroup — also unsafe."""
-        with patch("marianne.backends.claude_cli.os.killpg") as mock_killpg:
+        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
             result = _safe_killpg(0, signal.SIGKILL, context="test")
         assert result is False
         mock_killpg.assert_not_called()
 
     def test_pgid_negative_is_blocked(self) -> None:
         """Negative pgid is invalid / kernel-special; always refuse."""
-        with patch("marianne.backends.claude_cli.os.killpg") as mock_killpg:
+        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
             result = _safe_killpg(-1, signal.SIGKILL, context="test")
         assert result is False
         mock_killpg.assert_not_called()
@@ -52,7 +52,7 @@ class TestSafeKillpgGuardBlocks:
     def test_own_pgroup_is_blocked(self) -> None:
         """Signaling our own pgroup would kill pytest + whatever shares the group."""
         own_pgid = os.getpgid(0)
-        with patch("marianne.backends.claude_cli.os.killpg") as mock_killpg:
+        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
             result = _safe_killpg(own_pgid, signal.SIGKILL, context="test")
         assert result is False
         mock_killpg.assert_not_called()
@@ -63,7 +63,7 @@ class TestSafeKillpgGuardBlocks:
         Marianne uses structlog which writes to stdout/stderr directly in the
         default configuration, so capsys is the right capture tool.
         """
-        with patch("marianne.backends.claude_cli.os.killpg"):
+        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg"):
             _safe_killpg(1, signal.SIGKILL, context="unit_test")
         captured = capsys.readouterr()
         combined = captured.out + captured.err
@@ -85,7 +85,7 @@ class TestSafeKillpgGuardAllows:
         # check liveness — it only checks the blast-radius conditions.
         fake_pgid = 999999 if own_pgid != 999999 else 999998
 
-        with patch("marianne.backends.claude_cli.os.killpg") as mock_killpg:
+        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
             result = _safe_killpg(fake_pgid, signal.SIGKILL, context="test")
 
         assert result is True, "guard must return True when allowing"
@@ -100,8 +100,8 @@ class TestSafeKillpgGuardAllows:
         """
         fake_pgid = 999999
         with (
-            patch("marianne.backends.claude_cli.os.getpgid", side_effect=OSError("mocked")),
-            patch("marianne.backends.claude_cli.os.killpg") as mock_killpg,
+            patch("marianne.execution.instruments.claude_cli_legacy.os.getpgid", side_effect=OSError("mocked")),
+            patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg,
         ):
             result = _safe_killpg(fake_pgid, signal.SIGKILL, context="test")
 
@@ -124,7 +124,7 @@ class TestSafeKillpgGuardSignalTypes:
     def test_all_signals_blocked_on_pgid_one(self, sig: signal.Signals) -> None:
         """pgid=1 must be blocked regardless of signal — any signal to pgid=1
         translates to kill(-1, sig) which affects every process in the session."""
-        with patch("marianne.backends.claude_cli.os.killpg") as mock_killpg:
+        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
             result = _safe_killpg(1, sig, context="test")
         assert result is False
         mock_killpg.assert_not_called()
@@ -143,7 +143,7 @@ class TestCallSiteStructuralAudit:
         import inspect
         import re
 
-        from marianne.backends import claude_cli
+        from marianne.execution.instruments import claude_cli_legacy as claude_cli
 
         source = inspect.getsource(claude_cli)
 
@@ -184,7 +184,7 @@ class TestCallSiteStructuralAudit:
         """
         import inspect
 
-        from marianne.backends import claude_cli
+        from marianne.execution.instruments import claude_cli_legacy as claude_cli
 
         source = inspect.getsource(claude_cli)
 
@@ -200,7 +200,7 @@ class TestCallSiteStructuralAudit:
         """Every _safe_killpg call must include a context= kwarg for logging."""
         import inspect
 
-        from marianne.backends import claude_cli
+        from marianne.execution.instruments import claude_cli_legacy as claude_cli
 
         source = inspect.getsource(claude_cli)
         lines = source.split("\n")

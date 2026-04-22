@@ -1042,7 +1042,7 @@ class TestBackendWorkingDirectory:
         """Test that backend working_directory can be overridden."""
         from pathlib import Path
 
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         backend = ClaudeCliBackend(working_directory=Path("/original"))
         assert backend.working_directory == Path("/original")
@@ -1060,7 +1060,7 @@ class TestBackendWorkingDirectory:
         """Test dynamic attribute access works for working_directory."""
         from pathlib import Path
 
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         backend = ClaudeCliBackend(working_directory=Path("/test"))
 

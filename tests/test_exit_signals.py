@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from marianne.backends.base import ExecutionResult, ExitReason
-from marianne.backends.claude_cli import ClaudeCliBackend
+from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 from marianne.core.checkpoint import SheetState, SheetStatus
 from marianne.core.errors import (
     FATAL_SIGNALS,

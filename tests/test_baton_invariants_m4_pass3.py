@@ -411,7 +411,7 @@ class TestTokenExtractionDefensiveParsing:
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_always_returns_valid_tuple(self, stdout: str) -> None:
         """Any input produces a (int|None, int|None) tuple."""
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "json"
@@ -427,7 +427,7 @@ class TestTokenExtractionDefensiveParsing:
     @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_non_json_format_returns_none(self, stdout: str) -> None:
         """When output_format != 'json', always returns (None, None)."""
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "text"
@@ -442,7 +442,7 @@ class TestTokenExtractionDefensiveParsing:
     @settings(max_examples=50)
     def test_valid_json_preserves_values(self, input_tokens: int, output_tokens: int) -> None:
         """Well-formed JSON with integer tokens preserves exact values."""
-        from marianne.backends.claude_cli import ClaudeCliBackend
+        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
         backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
         backend.output_format = "json"
