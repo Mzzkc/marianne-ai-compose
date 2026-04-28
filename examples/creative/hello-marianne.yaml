@@ -31,10 +31,6 @@ description: "Three movements, three characters, one world — your first Marian
 
 workspace: ../../workspaces/hello-marianne
 
-instrument: claude-code
-instrument_config:
-  timeout_seconds: 600
-
 # Movement declarations — names appear in `mzt status` output
 movements:
   1:
