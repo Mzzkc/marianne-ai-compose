@@ -97,9 +97,9 @@ mzt stop                   # Stop conductor (only when no scores are running)
 
 ## Self-Evolution
 
-Marianne developed itself. 24 autonomous self-evolution cycles completed — each one a score that analyzed the codebase, identified improvements, implemented changes, ran tests, and validated results. The system that runs your scores is the system that built itself.
+Marianne developed itself through autonomous self-evolution scores — each one analyzing the codebase, identifying improvements, implementing changes, running tests, and validating results. The system that runs your scores is the system that built itself.
 
-The project includes 258 source files, 362 test files, and 3,384+ individual tests. The learning system has accumulated patterns across every execution. When Marianne encounters a problem it's seen before, it knows what worked.
+The project includes 261 source files, 372 test files, and 10,354+ individual tests. The learning system has accumulated patterns across every execution. When Marianne encounters a problem it's seen before, it knows what worked.
 
 This isn't a prototype. It's an R&D factory that happens to also be the product.
 
