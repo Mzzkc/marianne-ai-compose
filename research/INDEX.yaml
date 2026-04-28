@@ -1,0 +1,38 @@
+description: "Research findings and analysis"
+context: |
+  Research documents covering provider analysis, token compression,
+  convergence analysis, and API research. Three files relocated from
+  docs/plans/ during the 2026-04-13 reorganization.
+status: active
+
+files:
+  - name: README.md
+    purpose: "Research directory overview"
+    status: active
+  - name: OPUS-CONVERGENCE-ANALYSIS.md
+    purpose: "Opus convergence analysis — model behavior patterns"
+    status: completed
+  - name: TOKEN-COMPRESSION-STRATEGIES.md
+    purpose: "Token compression strategies — reducing context size"
+    status: completed
+  - name: 2026-03-26-multi-provider-abstraction-research.md
+    purpose: "Multi-provider abstraction research — abstracting across AI backends"
+    status: completed
+    source: "docs/plans/ (relocated)"
+  - name: 2026-03-26-universal-instrument-api-research.md
+    purpose: "Universal instrument API research — unified backend interface"
+    status: completed
+    source: "docs/plans/ (relocated)"
+  - name: 2026-03-26-provider-compliance.md
+    purpose: "Provider compliance — API compatibility and requirements"
+    status: completed
+    source: "docs/plans/ (relocated)"
+  - name: 2026-04-13-free-model-code-generation-research.md
+    purpose: "Free model evaluation — code generation capabilities of free OpenRouter models for instrument use"
+    status: completed
+  - name: 2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md
+    purpose: "Capability audit — empirical findings on compiler defects, technique system behavior, MCP pool wiring, code mode + interface_gen disconnect, and PROPER A2A support per CLI (claude-code/gemini-cli/codex/opencode). Triggered by 32-agent roster concert failure. Includes tiered next-step suggestions."
+    status: active
+  - name: 2026-04-18-marianne-memory-and-unconscious-research-dossier.md
+    purpose: "Research dossier synthesizing four streams (CAM, memory systems, local models, integration surface) into unified findings for Marianne Mozart memory and unconscious design. Convergences, tensions, implications for both specs, open questions."
+    status: completed
