@@ -1,14 +1,14 @@
 [project]
 name = "marianne-ai-compose"
 version = "0.1.0"
-description = "Orchestration tool for Claude AI sessions"
+description = "Universal asynchronous AI orchestration — declarative YAML scores executed across any combination of CLI instruments with built-in validation."
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
 requires-python = ">=3.11"
 authors = [
     { name = "Emzi" }
 ]
-keywords = ["claude", "ai", "orchestration", "automation"]
+keywords = ["ai", "orchestration", "automation", "multi-agent", "yaml", "declarative", "validation", "agents", "cli", "workflow"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
