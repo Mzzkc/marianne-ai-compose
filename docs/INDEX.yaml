@@ -320,7 +320,7 @@ semantic_index:
   iterative-dev: [plans/features/2026-03-08-iterative-dev-loop-design.md]
   flowspec: [plans/features/2026-03-26-flowspec-integration-design.md, plans/features/2026-03-26-flowspec-findings-tracker.md]
   issue-solver: [specs/2026-04-18-generic-issue-solver-design.md, plans/features/2026-02-14-issue-solver-design.md]
-  roadmap: [plans/strategic/2026-03-26-v1-beta-roadmap.md, plans/strategic/2026-02-14-roadmap-features.md]
+  roadmap: [roadmap.md, plans/strategic/2026-04-19-project-roadmap.md, plans/strategic/2026-03-26-v1-beta-roadmap.md, plans/strategic/2026-02-14-roadmap-features.md]
   documentation: [plans/strategic/2026-03-26-documentation-strategy-design.md, plans/strategic/2026-04-12-docs-reorganization-design.md]
   cadenza: [plans/features/2026-04-08-directory-cadenza-spec.md]
   auto-routing: [plans/features/2026-04-08-auto-routing-design.md]
