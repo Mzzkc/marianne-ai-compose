@@ -1,0 +1,155 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  Thinking Lab — Multi-Model Cross Review                                    ║
+# ║                                                                              ║
+# ║  Drop your prompt + context files into scores/prep/thinking-lab-input/       ║
+# ║  Run: mzt run scores/prep/thinking-lab.yaml                                  ║
+# ║  Read: workspaces/thinking-lab/review-{1,2,3,4,5}.md                         ║
+# ║                                                                              ║
+# ║  Reviewers, in order:                                                        ║
+# ║    1. Claude Opus 4.7    (Anthropic, claude-code)                            ║
+# ║    2. Gemini 3.1 Pro     (Google, gemini-cli)                                ║
+# ║    3. Gemma 4            (Google free via opencode→openrouter)               ║
+# ║    4. GLM 5.1            (Z.AI Coding Plan via opencode)                     ║
+# ║    5. GPT-5.5            (OpenAI, codex-cli)                                 ║
+# ║                                                                              ║
+# ║  Pattern: cli stage 1 stages a setup marker; stages 2-5 (uh, 6) fan in       ║
+# ║  parallel with directory cadenza injection of the input dir.                 ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "thinking-lab"
+description: "5 parallel independent reviews from Opus, Gemini Pro, Gemma, GLM, GPT-5.5"
+workspace: "/home/emzi/Projects/marianne-ai-compose/workspaces/thinking-lab"
+
+workspace_lifecycle:
+  archive_on_fresh: true
+
+instrument: claude-code
+instrument_fallbacks: [opencode]
+instrument_config:
+  timeout_seconds: 600
+  skip_permissions: true
+  disable_mcp: true
+
+instruments:
+  reviewer-opus:
+    profile: claude-code
+    config:
+      cli_model: claude-opus-4-7
+      skip_permissions: true
+      disable_mcp: true
+  reviewer-gemini:
+    profile: gemini-cli
+    config:
+      cli_model: "gemini-3.1-pro-preview"
+      skip_permissions: true
+  reviewer-gemma:
+    profile: opencode
+    config:
+      cli_model: "google/gemma-4:free"
+      skip_permissions: true
+  reviewer-glm:
+    profile: opencode
+    config:
+      cli_model: "zai-coding-plan/glm-5.1"
+      skip_permissions: true
+  reviewer-codex:
+    profile: codex-cli
+    config:
+      cli_model: "gpt-5.5"
+      skip_permissions: true
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 300
+
+movements:
+  1:
+    name: "Setup"
+    instrument: cli
+  2:
+    name: "Review: Opus"
+    instrument: reviewer-opus
+  3:
+    name: "Review: Gemini Pro"
+    instrument: reviewer-gemini
+  4:
+    name: "Review: Gemma"
+    instrument: reviewer-gemma
+  5:
+    name: "Review: GLM"
+    instrument: reviewer-glm
+  6:
+    name: "Review: GPT-5.5"
+    instrument: reviewer-codex
+
+sheet:
+  size: 1
+  total_items: 6
+
+  dependencies:
+    2: [1]
+    3: [1]
+    4: [1]
+    5: [1]
+    6: [1]
+
+  cadenzas:
+    2:
+      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+        as: context
+    3:
+      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+        as: context
+    4:
+      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+        as: context
+    5:
+      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+        as: context
+    6:
+      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+        as: context
+
+parallel:
+  enabled: true
+  max_concurrent: 5
+
+prompt:
+  template: |
+    {% if stage == 1 %}
+    ```bash
+    echo "ready" > {{ workspace }}/setup-complete.txt
+    ```
+    {% else %}
+    {% set reviewer = {2: "Opus 4.7 (Anthropic)", 3: "Gemini 3.1 Pro (Google)", 4: "Gemma 4 (Google)", 5: "GLM 5.1 (Z.AI)", 6: "GPT-5.5 (OpenAI)"}[stage] %}
+    {% set review_num = stage - 1 %}
+    You are {{ reviewer }}. Independent review. Others can't see your response.
+    Context files injected above contain the full problem and code.
+    Write your response to {{ workspace }}/review-{{ review_num }}.md
+    {% endif %}
+
+validations:
+  - type: file_exists
+    path: "{workspace}/setup-complete.txt"
+    condition: "stage == 1"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/review-1.md"
+    condition: "stage == 2"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/review-2.md"
+    condition: "stage == 3"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/review-3.md"
+    condition: "stage == 4"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/review-4.md"
+    condition: "stage == 5"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/review-5.md"
+    condition: "stage == 6"
+    stage: 1

@@ -1,0 +1,294 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  INSTRUMENT CATALOG BUILD — bootstrap the catalog with cross-vendor ratings ║
+# ║                                                                             ║
+# ║  Patterns: Reconnaissance Pull + Source Triangulation (via thinking-lab)   ║
+# ║                                                                             ║
+# ║  Bootstraps the v1 instrument-catalog.yaml. Takes the hand-drafted catalog ║
+# ║  (composer's judgment + benchmarks), runs it through thinking-lab.yaml for ║
+# ║  4-vendor cross-rating (Anthropic, Google, Z.AI, OpenAI), then folds the   ║
+# ║  reviews back to produce the finalized catalog with cross-vendor signal.   ║
+# ║                                                                             ║
+# ║  Three-score concert:                                                       ║
+# ║    catalog-build.yaml (this) → thinking-lab.yaml → catalog-build-fold.yaml║
+# ║                                                                             ║
+# ║  Why a score launching a score: we use Marianne's own concert mechanism   ║
+# ║  to bootstrap Marianne's catalog. The thinking-lab is a generic tool — we ║
+# ║  generate a per-run wrapper of it that chains to the fold score on success.║
+# ║                                                                             ║
+# ║  Usage:                                                                     ║
+# ║    mzt run scores/instrument-catalog-build.yaml --fresh                     ║
+# ║    mzt status instrument-catalog-build --watch                              ║
+# ║                                                                             ║
+# ║  Output:                                                                    ║
+# ║    workspaces/instrument-catalog-build/<artifacts>                          ║
+# ║    plugins/marianne/docs/ref/instrument-catalog.yaml (updated with ratings)     ║
+# ║    plugins/marianne/docs/ref/instrument-catalog.md (regenerated)                ║
+# ║    plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md (appended)         ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: instrument-catalog-build
+
+description: >
+  Bootstrap the instrument catalog. Reads the hand-drafted v1 YAML, prepares
+  thinking-lab input with a rating prompt, generates a per-run thinking-lab
+  wrapper that chains forward, and triggers the lab. Lab results are folded
+  by catalog-build-fold.yaml to produce the finalized catalog.
+
+workspace: "../workspaces/instrument-catalog-build"
+
+instrument: claude-code
+instrument_fallbacks: [anthropic_api]
+instrument_config:
+  timeout_seconds: 1200
+  skip_permissions: true
+  disable_mcp: true
+
+instruments:
+  scout:
+    profile: claude-code
+    config: { timeout_seconds: 600, cli_model: claude-sonnet-4-6 }
+  prep:
+    profile: claude-code
+    config: { timeout_seconds: 900, cli_model: claude-sonnet-4-6 }
+
+movements:
+  1: { name: "Read v1 Catalog",        instrument: scout }
+  2: { name: "Write Rating Prompt",    instrument: prep }
+  3: { name: "Generate Lab Wrapper",   instrument: prep }
+  4: { name: "Stage Lab Inputs",       instrument: prep }
+
+sheet:
+  size: 1
+  total_items: 4
+  descriptions:
+    1: "Read instrument-catalog.yaml v1 and summarize what we're rating"
+    2: "Write rating prompt that asks reviewers to score every musician"
+    3: "Generate a per-run thinking-lab wrapper YAML with on_success → fold"
+    4: "Copy catalog + prompt into thinking-lab-input/; verify wrapper validates"
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 8000
+  lookback_sheets: 4
+  capture_files:
+    - "{{ workspace }}/01-catalog-summary.md"
+    - "{{ workspace }}/02-rating-prompt.md"
+    - "{{ workspace }}/03-lab-wrapper.yaml"
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 15
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+concert:
+  enabled: true
+  max_chain_depth: 5
+
+on_success:
+  - type: run_command
+    command: |
+      WS="{workspace}"
+      WRAPPER="$WS/03-lab-wrapper.yaml"
+      test -f "$WRAPPER" || { echo "ERROR: lab wrapper missing" >&2; exit 1; }
+  - type: run_job
+    job_path: "{workspace}/03-lab-wrapper.yaml"
+    description: "Chain to per-run thinking-lab wrapper (which then chains to fold)"
+    detached: true
+    fresh: true
+
+prompt:
+  variables:
+    catalog_yaml_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
+    catalog_md_path:   "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
+    thinking_lab_path: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab.yaml"
+    fold_path:         "/home/emzi/Projects/marianne-ai-compose/scores/instrument-catalog-build-fold.yaml"
+    lab_input_dir:     "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+    lab_workspace:     "/home/emzi/Projects/marianne-ai-compose/workspaces/thinking-lab"
+
+  template: |
+    {% if stage == 1 %}
+    # Read v1 Catalog
+
+    Read `{{ catalog_yaml_path }}` and `{{ catalog_md_path }}`.
+
+    Produce a structured summary at `{{ workspace }}/01-catalog-summary.md`:
+
+    - `## Coverage` — instrument count, musician count by family, specialization count
+    - `## Tag dimensions` — list the 4 dimensions with their tag enums
+    - `## Use-case chains` — list the chain names + primary picks
+    - `## What we want the lab to rate` — for each musician, the existing rating axes (reasoning, code_gen, code_read, long_context, instruction_following, format_adherence, tool_use, speed_tokens_per_sec, cost_efficiency)
+    - `## Known biases in the v1 draft` — be honest. The composer hand-drafted ratings primarily from vendor docs, public benchmarks, and judgment. Anthropic models likely over-rated by an Anthropic model (composer self-bias). The lab's job is to surface and correct that.
+
+    {% elif stage == 2 %}
+    # Write Rating Prompt
+
+    Write `{{ workspace }}/02-rating-prompt.md`. This becomes the `prompt.md`
+    that thinking-lab sees in its input directory. Each of the 5 reviewers
+    will see this prompt and produce an independent rating review.
+
+    The prompt MUST include:
+
+    1. The list of every musician in the v1 catalog (by id) along with its
+       declared family, available_via, and tag/task tags. Reviewers should
+       rate musicians they know well and explicitly skip those they don't —
+       rather than guessing.
+    2. The rating axes (1-5):
+       - reasoning, code_gen, code_read, long_context, instruction_following,
+         format_adherence, tool_use, speed_tokens_per_sec, cost_efficiency
+    3. A request for: per-musician ratings (where the reviewer has direct
+       experience or strong evidence), strengths/weaknesses (1-2 sentences
+       each), known quirks, and a confidence flag (high/medium/low).
+    4. An explicit invitation to push back on v1 ratings the reviewer thinks
+       are wrong. The composer is asking for correction, not validation.
+    5. Output format spec: yaml fenced block with the same shape as the
+       catalog's musician entries' `ratings:` and `strengths:`/`weaknesses:`
+       fields, keyed by musician id. Reviewers should NOT rewrite the entire
+       catalog — only the fields they have signal on.
+
+    Length: 600-1200 words.
+
+    {% elif stage == 3 %}
+    # Generate Per-Run Thinking-Lab Wrapper
+
+    The generic thinking-lab.yaml at `{{ thinking_lab_path }}` has no
+    `on_success` (it's a leaf-tool). For this run, we generate a per-session
+    wrapper that:
+
+    1. Inherits the same instruments, movements, sheet config, and prompts
+       as thinking-lab.yaml (you may include a YAML anchor or full copy)
+    2. Adds `on_success` chaining to the fold score at `{{ fold_path }}`
+    3. Routes its workspace into `{{ workspace }}/lab/` so all artifacts
+       stay under this run's workspace tree
+    4. Validates as a Marianne score
+
+    Approach: read `{{ thinking_lab_path }}` verbatim; modify in-memory;
+    write to `{{ workspace }}/03-lab-wrapper.yaml`. Specific changes:
+
+    - `name:` → "instrument-catalog-build-lab" (unique job id)
+    - `workspace:` → `{{ workspace }}/lab` (so artifacts share this run's tree)
+    - Add at end:
+      ```yaml
+      concert:
+        enabled: true
+        max_chain_depth: 5
+      on_success:
+        - type: run_command
+          command: |
+            test -d "{{ '{' }}workspace{{ '}' }}" || { echo "lab workspace missing" >&2; exit 1; }
+            ls "{{ '{' }}workspace{{ '}' }}"/review-*.md >/dev/null || { echo "no reviews produced" >&2; exit 1; }
+        - type: run_job
+          job_path: "{{ fold_path }}"
+          description: "Chain to fold score"
+          detached: true
+          fresh: true
+      ```
+      (Use literal `{workspace}` format-string syntax in the run_command,
+      not Jinja, since it's a validation-engine path.)
+
+    Verify the wrapper is well-formed by parsing it with python yaml.
+
+    {% elif stage == 4 %}
+    # Stage Lab Inputs
+
+    The thinking-lab reads its inputs from `{{ lab_input_dir }}`. Stage
+    everything it needs:
+
+    1. Ensure `{{ lab_input_dir }}` exists.
+    2. Copy `{{ workspace }}/02-rating-prompt.md` to `{{ lab_input_dir }}/prompt.md`.
+    3. Copy the current catalog YAML to `{{ lab_input_dir }}/instrument-catalog.yaml`
+       so reviewers can examine the existing ratings they're being asked to
+       refine. Keep its filename; the lab injects the directory verbatim.
+    4. Copy the catalog MD too — it's a friendlier read for reviewers.
+    5. Write a small `{{ lab_input_dir }}/README.md` explaining the task in
+       one paragraph and pointing at prompt.md as the question.
+
+    Verify before completing:
+
+    - `{{ lab_input_dir }}/prompt.md` exists and is non-empty
+    - `{{ lab_input_dir }}/instrument-catalog.yaml` exists
+    - `{{ workspace }}/03-lab-wrapper.yaml` exists and parses as YAML
+    - The wrapper's on_success.job_path points at `{{ fold_path }}`
+
+    Write a brief stage-completion log to `{{ workspace }}/04-staged.md`
+    listing the files staged and the wrapper's on_success target.
+
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  # Stage 1
+  - type: file_exists
+    path: "{workspace}/01-catalog-summary.md"
+    condition: "stage == 1"
+    stage: 1
+  - type: content_contains
+    path: "{workspace}/01-catalog-summary.md"
+    pattern: "## Coverage"
+    condition: "stage == 1"
+    stage: 2
+  - type: content_contains
+    path: "{workspace}/01-catalog-summary.md"
+    pattern: "## Known biases"
+    condition: "stage == 1"
+    stage: 2
+
+  # Stage 2
+  - type: file_exists
+    path: "{workspace}/02-rating-prompt.md"
+    condition: "stage == 2"
+    stage: 1
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/02-rating-prompt.md") -ge 400'
+    condition: "stage == 2"
+    stage: 2
+    description: "Rating prompt is substantive (400+ words)"
+
+  # Stage 3 — wrapper YAML must parse and chain to fold
+  - type: file_exists
+    path: "{workspace}/03-lab-wrapper.yaml"
+    condition: "stage == 3"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 - <<'PY'
+      import yaml, sys
+      d = yaml.safe_load(open("{workspace}/03-lab-wrapper.yaml"))
+      assert isinstance(d, dict), "wrapper not a mapping"
+      for k in ("name", "workspace", "sheet", "prompt"):
+          assert k in d, f"wrapper missing {k}"
+      hooks = d.get("on_success", [])
+      job_hooks = [h for h in hooks if h.get("type") == "run_job"]
+      assert job_hooks, "wrapper has no run_job on_success"
+      assert "instrument-catalog-build-fold" in job_hooks[0]["job_path"], \
+          f"wrapper does not chain to fold; got {job_hooks[0]['job_path']}"
+      print("wrapper OK: chains to fold")
+      PY
+    condition: "stage == 3"
+    stage: 2
+    description: "Wrapper parses and chains to fold score"
+
+  # Stage 4 — lab input directory is correctly staged
+  - type: command_succeeds
+    command: |
+      LAB_INPUT="/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+      test -f "$LAB_INPUT/prompt.md" || { echo "prompt.md missing in lab input" >&2; exit 1; }
+      test -f "$LAB_INPUT/instrument-catalog.yaml" || { echo "catalog yaml missing in lab input" >&2; exit 1; }
+      test -s "$LAB_INPUT/prompt.md" || { echo "prompt.md empty" >&2; exit 1; }
+      exit 0
+    condition: "stage == 4"
+    stage: 1
+    description: "Lab input directory has prompt.md and catalog.yaml"
+  - type: file_exists
+    path: "{workspace}/04-staged.md"
+    condition: "stage == 4"
+    stage: 1

@@ -1,0 +1,331 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  INSTRUMENT CATALOG BUILD FOLD — fold lab reviews into finalized catalog    ║
+# ║                                                                             ║
+# ║  Final stage of the catalog-build chain. Runs after the per-run thinking-  ║
+# ║  lab wrapper completes. Reads the four reviewer YAML outputs, reconciles   ║
+# ║  them against the v1 catalog, and writes the finalized catalog with        ║
+# ║  cross-vendor signal incorporated.                                         ║
+# ║                                                                             ║
+# ║  Reconciliation rules:                                                      ║
+# ║    - All four reviewers agree directionally → adopt the consensus delta    ║
+# ║    - 3/4 agree → adopt with a "pending verification" note in changelog     ║
+# ║    - 2/4 agree → defer; flag for human review                              ║
+# ║    - Reviewer flagged "low confidence" → discount weight                   ║
+# ║    - Composer's v1 rating disagrees with all 4 → keep composer's, flag the ║
+# ║      disagreement for manual review (composer's draft was last-modified)   ║
+# ║                                                                             ║
+# ║  Outputs:                                                                   ║
+# ║    plugins/marianne/docs/ref/instrument-catalog.yaml (updated in place)         ║
+# ║    plugins/marianne/docs/ref/instrument-catalog.md (regenerated)                ║
+# ║    plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md (appended)         ║
+# ║    workspace/04-disagreements.md (items needing human review)               ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: instrument-catalog-build-fold
+
+description: >
+  Reads the four lab reviews, reconciles ratings against the v1 catalog,
+  writes the finalized catalog with cross-vendor signal incorporated, and
+  appends an entry to the catalog changelog.
+
+# Workspace nests under the build run's workspace so the chain shares state.
+workspace: "../workspaces/instrument-catalog-build/fold"
+
+instrument: claude-code
+instrument_fallbacks: [anthropic_api]
+instrument_config:
+  timeout_seconds: 1800
+  skip_permissions: true
+  disable_mcp: true
+
+instruments:
+  reader:    { profile: claude-code, config: { timeout_seconds: 600,  cli_model: claude-sonnet-4-6 } }
+  reconciler: { profile: claude-code, config: { timeout_seconds: 1800, cli_model: claude-opus-4-7 } }
+  scribe:    { profile: claude-code, config: { timeout_seconds: 1200, cli_model: claude-sonnet-4-6 } }
+
+movements:
+  1: { name: "Read Reviews",           instrument: reader }
+  2: { name: "Reconcile Ratings",      instrument: reconciler }
+  3: { name: "Write Finalized Catalog", instrument: scribe }
+  4: { name: "Regenerate Markdown",    instrument: scribe }
+
+sheet:
+  size: 1
+  total_items: 4
+  descriptions:
+    1: "Read all four lab reviews from the parent build run's lab/ workspace"
+    2: "Reconcile reviewer ratings against the v1 catalog using the agreement rules"
+    3: "Write finalized instrument-catalog.yaml in place; append CHANGELOG"
+    4: "Regenerate instrument-catalog.md from the updated YAML"
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 12000
+  lookback_sheets: 4
+  capture_files:
+    - "{{ workspace }}/01-reviews-extracted.yaml"
+    - "{{ workspace }}/02-reconciliation.yaml"
+    - "{{ workspace }}/03-changelog-entry.md"
+    - "{{ workspace }}/04-disagreements.md"
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 15
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+# Terminal score — no on_success.
+
+prompt:
+  variables:
+    catalog_yaml_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
+    catalog_md_path:   "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
+    catalog_changelog_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md"
+    lab_workspace:     "/home/emzi/Projects/marianne-ai-compose/workspaces/instrument-catalog-build/lab"
+
+  template: |
+    {% if stage == 1 %}
+    # Read Reviews
+
+    Read each of the five lab reviews from `{{ lab_workspace }}/`:
+
+    - `{{ lab_workspace }}/review-1.md` — Anthropic / Claude Opus 4.7
+    - `{{ lab_workspace }}/review-2.md` — Google / Gemini 3.1 Pro
+    - `{{ lab_workspace }}/review-3.md` — Google / Gemma 4 (free OpenRouter)
+    - `{{ lab_workspace }}/review-4.md` — Z.AI / GLM 5.1
+    - `{{ lab_workspace }}/review-5.md` — OpenAI / GPT-5.5
+
+    Each review begins with a YAML front-matter block identifying the
+    reviewer and its model. Each contains a fenced YAML block with rating
+    deltas keyed by musician id. Extract those deltas.
+
+    Write `{{ workspace }}/01-reviews-extracted.yaml`:
+
+    ```yaml
+    reviewers:
+      - id: anthropic-opus-4-7
+        confidence: high|medium|low
+        ratings:
+          claude-opus-4-7:                 # may be partial — only fields they rated
+            reasoning: 5
+            code_gen: 5
+            ...
+          gpt-5.5:
+            reasoning: 5
+            ...
+        strengths_added: { musician_id: ["..."] }
+        weaknesses_added: { musician_id: ["..."] }
+        push_back: { musician_id: "reviewer's argument for why v1 is wrong" }
+        skipped: ["musician-id-they-don't-know-well"]
+      - id: google-gemini-3.1-pro
+        ...
+      - id: google-gemma-4
+        ...
+      - id: zai-glm-5.1
+        ...
+      - id: openai-gpt-5.5
+        ...
+    ```
+
+    Be faithful — extract what reviewers actually said, including their
+    confidence and explicit skips. If a reviewer's output is malformed, note
+    that explicitly rather than guessing.
+
+    {% elif stage == 2 %}
+    # Reconcile Ratings
+
+    Read `{{ workspace }}/01-reviews-extracted.yaml` and `{{ catalog_yaml_path }}`.
+
+    Reconcile per the agreement rules:
+
+    1. **4/5 or 5/5 reviewers agree directionally** (e.g., they say `tool_use`
+       is higher than v1 says): adopt the consensus value (median of the
+       agreeing ratings).
+    2. **3/5 agree**: adopt with `verified_via` annotation noting partial
+       consensus. Add disagreeing reviewers' arguments to the changelog as context.
+    3. **2/5 agree or split votes**: DO NOT change the value. Add to
+       `{{ workspace }}/04-disagreements.md` for human review.
+    4. **Low-confidence reviewer disagreement**: discount weight — count as 0.5
+       in the agreement tally instead of 1.
+    5. **Composer's v1 rating contradicts all five reviewers**: keep composer's
+       value (it's the most-recently-validated baseline) BUT prominently flag
+       in the changelog. The composer can re-evaluate manually.
+    6. **New entries proposed by reviewers** (musicians not in v1): if at least
+       2 reviewers propose with concrete details (provider, family, context,
+       availability), add to the catalog as `verified: false` so the next
+       refresh confirms.
+    7. **Strengths/weaknesses additions**: append to existing lists; deduplicate.
+    8. **Quirks**: append; high-value catch.
+
+    Write `{{ workspace }}/02-reconciliation.yaml` showing for EACH affected
+    musician: original v1 value, each reviewer's value (with confidence),
+    decision, decided value, rationale.
+
+    Also write `{{ workspace }}/04-disagreements.md` listing items deferred
+    to human review. Empty file is acceptable if no disagreements.
+
+    {% elif stage == 3 %}
+    # Write Finalized Catalog
+
+    Apply the reconciliation decisions from `{{ workspace }}/02-reconciliation.yaml`
+    to `{{ catalog_yaml_path }}`. Update each affected musician's:
+
+    - `ratings:` (only the axes that changed)
+    - `strengths:` and `weaknesses:` (append/dedupe)
+    - `quirks:` (append)
+    - `last_verified:` → today's date (ISO format)
+    - `verified_via:` → append `lab_cross_rating_2026_04_29` (or current date)
+
+    Update top-level `generated_at:` to today.
+
+    Add new musicians (verified: false) per reconciliation rule 6 if any.
+
+    Re-run the dimension-tag lint after writing — every tag must be in the
+    declared dimensions:
+
+    ```bash
+    python3 -c "
+    import yaml
+    d = yaml.safe_load(open('{{ catalog_yaml_path }}'))
+    declared = set()
+    for dim in ['tier','task','modality','constraint']:
+        declared |= set(d['dimensions'][dim].keys())
+    extras = {'subscription','open-weights','free','no-rate-limit','offline','premier','oss-default','cheap','fast','thorough'}
+    declared |= extras
+    for mid, m in d['musicians'].items():
+        used = set(m.get('tags', [])) | set(m.get('task_tags', [])) | set(m.get('modality_tags', []))
+        unknown = used - declared
+        assert not unknown, f'{mid}: {unknown}'
+    print('lint OK')
+    "
+    ```
+
+    Append to `{{ catalog_changelog_path }}` (creating the file if missing):
+
+    ```markdown
+    ## 2026-04-29 — Cross-vendor lab refresh
+
+    **Drove by:** instrument-catalog-build concert (catalog-build → thinking-lab → fold)
+
+    **Reviewers:** Claude Opus 4.7, Gemini 3.1 Pro, Gemma 4, GLM 5.1, GPT-5.5
+
+    **Changes adopted:**
+    - <list of musician.field changes with rationale>
+
+    **Items deferred to human review:**
+    - <list from 04-disagreements.md, with brief description>
+
+    **Items new this round:**
+    - <new musicians added as verified: false>
+    ```
+
+    Write `{{ workspace }}/03-changelog-entry.md` containing the same content
+    that was appended (for review).
+
+    {% elif stage == 4 %}
+    # Regenerate Markdown
+
+    Regenerate `{{ catalog_md_path }}` from the updated `{{ catalog_yaml_path }}`.
+
+    The MD is a human view of the YAML — it should mirror the YAML's content
+    in a tables-and-prose format. Match the structure of the v1 markdown
+    (tag dimensions table, instruments table, musicians by family, use-case
+    chains in numbered lists). Keep the sections in the same order.
+
+    Update the "Generated" timestamp at top to match the YAML's
+    `generated_at`. Keep the cross-references to YAML and the refresh-
+    policy section.
+
+    Verify by checking that every musician in the YAML appears at least once
+    in the MD, and that no MD line references a musician id absent from the YAML.
+
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  # Stage 1
+  - type: file_exists
+    path: "{workspace}/01-reviews-extracted.yaml"
+    condition: "stage == 1"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import yaml
+      d = yaml.safe_load(open('{workspace}/01-reviews-extracted.yaml'))
+      assert 'reviewers' in d and len(d['reviewers']) == 5, 'expected 5 reviewers'
+      "
+    condition: "stage == 1"
+    stage: 2
+    description: "Reviews extracted, structure is reviewers[4]"
+
+  # Stage 2
+  - type: file_exists
+    path: "{workspace}/02-reconciliation.yaml"
+    condition: "stage == 2"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/04-disagreements.md"
+    condition: "stage == 2"
+    stage: 1
+    description: "Disagreements file exists (may be empty)"
+
+  # Stage 3 — outcome: catalog actually updated and still lint-passes
+  - type: file_exists
+    path: "{workspace}/03-changelog-entry.md"
+    condition: "stage == 3"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 - <<'PY'
+      import yaml
+      d = yaml.safe_load(open("/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"))
+      declared = set()
+      for dim in ['tier','task','modality','constraint']:
+          declared |= set(d['dimensions'][dim].keys())
+      declared |= {'subscription','open-weights','free','no-rate-limit','offline','premier','oss-default','cheap','fast','thorough'}
+      for mid, m in d['musicians'].items():
+          used = set(m.get('tags', [])) | set(m.get('task_tags', [])) | set(m.get('modality_tags', []))
+          unknown = used - declared
+          assert not unknown, f"{mid}: {unknown}"
+      assert d.get('generated_at'), "generated_at missing"
+      print("catalog OK")
+      PY
+    condition: "stage == 3"
+    stage: 2
+    description: "Updated catalog parses, tag-lint passes, generated_at set"
+  - type: command_succeeds
+    command: 'test -s "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md"'
+    condition: "stage == 3"
+    stage: 2
+    description: "Changelog appended"
+
+  # Stage 4 — markdown regenerated
+  - type: command_succeeds
+    command: |
+      MD="/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
+      YML="/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
+      test -f "$MD" || { echo "MD missing" >&2; exit 1; }
+      # Check every musician id in the YAML appears in the MD
+      python3 - <<PY
+      import yaml
+      d = yaml.safe_load(open("$YML"))
+      md = open("$MD").read()
+      missing = [mid for mid in d['musicians'] if mid not in md]
+      if missing:
+          print("MD missing musicians:", missing[:5], "..." if len(missing)>5 else "")
+          import sys; sys.exit(1)
+      print("MD coverage OK")
+      PY
+    condition: "stage == 4"
+    stage: 1
+    description: "MD covers every musician id from the YAML"

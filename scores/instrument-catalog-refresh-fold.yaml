@@ -1,0 +1,203 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  INSTRUMENT CATALOG REFRESH FOLD — apply lab cross-rating to changeset      ║
+# ║                                                                             ║
+# ║  Final stage of the refresh chain. Reads the four lab reviews (scoped to   ║
+# ║  changeset entries), applies the same reconciliation rules as the build's  ║
+# ║  fold, and updates the catalog YAML + MD + CHANGELOG in place.             ║
+# ║                                                                             ║
+# ║  Inputs:                                                                    ║
+# ║    - workspaces/instrument-catalog-refresh/04-changeset.yaml                ║
+# ║    - workspaces/instrument-catalog-refresh/lab/review-{1..4}.md             ║
+# ║    - plugins/marianne/docs/ref/instrument-catalog.yaml (current)                ║
+# ║                                                                             ║
+# ║  Outputs:                                                                   ║
+# ║    - plugins/marianne/docs/ref/instrument-catalog.yaml (updated)                ║
+# ║    - plugins/marianne/docs/ref/instrument-catalog.md (regenerated)              ║
+# ║    - plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md (appended)       ║
+# ║    - workspace/disagreements.md (deferred items for human review)           ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: instrument-catalog-refresh-fold
+
+description: >
+  Apply the lab's cross-vendor ratings (scoped to refresh changeset) into
+  the catalog. Same fold rules as catalog-build-fold but only touches
+  entries flagged as changed/new in the changeset.
+
+workspace: "../workspaces/instrument-catalog-refresh/fold"
+
+instrument: claude-code
+instrument_fallbacks: [anthropic_api]
+instrument_config:
+  timeout_seconds: 1800
+  skip_permissions: true
+  disable_mcp: true
+
+instruments:
+  reader:    { profile: claude-code, config: { timeout_seconds: 600,  cli_model: claude-sonnet-4-6 } }
+  reconciler: { profile: claude-code, config: { timeout_seconds: 1800, cli_model: claude-opus-4-7 } }
+  scribe:    { profile: claude-code, config: { timeout_seconds: 1200, cli_model: claude-sonnet-4-6 } }
+
+movements:
+  1: { name: "Read Reviews + Changeset", instrument: reader }
+  2: { name: "Reconcile",                instrument: reconciler }
+  3: { name: "Write Updated Catalog",    instrument: scribe }
+  4: { name: "Regenerate Markdown",      instrument: scribe }
+
+sheet:
+  size: 1
+  total_items: 4
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+  descriptions:
+    1: "Read all 4 reviews + the changeset"
+    2: "Reconcile reviewer ratings against changeset entries"
+    3: "Write updated YAML; append CHANGELOG"
+    4: "Regenerate MD"
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 12000
+  lookback_sheets: 4
+  capture_files:
+    - "{{ workspace }}/01-extracted.yaml"
+    - "{{ workspace }}/02-reconciliation.yaml"
+    - "{{ workspace }}/03-changelog-entry.md"
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 15
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+prompt:
+  variables:
+    catalog_yaml_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
+    catalog_md_path:   "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
+    catalog_changelog_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md"
+    refresh_workspace: "/home/emzi/Projects/marianne-ai-compose/workspaces/instrument-catalog-refresh"
+    lab_workspace:     "/home/emzi/Projects/marianne-ai-compose/workspaces/instrument-catalog-refresh/lab"
+
+  template: |
+    {% if stage == 1 %}
+    # Read Reviews + Changeset
+
+    Read `{{ refresh_workspace }}/04-changeset.yaml` and the five lab
+    reviews at `{{ lab_workspace }}/review-{1..5}.md`.
+
+    Extract reviewer ratings — but ONLY for musician ids present in the
+    changeset. Reviewers may have rated other entries; ignore those for
+    refresh-fold (the build-fold handles full-catalog rating).
+
+    Write `{{ workspace }}/01-extracted.yaml` with the same shape as
+    catalog-build-fold's stage 1 output, scoped to the changeset.
+
+    {% elif stage == 2 %}
+    # Reconcile (same rules as catalog-build-fold)
+
+    Apply the reconciliation rules from `instrument-catalog-build-fold.yaml`
+    stage 2:
+
+    - 4/5 or 5/5 agree → adopt consensus (median of agreeing ratings)
+    - 3/5 agree → adopt with partial-consensus annotation
+    - 2/5 or split → defer to disagreements file
+    - Low-confidence discount applies (count low-confidence as 0.5)
+    - New musicians proposed by ≥2 reviewers → add as `verified: false`
+
+    Write `{{ workspace }}/02-reconciliation.yaml` and
+    `{{ workspace }}/disagreements.md` (may be empty).
+
+    {% elif stage == 3 %}
+    # Write Updated Catalog
+
+    Apply reconciliation decisions to `{{ catalog_yaml_path }}` (in place).
+    Update `last_verified` and `verified_via` for each affected musician.
+    Update top-level `generated_at`.
+
+    Append to `{{ catalog_changelog_path }}`:
+
+    ```markdown
+    ## <today> — Periodic refresh
+
+    **Drove by:** instrument-catalog-refresh concert
+    **Vendor research cutoff:** <previous catalog generated_at>
+
+    **Changes adopted:**
+    - <list>
+
+    **Items deferred:**
+    - <list from disagreements.md>
+
+    **Items new:**
+    - <list new musicians added>
+    ```
+
+    Write same content to `{{ workspace }}/03-changelog-entry.md` for
+    review. Re-run the dimension-tag lint on the updated catalog.
+
+    {% elif stage == 4 %}
+    # Regenerate Markdown
+
+    Regenerate `{{ catalog_md_path }}` from the updated YAML. Same approach
+    as catalog-build-fold stage 4.
+
+    Verify: every musician id in the YAML appears in the MD.
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  - type: file_exists
+    path: "{workspace}/01-extracted.yaml"
+    condition: "stage == 1"
+    stage: 1
+
+  - type: file_exists
+    path: "{workspace}/02-reconciliation.yaml"
+    condition: "stage == 2"
+    stage: 1
+
+  - type: file_exists
+    path: "{workspace}/03-changelog-entry.md"
+    condition: "stage == 3"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 - <<'PY'
+      import yaml
+      d = yaml.safe_load(open("/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"))
+      declared = set()
+      for dim in ['tier','task','modality','constraint']:
+          declared |= set(d['dimensions'][dim].keys())
+      declared |= {'subscription','open-weights','free','no-rate-limit','offline','premier','oss-default','cheap','fast','thorough','deprecated','sunset'}
+      for mid, m in d['musicians'].items():
+          used = set(m.get('tags', [])) | set(m.get('task_tags', [])) | set(m.get('modality_tags', []))
+          unknown = used - declared
+          assert not unknown, f"{mid}: {unknown}"
+      print("OK")
+      PY
+    condition: "stage == 3"
+    stage: 2
+    description: "Updated catalog still passes tag-lint"
+
+  - type: command_succeeds
+    command: |
+      MD="/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
+      YML="/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
+      python3 - <<PY
+      import yaml
+      d = yaml.safe_load(open("$YML"))
+      md = open("$MD").read()
+      missing = [mid for mid in d['musicians'] if mid not in md]
+      assert not missing, f"MD missing: {missing[:5]}"
+      print("MD coverage OK")
+      PY
+    condition: "stage == 4"
+    stage: 1
+    description: "MD covers every musician id from the YAML"

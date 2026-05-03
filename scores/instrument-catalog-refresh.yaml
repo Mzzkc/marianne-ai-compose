@@ -1,0 +1,427 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  INSTRUMENT CATALOG REFRESH — freshclam-shaped periodic update              ║
+# ║                                                                             ║
+# ║  Patterns: Reconnaissance Pull + Source Triangulation (via thinking-lab)   ║
+# ║                                                                             ║
+# ║  Periodic catalog refresh. Runs on demand (or via cron) to:                ║
+# ║                                                                             ║
+# ║    1. Probe currently-installed instruments via `mzt doctor`                ║
+# ║    2. Web-research each provider's model release page since last_verified  ║
+# ║    3. Scan OpenRouter / Hugging Face for new free-tier models               ║
+# ║    4. Diff findings against the current catalog                             ║
+# ║    5. Run thinking-lab cross-rating on the diff (only changed/new entries) ║
+# ║    6. Apply fold logic to update catalog with citations                     ║
+# ║    7. Append changelog entry                                                ║
+# ║                                                                             ║
+# ║  Compared to catalog-build:                                                 ║
+# ║    - build is bootstrap-once; refresh runs repeatedly                       ║
+# ║    - refresh adds vendor research (web fetch) the build skipped             ║
+# ║    - refresh's lab pass is scoped to changed entries, not the whole catalog║
+# ║                                                                             ║
+# ║  Eventually rolls into a freshclam-style update mechanism the user runs   ║
+# ║  alongside other periodic data refreshes.                                  ║
+# ║                                                                             ║
+# ║  Usage:                                                                     ║
+# ║    mzt run scores/instrument-catalog-refresh.yaml --fresh                   ║
+# ║                                                                             ║
+# ║  Suggested cron: monthly                                                    ║
+# ║    0 4 1 * *  cd /home/emzi/Projects/marianne-ai-compose && \              ║
+# ║               source .venv/bin/activate && \                                ║
+# ║               mzt run scores/instrument-catalog-refresh.yaml --fresh        ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: instrument-catalog-refresh
+
+description: >
+  Periodic refresh of the instrument catalog. Doctor probe + per-provider
+  web research + OpenRouter scan + diff. Chains to a per-run thinking-lab
+  wrapper scoped to changed entries, which then chains to refresh-fold.
+
+workspace: "../workspaces/instrument-catalog-refresh"
+
+instrument: claude-code
+instrument_fallbacks: [anthropic_api]
+instrument_config:
+  timeout_seconds: 1800
+  skip_permissions: true
+  disable_mcp: true
+
+instruments:
+  scout:        { profile: claude-code, config: { timeout_seconds: 600,  cli_model: claude-sonnet-4-6 } }
+  researcher:   { profile: claude-code, config: { timeout_seconds: 1800, cli_model: claude-sonnet-4-6 } }
+  scanner:      { profile: claude-code, config: { timeout_seconds: 1200, cli_model: claude-haiku-4-5-20251001 } }
+  differ:       { profile: claude-code, config: { timeout_seconds: 1200, cli_model: claude-sonnet-4-6 } }
+  prep:         { profile: claude-code, config: { timeout_seconds: 900,  cli_model: claude-sonnet-4-6 } }
+
+movements:
+  1: { name: "Doctor Probe",        instrument: scout }
+  2: { name: "Vendor Research",     instrument: researcher }
+  3: { name: "OpenRouter / HF Scan", instrument: scanner }
+  4: { name: "Diff vs Catalog",     instrument: differ }
+  5: { name: "Stage Lab Inputs",    instrument: prep }
+  6: { name: "Generate Lab Wrapper", instrument: prep }
+
+sheet:
+  size: 1
+  total_items: 6
+  descriptions:
+    1: "Run `mzt doctor`; capture installed instruments and their availability"
+    2: "Web-research each provider's model release pages since last_verified"
+    3: "Scan OpenRouter free tier and Hugging Face trending for new models"
+    4: "Diff findings against current catalog; produce a focused change set"
+    5: "Stage lab inputs scoped to the change set"
+    6: "Generate per-run lab wrapper that chains to refresh-fold"
+  dependencies:
+    2: [1]
+    3: [1]   # research and scan can run in parallel
+    4: [2, 3]
+    5: [4]
+    6: [5]
+
+# Allow research and scan in parallel since they hit different external sources.
+parallel:
+  enabled: true
+  max_concurrent: 2
+  fail_fast: false
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 12000
+  lookback_sheets: 6
+  capture_files:
+    - "{{ workspace }}/01-doctor.yaml"
+    - "{{ workspace }}/02-vendor-research.md"
+    - "{{ workspace }}/03-openrouter-scan.yaml"
+    - "{{ workspace }}/04-changeset.yaml"
+    - "{{ workspace }}/05-staged.md"
+    - "{{ workspace }}/06-lab-wrapper.yaml"
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+concert:
+  enabled: true
+  max_chain_depth: 5
+
+on_success:
+  - type: run_command
+    command: |
+      WS="{workspace}"
+      WRAPPER="$WS/06-lab-wrapper.yaml"
+      CHANGESET="$WS/04-changeset.yaml"
+      # Skip lab if changeset is empty (nothing to rate)
+      EMPTY=$(python3 -c "
+      import yaml
+      cs = yaml.safe_load(open('$CHANGESET') or {})
+      print('1' if not cs or not cs.get('musicians_changed') and not cs.get('musicians_new') else '0')
+      " 2>/dev/null || echo "0")
+      if [ "$EMPTY" = "1" ]; then
+        echo "No changes detected — skipping lab + fold"
+        exit 0
+      fi
+      test -f "$WRAPPER" || { echo "ERROR: lab wrapper missing" >&2; exit 1; }
+  - type: run_job
+    job_path: "{workspace}/06-lab-wrapper.yaml"
+    description: "Chain to per-run lab wrapper (which chains to refresh-fold)"
+    detached: true
+    fresh: true
+
+prompt:
+  variables:
+    catalog_yaml_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
+    catalog_md_path:   "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
+    catalog_changelog_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md"
+    thinking_lab_path: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab.yaml"
+    refresh_fold_path: "/home/emzi/Projects/marianne-ai-compose/scores/instrument-catalog-refresh-fold.yaml"
+    lab_input_dir:     "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+
+  template: |
+    {% if stage == 1 %}
+    # Doctor Probe
+
+    Run `mzt doctor` and capture its full output. Parse the instrument list
+    and availability flags. Compare to the catalog's `instruments:` section.
+
+    Run:
+    ```bash
+    mzt doctor
+    ```
+
+    Write `{{ workspace }}/01-doctor.yaml`:
+
+    ```yaml
+    installed_instruments:
+      - id: claude-code
+        path: /home/emzi/.local/bin/claude
+        available: true
+      - id: codex-cli
+        path: ...
+        available: true
+      ...
+    not_installed:
+      - id: cline-cli
+    catalog_present_not_installed:
+      - id: ...
+    not_in_catalog:
+      - id: ...
+    ```
+
+    Flag any instrument in the catalog that's no longer installed (deprecation
+    candidate) and any installed instrument missing from the catalog (new
+    addition candidate).
+
+    {% elif stage == 2 %}
+    # Vendor Research
+
+    Read the catalog at `{{ catalog_yaml_path }}`. For each provider
+    represented (anthropic, openai, google, z-ai, meta, mistral, deepseek,
+    alibaba, microsoft, nvidia, minimax, etc.), perform a web search since
+    each musician's `last_verified` date for:
+
+    - New model releases
+    - Deprecated/sunset models
+    - Pricing changes
+    - Context window or capability changes
+
+    Search queries to run (use WebFetch / WebSearch):
+
+    - "{provider} new model release {YYYY-MM}" — for each provider, post-cutoff
+    - "{provider} model deprecation {YYYY}" — sunset announcements
+    - For OpenAI: hit https://platform.openai.com/docs/models
+    - For Anthropic: hit https://docs.anthropic.com/en/docs/about-claude/models
+    - For Google: hit https://ai.google.dev/gemini-api/docs/models/gemini
+
+    Synthesize findings to `{{ workspace }}/02-vendor-research.md`:
+
+    ```markdown
+    # Vendor Research
+
+    ## Anthropic
+    - **New since {date}:** ...
+    - **Deprecated:** ...
+    - **Pricing changes:** ...
+
+    ## OpenAI
+    ...
+
+    ## Sources
+    - [link 1]
+    - [link 2]
+    ```
+
+    Cite every claim with a source URL. If web search is unavailable in this
+    instrument config, say so explicitly and note the data freshness limit.
+
+    {% elif stage == 3 %}
+    # OpenRouter / Hugging Face Scan
+
+    Scan for new free-tier OpenRouter models and Hugging Face trending
+    open-weights models since last refresh.
+
+    OpenRouter free tier: https://openrouter.ai/models?fmt=cards&supported_parameters=tools&order=newest
+    Hugging Face trending: https://huggingface.co/models?sort=trending
+
+    Look for:
+
+    - Free-tier models on OpenRouter not currently in the catalog
+    - Open-weight releases (Apache, MIT, permissive licenses) with trending interest
+    - Specialization releases (new TTS, image-gen, video-gen models)
+
+    Write `{{ workspace }}/03-openrouter-scan.yaml`:
+
+    ```yaml
+    new_free_openrouter:
+      - id: ...
+        provider: ...
+        context: ...
+        max_output: ...
+        license: ...
+        notable: "why it might warrant inclusion"
+    new_open_weights:
+      - id: ...
+        provider: ...
+        license: ...
+        modality: ...
+    new_specializations:
+      - id: ...
+        modality: ...   # speech-out / image-gen / video-gen / etc
+        notable: "..."
+    ```
+
+    Skip noisy / fine-tune-of-fine-tune entries. Only include models that a
+    composer might reasonably want to reach for.
+
+    {% elif stage == 4 %}
+    # Diff vs Catalog
+
+    Read `{{ catalog_yaml_path }}`, `{{ workspace }}/01-doctor.yaml`,
+    `{{ workspace }}/02-vendor-research.md`, and `{{ workspace }}/03-openrouter-scan.yaml`.
+
+    Produce `{{ workspace }}/04-changeset.yaml`:
+
+    ```yaml
+    schema_version: 1
+    refresh_date: "<today>"
+
+    instruments_changed: []           # availability changes
+    instruments_new: []
+    instruments_deprecated: []
+
+    musicians_changed:                # entries with cost/context/availability changes
+      - id: <musician-id>
+        field: <which field changed>
+        old: <old value>
+        new: <new value>
+        source: <citation>
+    musicians_new:                    # new additions to consider
+      - id: <musician-id>
+        provider: ...
+        family: ...
+        proposed_tags: [...]
+        proposed_task_tags: [...]
+        rationale: "why include"
+        source: <citation>
+    musicians_deprecated:             # candidates for removal or "sunset" tag
+      - id: <musician-id>
+        reason: "..."
+        source: <citation>
+    musicians_stale_only: []          # last_verified > 90 days, no other change
+
+    summary:
+      total_changes: 0
+      requires_lab_rating: 0     # how many entries need fresh cross-vendor ratings
+    ```
+
+    Be conservative. The fold step rewards precision; spurious flags create
+    busywork.
+
+    {% elif stage == 5 %}
+    # Stage Lab Inputs (scoped to changeset)
+
+    Stage thinking-lab inputs only for entries needing fresh cross-vendor
+    ratings (i.e., new musicians + musicians with major changes).
+
+    1. Read `{{ workspace }}/04-changeset.yaml`.
+    2. If `requires_lab_rating == 0`, write a short note to
+       `{{ workspace }}/05-staged.md` saying lab is skipped and exit early.
+       (The on_success hook will detect the empty changeset and skip the lab.)
+    3. Otherwise:
+       - Ensure `{{ lab_input_dir }}` exists and is empty (rm contents)
+       - Write a focused rating prompt to `{{ lab_input_dir }}/prompt.md`
+         that asks reviewers ONLY to rate the entries in the changeset
+         (not the whole catalog). Include the entries' provider, family,
+         proposed tags, and citations from the research stage.
+       - Copy `{{ catalog_yaml_path }}` to `{{ lab_input_dir }}/instrument-catalog.yaml`
+         for context.
+       - Copy `{{ workspace }}/04-changeset.yaml` to `{{ lab_input_dir }}/changeset.yaml`
+       - Copy `{{ workspace }}/02-vendor-research.md` and `{{ workspace }}/03-openrouter-scan.yaml`
+         for citation grounding.
+
+    Write `{{ workspace }}/05-staged.md` recording what was staged.
+
+    {% elif stage == 6 %}
+    # Generate Per-Run Lab Wrapper
+
+    Generate the per-run wrapper of thinking-lab.yaml that chains to
+    `{{ refresh_fold_path }}`. Same approach as catalog-build.yaml stage 3:
+
+    - Read `{{ thinking_lab_path }}`
+    - Modify in-memory:
+      - `name:` → "instrument-catalog-refresh-lab"
+      - `workspace:` → `{{ workspace }}/lab`
+      - Add `concert.enabled: true`, `concert.max_chain_depth: 5`
+      - Add `on_success` chaining to `{{ refresh_fold_path }}`
+    - Write to `{{ workspace }}/06-lab-wrapper.yaml`
+    - Verify it parses and chains to refresh-fold
+
+    {% endif %}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+validations:
+  # Stage 1
+  - type: file_exists
+    path: "{workspace}/01-doctor.yaml"
+    condition: "stage == 1"
+    stage: 1
+  - type: command_succeeds
+    command: 'python3 -c "import yaml; d=yaml.safe_load(open(\"{workspace}/01-doctor.yaml\")); assert \"installed_instruments\" in d"'
+    condition: "stage == 1"
+    stage: 2
+
+  # Stage 2 — vendor research has citations
+  - type: file_exists
+    path: "{workspace}/02-vendor-research.md"
+    condition: "stage == 2"
+    stage: 1
+  - type: content_contains
+    path: "{workspace}/02-vendor-research.md"
+    pattern: "## Sources"
+    condition: "stage == 2"
+    stage: 2
+    description: "Vendor research includes a Sources section with URLs"
+
+  # Stage 3
+  - type: file_exists
+    path: "{workspace}/03-openrouter-scan.yaml"
+    condition: "stage == 3"
+    stage: 1
+
+  # Stage 4 — diff parses
+  - type: file_exists
+    path: "{workspace}/04-changeset.yaml"
+    condition: "stage == 4"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import yaml
+      d=yaml.safe_load(open('{workspace}/04-changeset.yaml'))
+      for k in ('musicians_changed','musicians_new','musicians_deprecated'):
+          assert k in d, f'missing {k}'
+      assert 'summary' in d and 'total_changes' in d['summary']
+      "
+    condition: "stage == 4"
+    stage: 2
+    description: "Changeset is well-formed"
+
+  # Stage 5 — lab inputs staged (or explicit skip note)
+  - type: file_exists
+    path: "{workspace}/05-staged.md"
+    condition: "stage == 5"
+    stage: 1
+
+  # Stage 6 — wrapper validates and chains correctly (only required if not empty)
+  - type: command_succeeds
+    command: |
+      WS="{workspace}"
+      CS="$WS/04-changeset.yaml"
+      EMPTY=$(python3 -c "
+      import yaml
+      d=yaml.safe_load(open('$CS') or {})
+      n = (d or {}).get('summary',{}).get('total_changes',0)
+      print('1' if n == 0 else '0')
+      " 2>/dev/null || echo "0")
+      if [ "$EMPTY" = "1" ]; then
+        echo "No changes; wrapper not required"
+        exit 0
+      fi
+      WRAPPER="$WS/06-lab-wrapper.yaml"
+      test -f "$WRAPPER" || { echo "wrapper missing" >&2; exit 1; }
+      python3 - <<PY
+      import yaml
+      d=yaml.safe_load(open("$WRAPPER"))
+      assert d.get('name'), 'no name'
+      assert any(h.get('type')=='run_job' for h in d.get('on_success',[])), 'no run_job in on_success'
+      print("wrapper OK")
+      PY
+    condition: "stage == 6"
+    stage: 2
+    description: "Lab wrapper validates and chains to refresh-fold (or changeset is empty)"
