@@ -1,0 +1,355 @@
+schema_version: 1
+instructions: |
+  This is the master navigation index for all Marianne documentation.
+  Use this to find where things are. Use per-directory INDEX.yaml
+  for semantic context about what's in each directory.
+
+  Maintenance: When adding, moving, or completing a document,
+  update this index AND the relevant directory's INDEX.yaml.
+
+directories:
+  plans/compose-system:
+    description: "8-stage compose system specification"
+    status: active
+    files:
+      - name: 00-system-overview.md
+        added: 2026-03-29
+      - name: 01-init-redesign.md
+        added: 2026-03-29
+      - name: 02-tdf-spec-engine.md
+        added: 2026-03-29
+      - name: 03-interview-system.md
+        added: 2026-03-29
+      - name: 04-score-composition.md
+        added: 2026-03-29
+      - name: 05-concert-execution.md
+        added: 2026-03-29
+      - name: 06-manifest-remediation.md
+        added: 2026-03-29
+      - name: 07-in-score-spec-gen.md
+        added: 2026-03-29
+      - name: FEEDBACK.md
+        added: 2026-03-29
+      - name: RESEARCH.md
+        added: 2026-03-29
+      - name: REVIEW.md
+        added: 2026-03-29
+      - name: init-interview-prompt.md
+        added: 2026-03-29
+        source: "docs/plans/ (relocated)"
+
+  plans/architecture:
+    description: "Core architectural decisions, structural designs, schema"
+    status: active
+    files:
+      - name: 2026-02-22-semantic-analyzer-backend-abstraction-design.md
+        added: 2026-02-22
+      - name: 2026-02-25-unified-schema-management-design.md
+        added: 2026-02-25
+      - name: 2026-02-25-unified-schema-management-implementation.md
+        added: 2026-02-25
+      - name: 2026-03-04-libretto-system-design.md
+        added: 2026-03-04
+      - name: 2026-03-04-workspace-archaeology-design.md
+        added: 2026-03-04
+      - name: 2026-03-26-baton-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-daemon-only-architecture-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-instrument-plugin-system-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-learning-store-remediation-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-score-looping-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-sheet-first-architecture-design.md
+        added: 2026-03-26
+      - name: 2026-04-07-unified-state-spec.md
+        added: 2026-04-07
+      - name: 2026-04-08-baton-event-flow-unification.md
+        added: 2026-04-08
+        source: "docs/superpowers/plans/ (relocated)"
+
+  plans/infrastructure:
+    description: "Daemon, config reload, scheduler, dashboard, monitoring designs"
+    status: completed
+    files:
+      - name: 2026-02-14-daemon-ux-improvements-design.md
+        added: 2026-02-14
+      - name: 2026-02-23-config-reload-and-reconciliation-design.md
+        added: 2026-02-23
+      - name: 2026-02-23-config-reload-and-reconciliation-implementation.md
+        added: 2026-02-23
+      - name: 2026-02-23-dashboard-concert-overhaul-design.md
+        added: 2026-02-23
+      - name: 2026-02-23-marianne-monitor-htop-design.md
+        added: 2026-02-23
+      - name: 2026-02-25-daemon-owned-hooks-and-config-reload-design.md
+        added: 2026-02-25
+      - name: 2026-02-25-daemon-owned-hooks-and-config-reload-implementation.md
+        added: 2026-02-25
+      - name: 2026-02-25-dashboard-daemon-data-bridge-design.md
+        added: 2026-02-25
+      - name: 2026-02-25-workspace-independent-job-control-design.md
+        added: 2026-02-25
+      - name: 2026-02-25-workspace-independent-job-control-plan.md
+        added: 2026-02-25
+      - name: 2026-03-26-dashboard-conductor-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-scheduler-conductor-wiring-design.md
+        added: 2026-03-26
+      - name: 2026-04-08-rate-limit-intelligence.md
+        added: 2026-04-08
+        source: "docs/superpowers/plans/ (relocated)"
+
+  plans/features:
+    description: "Feature-specific designs and implementations"
+    status: active
+    files:
+      - name: 2026-02-14-issue-solver-design.md
+        added: 2026-02-14
+      - name: 2026-02-14-issue-solver-implementation.md
+        added: 2026-02-14
+      - name: 2026-02-24-evolution-concert-design.md
+        added: 2026-02-24
+      - name: 2026-02-24-evolution-concert-implementation.md
+        added: 2026-02-24
+      - name: 2026-02-24-observer-integration-design.md
+        added: 2026-02-24
+      - name: 2026-02-24-observer-integration-plan.md
+        added: 2026-02-24
+      - name: 2026-03-08-iterative-dev-loop-agent-prompts.md
+        added: 2026-03-08
+      - name: 2026-03-08-iterative-dev-loop-design.md
+        added: 2026-03-08
+      - name: 2026-03-08-iterative-dev-loop-implementation.md
+        added: 2026-03-08
+      - name: 2026-03-08-iterative-dev-loop-memory-flow.md
+        added: 2026-03-08
+      - name: 2026-03-09-iterative-dev-loop-hierarchy-design.md
+        added: 2026-03-09
+      - name: 2026-03-26-flowspec-findings-tracker.md
+        added: 2026-03-26
+      - name: 2026-03-26-flowspec-integration-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-lovable-demo-design.md
+        added: 2026-03-26
+      - name: 2026-04-04-instrument-fallbacks-spec.md
+        added: 2026-04-04
+      - name: 2026-04-04-status-display-beautification.md
+        added: 2026-04-04
+      - name: 2026-04-07-intelligent-conductor-spec.md
+        added: 2026-04-07
+      - name: 2026-04-08-auto-routing-design.md
+        added: 2026-04-08
+      - name: 2026-04-08-directory-cadenza-spec.md
+        added: 2026-04-08
+      - name: 2026-04-09-generic-agent-scores.md
+        added: 2026-04-09
+        source: "docs/superpowers/plans/ (relocated)"
+
+  plans/quality:
+    description: "Testing, safety, quality assurance designs"
+    status: active
+    files:
+      - name: 2026-02-24-qa-testing-overhaul-design.md
+        added: 2026-02-24
+      - name: 2026-02-24-qa-testing-overhaul-implementation.md
+        added: 2026-02-24
+      - name: 2026-03-14-bug-dependency-dag.md
+        added: 2026-03-14
+      - name: 2026-03-26-safety-hardening-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-testing-strategy-design.md
+        added: 2026-03-26
+      - name: 2026-04-02-quality-gate-optimization.md
+        added: 2026-04-02
+      - name: 2026-04-10-quality-remediation.md
+        added: 2026-04-10
+
+  plans/strategic:
+    description: "Vision, roadmap, methodology, high-level strategy"
+    status: active
+    files:
+      - name: 2026-02-14-roadmap-features.md
+        added: 2026-02-14
+      - name: 2026-02-16-documentation-overhaul-design.md
+        added: 2026-02-16
+      - name: 2026-02-16-documentation-overhaul-implementation.md
+        added: 2026-02-16
+      - name: 2026-03-05-grand-opus-extension-v2-design.md
+        added: 2026-03-05
+      - name: 2026-03-09-company-in-a-box-vision.md
+        added: 2026-03-09
+      - name: 2026-03-26-cli-ux-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-documentation-strategy-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-v1-beta-roadmap.md
+        added: 2026-03-26
+      - name: 2026-04-19-project-roadmap.md
+        added: 2026-04-19
+        note: "Generated by project-roadmap score (Immune Cascade + Rashomon Gate)"
+      - name: 2026-04-12-docs-reorganization-design.md
+        added: 2026-04-12
+
+  plans/four-disciplines:
+    description: "Four disciplines methodology — gap analysis, 9 phases, reconciliation, rewiring"
+    status: completed
+    files:
+      - name: 2026-03-01-four-disciplines-gap-analysis-design.md
+        added: 2026-03-01
+      - name: 2026-03-01-four-disciplines-phase1-foundation.md
+        added: 2026-03-01
+      - name: 2026-03-01-four-disciplines-phase2-prompt-craft.md
+        added: 2026-03-01
+      - name: 2026-03-01-four-disciplines-phase3-intent.md
+        added: 2026-03-01
+      - name: 2026-03-01-four-disciplines-phase4-context-engineering.md
+        added: 2026-03-01
+      - name: 2026-03-01-four-disciplines-phase5-semantic-eval.md
+        added: 2026-03-01
+      - name: 2026-03-01-four-disciplines-phase6-model-selection.md
+        added: 2026-03-01
+      - name: 2026-03-01-four-disciplines-phase7-planner.md
+        added: 2026-03-01
+      - name: 2026-03-01-four-disciplines-phase8-learning-loops.md
+        added: 2026-03-01
+      - name: 2026-03-01-four-disciplines-phase9-dashboard.md
+        added: 2026-03-01
+      - name: 2026-03-26-four-disciplines-reconciliation-design.md
+        added: 2026-03-26
+      - name: 2026-03-26-four-disciplines-rewiring-guide.md
+        added: 2026-03-26
+
+  plans/rosetta:
+    description: "Rosetta-related plans (future)"
+    status: future
+    files: []
+
+  specs:
+    description: "Design specifications"
+    status: active
+    files:
+      - name: 2026-04-09-generic-agent-score-design.md
+        added: 2026-04-09
+        source: "docs/superpowers/specs/ (relocated)"
+      - name: 2026-04-13-composition-compiler-design.md
+        added: 2026-04-13
+        source: "docs/superpowers/specs/ (relocated)"
+      - name: 2026-04-13-instrument-forge-spec.md
+        added: 2026-04-13
+      - name: 2026-04-16-process-lifecycle-design.md
+        added: 2026-04-16
+      - name: 2026-04-16-rate-limit-primary-design.md
+        added: 2026-04-16
+      - name: 2026-04-17-baton-primitives-and-marianne-mozart-design.md
+        added: 2026-04-17
+      - name: 2026-04-18-baton-primitives-spec-update.md
+        added: 2026-04-18
+      - name: 2026-04-18-generic-issue-solver-design.md
+        added: 2026-04-18
+      - name: 2026-04-19-marianne-memory-system-design.md
+        added: 2026-04-19
+        note: "Merged from two independent design runs with adversarial review; supersedes 2026-04-18 version"
+      - name: 2026-04-19-marianne-unconscious-local-model-design.md
+        added: 2026-04-19
+        note: "Merged from two independent design runs with adversarial review; supersedes 2026-04-18 version"
+
+  guides:
+    description: "Methodology and reference guides"
+    status: active
+    files:
+      - name: score-composition-guide.md
+        added: 2026-04-12
+        source: "scores-internal/rosetta-modernize/ (promoted)"
+
+  handoffs:
+    description: "Session continuity documents (gitignored — local to each checkout)"
+    status: ongoing
+    note: |
+      The handoffs/ directory is gitignored; its contents are per-checkout session
+      state, not tracked documentation. See docs/handoffs/INDEX.yaml within any
+      checkout that has handoffs for the current inventory.
+
+  research:
+    description: "Research findings and analysis"
+    status: active
+    files:
+      - name: OPUS-CONVERGENCE-ANALYSIS.md
+        added: 2026-03-26
+      - name: README.md
+        added: 2026-03-26
+      - name: TOKEN-COMPRESSION-STRATEGIES.md
+        added: 2026-03-26
+      - name: 2026-03-26-multi-provider-abstraction-research.md
+        added: 2026-03-26
+        source: "docs/plans/ (relocated)"
+      - name: 2026-03-26-universal-instrument-api-research.md
+        added: 2026-03-26
+        source: "docs/plans/ (relocated)"
+      - name: 2026-03-26-provider-compliance.md
+        added: 2026-03-26
+        source: "docs/plans/ (relocated)"
+      - name: 2026-04-13-free-model-code-generation-research.md
+        added: 2026-04-13
+      - name: 2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md
+        added: 2026-04-19
+      - name: 2026-04-18-marianne-memory-and-unconscious-research-dossier.md
+        added: 2026-04-18
+
+semantic_index:
+  compose: [plans/compose-system, guides/score-composition-guide.md]
+  baton: [plans/architecture/2026-03-26-baton-design.md, plans/architecture/2026-04-08-baton-event-flow-unification.md]
+  conductor: [plans/infrastructure, plans/features/2026-04-07-intelligent-conductor-spec.md]
+  daemon: [plans/architecture/2026-03-26-daemon-only-architecture-design.md, plans/infrastructure]
+  dashboard: [plans/infrastructure/2026-02-23-dashboard-concert-overhaul-design.md, plans/infrastructure/2026-02-25-dashboard-daemon-data-bridge-design.md, plans/infrastructure/2026-03-26-dashboard-conductor-design.md]
+  instruments: [plans/architecture/2026-03-26-instrument-plugin-system-design.md, plans/features/2026-04-04-instrument-fallbacks-spec.md, research/2026-03-26-universal-instrument-api-research.md, specs/2026-04-13-instrument-forge-spec.md]
+  patterns: [guides/score-composition-guide.md]
+  quality: [plans/quality]
+  testing: [plans/quality/2026-03-26-testing-strategy-design.md, plans/quality/2026-02-24-qa-testing-overhaul-design.md]
+  safety: [plans/quality/2026-03-26-safety-hardening-design.md]
+  four-disciplines: [plans/four-disciplines]
+  rosetta: [plans/rosetta]
+  schema: [plans/architecture/2026-02-25-unified-schema-management-design.md]
+  libretto: [plans/architecture/2026-03-04-libretto-system-design.md]
+  state: [plans/architecture/2026-04-07-unified-state-spec.md]
+  learning: [plans/architecture/2026-03-26-learning-store-remediation-design.md]
+  observer: [plans/features/2026-02-24-observer-integration-design.md]
+  evolution: [plans/features/2026-02-24-evolution-concert-design.md]
+  iterative-dev: [plans/features/2026-03-08-iterative-dev-loop-design.md]
+  flowspec: [plans/features/2026-03-26-flowspec-integration-design.md, plans/features/2026-03-26-flowspec-findings-tracker.md]
+  issue-solver: [specs/2026-04-18-generic-issue-solver-design.md, plans/features/2026-02-14-issue-solver-design.md]
+  roadmap: [roadmap.md, plans/strategic/2026-04-19-project-roadmap.md, plans/strategic/2026-03-26-v1-beta-roadmap.md, plans/strategic/2026-02-14-roadmap-features.md]
+  documentation: [plans/strategic/2026-03-26-documentation-strategy-design.md, plans/strategic/2026-04-12-docs-reorganization-design.md]
+  cadenza: [plans/features/2026-04-08-directory-cadenza-spec.md]
+  auto-routing: [plans/features/2026-04-08-auto-routing-design.md]
+  agent-scores: [specs/2026-04-09-generic-agent-score-design.md, plans/features/2026-04-09-generic-agent-scores.md]
+  providers: [research/2026-03-26-multi-provider-abstraction-research.md, research/2026-03-26-provider-compliance.md]
+  config-reload: [plans/infrastructure/2026-02-23-config-reload-and-reconciliation-design.md, plans/infrastructure/2026-02-25-daemon-owned-hooks-and-config-reload-design.md]
+  workspace: [plans/architecture/2026-03-04-workspace-archaeology-design.md, plans/infrastructure/2026-02-25-workspace-independent-job-control-design.md]
+  scheduler: [plans/infrastructure/2026-03-26-scheduler-conductor-wiring-design.md]
+  rate-limiting: [plans/infrastructure/2026-04-08-rate-limit-intelligence.md, specs/2026-04-16-rate-limit-primary-design.md]
+  process-lifecycle: [specs/2026-04-16-process-lifecycle-design.md]
+  composition-compiler: [specs/2026-04-13-composition-compiler-design.md, research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]
+  a2a: [research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]
+  techniques: [research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]
+  mcp: [research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]
+  code-mode: [research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]
+  interface-generation: [research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]
+  capability-audit: [research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]
+  expressions: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  flow-control: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  triggers: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  loops: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md, plans/architecture/2026-03-26-score-looping-design.md]
+  cron: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  marianne-mozart: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  smart-conductor: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md, plans/features/2026-04-07-intelligent-conductor-spec.md]
+  validate: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  concierge: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  decision-authority: [specs/2026-04-17-baton-primitives-and-marianne-mozart-design.md]
+  iteration: [plans/features/2026-03-08-iterative-dev-loop-design.md, plans/features/2026-03-08-iterative-dev-loop-implementation.md]
+  memory: [specs/2026-04-19-marianne-memory-system-design.md, research/2026-04-18-marianne-memory-and-unconscious-research-dossier.md]
+  unconscious: [specs/2026-04-19-marianne-unconscious-local-model-design.md, research/2026-04-18-marianne-memory-and-unconscious-research-dossier.md]
+  local-model: [specs/2026-04-19-marianne-unconscious-local-model-design.md, research/2026-04-18-marianne-memory-and-unconscious-research-dossier.md]
+  handoffs: [handoffs]
