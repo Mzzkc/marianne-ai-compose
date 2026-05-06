@@ -1,0 +1,48 @@
+# Conductor Scheduler Block — 24x7-trader
+#
+# This is the canonical schedule per Feature 19 (#67). Add this to your
+# conductor.yaml under `scheduler:`. As of this score's publication
+# date, Feature 19 is on the roadmap but not yet shipped — see
+# `crontab.example` for the today-fallback using external cron.
+#
+# Once Feature 19 is live: `mzt config reload` after editing
+# conductor.yaml; the scheduler will register these cron entries
+# automatically.
+#
+# Times are UTC unless your conductor sets a TZ override. The schedule
+# below assumes the operator has set TZ=America/New_York at the
+# conductor level (the trading day is anchored to the US market).
+
+scheduler:
+  enabled: true
+  concerts:
+    # 06:00 weekdays — pre-market research and proposal generation
+    - score: examples/finance/24x7-trader/pre-market.yaml
+      cron: "0 6 * * 1-5"
+      description: "24x7-trader pre-market"
+
+    # 09:30 weekdays — adversarial review and execution
+    - score: examples/finance/24x7-trader/market-open.yaml
+      cron: "30 9 * * 1-5"
+      description: "24x7-trader market-open"
+
+    # 12:00 weekdays — midday position management
+    - score: examples/finance/24x7-trader/midday.yaml
+      cron: "0 12 * * 1-5"
+      description: "24x7-trader midday"
+
+    # 16:05 weekdays — daily close, journal, notify
+    - score: examples/finance/24x7-trader/market-close.yaml
+      cron: "5 16 * * 1-5"
+      description: "24x7-trader market-close"
+
+    # 16:30 Friday — weekly review
+    - score: examples/finance/24x7-trader/weekly-review.yaml
+      cron: "30 16 * * 5"
+      description: "24x7-trader weekly-review"
+
+  # Auto-fix is intentionally OFF for trading. A failed phase should
+  # surface to the operator, not be auto-patched. Trading isn't
+  # auto-fixable; we fail loudly.
+  auto_fix:
+    enabled: false

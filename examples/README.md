@@ -25,8 +25,9 @@ mzt run examples/getting-started/hello.yaml
 | [patterns](patterns/README.md) | Named Rosetta orchestration patterns: Immune Cascade, Echelon Repair, Source Triangulation, Dead Letter Quarantine, Prefabrication, Shipyard Sequence, Rashomon Gate | 7 | `shipyard-sequence.yaml` |
 | [product](product/README.md) | Candidate screening, contract generation, invoice analysis, marketing content | 4 | `candidate-screening.yaml` |
 | [advanced](advanced/README.md) | Explicit dependency DAGs, multi-instrument routing, echelon-tiered analysis, multi-source convergence | 2 | `instrument-showcase.yaml` |
+| [finance/24x7-trader](finance/24x7-trader/README.md) | **Flagship family.** Six scores operating an autonomous swing-trading agent: deterministic risk-envelope enforcement, three-frame Source Triangulation pre-market, Red Team / Blue Team adversarial review at the open, two-round Delphi weekly retros, file-based fermata. Vendor-neutral via technique contracts. Paper-safe by default. | 1 family (6 scores) | `finance/24x7-trader/README.md` |
 
-40 examples total across 7 categories.
+40 examples + 1 flagship family across 8 categories.
 
 ## Running Examples
 

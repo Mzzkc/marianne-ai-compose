@@ -1,0 +1,46 @@
+# crontab.example — 24x7-trader external scheduling
+#
+# Use this until Feature 19 (Conductor Scheduler) ships. After
+# customizing the path to your project root and the path to mzt,
+# install via `crontab -e` or place in /etc/cron.d/.
+#
+# Trading-day timezone:
+TZ=America/New_York
+
+# Replace these with absolute paths from your machine. Project root
+# is whatever directory contains examples/finance/24x7-trader/.
+# MZT is wherever your `mzt` binary lives. PROJECT must be an
+# absolute path because cron jobs run with HOME but no project CWD.
+
+# PROJECT=/home/USER/Projects/marianne-ai-compose
+# MZT=/home/USER/.local/bin/mzt
+
+# 06:00 weekdays — pre-market
+0  6 * * 1-5  cd $PROJECT && $MZT run examples/finance/24x7-trader/pre-market.yaml      >> $PROJECT/logs/24x7-pre-market.log      2>&1
+
+# 09:30 weekdays — market-open
+30 9 * * 1-5  cd $PROJECT && $MZT run examples/finance/24x7-trader/market-open.yaml     >> $PROJECT/logs/24x7-market-open.log     2>&1
+
+# 12:00 weekdays — midday
+0 12 * * 1-5  cd $PROJECT && $MZT run examples/finance/24x7-trader/midday.yaml          >> $PROJECT/logs/24x7-midday.log          2>&1
+
+# 16:05 weekdays — market-close
+5 16 * * 1-5  cd $PROJECT && $MZT run examples/finance/24x7-trader/market-close.yaml    >> $PROJECT/logs/24x7-market-close.log    2>&1
+
+# 16:30 Friday — weekly-review
+30 16 * * 5   cd $PROJECT && $MZT run examples/finance/24x7-trader/weekly-review.yaml   >> $PROJECT/logs/24x7-weekly-review.log   2>&1
+
+# Notes:
+# - Cron jobs run with a minimal environment. Source your secrets in
+#   /etc/cron.d via env-file or wrap each command in a shell that
+#   sources ~/.profile. The technique scripts read API keys from env
+#   vars (ALPACA_KEY, ALPACA_SECRET, PERPLEXITY_KEY, NOTIFY_*).
+#
+# - If the conductor isn't running when cron fires, `mzt run` will
+#   start a job that fails to register. Either keep `mzt start` running
+#   under a process supervisor (systemd, supervisord, launchd) or
+#   wrap each cron command with `mzt conductor-status >/dev/null ||
+#   $MZT start --detached;` before the run.
+#
+# - Logs append. Rotate them — the catalog issue tracker has filed
+#   at least one log-sprawl ticket; don't add to it.

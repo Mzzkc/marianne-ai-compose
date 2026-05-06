@@ -1,0 +1,836 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  24x7-trader / weekly-review                                                ║
+# ║                                                                              ║
+# ║  Patterns: Delphi Convergence (2 rounds) + Quorum Trigger + Sugya Weave    ║
+# ║                                                                              ║
+# ║  Friday post-mortem. Three reviewers from different model families do      ║
+# ║  Round 1 independently — each sees the same data, none see each other.     ║
+# ║  In Round 2, each sees the other two's Round 1 and refines (Delphi —       ║
+# ║  exposure without anchoring on a single chair). Synthesis (Sugya Weave)    ║
+# ║  produces an argued position with proposed strategy refinements. A         ║
+# ║  deterministic threshold check on drawdown and proposal magnitude          ║
+# ║  decides whether the result lands in the operator's mailbox or in the      ║
+# ║  fermata file (Quorum Trigger).                                            ║
+# ║                                                                              ║
+# ║  Inputs (workspace):                                                        ║
+# ║    - benchmarks.csv (full history)                                          ║
+# ║    - trade-log.jsonl (full history)                                         ║
+# ║    - journal/ (this week's entries)                                         ║
+# ║    - learnings.md, strategy.md, risk-envelope.yaml                          ║
+# ║                                                                              ║
+# ║  Outputs (workspace):                                                       ║
+# ║    - weekly-reviews/<DATE>-aggregate.md                                    ║
+# ║    - weekly-reviews/<DATE>-round1-{opus,gemini,glm}.md                     ║
+# ║    - weekly-reviews/<DATE>-round2-{opus,gemini,glm}.md                     ║
+# ║    - weekly-reviews/<DATE>-synthesis.md                                    ║
+# ║    - proposals/PENDING-COMPOSER-REVIEW.md (only if breach)                 ║
+# ║                                                                              ║
+# ║  Suggested cron: 16:30 Friday in market timezone (after close phase)        ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "24x7-trader-weekly-review"
+description: >
+  Weekly post-mortem. Two-round Delphi with three model families produces
+  a refined consensus; editorial synthesis takes a position; deterministic
+  threshold check writes the operator-fermata file when a drawdown or
+  strategy change requires composer review.
+
+workspace: "../../../workspaces/24x7-trader"
+
+workspace_lifecycle:
+  archive_on_fresh: false
+
+# Score-level default for non-reviewer sheets (1, 8, 9, 10).
+instrument: claude-code
+instrument_fallbacks: [opencode, gemini-cli]
+instrument_config:
+  skip_permissions: true
+  disable_mcp: true
+  timeout_seconds: 1500
+  allowed_tools: [Read, Write, Edit, Glob, Grep, Bash]
+
+# Three reviewers from different model families. Multi-family is the
+# point — correlated families share blind spots. Gemma is intentionally
+# omitted (per operator note: "if gemma is borked, you can ignore it").
+instruments:
+  scanner:
+    profile: claude-code
+    config:
+      timeout_seconds: 600
+      skip_permissions: true
+      disable_mcp: true
+  cli:
+    profile: cli
+  synthesizer:
+    profile: claude-code
+    config:
+      cli_model: claude-opus-4-7
+      timeout_seconds: 1800
+      skip_permissions: true
+      disable_mcp: true
+  reviewer-opus:
+    profile: claude-code
+    config:
+      cli_model: claude-opus-4-7
+      timeout_seconds: 1500
+      skip_permissions: true
+      disable_mcp: true
+  reviewer-gemini:
+    profile: gemini-cli
+    config:
+      cli_model: gemini-3.1-pro-preview
+      timeout_seconds: 1500
+      skip_permissions: true
+  reviewer-glm:
+    profile: opencode
+    config:
+      cli_model: zai-coding-plan/glm-5.1
+      timeout_seconds: 1500
+      skip_permissions: true
+
+movements:
+  1:
+    name: "Aggregate Week"
+    instrument: cli
+  2:
+    name: "Delphi Round 1 (independent)"
+    # per-sheet instruments below
+  3:
+    name: "Delphi Round 2 (exposed)"
+    # per-sheet instruments below
+  4:
+    name: "Synthesis"
+    instrument: synthesizer
+  5:
+    name: "Threshold Check"
+    instrument: cli
+  6:
+    name: "Fermata Gate"
+    instrument: scanner
+
+sheet:
+  size: 1
+  total_items: 6
+  fan_out:
+    2: 3
+    3: 3
+  # After fan-out expansion sheet numbers are:
+  #   stage 1 → sheet 1
+  #   stage 2 → sheets 2, 3, 4   (R1: opus / gemini / glm)
+  #   stage 3 → sheets 5, 6, 7   (R2: opus / gemini / glm)
+  #   stage 4 → sheet 8
+  #   stage 5 → sheet 9
+  #   stage 6 → sheet 10
+  instrument_map:
+    reviewer-opus: [2, 5]
+    reviewer-gemini: [3, 6]
+    reviewer-glm: [4, 7]
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+  prelude:
+    - file: "../../../examples/finance/24x7-trader/_libretto/trading-philosophy.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/glossary.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/operator-charter.md"
+      as: context
+    - file: "{{ workspace }}/02-strategy.md"
+      as: context
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 6000
+  lookback_sheets: 8
+  capture_files:
+    - "{{ workspace }}/weekly-reviews/today-aggregate.md"
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+retry:
+  max_retries: 1
+  base_delay_seconds: 60
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+  stagger_delay_ms: 500
+
+prompt:
+  variables:
+    reviewers:
+      1:
+        name: "opus"
+        model: "Claude Opus 4.7 (Anthropic)"
+        focus: "Strategy adherence: did the agent follow its written charter? Where did it deviate, and was the deviation justified by evidence or by drift?"
+      2:
+        name: "gemini"
+        model: "Gemini 3.1 Pro (Google)"
+        focus: "Market regime alignment: was this week's strategy appropriate for the actual macro/sector regime that obtained? What regime shift, if any, did the agent miss?"
+      3:
+        name: "glm"
+        model: "GLM 5.1 (Z.AI)"
+        focus: "Risk discipline: were stops respected? Was sizing within tier rules? Did the envelope hold? Are there discipline patterns repeating across weeks?"
+
+  template: |
+    {# ── Stage 1: Aggregate Week (deterministic) ──────────────────────────── #}
+    {% if stage == 1 %}
+    # Weekly Review — Stage 1: Aggregate Week
+
+    ## Fermata check (HALT IF PRESENT)
+
+    ```bash
+    if [[ -f {{ workspace }}/proposals/PENDING-COMPOSER-REVIEW.md ]]; then
+      echo "FERMATA: PENDING-COMPOSER-REVIEW.md already exists — halting weekly-review (the stage-6 fermata-write would overwrite operator context)" >&2
+      exit 1
+    fi
+    ```
+
+    ## Pull this week's data
+
+    Produce a deterministic aggregate document that the three reviewers
+    will all consume.
+
+    ```bash
+    set -e
+    today=$(date +%F)
+    echo "$today" > {{ workspace }}/today-date.txt
+    mkdir -p {{ workspace }}/weekly-reviews
+
+    # Determine the week window (today is end-of-week; go back 7 calendar days
+    # so we include Mon-Fri of this trading week)
+    week_start=$(date -d "$today -6 days" +%F)
+    echo "$week_start" > {{ workspace }}/today-week-start.txt
+
+    # Aggregate benchmarks for the week
+    python3 - <<'PY' > {{ workspace }}/today-week-stats.json
+    import csv, json
+    today = open('{{ workspace }}/today-date.txt').read().strip()
+    week_start = open('{{ workspace }}/today-week-start.txt').read().strip()
+    rows = []
+    with open('{{ workspace }}/benchmarks.csv') as f:
+        for r in csv.DictReader(f):
+            if week_start <= r['date'] <= today:
+                rows.append(r)
+    if not rows:
+        json.dump({'week_start': week_start, 'week_end': today, 'rows': [], 'note': 'no benchmark data'}, __import__('sys').stdout)
+    else:
+        first = rows[0]; last = rows[-1]
+        first_total = float(first['total']); last_total = float(last['total'])
+        first_spy = float(first['spy_close']) if first.get('spy_close') else None
+        last_spy = float(last['spy_close']) if last.get('spy_close') else None
+        peak = max(float(r['total']) for r in rows)
+        weekly_drawdown = 100.0 * (peak - last_total) / peak if peak else 0.0
+        portfolio_change = 100.0 * (last_total - first_total) / first_total if first_total else 0.0
+        spy_change = 100.0 * (last_spy - first_spy) / first_spy if (first_spy and last_spy) else 0.0
+        out = {
+            'week_start': week_start, 'week_end': today,
+            'rows': rows,
+            'portfolio_change_pct': portfolio_change,
+            'spy_change_pct': spy_change,
+            'rel_to_spy_pct': portfolio_change - spy_change,
+            'weekly_drawdown_pct': weekly_drawdown,
+            'rows_count': len(rows),
+        }
+        json.dump(out, __import__('sys').stdout, indent=2)
+    PY
+
+    # Aggregate trades for the week
+    python3 - <<'PY' > {{ workspace }}/today-week-trades.json
+    import json
+    today = open('{{ workspace }}/today-date.txt').read().strip()
+    week_start = open('{{ workspace }}/today-week-start.txt').read().strip()
+    trades = []
+    try:
+        with open('{{ workspace }}/trade-log.jsonl') as f:
+            for line in f:
+                line = line.strip()
+                if not line: continue
+                t = json.loads(line)
+                ts = t.get('ts', '') or t.get('date', '')
+                if week_start <= ts[:10] <= today:
+                    trades.append(t)
+    except FileNotFoundError:
+        pass
+    json.dump({'week_start': week_start, 'week_end': today, 'count': len(trades), 'trades': trades}, __import__('sys').stdout, indent=2)
+    PY
+
+    # Concatenate journals
+    : > {{ workspace }}/today-week-journals.md
+    for f in {{ workspace }}/journal/*.md; do
+      [[ -f "$f" ]] || continue
+      base=$(basename "$f" .md)
+      datepart=${base%-*}
+      if [[ "$datepart" > "$week_start" || "$datepart" == "$week_start" ]] && [[ "$datepart" < "$today" || "$datepart" == "$today" ]]; then
+        echo "## ${base}" >> {{ workspace }}/today-week-journals.md
+        cat "$f"           >> {{ workspace }}/today-week-journals.md
+        echo               >> {{ workspace }}/today-week-journals.md
+      fi
+    done
+    ```
+
+    Now write the aggregate document the reviewers will read:
+
+    `{{ workspace }}/weekly-reviews/today-aggregate.md`:
+
+    - `## Week Window` — week_start to week_end
+    - `## Numbers` — full week stats from `today-week-stats.json` (table)
+    - `## Trades This Week` — count, breakdown by side, by tier; full
+      trade list table from `today-week-trades.json`
+    - `## Drawdown` — weekly drawdown pct + the envelope's halt threshold
+      (from risk-envelope.yaml)
+    - `## Strategy Version` — first 5 lines of `02-strategy.md` for
+      version reference
+    - `## Charter Snippet` — `## Sovereign Operator Rules` from strategy
+    - `## This Week's Journals` — concat from `today-week-journals.md`
+    - `## Operator's Tracked Questions` — copy "What I'm trying to
+      learn" from operator-charter.md, three items
+    - `## Active Learnings (current)` — current `learnings.md` "Hot"
+      section
+
+    Length: as long as the data warrants. The point is reviewers see
+    everything in one place.
+
+    Also save dated copy:
+
+    ```bash
+    cp {{ workspace }}/weekly-reviews/today-aggregate.md \
+       {{ workspace }}/weekly-reviews/$(cat {{ workspace }}/today-date.txt)-aggregate.md
+    ```
+
+    {# ── Stage 2: Delphi Round 1 (independent) ────────────────────────────── #}
+    {% elif stage == 2 %}
+    {% set r = reviewers[instance] %}
+    # Weekly Review — Round 1: {{ r.name | upper }} ({{ r.model }})
+
+    You are reviewer **{{ r.name }}** running on **{{ r.model }}**.
+
+    This is Round 1. You will not see other reviewers' work yet. That's
+    intentional — independence in Round 1 prevents anchoring on a single
+    chair's framing.
+
+    Read `{{ workspace }}/weekly-reviews/today-aggregate.md` carefully.
+
+    ## Your specialty
+
+    {{ r.focus }}
+
+    Other reviewers handle the other dimensions. Stay in your lane in
+    Round 1 — you'll get to push back and integrate in Round 2.
+
+    ## Your tasks
+
+    For each of the operator's three tracked questions (in the
+    aggregate's "Operator's Tracked Questions" section), answer from
+    your specialty. Cite the data.
+
+    Then produce a per-week assessment from your specialty:
+
+    1. **Verdict** for the week: HEALTHY / MIXED / CONCERNING / BREACHED
+       (BREACHED means the strategy or envelope was violated in a way
+       that needs operator action.)
+    2. **Three concrete observations** the operator should know.
+    3. **One specific change you would propose** to the strategy or
+       envelope to address something this week revealed. (Or "no change
+       proposed" — that's a valid answer.)
+    4. **Confidence** — HIGH / MEDIUM / LOW for your verdict.
+
+    ## Output
+
+    Write `{{ workspace }}/weekly-reviews/today-round1-{{ r.name }}.md`:
+
+    - `## Reviewer` — name + model
+    - `## Specialty Lens` — your focus area
+    - `## Operator Tracked Questions` — answers from your specialty
+    - `## Verdict` — HEALTHY/MIXED/CONCERNING/BREACHED with reasoning
+    - `## Three Observations`
+    - `## Proposed Change` — specific text changes to strategy.md or
+      risk-envelope.yaml, with line-level specificity if possible.
+      If no change, say "No change proposed."
+    - `## Confidence`
+
+    Length: 400–800 words. The aggregate gives you data; reasoning is
+    your value.
+
+    {# ── Stage 3: Delphi Round 2 (exposed) ────────────────────────────────── #}
+    {% elif stage == 3 %}
+    {% set r = reviewers[instance] %}
+    # Weekly Review — Round 2: {{ r.name | upper }}
+
+    You are reviewer **{{ r.name }}** again. Round 2.
+
+    You may now see the other reviewers' Round 1 outputs:
+    - `{{ workspace }}/weekly-reviews/today-round1-opus.md`
+    - `{{ workspace }}/weekly-reviews/today-round1-gemini.md`
+    - `{{ workspace }}/weekly-reviews/today-round1-glm.md`
+
+    Your own Round 1 is one of these — read the OTHER two carefully.
+
+    ## Tasks
+
+    1. **What did the others see that you missed?** Be specific. If they
+       were wrong, say why with evidence.
+
+    2. **Where do all three converge?** Cross-reviewer convergence in
+       isolated R1 is real signal. Note these explicitly.
+
+    3. **Where do you and another reviewer disagree?** Don't smooth it
+       over. Find the cleanest disagreement and articulate the crux.
+
+    4. **Refine your Round 1 verdict.** It may be the same. It may
+       change. State which and why.
+
+    5. **Refine your proposed change.** If others' findings make your
+       change incomplete or unnecessary, say so. If their findings
+       reinforce yours, say that too.
+
+    ## Output
+
+    Write `{{ workspace }}/weekly-reviews/today-round2-{{ r.name }}.md`:
+
+    - `## Reviewer`
+    - `## What I Missed in R1` — what other reviewers saw that I didn't
+    - `## Cross-Reviewer Convergences` — bullets, with citations
+    - `## Crux Disagreements` — at most two, articulated
+    - `## Refined Verdict` — vs R1
+    - `## Refined Proposed Change`
+    - `## Confidence (R2)`
+
+    Length: 300–600 words. Round 2 is refinement, not re-statement.
+
+    {# ── Stage 4: Synthesis (Sugya Weave) ─────────────────────────────────── #}
+    {% elif stage == 4 %}
+    # Weekly Review — Stage 4: Synthesis
+
+    You are the editorial synthesizer. Read all six review files:
+
+    - R1: `{{ workspace }}/weekly-reviews/today-round1-opus.md`
+    - R1: `{{ workspace }}/weekly-reviews/today-round1-gemini.md`
+    - R1: `{{ workspace }}/weekly-reviews/today-round1-glm.md`
+    - R2: `{{ workspace }}/weekly-reviews/today-round2-opus.md`
+    - R2: `{{ workspace }}/weekly-reviews/today-round2-gemini.md`
+    - R2: `{{ workspace }}/weekly-reviews/today-round2-glm.md`
+
+    Plus the aggregate at `{{ workspace }}/weekly-reviews/today-aggregate.md`.
+
+    ## Your task
+
+    Take a position. Argue for it. Editorial synthesis means an argued
+    case, not a neutral aggregation.
+
+    1. **Cross-reviewer convergences** — name them. These are the
+       strongest signals. State what all three independently saw.
+    2. **Crux disagreements** — name them. For each, state which side
+       you're taking and why, citing evidence.
+    3. **Verdict** — single classification: HEALTHY / MIXED / CONCERNING
+       / BREACHED. Final, not hedged.
+    4. **Proposed strategy refinements** — list, ranked by importance.
+       Each refinement is a specific edit to `02-strategy.md` or
+       `risk-envelope.yaml`. Include line-level proposed text.
+    5. **Drawdown / discipline notes** — explicit drawdown number from
+       the aggregate; envelope halt threshold; status.
+    6. **Operator-tracked questions** — your synthesized answers to the
+       three questions the operator wants tracked.
+    7. **What the agent should learn** — a one-paragraph proposed
+       addition to `learnings.md` if and only if you can articulate it as
+       WHEN-THEN-BECAUSE. Otherwise: "No new learning earned this week."
+
+    ## Output
+
+    Write `{{ workspace }}/weekly-reviews/today-synthesis.md`. Length
+    700–1500 words. Take a position. Hedging is failure here.
+
+    Also write `{{ workspace }}/weekly-reviews/today-decision.json`:
+
+    ```json
+    {
+      "date": "...",
+      "verdict": "HEALTHY|MIXED|CONCERNING|BREACHED",
+      "weekly_drawdown_pct": <from aggregate>,
+      "drawdown_halt_threshold_pct": <from envelope>,
+      "drawdown_breached": true|false,
+      "proposed_changes": [
+        {"target": "strategy.md|risk-envelope.yaml", "summary": "...", "rank": 1}
+      ],
+      "proposed_learning": "WHEN... THEN... BECAUSE..." | null
+    }
+    ```
+
+    {# ── Stage 5: Threshold Check (Quorum Trigger) ────────────────────────── #}
+    {% elif stage == 5 %}
+    # Weekly Review — Stage 5: Threshold Check
+
+    Deterministic check. The drawdown number is read from the **deterministic
+    aggregate** at `today-week-stats.json`, NOT from the synthesizer's
+    decision JSON — the synthesizer is an LLM and cannot be trusted with
+    safety-critical numbers. We additionally cross-check that the
+    synthesizer's reported drawdown matches the deterministic source within
+    a small tolerance; mismatch is itself a failure.
+
+    Strategy-change detection scans the synthesis MARKDOWN for proposed
+    edits to `strategy.md` or `risk-envelope.yaml` (not just the
+    decision JSON's structured field), so the synthesizer can't dodge
+    fermata by suppressing the structured field while writing changes
+    in prose.
+
+    ```bash
+    set -e
+    python3 - <<'PY' > {{ workspace }}/weekly-reviews/today-threshold.json
+    import json, sys, re
+    week_stats = json.load(open('{{ workspace }}/today-week-stats.json'))
+    decision   = json.load(open('{{ workspace }}/weekly-reviews/today-decision.json'))
+    envelope   = __import__('yaml').safe_load(open('{{ workspace }}/risk-envelope.yaml'))
+    synthesis_md = open('{{ workspace }}/weekly-reviews/today-synthesis.md').read()
+
+    # Deterministic drawdown — TRUSTED source.
+    drawdown = float(week_stats.get('weekly_drawdown_pct', 0.0))
+    threshold = float(envelope['caps'].get('weekly_drawdown_halt_pct', 100))
+    drawdown_breached = drawdown >= threshold
+
+    # Cross-check synthesizer's drawdown vs deterministic. If they disagree by
+    # more than 0.1%, the synthesizer hallucinated — treat as breach.
+    decision_drawdown = float(decision.get('weekly_drawdown_pct', 0.0))
+    drawdown_mismatch = abs(decision_drawdown - drawdown) > 0.1
+    if drawdown_mismatch:
+        # Override decision verdict if synthesizer mis-reported the safety number
+        pass  # captured in the output
+
+    # Strategy change detection — TWO sources:
+    #   (a) the structured proposed_changes field in decision.json
+    #   (b) keyword scan of the synthesis markdown for edits/refinements
+    #       targeting strategy.md or risk-envelope.yaml
+    structured_changes = decision.get('proposed_changes', []) or []
+    has_structured_change = any(
+        c.get('target', '') in ('strategy.md', 'risk-envelope.yaml')
+        for c in structured_changes
+    )
+    md_change_pattern = re.compile(
+        r'(?i)(?:edit|change|adjust|update|widen|tighten|raise|lower|propose|recommend).{0,80}(strategy\.md|risk[- ]envelope\.yaml|\\bcaps?\\b|trailing[_ ]stop|per[_ ]position[_ ]pct|cash[_ ]floor|sector[_ ]cap)'
+    )
+    has_md_change = bool(md_change_pattern.search(synthesis_md))
+    has_strategy_change = has_structured_change or has_md_change
+
+    verdict = decision.get('verdict', 'MIXED')
+    verdict_breached = verdict == 'BREACHED'
+
+    fermata_required = drawdown_breached or verdict_breached or has_strategy_change or drawdown_mismatch
+
+    out = {
+        'drawdown_pct': drawdown,                                  # TRUSTED
+        'drawdown_threshold_pct': threshold,
+        'drawdown_breached': drawdown_breached,
+        'decision_drawdown_pct': decision_drawdown,                # synthesizer-reported
+        'drawdown_mismatch': drawdown_mismatch,
+        'verdict': verdict,
+        'verdict_breached': verdict_breached,
+        'has_structured_change': has_structured_change,
+        'has_md_change': has_md_change,
+        'has_strategy_change': has_strategy_change,
+        'fermata_required': fermata_required,
+        'reasons': []
+    }
+    if drawdown_breached:    out['reasons'].append(f'weekly drawdown {drawdown:.2f}% >= halt threshold {threshold}%')
+    if drawdown_mismatch:    out['reasons'].append(f'synthesis drawdown {decision_drawdown:.2f}% disagrees with deterministic {drawdown:.2f}% by >0.1%')
+    if verdict_breached:     out['reasons'].append('synthesis verdict is BREACHED')
+    if has_structured_change:out['reasons'].append(f'{len(structured_changes)} structured change(s) require operator approval')
+    if has_md_change and not has_structured_change:
+        out['reasons'].append('synthesis markdown proposes strategy/envelope edits not in structured field')
+
+    json.dump(out, sys.stdout, indent=2)
+    PY
+
+    cat {{ workspace }}/weekly-reviews/today-threshold.json
+    ```
+
+    {# ── Stage 6: Fermata Gate ────────────────────────────────────────────── #}
+    {% elif stage == 6 %}
+    # Weekly Review — Stage 6: Fermata Gate
+
+    Read the threshold result. If breach, write the operator-fermata
+    file and notify URGENTLY. Otherwise, write the regular weekly note
+    and notify daily channel.
+
+    ```bash
+    set -e
+    today=$(cat {{ workspace }}/today-date.txt)
+    : "${NOTIFY_CMD:?NOTIFY_CMD must be an absolute path}"
+    NOTIFY="$NOTIFY_CMD"
+    [[ -x "$NOTIFY" ]] || { echo "NOTIFY_CMD not executable: $NOTIFY" >&2; exit 1; }
+
+    # Save dated synthesis
+    cp {{ workspace }}/weekly-reviews/today-synthesis.md \
+       {{ workspace }}/weekly-reviews/${today}-synthesis.md
+    cp {{ workspace }}/weekly-reviews/today-decision.json \
+       {{ workspace }}/weekly-reviews/${today}-decision.json
+    cp {{ workspace }}/weekly-reviews/today-threshold.json \
+       {{ workspace }}/weekly-reviews/${today}-threshold.json
+
+    fermata=$(python3 -c "import json; print(json.load(open('{{ workspace }}/weekly-reviews/today-threshold.json'))['fermata_required'])")
+
+    if [[ "$fermata" == "True" ]]; then
+      # Compose PENDING-COMPOSER-REVIEW.md via Python (NOT a heredoc — synthesis
+      # markdown is agent-authored and must NOT be evaluated as shell code).
+      # Write atomically: temp file, then rename.
+      python3 - <<'PY'
+      import json, datetime, os, tempfile
+      ws = '{{ workspace }}'
+      threshold = open(f'{ws}/weekly-reviews/today-threshold.json').read()
+      synthesis = open(f'{ws}/weekly-reviews/today-synthesis.md').read()
+      created = datetime.datetime.now().astimezone().isoformat(timespec='seconds')
+      body = (
+          "# PENDING-COMPOSER-REVIEW\n\n"
+          f"**Created:** {created}\n"
+          "**By:** weekly-review.yaml\n"
+          "**Reason:** see threshold notes below\n\n"
+          "ALL EXECUTION PHASES (pre-market, market-open, midday, "
+          "market-close, weekly-review) WILL HALT AT STAGE 1 UNTIL THIS "
+          "FILE IS DELETED OR RENAMED BY THE OPERATOR.\n\n"
+          "## Threshold Result\n\n"
+          "```json\n" + threshold + "\n```\n\n"
+          "## Synthesis (full)\n\n" + synthesis + "\n\n"
+          "## Operator Action Required\n\n"
+          "Read the synthesis. Approve, reject, or modify proposed changes "
+          "by editing strategy.md / risk-envelope.yaml directly. Then "
+          "DELETE this file (`rm proposals/PENDING-COMPOSER-REVIEW.md`) "
+          "to allow phases to resume.\n"
+      )
+      target = f'{ws}/proposals/PENDING-COMPOSER-REVIEW.md'
+      tmp = target + '.tmp'
+      with open(tmp, 'w') as f:
+          f.write(body)
+      os.rename(tmp, target)  # atomic on POSIX
+      PY
+
+      "$NOTIFY" urgent "WEEKLY REVIEW: COMPOSER ACTION REQUIRED ($today)" \
+        {{ workspace }}/proposals/PENDING-COMPOSER-REVIEW.md
+    else
+      "$NOTIFY" weekly "Weekly review: $today (no action required)" \
+        {{ workspace }}/weekly-reviews/${today}-synthesis.md
+    fi
+    ```
+
+    {% endif %}
+
+validations:
+  # ── Stage 1: Fermata gate (validation backstop) ──
+  - type: command_succeeds
+    command: 'test ! -f "{workspace}/proposals/PENDING-COMPOSER-REVIEW.md"'
+    condition: "stage == 1"
+    stage: 1
+    description: "Fermata file does not exist (operator review pending halts the weekly review too — its fermata-write would overwrite operator context)"
+    retry_count: 0
+  # ── Stage 1: Aggregate ──
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-aggregate.md"
+    condition: "stage == 1"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/today-week-stats.json"
+    condition: "stage == 1"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/today-week-trades.json"
+    condition: "stage == 1"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      s = json.load(open('{workspace}/today-week-stats.json'))
+      assert 'week_start' in s and 'week_end' in s
+      "
+    condition: "stage == 1"
+    stage: 2
+    description: "Week stats has window"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/weekly-reviews/today-aggregate.md") -ge 300'
+    condition: "stage == 1"
+    stage: 2
+    description: "Aggregate is substantive (300+ words)"
+
+  # ── Stage 2: Round 1 (3 sheets, one per reviewer) ──
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-round1-opus.md"
+    sheet: 2
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-round1-gemini.md"
+    sheet: 3
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-round1-glm.md"
+    sheet: 4
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round1-opus.md"
+    pattern: "(?i)## Verdict"
+    sheet: 2
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round1-gemini.md"
+    pattern: "(?i)## Verdict"
+    sheet: 3
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round1-glm.md"
+    pattern: "(?i)## Verdict"
+    sheet: 4
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round1-opus.md"
+    pattern: "(?i)(HEALTHY|MIXED|CONCERNING|BREACHED)"
+    sheet: 2
+    stage: 2
+    description: "Opus R1 has a classified verdict"
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round1-gemini.md"
+    pattern: "(?i)(HEALTHY|MIXED|CONCERNING|BREACHED)"
+    sheet: 3
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round1-glm.md"
+    pattern: "(?i)(HEALTHY|MIXED|CONCERNING|BREACHED)"
+    sheet: 4
+    stage: 2
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/weekly-reviews/today-round1-opus.md") -ge 250'
+    sheet: 2
+    stage: 3
+    description: "Opus R1 is substantive"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/weekly-reviews/today-round1-gemini.md") -ge 250'
+    sheet: 3
+    stage: 3
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/weekly-reviews/today-round1-glm.md") -ge 250'
+    sheet: 4
+    stage: 3
+
+  # ── Stage 3: Round 2 (3 sheets) ──
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-round2-opus.md"
+    sheet: 5
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-round2-gemini.md"
+    sheet: 6
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-round2-glm.md"
+    sheet: 7
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round2-opus.md"
+    pattern: "(?i)## Refined Verdict"
+    sheet: 5
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round2-gemini.md"
+    pattern: "(?i)## Refined Verdict"
+    sheet: 6
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round2-glm.md"
+    pattern: "(?i)## Refined Verdict"
+    sheet: 7
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round2-opus.md"
+    pattern: "(?i)## (Cross-Reviewer Convergences|Crux Disagreements)"
+    sheet: 5
+    stage: 2
+    description: "Opus R2 references convergences/disagreements (proves they read others)"
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round2-gemini.md"
+    pattern: "(?i)## (Cross-Reviewer Convergences|Crux Disagreements)"
+    sheet: 6
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-round2-glm.md"
+    pattern: "(?i)## (Cross-Reviewer Convergences|Crux Disagreements)"
+    sheet: 7
+    stage: 2
+
+  # ── Stage 4: Synthesis ──
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-synthesis.md"
+    condition: "stage == 4"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-decision.json"
+    condition: "stage == 4"
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-synthesis.md"
+    pattern: "(?i)(HEALTHY|MIXED|CONCERNING|BREACHED)"
+    condition: "stage == 4"
+    stage: 2
+    description: "Synthesis takes a verdict position"
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-synthesis.md"
+    pattern: "(?i)## (Cross-Reviewer Convergences|Convergence)"
+    condition: "stage == 4"
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/weekly-reviews/today-synthesis.md"
+    pattern: "(?i)## (Crux Disagreements|Tension|Disagreement)"
+    condition: "stage == 4"
+    stage: 2
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      d = json.load(open('{workspace}/weekly-reviews/today-decision.json'))
+      assert d['verdict'] in ('HEALTHY','MIXED','CONCERNING','BREACHED')
+      assert isinstance(d.get('proposed_changes', []), list)
+      assert 'weekly_drawdown_pct' in d
+      "
+    condition: "stage == 4"
+    stage: 2
+    description: "Synthesis decision JSON well-formed"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/weekly-reviews/today-synthesis.md") -ge 700'
+    condition: "stage == 4"
+    stage: 3
+    description: "Synthesis is substantive (700+ words)"
+
+  # ── Stage 5: Threshold Check ──
+  - type: file_exists
+    path: "{workspace}/weekly-reviews/today-threshold.json"
+    condition: "stage == 5"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      t = json.load(open('{workspace}/weekly-reviews/today-threshold.json'))
+      for k in ('drawdown_pct','drawdown_threshold_pct','drawdown_breached','verdict_breached','has_strategy_change','fermata_required','reasons'):
+          assert k in t, f'missing {k}'
+      "
+    condition: "stage == 5"
+    stage: 2
+    description: "Threshold JSON has all required fields"
+
+  # ── Stage 6: Fermata Gate ──
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); test -f "{workspace}/weekly-reviews/${today}-synthesis.md"'
+    condition: "stage == 6"
+    stage: 1
+    description: "Dated synthesis archived"
+  - type: command_succeeds
+    command: |
+      fermata=$(python3 -c "import json; print(json.load(open('{workspace}/weekly-reviews/today-threshold.json'))['fermata_required'])")
+      if [[ "$fermata" == "True" ]]; then
+        test -f "{workspace}/proposals/PENDING-COMPOSER-REVIEW.md" || { echo "fermata required but file not written" >&2; exit 1; }
+      else
+        # Not required to exist; if it does, it's pre-existing (not from this run)
+        true
+      fi
+    condition: "stage == 6"
+    stage: 2
+    description: "If threshold breach, PENDING-COMPOSER-REVIEW.md was written"

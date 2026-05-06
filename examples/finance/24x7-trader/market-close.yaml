@@ -1,0 +1,347 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  24x7-trader / market-close                                                 ║
+# ║                                                                              ║
+# ║  Patterns: After-Action Review + Tool Chain                                 ║
+# ║                                                                              ║
+# ║  Daily P&L computation, journal, notify. Deterministic capture (Tool       ║
+# ║  Chain) feeds an interpretive reflection (AAR reflect), then an append     ║
+# ║  to benchmarks.csv (AAR record). Notify is the technique-contract call    ║
+# ║  out the door.                                                              ║
+# ║                                                                              ║
+# ║  Inputs (workspace):                                                        ║
+# ║    - positions.json, trade-log.jsonl, journal/today-*.md                   ║
+# ║    - benchmarks.csv (history)                                               ║
+# ║                                                                              ║
+# ║  Outputs (workspace):                                                       ║
+# ║    - journal/<DATE>-close.md                                               ║
+# ║    - benchmarks.csv (appended)                                              ║
+# ║                                                                              ║
+# ║  Suggested cron: 16:05 weekdays in market timezone (after close)            ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "24x7-trader-market-close"
+description: >
+  Daily close: deterministic P&L vs SPY, interpretive journal, benchmark
+  append, notify. After-Action Review with a deterministic capture stage.
+
+workspace: "../../../workspaces/24x7-trader"
+
+workspace_lifecycle:
+  archive_on_fresh: false
+
+instrument: claude-code
+instrument_fallbacks: [opencode, gemini-cli]
+instrument_config:
+  skip_permissions: true
+  disable_mcp: true
+  timeout_seconds: 1200
+  allowed_tools: [Read, Write, Edit, Glob, Grep, Bash]
+
+instruments:
+  scanner:
+    profile: claude-code
+    config:
+      timeout_seconds: 600
+      skip_permissions: true
+      disable_mcp: true
+  analyst:
+    profile: claude-code
+    config:
+      timeout_seconds: 1200
+      skip_permissions: true
+      disable_mcp: true
+  cli:
+    profile: cli
+
+movements:
+  1:
+    name: "Capture (deterministic)"
+    instrument: cli
+  2:
+    name: "Reflect (journal)"
+    instrument: analyst
+  3:
+    name: "Record (append benchmarks)"
+    instrument: scanner
+  4:
+    name: "Notify"
+    instrument: cli
+
+sheet:
+  size: 1
+  total_items: 4
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+  prelude:
+    - file: "../../../examples/finance/24x7-trader/_libretto/trading-philosophy.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/glossary.md"
+      as: context
+    - file: "{{ workspace }}/02-strategy.md"
+      as: context
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 4000
+  lookback_sheets: 4
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1200
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+prompt:
+  template: |
+    {# ── Stage 1: Capture ─────────────────────────────────────────────────── #}
+    {% if stage == 1 %}
+    # Market-Close — Stage 1: Capture
+
+    ## Bootstrap precondition check
+
+    ```bash
+    [[ -f {{ workspace }}/02-strategy.md ]]    || { echo "FAIL: bootstrap not run" >&2; exit 1; }
+    [[ -f {{ workspace }}/risk-envelope.yaml ]] || { echo "FAIL: risk-envelope.yaml missing" >&2; exit 1; }
+    ```
+
+    ## Capture
+
+    ```bash
+    set -e
+    today=$(date +%F)
+    echo "$today" > {{ workspace }}/today-date.txt
+    : "${BROKER_CMD:?BROKER_CMD must be an absolute path}"
+    : "${BENCHMARK_CMD:?BENCHMARK_CMD must be an absolute path}"
+    BROKER="$BROKER_CMD"
+    BENCHMARK="$BENCHMARK_CMD"
+    [[ -x "$BROKER" ]]    || { echo "BROKER_CMD not executable: $BROKER" >&2; exit 1; }
+    [[ -x "$BENCHMARK" ]] || { echo "BENCHMARK_CMD not executable: $BENCHMARK" >&2; exit 1; }
+
+    # Refresh positions and balance
+    "$BROKER" get_positions > {{ workspace }}/positions.json
+    "$BROKER" get_balance > {{ workspace }}/today-close-balance.json
+
+    # Compute portfolio total
+    "$BENCHMARK" portfolio_value --workspace {{ workspace }} > {{ workspace }}/today-close-portfolio.json
+
+    # SPY close
+    "$BENCHMARK" spy_close --date "$today" > {{ workspace }}/today-close-spy.json
+
+    # Daily delta computation — read last benchmark row, compute pct changes
+    python3 - <<'PY' > {{ workspace }}/today-close-stats.json
+    import json, csv, sys
+    today = open('{{ workspace }}/today-date.txt').read().strip()
+    pf = json.load(open('{{ workspace }}/today-close-portfolio.json'))
+    spy = json.load(open('{{ workspace }}/today-close-spy.json'))
+
+    # Load history
+    rows = []
+    try:
+        with open('{{ workspace }}/benchmarks.csv') as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+    except FileNotFoundError:
+        pass
+
+    # Compute deltas vs previous row (if any)
+    prev = rows[-1] if rows else None
+    today_total = pf['total']
+    today_spy = spy['close']
+    if prev:
+        prev_total = float(prev['total'])
+        prev_spy = float(prev['spy_close']) if prev.get('spy_close') else None
+        pf_change = 100.0 * (today_total - prev_total) / prev_total if prev_total else 0.0
+        spy_change = 100.0 * (today_spy - prev_spy) / prev_spy if prev_spy else 0.0
+    else:
+        pf_change = 0.0
+        spy_change = 0.0
+
+    # Compute trailing drawdown over all history
+    if rows:
+        totals = [float(r['total']) for r in rows] + [today_total]
+        peak = max(totals)
+        drawdown = 100.0 * (peak - today_total) / peak if peak else 0.0
+    else:
+        drawdown = 0.0
+
+    out = {
+        'date': today,
+        'equity': pf['equity'],
+        'cash': pf['cash'],
+        'total': today_total,
+        'spy_close': today_spy,
+        'portfolio_pct_change_today': pf_change,
+        'spy_pct_change_today': spy_change,
+        'rel_to_spy_today': pf_change - spy_change,
+        'drawdown_pct': drawdown,
+        'positions_count': pf['positions_count'],
+    }
+    json.dump(out, sys.stdout, indent=2)
+    PY
+
+    cat {{ workspace }}/today-close-stats.json
+    ```
+
+    The output of this stage is `today-close-stats.json` — pure
+    deterministic numbers. No interpretation here.
+
+    {# ── Stage 2: Reflect ─────────────────────────────────────────────────── #}
+    {% elif stage == 2 %}
+    # Market-Close — Stage 2: Reflect
+
+    Read:
+    - `{{ workspace }}/today-close-stats.json` (the numbers)
+    - `{{ workspace }}/journal/today-open.md` (or similarly-dated file)
+    - `{{ workspace }}/journal/today-midday.md` (or similar)
+    - `{{ workspace }}/research-log/today-summary.md` (or similar)
+    - `{{ workspace }}/trade-log.jsonl` (today's tail — `grep $today`)
+
+    Write `{{ workspace }}/journal/$(cat {{ workspace }}/today-date.txt)-close.md`:
+
+    - `## Date`
+    - `## Numbers` — equity, cash, total, daily change %, vs-SPY, drawdown
+    - `## What I Did Today` — concise list referencing today's open and
+      midday journals
+    - `## What Worked` — specific. "Cutting NVDA at the stop saved $X
+      relative to where it closed." OR "Skipped a LOW-tier trade that
+      underperformed SPY."
+    - `## What Surprised Me` — the most important section. If nothing
+      surprised the agent, it wasn't paying attention. If the day was
+      genuinely uneventful, surface a structural observation about the
+      tape that would have been a surprise had a position depended on it.
+    - `## Reads That Proved Wrong` — name the specific frame and the
+      specific call. The technical frame thought a stop at $X was right;
+      it was wrong because Y. Don't be diplomatic.
+    - `## Lessons for Tomorrow` — one or two things the next pre-market
+      should incorporate. These do NOT auto-promote into learnings.md;
+      that's the operator's job. But they're flagged for the weekly review
+      to consider.
+
+    No padding. 250–600 words. The journal is a record, not an essay.
+
+    {# ── Stage 3: Record (append benchmarks) ──────────────────────────────── #}
+    {% elif stage == 3 %}
+    # Market-Close — Stage 3: Record
+
+    Append today's stats to the benchmarks.csv. Pure deterministic.
+
+    ```bash
+    set -e
+    today=$(cat {{ workspace }}/today-date.txt)
+    if grep -q "^${today}," {{ workspace }}/benchmarks.csv 2>/dev/null; then
+      echo "benchmarks.csv already has row for $today — skipping append"
+      exit 0
+    fi
+
+    python3 - <<'PY'
+    import json, csv
+    s = json.load(open('{{ workspace }}/today-close-stats.json'))
+    row = [s['date'], s['equity'], s['cash'], s['total'],
+           s['spy_close'], s['portfolio_pct_change_today'], s['spy_pct_change_today']]
+    with open('{{ workspace }}/benchmarks.csv', 'a') as f:
+        csv.writer(f).writerow(row)
+    PY
+
+    tail -1 {{ workspace }}/benchmarks.csv
+    ```
+
+    {# ── Stage 4: Notify ──────────────────────────────────────────────────── #}
+    {% elif stage == 4 %}
+    # Market-Close — Stage 4: Notify
+
+    Send the daily close notification.
+
+    ```bash
+    set -e
+    today=$(cat {{ workspace }}/today-date.txt)
+    : "${NOTIFY_CMD:?NOTIFY_CMD must be an absolute path}"
+    NOTIFY="$NOTIFY_CMD"
+    [[ -x "$NOTIFY" ]] || { echo "NOTIFY_CMD not executable: $NOTIFY" >&2; exit 1; }
+    "$NOTIFY" daily "Daily close: $today" {{ workspace }}/journal/${today}-close.md
+    ```
+
+    The validation runs the notify command directly so notify failures
+    register as score failures (operator wants to know).
+
+    {% endif %}
+
+validations:
+  # ── Stage 1: Fermata gate (validation backstop) ──
+  - type: command_succeeds
+    command: 'test ! -f "{workspace}/proposals/PENDING-COMPOSER-REVIEW.md"'
+    condition: "stage == 1"
+    stage: 1
+    description: "Fermata file does not exist (operator review pending halts all execution phases)"
+    retry_count: 0
+  # ── Stage 1: Capture ──
+  - type: file_exists
+    path: "{workspace}/today-close-stats.json"
+    condition: "stage == 1"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      s = json.load(open('{workspace}/today-close-stats.json'))
+      for k in ('date','equity','cash','total','spy_close','portfolio_pct_change_today','spy_pct_change_today','drawdown_pct'):
+          assert k in s, f'missing {k}'
+      assert s['total'] >= 0, 'total < 0'
+      "
+    condition: "stage == 1"
+    stage: 2
+    description: "Close stats JSON has all required fields"
+
+  # ── Stage 2: Reflect ──
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); test -f "{workspace}/journal/${today}-close.md"'
+    condition: "stage == 2"
+    stage: 1
+    description: "Close journal written"
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); test $(wc -w < "{workspace}/journal/${today}-close.md") -ge 200'
+    condition: "stage == 2"
+    stage: 2
+    description: "Close journal has substantive content (200+ words)"
+  - type: command_succeeds
+    command: |
+      today=$(cat "{workspace}/today-date.txt")
+      grep -qiE "(^|\\W)## Numbers" "{workspace}/journal/${today}-close.md" \
+      && grep -qiE "(^|\\W)## What Surprised Me" "{workspace}/journal/${today}-close.md"
+    condition: "stage == 2"
+    stage: 2
+    description: "Close journal has Numbers and What-Surprised-Me sections"
+
+  # ── Stage 3: Record ──
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); grep -q "^${today}," "{workspace}/benchmarks.csv"'
+    condition: "stage == 3"
+    stage: 1
+    description: "Today's row appended to benchmarks.csv"
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import csv
+      with open('{workspace}/benchmarks.csv') as f:
+          rows = list(csv.reader(f))
+      header = rows[0]
+      assert header[0] == 'date' and 'spy_close' in header
+      # Ensure last row has all columns populated
+      last = rows[-1]
+      assert len(last) == len(header), f'last row column mismatch: {last}'
+      "
+    condition: "stage == 3"
+    stage: 2
+    description: "benchmarks.csv has consistent schema"
+
+  # ── Stage 4: Notify (validation IS the call) ──
+  - type: command_succeeds
+    command: |
+      today=$(cat "{workspace}/today-date.txt")
+      "${NOTIFY_CMD:?NOTIFY_CMD required}" daily "Daily close: $today" "{workspace}/journal/${today}-close.md"
+    condition: "stage == 4"
+    stage: 1
+    description: "Notify succeeded"

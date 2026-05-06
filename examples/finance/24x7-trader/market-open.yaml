@@ -1,0 +1,668 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  24x7-trader / market-open                                                  ║
+# ║                                                                              ║
+# ║  Patterns: Red Team / Blue Team + Tool Chain + Andon Cord                   ║
+# ║                                                                              ║
+# ║  At market open, the pre-market slate is reviewed adversarially before      ║
+# ║  any order is placed. Blue Team advocates each proposal; Red Team           ║
+# ║  attacks each proposal. Arbitration produces final go/no-go decisions      ║
+# ║  per proposal with conviction tier (which may demote, never promote).      ║
+# ║  A second deterministic envelope check after arbitration is the wall       ║
+# ║  before the broker is called. Andon Cord diagnoses any broker failure      ║
+# ║  rather than blind-retrying.                                                ║
+# ║                                                                              ║
+# ║  Inputs (workspace):                                                        ║
+# ║    - proposals/<DATE>-slate.json (from pre-market)                         ║
+# ║    - proposals/<DATE>-rationale.md                                          ║
+# ║    - positions.json, risk-envelope.yaml, strategy.md                       ║
+# ║                                                                              ║
+# ║  Outputs (workspace):                                                       ║
+# ║    - proposals/<DATE>-arbitration.md                                       ║
+# ║    - proposals/<DATE>-final-slate.json (post-arbitration)                  ║
+# ║    - trade-log.jsonl (appended)                                            ║
+# ║    - journal/<DATE>-open.md                                                 ║
+# ║                                                                              ║
+# ║  Suggested cron: 09:30 weekdays in market timezone                          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "24x7-trader-market-open"
+description: >
+  Adversarial pre-trade review and execution. Blue Team advocates and Red
+  Team attacks each proposal in parallel; arbitration produces a final
+  slate; a second envelope check is the wall before the broker is called;
+  Andon Cord diagnoses broker failures.
+
+workspace: "../../../workspaces/24x7-trader"
+
+workspace_lifecycle:
+  archive_on_fresh: false
+
+instrument: claude-code
+instrument_fallbacks: [opencode, gemini-cli]
+instrument_config:
+  skip_permissions: true
+  disable_mcp: true
+  timeout_seconds: 1200
+  allowed_tools: [Read, Write, Edit, Glob, Grep, Bash]
+
+instruments:
+  scanner:
+    profile: claude-code
+    config:
+      timeout_seconds: 600
+      skip_permissions: true
+      disable_mcp: true
+  analyst:
+    profile: claude-code
+    config:
+      timeout_seconds: 1200
+      skip_permissions: true
+      disable_mcp: true
+  # Red Team uses a different model family from Blue Team. Same-model adversarial
+  # review produces decorous disagreement — a single model arguing with itself
+  # rarely finds the blind spot it shares with itself. Falls back to opencode if
+  # gemini-cli isn't configured locally.
+  red-team:
+    profile: gemini-cli
+    config:
+      cli_model: gemini-3.1-pro-preview
+      timeout_seconds: 1200
+      skip_permissions: true
+  synthesizer:
+    profile: claude-code
+    config:
+      cli_model: claude-opus-4-7
+      timeout_seconds: 1500
+      skip_permissions: true
+      disable_mcp: true
+  cli:
+    profile: cli
+
+movements:
+  1:
+    name: "Open Setup"
+    instrument: scanner
+  2:
+    name: "Adversarial Review"
+    # per-sheet instrument map below: blue uses analyst, red uses red-team
+  3:
+    name: "Arbitration"
+    instrument: synthesizer
+  4:
+    name: "Envelope Re-Check"
+    instrument: cli
+  5:
+    name: "Execute (deterministic)"
+    instrument: cli
+  6:
+    name: "Journal & Notify"
+    instrument: analyst
+
+sheet:
+  size: 1
+  total_items: 6
+  fan_out:
+    2: 2                          # Blue + Red
+  # After fan-out: stage 1 → sheet 1; stage 2 → sheets 2 (blue, instance 1) &
+  # 3 (red, instance 2); stage 3 → sheet 4; stage 4 → 5; stage 5 → 6; stage 6 → 7.
+  instrument_map:
+    analyst: [2]                  # Blue (stage 2, instance 1, sheet 2) — claude-code
+    red-team: [3]                 # Red  (stage 2, instance 2, sheet 3) — different model family
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+  prelude:
+    - file: "../../../examples/finance/24x7-trader/_libretto/trading-philosophy.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/glossary.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/operator-charter.md"
+      as: context
+    - file: "{{ workspace }}/02-strategy.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_techniques/broker.md"
+      as: tool
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 5000
+  lookback_sheets: 5
+  capture_files:
+    - "{{ workspace }}/proposals/today-blue-team.md"
+    - "{{ workspace }}/proposals/today-red-team.md"
+    - "{{ workspace }}/proposals/today-arbitration.md"
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+parallel:
+  enabled: true
+  max_concurrent: 2
+  stagger_delay_ms: 500
+
+prompt:
+  variables:
+    teams:
+      1:
+        name: "blue"
+        stance: "advocate"
+        instruction: |
+          You are BLUE TEAM. Your role is to advocate for each proposal — to
+          be the strongest version of the case for executing it. NOT to be
+          uncritical. To be honest. Your ideal opponent is a sharp Red Team
+          that will exploit any weakness. So you must articulate the
+          strongest possible argument for each proposal AND surface any
+          weakness you yourself can see, so Red Team can't claim it first.
+
+          For each proposal: write the case as if persuading a skeptical
+          partner. Include the evidence chain. Acknowledge known risks but
+          explain why they don't change the decision.
+      2:
+        name: "red"
+        stance: "attack"
+        instruction: |
+          You are RED TEAM. Your role is to attack each proposal — to find
+          what's wrong. Assume the proposal is wrong by default and require
+          it to defend itself.
+
+          For each proposal: identify the strongest counter-argument you can
+          construct, the weakest claim in the rationale, the most plausible
+          way this trade goes badly, and the regime conditions under which
+          this proposal looks dumb in retrospect. Cite evidence. Do not
+          generate generic objections; be specific to THIS proposal at THIS
+          tape.
+
+  template: |
+    {# ── Stage 1: Open Setup ─────────────────────────────────────────────── #}
+    {% if stage == 1 %}
+    # Market-Open — Stage 1: Setup
+
+    ## Fermata check (HALT IF PRESENT)
+
+    ```bash
+    if [[ -f {{ workspace }}/proposals/PENDING-COMPOSER-REVIEW.md ]]; then
+      echo "FERMATA: PENDING-COMPOSER-REVIEW.md exists — halting market-open" >&2
+      exit 1
+    fi
+    ```
+
+    ## Bootstrap precondition check
+
+    ```bash
+    [[ -f {{ workspace }}/02-strategy.md ]]    || { echo "FAIL: bootstrap not run" >&2; exit 1; }
+    [[ -f {{ workspace }}/risk-envelope.yaml ]] || { echo "FAIL: risk-envelope.yaml missing" >&2; exit 1; }
+    ```
+
+    ## Slate ingestion
+
+    ```bash
+    set -e
+    today=$(cat {{ workspace }}/today-date.txt 2>/dev/null || date +%F)
+    echo "$today" > {{ workspace }}/today-date.txt
+
+    : "${BROKER_CMD:?BROKER_CMD must be an absolute path to the broker script}"
+    BROKER="$BROKER_CMD"
+    [[ -x "$BROKER" ]] || { echo "BROKER_CMD not executable: $BROKER" >&2; exit 1; }
+
+    # Snapshot envelope hash for tamper detection (stage 4 will verify it)
+    sha256sum {{ workspace }}/risk-envelope.yaml | awk '{print $1}' > {{ workspace }}/today-envelope-hash.txt
+
+    SLATE={{ workspace }}/proposals/${today}-slate.json
+    if [[ ! -f "$SLATE" ]]; then
+      # No pre-market slate for today — treat as empty slate (do nothing day).
+      # We MUST still produce today-slate.json and today-inventory.md so downstream
+      # validations and stages have well-defined inputs.
+      echo "no pre-market slate for $today — treating as empty" >&2
+      echo "[]" > {{ workspace }}/proposals/today-slate.json
+      echo "# Today's slate was missing — empty slate inferred." > {{ workspace }}/proposals/today-rationale.md
+    else
+      cp "$SLATE" {{ workspace }}/proposals/today-slate.json
+      cp {{ workspace }}/proposals/${today}-rationale.md {{ workspace }}/proposals/today-rationale.md
+    fi
+
+    "$BROKER" auth_check > {{ workspace }}/today-open-auth.json
+    "$BROKER" get_balance > {{ workspace }}/today-balance.json
+    "$BROKER" get_positions > {{ workspace }}/positions.json
+    ```
+
+    ## Slate inventory
+
+    Read `{{ workspace }}/proposals/today-slate.json` and produce:
+    `{{ workspace }}/proposals/today-inventory.md` — ALWAYS write this file,
+    even if the slate is empty:
+
+    - Count of proposals by side (BUY / SELL / HOLD)
+    - Count by tier (HIGH / MEDIUM / LOW)
+    - Total target capital deployed (sum of target_value_usd for BUYs)
+    - Sectors touched
+    - Thesis families touched
+    - Any proposal with the same client_order_id as a previous trade-log
+      entry (would be a duplicate execution attempt — flag it)
+
+    If the slate is `[]`, the inventory MUST still be written and should
+    say so explicitly. The later stages handle empty slates gracefully —
+    there is no shame in a no-trade day.
+
+    {# ── Stage 2: Adversarial Review (Red Team / Blue Team, fan-out 2) ───── #}
+    {% elif stage == 2 %}
+    {% set t = teams[instance] %}
+    # Market-Open — Stage 2: {{ t.name | upper }} TEAM
+
+    {{ t.instruction }}
+
+    Read:
+    - `{{ workspace }}/proposals/today-slate.json` (the proposals)
+    - `{{ workspace }}/proposals/today-rationale.md` (Blue Team's
+      starting case from pre-market)
+    - `{{ workspace }}/research-log/today-triangulation.md` (the evidence)
+    - `{{ workspace }}/positions.json` (current state)
+
+    For each proposal in the slate:
+
+    1. {% if t.stance == "advocate" %}
+       Build the strongest argued case. Evidence-rooted. Acknowledge
+       weakness explicitly, with a defense for why it doesn't change
+       the decision.
+       {% else %}
+       Build the strongest counter-case. Find the weakest claim in
+       Blue's rationale and attack it specifically. Identify the
+       regime where this trade is wrong.
+       {% endif %}
+
+    2. Render a verdict per proposal:
+       - **{% if t.stance == "advocate" %}EXECUTE{% else %}REJECT{% endif %}**
+         — recommend {{ "go" if t.stance == "advocate" else "no-go" }}
+       - **HOLD** — do nothing today (defer to later phase)
+       - **{% if t.stance == "advocate" %}DEMOTE{% else %}DEMOTE{% endif %}**
+         — execute but at a lower tier than proposed (specify new tier)
+
+    ## Output
+
+    Write `{{ workspace }}/proposals/today-{{ t.name }}-team.md`:
+
+    - `## {{ t.name | upper }} Team Review — $(date +%F)`
+    - `## Per-Proposal Reviews` — one section per proposal:
+      - **Ticker / Side / Original Tier**
+      - **{{ "Case" if t.stance == "advocate" else "Counter-case" }}**
+        — argued
+      - **Verdict** — EXECUTE / REJECT / HOLD / DEMOTE-TO-{tier}
+      - **Strongest evidence cited**
+      - **{{ "Acknowledged weaknesses" if t.stance == "advocate" else "What would change my mind" }}**
+    - `## Cross-Cutting Observations` — patterns across proposals
+    - `## Sovereign-Rule Concerns` — any proposal that brushes against
+      a hard rule from `02-strategy.md` (forbidden actions, operator
+      blocklist, asset class). State the rule and the concern. The
+      operator's hard rules are not subject to adversarial debate; if
+      Red sees a hard-rule violation it is auto-REJECT.
+
+    Length: at minimum 200 words per proposal in the slate, or 400
+    words minimum for an empty slate (in which case explain how the
+    slate's emptiness reads — "appropriate caution" vs "missed the
+    opportunity").
+
+    {# ── Stage 3: Arbitration ────────────────────────────────────────────── #}
+    {% elif stage == 3 %}
+    # Market-Open — Stage 3: Arbitration
+
+    Read:
+    - `{{ workspace }}/proposals/today-slate.json`
+    - `{{ workspace }}/proposals/today-blue-team.md`
+    - `{{ workspace }}/proposals/today-red-team.md`
+    - `{{ workspace }}/proposals/today-rationale.md`
+
+    Your job: produce the FINAL slate. You are the neutral arbiter who
+    has read both sides. You are not splitting the difference — you are
+    deciding.
+
+    ## Decision rules
+
+    For each original proposal:
+
+    1. **If Red identified a sovereign-rule violation:** REJECT, full
+       stop. The agent does not debate hard rules.
+
+    2. **If Blue + Red both EXECUTE (with possibly different tiers):**
+       Take the LOWER of the two tiers. Conviction tier never gets
+       promoted at market-open — only demoted.
+
+    3. **If Blue EXECUTE and Red REJECT:** Decide based on which side's
+       argument was more grounded in evidence. Document your reasoning.
+       If genuinely 50/50, default to REJECT — the cost of a missed
+       trade is recoverable; the cost of a wrong trade is not.
+
+    4. **If Red identifies a "regime where this is wrong" and that
+       regime appears to obtain TODAY:** REJECT or DEMOTE.
+
+    5. **Holds and existing-position SELLs:** apply the same logic.
+
+    ## Output
+
+    Two files.
+
+    First, `{{ workspace }}/proposals/today-arbitration.md`:
+
+    - `## Arbitration — $(date +%F)`
+    - `## Per-Proposal Decisions` — one section per ORIGINAL proposal:
+      - **Ticker / Original Tier**
+      - **Blue Verdict / Red Verdict**
+      - **Final Decision** — EXECUTE@tier / REJECT / HOLD
+      - **Reasoning** — short, evidence-cited
+    - `## Demotions Summary` — list of tier demotions
+    - `## Rejections Summary` — list of rejections with reasons
+    - `## What Changed vs Pre-Market` — summary at the top: how does
+      the final slate differ from pre-market's slate?
+
+    Second, `{{ workspace }}/proposals/today-final-slate.json`:
+
+    Same JSON schema as the input slate, but only the EXECUTE entries.
+    Tiers may be lower than originally proposed; sizes recomputed for
+    the final tier. REJECT and HOLD entries are not in the JSON.
+
+    If everything was rejected, emit `[]`. That is a successful arbitration.
+
+    {# ── Stage 4: Envelope Re-Check (Tool Chain) ─────────────────────────── #}
+    {% elif stage == 4 %}
+    # Market-Open — Stage 4: Envelope Re-Check
+
+    Re-run the deterministic envelope check on the FINAL slate. Tier
+    demotions in arbitration changed sizes; the envelope check on
+    pre-market's slate doesn't cover the final shape.
+
+    ```bash
+    set -e
+    : "${CHECK_ENVELOPE_CMD:?CHECK_ENVELOPE_CMD must be an absolute path}"
+    today=$(cat {{ workspace }}/today-date.txt)
+    SLATE={{ workspace }}/proposals/today-final-slate.json
+    BALANCE={{ workspace }}/today-balance.json
+    [[ -f "$SLATE" ]]   || { echo "no final slate: $SLATE" >&2; exit 1; }
+    [[ -f "$BALANCE" ]] || { echo "no balance: $BALANCE" >&2; exit 1; }
+
+    bash "$CHECK_ENVELOPE_CMD" \
+      {{ workspace }} \
+      "$SLATE" \
+      "$BALANCE" \
+      > {{ workspace }}/proposals/${today}-envelope-check-final.log 2>&1
+    rc=$?
+    cat {{ workspace }}/proposals/${today}-envelope-check-final.log
+    exit $rc
+    ```
+
+    {# ── Stage 5: Execute (deterministic — Tool Chain) ────────────────────── #}
+    {% elif stage == 5 %}
+    # Market-Open — Stage 5: Execute (deterministic)
+
+    No agent judgment here. Invoke `execute_slate.sh` and let it iterate
+    the final slate, place orders with deterministic client_order_ids,
+    and set initial stops.
+
+    ```bash
+    set -e
+    : "${EXECUTE_SLATE_CMD:?EXECUTE_SLATE_CMD must be an absolute path}"
+    today=$(cat {{ workspace }}/today-date.txt)
+    SLATE={{ workspace }}/proposals/today-final-slate.json
+    RESULTS={{ workspace }}/today-execute-results.jsonl
+    FAILURES={{ workspace }}/journal/today-open-failures.md
+    mkdir -p {{ workspace }}/journal
+
+    bash "$EXECUTE_SLATE_CMD" {{ workspace }} "$SLATE" "$RESULTS" "$FAILURES"
+    ```
+
+    `execute_slate.sh` writes results.jsonl (one row per attempt), the
+    failures file (always touched, content only on failure), appends
+    successes to `trade-log.jsonl`, and refreshes `positions.json`.
+
+    {# ── Stage 6: Journal & Notify (interpretive) ─────────────────────────── #}
+    {% elif stage == 6 %}
+    # Market-Open — Stage 6: Journal & Notify
+
+    Read:
+    - `{{ workspace }}/today-execute-results.jsonl` — every order attempt
+    - `{{ workspace }}/journal/today-open-failures.md` — diagnostics for
+      any failures
+    - `{{ workspace }}/proposals/today-arbitration.md` — what arbitration
+      decided
+    - `{{ workspace }}/positions.json` — post-execution snapshot
+
+    Reconcile broker fills against intended slate (partial fills, slippage
+    flags) and produce the day's open journal.
+
+    Write `{{ workspace }}/journal/today-open.md` (alias) AND copy to
+    `{{ workspace }}/journal/$(cat {{ workspace }}/today-date.txt)-open.md`
+    (dated). Both files have identical content; the alias makes downstream
+    phase reads simpler:
+
+    - `## Date / Time`
+    - `## Final Slate Executed` — table: ticker | side | qty | type |
+      tier (final) | result | broker order_id
+    - `## Reconciliation` — for each successful order, did the fill match
+      target_qty and limit_price? Flag partial fills and slippage > 1%.
+    - `## Stops Set` — table from results.jsonl entries with `result == "stop_set"`
+    - `## Failures` — pull from `today-open-failures.md`. For each failure,
+      diagnose root cause (auth? rate limit? rejection?) and recommend
+      operator action.
+    - `## Differences vs Original Slate` — what arbitration changed
+    - `## Note for Midday` — surprises, slippage warnings, anything midday
+      should know that isn't in positions.json
+
+    After writing the journal, copy alias → dated:
+
+    ```bash
+    today=$(cat {{ workspace }}/today-date.txt)
+    cp {{ workspace }}/journal/today-open.md {{ workspace }}/journal/${today}-open.md
+    ```
+
+    ## Notify
+
+    ```bash
+    NOTIFY="${NOTIFY_CMD:-}"
+    if [[ -n "$NOTIFY" && -x "$NOTIFY" ]]; then
+      "$NOTIFY" trades "Market-open complete: $today" {{ workspace }}/journal/${today}-open.md || true
+    fi
+    ```
+
+    {% endif %}
+
+validations:
+  # ── Stage 1: Fermata gate (validation backstop) ──
+  - type: command_succeeds
+    command: 'test ! -f "{workspace}/proposals/PENDING-COMPOSER-REVIEW.md"'
+    condition: "stage == 1"
+    stage: 1
+    description: "Fermata file does not exist (operator review pending halts all execution phases)"
+    retry_count: 0
+  # ── Stage 1: Open Setup ──
+  - type: file_exists
+    path: "{workspace}/proposals/today-inventory.md"
+    condition: "stage == 1"
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/proposals/today-inventory.md"
+    pattern: "(?i)(BUY|SELL|HOLD|empty|no proposal)"
+    condition: "stage == 1"
+    stage: 2
+    description: "Inventory acknowledges slate sides or empty"
+  - type: command_succeeds
+    command: 'python3 -c "import json,sys; json.load(open(\"{workspace}/positions.json\"))"'
+    condition: "stage == 1"
+    stage: 2
+    description: "Positions refreshed and valid JSON"
+
+  # ── Stage 2: Adversarial Review (fan-out 2) ──
+  - type: file_exists
+    path: "{workspace}/proposals/today-blue-team.md"
+    sheet: 2
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/proposals/today-red-team.md"
+    sheet: 3
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/proposals/today-blue-team.md"
+    pattern: "(?i)(EXECUTE|REJECT|HOLD|DEMOTE)"
+    sheet: 2
+    stage: 2
+    description: "Blue team produces verdicts"
+  - type: content_regex
+    path: "{workspace}/proposals/today-red-team.md"
+    pattern: "(?i)(EXECUTE|REJECT|HOLD|DEMOTE)"
+    sheet: 3
+    stage: 2
+    description: "Red team produces verdicts"
+  - type: content_regex
+    path: "{workspace}/proposals/today-blue-team.md"
+    pattern: "(?i)## Per-Proposal Reviews"
+    sheet: 2
+    stage: 2
+  - type: content_regex
+    path: "{workspace}/proposals/today-red-team.md"
+    pattern: "(?i)## Per-Proposal Reviews"
+    sheet: 3
+    stage: 2
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/proposals/today-blue-team.md") -ge 200'
+    sheet: 2
+    stage: 3
+    description: "Blue team review is substantive"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/proposals/today-red-team.md") -ge 200'
+    sheet: 3
+    stage: 3
+    description: "Red team review is substantive"
+
+  # ── Stage 3: Arbitration ──
+  - type: file_exists
+    path: "{workspace}/proposals/today-arbitration.md"
+    condition: "stage == 3"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/proposals/today-final-slate.json"
+    condition: "stage == 3"
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/proposals/today-arbitration.md"
+    pattern: "(?i)## Per-Proposal Decisions"
+    condition: "stage == 3"
+    stage: 2
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      slate = json.load(open('{workspace}/proposals/today-final-slate.json'))
+      assert isinstance(slate, list), 'final slate must be JSON array'
+      original = json.load(open('{workspace}/proposals/today-slate.json'))
+      origs_by_id = {p['client_order_id']: p for p in original if 'client_order_id' in p}
+      tier_rank = {'HIGH': 3, 'MEDIUM': 2, 'LOW': 1, 'NO-GO': 0}
+      for p in slate:
+          orig = origs_by_id.get(p.get('client_order_id'))
+          if orig is None:
+              raise SystemExit(f'final slate has proposal not in original: {p.get(\"client_order_id\")}')
+          if tier_rank.get(p['tier'], -1) > tier_rank.get(orig['tier'], -1):
+              raise SystemExit(f'tier promoted in arbitration (forbidden): {p[\"client_order_id\"]} {orig[\"tier\"]}->{p[\"tier\"]}')
+      "
+    condition: "stage == 3"
+    stage: 2
+    description: "Arbitration produced subset of original slate, no tier promotions"
+
+  # ── Stage 4: Envelope Re-Check ──
+  - type: command_succeeds
+    command: |
+      hash_now=$(sha256sum "{workspace}/risk-envelope.yaml" | awk '{print $1}')
+      hash_then=$(cat "{workspace}/today-envelope-hash.txt")
+      [[ "$hash_now" == "$hash_then" ]] || { echo "FAIL: envelope was modified during this score run (was $hash_then, is $hash_now)" >&2; exit 1; }
+    condition: "stage == 4"
+    stage: 1
+    description: "risk-envelope.yaml has not been modified during this score run"
+  - type: command_succeeds
+    command: |
+      bash "${CHECK_ENVELOPE_CMD:?CHECK_ENVELOPE_CMD required}" \
+        "{workspace}" \
+        "{workspace}/proposals/today-final-slate.json" \
+        "{workspace}/today-balance.json"
+    condition: "stage == 4"
+    stage: 2
+    description: "Envelope re-check passes on final slate"
+
+  # ── Stage 5: Execute (deterministic) ──
+  # The execute_slate.sh script ALWAYS touches the failures file (empty on success)
+  # and always writes the results JSONL. Validate file_exists, not non-empty content.
+  - type: file_exists
+    path: "{workspace}/today-execute-results.jsonl"
+    condition: "stage == 5"
+    stage: 1
+    description: "Execute results JSONL written"
+  - type: file_exists
+    path: "{workspace}/journal/today-open-failures.md"
+    condition: "stage == 5"
+    stage: 1
+    description: "Failures file exists (always touched, may be empty)"
+  # Outcome: every final-slate proposal has a corresponding result row by client_order_id
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      slate = json.load(open('{workspace}/proposals/today-final-slate.json'))
+      results = []
+      with open('{workspace}/today-execute-results.jsonl') as f:
+          for line in f:
+              line = line.strip()
+              if line: results.append(json.loads(line))
+      slate_ids = {p['client_order_id'] for p in slate}
+      result_ids = {r['proposal']['client_order_id'] for r in results if r['result'] in ('ok','fail') and 'proposal' in r}
+      missing = slate_ids - result_ids
+      if missing:
+          raise SystemExit(f'final-slate client_order_ids without execution results: {missing}')
+      "
+    condition: "stage == 5"
+    stage: 2
+    description: "Every final-slate proposal has an execute result by client_order_id"
+  # Outcome: successful results were appended to trade-log.jsonl
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      results = []
+      with open('{workspace}/today-execute-results.jsonl') as f:
+          for line in f:
+              line = line.strip()
+              if line: results.append(json.loads(line))
+      ok_results = [r for r in results if r.get('result') == 'ok' and 'proposal' in r]
+      if not ok_results:
+          # No successful orders; trade-log doesn't need today entries
+          import sys; sys.exit(0)
+      logged = set()
+      with open('{workspace}/trade-log.jsonl') as f:
+          for line in f:
+              try:
+                  e = json.loads(line)
+                  if e.get('result') == 'ok' and 'proposal' in e:
+                      logged.add(e['proposal'].get('client_order_id'))
+              except Exception: pass
+      ok_ids = {r['proposal']['client_order_id'] for r in ok_results}
+      missing = ok_ids - logged
+      if missing:
+          raise SystemExit(f'successful orders not logged to trade-log.jsonl: {missing}')
+      "
+    condition: "stage == 5"
+    stage: 2
+    description: "Successful executions are appended to trade-log.jsonl"
+
+  # ── Stage 6: Journal & Notify ──
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); test -f "{workspace}/journal/${today}-open.md"'
+    condition: "stage == 6"
+    stage: 1
+    description: "Open journal written"
+  - type: content_regex
+    path: "{workspace}/journal/today-open.md"
+    pattern: "(?i)## Reconciliation"
+    condition: "stage == 6"
+    stage: 2
+    description: "Open journal has Reconciliation section"

@@ -1,0 +1,448 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  24x7-trader / bootstrap                                                    ║
+# ║                                                                              ║
+# ║  One-shot initialization of the trading agent's substrate.                  ║
+# ║  Patterns: Reconnaissance Pull + Decision Propagation                       ║
+# ║                                                                              ║
+# ║  Inputs:                                                                     ║
+# ║    - operator-charter.md (operator-edited)                                  ║
+# ║    - existing positions, if any (from broker)                               ║
+# ║                                                                              ║
+# ║  Outputs (workspace):                                                        ║
+# ║    - strategy.md            — codified philosophy + axioms                  ║
+# ║    - risk-envelope.yaml     — machine-readable hard caps                    ║
+# ║    - positions.json         — initial position snapshot                     ║
+# ║    - learnings.md           — empty starter                                 ║
+# ║    - benchmarks.csv         — header-only starter                           ║
+# ║                                                                              ║
+# ║  Run ONCE before scheduling the daily phases. Re-run only when the          ║
+# ║  operator charter changes meaningfully — and even then, prefer to edit      ║
+# ║  strategy.md and risk-envelope.yaml in place.                               ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "24x7-trader-bootstrap"
+description: >
+  One-shot initialization. Reads operator charter and existing positions,
+  produces the strategy document, machine-readable risk envelope, position
+  snapshot, and starter logs that every daily phase consumes.
+
+workspace: "../../../workspaces/24x7-trader"
+
+workspace_lifecycle:
+  archive_on_fresh: false        # never wipe trade history with --fresh
+
+instrument: claude-code
+instrument_fallbacks: [opencode, gemini-cli]
+instrument_config:
+  skip_permissions: true
+  disable_mcp: true
+  timeout_seconds: 900
+  allowed_tools: [Read, Write, Edit, Glob, Grep, Bash]
+
+instruments:
+  scanner:
+    profile: claude-code
+    config:
+      timeout_seconds: 600
+      skip_permissions: true
+      disable_mcp: true
+  synthesizer:
+    profile: claude-code
+    config:
+      cli_model: claude-opus-4-7
+      timeout_seconds: 1200
+      skip_permissions: true
+      disable_mcp: true
+  cli:
+    profile: cli
+
+movements:
+  1:
+    name: "Intent Capture"
+    instrument: scanner          # cheap inventory of operator inputs
+  2:
+    name: "Charter Synthesis"
+    instrument: synthesizer      # deep reasoning to codify philosophy
+  3:
+    name: "Schema Emission"
+    instrument: cli              # deterministic translation to YAML
+
+sheet:
+  size: 1
+  total_items: 3
+  dependencies:
+    2: [1]
+    3: [2]
+  prelude:
+    - file: "../../../examples/finance/24x7-trader/_libretto/trading-philosophy.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/glossary.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/risk-envelope.schema.md"
+      as: skill
+    - file: "../../../examples/finance/24x7-trader/_libretto/operator-charter.md"
+      as: context
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 4000
+  lookback_sheets: 3
+  capture_files:
+    - "{{ workspace }}/01-intent-capture.md"
+    - "{{ workspace }}/02-strategy.md"
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1200
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+prompt:
+  template: |
+    {# ── Stage 1: Intent Capture (Reconnaissance Pull) ───────────────────── #}
+    {% if stage == 1 %}
+    # Bootstrap — Stage 1: Intent Capture
+
+    The operator has provided a charter (injected above). Before any work,
+    we orient. Your job is to form an honest first read of the operator's
+    intent and to identify gaps that must be closed before strategy synthesis.
+
+    ## Inputs you have
+
+    - `trading-philosophy.md` — defaults this agent operates under
+    - `glossary.md` — shared vocabulary
+    - `risk-envelope.schema.md` — schema for the machine-readable envelope
+    - `operator-charter.md` — the operator's customizable axioms
+
+    ## Tasks
+
+    1. Read the operator charter carefully. Where does the operator's
+       phrasing override the default philosophy? Note each override
+       explicitly — the next stage must propagate them.
+
+    2. Identify gaps. The charter has placeholder text in brackets like
+       `[your name]`, `[example: ...]`. List every placeholder still
+       present. The next stage cannot proceed if critical placeholders
+       remain (operator identity, risk-tolerance descriptor, hard rules).
+
+    3. If a broker is configured (i.e. `BROKER_CMD` is set to an absolute
+       path), run an inventory call and capture the account state. This is
+       read-only:
+
+       ```bash
+       BROKER="${BROKER_CMD:-}"
+       if [[ -n "$BROKER" && -x "$BROKER" ]]; then
+         "$BROKER" auth_check > {{ workspace }}/01-broker-auth.json 2>{{ workspace }}/01-broker-auth.err || true
+         "$BROKER" get_balance > {{ workspace }}/01-balance.json 2>>{{ workspace }}/01-broker-auth.err || true
+         "$BROKER" get_positions > {{ workspace }}/01-positions-initial.json 2>>{{ workspace }}/01-broker-auth.err || true
+       else
+         echo "BROKER_CMD not set or not executable — bootstrap will proceed without broker state" \
+           > {{ workspace }}/01-broker-auth.err
+       fi
+       ```
+
+       If the broker isn't configured, record that. Do NOT fail the stage.
+       Bootstrap is supposed to work without broker access — the operator
+       can configure it before scheduling the phases. (The daily phases
+       require `BROKER_CMD` and will fail at stage 1 if it's not set.)
+
+    4. Write a structured intent capture document.
+
+    ## Output
+
+    Write `{{ workspace }}/01-intent-capture.md` with these sections:
+
+    - `## Operator overrides` — bullet list of each conflict between
+      defaults and charter, with the resolution
+    - `## Charter gaps` — list of unfilled placeholders, marked
+      CRITICAL / OPTIONAL. Critical placeholders are: operator name,
+      account size band, risk tolerance descriptor, all "Hard rules I'm
+      imposing on the agent", all "What I'm trying to learn" items.
+      Other placeholders are OPTIONAL.
+    - `## Broker status` — connected / not connected, with diagnostic
+    - `## Initial positions` — table from `01-positions-initial.json`
+      (or "no positions" if broker unavailable)
+    - `## Open questions for the operator` — anything the charter implies
+      but doesn't state outright
+
+    Then check the charter file directly for unfilled critical placeholders
+    and write a status flag the validation reads:
+
+    ```bash
+    # Detect placeholders matching [...] patterns in the operator-edited charter.
+    # Anything inside [square brackets] in operator-charter.md is unfilled
+    # template text. Critical placeholders (operator identity, account band,
+    # risk tolerance, hard rules, what-trying-to-learn) MUST be filled.
+    charter={{ workspace }}/../../examples/finance/24x7-trader/_libretto/operator-charter.md
+    if [[ ! -f "$charter" ]]; then
+      # workspace-relative path didn't resolve; try direct
+      charter=$(find . -path '*examples/finance/24x7-trader/_libretto/operator-charter.md' 2>/dev/null | head -1)
+    fi
+
+    # Critical sections by markdown header
+    python3 - "$charter" {{ workspace }}/01-charter-status.json <<'PY'
+    import re, sys, json, pathlib
+    p = pathlib.Path(sys.argv[1])
+    out = pathlib.Path(sys.argv[2])
+    if not p.exists():
+        out.write_text(json.dumps({"error": f"charter not found: {p}", "critical_placeholders_remaining": 99}))
+        sys.exit(0)
+    text = p.read_text()
+    critical_sections = ["Operator identity", "What I'm trying to learn", "Hard rules I'm imposing on the agent"]
+    # split by markdown sections
+    sections = re.split(r'\n## ', text)
+    critical_text = ""
+    for s in sections:
+        for cs in critical_sections:
+            if s.startswith(cs):
+                critical_text += "\n" + s
+    placeholders = re.findall(r'\[([^\]]+)\]', critical_text)
+    # Filter out plausible filled values; flag anything matching template language
+    unfilled = [p for p in placeholders if re.match(r'(your|example|paper / small live|be honest|conservative / moderate|^\d+ AM|^stdout / slack|every-trade)', p, re.I)]
+    out.write_text(json.dumps({
+        "critical_placeholders_remaining": len(unfilled),
+        "unfilled": unfilled[:20],
+    }, indent=2))
+    PY
+    ```
+
+    {# ── Stage 2: Charter Synthesis (Decision Propagation) ───────────────── #}
+    {% elif stage == 2 %}
+    # Bootstrap — Stage 2: Charter Synthesis
+
+    Read your previous output at `{{ workspace }}/01-intent-capture.md`.
+    Read the prelude documents (philosophy, glossary, charter, schema).
+    Synthesize them into a single authoritative strategy document that
+    every daily phase will consume verbatim.
+
+    This is a Decision Propagation move: downstream agents (pre-market,
+    market-open, etc.) will read THIS document. Anything ambiguous here
+    becomes ambiguity propagated. Write tightly.
+
+    ## Required structure
+
+    Write `{{ workspace }}/02-strategy.md` with these mandatory sections:
+
+    1. `## Operator Identity & Account Band` — copied from charter
+    2. `## Sovereign Operator Rules` — the hard rules the operator imposed
+       (numbered, falsifiable, non-negotiable)
+    3. `## Trading Philosophy (Active)` — defaults from philosophy.md AS
+       MODIFIED by the charter. If a default is overridden, state both the
+       default AND the override, with a one-line rationale.
+    4. `## Conviction Tier Definitions` — verbatim from philosophy unless
+       the charter overrides
+    5. `## Frame Definitions` — the three pre-market frames (macro,
+       sector/peer, technical) AS MODIFIED by charter
+    6. `## Forbidden Actions` — verbatim list of what this agent will not
+       do, drawn from philosophy + charter overrides
+    7. `## Operator's Known Biases` — copied from charter "Mistakes I'm
+       prone to" section, framed as flags downstream phases watch for
+    8. `## What This Agent Tracks for the Operator` — the operator's
+       three "What I'm trying to learn" items, framed as evaluation
+       criteria the weekly review will apply
+
+    ## Quality bar
+
+    Length: 800–1500 words. Less than 800 means you didn't engage; more
+    than 1500 means you padded.
+
+    Tone: declarative, second-person agent-facing. ("This agent will...")
+    Not first-person operator-facing.
+
+    Conflicts: when philosophy and charter disagree, charter wins. State
+    the conflict, then state the resolution. Do not silently override.
+
+    {# ── Stage 3: Schema Emission ────────────────────────────────────────── #}
+    {% elif stage == 3 %}
+    # Bootstrap — Stage 3: Schema Emission
+
+    Translate `{{ workspace }}/02-strategy.md` and the schema document
+    into a machine-readable `risk-envelope.yaml`. This stage is mostly
+    deterministic — your job is to extract values from the strategy,
+    confirm they parse, and emit the file.
+
+    ## Tasks
+
+    1. From the strategy, extract numeric caps (per-position %, sector %,
+       family count, max positions, cash floor, daily loss cap, weekly
+       drawdown halt %, initial stop %, trailing stop floor %).
+
+    2. Where the strategy is silent on a cap, use the schema's default —
+       but the strategy SHOULD have set them all. If you find missing
+       values, fail this stage by writing `MISSING: <field>` in the
+       output and exiting; the operator must edit the charter and re-run.
+
+    3. Translate the operator's hard rules into the `forbidden` and
+       `allowed` blocks where applicable.
+
+    4. List the thesis families the strategy declares. If the operator
+       didn't override, use the philosophy's default list.
+
+    5. Emit `{{ workspace }}/risk-envelope.yaml` matching the schema.
+       Use Python or bash to make the file — do not hand-type YAML.
+
+    6. Initialize empty workspace files that the daily phases expect:
+
+       ```bash
+       set -e
+       cd {{ workspace }}
+       [[ -f learnings.md ]] || cat > learnings.md <<'EOF'
+       # Learnings — append-only, operator-curated
+
+       Pattern: WHEN <condition> THEN <action> BECAUSE <evidence>.
+
+       ## Hot
+
+       (none yet — populated by weekly reviews and operator edits)
+
+       EOF
+       [[ -f benchmarks.csv ]] || echo "date,equity,cash,total,spy_close,portfolio_pct_change,spy_pct_change" > benchmarks.csv
+       mkdir -p research-log journal proposals weekly-reviews
+       [[ -f trade-log.jsonl ]] || : > trade-log.jsonl
+       ```
+
+    7. If the broker captured positions in stage 1, copy that snapshot to
+       `positions.json` (and capture initial balance similarly):
+
+       ```bash
+       if [[ -f {{ workspace }}/01-positions-initial.json ]]; then
+         cp {{ workspace }}/01-positions-initial.json {{ workspace }}/positions.json
+       else
+         echo "[]" > {{ workspace }}/positions.json
+       fi
+       if [[ -f {{ workspace }}/01-balance.json ]]; then
+         cp {{ workspace }}/01-balance.json {{ workspace }}/today-balance.json
+       else
+         echo '{"cash":0,"equity":0,"buying_power":0,"currency":"USD"}' > {{ workspace }}/today-balance.json
+       fi
+       ```
+
+    8. Validate that the envelope parses:
+
+       ```bash
+       python3 -c "import yaml; yaml.safe_load(open('{{ workspace }}/risk-envelope.yaml'))"
+       ```
+
+    ## Output
+
+    - `{{ workspace }}/risk-envelope.yaml` — schema-valid
+    - `{{ workspace }}/positions.json` — array (possibly empty)
+    - `{{ workspace }}/learnings.md` — starter
+    - `{{ workspace }}/benchmarks.csv` — header row
+    - subdirs `research-log/`, `journal/`, `proposals/`, `weekly-reviews/`
+
+    Write a short `{{ workspace }}/03-bootstrap-complete.md` summarizing
+    what was emitted and any caveats (e.g., "broker not configured —
+    positions.json initialized empty").
+
+    {% endif %}
+
+validations:
+  # ── Stage 1: Intent Capture ──
+  - type: file_exists
+    path: "{workspace}/01-intent-capture.md"
+    condition: "stage == 1"
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/01-intent-capture.md"
+    pattern: "(?i)## Operator overrides"
+    condition: "stage == 1"
+    stage: 2
+    description: "Intent capture has Operator overrides section"
+  - type: content_regex
+    path: "{workspace}/01-intent-capture.md"
+    pattern: "(?i)## Charter gaps"
+    condition: "stage == 1"
+    stage: 2
+    description: "Intent capture has Charter gaps section"
+  - type: content_regex
+    path: "{workspace}/01-intent-capture.md"
+    pattern: "(?i)## Broker status"
+    condition: "stage == 1"
+    stage: 2
+    description: "Intent capture has Broker status section"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/01-intent-capture.md") -ge 200'
+    condition: "stage == 1"
+    stage: 3
+    description: "Intent capture is substantive (200+ words)"
+  - type: command_succeeds
+    command: 'python3 -c "import json; d=json.load(open(\"{workspace}/01-charter-status.json\")); assert d.get(\"critical_placeholders_remaining\",99) == 0, f\"Critical charter placeholders unfilled: {d.get(\\\"unfilled\\\")} — edit operator-charter.md and re-run bootstrap\""'
+    condition: "stage == 1"
+    stage: 3
+    description: "Critical operator-charter placeholders are filled"
+
+  # ── Stage 2: Charter Synthesis ──
+  - type: file_exists
+    path: "{workspace}/02-strategy.md"
+    condition: "stage == 2"
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/02-strategy.md"
+    pattern: "(?i)## Sovereign Operator Rules"
+    condition: "stage == 2"
+    stage: 2
+    description: "Strategy has Sovereign Operator Rules section"
+  - type: content_regex
+    path: "{workspace}/02-strategy.md"
+    pattern: "(?i)## Conviction Tier Definitions"
+    condition: "stage == 2"
+    stage: 2
+    description: "Strategy has Conviction Tier Definitions"
+  - type: content_regex
+    path: "{workspace}/02-strategy.md"
+    pattern: "(?i)## Frame Definitions"
+    condition: "stage == 2"
+    stage: 2
+    description: "Strategy has Frame Definitions"
+  - type: content_regex
+    path: "{workspace}/02-strategy.md"
+    pattern: "(?i)## Forbidden Actions"
+    condition: "stage == 2"
+    stage: 2
+    description: "Strategy has Forbidden Actions section"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/02-strategy.md") -ge 800 -a $(wc -w < "{workspace}/02-strategy.md") -le 2000'
+    condition: "stage == 2"
+    stage: 3
+    description: "Strategy length 800-2000 words"
+
+  # ── Stage 3: Schema Emission ──
+  - type: file_exists
+    path: "{workspace}/risk-envelope.yaml"
+    condition: "stage == 3"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/positions.json"
+    condition: "stage == 3"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/learnings.md"
+    condition: "stage == 3"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/benchmarks.csv"
+    condition: "stage == 3"
+    stage: 1
+  - type: command_succeeds
+    command: 'python3 -c "import yaml,sys; e=yaml.safe_load(open(\"{workspace}/risk-envelope.yaml\")); assert e[\"caps\"][\"per_position_pct\"]>0; assert e[\"caps\"][\"max_open_positions\"]>0; assert isinstance(e[\"thesis_families\"],list) and len(e[\"thesis_families\"])>=3"'
+    condition: "stage == 3"
+    stage: 2
+    description: "Risk envelope parses and has required caps + families"
+  - type: command_succeeds
+    command: 'python3 -c "import json,sys; json.load(open(\"{workspace}/positions.json\"))"'
+    condition: "stage == 3"
+    stage: 2
+    description: "positions.json is valid JSON"
+  - type: command_succeeds
+    command: 'test -d "{workspace}/research-log" -a -d "{workspace}/journal" -a -d "{workspace}/proposals" -a -d "{workspace}/weekly-reviews"'
+    condition: "stage == 3"
+    stage: 2
+    description: "All required subdirectories exist"
+  - type: command_succeeds
+    command: 'head -1 "{workspace}/benchmarks.csv" | grep -q "^date,equity,cash,total,spy_close"'
+    condition: "stage == 3"
+    stage: 2
+    description: "benchmarks.csv has expected header"

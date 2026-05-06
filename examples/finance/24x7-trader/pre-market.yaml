@@ -1,0 +1,702 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  24x7-trader / pre-market                                                   ║
+# ║                                                                              ║
+# ║  Patterns: Source Triangulation + Sugya Weave + Tool Chain                  ║
+# ║                                                                              ║
+# ║  Three independent analytical frames investigate today's tape from          ║
+# ║  structurally different angles (macro, sector/peer, technical levels).     ║
+# ║  A triangulation stage finds CORROBORATED / UNCORROBORATED / CONTRADICTED  ║
+# ║  threads. Editorial synthesis (Sugya Weave) produces the proposal slate    ║
+# ║  with conviction tiers. A deterministic risk-envelope check (Tool Chain)   ║
+# ║  refuses any proposal that violates hard caps before market-open ever      ║
+# ║  sees the slate.                                                            ║
+# ║                                                                              ║
+# ║  Inputs (workspace):                                                        ║
+# ║    - strategy.md, risk-envelope.yaml, positions.json, learnings.md         ║
+# ║                                                                              ║
+# ║  Outputs (workspace):                                                       ║
+# ║    - research-log/<DATE>.md         — research narrative                   ║
+# ║    - proposals/<DATE>-slate.json    — structured slate                     ║
+# ║    - proposals/<DATE>-rationale.md  — argued case for each proposal       ║
+# ║                                                                              ║
+# ║  Suggested cron: 06:00 weekdays in market timezone                          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "24x7-trader-pre-market"
+description: >
+  Pre-market research and proposal generation. Source Triangulation across
+  three frames produces evidence; Sugya Weave produces an argued proposal
+  slate; deterministic risk-envelope check enforces hard caps before any
+  proposal can leave this score.
+
+workspace: "../../../workspaces/24x7-trader"
+
+workspace_lifecycle:
+  archive_on_fresh: false        # never wipe trade history
+
+instrument: claude-code
+instrument_fallbacks: [opencode, gemini-cli]
+instrument_config:
+  skip_permissions: true
+  disable_mcp: true
+  timeout_seconds: 1200
+  allowed_tools: [Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch]
+
+# Cost-graduated tiers: scanner (cheap inventory, deterministic emission),
+# analyst (per-frame investigation), synthesizer (triangulation + editorial).
+# Multi-provider fallbacks ensure 6am rate limits don't kill the run.
+instruments:
+  scanner:
+    profile: claude-code
+    config:
+      timeout_seconds: 600
+      skip_permissions: true
+      disable_mcp: true
+  analyst:
+    profile: claude-code
+    config:
+      timeout_seconds: 1200
+      skip_permissions: true
+      disable_mcp: true
+  synthesizer:
+    profile: claude-code
+    config:
+      cli_model: claude-opus-4-7
+      timeout_seconds: 1500
+      skip_permissions: true
+      disable_mcp: true
+  cli:
+    profile: cli
+
+movements:
+  1:
+    name: "State & Plan"
+    instrument: scanner
+  2:
+    name: "Three-Frame Investigation"
+    instrument: analyst
+  3:
+    name: "Triangulation"
+    instrument: synthesizer
+  4:
+    name: "Editorial Synthesis"
+    instrument: synthesizer
+  5:
+    name: "Risk-Envelope Check"
+    instrument: cli
+  6:
+    name: "Journal & Commit"
+    instrument: scanner
+
+sheet:
+  size: 1
+  total_items: 6
+  fan_out:
+    2: 3                          # macro / sector-peer / technical
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+    5: [4]
+    6: [5]
+  prelude:
+    - file: "../../../examples/finance/24x7-trader/_libretto/trading-philosophy.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/glossary.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/operator-charter.md"
+      as: context
+    - file: "{{ workspace }}/02-strategy.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_techniques/news_research.md"
+      as: tool
+    - file: "../../../examples/finance/24x7-trader/_techniques/broker.md"
+      as: tool
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 5000
+  lookback_sheets: 6
+  capture_files:
+    - "{{ workspace }}/research-log/today-state.md"
+    - "{{ workspace }}/research-log/today-frame-macro.md"
+    - "{{ workspace }}/research-log/today-frame-sector.md"
+    - "{{ workspace }}/research-log/today-frame-technical.md"
+    - "{{ workspace }}/research-log/today-triangulation.md"
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+parallel:
+  enabled: true
+  max_concurrent: 3
+  stagger_delay_ms: 500
+
+prompt:
+  variables:
+    frames:
+      1:
+        name: "macro"
+        focus: "Macroeconomic indicators, central bank posture, regime signals (rates, inflation, employment, dollar strength), sector rotation tape, market breadth, VIX context."
+        forbidden: "Do not analyze individual tickers in isolation here. The macro frame is about the river, not the boats."
+        deliverable: "Per-candidate-sector tailwind/headwind judgment with cited evidence."
+      2:
+        name: "sector"
+        focus: "Sector flows, peer-relative performance, supply-chain news, earnings cadence (last 7 days + next 7 days), regulatory shifts."
+        forbidden: "Do not opine on technical levels — that is a separate frame. Do not make macroeconomic claims — that is a separate frame."
+        deliverable: "Per-candidate sector context: tailwind / headwind / neutral, with peer comparison."
+      3:
+        name: "technical"
+        focus: "Price action only: position relative to MAs, support/resistance, volume profile, recent breakouts/breakdowns, overextension flags."
+        forbidden: "Do not generate fundamental theses. Do not infer earnings outcomes. Do not predict short-term direction. The technical frame's job is to inform STOPS and OVEREXTENSION, not entries."
+        deliverable: "Per-candidate stop suggestion (price level + % below entry) and overextension flag."
+
+    today_iso: "{{ '%Y-%m-%d' | strftime if false else 'TODAY' }}"  # set in stage 1 from `date +%F`
+
+  template: |
+    {# ── Stage 1: State & Plan (ST extract) ──────────────────────────────── #}
+    {% if stage == 1 %}
+    # Pre-Market — Stage 1: State & Plan
+
+    Orient before researching. Read what's there, identify what's missing,
+    set the day's research scope.
+
+    ## Fermata check (HALT IF PRESENT)
+
+    ```bash
+    if [[ -f {{ workspace }}/proposals/PENDING-COMPOSER-REVIEW.md ]]; then
+      echo "FERMATA: PENDING-COMPOSER-REVIEW.md exists — halting pre-market" >&2
+      exit 1
+    fi
+    ```
+
+    If the fermata file exists, this stage MUST exit non-zero. Do NOT
+    delete it; only the operator deletes it. The score will fail and the
+    operator will be notified by the conductor's normal failure path.
+
+    ## State read
+
+    Read these files (already in your prelude as context):
+    - `02-strategy.md` (the codified strategy)
+    - `risk-envelope.yaml` (the hard caps)
+    - `learnings.md` (what we've learned across weeks)
+    - `positions.json` (current portfolio)
+
+    ## Bootstrap precondition check
+
+    ```bash
+    [[ -f {{ workspace }}/02-strategy.md ]]    || { echo "FAIL: bootstrap not run — execute 'mzt run examples/finance/24x7-trader/bootstrap.yaml' first" >&2; exit 1; }
+    [[ -f {{ workspace }}/risk-envelope.yaml ]] || { echo "FAIL: risk-envelope.yaml missing — run bootstrap" >&2; exit 1; }
+    ```
+
+    Pull broker-fresh state:
+
+    ```bash
+    set -e
+    : "${BROKER_CMD:?BROKER_CMD must be an absolute path to the broker script}"
+    BROKER="$BROKER_CMD"
+    [[ -x "$BROKER" ]] || { echo "BROKER_CMD not executable: $BROKER" >&2; exit 1; }
+    today=$(date +%F)
+    mkdir -p {{ workspace }}/research-log
+
+    # Snapshot envelope hash — later stages confirm it didn't change mid-run.
+    sha256sum {{ workspace }}/risk-envelope.yaml | awk '{print $1}' > {{ workspace }}/today-envelope-hash.txt
+
+    "$BROKER" get_balance > {{ workspace }}/today-balance.json
+    "$BROKER" get_positions > {{ workspace }}/positions.json
+    echo "$today" > {{ workspace }}/today-date.txt
+    ```
+
+    ## Tasks
+
+    1. Inspect current positions. For each, write a one-line status:
+       on-thesis / drifting / actionable.
+    2. From `learnings.md`, surface 1–3 patterns that may apply today
+       (e.g., "WHEN biotech FDA week THEN reduce sector exposure").
+    3. Identify a research universe of 5–15 tickers to investigate. Mix:
+       - existing positions worth re-examining
+       - watchlist items the operator has flagged via charter or learnings
+       - peers of existing positions where divergence could be informative
+    4. Set today's research scope: which sectors and which macro angles
+       deserve focus given current positions and learnings.
+
+    ## Output
+
+    Write `{{ workspace }}/research-log/today-state.md` with:
+
+    - `## Date` — today's ISO date
+    - `## Account State` — balance, equity, cash, positions count
+    - `## Position Status Table` — ticker | conviction-tier | days-held |
+      status (one-line)
+    - `## Active Learnings Today` — bullets, max 3
+    - `## Research Universe` — list of tickers with one-line "why investigate"
+    - `## Frame Briefs` — one paragraph each for the macro, sector,
+      technical frames pointing them at the most relevant ground
+
+    {# ── Stage 2: Three-Frame Investigation (ST investigate, fan-out 3) ──── #}
+    {% elif stage == 2 %}
+    {% set f = frames[instance] %}
+    # Pre-Market — Stage 2: Frame {{ instance }} of {{ fan_count }} — {{ f.name | upper }}
+
+    You are the {{ f.name }} frame. You are independent. You will not see
+    the other two frames' outputs. That is the point — convergence across
+    isolated frames is the strongest signal.
+
+    Read `{{ workspace }}/research-log/today-state.md` for the universe
+    and your frame brief.
+
+    ## Your scope
+
+    {{ f.focus }}
+
+    ## What you must NOT do
+
+    {{ f.forbidden }}
+
+    ## Your deliverable
+
+    {{ f.deliverable }}
+
+    ## Process
+
+    Use the news/research technique CLI for fresh data:
+
+    ```bash
+    : "${NEWS_CMD:?NEWS_CMD must be an absolute path to the news script}"
+    NEWS="$NEWS_CMD"
+    today=$(cat {{ workspace }}/today-date.txt)
+    {% if f.name == "macro" %}
+    "$NEWS" macro_today --date "$today" > {{ workspace }}/research-log/today-macro-raw.md
+    {% elif f.name == "sector" %}
+    # Per sector relevant to research universe — invoke per sector once
+    # (drive from the universe in today-state.md). Append outputs.
+    {% elif f.name == "technical" %}
+    # Use broker get_quote and price history for technical analysis
+    : "${BROKER_CMD:?BROKER_CMD must be set}"
+    BROKER="$BROKER_CMD"
+    {% endif %}
+    ```
+
+    For each candidate ticker in the research universe, produce evidence
+    aligned with your frame's deliverable. CITE every external claim with
+    a URL. If you must use offline knowledge, prefix that bullet
+    `[OFFLINE]` so triangulation can weight it appropriately.
+
+    ## Output
+
+    Write `{{ workspace }}/research-log/today-frame-{{ f.name }}.md` with:
+
+    - `## Frame: {{ f.name | title }}`
+    - `## Method` — brief description of what you queried and how
+    - `## Per-Candidate Findings` — one section per ticker, with:
+       - **Verdict per your frame's deliverable**
+       - **Evidence** (cited)
+       - **Confidence** (HIGH / MEDIUM / LOW)
+    - `## Cross-cutting Observations` — sector-level or macro-level
+      observations that affect MULTIPLE candidates
+    - `## Frame-Specific Caveats` — what this frame CANNOT see (forces a
+      sober handoff to the triangulation stage)
+
+    {# ── Stage 3: Triangulation (ST triangulate) ─────────────────────────── #}
+    {% elif stage == 3 %}
+    # Pre-Market — Stage 3: Triangulation
+
+    Read all three frames:
+    - `{{ workspace }}/research-log/today-frame-macro.md`
+    - `{{ workspace }}/research-log/today-frame-sector.md`
+    - `{{ workspace }}/research-log/today-frame-technical.md`
+
+    Do NOT summarize. Do triangulation.
+
+    ## Per-candidate verdict
+
+    For each candidate ticker that appears in 2+ frames, produce a verdict:
+
+    - **CORROBORATED** — frames independently reach the same direction
+      (or compatible directions). State which frames agree and on what.
+      This is signal — it wasn't coordinated.
+    - **UNCORROBORATED** — only one frame supports a position; others
+      silent or insufficient. Treat as opportunistic at best.
+    - **CONTRADICTED** — frames actively disagree. DO NOT resolve by
+      averaging. Either find a reading that makes both true (e.g., macro
+      headwind + technical strength = potential mean-reversion trade with
+      tight stop), or explain why one frame's evidence dominates.
+
+    ## Cross-frame insights
+
+    Beyond per-candidate verdicts:
+
+    - **Convergence** — what did all three frames flag without coordinating?
+    - **Tension** — where do the frames structurally disagree, and what
+      does that disagreement teach us about today's tape?
+    - **Gaps** — what did NO frame cover that should have been covered?
+      Blind spots are findings.
+
+    ## Output
+
+    Write `{{ workspace }}/research-log/today-triangulation.md` with:
+
+    - `## Per-Candidate Triangulation` — table: ticker | macro verdict |
+      sector verdict | technical verdict | overall (CORROBORATED /
+      UNCORROBORATED / CONTRADICTED) | confidence
+    - `## Convergences` — independent agreement across frames
+    - `## Tensions` — disagreements with explanations
+    - `## Gaps` — what's missing
+    - `## Triangulation Notes for Synthesis` — a short brief for the
+      next stage's editorial synthesis: what's the SHAPE of today's
+      proposal slate likely to be?
+
+    Length: 600+ words minimum. Less than 600 means you summarized.
+
+    {# ── Stage 4: Editorial Synthesis (Sugya Weave) ──────────────────────── #}
+    {% elif stage == 4 %}
+    # Pre-Market — Stage 4: Editorial Synthesis
+
+    The triangulation produced verdicts. Your job is editorial: take a
+    POSITION. Produce the proposal slate with argued conviction tiers.
+
+    Read:
+    - `{{ workspace }}/research-log/today-state.md`
+    - `{{ workspace }}/research-log/today-triangulation.md`
+    - `{{ workspace }}/02-strategy.md` (already in prelude)
+    - `{{ workspace }}/risk-envelope.yaml` (already in prelude)
+    - `{{ workspace }}/positions.json`
+
+    ## Tasks
+
+    For each candidate that the triangulation supports:
+
+    1. **Decide a side** — BUY / SELL / HOLD. Existing position + no new
+       evidence = HOLD; existing position + thesis broken = SELL; new
+       candidate corroborated = BUY (subject to envelope).
+
+    2. **Assign a conviction tier** by the rules in strategy.md. Document
+       the tier reasoning. CONTRADICTED candidates may not be HIGH tier
+       under any circumstance — note this explicitly when relevant.
+
+    3. **Size the position** based on tier and envelope caps. Compute
+       target_value_usd from current portfolio total and tier rules:
+       HIGH = up to envelope max; MEDIUM = 50%; LOW = 25% (paper
+       preferred). Exact numbers — no ranges.
+
+    4. **Set stop level** from technical frame's suggestion, BUT not
+       deeper than envelope's `per_position_initial_stop_pct`. If the
+       technical-suggested stop is deeper than envelope allows, demote
+       the proposal to LOW tier OR remove it.
+
+    5. **Classify thesis_family** — must match envelope's declared
+       families. Missing or unrecognized = proposal is invalid.
+
+    6. **Write rationale** — three falsifiable claims that justify the
+       position. Stop the position if any of these turns out to be wrong.
+
+    ## Output two files
+
+    First, `{{ workspace }}/proposals/$(cat {{ workspace }}/today-date.txt)-slate.json`:
+
+    A JSON array. Schema for each proposal:
+
+    ```json
+    {
+      "ticker": "MSFT",
+      "side": "BUY",
+      "tier": "HIGH",
+      "asset_class": "equity",
+      "thesis_family": "ai_infrastructure",
+      "sector": "Technology",
+      "target_qty": 25,
+      "target_value_usd": 12500,
+      "order_type": "limit",
+      "limit_price": 500.00,
+      "initial_stop_pct": 7.0,
+      "initial_stop_price": 465.00,
+      "rationale_id": "msft-2026-05-05",
+      "client_order_id": "24x7-2026-05-05-MSFT-BUY",
+      "claims": [
+        "Cloud growth re-accelerated in last quarter (proof: Q earnings)",
+        "Enterprise AI adoption thesis is intact (proof: customer wins)",
+        "Technical position above 200-day, no overextension (proof: technical frame)"
+      ]
+    }
+    ```
+
+    Required fields enforced by validation: ticker, side, tier,
+    thesis_family, asset_class, target_value_usd (for BUYs),
+    client_order_id, rationale_id, claims (≥ 3).
+
+    Second, `{{ workspace }}/proposals/$(cat {{ workspace }}/today-date.txt)-rationale.md`
+    — the argued case for the slate. For each proposal:
+
+    - Tier reasoning (why HIGH/MEDIUM/LOW)
+    - The three claims with the evidence each is rooted in
+    - The stop reasoning (why this level, not deeper)
+    - What would invalidate this thesis (the kill switches)
+
+    Plus an editorial preamble: what's the SHAPE of today's slate?
+    (e.g., "defensive day — three trims, one new HIGH conviction add.")
+
+    ## Sovereign rule: if no proposal qualifies, EMIT AN EMPTY SLATE
+
+    `[]` is a valid slate. The honest output of a careful pre-market is
+    sometimes "do nothing today." A slate full of LOW tiers because the
+    agent felt obligated to produce trades is the failure mode this
+    family rejects.
+
+    {# ── Stage 5: Risk-Envelope Check (Tool Chain — deterministic) ─────────── #}
+    {% elif stage == 5 %}
+    # Pre-Market — Stage 5: Risk-Envelope Check
+
+    Run the deterministic envelope check on the slate produced in stage 4.
+    This stage is mechanical: invoke the script, capture output, fail if
+    the script fails.
+
+    The script needs three arguments:
+      check_envelope.sh <workspace> <slate.json> <balance.json>
+
+    The balance.json was refreshed by stage 1 from the broker's `get_balance`.
+
+    ```bash
+    set -e
+    : "${CHECK_ENVELOPE_CMD:?CHECK_ENVELOPE_CMD must be an absolute path to check_envelope.sh}"
+    today=$(cat {{ workspace }}/today-date.txt)
+    SLATE={{ workspace }}/proposals/${today}-slate.json
+    BALANCE={{ workspace }}/today-balance.json
+    [[ -f "$SLATE" ]]   || { echo "no slate file: $SLATE" >&2; exit 1; }
+    [[ -f "$BALANCE" ]] || { echo "no balance file: $BALANCE" >&2; exit 1; }
+
+    bash "$CHECK_ENVELOPE_CMD" \
+      {{ workspace }} \
+      "$SLATE" \
+      "$BALANCE" \
+      > {{ workspace }}/proposals/${today}-envelope-check.log 2>&1
+    rc=$?
+    cat {{ workspace }}/proposals/${today}-envelope-check.log
+    exit $rc
+    ```
+
+    The validation for this stage runs the same check via
+    `command_succeeds` — that is the gate. If this stage fails, the
+    market-open phase will not proceed (the slate it would consume is
+    flagged as failing).
+
+    {# ── Stage 6: Journal & Commit ───────────────────────────────────────── #}
+    {% elif stage == 6 %}
+    # Pre-Market — Stage 6: Journal & Commit
+
+    Write the day's research-log entry, summarizing what you did and what
+    you decided. This is the human-readable record the operator reviews.
+
+    ```bash
+    today=$(cat {{ workspace }}/today-date.txt)
+    cp {{ workspace }}/research-log/today-state.md         {{ workspace }}/research-log/${today}-state.md
+    cp {{ workspace }}/research-log/today-frame-macro.md   {{ workspace }}/research-log/${today}-frame-macro.md
+    cp {{ workspace }}/research-log/today-frame-sector.md  {{ workspace }}/research-log/${today}-frame-sector.md
+    cp {{ workspace }}/research-log/today-frame-technical.md {{ workspace }}/research-log/${today}-frame-technical.md
+    cp {{ workspace }}/research-log/today-triangulation.md {{ workspace }}/research-log/${today}-triangulation.md
+    ```
+
+    Then write `{{ workspace }}/research-log/${today}-summary.md`:
+
+    - `## Date`
+    - `## Slate Shape` — paraphrase from the rationale preamble
+    - `## Notable Triangulation Findings` — key convergences/tensions
+    - `## Decisions Deferred` — anything we noticed but chose not to act
+      on, with WHY (so the weekly review can audit deferral patterns)
+    - `## Notes for Market-Open` — anything market-open should know that
+      isn't in the slate JSON itself
+
+    Notify (best-effort, don't fail the score on notify failure):
+
+    ```bash
+    NOTIFY="${NOTIFY_CMD:-}"
+    if [[ -n "$NOTIFY" && -x "$NOTIFY" ]]; then
+      "$NOTIFY" trades "Pre-market complete: $today" {{ workspace }}/research-log/${today}-summary.md || true
+    fi
+    ```
+
+    {% endif %}
+
+validations:
+  # ── Stage 1: Fermata gate (validation backstop) ──
+  - type: command_succeeds
+    command: 'test ! -f "{workspace}/proposals/PENDING-COMPOSER-REVIEW.md"'
+    condition: "stage == 1"
+    stage: 1
+    description: "Fermata file does not exist (operator review pending halts all execution phases)"
+    retry_count: 0
+  # ── Stage 1: State & Plan ──
+  - type: file_exists
+    path: "{workspace}/research-log/today-state.md"
+    condition: "stage == 1"
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/research-log/today-state.md"
+    pattern: "(?i)## Research Universe"
+    condition: "stage == 1"
+    stage: 2
+    description: "Today-state has Research Universe section"
+  - type: content_regex
+    path: "{workspace}/research-log/today-state.md"
+    pattern: "(?i)## Frame Briefs"
+    condition: "stage == 1"
+    stage: 2
+    description: "Today-state has Frame Briefs"
+  - type: file_exists
+    path: "{workspace}/today-date.txt"
+    condition: "stage == 1"
+    stage: 2
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/research-log/today-state.md") -ge 250'
+    condition: "stage == 1"
+    stage: 3
+    description: "State document is substantive (250+ words)"
+  - type: command_succeeds
+    command: 'python3 -c "import json,sys; json.load(open(\"{workspace}/positions.json\"))"'
+    condition: "stage == 1"
+    stage: 2
+    description: "positions.json refreshed and valid"
+
+  # ── Stage 2: Three-Frame Investigation (fan-out 3) ──
+  # Sheets 2, 3, 4 = macro, sector, technical
+  - type: file_exists
+    path: "{workspace}/research-log/today-frame-macro.md"
+    sheet: 2
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/research-log/today-frame-sector.md"
+    sheet: 3
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/research-log/today-frame-technical.md"
+    sheet: 4
+    stage: 1
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/research-log/today-frame-macro.md") -ge 300'
+    sheet: 2
+    stage: 2
+    description: "Macro frame has substantive content (300+ words)"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/research-log/today-frame-sector.md") -ge 300'
+    sheet: 3
+    stage: 2
+    description: "Sector frame has substantive content (300+ words)"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/research-log/today-frame-technical.md") -ge 300'
+    sheet: 4
+    stage: 2
+    description: "Technical frame has substantive content (300+ words)"
+  - type: content_regex
+    path: "{workspace}/research-log/today-frame-macro.md"
+    pattern: "(?i)## Per-Candidate Findings"
+    sheet: 2
+    stage: 2
+    description: "Macro frame has Per-Candidate Findings"
+  - type: content_regex
+    path: "{workspace}/research-log/today-frame-sector.md"
+    pattern: "(?i)## Per-Candidate Findings"
+    sheet: 3
+    stage: 2
+    description: "Sector frame has Per-Candidate Findings"
+  - type: content_regex
+    path: "{workspace}/research-log/today-frame-technical.md"
+    pattern: "(?i)## Per-Candidate Findings"
+    sheet: 4
+    stage: 2
+    description: "Technical frame has Per-Candidate Findings"
+  # Outcome validation: technical frame must produce stop suggestions
+  - type: content_regex
+    path: "{workspace}/research-log/today-frame-technical.md"
+    pattern: "(?i)stop"
+    sheet: 4
+    stage: 2
+    description: "Technical frame discusses stops (its required deliverable)"
+
+  # ── Stage 3: Triangulation ──
+  - type: file_exists
+    path: "{workspace}/research-log/today-triangulation.md"
+    condition: "stage == 3"
+    stage: 1
+  - type: content_regex
+    path: "{workspace}/research-log/today-triangulation.md"
+    pattern: "(?i)(CORROBORATED|UNCORROBORATED|CONTRADICTED)"
+    condition: "stage == 3"
+    stage: 2
+    description: "Triangulation produces verification verdicts"
+  - type: content_regex
+    path: "{workspace}/research-log/today-triangulation.md"
+    pattern: "(?i)## (Convergence|Tension|Gap)"
+    condition: "stage == 3"
+    stage: 2
+    description: "Triangulation has Convergence/Tension/Gap sections"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/research-log/today-triangulation.md") -ge 600'
+    condition: "stage == 3"
+    stage: 3
+    description: "Triangulation is substantive (600+ words)"
+
+  # ── Stage 4: Editorial Synthesis ──
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); test -f "{workspace}/proposals/${today}-slate.json"'
+    condition: "stage == 4"
+    stage: 1
+    description: "Slate JSON written for today"
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); test -f "{workspace}/proposals/${today}-rationale.md"'
+    condition: "stage == 4"
+    stage: 1
+    description: "Rationale markdown written for today"
+  - type: command_succeeds
+    command: |
+      today=$(cat "{workspace}/today-date.txt")
+      python3 -c "
+      import json, sys
+      slate = json.load(open(f'{workspace}/proposals/{today}-slate.json'.format(workspace='{workspace}')))
+      assert isinstance(slate, list), 'slate must be a JSON array'
+      required = {'ticker','side','tier','thesis_family','asset_class','rationale_id','client_order_id','claims'}
+      for p in slate:
+          missing = required - set(p)
+          assert not missing, f'proposal missing required fields {missing}: {p}'
+          assert isinstance(p['claims'], list) and len(p['claims']) >= 3, f'claims must be a list of >= 3 items: {p}'
+          if p['side'].upper() == 'BUY':
+              assert 'target_value_usd' in p, f'BUY proposal missing target_value_usd: {p}'
+      "
+    condition: "stage == 4"
+    stage: 2
+    description: "Slate is valid JSON with all required proposal fields and >= 3 claims each"
+
+  # ── Stage 5: Risk-Envelope Check (deterministic gate) ──
+  - type: command_succeeds
+    command: |
+      hash_now=$(sha256sum "{workspace}/risk-envelope.yaml" | awk '{print $1}')
+      hash_then=$(cat "{workspace}/today-envelope-hash.txt")
+      [[ "$hash_now" == "$hash_then" ]] || { echo "FAIL: envelope was modified during the score run (was $hash_then, is $hash_now)" >&2; exit 1; }
+    condition: "stage == 5"
+    stage: 1
+    description: "risk-envelope.yaml has not been modified during this score run"
+  - type: command_succeeds
+    command: |
+      today=$(cat "{workspace}/today-date.txt")
+      bash "${CHECK_ENVELOPE_CMD:?CHECK_ENVELOPE_CMD required}" \
+        "{workspace}" \
+        "{workspace}/proposals/${today}-slate.json" \
+        "{workspace}/today-balance.json"
+    condition: "stage == 5"
+    stage: 2
+    description: "Risk envelope check passes — slate is within hard caps"
+
+  # ── Stage 6: Journal & Commit ──
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); test -f "{workspace}/research-log/${today}-summary.md"'
+    condition: "stage == 6"
+    stage: 1
+    description: "Daily summary written"
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); test -f "{workspace}/research-log/${today}-triangulation.md"'
+    condition: "stage == 6"
+    stage: 2
+    description: "Today's triangulation archived under date"

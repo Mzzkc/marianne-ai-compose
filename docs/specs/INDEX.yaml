@@ -45,3 +45,7 @@ files:
     status: designed
     revised: 2026-04-19
     related: [2026-04-17-baton-primitives-and-marianne-mozart-design.md, 2026-04-19-marianne-memory-system-design.md]
+  - name: validation-gaps-addendum.md
+    purpose: "Append-only catalog of cases where score `validations:` should have caught a defective output but the current Marianne validation types cannot express the check. Living institutional memory — entries remain even after fixes land. Seeded by 2026-05-05 24x7-trader thinking-lab review (12 gaps documented)."
+    status: active
+    added: 2026-05-05

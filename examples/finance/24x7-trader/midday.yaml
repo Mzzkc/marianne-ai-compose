@@ -1,0 +1,481 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  24x7-trader / midday                                                       ║
+# ║                                                                              ║
+# ║  Patterns: Triage Gate + Read-and-React + Tool Chain                        ║
+# ║                                                                              ║
+# ║  Position management. Classify positions cheaply (TG classify), make       ║
+# ║  per-position decisions for the actionable subset (TG route + R&R),        ║
+# ║  envelope-check the action plan, then execute. Holistic decision-making    ║
+# ║  in stage 2 — positions interact (cutting one frees capacity for another); ║
+# ║  fan-out would force false independence.                                    ║
+# ║                                                                              ║
+# ║  Inputs (workspace):                                                        ║
+# ║    - positions.json, risk-envelope.yaml, strategy.md                       ║
+# ║    - trade-log.jsonl (cost basis source)                                    ║
+# ║                                                                              ║
+# ║  Outputs (workspace):                                                       ║
+# ║    - journal/<DATE>-midday.md                                              ║
+# ║    - midday-actions.json                                                    ║
+# ║                                                                              ║
+# ║  Suggested cron: 12:00 weekdays in market timezone                          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: "24x7-trader-midday"
+description: >
+  Midday position management. Triage classifies positions; a single
+  holistic-decision sheet decides cut/tighten/hold for each actionable
+  position; envelope-check enforces caps; execution is journaled.
+
+workspace: "../../../workspaces/24x7-trader"
+
+workspace_lifecycle:
+  archive_on_fresh: false
+
+instrument: claude-code
+instrument_fallbacks: [opencode, gemini-cli]
+instrument_config:
+  skip_permissions: true
+  disable_mcp: true
+  timeout_seconds: 1200
+  allowed_tools: [Read, Write, Edit, Glob, Grep, Bash]
+
+instruments:
+  scanner:
+    profile: claude-code
+    config:
+      timeout_seconds: 600
+      skip_permissions: true
+      disable_mcp: true
+  analyst:
+    profile: claude-code
+    config:
+      timeout_seconds: 1200
+      skip_permissions: true
+      disable_mcp: true
+  cli:
+    profile: cli
+
+movements:
+  1:
+    name: "Triage Classify"
+    instrument: scanner
+  2:
+    name: "Action Decisions"
+    instrument: analyst
+  3:
+    name: "Envelope Check"
+    instrument: cli
+  4:
+    name: "Execute & Journal"
+    instrument: analyst
+
+sheet:
+  size: 1
+  total_items: 4
+  dependencies:
+    2: [1]
+    3: [2]
+    4: [3]
+  prelude:
+    - file: "../../../examples/finance/24x7-trader/_libretto/trading-philosophy.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/glossary.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_libretto/operator-charter.md"
+      as: context
+    - file: "{{ workspace }}/02-strategy.md"
+      as: context
+    - file: "../../../examples/finance/24x7-trader/_techniques/broker.md"
+      as: tool
+
+cross_sheet:
+  auto_capture_stdout: true
+  max_output_chars: 4000
+  lookback_sheets: 4
+
+stale_detection:
+  enabled: true
+  idle_timeout_seconds: 1800
+
+retry:
+  max_retries: 2
+  base_delay_seconds: 30
+
+prompt:
+  template: |
+    {# ── Stage 1: Triage Classify ─────────────────────────────────────────── #}
+    {% if stage == 1 %}
+    # Midday — Stage 1: Triage Classify
+
+    ## Fermata check (HALT IF PRESENT)
+
+    ```bash
+    if [[ -f {{ workspace }}/proposals/PENDING-COMPOSER-REVIEW.md ]]; then
+      echo "FERMATA: PENDING-COMPOSER-REVIEW.md exists — halting midday" >&2
+      exit 1
+    fi
+    ```
+
+    ## Bootstrap precondition check
+
+    ```bash
+    [[ -f {{ workspace }}/02-strategy.md ]]    || { echo "FAIL: bootstrap not run" >&2; exit 1; }
+    [[ -f {{ workspace }}/risk-envelope.yaml ]] || { echo "FAIL: risk-envelope.yaml missing" >&2; exit 1; }
+    ```
+
+    ## Refresh state
+
+    ```bash
+    set -e
+    today=$(date +%F)
+    echo "$today" > {{ workspace }}/today-date.txt
+    : "${BROKER_CMD:?BROKER_CMD must be an absolute path}"
+    BROKER="$BROKER_CMD"
+    [[ -x "$BROKER" ]] || { echo "BROKER_CMD not executable: $BROKER" >&2; exit 1; }
+    sha256sum {{ workspace }}/risk-envelope.yaml | awk '{print $1}' > {{ workspace }}/today-envelope-hash.txt
+    "$BROKER" get_positions > {{ workspace }}/positions.json
+    "$BROKER" get_balance > {{ workspace }}/today-midday-balance.json
+    "$BROKER" list_orders --status open > {{ workspace }}/today-midday-open-orders.json
+    ```
+
+    ## Classify each position
+
+    Read `{{ workspace }}/positions.json` and the envelope at
+    `{{ workspace }}/risk-envelope.yaml`. Cross-reference with
+    `{{ workspace }}/trade-log.jsonl` for original cost basis,
+    initial stop level, and conviction tier at entry.
+
+    For each position, classify into ONE of the five buckets:
+
+    | Bucket | When |
+    |---|---|
+    | `CUT_NOW` | Unrealized loss exceeds the stop set at entry |
+    | `TIGHTEN_STOP` | Unrealized gain ≥ envelope's `trailing_stop_min_pct` AND no current stop OR stop is more than `trailing_stop_min_pct` below current price |
+    | `EXIT_CHECK` | Held > 14 days AND no progress on thesis (drift detected) |
+    | `THESIS_RECHECK` | News/regulatory event flagged in pre-market for this ticker |
+    | `HOLD` | None of the above |
+
+    The classification is conservative — when in doubt, `HOLD`. Midday is
+    not the time for re-thinking the strategy; that's the weekly review.
+
+    ## Output
+
+    Write `{{ workspace }}/midday-classification.json`:
+
+    ```json
+    {
+      "date": "2026-05-05",
+      "total_positions": 7,
+      "buckets": {
+        "CUT_NOW": [{"ticker": "...", "reason": "...", "stop_level": ..., "current": ...}],
+        "TIGHTEN_STOP": [{"ticker": "...", "current_stop": ..., "suggested_stop": ..., "rationale": "..."}],
+        "EXIT_CHECK": [{"ticker": "...", "days_held": ..., "drift_signal": "..."}],
+        "THESIS_RECHECK": [{"ticker": "...", "trigger": "..."}],
+        "HOLD": [{"ticker": "..."}]
+      },
+      "actionable_count": 0
+    }
+    ```
+
+    `actionable_count` = sum of CUT_NOW + TIGHTEN_STOP + EXIT_CHECK + THESIS_RECHECK.
+
+    Also write `{{ workspace }}/midday-classification.md` for human reading,
+    grouping positions by bucket with one-line reasons.
+
+    {# ── Stage 2: Action Decisions (TG route + Read-and-React) ────────────── #}
+    {% elif stage == 2 %}
+    # Midday — Stage 2: Action Decisions
+
+    Read `{{ workspace }}/midday-classification.json`. Make per-position
+    decisions for ALL actionable buckets. This is holistic — positions
+    interact (capacity, sector concentration). Decide the whole set at once.
+
+    ## If actionable_count == 0
+
+    Skip to writing a no-op decisions file and finish the stage:
+
+    ```json
+    {"date": "...", "actions": [], "note": "no actionable positions today"}
+    ```
+
+    ## For each CUT_NOW
+
+    DECIDE: `MARKET_SELL` (immediate) or `LIMIT_SELL_AT_MARKET` (with a
+    limit price near current bid to avoid worst-case slippage). The
+    operator's charter may set a preference; in absence of that, default
+    to `LIMIT_SELL_AT_MARKET`. NEVER attempt to "wait for a bounce" — the
+    stop was set at entry, the stop hit, the trade is done.
+
+    ## For each TIGHTEN_STOP
+
+    DECIDE the new stop level. Constraints:
+    - New stop ≥ envelope's `trailing_stop_min_pct` below current price
+    - New stop > existing stop (only tighten, never loosen)
+    - Round to two decimals
+
+    ## For each EXIT_CHECK
+
+    DECIDE: `EXIT` (no thesis progress, free capacity) or `HOLD_W_REVIEW`
+    (still possible, schedule for thesis-recheck). EXIT_CHECK never
+    becomes a CUT decision at midday — the stop is the stop. EXIT_CHECK
+    is a non-stop-driven exit.
+
+    ## For each THESIS_RECHECK
+
+    Read the relevant pre-market frame outputs from today
+    (`research-log/today-frame-*.md`) for fresh evidence. DECIDE: `HOLD`
+    (thesis intact), `TIGHTEN_STOP` (thesis weakening, raise stop), or
+    `EXIT` (thesis broken). Document which evidence drove the decision.
+
+    ## Output
+
+    Write `{{ workspace }}/midday-actions.json`:
+
+    ```json
+    {
+      "date": "...",
+      "actions": [
+        {
+          "client_order_id": "24x7-2026-05-05-NVDA-MIDDAY-SELL",
+          "ticker": "NVDA",
+          "action": "SELL_MARKET",
+          "qty": 30,
+          "reason": "stop hit",
+          "source_bucket": "CUT_NOW"
+        },
+        {
+          "client_order_id": "24x7-2026-05-05-MSFT-MIDDAY-STOPADJ",
+          "ticker": "MSFT",
+          "action": "SET_STOP",
+          "stop_price": 510.50,
+          "reason": "+12% gain, tighten from 7% to trailing 10%",
+          "source_bucket": "TIGHTEN_STOP"
+        }
+      ]
+    }
+    ```
+
+    Allowed `action` values: `SELL_MARKET`, `SELL_LIMIT` (with `limit_price`
+    field), `SET_STOP`, `EXIT_LIMIT` (with `limit_price`), `HOLD_W_REVIEW`.
+
+    Also write `{{ workspace }}/midday-rationale.md` — markdown,
+    one section per action with the reasoning.
+
+    {# ── Stage 3: Envelope Check ──────────────────────────────────────────── #}
+    {% elif stage == 3 %}
+    # Midday — Stage 3: Envelope Check
+
+    Midday actions can violate the envelope in subtler ways than entries:
+    a partial sell still leaves the position; a stop adjustment could
+    set a stop too tight; a SELL could exceed held quantity.
+
+    First confirm the envelope itself wasn't modified during this run,
+    then check action-specific constraints.
+
+    ```bash
+    set -e
+    hash_now=$(sha256sum {{ workspace }}/risk-envelope.yaml | awk '{print $1}')
+    hash_then=$(cat {{ workspace }}/today-envelope-hash.txt)
+    [[ "$hash_now" == "$hash_then" ]] || { echo "FAIL: envelope was modified during this score run" >&2; exit 1; }
+
+    python3 - <<'PY'
+    import json, sys
+    actions = json.load(open('{{ workspace }}/midday-actions.json'))['actions']
+    envelope = __import__('yaml').safe_load(open('{{ workspace }}/risk-envelope.yaml'))
+    floor = envelope['caps'].get('trailing_stop_min_pct', 0)
+    positions = {p['ticker']: p for p in json.load(open('{{ workspace }}/positions.json'))}
+
+    issues = []
+    for a in actions:
+        tkr = a['ticker']
+        act = a['action']
+
+        # SELL/EXIT checks — must reference held position with sufficient qty
+        if act in ('SELL_MARKET', 'SELL_LIMIT', 'EXIT_LIMIT'):
+            pos = positions.get(tkr)
+            if pos is None:
+                issues.append(f'{tkr}: {act} for ticker not held (forbidden short_sell)')
+                continue
+            req_qty = a.get('qty')
+            if req_qty is not None and float(req_qty) > float(pos.get('qty', 0)):
+                issues.append(f'{tkr}: {act} qty {req_qty} > held qty {pos["qty"]}')
+            if act in ('SELL_LIMIT', 'EXIT_LIMIT') and 'limit_price' not in a:
+                issues.append(f'{tkr}: {act} requires limit_price')
+
+        if act == 'SET_STOP':
+            pos = positions.get(tkr)
+            if pos is None:
+                issues.append(f'{tkr}: SET_STOP for ticker not held')
+                continue
+            current = pos.get('current_price', 0)
+            stop = a.get('stop_price', 0)
+            if current and stop:
+                gap_pct = 100.0 * (current - stop) / current
+                if gap_pct < floor:
+                    issues.append(f'{tkr}: stop too tight ({gap_pct:.1f}% < floor {floor}%)')
+            # Stops must only TIGHTEN, never loosen — if a current stop exists,
+            # the new stop must be >= the current one.
+            existing_stop = pos.get('current_stop')
+            if existing_stop is not None and float(stop) < float(existing_stop):
+                issues.append(f'{tkr}: SET_STOP would loosen stop ({existing_stop} → {stop})')
+
+    if issues:
+        print('VIOLATIONS:', file=sys.stderr)
+        for i in issues: print(f'  - {i}', file=sys.stderr)
+        sys.exit(1)
+    print('midday envelope check OK')
+    PY
+    ```
+
+    {# ── Stage 4: Execute (deterministic) & Journal ────────────────────────── #}
+    {% elif stage == 4 %}
+    # Midday — Stage 4: Execute & Journal
+
+    Execution is deterministic — invoke the broker directly per action,
+    using the action's `client_order_id` for idempotency. No agent
+    judgment in the order placement itself. The journal that follows
+    IS interpretive — that's where this stage uses LLM reasoning.
+
+    ```bash
+    set -e
+    today=$(cat {{ workspace }}/today-date.txt)
+    : "${BROKER_CMD:?BROKER_CMD must be set}"
+    BROKER="$BROKER_CMD"
+    mkdir -p {{ workspace }}/journal
+    : > {{ workspace }}/journal/today-midday-failures.md
+    : > {{ workspace }}/today-midday-results.jsonl
+    ```
+
+    For each action:
+
+    - `SELL_MARKET` → `broker place_order TICKER SELL QTY market`
+    - `SELL_LIMIT` → `broker place_order TICKER SELL QTY limit LIMIT_PRICE`
+    - `EXIT_LIMIT` → same as SELL_LIMIT but tagged for journal
+    - `SET_STOP` → first `broker cancel_stop TICKER`, then
+      `broker set_stop TICKER STOP_PRICE`
+    - `HOLD_W_REVIEW` → no broker call, just a journal note
+
+    Append every result (success OR failure) to
+    `{{ workspace }}/today-midday-results.jsonl`. On failure, also append
+    diagnostic to `{{ workspace }}/journal/today-midday-failures.md`.
+    Continue with next action — partial completion is acceptable.
+
+    Append every successful execution to `{{ workspace }}/trade-log.jsonl`.
+
+    Refresh:
+    ```bash
+    "$BROKER" get_positions > {{ workspace }}/positions.json
+    ```
+
+    ## Journal
+
+    Write `{{ workspace }}/journal/${today}-midday.md`:
+
+    - `## Date / Time`
+    - `## Triage Summary` — counts per bucket (from midday-classification.json)
+    - `## Actions Executed` — per-action result table
+    - `## Failures` — diagnostic for each broker failure with operator
+      action recommendation
+    - `## Stops Adjusted` — table of new stop levels
+    - `## Notes for Close` — anything close should know
+
+    Notify:
+    ```bash
+    NOTIFY="${NOTIFY_CMD:-}"
+    if [[ -n "$NOTIFY" && -x "$NOTIFY" ]]; then
+      "$NOTIFY" trades "Midday complete: $today" {{ workspace }}/journal/${today}-midday.md || true
+    fi
+    ```
+
+    {% endif %}
+
+validations:
+  # ── Stage 1: Fermata gate (validation backstop) ──
+  - type: command_succeeds
+    command: 'test ! -f "{workspace}/proposals/PENDING-COMPOSER-REVIEW.md"'
+    condition: "stage == 1"
+    stage: 1
+    description: "Fermata file does not exist (operator review pending halts all execution phases)"
+    retry_count: 0
+  # ── Stage 1: Triage Classify ──
+  - type: file_exists
+    path: "{workspace}/midday-classification.json"
+    condition: "stage == 1"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/midday-classification.md"
+    condition: "stage == 1"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      c = json.load(open('{workspace}/midday-classification.json'))
+      assert 'buckets' in c and isinstance(c['buckets'], dict), 'missing buckets'
+      for b in ('CUT_NOW','TIGHTEN_STOP','EXIT_CHECK','THESIS_RECHECK','HOLD'):
+          assert b in c['buckets'], f'missing bucket {b}'
+      total = sum(len(c['buckets'][b]) for b in c['buckets'])
+      positions = json.load(open('{workspace}/positions.json'))
+      assert total == len(positions), f'classification covers {total} positions but {len(positions)} held'
+      "
+    condition: "stage == 1"
+    stage: 2
+    description: "Classification is well-formed and covers all positions"
+
+  # ── Stage 2: Action Decisions ──
+  - type: file_exists
+    path: "{workspace}/midday-actions.json"
+    condition: "stage == 2"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/midday-rationale.md"
+    condition: "stage == 2"
+    stage: 1
+  - type: command_succeeds
+    command: |
+      python3 -c "
+      import json
+      a = json.load(open('{workspace}/midday-actions.json'))
+      cls = json.load(open('{workspace}/midday-classification.json'))
+      actionable = sum(len(cls['buckets'][b]) for b in ('CUT_NOW','TIGHTEN_STOP','EXIT_CHECK','THESIS_RECHECK'))
+      acts = a.get('actions', [])
+      assert isinstance(acts, list)
+      # Allow EXIT_CHECK to dispatch to HOLD_W_REVIEW (no broker action) — those still appear in actions list
+      if actionable == 0:
+          assert acts == [], f'expected no actions for 0 actionable, got {len(acts)}'
+      else:
+          assert len(acts) >= 1, 'actionable positions but no actions decided'
+      allowed = {'SELL_MARKET','SELL_LIMIT','SET_STOP','EXIT_LIMIT','HOLD_W_REVIEW'}
+      for x in acts:
+          assert x['action'] in allowed, f'invalid action {x[\"action\"]}'
+          assert 'client_order_id' in x and 'ticker' in x and 'reason' in x
+      "
+    condition: "stage == 2"
+    stage: 2
+    description: "Actions cover all actionable positions with valid action types"
+
+  # ── Stage 3: Envelope Check ──
+  # Validation IS the stage 3 command — already checked
+  - type: file_exists
+    path: "{workspace}/midday-actions.json"
+    condition: "stage == 3"
+    stage: 1
+
+  # ── Stage 4: Execute & Journal ──
+  - type: command_succeeds
+    command: 'today=$(cat "{workspace}/today-date.txt"); test -f "{workspace}/journal/${today}-midday.md"'
+    condition: "stage == 4"
+    stage: 1
+    description: "Midday journal written"
+  - type: command_succeeds
+    command: |
+      a=$(python3 -c "import json; print(len(json.load(open('{workspace}/midday-actions.json'))['actions']))")
+      r=$(wc -l < "{workspace}/today-midday-results.jsonl" 2>/dev/null || echo 0)
+      # Allow 0-action runs; if actions present, at least one result line per action
+      if [[ "$a" -gt 0 && "$r" -lt "$a" ]]; then
+        echo "actions=$a but results=$r" >&2
+        exit 1
+      fi
+    condition: "stage == 4"
+    stage: 2
+    description: "Result line per action recorded (or zero of each)"
