@@ -354,7 +354,7 @@ Remove all compiler code from Mozart. Fix everything that breaks.
 
 ### Session Context
 - `docs/handoffs/composition-compiler--SESSION-HANDOFF-2026-04-13.md` — Build session handoff
-- `memory-bank/legion/legion.md` — Legion's memory of the build
+- `~/Projects/legion/legion.md` — Legion's memory of the build (lives outside this repo by design)
 
 ## Verification After Decoupling
 

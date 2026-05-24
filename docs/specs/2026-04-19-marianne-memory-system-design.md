@@ -623,5 +623,5 @@ All four Critical issues from both runs' reviews (unbounded in-memory NumPy OOM,
 - **Promoted Spec (Run 1, revised):** `docs/specs/2026-04-18-marianne-memory-system-design.md` — the backbone of this merged specification. Incorporated all critical fixes from both reviews: sqlite-vec, EventBus, archival lifecycle, dedicated embedding thread pool.
 - **Companion Spec (Unconscious):** `docs/specs/2026-04-19-marianne-unconscious-local-model-design.md` — the parallel spec defining the DecisionSource Protocol and local model layer that consumes memory via `MemorySnapshot`.
 - **Existing Learning Store:** `src/marianne/learning/store/` — 16 Python files, 7,279 lines, 13 CREATE TABLE statements, schema version 15. Preserved and bridged, not replaced.
-- **Legion Identity Model:** `memory-bank/legion/legion_identity.md` — working example of hot/warm/cold/core tiered memory with dreaming consolidation.
+- **Legion Identity Model:** `~/Projects/legion/legion_identity.md` — working example of hot/warm/cold/core tiered memory with dreaming consolidation. Lives outside any project repository so Legion persists across all projects, not just this one.
 - **Memory Protocol Technique:** `plugins/marianne/techniques/memory-protocol.md` — four-layer (L1-L4) memory protocol with word budgets, the structural analogue to RLF's person model.

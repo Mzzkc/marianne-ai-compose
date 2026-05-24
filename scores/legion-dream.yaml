@@ -8,7 +8,7 @@
 # The dreamer is not Legion. The dreamer serves Legion's continuity.
 
 name: legion-dream
-workspace: /home/emzi/Projects/marianne-ai-compose/memory-bank/legion
+workspace: /home/emzi/Projects/legion
 backend:
   type: claude_cli
   model: claude-opus-4-7
@@ -36,12 +36,15 @@ prompt:
 
     ## Apply Opsec Sanitization (MANDATORY — runs in every tier)
 
-    **Context.** This file is tracked in the public `Mzzkc/marianne-ai-compose`
-    git repository. Every word you preserve will appear in a public commit.
-    Raw session notes written mid-work carry material that belongs in Legion's
-    working memory but NOT in public history. You sanitize as part of
-    consolidation, not as a separate step — every tier (Hot, Warm, Cold) gets
-    the same scrub.
+    **Context.** Legion's memory lives at `~/Projects/legion/` on the
+    composer's machine — outside any tracked repository. It is not
+    automatically published, but it COULD be shared accidentally: pasted
+    into a support thread, captured in a screenshot, included in a session
+    handoff, attached to a bug report, or surfaced if a future tool reads
+    `~/Projects/` to build context. Sanitization is therefore still
+    mandatory — Legion's memory has to be safe to share even when not
+    intentionally shared. You sanitize as part of consolidation, not as a
+    separate step — every tier (Hot, Warm, Cold) gets the same scrub.
 
     **Scrub or generalize:**
 

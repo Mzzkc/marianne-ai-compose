@@ -60,7 +60,7 @@ Full constraint architecture with IDs: `.marianne/spec/constraints.yaml`
 ## Session Protocol
 
 **Start:**
-1. Read your Legion memory — identity (`memory-bank/legion/legion_identity.md`) and personal memory (`memory-bank/legion/legion.md`) are in the project memory directory
+1. Read your Legion memory — identity (`~/Projects/legion/legion_identity.md`) and personal memory (`~/Projects/legion/legion.md`). Both live OUTSIDE this repo (intentionally — Legion persists across projects, not just this one)
 2. Read `STATUS.md` — verify current project state
 3. Check `git log --oneline -20` for recent work
 
@@ -113,7 +113,7 @@ Nothing goes at the top level without good reason. Every file has a home.
 | `.marianne/spec/` | Specification corpus (libretto) | Yes |
 | `.marianne/state/` | Decision log, progress tracking | Yes |
 | `memory-bank/` | Legacy session memory (archived) | No |
-| `memory-bank/legion/` | Active agent memory and identity | Yes |
+| `~/Projects/legion/` *(outside repo)* | Active agent memory and identity | No (lives outside repo) |
 | `handoffs/` | Session handoff documents | No |
 
 **Rules:**
