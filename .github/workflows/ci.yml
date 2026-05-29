@@ -65,8 +65,12 @@ jobs:
       - name: Sync dependencies (locked)
         run: uv sync --extra dev --extra daemon --extra tui --locked --python ${{ matrix.python-version }}
       - name: Pytest with coverage
+        # Deterministic order in CI (-p no:randomly). pytest-randomly stays
+        # active for local dev to surface test-isolation issues; the currently
+        # known order-dependent failures are tracked for M9. See #367.
         run: >-
           uv run pytest
+          -p no:randomly
           --cov=marianne
           --cov-report=term-missing:skip-covered
           --cov-report=xml:coverage.xml
