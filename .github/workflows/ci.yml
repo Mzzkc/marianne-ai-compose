@@ -64,6 +64,8 @@ jobs:
           enable-cache: true
       - name: Sync dependencies (locked)
         run: uv sync --extra dev --extra daemon --locked --python ${{ matrix.python-version }}
+      - name: Install bundled compiler submodule (optional dep for compile tests)
+        run: uv pip install -e ./compiler
       - name: Pytest with coverage
         run: >-
           uv run pytest
