@@ -108,7 +108,7 @@ class ClaudeCliBackend(Backend):
         self._on_process_spawned: Callable[[int], None] | None = None
         self._on_process_exited: Callable[[int], None] | None = None
 
-        # Real-time output logging paths (set per-sheet by runner)
+        # Real-time output logging paths (set per-sheet by the musician)
         # Industry standard: separate files for stdout and stderr
         self._stdout_log_path: Path | None = None
         self._stderr_log_path: Path | None = None
@@ -126,11 +126,11 @@ class ClaudeCliBackend(Backend):
         self.log_write_failures: int = 0
 
         # Use shared ErrorClassifier for rate limit detection
-        # This ensures consistent classification with the runner
+        # This ensures consistent classification with the baton
         self._error_classifier = ErrorClassifier()
 
         # Dynamic preamble — context-aware identity/position/retry info built
-        # per-sheet by the runner via set_preamble().
+        # per-sheet by the musician via set_preamble().
         self._preamble: str | None = None
 
         # Prompt extensions (GH#76) — additional directives injected after the
@@ -181,7 +181,7 @@ class ClaudeCliBackend(Backend):
     def set_output_log_path(self, path: Path | None) -> None:
         """Set base path for real-time output logging.
 
-        Called per-sheet by runner to enable streaming output to log files.
+        Called per-sheet by the musician to enable streaming output to log files.
         This provides visibility into Claude's output during long executions.
 
         Uses industry-standard separate files for stdout and stderr:
@@ -213,7 +213,7 @@ class ClaudeCliBackend(Backend):
         """Set prompt extensions for the next execution.
 
         Extensions are additional directive blocks injected after the
-        preamble. Called per-sheet by the runner to apply score-level and
+        preamble. Called per-sheet by the musician to apply score-level and
         sheet-level extensions.
 
         Args:

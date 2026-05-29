@@ -598,7 +598,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
 
     The baton publishes events to the EventBus so that the dashboard,
     learning hub, and notification system can consume them. Baton events
-    use the ``baton.*`` namespace to distinguish from runner events.
+    use the ``baton.*`` namespace to distinguish from legacy runner events.
 
     Returns a dict matching the ObserverEvent TypedDict shape:
     ``{job_id, sheet_num, event, data, timestamp}``

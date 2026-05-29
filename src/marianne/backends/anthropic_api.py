@@ -54,7 +54,7 @@ class AnthropicApiBackend(Backend):
         self.timeout_seconds = timeout_seconds
         self._working_directory: Path | None = None
 
-        # Real-time output logging paths (set per-sheet by runner)
+        # Real-time output logging paths (set per-sheet by the musician)
         # Matches ClaudeCliBackend pattern for observability parity
         self._stdout_log_path: Path | None = None
         self._stderr_log_path: Path | None = None
@@ -120,7 +120,7 @@ class AnthropicApiBackend(Backend):
     def set_output_log_path(self, path: Path | None) -> None:
         """Set base path for real-time output logging.
 
-        Called per-sheet by runner to enable writing API responses to log files.
+        Called per-sheet by the musician to enable writing API responses to log files.
         Provides observability parity with ClaudeCliBackend.
 
         Args:

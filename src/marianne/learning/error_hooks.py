@@ -99,7 +99,7 @@ class ErrorLearningHooks:
     to record error patterns and learn from recovery attempts.
 
     The hooks follow the design pattern of non-invasive integration:
-    - They can be optionally called by the runner
+    - They can be optionally called by the baton
     - If global_store is None, hooks are no-ops
     - All operations are logged for debugging
 
@@ -401,7 +401,7 @@ def wrap_classifier_with_learning(
         global_store: Global learning store for persistence.
 
     Returns:
-        Tuple of (classifier, hooks) for use in runner.
+        Tuple of (classifier, hooks) for use in the baton.
     """
     # Import here to avoid circular imports
 
@@ -410,7 +410,7 @@ def wrap_classifier_with_learning(
 
 
 # =============================================================================
-# Convenience function for recording recovery at runner level
+# Convenience function for recording recovery at baton level
 # =============================================================================
 
 
@@ -423,7 +423,7 @@ def record_error_recovery(
 ) -> None:
     """Record an error recovery to the global store.
 
-    Convenience function for use in the runner when a recovery is attempted.
+    Convenience function for use in the baton when a recovery is attempted.
 
     Args:
         global_store: Global learning store (no-op if None).

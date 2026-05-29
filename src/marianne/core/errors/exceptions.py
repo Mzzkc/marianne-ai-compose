@@ -47,7 +47,7 @@ class RateLimitExhaustedError(FatalError):
 class GracefulShutdownError(Exception):
     """Raised when Ctrl+C is pressed to trigger graceful shutdown.
 
-    This exception is caught by the runner to save state before exiting.
+    This exception is caught by the baton to save state before exiting.
     """
 
     pass

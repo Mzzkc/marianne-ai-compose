@@ -45,7 +45,7 @@ StatePublishCallback = Callable[[CheckpointState], Any]
 class _PublishingBackend:
     """StateBackend wrapper that publishes state to the conductor on save.
 
-    Decorates the real backend transparently — the runner never knows the
+    Decorates the real backend transparently — the baton never knows the
     difference.  Every ``save()`` call first persists to the real backend,
     then fires the publish callback so the conductor's in-memory state
     stays current.  Callback failures are logged but never propagate
@@ -134,7 +134,7 @@ class JobService:
         """Pause a running job via signal file.
 
         Mirrors the logic in cli/commands/pause.py::_pause_job():
-        Creates a pause signal file that the runner polls at sheet boundaries.
+        Creates a pause signal file that the baton polls at sheet boundaries.
 
         Args:
             job_id: Job identifier to pause.

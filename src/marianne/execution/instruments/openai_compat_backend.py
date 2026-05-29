@@ -109,7 +109,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         self._saved_max_tokens: int | None = None
         self._has_overrides: bool = False
 
-        # Real-time output logging (set per-sheet by runner)
+        # Real-time output logging (set per-sheet by the musician)
         self._stdout_log_path: Path | None = None
         self._stderr_log_path: Path | None = None
 

@@ -1,7 +1,7 @@
 """Validation result models and data structures.
 
 Contains the core result types used by the validation engine and
-consumed by the runner, prompts, and escalation layers.
+consumed by the baton, prompts, and escalation layers.
 """
 
 from __future__ import annotations

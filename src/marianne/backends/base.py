@@ -280,7 +280,7 @@ class Backend(ABC):
     def apply_overrides(self, overrides: dict[str, object]) -> None:  # noqa: B027
         """Apply per-sheet parameter overrides for the next execution.
 
-        Called per-sheet by the runner when ``sheet_overrides`` is configured.
+        Called per-sheet by the musician when ``sheet_overrides`` is configured.
         Subclasses store the overrides and apply them in ``execute()``.
         ``clear_overrides()`` is called after execution to restore defaults.
 
@@ -304,7 +304,7 @@ class Backend(ABC):
     def set_preamble(self, _preamble: str | None) -> None:  # noqa: B027
         """Set the dynamic preamble for the next execution.
 
-        Called per-sheet by the runner with a context-aware preamble built by
+        Called per-sheet by the musician with a context-aware preamble built by
         ``build_preamble()``. The preamble includes sheet identity, position,
         workspace, and retry status.
 
@@ -319,7 +319,7 @@ class Backend(ABC):
         """Set prompt extensions for the next execution.
 
         Extensions are additional directive blocks injected after the
-        preamble. Called per-sheet by the runner to apply score-level and
+        preamble. Called per-sheet by the musician to apply score-level and
         sheet-level prompt extensions (GH#76).
 
         Override in subclasses that support prompt injection.
@@ -332,7 +332,7 @@ class Backend(ABC):
     def set_output_log_path(self, _path: Path | None) -> None:  # noqa: B027
         """Set base path for real-time output logging.
 
-        Called per-sheet by runner to enable streaming output to log files.
+        Called per-sheet by the musician to enable streaming output to log files.
         This provides visibility into backend output during long executions.
 
         Uses industry-standard separate files for stdout and stderr:

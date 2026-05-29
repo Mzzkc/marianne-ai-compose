@@ -2,7 +2,7 @@
 
 Watches each running job's workspace for file changes (via watchfiles)
 and monitors the process tree (via psutil) to produce ObserverEvents
-independently of the runner's self-reports.  Events are published to
+independently of the baton's self-reports.  Events are published to
 the EventBus for downstream consumers (SSE dashboard, learning hub).
 """
 

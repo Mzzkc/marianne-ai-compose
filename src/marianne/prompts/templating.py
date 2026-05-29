@@ -76,7 +76,7 @@ class SheetContext:
     start_item: int
     end_item: int
     workspace: Path
-    # Fan-out metadata (populated by runner when fan_out is configured)
+    # Fan-out metadata (populated by the baton when fan_out is configured)
     stage: int = 0
     """Logical stage number (1-indexed). 0 = not set, falls back to sheet_num."""
     instance: int = 1
@@ -85,7 +85,7 @@ class SheetContext:
     """Total instances in this stage's fan-out group. Default 1."""
     total_stages: int = 0
     """Original stage count before expansion. 0 = not set, falls back to total_sheets."""
-    # Cross-sheet context (populated by runner when CrossSheetConfig is enabled)
+    # Cross-sheet context (populated by the baton when CrossSheetConfig is enabled)
     previous_outputs: dict[int, str] = field(default_factory=dict)
     """Stdout outputs from previous sheets. Keys are sheet numbers (1-indexed)."""
     previous_files: dict[str, str] = field(default_factory=dict)

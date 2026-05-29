@@ -125,7 +125,7 @@ class JobResponse(BaseModel):
 
 
 class ObserverEvent(TypedDict):
-    """Structured event emitted by the runner and routed through the daemon.
+    """Structured event emitted by the baton and routed through the daemon.
 
     Standard event types:
         sheet.started, sheet.completed, sheet.failed, sheet.retrying,
