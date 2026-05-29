@@ -20,11 +20,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-import uvicorn
-from playwright.sync_api import Browser, Page, sync_playwright
 
-from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from marianne.dashboard.app import create_app
+# Dashboard E2E requires Playwright + browser binaries and is run separately
+# (`pytest -m playwright -n0`). Skip the whole module when Playwright is not
+# installed — e.g. the hermetic CI environment — so collection stays clean.
+pytest.importorskip("playwright")
+
+import uvicorn  # noqa: E402
+from playwright.sync_api import Browser, Page, sync_playwright  # noqa: E402
+
+from marianne.core.checkpoint import (  # noqa: E402
+    CheckpointState,
+    JobStatus,
+    SheetState,
+    SheetStatus,
+)
+from marianne.dashboard.app import create_app  # noqa: E402
 from marianne.state.json_backend import JsonStateBackend
 
 

@@ -24,7 +24,7 @@ async def dashboard_home(
     templates: Jinja2Templates = Depends(get_templates),
 ) -> HTMLResponse:
     """Render the dashboard overview page."""
-    return templates.TemplateResponse("pages/index.html", {"request": request})
+    return templates.TemplateResponse(request, "pages/index.html", {"request": request})
 
 
 @router.get("/jobs", response_class=HTMLResponse)
@@ -33,7 +33,7 @@ async def jobs_page(
     templates: Jinja2Templates = Depends(get_templates),
 ) -> HTMLResponse:
     """Render the jobs list page."""
-    return templates.TemplateResponse("pages/jobs_list.html", {"request": request})
+    return templates.TemplateResponse(request, "pages/jobs_list.html", {"request": request})
 
 
 @router.get("/jobs/list", response_class=HTMLResponse)
@@ -63,7 +63,7 @@ async def jobs_list_partial(
 
         job_summaries = [JobSummary.from_checkpoint(job) for job in jobs]
 
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "partials/jobs_list_content.html",
             {
                 "request": request,
@@ -75,7 +75,7 @@ async def jobs_list_partial(
         )
     except Exception as e:
         # Return error partial
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "partials/error_message.html",
             {
                 "request": request,
@@ -103,7 +103,7 @@ async def job_details_page(
 
         job_detail = JobDetail.from_checkpoint(state)
 
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "pages/job_detail.html",
             {
                 "request": request,
@@ -113,7 +113,7 @@ async def job_details_page(
     except HTTPException:
         raise
     except Exception as e:
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "partials/error_message.html",
             {
                 "request": request,
@@ -141,7 +141,7 @@ async def job_logs_page(
 
         job_detail = JobDetail.from_checkpoint(state)
 
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "pages/job_logs.html",
             {
                 "request": request,
@@ -151,7 +151,7 @@ async def job_logs_page(
     except HTTPException:
         raise
     except Exception as e:
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "partials/error_message.html",
             {
                 "request": request,
@@ -167,7 +167,7 @@ async def monitor_page(
     templates: Jinja2Templates = Depends(get_templates),
 ) -> HTMLResponse:
     """Render the system monitoring page."""
-    return templates.TemplateResponse("pages/monitor.html", {"request": request})
+    return templates.TemplateResponse(request, "pages/monitor.html", {"request": request})
 
 
 @router.get("/templates", response_class=HTMLResponse)
@@ -176,7 +176,7 @@ async def templates_page(
     templates: Jinja2Templates = Depends(get_templates),
 ) -> HTMLResponse:
     """Render the templates browser page."""
-    return templates.TemplateResponse("pages/templates.html", {"request": request})
+    return templates.TemplateResponse(request, "pages/templates.html", {"request": request})
 
 
 @router.get("/editor", response_class=HTMLResponse)
@@ -185,7 +185,7 @@ async def score_editor_page(
     templates: Jinja2Templates = Depends(get_templates),
 ) -> HTMLResponse:
     """Render the score editor page."""
-    return templates.TemplateResponse("pages/score_editor.html", {"request": request})
+    return templates.TemplateResponse(request, "pages/score_editor.html", {"request": request})
 
 
 @router.get("/analytics", response_class=HTMLResponse)
@@ -194,7 +194,7 @@ async def analytics_page(
     templates: Jinja2Templates = Depends(get_templates),
 ) -> HTMLResponse:
     """Render the analytics overview page."""
-    return templates.TemplateResponse("pages/analytics.html", {"request": request})
+    return templates.TemplateResponse(request, "pages/analytics.html", {"request": request})
 
 
 @router.get("/api/templates/list", response_class=HTMLResponse)
@@ -241,7 +241,7 @@ async def templates_list_partial(
                 _logger.warning("Failed to load template, skipping", exc_info=True)
                 continue
 
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "partials/templates_grid.html",
             {
                 "request": request,
@@ -254,7 +254,7 @@ async def templates_list_partial(
 
     except Exception as e:
         # Return error partial
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "partials/error_message.html",
             {
                 "request": request,

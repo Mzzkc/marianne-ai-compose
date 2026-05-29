@@ -147,7 +147,7 @@ async def dashboard_stats_partial(
 ) -> HTMLResponse:
     """Render the dashboard stats cards as an HTML partial (htmx target)."""
     stats = await get_dashboard_stats(backend)
-    return templates.TemplateResponse(
+    return templates.TemplateResponse(request,
         "partials/dashboard_stats.html",
         {"request": request, "stats": stats},
     )
@@ -162,7 +162,7 @@ async def dashboard_recent_partial(
 ) -> HTMLResponse:
     """Render the recent activity list as an HTML partial (htmx target)."""
     recent = await get_recent_jobs(limit=limit, backend=backend)
-    return templates.TemplateResponse(
+    return templates.TemplateResponse(request,
         "partials/recent_activity.html",
         {"request": request, "recent_jobs": recent},
     )
@@ -228,7 +228,7 @@ async def dashboard_system_partial(
             except Exception:
                 _logger.debug("dashboard.system_partial.read_error", exc_info=True)
 
-    return templates.TemplateResponse(
+    return templates.TemplateResponse(request,
         "partials/system_resources.html",
         {"request": request, "snapshot": snapshot_data},
     )

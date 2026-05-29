@@ -24,8 +24,11 @@ dependencies = [
     "jinja2>=3.1.0",
 
     # CLI (modern typer bundles rich + shellingham in the base package;
-    # the legacy `[all]` extra was removed upstream)
-    "typer>=0.12.0",
+    # the legacy `[all]` extra was removed upstream). Capped <0.21: typer 0.21+
+    # stopped aliasing typer.Exit to the top-level click.exceptions.Exit, which
+    # several CLI tests assert against. Dependabot can propose the bump + the
+    # accompanying test migration deliberately.
+    "typer>=0.12.0,<0.21",
     "rich>=13.0.0",
 
     # HTTP (for API backend + notifications)
@@ -53,6 +56,8 @@ dependencies = [
 
 [project.optional-dependencies]
 daemon = ["psutil>=5.9", "watchfiles>=0.21"]
+# Terminal UI (`mzt top`). Lazily imported, so the core CLI works without it.
+tui = ["textual>=7,<8"]
 docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.24",
@@ -68,8 +73,14 @@ dev = [
     "hypothesis>=6.100.0",
     "pytest-xdist>=3.5.0",
     "pytest-randomly>=3.15.0",
-    "ruff>=0.2.0",
-    "mypy>=1.8.0",
+    # Quality tools pinned to the versions the gates are verified green against.
+    # Newer majors change rules (ruff 0.15 UP042, mypy 2.x) — let Dependabot
+    # propose those bumps deliberately rather than break CI on a tooling release.
+    "ruff>=0.14,<0.15",
+    "mypy>=1.19,<1.20",
+    # Type stubs for untyped runtime deps (needed by mypy --strict).
+    "types-PyYAML>=6.0",
+    "types-psutil>=6.0",
 ]
 
 [project.scripts]
@@ -106,6 +117,13 @@ python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
+
+# The composition compiler is an optional, separately-packaged submodule that
+# is not installed in every environment (e.g. hermetic CI). It is imported
+# lazily inside `mzt compile`; treat its absence as a non-error.
+[[tool.mypy.overrides]]
+module = "marianne_compiler.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

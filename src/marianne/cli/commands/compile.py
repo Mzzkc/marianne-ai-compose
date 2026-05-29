@@ -65,8 +65,8 @@ def compile_scores(
     techniques, instruments) and produces complete Mozart score YAML
     for each agent, plus identity directories and fleet configs.
     """
-    from marianne_compiler.fleet import FleetGenerator  # type: ignore[import-untyped]
-    from marianne_compiler.pipeline import CompilationPipeline  # type: ignore[import-untyped]
+    from marianne_compiler.fleet import FleetGenerator
+    from marianne_compiler.pipeline import CompilationPipeline
 
     # Load and validate config
     try:

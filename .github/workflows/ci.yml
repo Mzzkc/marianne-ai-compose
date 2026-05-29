@@ -31,7 +31,7 @@ jobs:
         with:
           enable-cache: true
       - name: Sync dependencies (locked)
-        run: uv sync --extra dev --extra daemon --locked
+        run: uv sync --extra dev --extra daemon --extra tui --locked
       - name: Ruff
         run: uv run ruff check src/ tests/
 
@@ -45,7 +45,7 @@ jobs:
         with:
           enable-cache: true
       - name: Sync dependencies (locked)
-        run: uv sync --extra dev --extra daemon --locked
+        run: uv sync --extra dev --extra daemon --extra tui --locked
       - name: Mypy
         run: uv run mypy src/
 
@@ -63,7 +63,7 @@ jobs:
         with:
           enable-cache: true
       - name: Sync dependencies (locked)
-        run: uv sync --extra dev --extra daemon --locked --python ${{ matrix.python-version }}
+        run: uv sync --extra dev --extra daemon --extra tui --locked --python ${{ matrix.python-version }}
       - name: Pytest with coverage
         run: >-
           uv run pytest
@@ -88,7 +88,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Sync dependencies (locked)
-        run: uv sync --extra dev --extra daemon --locked
+      - name: Export locked requirements
+        run: >-
+          uv export --frozen --extra dev --extra daemon --extra tui
+          --no-emit-project --format requirements-txt > requirements-audit.txt
       - name: pip-audit
-        run: uv run pip-audit --strict
+        run: uvx pip-audit --strict --requirement requirements-audit.txt
