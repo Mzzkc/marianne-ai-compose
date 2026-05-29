@@ -163,6 +163,65 @@ class TestRecoverJobRegistration:
         # Completion event should exist
         assert "test-job" in adapter._completion_events
 
+    def test_recover_job_refreshes_stale_baton_entry(self) -> None:
+        """Second recover_job() refreshes baton state from new checkpoint.
+
+        Regression (2026-05-15): register_job has a duplicate-job_id guard
+        that no-ops on re-register. recover_job's documented invariant —
+        "Checkpoint is the source of truth. The baton rebuilds from
+        checkpoint, not the reverse." — was violated when called on an
+        already-registered job: the prior baton sheet states leaked through.
+
+        Live-conductor consequence: `mzt recover` updated the DB checkpoint
+        (failed → pending), then `mzt resume` called recover_job, but the
+        baton's _jobs entry retained the FAILED states. is_job_complete
+        fired immediately and re-FAILed the job. Operator was forced to
+        restart the conductor for recover to take effect.
+
+        Fix: recover_job calls deregister_job before register_job so the
+        baton entry is rebuilt from the new checkpoint each time.
+        """
+        adapter = BatonAdapter()
+        sheets = _make_sheets_list(3)
+        deps = _make_simple_deps(3)
+
+        # First recovery: sheet 2 is FAILED, sheet 3 cascaded to SKIPPED.
+        initial = _make_checkpoint(
+            total_sheets=3,
+            sheet_statuses={1: "completed", 2: "failed", 3: "skipped"},
+        )
+        adapter.recover_job("test-job", sheets, deps, initial)
+        state2 = adapter.baton.get_sheet_state("test-job", 2)
+        state3 = adapter.baton.get_sheet_state("test-job", 3)
+        assert state2 is not None and state2.status == BatonSheetStatus.FAILED
+        assert state3 is not None and state3.status == BatonSheetStatus.SKIPPED
+
+        # Simulate `mzt recover`: the DB checkpoint flips 2/3 to pending.
+        # Then `mzt resume` calls recover_job again with the same job_id.
+        updated = _make_checkpoint(
+            total_sheets=3,
+            sheet_statuses={1: "completed", 2: "pending", 3: "pending"},
+        )
+        adapter.recover_job("test-job", sheets, deps, updated)
+
+        # Baton MUST now reflect the updated checkpoint, not the prior
+        # FAILED/SKIPPED states. Without the deregister-before-register
+        # fix, these assertions fail (baton state stuck at FAILED/SKIPPED).
+        state2 = adapter.baton.get_sheet_state("test-job", 2)
+        state3 = adapter.baton.get_sheet_state("test-job", 3)
+        assert state2 is not None
+        assert state2.status == BatonSheetStatus.PENDING, (
+            f"sheet 2 stale after re-recover: got {state2.status}"
+        )
+        assert state3 is not None
+        assert state3.status == BatonSheetStatus.PENDING, (
+            f"sheet 3 stale after re-recover: got {state3.status}"
+        )
+
+        # Job is now not complete — has pending work to do — so a downstream
+        # is_job_complete check correctly returns False.
+        assert not adapter.baton.is_job_complete("test-job")
+
 
 class TestRecoverJobStatusMapping:
     """Test that recover_job() correctly maps checkpoint statuses to baton statuses."""

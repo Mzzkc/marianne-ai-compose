@@ -396,6 +396,84 @@ class TestDispatchCallback:
 
         adapter._backend_pool.release.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_dispatch_syncs_attempt_count_for_status_display(self) -> None:
+        """Each dispatch updates SheetState.attempt_count so consumers see real counts.
+
+        Regression (2026-05-15): The "Attempts" column in `mzt status` (and
+        diagnose, dashboard, MCP, sqlite persistence, escalation gating,
+        semantic analyzer) all read SheetState.attempt_count. The legacy
+        CheckpointState.mark_sheet_started() path incremented this on every
+        sheet start. After Phase 2 unified SheetExecutionState with
+        SheetState, the baton-driven dispatch path no longer routed through
+        mark_sheet_started — so attempt_count stayed at 0 forever for all
+        baton-managed sheets. The baton's own normal_attempts and
+        completion_attempts trackers are budget counters (only incremented
+        on failure / completion-mode entry), not "total dispatches", so
+        they cannot substitute. Fix: at dispatch time, sync attempt_count
+        with the computed attempt_number so every consumer reads accurate
+        per-sheet attempt totals.
+        """
+        from marianne.daemon.baton.adapter import BatonAdapter
+
+        adapter = BatonAdapter()
+        sheets = [_make_sheet(num=1)]
+        adapter.register_job("test-job", sheets, dependencies={})
+
+        mock_backend = AsyncMock()
+        mock_backend.execute = AsyncMock(
+            return_value=MagicMock(
+                success=True,
+                exit_code=0,
+                stdout="ok",
+                stderr="",
+                rate_limited=False,
+                duration_seconds=0.1,
+                input_tokens=1,
+                output_tokens=1,
+                model="test",
+                error_message=None,
+            )
+        )
+        adapter._backend_pool = MagicMock()
+        adapter._backend_pool.acquire = AsyncMock(return_value=mock_backend)
+        adapter._backend_pool.release = AsyncMock()
+
+        state = _make_execution_state(sheet_num=1)
+
+        # Baseline: a fresh execution state has attempt_count=0 (Pydantic default).
+        assert state.attempt_count == 0
+
+        # First dispatch — attempt_number = 0 + 0 + 1 = 1.
+        await adapter._dispatch_callback("test-job", 1, state)
+        assert state.attempt_count == 1, (
+            f"first dispatch should sync attempt_count to 1; "
+            f"got {state.attempt_count} — the status display bug is back"
+        )
+
+        # Simulate a failed attempt: baton increments normal_attempts.
+        state.normal_attempts = 1
+        await adapter._dispatch_callback("test-job", 1, state)
+        assert state.attempt_count == 2, (
+            f"second dispatch should sync attempt_count to 2; "
+            f"got {state.attempt_count}"
+        )
+
+        # Simulate entering completion mode after another failure.
+        state.normal_attempts = 2
+        state.completion_attempts = 1
+        await adapter._dispatch_callback("test-job", 1, state)
+        assert state.attempt_count == 4, (
+            f"completion-mode dispatch should sync attempt_count to "
+            f"normal+completion+1 = 4; got {state.attempt_count}"
+        )
+
+        # Clean up any spawned tasks so pytest's loop closes cleanly.
+        if adapter._active_tasks:
+            await asyncio.gather(
+                *adapter._active_tasks.values(), return_exceptions=True
+            )
+
 
 # =========================================================================
 # EventBus integration — Surface 5

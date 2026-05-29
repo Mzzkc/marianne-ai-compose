@@ -908,7 +908,16 @@ class BatonAdapter:
 
             states[sheet.num] = state
 
-        # Register with baton using the recovered states
+        # Drop any stale baton entry before re-registering. `register_job`
+        # silently no-ops on duplicate job_id (a safety guard for accidental
+        # double-registers from other paths), which collides with recover_job's
+        # documented invariant ("Checkpoint is the source of truth. The baton
+        # rebuilds from checkpoint, not the reverse"). Without this deregister,
+        # a `mzt recover` followed by `mzt resume` on a live conductor finds
+        # the prior failed sheet states intact in the baton, fires
+        # `is_job_complete` immediately, and re-FAILs the job — forcing the
+        # operator to restart the conductor before recover takes effect.
+        self._baton.deregister_job(job_id)
         self._baton.register_job(
             job_id,
             states,
@@ -1452,6 +1461,18 @@ class BatonAdapter:
 
         # Build attempt context
         attempt_number = state.normal_attempts + state.completion_attempts + 1
+
+        # Keep the legacy `attempt_count` field synced with the baton's view
+        # of "current attempt number" so all consumers (status display,
+        # diagnose, dashboard, MCP, sqlite persistence, escalation gating,
+        # semantic analyzer) report accurate counts. Phase 2 unified
+        # SheetExecutionState with SheetState so `state` is the live
+        # CheckpointState.sheets entry; the legacy mark_sheet_started()
+        # path increments attempt_count via the JSON/SQLite backends'
+        # state_publish hook, but baton-driven sheets bypass that path,
+        # which is why "Attempts" displayed 0 across the board.
+        state.attempt_count = attempt_number
+
         mode = AttemptMode.NORMAL
         completion_suffix: str | None = None
 

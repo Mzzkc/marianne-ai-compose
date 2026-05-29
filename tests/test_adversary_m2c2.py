@@ -635,27 +635,45 @@ class TestDoubleRecovery:
         job = baton._jobs["j1"]
         assert job.sheets[1].status == BatonSheetStatus.COMPLETED
 
-    def test_recover_after_register_is_noop(self) -> None:
-        """recover_job on an already-registered job should be blocked by baton."""
+    def test_recover_after_register_rebuilds_from_checkpoint(self) -> None:
+        """recover_job rebuilds baton state from the checkpoint, even if already registered.
+
+        Regression (#363): ``register_job`` silently no-ops on a duplicate
+        job_id (a guard against accidental double-registers — see
+        ``test_double_register_is_noop`` above). ``recover_job`` previously
+        relied on ``register_job`` alone, so recovering an already-registered
+        job was a no-op and the stale baton state leaked through. On a live
+        conductor this meant ``mzt recover`` (DB flips failed→pending) followed
+        by ``mzt resume`` found the prior state intact, fired
+        ``is_job_complete`` immediately, and re-FAILed the job — forcing a
+        conductor restart.
+
+        ``recover_job`` now deregisters before re-registering, honouring its
+        documented invariant ("Checkpoint is the source of truth. The baton
+        rebuilds from checkpoint, not the reverse"). So the recovered state
+        below MUST reflect the checkpoint (PENDING), not the stale prior
+        registration (COMPLETED).
+        """
         adapter = BatonAdapter(event_bus=MagicMock())
 
-        # First: register directly
+        # First: register directly with a COMPLETED sheet.
         states = {1: _make_sheet_state(1, BatonSheetStatus.COMPLETED)}
         adapter._baton.register_job("j1", states, {})
 
-        # Second: recover_job
+        # Second: recover_job from a checkpoint whose sheet is PENDING.
         sheets = [MagicMock(num=1, instrument_name="claude-code", movement=1)]
         cp = MagicMock()
         cp_sheet = MagicMock()
-        cp_sheet.status = MagicMock(value="pending")
+        cp_sheet.status = BatonSheetStatus.PENDING
         cp_sheet.attempt_count = 0
         cp_sheet.completion_attempts = 0
         cp.sheets = {1: cp_sheet}
 
         adapter.recover_job("j1", sheets, {}, cp, max_retries=3)
 
+        # Baton MUST reflect the checkpoint, not the stale prior registration.
         job = adapter._baton._jobs["j1"]
-        assert job.sheets[1].status == BatonSheetStatus.COMPLETED
+        assert job.sheets[1].status == BatonSheetStatus.PENDING
 
 
 # =========================================================================
