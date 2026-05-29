@@ -5,7 +5,7 @@ for gracefully pausing running jobs and updating their configuration.
 
 ★ Insight ─────────────────────────────────────
 1. **Signal-based pause mechanism**: Rather than interrupting execution directly,
-   Marianne uses a file-based signal (.marianne-pause-{job_id}). The runner polls for
+   Marianne uses a file-based signal (.marianne-pause-{job_id}). The baton polls for
    this file at sheet boundaries, enabling clean checkpoints without data loss.
 
 2. **Atomic state transitions**: The pause command only works on RUNNING jobs,

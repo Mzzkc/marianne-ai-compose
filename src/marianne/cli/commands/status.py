@@ -1928,7 +1928,7 @@ def _infer_circuit_breaker_state(job: CheckpointState) -> CircuitBreakerInferenc
     """Get circuit breaker state from persisted history, falling back to inference.
 
     Prefers ground-truth from ``circuit_breaker_history`` (populated when
-    the runner records CB transitions at runtime). Falls back to the legacy
+    the baton records CB transitions at runtime). Falls back to the legacy
     heuristic for state files that predate CB persistence.
 
     Args:
