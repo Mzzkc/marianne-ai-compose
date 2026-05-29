@@ -12,10 +12,18 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 import yaml
 from typer.testing import CliRunner
 
 from marianne.cli import app
+
+# The compile command delegates to the optional, separately-packaged
+# ``marianne_compiler`` (bundled as a git submodule). Every test here invokes
+# ``mzt compile``, whose function body imports marianne_compiler eagerly, so
+# skip the whole module when it is not installed — e.g. CI on a bare checkout
+# without submodule access. Runs normally wherever the compiler is present.
+pytest.importorskip("marianne_compiler")
 
 runner = CliRunner()
 
