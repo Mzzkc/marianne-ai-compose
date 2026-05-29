@@ -65,9 +65,13 @@ jobs:
       - name: Sync dependencies (locked)
         run: uv sync --extra dev --extra daemon --extra tui --locked --python ${{ matrix.python-version }}
       - name: Pytest with coverage
-        # Deterministic order in CI (-p no:randomly). pytest-randomly stays
-        # active for local dev to surface test-isolation issues; the currently
-        # known order-dependent failures are tracked for M9. See #367.
+        # COLUMNS: CLI --help tests assert option strings appear in Rich-rendered
+        # help; without a TTY the runner reports a tiny width that collapses the
+        # options table. Pin a sane width.
+        # -p no:randomly: deterministic order in CI (pytest-randomly stays active
+        # for local dev; known order-dependent failures tracked in #367 / M9).
+        env:
+          COLUMNS: "200"
         run: >-
           uv run pytest
           -p no:randomly

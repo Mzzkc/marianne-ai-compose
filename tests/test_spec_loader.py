@@ -674,7 +674,7 @@ class TestRealSpecCorpus:
 
     def test_load_actual_spec_corpus(self) -> None:
         """Load the actual .marianne/spec/ directory if it exists."""
-        spec_dir = Path("/home/emzi/Projects/marianne-ai-compose/.marianne/spec")
+        spec_dir = Path(__file__).resolve().parents[1] / ".marianne" / "spec"
         if not spec_dir.exists():
             pytest.skip("No .marianne/spec/ directory in project")
 

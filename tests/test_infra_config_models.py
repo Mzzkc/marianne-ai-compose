@@ -856,9 +856,9 @@ class TestOpenCodeProfile:
     def test_profile_file_exists(self) -> None:
         from pathlib import Path
 
-        profile_path = Path(
-            "/home/emzi/Projects/marianne-ai-compose/"
-            "src/marianne/instruments/builtins/opencode.yaml"
+        profile_path = (
+            Path(__file__).resolve().parents[1]
+            / "src/marianne/instruments/builtins/opencode.yaml"
         )
         assert profile_path.exists(), f"OpenCode profile not found at {profile_path}"
 
@@ -870,9 +870,9 @@ class TestOpenCodeProfile:
 
         from marianne.core.config.instruments import InstrumentProfile
 
-        profile_path = Path(
-            "/home/emzi/Projects/marianne-ai-compose/"
-            "src/marianne/instruments/builtins/opencode.yaml"
+        profile_path = (
+            Path(__file__).resolve().parents[1]
+            / "src/marianne/instruments/builtins/opencode.yaml"
         )
         with open(profile_path) as f:
             data = yaml.safe_load(f)
