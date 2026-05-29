@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import click
 import pytest
 from typer.testing import CliRunner
 
@@ -408,9 +409,9 @@ class TestPauseCommand:
         result = runner.invoke(app, ["pause", "--help"])
         assert result.exit_code == 0
         assert "Pause a running Marianne score" in result.output
-        assert "--wait" in result.output
-        assert "--timeout" in result.output
-        assert "--json" in result.output
+        assert "--wait" in click.unstyle(result.output)
+        assert "--timeout" in click.unstyle(result.output)
+        assert "--json" in click.unstyle(result.output)
 
     def test_pause_creates_signal_file(
         self, running_job_state: tuple[CheckpointState, Path]
@@ -622,9 +623,9 @@ class TestModifyCommand:
         result = runner.invoke(app, ["modify", "--help"])
         assert result.exit_code == 0
         assert "Apply a new configuration to a score" in result.output
-        assert "--config" in result.output
-        assert "--resume" in result.output
-        assert "--wait" in result.output
+        assert "--config" in click.unstyle(result.output)
+        assert "--resume" in click.unstyle(result.output)
+        assert "--wait" in click.unstyle(result.output)
 
     def test_modify_validates_config(
         self,

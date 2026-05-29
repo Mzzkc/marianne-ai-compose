@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import click
 import pytest
 from typer.testing import CliRunner
 
@@ -365,33 +366,33 @@ class TestWorkspaceHidden:
         assert result.exit_code == 0
         # --workspace should NOT appear in help output (hidden=True)
         # But other options should appear
-        assert "--json" in result.output
-        assert "--watch" in result.output
+        assert "--json" in click.unstyle(result.output)
+        assert "--watch" in click.unstyle(result.output)
 
     def test_workspace_hidden_from_pause_help(self):
         result = runner.invoke(app, ["pause", "--help"])
         assert result.exit_code == 0
-        assert "--wait" in result.output
+        assert "--wait" in click.unstyle(result.output)
 
     def test_workspace_hidden_from_resume_help(self):
         result = runner.invoke(app, ["resume", "--help"])
         assert result.exit_code == 0
-        assert "--force" in result.output
+        assert "--force" in click.unstyle(result.output)
 
     def test_workspace_hidden_from_errors_help(self):
         result = runner.invoke(app, ["errors", "--help"])
         assert result.exit_code == 0
-        assert "--type" in result.output
+        assert "--type" in click.unstyle(result.output)
 
     def test_workspace_hidden_from_diagnose_help(self):
         result = runner.invoke(app, ["diagnose", "--help"])
         assert result.exit_code == 0
-        assert "--json" in result.output
+        assert "--json" in click.unstyle(result.output)
 
     def test_workspace_hidden_from_history_help(self):
         result = runner.invoke(app, ["history", "--help"])
         assert result.exit_code == 0
-        assert "--limit" in result.output
+        assert "--limit" in click.unstyle(result.output)
 
 
 # ─── require_conductor helper ───────────────────────────────────────

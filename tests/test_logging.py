@@ -7,6 +7,7 @@ import logging
 import re
 from pathlib import Path
 
+import click
 import pytest
 import structlog
 
@@ -1515,10 +1516,10 @@ class TestLogsCLI:
 
         assert result.exit_code == 0
         assert "Show or tail log files" in result.output
-        assert "--follow" in result.output
-        assert "--lines" in result.output
-        assert "--level" in result.output
-        assert "--json" in result.output
+        assert "--follow" in click.unstyle(result.output)
+        assert "--lines" in click.unstyle(result.output)
+        assert "--level" in click.unstyle(result.output)
+        assert "--json" in click.unstyle(result.output)
 
     def test_logs_no_file_found(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Test logs command when no log file exists."""

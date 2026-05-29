@@ -66,17 +66,14 @@ jobs:
         run: uv sync --extra dev --extra daemon --extra tui --locked --python ${{ matrix.python-version }}
       - name: Pytest with coverage
         # COLUMNS=200: keep Rich-rendered CLI --help wide enough that the options
-        # table doesn't collapse on a non-TTY runner.
-        # env -u FORCE_COLOR: the runner exports FORCE_COLOR, which makes Rich
-        # inject ANSI into captured --help output and split option strings (e.g.
-        # "--wait"), breaking plain-substring assertions. Unset it so CliRunner
-        # output is plain, as in a normal non-terminal capture.
+        # table doesn't collapse on a non-TTY runner. (The CLI help tests strip
+        # ANSI via click.unstyle, so forced-color environments are handled too.)
         # -p no:randomly: deterministic order in CI (pytest-randomly stays active
         # for local dev; known order-dependent failures tracked in #367 / M9).
         env:
           COLUMNS: "200"
         run: >-
-          env -u FORCE_COLOR uv run pytest
+          uv run pytest
           -p no:randomly
           --cov=marianne
           --cov-report=term-missing:skip-covered
