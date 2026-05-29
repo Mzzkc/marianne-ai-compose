@@ -771,8 +771,8 @@ class TestOpenRouterBackend:
         assert OpenRouterBackend is not None
 
     def test_from_config(self) -> None:
-        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
         from marianne.core.config import BackendConfig
+        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
 
         # BackendConfig.type doesn't include "openrouter" yet, but from_config
         # only reads model/timeout_seconds which are type-agnostic fields.

@@ -52,7 +52,6 @@ from __future__ import annotations
 import warnings
 
 import pytest
-from pydantic import ValidationError
 
 from marianne.core.config.backend import BackendConfig
 from marianne.core.config.job import JobConfig

@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from marianne.backends.base import ExecutionResult, ExitReason
-from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 from marianne.core.checkpoint import SheetState, SheetStatus
 from marianne.core.errors import (
     FATAL_SIGNALS,
@@ -22,6 +21,7 @@ from marianne.core.errors import (
     ErrorClassifier,
     get_signal_name,
 )
+from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
 # ============================================================================
 # ExecutionResult Tests

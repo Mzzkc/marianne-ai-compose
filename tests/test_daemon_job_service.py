@@ -285,7 +285,9 @@ class TestCreateBackend:
         mock_config = MagicMock()
         mock_config.backend.type = "claude_cli"
 
-        with patch("marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.from_config") as mock_from_config:
+        with patch(
+            "marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.from_config"
+        ) as mock_from_config:
             mock_from_config.return_value = MagicMock()
             create_backend(mock_config)
             mock_from_config.assert_called_once_with(mock_config.backend)
@@ -328,7 +330,9 @@ class TestCreateBackend:
         mock_config = MagicMock()
         mock_config.backend.type = "unknown_type"
 
-        with patch("marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.from_config") as mock_from_config:
+        with patch(
+            "marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.from_config"
+        ) as mock_from_config:
             mock_from_config.return_value = MagicMock()
             create_backend(mock_config)
             mock_from_config.assert_called_once_with(mock_config.backend)

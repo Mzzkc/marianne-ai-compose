@@ -100,7 +100,10 @@ class TestSafeKillpgGuardAllows:
         """
         fake_pgid = 999999
         with (
-            patch("marianne.execution.instruments.claude_cli_legacy.os.getpgid", side_effect=OSError("mocked")),
+            patch(
+                "marianne.execution.instruments.claude_cli_legacy.os.getpgid",
+                side_effect=OSError("mocked"),
+            ),
             patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg,
         ):
             result = _safe_killpg(fake_pgid, signal.SIGKILL, context="test")

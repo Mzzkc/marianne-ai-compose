@@ -50,8 +50,6 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
-import pytest
-
 from marianne.core.config.instruments import (
     HttpProfile,
     InstrumentProfile,
