@@ -8,9 +8,10 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal, Required, TypedDict
+from typing import Any, Literal, Required
 
 from pydantic import BaseModel, Field, model_validator
+from typing_extensions import TypedDict
 
 from marianne.core.errors.codes import ErrorCategory, ExitReason
 from marianne.core.logging import get_logger

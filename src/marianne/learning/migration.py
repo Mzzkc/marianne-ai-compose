@@ -18,7 +18,11 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any
+
+from typing_extensions import (
+    TypedDict,  # noqa: UP035  (pydantic needs typing_extensions.TypedDict on py<3.12)
+)
 
 from marianne.core.checkpoint import SheetStatus, ValidationDetailDict
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY

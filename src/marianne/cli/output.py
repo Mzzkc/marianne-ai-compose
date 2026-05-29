@@ -652,6 +652,12 @@ def create_run_summary_panel(
     status_color = StatusColors.get_job_color(job_status)
     status_text = f"[{status_color}]{job_status.value.upper()}[/{status_color}]"
 
+    remaining_sheets = (
+        summary.total_sheets
+        - summary.completed_sheets
+        - summary.failed_sheets
+        - summary.skipped_sheets
+    )
     lines = [
         f"[bold]{summary.job_name}[/bold]",
         f"Status: {status_text}",
@@ -659,12 +665,7 @@ def create_run_summary_panel(
         "[bold]Sheets[/bold]",
         f"  Completed: {summary.completed_sheets}/{summary.total_sheets}",
         f"  Failed: {summary.failed_sheets}",
-        f"  Remaining: {
-            summary.total_sheets
-            - summary.completed_sheets
-            - summary.failed_sheets
-            - summary.skipped_sheets
-        }",
+        f"  Remaining: {remaining_sheets}",
     ]
 
     # Add validation info if available

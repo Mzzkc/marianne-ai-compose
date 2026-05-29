@@ -5,10 +5,13 @@ terminal display with Rich and JSON output for tooling.
 """
 
 import json
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 from rich.panel import Panel
+from typing_extensions import (
+    TypedDict,  # noqa: UP035  (pydantic needs typing_extensions.TypedDict on py<3.12)
+)
 
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.validation.base import ValidationIssue, ValidationSeverity

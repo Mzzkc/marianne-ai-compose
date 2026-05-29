@@ -16,9 +16,12 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any
 
 import httpx
+from typing_extensions import (
+    TypedDict,  # noqa: UP035  (pydantic needs typing_extensions.TypedDict on py<3.12)
+)
 
 from marianne.backends.base import Backend, ExecutionResult, HttpxClientMixin
 from marianne.core.logging import get_logger

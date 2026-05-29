@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal
 
 import typer
 from rich.console import Console
@@ -33,6 +33,9 @@ from rich.progress import (
     BarColumn,
     Progress,
     TextColumn,
+)
+from typing_extensions import (
+    TypedDict,  # noqa: UP035  (pydantic needs typing_extensions.TypedDict on py<3.12)
 )
 
 from marianne.core.checkpoint import (

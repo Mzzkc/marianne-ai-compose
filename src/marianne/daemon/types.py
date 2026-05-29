@@ -8,9 +8,13 @@ serialization over IPC.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, Required, TypedDict
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from typing_extensions import (  # noqa: UP035  (pydantic needs typing_extensions.TypedDict on py<3.12)
+    Required,
+    TypedDict,
+)
 
 # ─── IPC Handler Parameter TypedDicts ─────────────────────────────
 # These define the expected parameter shapes for each daemon IPC method.
