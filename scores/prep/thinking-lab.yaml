@@ -3,21 +3,23 @@
 # ║                                                                              ║
 # ║  Drop your prompt + context files into scores/prep/thinking-lab-input/       ║
 # ║  Run: mzt run scores/prep/thinking-lab.yaml                                  ║
-# ║  Read: workspaces/thinking-lab/review-{1,2,3,4,5}.md                         ║
+# ║  Read: workspaces/thinking-lab/review-{1,2,3,4}.md                           ║
 # ║                                                                              ║
 # ║  Reviewers, in order:                                                        ║
-# ║    1. Claude Opus 4.7    (Anthropic, claude-code)                            ║
-# ║    2. Gemini 3.1 Pro     (Google, gemini-cli)                                ║
-# ║    3. Gemma 4            (Google free via opencode→openrouter)               ║
-# ║    4. GLM 5.1            (Z.AI Coding Plan via opencode)                     ║
-# ║    5. GPT-5.5            (OpenAI, codex-cli)                                 ║
+# ║    1. Claude Opus 4.7    (Anthropic, claude-code)        → review-1.md      ║
+# ║    2. Gemini 3.1 Pro     (Google, gemini-cli)            → review-2.md      ║
+# ║    3. GLM 5.1            (Z.AI Coding Plan via opencode) → review-3.md      ║
+# ║    4. GPT-5.5            (OpenAI, codex-cli)             → review-4.md      ║
 # ║                                                                              ║
-# ║  Pattern: cli stage 1 stages a setup marker; stages 2-5 (uh, 6) fan in       ║
-# ║  parallel with directory cadenza injection of the input dir.                 ║
+# ║  Gemma 4 (Google free via openrouter) was removed 2026-05-07 — chronic       ║
+# ║  bottleneck (24min+ stalls vs 5-10min for the rest).                        ║
+# ║                                                                              ║
+# ║  Pattern: cli stage 1 stages a setup marker; stages 2-5 fan in parallel      ║
+# ║  with directory cadenza injection of the input dir.                          ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: "thinking-lab"
-description: "5 parallel independent reviews from Opus, Gemini Pro, Gemma, GLM, GPT-5.5"
+description: "4 parallel independent reviews from Opus, Gemini Pro, GLM, GPT-5.5"
 workspace: "/home/emzi/Projects/marianne-ai-compose/workspaces/thinking-lab"
 
 workspace_lifecycle:
@@ -41,11 +43,6 @@ instruments:
     profile: gemini-cli
     config:
       cli_model: "gemini-3.1-pro-preview"
-      skip_permissions: true
-  reviewer-gemma:
-    profile: opencode
-    config:
-      cli_model: "google/gemma-4:free"
       skip_permissions: true
   reviewer-glm:
     profile: opencode
@@ -73,25 +70,21 @@ movements:
     name: "Review: Gemini Pro"
     instrument: reviewer-gemini
   4:
-    name: "Review: Gemma"
-    instrument: reviewer-gemma
-  5:
     name: "Review: GLM"
     instrument: reviewer-glm
-  6:
+  5:
     name: "Review: GPT-5.5"
     instrument: reviewer-codex
 
 sheet:
   size: 1
-  total_items: 6
+  total_items: 5
 
   dependencies:
     2: [1]
     3: [1]
     4: [1]
     5: [1]
-    6: [1]
 
   cadenzas:
     2:
@@ -106,13 +99,10 @@ sheet:
     5:
       - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
         as: context
-    6:
-      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
-        as: context
 
 parallel:
   enabled: true
-  max_concurrent: 5
+  max_concurrent: 4
 
 prompt:
   template: |
@@ -121,7 +111,7 @@ prompt:
     echo "ready" > {{ workspace }}/setup-complete.txt
     ```
     {% else %}
-    {% set reviewer = {2: "Opus 4.7 (Anthropic)", 3: "Gemini 3.1 Pro (Google)", 4: "Gemma 4 (Google)", 5: "GLM 5.1 (Z.AI)", 6: "GPT-5.5 (OpenAI)"}[stage] %}
+    {% set reviewer = {2: "Opus 4.7 (Anthropic)", 3: "Gemini 3.1 Pro (Google)", 4: "GLM 5.1 (Z.AI)", 5: "GPT-5.5 (OpenAI)"}[stage] %}
     {% set review_num = stage - 1 %}
     You are {{ reviewer }}. Independent review. Others can't see your response.
     Context files injected above contain the full problem and code.
