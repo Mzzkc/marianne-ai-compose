@@ -95,8 +95,10 @@ class EventBus:
         callback_timeout: float = _DEFAULT_CALLBACK_TIMEOUT,
         shutdown_timeout: float = _DEFAULT_SHUTDOWN_TIMEOUT,
     ) -> None:
-        if max_queue_size < 1:
-            raise ValueError(f"max_queue_size must be >= 1, got {max_queue_size}")
+        # max_queue_size comes from Pydantic-validated ObserverConfig — trust
+        # that boundary rather than re-validate here. The internal-only tuning
+        # params below are guarded because maxsize=0 silently makes the queue
+        # unbounded (re-introducing #220) and timeout<=0 breaks asyncio.wait_for.
         if max_pending_size < 1:
             raise ValueError(f"max_pending_size must be >= 1, got {max_pending_size}")
         if callback_timeout <= 0:

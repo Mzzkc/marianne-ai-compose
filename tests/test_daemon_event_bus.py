@@ -35,12 +35,6 @@ def _make_event(
     )
 
 
-async def _spin(cond) -> None:
-    """Poll until ``cond()`` is true (caller wraps in asyncio.wait_for guard)."""
-    while not cond():
-        await asyncio.sleep(0.005)
-
-
 # ─── Lifecycle ────────────────────────────────────────────────────────
 
 
@@ -226,51 +220,26 @@ class TestPublishSubscribe:
 class TestBackpressure:
     """Tests for bounded queue and error handling."""
 
-    @pytest.mark.asyncio
-    async def test_bounded_queue_drops_oldest(self):
-        """A subscriber that can't keep up loses its OLDEST buffered events.
+    def test_bounded_queue_drops_oldest(self):
+        """A subscriber's bounded deque drops its OLDEST buffered events.
 
-        Each subscriber owns a bounded ``deque(maxlen=max_queue_size)`` that is
-        the actual delivery buffer (#220). When the producer outruns the
-        subscriber's worker, the deque drops its oldest events — preserving
-        recency for live observability streams. Deterministic: the worker is
-        pinned on its first event while the rest of the burst fills the deque.
+        Each subscriber owns a ``deque(maxlen=max_queue_size)`` that is the
+        actual delivery buffer (#220). When the central drain fans out faster
+        than the subscriber drains, the deque keeps the newest events and drops
+        the oldest — preserving recency for live observability streams. Driven
+        deterministically through ``_distribute`` with no worker/drain timing:
+        the bus is never started, so ``subscribe`` registers the subscriber
+        without spawning a draining worker.
         """
         bus = EventBus(max_queue_size=2)
-        await bus.start()
+        sub_id = bus.subscribe(callback=lambda e: None)
+        sub = bus._subscribers[sub_id]
 
-        received: list[str] = []
-        entered = asyncio.Event()
-        release = asyncio.Event()
-
-        async def slow(e: ObserverEvent) -> None:
-            received.append(e["event"])
-            if e["event"] == "prime":
-                entered.set()
-                await release.wait()  # pin the worker with an empty deque
-
-        sub_id = bus.subscribe(callback=slow)
-
-        # Prime: the worker pops this and blocks, leaving its deque empty.
-        await bus.publish(_make_event("prime"))
-        await asyncio.wait_for(entered.wait(), timeout=2.0)
-
-        # Burst lands while the worker is blocked: deque(maxlen=2) keeps the
-        # newest two (event.3, event.4), dropping event.0/1/2 (drop-oldest).
         for i in range(5):
-            await bus.publish(_make_event(f"event.{i}", sheet_num=i))
+            bus._distribute(_make_event(f"event.{i}", sheet_num=i))
 
-        async def _settled() -> bool:
-            return bus._pending.empty() and len(bus._subscribers[sub_id].queue) == 2
-
-        await asyncio.wait_for(_spin(_settled), timeout=2.0)
-        release.set()
-
-        await asyncio.wait_for(
-            _spin(lambda: received == ["prime", "event.3", "event.4"]),
-            timeout=2.0,
-        )
-        await bus.shutdown()
+        # deque(maxlen=2) retains only the two newest events.
+        assert [e["event"] for e in sub.queue] == ["event.3", "event.4"]
 
     @pytest.mark.asyncio
     async def test_callback_error_does_not_stop_bus(self):
