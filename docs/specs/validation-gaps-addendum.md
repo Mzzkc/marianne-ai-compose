@@ -168,6 +168,68 @@ of the 24x7-trader flagship score family in
 
 ---
 
+## 2026-05-12 — corpus-build stage 7 fast-fail (cli/bash sheet)
+
+Static-analysis-level gap (not a sheet `validations:` gap). `mzt validate`
+ran clean against the score before the run; the sheet still failed in
+~3 ms with bare `Exit code 2` and no captured output. Diagnosed by
+manually rendering the Jinja template and feeding it to `bash -c`.
+
+### Gap 13 — Bash `${#var}` / `${#arr[@]}` opens a Jinja comment
+
+| | |
+|---|---|
+| **Score & stage** | `scores/corpus-build.yaml` stage 7 (`cli` font install). Same pattern previously found in `import-mill` stage 2. |
+| **The claim** | The rendered Jinja template is a valid bash script. `mzt validate` says "YAML syntax valid / Schema validation passed". |
+| **Why current validation can't catch it** | V001 (`JinjaSyntaxCheck`) parses the template with `jinja2.Environment().parse()`. Jinja's lexer happily consumes `${#SRC_FONTS[@]}` as the start of a `{# ... #}` comment, scans ahead to the next `#}` (often a divider line above the next stage), and treats the eaten span as a valid comment. The parser returns success — no syntax error to report. The agent then receives a truncated bash script and fails at the shell level. The memory entry `feedback_jinja_bash_array_length_landmine.md` documents the full failure signature: `Exit code 2`, no stderr, sub-5 ms duration. |
+| **Suggested capability** | A new check (proposed V002 / `BashJinjaCollisionCheck`) that scans the raw template **before** Jinja parsing for the literal sequence `${#`. ERROR severity with a clear fix suggestion (rewrite as `$(printf '%s\n' "${arr[@]}" \| wc -l)` or wrap the bash body in `{% raw %}...{% endraw %}`). **Implementation note from an aborted attempt**: do NOT also flag `${{` or `${%` — those are false-positive prone (`${{ amount }}` is the canonical way to render a literal `$` in front of a Jinja expression, common for currency in invoice/finance scores). Verified against `examples/product/invoice-analysis.yaml` — 6 false positives if the check naively flags all `${...` followed by Jinja markers. Scope V002 strictly to `${#`. |
+| **Status** | open — mitigated by composer awareness + existing memory entry. Two production sheets have been bitten; both took >30 minutes to root-cause due to the silent-truncation failure mode. |
+| **Reviewer concurrence** | Single-composer-found; corroborated by Legion memory entry from prior session. |
+
+---
+
+## 2026-05-12 — emzihypno-site v1a stage 28 markdown-in-cli-template
+
+Different incident, same date as Gap 13. Different failure class. Production score
+`scores-internal/build-emzihypno-site-v1a.yaml` stage 28 (mid-build integration
+gate, `cli` instrument). The path-discipline preamble fix earlier this session
+moved the SHARED markdown out of `sheet.prelude:`. That solved the per-prelude leak.
+But stage 28's **per-stage template body itself** is structured-AI-prompt
+markdown — section headers, prose, triple-backtick code fences, em dashes —
+authored for AI consumption but routed to `cli` instrument late in the lifecycle
+(round-14 mid-build gate addition). When `cli` executes, bash receives the markdown
+as input and fast-fails. Fallback chain advances through gemini-cli / codex-cli /
+opencode until an LLM agent reinterprets the prose as instructions and "completes"
+the work in ~130s. The `command_succeeds` validation then runs and passes because
+it independently executes the pnpm chain — but the cli sheet itself never ran the
+bash. Architectural fakery; correct outcomes.
+
+### Gap 14 — Markdown-style `prompt.template` body in a `cli`-instrument stage
+
+| | |
+|---|---|
+| **Score & stage** | `scores-internal/build-emzihypno-site-v1a.yaml` stage 28 (S26 mid-build integration gate). Discovered 2026-05-12 during the v1a build run. Pattern likely present anywhere a CLI stage was authored using the same AI-prompt template style as nearby AI stages. |
+| **The claim** | A `cli`-instrument stage's `prompt.template` body renders to valid bash that the cli instrument can `bash -c` execute directly. `mzt validate` says "YAML syntax valid / Schema validation passed / Jinja syntax valid". |
+| **Why current validation can't catch it** | V001 (`JinjaSyntaxCheck`) validates Jinja syntax, not bash-validity of the rendered output. The template renders cleanly to a string; the string just happens to be markdown (with `## PURPOSE`, English prose, ` ```bash ` fences, em dashes) instead of bash. Bash parses the rendered string at startup, fails on the first construct that looks like nested command substitution or non-ASCII typography, exits with status 2 in ~1.5 ms with no stdout/stderr. Conductor logs the failure as `success: false, pass_rate: 0.0, duration: 0.001-0.002` then advances the fallback chain. If a downstream LLM-based fallback is available (`gemini-cli`, `codex-cli`, `opencode`), it interprets the markdown prose as natural-language instructions and runs the work some other way — silently bypassing the CLI sheet semantics. Validation passes because the `command_succeeds` block was independently executable. Score "completes successfully" while concealing that the deterministic CLI sheet never actually ran. **This is the second-class bash-Jinja problem**: Gap 13 truncates the bash; Gap 14 replaces it entirely. |
+| **Failure signature** | Conductor log shows multiple `cli` attempts with `duration: 0.001-0.005` and `success: false` (the bash-parse-fail signature). Fallback chain advances. Eventually an LLM agent succeeds in 60-150s. The marker file and validation outputs are produced by the LLM, not the CLI. |
+| **Suggested capability** | A new check (proposed V003 / `CliTemplateBashCleanCheck`) that, for any stage whose resolved instrument has `raw_prompt: true` AND whose movement instrument is `cli` (or any instrument that bash-execs), renders the Jinja template for that stage with realistic variable bindings and then pipes the output through `bash -n` (syntax check). If `bash -n` exits non-zero, fail validation with the bash error message. **Pre-implementation discipline**: per the false-positive-sweep section at the bottom of this addendum, run the new check against every score in the repo before merging — verify that no existing CLI sheet that legitimately uses non-trivial bash constructs (e.g., heredocs, escaped quotes) gets a false positive. The check must distinguish "the bash is wrong" from "the template body has structured-AI-prompt content". A simpler proxy: scan the rendered template for: any `##` line, any line starting with markdown bullet `- ` at column 0, any ` ``` ` triple-backtick, any em dash `—` / curly quote / non-ASCII punctuation. ERROR if found in a stage marked for a `raw_prompt: true` cli instrument. |
+| **Status** | open — mitigated by per-author awareness + memory entry. Documented in `~/Projects/emzihypno-concert/priming/cli-sheet-templates-must-be-bash.yaml` as the 10th primer for the emzihypno.com concert. v1a stage 28 was patched in-place 2026-05-12 (markdown body → clean bash announce + marker write). The validator-level check is still wanted for future authoring discipline. |
+| **Reviewer concurrence** | Single-composer-found; corroborated by conductor-log evidence (sheet 28: cli attempts 1.6ms each → gemini-cli rate-limited → codex-cli failed → opencode succeeded in 129s — the canonical LLM-fakery cascade). |
+
+### Defense-in-depth at the engine level (a second possible answer)
+
+Independent of any new validate check: Marianne could refuse to fall back from a
+`cli` instrument to an LLM-based instrument unless the score explicitly opts in.
+The current fallback chain advances `cli → gemini-cli → codex-cli → opencode`
+when `instrument_fallbacks` resolves to LLM instruments. That semantic mismatch is
+the root cause of LLM-fakery: deterministic intent (cli) silently becomes
+interpretive (LLM). A `cli_fallback_policy: strict` option that fails the sheet
+rather than advancing to an LLM-based fallback would make the failure loud
+instead of papered-over. Tracked separately from V003; both fixes are
+complementary.
+
+---
+
 ## Process
 
 When the next thinking-lab review surfaces a validation gap:
@@ -186,3 +248,84 @@ This file is the institutional memory of "validations Marianne should be
 able to express but currently can't." It's deliberately verbose — future
 composers benefit from seeing the full reasoning, not just a one-line
 lessons-learned summary.
+
+---
+
+## Implementing a gap — false-positive discipline (READ BEFORE WRITING CODE)
+
+When an agent implements one of the gaps above as a new `mzt validate`
+check (or as a new sheet validation type), the implementation is **not**
+done when synthetic test cases pass. Synthetic tests prove the check
+fires on the bug you have in mind. They do **not** prove the check stays
+quiet on patterns the bug shares structure with but does not actually
+break.
+
+The default failure mode of an agent implementing a new check is:
+write a regex narrow enough to feel right, run it against one or two
+constructed examples, declare victory, and move on. The check then
+goes live and flags dozens of pre-existing scores that are working
+correctly — turning every future `mzt validate` run into a noise
+storm that composers learn to ignore. This degrades the entire
+validation system.
+
+To prevent this, every new check MUST go through the following
+acceptance gate before being merged or recommended for merge:
+
+### Required false-positive sweep
+
+1. **Run the new check against every score in the repository.**
+   - `for f in scores/*.yaml scores-internal/*.yaml examples/**/*.yaml; do mzt validate "$f"; done`
+   - Pipe through `grep -A2 V<your-id>` to collect hits.
+   - Include public examples, internal dev scores, and any active
+     concert family. Do not exclude any directory.
+
+2. **For every hit, open the score and read the line in context.**
+   Do not skim. Do not assume the hit is real because the regex
+   matched. Specifically ask:
+   - Does this pattern actually trigger the failure the check
+     describes? Run it through a manual repro if uncertain (render
+     the Jinja, feed to bash, watch what happens).
+   - Is this a legitimate pattern that happens to share structure
+     with the landmine? Common false-positive sources:
+     - `${{ var }}` — literal `$` before a Jinja expression. Used
+       for currency rendering in finance / invoice scores. NOT a bug.
+     - `${var:-default}` — bash parameter default. Contains `${` and
+       `}` but is structurally inert to Jinja. NOT a bug.
+     - `# {{ var }}` — bash comment containing a Jinja expression.
+       Renders correctly. NOT a bug.
+
+3. **Record every false-positive case in the gap entry above** under
+   "Implementation note from an aborted attempt" or a similar line.
+   Future implementers must see what already burned. The case
+   `${{ amount }}` for currency in `examples/product/invoice-analysis.yaml`
+   is the seed example for this rule — it triggered 6 false positives
+   in a five-minute over-eager implementation attempt.
+
+4. **Tighten the regex / AST query until zero false positives remain
+   across the entire corpus.** If you cannot eliminate them, narrow
+   the check's scope (e.g., "only inside `cli` instrument sheets",
+   "only when the prompt block has no `{% raw %}` wrapper") rather
+   than shipping a noisy check.
+
+5. **Add the corpus sweep itself as a regression test.** A pytest
+   that walks `examples/` + `scores/` + `scores-internal/` and
+   asserts your check produces zero hits against the current corpus.
+   When a future score legitimately needs the flagged pattern, the
+   test breaks loudly and forces a deliberate exemption rather than
+   silent normalization.
+
+### Why this matters more for agents than for humans
+
+A human composer who writes a noisy check feels the friction
+immediately — every `mzt validate` they run buzzes with their own
+false positives. An agent implementing a check works in a fresh
+context, runs the synthetic test, and hands back "validation
+added." The noise lands on the composer days later, when the
+agent is gone. The composer either disables the check, learns
+to grep past it, or stops trusting `mzt validate`. All three
+outcomes erode the system.
+
+So: if you are an agent reading this before implementing one of
+the gaps above, you are required to do the corpus sweep, read
+every hit in context, and report the false-positive analysis in
+the gap entry **before** declaring the work complete.
