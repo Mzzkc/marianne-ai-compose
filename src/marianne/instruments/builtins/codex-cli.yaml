@@ -60,6 +60,20 @@ cli:
     rate_limit_patterns:
       - "rate.?limit"
       - "(?:error|status|code)[^\\w]*429"
+      # Codex CLI subscription-mode quota messages (ChatGPT Plus/Pro/Team plans
+      # share quota with the Codex CLI). Patterns are intentionally tight to
+      # avoid false positives on code-context stderr; case-insensitive via
+      # cli_backend._check_rate_limit -> re.search(..., re.IGNORECASE).
+      #
+      # Example codex stderr on quota exhaustion:
+      #   ■ You've hit your usage limit. Upgrade to Pro (...), visit ... to
+      #   purchase more credits or try again at 6:15 AM.
+      #
+      # The three patterns below each independently identify that message;
+      # any one matching is sufficient.
+      - "hit your\\s+(?:usage|monthly|weekly|daily)\\s*limit"
+      - "purchase\\s+more\\s+credits"
+      - "try\\s+again\\s+at\\s+\\d{1,2}:\\d{2}"
     auth_error_patterns:
       - "authenticat"
       - "invalid.*api.*key"
