@@ -13,6 +13,7 @@ TDD: tests written before implementation. Red first, then green.
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import patch
 
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import (
@@ -509,3 +510,40 @@ class TestDiagnostics:
         baton = BatonCore()
         diag = baton.get_diagnostics("nonexistent")
         assert diag is None
+
+
+class TestEventHandlerErrorContext:
+    """#317: a failing event handler must log job_id + sheet_num, not just the
+    event type — otherwise correlating a traceback to a specific job in a
+    multi-job conductor requires timestamp-based log grepping."""
+
+    async def test_handler_error_logs_job_and_sheet(self) -> None:
+        baton = BatonCore()
+        baton.register_job(
+            "j1",
+            {1: SheetExecutionState(sheet_num=1, instrument_name="claude-code")},
+            {},
+        )
+        result = SheetAttemptResult(
+            job_id="j1",
+            sheet_num=7,
+            instrument_name="claude-code",
+            attempt=1,
+            execution_success=True,
+        )
+
+        with (
+            patch.object(
+                baton, "_handle_attempt_result", side_effect=RuntimeError("boom")
+            ),
+            patch("marianne.daemon.baton.core._logger") as mock_logger,
+        ):
+            # handle_event must catch the handler error (not propagate) ...
+            await baton.handle_event(result)
+
+        # ... and the error log must carry the job/sheet context.
+        mock_logger.error.assert_called_once()
+        extra = mock_logger.error.call_args.kwargs["extra"]
+        assert extra["event_type"] == "SheetAttemptResult"
+        assert extra["job_id"] == "j1"
+        assert extra["sheet_num"] == 7

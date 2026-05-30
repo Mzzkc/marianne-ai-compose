@@ -1184,9 +1184,16 @@ class BatonCore:
                     )
 
         except Exception:
+            # #317: include the job/sheet context (when the event carries it)
+            # so a handler traceback can be correlated to a specific job in a
+            # multi-job conductor without timestamp-based log grepping.
             _logger.error(
                 "baton.event_handler_failed",
-                extra={"event_type": type(event).__name__},
+                extra={
+                    "event_type": type(event).__name__,
+                    "job_id": getattr(event, "job_id", None),
+                    "sheet_num": getattr(event, "sheet_num", None),
+                },
                 exc_info=True,
             )
 
