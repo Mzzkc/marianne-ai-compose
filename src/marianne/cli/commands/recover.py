@@ -26,6 +26,7 @@ from typing import Any
 import typer
 from rich.panel import Panel
 
+from marianne.core.checkpoint import JobStatus, SheetStatus
 from marianne.core.config import JobConfig
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
@@ -92,7 +93,7 @@ def _reset_sheet_data_for_retry(sdata: dict[str, Any]) -> None:
     is unit-testable (the command-level tests are skipped under the F-532
     conductor-mock debt).
     """
-    sdata["status"] = "pending"
+    sdata["status"] = SheetStatus.PENDING.value
     sdata.pop("error_message", None)
     sdata.pop("error_code", None)
     sdata.pop("completed_at", None)
@@ -204,7 +205,7 @@ async def _recover_cascade(
     # Count before
     before: dict[str, int] = {}
     for sdata in sheets.values():
-        st = sdata.get("status", "pending")
+        st = sdata.get("status", SheetStatus.PENDING.value)
         before[st] = before.get(st, 0) + 1
 
     # Reset — handle both FAILED and SKIPPED (cascade-skipped) sheets
@@ -212,14 +213,18 @@ async def _recover_cascade(
     for snum_str, sdata in sheets.items():
         snum = int(snum_str)
         status = sdata.get("status")
-        if snum >= from_sheet and status in ("failed", "skipped", "dispatched"):
+        if snum >= from_sheet and status in (
+            SheetStatus.FAILED.value,
+            SheetStatus.SKIPPED.value,
+            SheetStatus.DISPATCHED.value,
+        ):
             _reset_sheet_data_for_retry(sdata)
             reset_count += 1
 
     # Count after
     after: dict[str, int] = {}
     for sdata in sheets.values():
-        st = sdata.get("status", "pending")
+        st = sdata.get("status", SheetStatus.PENDING.value)
         after[st] = after.get(st, 0) + 1
 
     console.print(Panel(
@@ -248,7 +253,7 @@ async def _recover_cascade(
     console.print(f"Backup: {backup}")
 
     # Set job status to paused for clean resume
-    checkpoint["status"] = "paused"
+    checkpoint["status"] = JobStatus.PAUSED.value
 
     # Save
     checkpoint_json = json.dumps(checkpoint)
@@ -309,7 +314,10 @@ async def _recover_job(
     sheets_to_reset: list[str] = []
     if sheet_num is not None:
         skey = str(sheet_num)
-        if skey in sheets and sheets[skey].get("status") in ("failed", "skipped"):
+        if skey in sheets and sheets[skey].get("status") in (
+            SheetStatus.FAILED.value,
+            SheetStatus.SKIPPED.value,
+        ):
             sheets_to_reset = [skey]
         elif skey not in sheets:
             conn.close()
@@ -319,7 +327,7 @@ async def _recover_job(
             raise typer.Exit(1)
     else:
         for skey, sdata in sheets.items():
-            if sdata.get("status") in ("failed", "skipped"):
+            if sdata.get("status") in (SheetStatus.FAILED.value, SheetStatus.SKIPPED.value):
                 sheets_to_reset.append(skey)
 
     if not sheets_to_reset:
@@ -330,7 +338,7 @@ async def _recover_job(
     # Count before
     before: dict[str, int] = {}
     for sdata in sheets.values():
-        st = sdata.get("status", "pending")
+        st = sdata.get("status", SheetStatus.PENDING.value)
         before[st] = before.get(st, 0) + 1
 
     # Try validation-based recovery if config is available
@@ -365,7 +373,7 @@ async def _recover_job(
 
             if vresult.all_passed:
                 if not dry_run:
-                    sdata["status"] = "completed"
+                    sdata["status"] = SheetStatus.COMPLETED.value
                     sdata.pop("error_message", None)
                     sdata.pop("error_code", None)
                 validated_count += 1
@@ -381,7 +389,7 @@ async def _recover_job(
     # Count after
     after: dict[str, int] = {}
     for sdata in sheets.values():
-        st = sdata.get("status", "pending")
+        st = sdata.get("status", SheetStatus.PENDING.value)
         after[st] = after.get(st, 0) + 1
 
     total_recovered = reset_count + validated_count
@@ -410,12 +418,12 @@ async def _recover_job(
 
     # Update job status
     all_complete = all(
-        s.get("status") == "completed" for s in sheets.values()
+        s.get("status") == SheetStatus.COMPLETED.value for s in sheets.values()
     )
     if all_complete:
-        checkpoint["status"] = "completed"
-    elif checkpoint.get("status") == "failed":
-        checkpoint["status"] = "paused"
+        checkpoint["status"] = JobStatus.COMPLETED.value
+    elif checkpoint.get("status") == JobStatus.FAILED.value:
+        checkpoint["status"] = JobStatus.PAUSED.value
 
     # Save
     checkpoint_json = json.dumps(checkpoint)

@@ -417,7 +417,10 @@ class TestResetSheetDataForRetry:
 
         _reset_sheet_data_for_retry(sdata)
 
-        assert sdata["status"] == "pending"
+        from marianne.core.checkpoint import SheetStatus
+
+        # #319: status set via the enum value, not a bare literal.
+        assert sdata["status"] == SheetStatus.PENDING.value
         assert sdata["current_instrument_index"] == 0  # #187: back to primary
         assert sdata["normal_attempts"] == 0
         assert sdata["completion_attempts"] == 0
