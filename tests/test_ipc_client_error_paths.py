@@ -310,3 +310,34 @@ class TestRequestIdGeneration:
     def test_ids_start_from_one(self, tmp_path: Path) -> None:
         client = DaemonClient(tmp_path / "test.sock")
         assert client._next_request_id() == 1
+
+
+class TestCloseWriterLogging:
+    """#254: a failed writer close must be logged (fd-leak visibility), not
+    silently swallowed with a bare `except: pass`."""
+
+    def test_close_error_is_logged(self) -> None:
+        from marianne.daemon.ipc import client as client_mod
+
+        writer = MagicMock()
+        writer.is_closing.return_value = False
+        writer.close.side_effect = OSError("close boom")
+
+        with patch.object(client_mod, "_logger") as mock_logger:
+            # Must not raise — close errors are swallowed, but now logged.
+            client_mod.ConnectionPool._close_writer(writer)
+
+        dbg = [
+            c for c in mock_logger.debug.call_args_list
+            if c.args and c.args[0] == "pool_close_writer_failed"
+        ]
+        assert len(dbg) == 1
+
+    def test_already_closing_is_noop(self) -> None:
+        from marianne.daemon.ipc import client as client_mod
+
+        writer = MagicMock()
+        writer.is_closing.return_value = True
+
+        client_mod.ConnectionPool._close_writer(writer)
+        writer.close.assert_not_called()

@@ -218,12 +218,15 @@ class ConnectionPool:
 
     @staticmethod
     def _close_writer(writer: asyncio.StreamWriter) -> None:
-        """Close a writer, swallowing errors."""
+        """Close a writer, logging (not silently swallowing) close errors."""
         try:
             if not writer.is_closing():
                 writer.close()
-        except (OSError, RuntimeError):
-            pass
+        except (OSError, RuntimeError) as exc:
+            # A failed close can leak the fd. These errors are usually benign
+            # (already-reset peer), so debug level — but #254: not silent, so
+            # an fd-exhaustion pattern is visible rather than invisible.
+            _logger.debug("pool_close_writer_failed", error=str(exc))
 
 
 class DaemonClient:
