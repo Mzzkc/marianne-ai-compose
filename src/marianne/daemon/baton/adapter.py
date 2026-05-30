@@ -48,7 +48,6 @@ from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import (
-    DispatchRetry,
     SheetAttemptResult,
     SheetSkipped,
     StaleCheck,
@@ -92,6 +91,14 @@ StateSyncCallback = Callable[[str, int, str, SheetExecutionState | None], None]
 # finally block uses the same interval independently (belt and suspenders).
 # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 3).
 _KILL_GRACE_SECONDS = 2.0
+
+# Inbox depth monitoring (#222). The inbox is intentionally unbounded, so a
+# sustained-large depth means the consumer is falling behind (a stall) rather
+# than normal load — instantaneous depth is O(active sheets), well under this.
+# Crossing the threshold emits a rate-limited WARNING so the trend is visible
+# long before OOM. The real liveness fixes are timeouts (#309, #310).
+_INBOX_WARN_SIZE = 512
+_INBOX_WARN_INTERVAL = 30.0  # seconds between repeated high-water warnings
 
 
 # Phase 2: identity mappings — kept for test backward compat
@@ -395,6 +402,10 @@ class BatonAdapter:
         # Active musician tasks: (job_id, sheet_num) → Task
         self._active_tasks: dict[tuple[str, int], asyncio.Task[Any]] = {}
 
+        # Last time an inbox high-water WARNING was emitted (#222), so the loop
+        # doesn't spam a log line on every event once the queue is deep.
+        self._inbox_warn_logged_at: float = 0.0
+
         # Phase 1 process lifecycle: in-memory PID/PGID tracking per
         # dispatched sheet. Populated by the backend's
         # ``_on_process_group_spawned`` callback (wired by
@@ -594,8 +605,8 @@ class BatonAdapter:
 
         # Kick the event loop so dispatch_ready runs for the newly registered
         # sheets.  Without this the loop blocks on inbox.get() forever
-        # because no musician or timer has produced an event yet.
-        self._baton.inbox.put_nowait(DispatchRetry())
+        # because no musician or timer has produced an event yet. Coalesced (#222).
+        self._baton.enqueue_dispatch_retry()
 
     def get_router(self, job_id: str) -> TechniqueRouter | None:
         """Return the per-job TechniqueRouter, or None if not activated.
@@ -951,8 +962,8 @@ class BatonAdapter:
             },
         )
 
-        # Kick the event loop so dispatch_ready runs for recovered sheets
-        self._baton.inbox.put_nowait(DispatchRetry())
+        # Kick the event loop so dispatch_ready runs for recovered sheets. Coalesced (#222).
+        self._baton.enqueue_dispatch_retry()
 
     def get_sheet(self, job_id: str, sheet_num: int) -> Sheet | None:
         """Get a Sheet entity for a registered job.
@@ -1880,6 +1891,28 @@ class BatonAdapter:
     # Main Loop
     # =========================================================================
 
+    def _maybe_warn_inbox_depth(self, qsize: int, event_type: str) -> bool:
+        """Emit a rate-limited WARNING when the inbox is too deep (#222).
+
+        The inbox is unbounded by design, so a sustained-large depth signals a
+        consumer stall, not normal load. Returns True iff a warning was emitted
+        (so the condition is unit-testable without log capture).
+        """
+        if qsize < _INBOX_WARN_SIZE:
+            return False
+        now = time.monotonic()
+        if now - self._inbox_warn_logged_at < _INBOX_WARN_INTERVAL:
+            return False
+        self._inbox_warn_logged_at = now
+        _logger.warning(
+            "adapter.inbox_high_water",
+            queue_size=qsize,
+            high_water=self._baton._inbox_high_water,
+            event_type=event_type,
+            threshold=_INBOX_WARN_SIZE,
+        )
+        return True
+
     async def run(self) -> None:
         """Run the baton's event loop with dispatch integration.
 
@@ -1943,11 +1976,14 @@ class BatonAdapter:
             while not self._baton._shutting_down:
                 event = await self._baton.inbox.get()
 
+                qsize = self._baton.inbox.qsize()
+                self._baton.observe_inbox_depth(qsize)
                 _logger.debug(
                     "adapter.event_loop.received",
                     event_type=type(event).__name__,
-                    queue_size=self._baton.inbox.qsize(),
+                    queue_size=qsize,
                 )
+                self._maybe_warn_inbox_depth(qsize, type(event).__name__)
 
                 # Intercept StaleCheck: only fail if the musician task
                 # is actually dead. If the task is alive, the sheet isn't

@@ -169,10 +169,45 @@ class BatonCore:
         self._retry_exponential_base: float = 2.0
         self._max_retry_delay: float = 3600.0
 
+        # DispatchRetry coalescing (#222). DispatchRetry is a pure wake signal:
+        # the loop runs dispatch_ready + completion checks after EVERY event, so
+        # multiple queued copies are redundant. A failure cascade that wants to
+        # wake the loop N times only needs one. This flag keeps at most one
+        # DispatchRetry pending; it is cleared when the loop handles it.
+        self._dispatch_retry_pending: bool = False
+
+        # Inbox-depth observability (#222). The inbox is intentionally UNBOUNDED
+        # — dropping a baton event (a completion, rate-limit hit, retry-due,
+        # control command, ...) would strand a sheet or corrupt state, and the
+        # self-enqueue sites run on the consumer task so a blocking bounded put
+        # would deadlock. Instead of a hard cap we track the high-water mark so
+        # a consumer stall (the only way the queue grows without bound) is
+        # diagnosable before it can trend toward OOM.
+        self._inbox_high_water: int = 0
+
     @property
     def inbox(self) -> asyncio.Queue[BatonEvent]:
         """The event inbox — put events here for the baton to process."""
         return self._inbox
+
+    def enqueue_dispatch_retry(self) -> None:
+        """Wake the event loop to run a dispatch / completion cycle.
+
+        Coalesced (#222): at most one ``DispatchRetry`` is ever pending. When
+        the loop is idle (blocked on ``inbox.get()``) the flag is clear, so this
+        enqueues a fresh wake; while one is already queued, additional calls are
+        no-ops because the pending wake already triggers a full dispatch +
+        completion pass. Bounds cascade-driven wake accumulation to O(1).
+        """
+        if self._dispatch_retry_pending:
+            return
+        self._dispatch_retry_pending = True
+        self._inbox.put_nowait(DispatchRetry())
+
+    def observe_inbox_depth(self, depth: int) -> None:
+        """Record the inbox depth seen by the consumer (#222 high-water mark)."""
+        if depth > self._inbox_high_water:
+            self._inbox_high_water = depth
 
     @property
     def is_running(self) -> bool:
@@ -1134,7 +1169,10 @@ class BatonCore:
 
                 # === Internal events ===
                 case DispatchRetry():
-                    pass  # Dispatch retry — _dispatch_ready handles this
+                    # Wake signal consumed — clear the coalescing flag so the
+                    # next cascade can enqueue a fresh wake (#222). Dispatch and
+                    # completion checks run in the adapter loop after this.
+                    self._dispatch_retry_pending = False
 
                 case CircuitBreakerRecovery():
                     self._handle_circuit_breaker_recovery(event)
@@ -1982,7 +2020,8 @@ class BatonCore:
             # loop blocks on inbox.get() and the job hangs until an unrelated
             # event arrives. The DispatchRetry is a no-op for dispatch (nothing
             # to dispatch) but triggers the completion check in the adapter.
-            self._inbox.put_nowait(DispatchRetry())
+            # Coalesced so a wide fan-in cascade can't queue N redundant wakes.
+            self.enqueue_dispatch_retry()
 
     # =========================================================================
     # Main Loop
@@ -2040,4 +2079,9 @@ class BatonCore:
                 **status_counts,
             },
             "instruments_used": sorted(instruments_used),
+            # Inbox depth observability (#222) — the inbox is process-wide, not
+            # per-job, but surfacing it here makes a consumer stall visible via
+            # `mzt diagnose` without a log grep.
+            "inbox_depth": self._inbox.qsize(),
+            "inbox_high_water": self._inbox_high_water,
         }
