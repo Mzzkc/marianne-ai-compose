@@ -547,3 +547,69 @@ class TestEventHandlerErrorContext:
         assert extra["event_type"] == "SheetAttemptResult"
         assert extra["job_id"] == "j1"
         assert extra["sheet_num"] == 7
+
+
+class TestExhaustionPathOrdering:
+    """#248: `_handle_exhaustion` tries targeted recovery (fallback → healing →
+    escalation) BEFORE consuming the normal-retry budget. Reordering would burn
+    retries on the same failing instrument before recovery kicks in. These
+    tests lock the precedence so a future reorder fails at CI."""
+
+    @staticmethod
+    def _register(sheet: SheetExecutionState, *, escalation: bool = False,
+                  healing: bool = False) -> BatonCore:
+        baton = BatonCore()
+        baton.register_job(
+            "j1", {1: sheet}, {},
+            escalation_enabled=escalation, self_healing_enabled=healing,
+        )
+        return baton
+
+    async def test_fallback_precedes_retry(self) -> None:
+        sheet = SheetExecutionState(
+            sheet_num=1, instrument_name="claude-code",
+            max_retries=3, fallback_chain=["gemini-cli"],
+        )
+        baton = self._register(sheet)  # can_retry is True AND fallback available
+        baton._handle_exhaustion("j1", 1, sheet)
+        assert sheet.status == BatonSheetStatus.PENDING        # fallback path
+        assert sheet.current_instrument_index == 1             # advanced
+        assert sheet.normal_attempts == 0                      # retry NOT consumed
+        assert baton._fallback_events                          # fallback emitted
+
+    async def test_healing_precedes_retry(self) -> None:
+        sheet = SheetExecutionState(
+            sheet_num=1, instrument_name="claude-code", max_retries=3,
+        )  # no fallback
+        baton = self._register(sheet, healing=True)
+        baton._handle_exhaustion("j1", 1, sheet)
+        assert sheet.healing_attempts == 1                     # healing path
+        assert sheet.normal_attempts == 0                      # retry NOT consumed
+        assert sheet.status == BatonSheetStatus.RETRY_SCHEDULED
+
+    async def test_escalation_precedes_retry(self) -> None:
+        sheet = SheetExecutionState(
+            sheet_num=1, instrument_name="claude-code", max_retries=3,
+        )
+        baton = self._register(sheet, escalation=True)
+        baton._handle_exhaustion("j1", 1, sheet)
+        assert sheet.status == BatonSheetStatus.FERMATA        # escalation path
+        assert sheet.normal_attempts == 0
+
+    async def test_retry_only_when_no_targeted_recovery(self) -> None:
+        sheet = SheetExecutionState(
+            sheet_num=1, instrument_name="claude-code", max_retries=3,
+        )
+        baton = self._register(sheet)  # no fallback/healing/escalation
+        baton._handle_exhaustion("j1", 1, sheet)
+        assert sheet.normal_attempts == 1                      # retry path
+        assert sheet.status == BatonSheetStatus.RETRY_SCHEDULED
+
+    async def test_fail_when_nothing_applies(self) -> None:
+        sheet = SheetExecutionState(
+            sheet_num=1, instrument_name="claude-code", max_retries=1,
+        )
+        sheet.normal_attempts = 1  # can_retry is now False
+        baton = self._register(sheet)
+        baton._handle_exhaustion("j1", 1, sheet)
+        assert sheet.status == BatonSheetStatus.FAILED
