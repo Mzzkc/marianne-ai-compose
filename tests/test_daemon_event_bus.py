@@ -35,6 +35,12 @@ def _make_event(
     )
 
 
+async def _spin(cond) -> None:
+    """Poll until ``cond()`` is true (caller wraps in asyncio.wait_for guard)."""
+    while not cond():
+        await asyncio.sleep(0.005)
+
+
 # ─── Lifecycle ────────────────────────────────────────────────────────
 
 
@@ -222,23 +228,48 @@ class TestBackpressure:
 
     @pytest.mark.asyncio
     async def test_bounded_queue_drops_oldest(self):
-        """When queue is full, oldest events are dropped (deque maxlen)."""
-        bus = EventBus(max_queue_size=3)
+        """A subscriber that can't keep up loses its OLDEST buffered events.
+
+        Each subscriber owns a bounded ``deque(maxlen=max_queue_size)`` that is
+        the actual delivery buffer (#220). When the producer outruns the
+        subscriber's worker, the deque drops its oldest events — preserving
+        recency for live observability streams. Deterministic: the worker is
+        pinned on its first event while the rest of the burst fills the deque.
+        """
+        bus = EventBus(max_queue_size=2)
         await bus.start()
 
-        received: list[ObserverEvent] = []
-        bus.subscribe(callback=lambda e: received.append(e))
+        received: list[str] = []
+        entered = asyncio.Event()
+        release = asyncio.Event()
 
-        # Publish 5 events rapidly
+        async def slow(e: ObserverEvent) -> None:
+            received.append(e["event"])
+            if e["event"] == "prime":
+                entered.set()
+                await release.wait()  # pin the worker with an empty deque
+
+        sub_id = bus.subscribe(callback=slow)
+
+        # Prime: the worker pops this and blocks, leaving its deque empty.
+        await bus.publish(_make_event("prime"))
+        await asyncio.wait_for(entered.wait(), timeout=2.0)
+
+        # Burst lands while the worker is blocked: deque(maxlen=2) keeps the
+        # newest two (event.3, event.4), dropping event.0/1/2 (drop-oldest).
         for i in range(5):
             await bus.publish(_make_event(f"event.{i}", sheet_num=i))
 
-        await asyncio.sleep(0.2)
+        async def _settled() -> bool:
+            return bus._pending.empty() and len(bus._subscribers[sub_id].queue) == 2
 
-        # The subscriber's deque has maxlen=3, so it stores at most 3 events.
-        # But the callback fires for every event, so received should have all 5.
-        # The deque is an internal buffer; the callback is called immediately.
-        assert len(received) == 5
+        await asyncio.wait_for(_spin(_settled), timeout=2.0)
+        release.set()
+
+        await asyncio.wait_for(
+            _spin(lambda: received == ["prime", "event.3", "event.4"]),
+            timeout=2.0,
+        )
         await bus.shutdown()
 
     @pytest.mark.asyncio
@@ -298,19 +329,26 @@ class TestShutdownDrain:
     """Tests for graceful shutdown draining pending events."""
 
     @pytest.mark.asyncio
-    async def test_shutdown_drains_pending_events(self):
-        """Events in the pending queue are delivered during shutdown."""
+    async def test_running_drain_loop_delivers_before_shutdown(self):
+        """The running drain loop delivers queued events before shutdown.
+
+        (Shutdown itself is bounded and DROPS any still-pending observability
+        events rather than awaiting callbacks — see #228 tests. Here the event
+        is delivered by the live drain loop prior to shutdown.)
+        """
         bus = EventBus(max_queue_size=100)
         await bus.start()
 
         received: list[ObserverEvent] = []
-        bus.subscribe(callback=lambda e: received.append(e))
+        got = asyncio.Event()
 
-        # Put event directly in the pending queue to simulate a race
-        await bus._pending.put(_make_event("drain.test"))
+        def handler(e: ObserverEvent) -> None:
+            received.append(e)
+            got.set()
 
-        # Small delay so drain loop picks it up
-        await asyncio.sleep(0.1)
+        bus.subscribe(callback=handler)
+        await bus.publish(_make_event("drain.test"))
+        await asyncio.wait_for(got.wait(), timeout=2.0)
         await bus.shutdown()
 
         assert any(e["event"] == "drain.test" for e in received)
