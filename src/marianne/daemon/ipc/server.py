@@ -36,6 +36,14 @@ DEFAULT_MAX_CONNECTIONS = 500
 # Default limit on concurrently processing requests.
 DEFAULT_MAX_CONCURRENT_REQUESTS = 50
 
+# Per-readline idle timeout (#310). The IPC protocol is a local Unix-socket
+# control channel; the CLI sends its request immediately and disconnects, so a
+# connection that idles this long between complete messages is dead or stuck and
+# is holding a connection slot for nothing. On expiry the server closes the
+# connection (it does NOT send a JSON-RPC error — a non-reading peer can't
+# receive it). Generous by default; configurable for tighter FD hygiene.
+DEFAULT_READ_IDLE_TIMEOUT = 300.0
+
 
 class DaemonServer:
     """Async Unix domain socket server with JSON-RPC 2.0 routing.
@@ -65,6 +73,7 @@ class DaemonServer:
         permissions: int = 0o660,
         max_connections: int = DEFAULT_MAX_CONNECTIONS,
         max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS,
+        read_idle_timeout: float = DEFAULT_READ_IDLE_TIMEOUT,
     ) -> None:
         if max_connections < 1:
             raise ValueError(f"max_connections must be >= 1, got {max_connections}")
@@ -72,12 +81,17 @@ class DaemonServer:
             raise ValueError(
                 f"max_concurrent_requests must be >= 1, got {max_concurrent_requests}"
             )
+        if read_idle_timeout <= 0:
+            raise ValueError(
+                f"read_idle_timeout must be > 0, got {read_idle_timeout}"
+            )
 
         self._socket_path = socket_path
         self._handler = handler
         self._permissions = permissions
         self._max_connections = max_connections
         self._max_concurrent_requests = max_concurrent_requests
+        self._read_idle_timeout = read_idle_timeout
         self._server: asyncio.Server | None = None
         self._connections: set[asyncio.Task[None]] = set()
         self._connection_semaphore = asyncio.Semaphore(max_connections)
@@ -201,12 +215,29 @@ class DaemonServer:
         try:
             while True:
                 try:
-                    line = await reader.readline()
+                    line = await asyncio.wait_for(
+                        reader.readline(),
+                        timeout=self._read_idle_timeout,
+                    )
+                except TimeoutError:
+                    # Idle too long between complete messages (#310): a dead or
+                    # stuck client holding a connection slot. Close it — don't
+                    # send a JSON-RPC error, the peer isn't reading.
+                    _logger.debug(
+                        "client_idle_timeout",
+                        peer=str(peer),
+                        timeout=self._read_idle_timeout,
+                    )
+                    break
                 except asyncio.LimitOverrunError:
                     # Message exceeded MAX_MESSAGE_BYTES; buffer is in an
                     # indeterminate state so we must close the connection.
                     _logger.warning("message_too_large", peer=str(peer))
                     await self._write_response(writer, parse_error())
+                    break
+                except ConnectionResetError:
+                    # asyncio.wait_for can surface a reset through this path
+                    # rather than the outer handler; treat it as a clean drop.
                     break
 
                 if not line:
