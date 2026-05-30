@@ -9,12 +9,10 @@
 
 name: legion-dream
 workspace: /home/emzi/Projects/legion
-backend:
-  type: claude_cli
-  model: claude-opus-4-7
-  skip_permissions: true
+instrument: opencode
+instrument_config:
+  model: zai-coding-plan/glm-5.1
   timeout_seconds: 1800
-  output_format: text
 sheet:
   size: 1
   total_items: 1
