@@ -29,6 +29,7 @@ MAX_OUTPUT_CAPTURE_BYTES: int = 51200  # 50KB - last N bytes of stdout/stderr to
 # Constants for error history (Task 10: Error History Model)
 MAX_ERROR_HISTORY: int = 50  # Maximum number of error records to keep per sheet
 MAX_INSTRUMENT_FALLBACK_HISTORY: int = 50  # Maximum fallback records per sheet
+MAX_CIRCUIT_BREAKER_HISTORY: int = 50  # Maximum CB transition records per job
 
 # Type alias for error types
 ErrorType = Literal["transient", "rate_limit", "permanent"]
@@ -1082,6 +1083,13 @@ class CheckpointState(BaseModel):
             "trigger": trigger,
             "consecutive_failures": consecutive_failures,
         })
+        # Bound the history so multi-day jobs with flapping backends don't grow
+        # circuit_breaker_history without limit (parity with error_history and
+        # instrument_fallback_history).
+        if len(self.circuit_breaker_history) > MAX_CIRCUIT_BREAKER_HISTORY:
+            self.circuit_breaker_history = self.circuit_breaker_history[
+                -MAX_CIRCUIT_BREAKER_HISTORY:
+            ]
         self.updated_at = utc_now()
 
         _logger.debug(

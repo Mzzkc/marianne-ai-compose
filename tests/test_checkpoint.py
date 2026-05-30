@@ -6,6 +6,7 @@ import pydantic
 import pytest
 
 from marianne.core.checkpoint import (
+    MAX_CIRCUIT_BREAKER_HISTORY,
     MAX_OUTPUT_CAPTURE_BYTES,
     CheckpointState,
     JobStatus,
@@ -875,3 +876,45 @@ class TestZombieDetection:
 
         # Should still be detected as zombie after deserialization
         assert loaded.is_zombie() is True
+
+
+class TestCircuitBreakerHistoryCap:
+    """record_circuit_breaker_change bounds circuit_breaker_history (#241).
+
+    Parity with error_history and instrument_fallback_history: a multi-day job
+    with a flapping backend must not grow circuit_breaker_history without limit.
+    """
+
+    @staticmethod
+    def _state() -> CheckpointState:
+        return CheckpointState(
+            job_id="cb-job",
+            job_name="CB",
+            total_sheets=1,
+            sheets={1: SheetState(sheet_num=1)},
+        )
+
+    def test_below_limit_keeps_all(self) -> None:
+        state = self._state()
+        for i in range(MAX_CIRCUIT_BREAKER_HISTORY - 1):
+            state.record_circuit_breaker_change("open", f"failure_{i}", i)
+        assert len(state.circuit_breaker_history) == MAX_CIRCUIT_BREAKER_HISTORY - 1
+
+    def test_at_limit_keeps_all(self) -> None:
+        state = self._state()
+        for i in range(MAX_CIRCUIT_BREAKER_HISTORY):
+            state.record_circuit_breaker_change("open", f"failure_{i}", i)
+        assert len(state.circuit_breaker_history) == MAX_CIRCUIT_BREAKER_HISTORY
+
+    def test_over_limit_stays_bounded_keeps_newest(self) -> None:
+        state = self._state()
+        total = MAX_CIRCUIT_BREAKER_HISTORY * 2 + 5
+        for i in range(total):
+            state.record_circuit_breaker_change("open", f"failure_{i}", i)
+
+        assert len(state.circuit_breaker_history) == MAX_CIRCUIT_BREAKER_HISTORY
+        # Newest window retained, in order (oldest transitions dropped).
+        triggers = [e["trigger"] for e in state.circuit_breaker_history]
+        assert triggers == [
+            f"failure_{i}" for i in range(total - MAX_CIRCUIT_BREAKER_HISTORY, total)
+        ]
