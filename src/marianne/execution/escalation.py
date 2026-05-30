@@ -26,7 +26,10 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from marianne.core.checkpoint import SheetState, ValidationDetailDict
+from marianne.core.logging import get_logger
 from marianne.execution.validation import SheetValidationResult
+
+_logger = get_logger("execution.escalation")
 
 # =============================================================================
 # v21 Evolution: Proactive Checkpoint System
@@ -259,8 +262,21 @@ class ConsoleEscalationHandler:
         if confidence >= self.confidence_threshold:
             return False
 
-        # Escalate if auto-retry is disabled OR this is not the first attempt
-        return not (self.auto_retry_on_first_failure and sheet_state.attempt_count <= 1)
+        # Escalate if auto-retry is disabled OR this is not the first attempt.
+        suppressed_by_auto_retry = (
+            self.auto_retry_on_first_failure and sheet_state.attempt_count <= 1
+        )
+        if suppressed_by_auto_retry:
+            # #257: low confidence WOULD escalate, but auto-retry-on-first-failure
+            # silently swallows it. Log so "why did my sheet retry?" has a trace.
+            _logger.info(
+                "escalation.auto_retry_first_failure",
+                sheet_num=sheet_state.sheet_num,
+                attempt_count=sheet_state.attempt_count,
+                confidence=confidence,
+                confidence_threshold=self.confidence_threshold,
+            )
+        return not suppressed_by_auto_retry
 
     async def escalate(self, context: EscalationContext) -> EscalationResponse:
         """Prompt user for escalation decision via console.
