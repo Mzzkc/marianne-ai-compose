@@ -49,6 +49,22 @@ _logger = get_logger("daemon.manager")
 # Avoids false positives from filesystem granularity differences.
 _MTIME_TOLERANCE_SECONDS = 1.0
 
+# Maps a daemon-level job status to the checkpoint-level JobStatus stored in
+# live state (which serves `mzt status`). Module-level so a test can assert it
+# is exhaustive over DaemonJobStatus (#234): an unmapped member silently
+# skipped the live-state update, diverging `mzt status` from `mzt list`. The
+# missing PAUSED_AT_CHAIN mapping was exactly that latent bug.
+_DAEMON_TO_CHECKPOINT_STATUS: dict[DaemonJobStatus, JobStatus] = {
+    DaemonJobStatus.QUEUED: JobStatus.PENDING,
+    DaemonJobStatus.PENDING: JobStatus.PENDING,
+    DaemonJobStatus.RUNNING: JobStatus.RUNNING,
+    DaemonJobStatus.PAUSED: JobStatus.PAUSED,
+    DaemonJobStatus.PAUSED_AT_CHAIN: JobStatus.PAUSED_AT_CHAIN,
+    DaemonJobStatus.COMPLETED: JobStatus.COMPLETED,
+    DaemonJobStatus.FAILED: JobStatus.FAILED,
+    DaemonJobStatus.CANCELLED: JobStatus.CANCELLED,
+}
+
 
 def _should_auto_fresh(config_path: Path, completed_at: float | None) -> bool:
     """Check if a score file was modified after a completed run.
@@ -532,18 +548,19 @@ class JobManager:
         # 2. Live checkpoint state (may not exist yet for queued jobs)
         live = self._live_states.get(job_id)
         if live is not None:
-            _STATUS_MAP: dict[DaemonJobStatus, JobStatus] = {
-                DaemonJobStatus.QUEUED: JobStatus.PENDING,
-                DaemonJobStatus.PENDING: JobStatus.PENDING,
-                DaemonJobStatus.RUNNING: JobStatus.RUNNING,
-                DaemonJobStatus.PAUSED: JobStatus.PAUSED,
-                DaemonJobStatus.COMPLETED: JobStatus.COMPLETED,
-                DaemonJobStatus.FAILED: JobStatus.FAILED,
-                DaemonJobStatus.CANCELLED: JobStatus.CANCELLED,
-            }
-            cp_status = _STATUS_MAP.get(status)
+            cp_status = _DAEMON_TO_CHECKPOINT_STATUS.get(status)
             if cp_status is not None:
                 object.__setattr__(live, "status", cp_status)
+            else:
+                # #234: an unmapped status must not silently skip the live
+                # update (which would diverge `mzt status` from `mzt list`).
+                # The exhaustiveness test guards against this at CI time; this
+                # warning surfaces it if one ever slips through at runtime.
+                _logger.warning(
+                    "job_status.unmapped_daemon_status",
+                    job_id=job_id,
+                    status=status.value,
+                )
 
         # 3. Persistent registry
         await self._registry.update_status(

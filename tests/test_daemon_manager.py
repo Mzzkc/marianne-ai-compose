@@ -2522,3 +2522,35 @@ class TestHookConfigRestoration:
         meta = mgr2._job_meta[response.job_id]
         assert meta.hook_config is None
         await mgr2.shutdown()
+
+
+class TestDaemonToCheckpointStatusMap:
+    """#234: the DaemonJobStatus → JobStatus map must stay exhaustive.
+
+    An unmapped DaemonJobStatus member silently skipped the live-state update
+    in `_set_job_status`, diverging `mzt status` (live) from `mzt list`
+    (registry). PAUSED_AT_CHAIN was exactly that latent omission. This test
+    fails at CI time if a new DaemonJobStatus is added without a mapping.
+    """
+
+    def test_every_daemon_status_is_mapped(self) -> None:
+        from marianne.core.checkpoint import JobStatus
+        from marianne.daemon.manager import _DAEMON_TO_CHECKPOINT_STATUS
+
+        unmapped = set(DaemonJobStatus) - set(_DAEMON_TO_CHECKPOINT_STATUS)
+        assert unmapped == set(), (
+            f"DaemonJobStatus members missing from _DAEMON_TO_CHECKPOINT_STATUS: "
+            f"{sorted(s.value for s in unmapped)}"
+        )
+        # Every mapped value is a real JobStatus (no typos).
+        for cp_status in _DAEMON_TO_CHECKPOINT_STATUS.values():
+            assert isinstance(cp_status, JobStatus)
+
+    def test_paused_at_chain_maps_to_paused_at_chain(self) -> None:
+        from marianne.core.checkpoint import JobStatus
+        from marianne.daemon.manager import _DAEMON_TO_CHECKPOINT_STATUS
+
+        assert (
+            _DAEMON_TO_CHECKPOINT_STATUS[DaemonJobStatus.PAUSED_AT_CHAIN]
+            == JobStatus.PAUSED_AT_CHAIN
+        )
