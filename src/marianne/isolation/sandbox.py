@@ -18,6 +18,7 @@ in kilobytes, not megabytes.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +28,12 @@ _logger = get_logger("isolation.sandbox")
 
 # Standard system directories mounted read-only inside the sandbox.
 _SYSTEM_RO_DIRS: list[str] = ["/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc"]
+
+# Bound the `bwrap --version` availability probe (#237). The probe is instant
+# in a healthy environment; a hang (broken binary, NFS mount stall, constrained
+# sandbox) must never block conductor startup — on timeout we kill the probe
+# and report bwrap unavailable.
+_BWRAP_PROBE_TIMEOUT = 5.0
 
 
 @dataclass(frozen=True)
@@ -156,10 +163,26 @@ class BwrapSandbox:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            await proc.wait()
-            available = proc.returncode == 0
-            _logger.debug("bwrap_availability_check", available=available)
-            return available
         except FileNotFoundError:
             _logger.debug("bwrap_availability_check", available=False)
             return False
+
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=_BWRAP_PROBE_TIMEOUT)
+        except TimeoutError:
+            # A hung probe (broken binary, NFS stall, constrained env) must not
+            # block conductor startup (#237). Kill it, reap it (bounded), and
+            # report bwrap unavailable.
+            _logger.warning(
+                "bwrap_availability_check.timeout",
+                timeout=_BWRAP_PROBE_TIMEOUT,
+            )
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(proc.wait(), timeout=_BWRAP_PROBE_TIMEOUT)
+            return False
+
+        available = proc.returncode == 0
+        _logger.debug("bwrap_availability_check", available=available)
+        return available

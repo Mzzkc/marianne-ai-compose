@@ -7,8 +7,9 @@ process isolation (which needs privileges).
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -260,6 +261,34 @@ class TestIsAvailable:
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
             result = await BwrapSandbox.is_available()
             assert result is False
+
+    async def test_unavailable_when_bwrap_hangs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """#237: a hung `bwrap --version` (broken binary, NFS stall, constrained
+        env) must NOT block conductor startup — the probe times out, the process
+        is killed, and bwrap is reported unavailable."""
+        monkeypatch.setattr(
+            "marianne.isolation.sandbox._BWRAP_PROBE_TIMEOUT", 0.05
+        )
+
+        async def _hang() -> None:
+            await asyncio.Event().wait()  # never completes
+
+        mock_proc = AsyncMock()
+        mock_proc.wait = AsyncMock(side_effect=_hang)
+        mock_proc.kill = MagicMock()
+        mock_proc.returncode = None
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            # Guard: if is_available() lacks a timeout it hangs forever and the
+            # guard fails the test (red); with the fix it returns promptly.
+            result = await asyncio.wait_for(
+                BwrapSandbox.is_available(), timeout=2.0
+            )
+
+        assert result is False
+        mock_proc.kill.assert_called_once()
 
 
 # =============================================================================
