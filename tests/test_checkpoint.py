@@ -7,6 +7,7 @@ import pytest
 
 from marianne.core.checkpoint import (
     MAX_CIRCUIT_BREAKER_HISTORY,
+    MAX_INSTRUMENT_FALLBACK_HISTORY,
     MAX_OUTPUT_CAPTURE_BYTES,
     CheckpointState,
     JobStatus,
@@ -918,3 +919,86 @@ class TestCircuitBreakerHistoryCap:
         assert triggers == [
             f"failure_{i}" for i in range(total - MAX_CIRCUIT_BREAKER_HISTORY, total)
         ]
+
+
+class TestAdvanceFallback:
+    """SheetState.advance_fallback — the critical instrument-fallback transition (#321).
+
+    A regression here causes premature failure (skips a usable fallback) or an
+    infinite retry loop (budget never resets / index never advances), so the
+    budget reset, index advance, instrument switch, model clear (GH#337), and
+    history record+trim all need direct coverage.
+    """
+
+    @staticmethod
+    def _sheet(chain: list[str], primary: str = "primary") -> SheetState:
+        return SheetState(
+            sheet_num=1,
+            instrument_name=primary,
+            fallback_chain=chain,
+        )
+
+    def test_has_fallback_available_reflects_index(self) -> None:
+        sheet = self._sheet(["a", "b"])
+        assert sheet.has_fallback_available is True
+        sheet.current_instrument_index = 2
+        assert sheet.has_fallback_available is False
+
+    def test_advance_switches_instrument_and_advances_index(self) -> None:
+        sheet = self._sheet(["a", "b"])
+        result = sheet.advance_fallback("rate_limit_exhausted")
+        assert result == "a"
+        assert sheet.instrument_name == "a"
+        assert sheet.current_instrument_index == 1
+
+    def test_advance_resets_budget_and_clears_model(self) -> None:
+        sheet = self._sheet(["a"])
+        sheet.model = "gemini-3.1-pro-preview"
+        sheet.normal_attempts = 3
+        sheet.completion_attempts = 2
+
+        sheet.advance_fallback("validation_failed")
+
+        # Fresh budget for the new instrument; model cleared so the fallback
+        # uses its own default (GH#337).
+        assert sheet.normal_attempts == 0
+        assert sheet.completion_attempts == 0
+        assert sheet.model is None
+        # The exhausted budget of the *previous* instrument is recorded.
+        assert sheet.fallback_attempts["primary"] == 3
+
+    def test_advance_records_transition(self) -> None:
+        sheet = self._sheet(["a"])
+        sheet.advance_fallback("execution_crashed")
+        assert len(sheet.instrument_fallback_history) == 1
+        entry = sheet.instrument_fallback_history[0]
+        assert entry["from"] == "primary"
+        assert entry["to"] == "a"
+        assert entry["reason"] == "execution_crashed"
+        assert "timestamp" in entry
+
+    def test_walk_full_chain_then_exhausted(self) -> None:
+        sheet = self._sheet(["a", "b"])
+        assert sheet.advance_fallback("r") == "a"
+        assert sheet.advance_fallback("r") == "b"
+
+        # Chain exhausted: returns None and leaves state untouched.
+        before_index = sheet.current_instrument_index
+        before_name = sheet.instrument_name
+        before_history = len(sheet.instrument_fallback_history)
+        assert sheet.advance_fallback("r") is None
+        assert sheet.current_instrument_index == before_index
+        assert sheet.instrument_name == before_name
+        assert len(sheet.instrument_fallback_history) == before_history
+
+    def test_history_trimmed_at_boundary(self) -> None:
+        n = MAX_INSTRUMENT_FALLBACK_HISTORY + 5
+        sheet = self._sheet([f"i{j}" for j in range(n)])
+        for _ in range(n):
+            assert sheet.advance_fallback("r") is not None
+
+        # All n transitions happened, but history is bounded and keeps newest.
+        assert sheet.current_instrument_index == n
+        assert len(sheet.instrument_fallback_history) == MAX_INSTRUMENT_FALLBACK_HISTORY
+        tos = [e["to"] for e in sheet.instrument_fallback_history]
+        assert tos == [f"i{j}" for j in range(n - MAX_INSTRUMENT_FALLBACK_HISTORY, n)]
