@@ -313,3 +313,75 @@ class TestRecoverCommand:
         updated = json.loads((tmp_path / "extend.json").read_text())
         assert updated["sheets"]["3"]["status"] == "completed"
         assert updated["last_completed_sheet"] == 3
+
+
+class TestLoadRecoveryConfig:
+    """Unit tests for recover._load_recovery_config (#229).
+
+    Deserialization failures must NOT be silently swallowed: recovery proceeds
+    without validation, so a degraded recovery has to leave a diagnostic trail
+    (MN-007 forbids bare ``except Exception: pass``). These tests run directly
+    against the helper because the CLI-level recover tests above are skipped
+    pending conductor-mock infrastructure (F-532).
+    """
+
+    @staticmethod
+    def _valid_snapshot(workspace: Path) -> dict:
+        return {
+            "name": "ok-job",
+            "backend": {"type": "claude_cli", "skip_permissions": True},
+            "sheet": {"size": 10, "total_items": 30},
+            "prompt": {"template": "Sheet {{ sheet_num }}"},
+            "workspace": str(workspace),
+        }
+
+    def test_valid_snapshot_returns_config(self, tmp_path: Path) -> None:
+        from marianne.cli.commands.recover import _load_recovery_config
+
+        config = _load_recovery_config(self._valid_snapshot(tmp_path), None)
+        assert config is not None
+        assert config.name == "ok-job"
+
+    def test_invalid_snapshot_returns_none_and_warns(self) -> None:
+        from unittest.mock import patch
+
+        from marianne.cli.commands.recover import _load_recovery_config
+
+        with patch("marianne.cli.commands.recover._logger") as logger:
+            config = _load_recovery_config({"this": "is not a valid JobConfig"}, None)
+
+        assert config is None
+        logger.warning.assert_called_once()
+        assert logger.warning.call_args[0][0] == "recover.config_snapshot_invalid"
+
+    def test_no_config_returns_none_without_warning(self) -> None:
+        from unittest.mock import patch
+
+        from marianne.cli.commands.recover import _load_recovery_config
+
+        with patch("marianne.cli.commands.recover._logger") as logger:
+            config = _load_recovery_config(None, None)
+
+        assert config is None
+        logger.warning.assert_not_called()
+
+    def test_invalid_config_path_returns_none_and_warns(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
+        from marianne.cli.commands.recover import _load_recovery_config
+
+        bad = tmp_path / "broken.yaml"
+        bad.write_text("{ this is not: valid: yaml: ::")
+
+        with patch("marianne.cli.commands.recover._logger") as logger:
+            config = _load_recovery_config(None, str(bad))
+
+        assert config is None
+        logger.warning.assert_called_once()
+        assert logger.warning.call_args[0][0] == "recover.config_path_invalid"
+
+    def test_missing_config_path_file_returns_none(self, tmp_path: Path) -> None:
+        from marianne.cli.commands.recover import _load_recovery_config
+
+        config = _load_recovery_config(None, str(tmp_path / "does-not-exist.yaml"))
+        assert config is None

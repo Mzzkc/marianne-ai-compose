@@ -28,10 +28,50 @@ from rich.panel import Panel
 
 from marianne.core.config import JobConfig
 from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.logging import get_logger
 from marianne.execution.validation import ValidationEngine
 
 from ..helpers import configure_global_logging
 from ..output import console, output_error
+
+_logger = get_logger("cli.recover")
+
+
+def _load_recovery_config(
+    config_snapshot: dict[str, Any] | None,
+    config_path: str | None,
+) -> JobConfig | None:
+    """Deserialize the job config for validation-based recovery.
+
+    Returns ``None`` when no config is available or it fails to deserialize.
+    A deserialization failure is a real degradation — recovery then proceeds
+    WITHOUT validation — so it must leave a diagnostic trail rather than be
+    silently swallowed (MN-007 forbids ``except Exception: pass``; #229).
+    """
+    if config_snapshot:
+        try:
+            return JobConfig.model_validate(config_snapshot)
+        except Exception as exc:
+            _logger.warning(
+                "recover.config_snapshot_invalid",
+                error=str(exc),
+                detail="config_snapshot failed to deserialize; "
+                "recovery will proceed without validation",
+            )
+            return None
+    if config_path and Path(config_path).exists():
+        try:
+            return JobConfig.from_yaml(Path(config_path))
+        except Exception as exc:
+            _logger.warning(
+                "recover.config_path_invalid",
+                config_path=str(config_path),
+                error=str(exc),
+                detail="config file failed to load; "
+                "recovery will proceed without validation",
+            )
+            return None
+    return None
 
 
 def _get_db_path() -> Path:
@@ -285,18 +325,7 @@ async def _recover_job(
     # Try validation-based recovery if config is available
     config_snapshot = checkpoint.get("config_snapshot")
     config_path = checkpoint.get("config_path")
-    config: JobConfig | None = None
-
-    if config_snapshot:
-        try:
-            config = JobConfig.model_validate(config_snapshot)
-        except Exception:
-            pass
-    elif config_path and Path(config_path).exists():
-        try:
-            config = JobConfig.from_yaml(Path(config_path))
-        except Exception:
-            pass
+    config: JobConfig | None = _load_recovery_config(config_snapshot, config_path)
 
     # Reset sheets and optionally validate
     reset_count = 0
