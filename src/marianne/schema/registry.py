@@ -2,6 +2,21 @@
 
 Maps Pydantic BaseModel and dataclass models to SQLite table schemas,
 enabling automatic DDL generation, upsert SQL, and schema drift detection.
+
+NOT WIRED INTO PRODUCTION (see #224). This module is the implementation of the
+approved "unified schema management" design
+(docs/plans/architecture/2026-02-25-unified-schema-management-design.md) whose
+intent is no-loss, normalized, model-driven columns for fleet-scale analytics.
+That intent is deferred: the single daemon currently persists the *whole*
+``CheckpointState`` as a JSON blob (``JobRegistry.checkpoint_json``), which is
+already no-loss for resume, and ``SQLiteStateBackend`` uses its own hand-written
+DDL for the diagnostics/history projection. So this registry has no production
+caller today. It is preserved (not deleted) as the seed for the deferred
+fleet-queryable work, and fenced by
+``test_schema_registry.py::test_no_production_caller_imports_registry`` — that
+guard fails the moment production code imports the DDL symbols, forcing whoever
+wires it in to consciously reconcile it with the live ``SQLiteStateBackend``
+schema rather than letting two schema definitions drift silently.
 """
 
 from __future__ import annotations

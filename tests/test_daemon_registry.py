@@ -6,11 +6,18 @@ orphan recovery, job deletion, and error handling.
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
 
+from marianne.core.checkpoint import (
+    CheckpointState,
+    JobStatus,
+    SheetState,
+    SheetStatus,
+)
 from marianne.daemon.registry import DaemonJobStatus, JobRecord, JobRegistry
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
@@ -467,3 +474,147 @@ class TestHookConfigStorage:
             await reg.store_hook_config("old-job", "[]")
             result = await reg.get_hook_config("old-job")
             assert result == "[]"
+
+
+# ─── Checkpoint Blob Round-Trip (Invariant pin for #223) ──────────────
+
+
+class TestCheckpointRoundTrip:
+    """The daemon resume path persists the WHOLE ``CheckpointState`` as a JSON
+    blob in the registry's ``checkpoint_json`` column and reconstructs it on
+    resume — it does NOT use the column-mapped ``SQLiteStateBackend``.
+
+    These tests pin the invariant behind #223: baton-scheduling, cost-tracking,
+    and worktree fields survive a daemon ``save_checkpoint`` → ``load_checkpoint``
+    round-trip. #223 ("100+ fields silently lost on restart") was filed against
+    the lossy ``SQLiteStateBackend`` column projection, but that backend is not
+    on the daemon resume path; the blob round-trip below is. If this test ever
+    fails, the daemon resume path has genuinely become lossy.
+    """
+
+    @pytest.mark.asyncio
+    async def test_save_load_preserves_baton_cost_worktree_fields(
+        self, registry: JobRegistry
+    ) -> None:
+        """A full CheckpointState round-trips through the registry blob lossless
+        for every persisted baton/cost/worktree field.
+        """
+        await registry.register_job("rt", Path("/tmp/c.yaml"), Path("/tmp/ws"))
+
+        sheet = SheetState(
+            sheet_num=1,
+            status=SheetStatus.IN_PROGRESS,
+            # Baton scheduling (persisted)
+            normal_attempts=3,
+            max_retries=6,
+            max_completion=4,
+            completion_attempts=1,
+            healing_attempts=2,
+            total_cost_usd=7.89,
+            total_duration_seconds=123.4,
+            model="glm-5.1",
+            fallback_chain=["claude", "goose", "gemini"],
+            current_instrument_index=2,
+            fallback_attempts={"claude": 2, "goose": 1},
+            sheet_timeout_seconds=300.0,
+            instrument_fallback_history=[
+                {"from": "claude", "to": "goose", "reason": "timeout"}
+            ],
+            # Cost tracking (persisted)
+            input_tokens=15000,
+            output_tokens=8000,
+            estimated_cost=0.045,
+            cost_confidence=0.9,
+        )
+        state = CheckpointState(
+            job_id="rt",
+            job_name="round-trip",
+            total_sheets=1,
+            status=JobStatus.RUNNING,
+            sheets={1: sheet},
+            # Aggregate cost + worktree (persisted on CheckpointState)
+            total_estimated_cost=5.67,
+            total_input_tokens=15000,
+            total_output_tokens=8000,
+            instruments_used=["claude", "goose"],
+            worktree_path="/tmp/worktree-rt",
+            worktree_branch="sheet-1-attempt-3",
+            worktree_locked=True,
+            worktree_base_commit="abc123def",
+            circuit_breaker_history=[{"tripped_at": "2026-05-30"}],
+        )
+
+        await registry.save_checkpoint("rt", state.model_dump_json())
+        blob = await registry.load_checkpoint("rt")
+        assert blob is not None
+        restored = CheckpointState.model_validate(json.loads(blob))
+
+        s = restored.sheets[1]
+        # Baton scheduling
+        assert s.normal_attempts == 3
+        assert s.max_retries == 6
+        assert s.max_completion == 4
+        assert s.completion_attempts == 1
+        assert s.healing_attempts == 2
+        assert s.total_cost_usd == pytest.approx(7.89)
+        assert s.total_duration_seconds == pytest.approx(123.4)
+        assert s.model == "glm-5.1"
+        assert s.fallback_chain == ["claude", "goose", "gemini"]
+        assert s.current_instrument_index == 2
+        assert s.fallback_attempts == {"claude": 2, "goose": 1}
+        assert s.sheet_timeout_seconds == pytest.approx(300.0)
+        assert s.instrument_fallback_history == [
+            {"from": "claude", "to": "goose", "reason": "timeout"}
+        ]
+        # Cost tracking
+        assert s.input_tokens == 15000
+        assert s.output_tokens == 8000
+        assert s.estimated_cost == pytest.approx(0.045)
+        assert s.cost_confidence == pytest.approx(0.9)
+        # Aggregate + worktree
+        assert restored.total_estimated_cost == pytest.approx(5.67)
+        assert restored.total_input_tokens == 15000
+        assert restored.total_output_tokens == 8000
+        assert restored.instruments_used == ["claude", "goose"]
+        assert restored.worktree_path == "/tmp/worktree-rt"
+        assert restored.worktree_branch == "sheet-1-attempt-3"
+        assert restored.worktree_locked is True
+        assert restored.worktree_base_commit == "abc123def"
+        assert restored.circuit_breaker_history == [{"tripped_at": "2026-05-30"}]
+
+    @pytest.mark.asyncio
+    async def test_transient_fields_are_intentionally_dropped(
+        self, registry: JobRegistry
+    ) -> None:
+        """Fields marked ``exclude=True`` (timers, in-flight attempt results) are
+        intentionally NOT persisted — they reset to defaults on restart by design.
+
+        This documents the one place the round-trip is deliberately lossy so a
+        future reader does not mistake it for the #223 bug.
+        """
+        await registry.register_job("tr", Path("/tmp/c.yaml"), Path("/tmp/ws"))
+
+        sheet = SheetState(
+            sheet_num=1,
+            status=SheetStatus.IN_PROGRESS,
+            next_retry_at=999.0,
+            dispatched_at=888.0,
+            attempt_results=[{"attempt": 1}],
+        )
+        state = CheckpointState(
+            job_id="tr",
+            job_name="transient",
+            total_sheets=1,
+            status=JobStatus.RUNNING,
+            sheets={1: sheet},
+        )
+
+        await registry.save_checkpoint("tr", state.model_dump_json())
+        blob = await registry.load_checkpoint("tr")
+        assert blob is not None
+        restored = CheckpointState.model_validate(json.loads(blob))
+
+        s = restored.sheets[1]
+        assert s.next_retry_at is None
+        assert s.dispatched_at is None
+        assert s.attempt_results == []

@@ -590,3 +590,55 @@ class TestRoundTrip:
         v = [{"id": "p1", "description": "test"}, {"id": "p2", "description": "test2"}]
         ann = list[dict[str, str]]
         assert deserialize_field(serialize_field(v, ann), ann) == v
+
+
+# ── #224 drift guard: registry is not wired into production ──────────────
+
+
+class TestNotWiredIntoProduction:
+    """``schema/registry.py`` is the deferred fleet-analytics seed (#224); it is
+    intentionally NOT used by production. The live state layer is the daemon's
+    full-blob ``JobRegistry`` plus ``SQLiteStateBackend``'s hand-written DDL.
+
+    This guard pins that fact. If production code starts importing the registry's
+    DDL machinery, the "two schema definitions will drift" hazard (#224) becomes
+    live — so this test fails to force a conscious reconciliation rather than a
+    silent drift.
+    """
+
+    def test_no_production_caller_imports_registry(self) -> None:
+        import ast
+        from pathlib import Path
+
+        ddl_symbols = {
+            "get_state_registry",
+            "_build_state_registry",
+            "build_state_registry",
+            "TableMapping",
+            "generate_create_table",
+            "generate_upsert",
+            "get_expected_columns",
+            "get_column_sources",
+        }
+        src = Path(__file__).resolve().parents[1] / "src" / "marianne"
+        assert src.is_dir(), f"source tree not found at {src}"
+
+        violations: list[str] = []
+        for py in src.rglob("*.py"):
+            if py.relative_to(src).parts[:2] == ("schema", "registry.py"):
+                continue
+            if py.name == "registry.py" and py.parent.name == "schema":
+                continue
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    if node.module.endswith("schema.registry"):
+                        names = {a.name for a in node.names}
+                        hit = names & ddl_symbols
+                        if hit:
+                            violations.append(f"{py.relative_to(src)} imports {sorted(hit)}")
+
+        assert not violations, (
+            "schema/registry.py is supposed to be unused in production (#224), "
+            "but these modules import its DDL machinery:\n  " + "\n  ".join(violations)
+        )
