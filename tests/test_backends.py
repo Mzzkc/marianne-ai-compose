@@ -597,6 +597,76 @@ class TestClaudeCliBackendTimeoutOutputPreservation:
         assert result.stderr.startswith("err")
 
     @pytest.mark.asyncio
+    async def test_timeout_log_includes_stderr_tail(
+        self, backend: ClaudeCliBackend
+    ) -> None:
+        """#264: the execution_timeout log must include the partial-stderr tail
+        — the most diagnostic info, previously discarded (only duration/bytes
+        were logged), so a 30-min timeout left no record of what failed."""
+        backend._partial_stdout_chunks = []
+        backend._partial_stderr_chunks = [b"fatal: boom traceback line"]
+
+        with patch(
+            "marianne.execution.instruments.claude_cli_legacy._logger"
+        ) as mock_logger:
+            await backend._handle_execution_timeout(
+                process=AsyncMock(
+                    terminate=MagicMock(),
+                    wait=AsyncMock(),
+                    kill=MagicMock(),
+                    returncode=-9,
+                ),
+                start_time=time.monotonic() - 10.0,
+                bytes_received=27,
+                lines_received=1,
+            )
+
+        timeout_logs = [
+            c for c in mock_logger.error.call_args_list
+            if c.args and c.args[0] == "execution_timeout"
+        ]
+        assert len(timeout_logs) == 1
+        assert "boom traceback" in timeout_logs[0].kwargs["stderr_tail"]
+
+    @pytest.mark.asyncio
+    async def test_execution_exception_logs_command_and_cwd(self) -> None:
+        """#264: the execution_exception log must carry the command + cwd so a
+        failure is reproducible (previously only the error string was logged)."""
+        from pathlib import Path
+
+        backend = ClaudeCliBackend(
+            timeout_seconds=5.0, working_directory=Path("/tmp/ws-264")
+        )
+        mock_process = AsyncMock()
+        mock_process.pid = 999
+        mock_process.returncode = None
+
+        async def _boom(_proc, _start, _notify, *, effective_timeout=None):
+            raise OSError("stream boom")
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_process),
+            patch.object(backend, "_build_command", return_value=["claude", "-p", "-"]),
+            patch.object(backend, "_prepare_log_files"),
+            patch.object(backend, "_stream_with_progress", side_effect=_boom),
+            patch.object(backend, "_kill_orphaned_process", new=AsyncMock()),
+            patch(
+                "marianne.execution.instruments.claude_cli_legacy._logger"
+            ) as mock_logger,
+        ):
+            result = await backend._execute_impl("test")
+
+        assert result.success is False
+        exc_logs = [
+            c for c in mock_logger.exception.call_args_list
+            if c.args and c.args[0] == "execution_exception"
+        ]
+        assert len(exc_logs) == 1
+        kwargs = exc_logs[0].kwargs
+        assert kwargs["command"] == ["claude", "-p", "-"]
+        assert kwargs["working_directory"] == "/tmp/ws-264"
+
+    @pytest.mark.asyncio
     async def test_graceful_termination_before_kill(self, backend: ClaudeCliBackend) -> None:
         """Timeout handler tries SIGTERM before SIGKILL."""
         mock_process = AsyncMock()

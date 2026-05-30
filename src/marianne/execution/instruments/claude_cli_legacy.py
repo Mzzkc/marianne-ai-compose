@@ -377,6 +377,12 @@ class ClaudeCliBackend(Backend):
         duration = time.monotonic() - start_time
         actual_signal = signal.SIGKILL if escalated_to_kill else signal.SIGTERM
 
+        # Capture partial output collected before timeout.
+        # The streaming path accumulates chunks in _partial_stdout_chunks;
+        # the non-streaming path leaves them empty (communicate() is atomic).
+        partial_stdout = b"".join(self._partial_stdout_chunks).decode("utf-8", errors="replace")
+        partial_stderr = b"".join(self._partial_stderr_chunks).decode("utf-8", errors="replace")
+
         _logger.error(
             "execution_timeout",
             duration_seconds=duration,
@@ -384,6 +390,9 @@ class ClaudeCliBackend(Backend):
             bytes_received=bytes_received,
             lines_received=lines_received,
             termination_signal=actual_signal,
+            # #264: include a tail of partial stderr — the most diagnostic
+            # info on a timeout, previously discarded from the log.
+            stderr_tail=partial_stderr[-TRUNCATE_STDOUT_TAIL_CHARS:],
         )
 
         if self.progress_callback:
@@ -394,11 +403,6 @@ class ClaudeCliBackend(Backend):
                 "phase": "timeout",
             })
 
-        # Capture partial output collected before timeout.
-        # The streaming path accumulates chunks in _partial_stdout_chunks;
-        # the non-streaming path leaves them empty (communicate() is atomic).
-        partial_stdout = b"".join(self._partial_stdout_chunks).decode("utf-8", errors="replace")
-        partial_stderr = b"".join(self._partial_stderr_chunks).decode("utf-8", errors="replace")
         timeout_msg = f"Command timed out after {self.timeout_seconds}s"
         stderr_combined = (
             f"{partial_stderr}\n{timeout_msg}".strip()
@@ -768,6 +772,13 @@ class ClaudeCliBackend(Backend):
                 "execution_exception",
                 error_message=str(e),
                 duration_seconds=duration,
+                # #264: include the command + cwd so the failure is
+                # reproducible. cmd carries no prompt text (prompt is sent via
+                # stdin), so this is safe to log.
+                command=cmd,
+                working_directory=(
+                    str(self.working_directory) if self.working_directory else None
+                ),
             )
             return ExecutionResult(
                 success=False,
