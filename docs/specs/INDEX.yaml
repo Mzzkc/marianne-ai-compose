@@ -49,3 +49,8 @@ files:
     purpose: "Append-only catalog of cases where score `validations:` should have caught a defective output but the current Marianne validation types cannot express the check. Living institutional memory — entries remain even after fixes land. Seeded by 2026-05-05 24x7-trader thinking-lab review (12 gaps documented)."
     status: active
     added: 2026-05-05
+  - name: 2026-05-11-modular-sheets-rough-spec.md
+    purpose: "Modular sheets — break monolithic score YAML into per-sheet files (Python-modules / .c-files analogy). Each sheet self-contained with its own dependencies, cadenza, prompt, and validations; Marianne loader globs and assembles. Reifies sheets-as-functions mental model. Filed as ROUGH PLACEHOLDER during emzihypno.com build round 14 — needs an actual design session before implementation. Composer's PM score keeps this deferred."
+    status: rough-needs-design-session
+    added: 2026-05-11
+    deferred: true

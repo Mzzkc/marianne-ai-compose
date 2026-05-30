@@ -355,4 +355,6 @@ semantic_index:
   memory: [specs/2026-04-19-marianne-memory-system-design.md, research/2026-04-18-marianne-memory-and-unconscious-research-dossier.md]
   unconscious: [specs/2026-04-19-marianne-unconscious-local-model-design.md, research/2026-04-18-marianne-memory-and-unconscious-research-dossier.md]
   local-model: [specs/2026-04-19-marianne-unconscious-local-model-design.md, research/2026-04-18-marianne-memory-and-unconscious-research-dossier.md]
+  modular-sheets: [specs/2026-05-11-modular-sheets-rough-spec.md]
+  score-modularization: [specs/2026-05-11-modular-sheets-rough-spec.md]
   handoffs: [handoffs]
