@@ -65,9 +65,23 @@ def is_fleet_config(config_path: Path) -> bool:
     try:
         with open(config_path) as f:
             raw = yaml.safe_load(f)
-        return isinstance(raw, dict) and raw.get("type") == "fleet"
-    except Exception:
+    except FileNotFoundError:
+        # Expected when probing arbitrary paths — not a misconfiguration.
+        _logger.debug("fleet.config_not_found", path=str(config_path))
         return False
+    except (OSError, yaml.YAMLError) as exc:
+        # #255: a genuine read/parse error (permission denied, malformed YAML)
+        # must be distinguishable from "valid file, just not a fleet config".
+        # Still return False (the contract is bool), but surface WHY so the
+        # operator isn't left guessing whether the file is wrong or broken.
+        _logger.warning(
+            "fleet.config_unreadable",
+            path=str(config_path),
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        return False
+    return isinstance(raw, dict) and raw.get("type") == "fleet"
 
 
 def topological_sort_groups(

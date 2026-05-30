@@ -49,6 +49,36 @@ class TestIsFleetConfig:
         bad_yaml.write_text("{{{{invalid yaml")
         assert is_fleet_config(bad_yaml) is False
 
+    def test_malformed_yaml_logs_warning(self, tmp_path: Path) -> None:
+        """#255: a malformed (vs simply non-fleet) file must not fail silently —
+        the parse error is surfaced so a misconfig is distinguishable."""
+        from unittest.mock import patch
+
+        from marianne.daemon import fleet as fleet_mod
+
+        bad_yaml = tmp_path / "broken.yaml"
+        bad_yaml.write_text("type: fleet\n  bad: : indentation")
+        with patch.object(fleet_mod, "_logger") as mock_logger:
+            assert fleet_mod.is_fleet_config(bad_yaml) is False
+
+        warn_calls = [
+            c for c in mock_logger.warning.call_args_list
+            if c.args and c.args[0] == "fleet.config_unreadable"
+        ]
+        assert len(warn_calls) == 1
+        assert str(bad_yaml) in warn_calls[0].kwargs["path"]
+
+    def test_missing_file_does_not_warn(self, tmp_path: Path) -> None:
+        """A missing file is expected when probing paths — debug, not warning."""
+        from unittest.mock import patch
+
+        from marianne.daemon import fleet as fleet_mod
+
+        with patch.object(fleet_mod, "_logger") as mock_logger:
+            assert fleet_mod.is_fleet_config(tmp_path / "nope.yaml") is False
+
+        assert mock_logger.warning.call_count == 0
+
 
 # ─── Topological Sort Tests ─────────────────────────────────────────
 
