@@ -626,6 +626,7 @@ class TestPromptRendererWiring:
         adapter._job_sheets = {}
         adapter._job_renderers = {}
         adapter._completion_events = {}
+        adapter._stale_configs = {}
 
         sheet = MagicMock()
         sheet.num = 1
@@ -651,6 +652,7 @@ class TestPromptRendererWiring:
         adapter._job_sheets = {}
         adapter._job_renderers = {}
         adapter._completion_events = {}
+        adapter._stale_configs = {}
 
         sheet1 = MagicMock()
         sheet1.num = 1
@@ -694,6 +696,7 @@ class TestPromptRendererWiring:
         adapter._job_sheets = {}
         adapter._job_renderers = {}
         adapter._completion_events = {}
+        adapter._stale_configs = {}
 
         sheets = []
         for i in range(5):
@@ -733,6 +736,7 @@ class TestPromptRendererWiring:
         adapter._job_sheets = {}
         adapter._job_renderers = {}
         adapter._completion_events = {}
+        adapter._stale_configs = {}
 
         sheet = MagicMock()
         sheet.num = 1

@@ -2552,6 +2552,7 @@ class JobManager:
             pacing_seconds=float(config.pause_between_sheets_seconds),
             live_sheets=initial_state.sheets,
             techniques=config.techniques or None,
+            stale_detection=config.stale_detection,
         )
 
         try:
@@ -2732,6 +2733,7 @@ class JobManager:
             pacing_seconds=float(config.pause_between_sheets_seconds),
             live_sheets=checkpoint.sheets,
             techniques=config.techniques or None,
+            stale_detection=config.stale_detection,
         )
 
         # Reconcile live state with baton's view: recover_job resets

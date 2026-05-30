@@ -42,8 +42,10 @@ import os
 import signal
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from marianne.core.config.execution import StaleDetectionConfig
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.core import BatonCore
@@ -402,6 +404,16 @@ class BatonAdapter:
         # Active musician tasks: (job_id, sheet_num) → Task
         self._active_tasks: dict[tuple[str, int], asyncio.Task[Any]] = {}
 
+        # Idle-based stale detection (#349/#350). Per-job config captured at
+        # registration; per-sheet dispatch time (wall clock) is the floor for
+        # the idle window so pre-existing workspace files / a quiet start don't
+        # false-positive, and re-dispatch (retry) resets the window. The marker
+        # set records sheets cancelled *for staleness* so _on_musician_done
+        # classifies the synthetic failure as STALE rather than CANCELLED.
+        self._stale_configs: dict[str, StaleDetectionConfig] = {}
+        self._stale_dispatch_time: dict[tuple[str, int], float] = {}
+        self._stale_markers: set[tuple[str, int]] = set()
+
         # Last time an inbox high-water WARNING was emitted (#222), so the loop
         # doesn't spam a log line on every event once the queue is deep.
         self._inbox_warn_logged_at: float = 0.0
@@ -498,6 +510,7 @@ class BatonAdapter:
         pacing_seconds: float = 0.0,
         live_sheets: dict[int, SheetExecutionState] | None = None,
         techniques: dict[str, Any] | None = None,
+        stale_detection: StaleDetectionConfig | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -529,6 +542,9 @@ class BatonAdapter:
         """
         # Store sheets for prompt rendering at dispatch time
         self._job_sheets[job_id] = {s.num: s for s in sheets}
+
+        # Capture idle stale-detection config (#349/#350); default = disabled.
+        self._stale_configs[job_id] = stale_detection or StaleDetectionConfig()
 
         # Store cross-sheet config (F-210)
         if cross_sheet is not None:
@@ -760,6 +776,14 @@ class BatonAdapter:
         self._job_routers.pop(job_id, None)
         self._job_techniques.pop(job_id, None)
 
+        # Idle stale-detection cleanup (#349/#350): drop the job config and any
+        # per-sheet idle-window / stale-marker state for this job.
+        self._stale_configs.pop(job_id, None)
+        stale_keys = [k for k in self._stale_dispatch_time if k[0] == job_id]
+        for k in stale_keys:
+            self._stale_dispatch_time.pop(k, None)
+            self._stale_markers.discard(k)
+
         # Clean up vestigial _synced_status entries (Phase 2: sync layer
         # removed but dict retained for compatibility). Defensive cleanup
         # prevents memory leaks if anything accidentally populates it.
@@ -792,6 +816,7 @@ class BatonAdapter:
         pacing_seconds: float = 0.0,
         live_sheets: dict[int, SheetExecutionState] | None = None,
         techniques: dict[str, Any] | None = None,
+        stale_detection: StaleDetectionConfig | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -821,6 +846,10 @@ class BatonAdapter:
         """
         # Store sheets for prompt rendering
         self._job_sheets[job_id] = {s.num: s for s in sheets}
+
+        # Capture idle stale-detection config (#349/#350); default = disabled.
+        # Recovered jobs get fresh idle windows when their sheets re-dispatch.
+        self._stale_configs[job_id] = stale_detection or StaleDetectionConfig()
 
         # Store cross-sheet config (F-210)
         if cross_sheet is not None:
@@ -1788,6 +1817,14 @@ class BatonAdapter:
         # already preempt-killed and cleared.
         self._active_pids.pop((job_id, sheet_num), None)
 
+        # Stale-detection cleanup (#349/#350): consume the stale marker (set by
+        # the StaleCheck handler before it cancelled this task) and drop the
+        # idle-window dispatch timestamp. Done in all completion paths so no
+        # state leaks; the marker decides the cancellation's classification.
+        is_stale = (job_id, sheet_num) in self._stale_markers
+        self._stale_markers.discard((job_id, sheet_num))
+        self._stale_dispatch_time.pop((job_id, sheet_num), None)
+
         if task.cancelled():
             # Cancelled tasks never report to the baton — the sheet stays
             # DISPATCHED, consuming a concurrency slot. Inject a synthetic
@@ -1803,8 +1840,12 @@ class BatonAdapter:
                     instrument_name=state.instrument_name or "",
                     attempt=state.normal_attempts + 1,
                     execution_success=False,
-                    error_classification="CANCELLED",
-                    error_message="Musician task cancelled",
+                    error_classification="STALE" if is_stale else "CANCELLED",
+                    error_message=(
+                        "Musician task stale-terminated (idle timeout exceeded)"
+                        if is_stale
+                        else "Musician task cancelled"
+                    ),
                 ))
             _logger.warning(
                 "adapter.musician.cancelled",
@@ -1941,6 +1982,131 @@ class BatonAdapter:
         )
         return True
 
+    # =========================================================================
+    # Stale detection (#349/#350)
+    # =========================================================================
+
+    def _schedule_stale_detection(self, job_id: str, sheet_num: int) -> None:
+        """Schedule stale checks for a freshly-dispatched sheet.
+
+        Always schedules the timeout safety net at ``sheet_timeout + 60`` (which
+        catches a task that dies without reporting). When idle detection is
+        enabled for the job, additionally records the dispatch time (the floor
+        of the idle window) and schedules the first idle check one
+        ``check_interval_seconds`` out; the handler reschedules itself.
+        """
+        state = self._baton.get_sheet_state(job_id, sheet_num)
+        timeout = (
+            getattr(state, "sheet_timeout_seconds", 1800.0) if state else 1800.0
+        )
+        self._timer_wheel.schedule(
+            timeout + 60.0,
+            StaleCheck(job_id=job_id, sheet_num=sheet_num),
+        )
+        cfg = self._stale_configs.get(job_id)
+        if cfg is not None and cfg.enabled:
+            # Reset the idle window on every (re-)dispatch so a retry gets a
+            # fresh grace period and an old StaleCheck can't kill a new attempt.
+            self._stale_dispatch_time[(job_id, sheet_num)] = time.time()
+            self._timer_wheel.schedule(
+                cfg.check_interval_seconds,
+                StaleCheck(job_id=job_id, sheet_num=sheet_num),
+            )
+
+    @staticmethod
+    def _newest_workspace_mtime(workspace: Path) -> float:
+        """Newest mtime among the workspace dir and its files (0.0 if absent)."""
+        try:
+            newest = workspace.stat().st_mtime
+        except OSError:
+            return 0.0
+        for child in workspace.rglob("*"):
+            try:
+                mtime = child.stat().st_mtime
+            except OSError:
+                continue
+            newest = max(newest, mtime)
+        return newest
+
+    async def _handle_stale_check(self, event: StaleCheck) -> None:
+        """Handle a StaleCheck event.
+
+        Branch A — task dead/absent: if still DISPATCHED, inject a synthetic
+        STALE result (the timeout-safety-net path), unchanged from before.
+
+        Branch B — task alive, idle detection enabled: if the workspace has had
+        no write for ``idle_timeout_seconds`` (measured from the later of last
+        write and dispatch time), mark the sheet stale and cancel its task —
+        ``_on_musician_done`` then injects exactly one STALE result. Otherwise
+        reschedule the next check at ``check_interval_seconds``.
+
+        Branch C — task alive, idle detection disabled: reschedule at the legacy
+        60s interval (a pure no-op for stale detection).
+        """
+        key = (event.job_id, event.sheet_num)
+        task = self._active_tasks.get(key)
+
+        if task is None or task.done():
+            state = self._baton.get_sheet_state(event.job_id, event.sheet_num)
+            if state is not None and state.status == BatonSheetStatus.DISPATCHED:
+                _logger.warning(
+                    "adapter.stale_check.task_dead",
+                    extra={"job_id": event.job_id, "sheet_num": event.sheet_num},
+                )
+                self._baton.inbox.put_nowait(SheetAttemptResult(
+                    job_id=event.job_id,
+                    sheet_num=event.sheet_num,
+                    instrument_name=state.instrument_name or "",
+                    attempt=state.normal_attempts + 1,
+                    execution_success=False,
+                    error_classification="STALE",
+                    error_message=(
+                        f"Sheet {event.sheet_num}: musician task dead "
+                        f"with no result reported"
+                    ),
+                ))
+            await self._baton.handle_event(event)
+            return
+
+        cfg = self._stale_configs.get(event.job_id)
+        if cfg is not None and cfg.enabled:
+            sheet = self._job_sheets.get(event.job_id, {}).get(event.sheet_num)
+            last_active = self._stale_dispatch_time.get(key, time.time())
+            if sheet is not None:
+                last_active = max(
+                    last_active, self._newest_workspace_mtime(sheet.workspace)
+                )
+            idle_seconds = time.time() - last_active
+            if idle_seconds >= cfg.idle_timeout_seconds:
+                _logger.warning(
+                    "adapter.stale_check.idle_cancel",
+                    extra={
+                        "job_id": event.job_id,
+                        "sheet_num": event.sheet_num,
+                        "idle_seconds": round(idle_seconds, 1),
+                        "idle_timeout_seconds": cfg.idle_timeout_seconds,
+                    },
+                )
+                # Mark BEFORE cancel so _on_musician_done classifies the
+                # synthetic failure as STALE. Do NOT inject here — the
+                # done-callback injects exactly one result (no double-fire).
+                self._stale_markers.add(key)
+                task.cancel()
+                await self._baton.handle_event(event)
+                return
+            self._timer_wheel.schedule(
+                cfg.check_interval_seconds,
+                StaleCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+            )
+            await self._baton.handle_event(event)
+            return
+
+        # Idle detection disabled — legacy 60s reschedule.
+        self._timer_wheel.schedule(
+            60.0, StaleCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+        )
+        await self._baton.handle_event(event)
+
     async def run(self) -> None:
         """Run the baton's event loop with dispatch integration.
 
@@ -2013,56 +2179,11 @@ class BatonAdapter:
                 )
                 self._maybe_warn_inbox_depth(qsize, type(event).__name__)
 
-                # Intercept StaleCheck: only fail if the musician task
-                # is actually dead. If the task is alive, the sheet isn't
-                # stale — the backend is still executing. Reschedule.
+                # StaleCheck has its own handler: dead-task → synthetic STALE;
+                # alive-but-idle → cancel (idle detection, #349/#350); alive +
+                # busy/disabled → reschedule.
                 if isinstance(event, StaleCheck):
-                    task_key = (event.job_id, event.sheet_num)
-                    task = self._active_tasks.get(task_key)
-                    if task is not None and not task.done():
-                        # Task alive — not stale, reschedule in 60s
-                        self._timer_wheel.schedule(
-                            60.0,
-                            StaleCheck(
-                                job_id=event.job_id,
-                                sheet_num=event.sheet_num,
-                            ),
-                        )
-                        # Still pass to baton for logging
-                        await self._baton.handle_event(event)
-                    else:
-                        # Task dead with no result — actually stale
-                        state = self._baton.get_sheet_state(
-                            event.job_id, event.sheet_num,
-                        )
-                        if (
-                            state is not None
-                            and state.status == BatonSheetStatus.DISPATCHED
-                        ):
-                            _logger.warning(
-                                "adapter.stale_check.task_dead",
-                                extra={
-                                    "job_id": event.job_id,
-                                    "sheet_num": event.sheet_num,
-                                },
-                            )
-                            # Inject synthetic failure
-                            from marianne.daemon.baton.events import (
-                                SheetAttemptResult as SAR,
-                            )
-                            self._baton.inbox.put_nowait(SAR(
-                                job_id=event.job_id,
-                                sheet_num=event.sheet_num,
-                                instrument_name=state.instrument_name or "",
-                                attempt=state.normal_attempts + 1,
-                                execution_success=False,
-                                error_classification="STALE",
-                                error_message=(
-                                    f"Sheet {event.sheet_num}: musician task "
-                                    f"dead with no result reported"
-                                ),
-                            ))
-                        await self._baton.handle_event(event)
+                    await self._handle_stale_check(event)
                 else:
                     await self._baton.handle_event(event)
 
@@ -2097,18 +2218,9 @@ class BatonAdapter:
                     # Persist dispatch state (sheet moved to DISPATCHED)
                     if self._persist_callback:
                         self._persist_callback(d_job_id)
-                    # Schedule stale detection using per-sheet timeout.
-                    # If the sheet completes normally, the StaleCheck handler
-                    # finds it non-DISPATCHED and is a no-op.
-                    d_state = self._baton.get_sheet_state(d_job_id, d_sheet_num)
-                    stale_delay = (
-                        getattr(d_state, "sheet_timeout_seconds", 1800.0)
-                        if d_state else 1800.0
-                    ) + 60.0  # buffer beyond timeout
-                    self._timer_wheel.schedule(
-                        stale_delay,
-                        StaleCheck(job_id=d_job_id, sheet_num=d_sheet_num),
-                    )
+                    # Schedule the timeout safety net and (when enabled) the
+                    # idle-detection cadence for this freshly-dispatched sheet.
+                    self._schedule_stale_detection(d_job_id, d_sheet_num)
 
                 # Publish any fallback events to EventBus
                 await self._publish_fallback_events()

@@ -264,6 +264,21 @@ class StaleDetectionConfig(BaseModel):
     Note: The idle timeout should be generous enough to accommodate legitimate
     pauses (e.g., waiting for API responses). A minimum of 120 seconds is
     recommended for LLM-based workloads.
+
+    Activity is currently measured from **workspace file writes** (the newest
+    mtime under the sheet's workspace). This has two known v1 limitations,
+    both tracked by GH#352 (per-sheet output streaming):
+
+    * **Job-level granularity.** A sheet's workspace is the job workspace, so
+      during parallel fan-out an active sibling sheet's writes reset the idle
+      clock for a stuck sibling. Idle detection is therefore most effective for
+      sequential execution; under fan-out a stuck sheet still falls back to the
+      ``sheet_timeout`` safety net.
+    * **File-activity only.** An instrument that does long, legitimate work
+      without writing files (e.g., a single API call that flushes all output at
+      the end) looks idle. Set ``idle_timeout_seconds`` above such an
+      instrument's expected silent duration, or leave detection disabled for
+      those sheets.
     """
 
     model_config = ConfigDict(extra="forbid")

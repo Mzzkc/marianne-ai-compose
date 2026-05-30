@@ -640,6 +640,10 @@ class TestDeregisterJobCleanup:
         }
         adapter._active_tasks = {}
         adapter._active_pids = {}
+        # Idle stale-detection collections (#349/#350)
+        adapter._stale_configs = {job_id: MagicMock()}
+        adapter._stale_dispatch_time = {(job_id, 1): 0.0, ("other-job", 1): 0.0}
+        adapter._stale_markers = {(job_id, 1), ("other-job", 1)}
 
         adapter.deregister_job(job_id)
 
@@ -654,6 +658,12 @@ class TestDeregisterJobCleanup:
         assert (job_id, 1) not in adapter._synced_status
         assert (job_id, 2) not in adapter._synced_status
         assert ("other-job", 1) in adapter._synced_status
+        # Stale-detection state: this job's entries gone, other job preserved
+        assert job_id not in adapter._stale_configs
+        assert (job_id, 1) not in adapter._stale_dispatch_time
+        assert (job_id, 1) not in adapter._stale_markers
+        assert ("other-job", 1) in adapter._stale_dispatch_time
+        assert ("other-job", 1) in adapter._stale_markers
 
     def test_deregister_nonexistent_job_no_crash(self) -> None:
         """Deregistering a job that doesn't exist shouldn't crash."""
@@ -673,6 +683,9 @@ class TestDeregisterJobCleanup:
         adapter._synced_status = {}
         adapter._active_tasks = {}
         adapter._active_pids = {}
+        adapter._stale_configs = {}
+        adapter._stale_dispatch_time = {}
+        adapter._stale_markers = set()
 
         # Should not raise
         adapter.deregister_job("nonexistent-job")
