@@ -4,6 +4,7 @@ Verifies state persistence, atomic writes, corruption handling,
 zombie detection, and listing/sorting behavior.
 """
 
+import asyncio
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -400,3 +401,53 @@ class TestMarkSheetStatus:
         """Marking sheet on non-existent job raises ValueError."""
         with pytest.raises(ValueError, match="No state found"):
             await backend.mark_sheet_status("no-such-job", 1, SheetStatus.COMPLETED)
+
+
+class TestConcurrentMarkSheetStatus:
+    """#221: concurrent `mark_sheet_status` on different sheets of one job must
+    not lose each other's update — the load-modify-save is serialized by a lock.
+    """
+
+    async def test_concurrent_updates_do_not_lose_each_other(
+        self, backend: JsonStateBackend
+    ) -> None:
+        state = _make_state("race-job", total_sheets=2)
+        await backend.save(state)
+
+        first_in_save = asyncio.Event()
+        release = asyncio.Event()
+        real_save = backend.save
+        calls = {"n": 0}
+
+        async def gated_save(s: CheckpointState) -> None:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                # Hold the FIRST save inside the lock so a second, unsynchronized
+                # load-modify-save would observe stale state and overwrite us.
+                first_in_save.set()
+                await release.wait()
+            await real_save(s)
+
+        backend.save = gated_save  # type: ignore[method-assign]
+
+        t1 = asyncio.create_task(
+            backend.mark_sheet_status("race-job", 1, SheetStatus.COMPLETED)
+        )
+        await asyncio.wait_for(first_in_save.wait(), timeout=2.0)
+
+        t2 = asyncio.create_task(
+            backend.mark_sheet_status("race-job", 2, SheetStatus.COMPLETED)
+        )
+        await asyncio.sleep(0)  # let t2 reach the lock
+        # Serialized: t2 must block on the lock while t1 holds it (not race ahead
+        # to load the stale state).
+        assert not t2.done()
+
+        release.set()
+        await asyncio.gather(t1, t2)
+
+        final = await backend.load("race-job")
+        assert final is not None
+        # Both updates survived — neither overwrote the other.
+        assert final.sheets[1].status == SheetStatus.COMPLETED
+        assert final.sheets[2].status == SheetStatus.COMPLETED

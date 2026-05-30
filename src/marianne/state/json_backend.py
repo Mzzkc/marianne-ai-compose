@@ -4,6 +4,7 @@ Simple state storage using JSON files, similar to the .review-state
 approach in the original bash script.
 """
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -49,6 +50,12 @@ class JsonStateBackend(StateBackend):
         """
         self.state_dir = Path(state_dir)
         self.state_dir.mkdir(parents=True, exist_ok=True)
+        # Serializes in-process load-modify-save sequences (#221). Without it,
+        # two concurrent coroutines could each load the same state, modify
+        # different sheets, and save — the later save overwriting the earlier
+        # one's change (lost update). Per-backend-instance; the single-daemon
+        # (PID-locked) model makes cross-process contention a non-issue.
+        self._mutate_lock = asyncio.Lock()
 
     def _get_state_file(self, job_id: str) -> Path:
         """Get the state file path for a job."""
@@ -203,16 +210,22 @@ class JsonStateBackend(StateBackend):
         status: SheetStatus,
         error_message: str | None = None,
     ) -> None:
-        """Update sheet status in state."""
-        state = await self.load(job_id)
-        if state is None:
-            raise ValueError(f"No state found for job {job_id}")
+        """Update sheet status in state.
 
-        if status == SheetStatus.COMPLETED:
-            state.mark_sheet_completed(sheet_num)
-        elif status == SheetStatus.FAILED:
-            state.mark_sheet_failed(sheet_num, error_message or "Unknown error")
-        elif status == SheetStatus.IN_PROGRESS:
-            state.mark_sheet_started(sheet_num)
+        The load-modify-save sequence is serialized by ``_mutate_lock`` so
+        concurrent updates to different sheets of the same job cannot lose each
+        other's changes (#221).
+        """
+        async with self._mutate_lock:
+            state = await self.load(job_id)
+            if state is None:
+                raise ValueError(f"No state found for job {job_id}")
 
-        await self.save(state)
+            if status == SheetStatus.COMPLETED:
+                state.mark_sheet_completed(sheet_num)
+            elif status == SheetStatus.FAILED:
+                state.mark_sheet_failed(sheet_num, error_message or "Unknown error")
+            elif status == SheetStatus.IN_PROGRESS:
+                state.mark_sheet_started(sheet_num)
+
+            await self.save(state)
