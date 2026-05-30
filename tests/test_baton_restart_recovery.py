@@ -308,6 +308,81 @@ class TestRecoverJobStatusMapping:
         assert state.status == BatonSheetStatus.PENDING
 
 
+class TestRecoverJobResetsInstrumentIndex:
+    """#187: recovery must restart a non-terminal sheet from its PRIMARY
+    instrument, not the fallback it died on.
+
+    The bug: ``current_instrument_index`` persisted in the checkpoint and was
+    never reset on recovery, so a sheet that fell back to a broken instrument
+    resumed stuck on it — the primary (often healthy) was never retried.
+    """
+
+    def test_non_terminal_sheet_index_reset_to_primary(self) -> None:
+        adapter = BatonAdapter()
+        sheets = _make_sheets_list(2)
+        deps = {1: [], 2: [1]}
+        checkpoint = _make_checkpoint(
+            total_sheets=2,
+            sheet_statuses={1: "in_progress", 2: "pending"},
+        )
+        # Sheet 1 died on the 2nd fallback instrument.
+        checkpoint.sheets[1].fallback_chain = ["gemini-cli", "ollama"]
+        checkpoint.sheets[1].current_instrument_index = 2
+
+        adapter.recover_job("test-job", sheets, deps, checkpoint)
+
+        state = adapter.baton.get_sheet_state("test-job", 1)
+        assert state is not None
+        # Reset to the primary instrument — not stuck on the dead fallback.
+        assert state.current_instrument_index == 0
+
+    def test_failed_sheet_index_reset_to_primary(self) -> None:
+        adapter = BatonAdapter()
+        sheets = _make_sheets_list(2)
+        deps = {1: [], 2: [1]}
+        checkpoint = _make_checkpoint(
+            total_sheets=2,
+            sheet_statuses={1: "failed", 2: "pending"},
+        )
+        # A failed sheet exhausted its fallback chain before dying.
+        checkpoint.sheets[1].fallback_chain = ["gemini-cli", "ollama"]
+        checkpoint.sheets[1].current_instrument_index = 2
+
+        adapter.recover_job("test-job", sheets, deps, checkpoint)
+
+        state = adapter.baton.get_sheet_state("test-job", 1)
+        assert state is not None
+        # A recovered failed sheet retries from the primary instrument.
+        assert state.current_instrument_index == 0
+
+    def test_clears_stale_fallback_history_for_non_terminal(self) -> None:
+        """#190: stale fallback history must not survive recovery for a sheet
+        that now restarts clean — otherwise the status display shows a phantom
+        '(was X: rate_limit)' tag long after the rate limit cleared."""
+        adapter = BatonAdapter()
+        sheets = _make_sheets_list(2)
+        deps = {1: [], 2: [1]}
+        checkpoint = _make_checkpoint(
+            total_sheets=2,
+            sheet_statuses={1: "failed", 2: "pending"},
+        )
+        checkpoint.sheets[1].fallback_chain = ["gemini-cli", "ollama"]
+        checkpoint.sheets[1].current_instrument_index = 1
+        checkpoint.sheets[1].instrument_fallback_history = [
+            {"from": "claude-code", "to": "gemini-cli",
+             "reason": "rate_limit_exhausted", "timestamp": "T"},
+        ]
+        checkpoint.sheets[1].fallback_attempts = {"claude-code": 3}
+
+        adapter.recover_job("test-job", sheets, deps, checkpoint)
+
+        state = adapter.baton.get_sheet_state("test-job", 1)
+        assert state is not None
+        assert state.current_instrument_index == 0
+        assert state.instrument_fallback_history == []
+        assert state.fallback_attempts == {}
+
+
 class TestRecoverJobAttemptPreservation:
     """Test that recover_job() preserves attempt counts from the checkpoint."""
 

@@ -82,6 +82,32 @@ def _get_db_path() -> Path:
     return Path("~/.marianne/daemon-state.db").expanduser()
 
 
+def _reset_sheet_data_for_retry(sdata: dict[str, Any]) -> None:
+    """Reset a serialized sheet dict to PENDING for a fresh recovery attempt.
+
+    A recovered sheet must start over from the TOP of its instrument chain with
+    a full retry/completion budget — not resume stuck on whatever fallback it
+    died on (#187) with exhausted budgets (which would immediately re-fail).
+    Extracted from the two identical reset sites in ``recover`` so the contract
+    is unit-testable (the command-level tests are skipped under the F-532
+    conductor-mock debt).
+    """
+    sdata["status"] = "pending"
+    sdata.pop("error_message", None)
+    sdata.pop("error_code", None)
+    sdata.pop("completed_at", None)
+    sdata["normal_attempts"] = 0
+    sdata["completion_attempts"] = 0
+    sdata["attempt_count"] = 0
+    sdata["healing_attempts"] = 0
+    # #187: restart from the primary instrument, not the dead fallback.
+    sdata["current_instrument_index"] = 0
+    # #190: drop the stale fallback record so the status display doesn't show a
+    # phantom "(was X: rate_limit)" tag after a clean restart.
+    sdata["instrument_fallback_history"] = []
+    sdata["fallback_attempts"] = {}
+
+
 def recover(
     job_id: str = typer.Argument(..., help="Score ID to recover"),
     sheet: int | None = typer.Option(
@@ -187,22 +213,7 @@ async def _recover_cascade(
         snum = int(snum_str)
         status = sdata.get("status")
         if snum >= from_sheet and status in ("failed", "skipped", "dispatched"):
-            sdata["status"] = "pending"
-            sdata.pop("error_message", None)
-            sdata.pop("error_code", None)
-            sdata.pop("completed_at", None)
-            # Reset retry and completion budgets so the baton gives these
-            # sheets a fresh attempt. Without this, sheets come back as
-            # PENDING with exhausted budgets and immediately re-fail on
-            # the first partial validation result.
-            sdata["normal_attempts"] = 0
-            sdata["completion_attempts"] = 0
-            sdata["attempt_count"] = 0
-            sdata["healing_attempts"] = 0
-            # Reset instrument to primary. A recovered sheet MUST start
-            # from the top of the instrument chain, not stay stuck on
-            # whatever fallback it died on.
-            sdata["current_instrument_index"] = 0
+            _reset_sheet_data_for_retry(sdata)
             reset_count += 1
 
     # Count after
@@ -364,15 +375,7 @@ async def _recover_job(
 
         # No config or validations failed — reset to PENDING for retry
         if not dry_run:
-            sdata["status"] = "pending"
-            sdata.pop("error_message", None)
-            sdata.pop("error_code", None)
-            sdata.pop("completed_at", None)
-            sdata["normal_attempts"] = 0
-            sdata["completion_attempts"] = 0
-            sdata["attempt_count"] = 0
-            sdata["healing_attempts"] = 0
-            sdata["current_instrument_index"] = 0
+            _reset_sheet_data_for_retry(sdata)
         reset_count += 1
 
     # Count after

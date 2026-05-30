@@ -952,6 +952,11 @@ class BatonAdapter:
             }
             if baton_status not in _TERMINAL:
                 state.current_instrument_index = 0
+                # GH#190: also clear the stale fallback record so the status
+                # display doesn't show a phantom "(was X: rate_limit)" tag for a
+                # sheet that now restarts clean from its primary instrument.
+                state.instrument_fallback_history = []
+                state.fallback_attempts = {}
 
             states[sheet.num] = state
 

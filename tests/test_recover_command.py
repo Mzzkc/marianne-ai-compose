@@ -385,3 +385,56 @@ class TestLoadRecoveryConfig:
 
         config = _load_recovery_config(None, str(tmp_path / "does-not-exist.yaml"))
         assert config is None
+
+
+class TestResetSheetDataForRetry:
+    """#187: `_reset_sheet_data_for_retry` restarts a recovered sheet from its
+    PRIMARY instrument with a fresh budget — not the fallback it died on.
+
+    The command-level recover tests are skipped (F-532 conductor-mock debt), so
+    the reset contract is verified directly on the extracted pure helper.
+    """
+
+    def test_resets_index_budgets_and_clears_error(self) -> None:
+        from marianne.cli.commands.recover import _reset_sheet_data_for_retry
+
+        sdata: dict = {
+            "status": "failed",
+            "error_message": "boom",
+            "error_code": "E500",
+            "completed_at": "2026-01-01T00:00:00",
+            "normal_attempts": 3,
+            "completion_attempts": 2,
+            "attempt_count": 5,
+            "healing_attempts": 1,
+            "current_instrument_index": 2,  # died on the 2nd fallback
+            "instrument_fallback_history": [
+                {"from": "claude-code", "to": "gemini-cli",
+                 "reason": "rate_limit", "timestamp": "T"},
+            ],
+            "fallback_attempts": {"claude-code": 3},
+        }
+
+        _reset_sheet_data_for_retry(sdata)
+
+        assert sdata["status"] == "pending"
+        assert sdata["current_instrument_index"] == 0  # #187: back to primary
+        assert sdata["normal_attempts"] == 0
+        assert sdata["completion_attempts"] == 0
+        assert sdata["attempt_count"] == 0
+        assert sdata["healing_attempts"] == 0
+        assert "error_message" not in sdata
+        assert "error_code" not in sdata
+        assert "completed_at" not in sdata
+        # #190: stale fallback record cleared
+        assert sdata["instrument_fallback_history"] == []
+        assert sdata["fallback_attempts"] == {}
+
+    def test_tolerates_missing_optional_keys(self) -> None:
+        from marianne.cli.commands.recover import _reset_sheet_data_for_retry
+
+        sdata: dict = {"status": "skipped", "current_instrument_index": 1}
+        _reset_sheet_data_for_retry(sdata)  # no error_*/completed_at present
+
+        assert sdata["status"] == "pending"
+        assert sdata["current_instrument_index"] == 0
