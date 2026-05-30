@@ -1312,3 +1312,25 @@ class TestPromptVariablesInValidation105:
         # Key accessible as string "1", not integer 1
         assert "1" in engine.sheet_context
         assert engine.sheet_context["1"] == "sheet_one_content"
+
+
+class TestRetryableDispatchSync:
+    """#256: `_RETRYABLE_VALIDATION_TYPES` and `_VALIDATION_DISPATCH` are
+    maintained independently but must list the same validation types. Adding a
+    new type to dispatch while forgetting `_RETRYABLE` silently disables retry
+    for it. This test fails loudly if the two diverge in either direction."""
+
+    def test_retryable_types_match_dispatch_keys(self) -> None:
+        retryable = ValidationEngine._RETRYABLE_VALIDATION_TYPES
+        dispatchable = set(ValidationEngine._VALIDATION_DISPATCH)
+
+        missing_from_retryable = dispatchable - retryable
+        assert missing_from_retryable == set(), (
+            "validation types dispatchable but NOT in _RETRYABLE_VALIDATION_TYPES "
+            f"(retry silently disabled): {sorted(missing_from_retryable)}"
+        )
+        unknown_retryable = retryable - dispatchable
+        assert unknown_retryable == set(), (
+            "types in _RETRYABLE_VALIDATION_TYPES with no dispatch entry "
+            f"(stale/typo): {sorted(unknown_retryable)}"
+        )
