@@ -394,3 +394,68 @@ class TestErrorRecordEdgeCases:
         record = state.error_history[0]
         assert record.context["some_field"] is None
         assert record.context["other_field"] == "value"
+
+
+class TestAddErrorToHistoryTrimming:
+    """Tests for SheetState.add_error_to_history bound enforcement (#240).
+
+    The error_history bound at MAX_ERROR_HISTORY exists to keep long-running
+    jobs from growing state without limit. The trimming branch
+    (checkpoint.py: ``if len(self.error_history) > MAX_ERROR_HISTORY``) had no
+    direct test, so the cap was stated but unverified.
+    """
+
+    @staticmethod
+    def _record(n: int) -> ErrorRecord:
+        """A uniquely-identifiable error record (error_code encodes its index)."""
+        return ErrorRecord(
+            error_type="transient",
+            error_code=f"E{n:04d}",
+            error_message=f"error {n}",
+            attempt_number=1,
+        )
+
+    def test_below_limit_keeps_all(self) -> None:
+        """Fewer than MAX entries are all retained, in insertion order."""
+        state = SheetState(sheet_num=1)
+        for i in range(MAX_ERROR_HISTORY - 1):
+            state.add_error_to_history(self._record(i))
+
+        assert len(state.error_history) == MAX_ERROR_HISTORY - 1
+        assert [r.error_code for r in state.error_history] == [
+            f"E{i:04d}" for i in range(MAX_ERROR_HISTORY - 1)
+        ]
+
+    def test_at_limit_keeps_all(self) -> None:
+        """Exactly MAX entries are retained (boundary: no trim at the cap)."""
+        state = SheetState(sheet_num=1)
+        for i in range(MAX_ERROR_HISTORY):
+            state.add_error_to_history(self._record(i))
+
+        assert len(state.error_history) == MAX_ERROR_HISTORY
+
+    def test_one_over_limit_trims_oldest_keeps_newest(self) -> None:
+        """The (MAX+1)th entry triggers a trim that drops the oldest, keeps newest."""
+        state = SheetState(sheet_num=1)
+        for i in range(MAX_ERROR_HISTORY + 1):
+            state.add_error_to_history(self._record(i))
+
+        assert len(state.error_history) == MAX_ERROR_HISTORY
+        # Oldest (index 0) dropped; window is the newest MAX records, in order.
+        assert state.error_history[0].error_code == "E0001"
+        assert state.error_history[-1].error_code == f"E{MAX_ERROR_HISTORY:04d}"
+        assert [r.error_code for r in state.error_history] == [
+            f"E{i:04d}" for i in range(1, MAX_ERROR_HISTORY + 1)
+        ]
+
+    def test_far_over_limit_stays_bounded(self) -> None:
+        """Many appends (well past the cap) stay bounded at MAX with the newest kept."""
+        state = SheetState(sheet_num=1)
+        total = MAX_ERROR_HISTORY * 3 + 7
+        for i in range(total):
+            state.add_error_to_history(self._record(i))
+
+        assert len(state.error_history) == MAX_ERROR_HISTORY
+        assert [r.error_code for r in state.error_history] == [
+            f"E{i:04d}" for i in range(total - MAX_ERROR_HISTORY, total)
+        ]
