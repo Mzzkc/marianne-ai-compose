@@ -104,12 +104,14 @@ class TestNonBlockingInvariant:
 
 
 class TestBoundedPending:
-    async def test_pending_drops_newest_when_full(self) -> None:
-        """publish() must drop the NEWEST event (not block) when _pending is full.
+    async def test_pending_drops_oldest_when_full(self) -> None:
+        """publish() must drop the OLDEST event (not block) when _pending is full.
 
-        With the drain loop never started, _pending fills to max_pending_size
-        and subsequent publishes are dropped. The retained events are the
-        OLDEST ones (drop-newest), and the dropped count is exact.
+        Per architecture.yaml's "drop-oldest backpressure: slow consumers lose
+        old events rather than blocking the system." With the drain loop never
+        started, _pending fills to max_pending_size and subsequent publishes
+        evict the oldest in-flight event. The retained events are therefore the
+        NEWEST ones, and the dropped count is exact.
         """
         bus = EventBus(max_pending_size=3)
         # Deliberately do NOT start() — nothing drains _pending.
@@ -119,9 +121,9 @@ class TestBoundedPending:
                 await bus.publish(_evt(f"e.{i}"))
             assert bus._pending.qsize() == 3
             assert bus._pending_dropped == 7
-            # Oldest retained (drop-newest): the first three events survive.
+            # Newest retained (drop-oldest): the last three events survive.
             retained = [bus._pending.get_nowait()["event"] for _ in range(3)]
-            assert retained == ["e.0", "e.1", "e.2"]
+            assert retained == ["e.7", "e.8", "e.9"]
         finally:
             bus._running = False
 

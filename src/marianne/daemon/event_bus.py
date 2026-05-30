@@ -13,13 +13,14 @@ To honour that invariant in practice (not just in the letter of a non-blocking
 ``publish``), this bus isolates subscribers from each other and from the
 publisher:
 
-* ``_pending`` is a **bounded** queue. ``publish()`` uses ``put_nowait`` and
-  drops the *newest* event on overflow (atomic — no race with the drain loop's
-  ``get()``), so a publisher can never block and memory can never grow without
-  bound.
+* ``_pending`` is a **bounded** queue. ``publish()`` uses ``put_nowait`` and,
+  on overflow, evicts the *oldest* in-flight event before enqueuing the new one
+  (drop-oldest backpressure — slow consumers lose old events, per
+  architecture.yaml), so a publisher can never block and memory can never grow
+  without bound.
 * The single drain loop only **filters and enqueues** events into each
-  subscriber's own bounded ``deque`` (drop-oldest, drop-oldest preserves
-  recency for live streams) — it never awaits a subscriber callback.
+  subscriber's own bounded ``deque`` (drop-oldest preserves recency for live
+  streams) — it never awaits a subscriber callback.
 * Each subscriber owns a **worker task** that runs its callback under a
   per-callback timeout. A slow/hung callback blocks only that subscriber.
 * A subscriber is **auto-evicted** after ``_MAX_CONSECUTIVE_FAILURES``
@@ -33,6 +34,7 @@ publisher:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import uuid
 from collections import deque
 from collections.abc import Callable
@@ -134,15 +136,24 @@ class EventBus:
     async def publish(self, event: ObserverEvent) -> None:
         """Publish an event to all matching subscribers.
 
-        Non-blocking for the publisher (invariant 5). If the central queue is
-        full, the *newest* event is dropped — preferred over drop-oldest here
-        because it is atomic (no ``get``/``put`` pair racing the drain loop).
+        Non-blocking for the publisher (invariant 5). On a full central queue,
+        the *oldest* event is dropped to make room — matching the EventBus's
+        spec'd "drop-oldest backpressure: slow consumers lose old events"
+        (architecture.yaml) and the per-subscriber deques. The
+        ``get_nowait()``+``put_nowait()`` pair is atomic here: there is no
+        ``await`` between them, so the single-threaded drain loop cannot
+        interleave (and the queue is full, so no getter is waiting).
         """
         if not self._running:
             return
         try:
             self._pending.put_nowait(event)
         except asyncio.QueueFull:
+            # Drop the oldest in-flight event, then enqueue the new one.
+            with contextlib.suppress(asyncio.QueueEmpty):
+                self._pending.get_nowait()
+            with contextlib.suppress(asyncio.QueueFull):
+                self._pending.put_nowait(event)
             self._pending_dropped += 1
             if self._pending_dropped % _DROP_LOG_INTERVAL == 1:
                 _logger.warning(
