@@ -245,3 +245,36 @@ class TestDedupMerging:
         pattern = store.get_pattern_by_id(pid)
         assert pattern is not None
         assert pattern.occurrence_count >= 2
+
+
+class TestGetPatternsEmptyDiagnostic:
+    """get_patterns logs the applied filters when it returns nothing (#324).
+
+    An empty result is otherwise indistinguishable (empty DB vs below-threshold
+    vs instrument mismatch), so pattern injection can stop silently with no
+    diagnostic trail.
+    """
+
+    def test_empty_result_logs_query_empty(self, store: GlobalLearningStore) -> None:
+        from unittest.mock import MagicMock
+
+        store._logger = MagicMock()
+        results = store.get_patterns(instrument_name="nonexistent-instrument")
+
+        assert results == []
+        events = [c.args[0] for c in store._logger.debug.call_args_list]
+        assert "patterns.query_empty" in events
+
+    def test_nonempty_result_does_not_log_query_empty(
+        self, store: GlobalLearningStore
+    ) -> None:
+        from unittest.mock import MagicMock
+
+        _insert_pattern_direct(store, "p-visible", priority=0.5)
+        store._logger = MagicMock()
+
+        results = store.get_patterns()
+
+        assert len(results) >= 1
+        events = [c.args[0] for c in store._logger.debug.call_args_list]
+        assert "patterns.query_empty" not in events

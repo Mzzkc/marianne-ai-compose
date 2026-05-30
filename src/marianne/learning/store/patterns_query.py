@@ -163,7 +163,32 @@ class PatternQueryMixin:
                 (*params, limit),
             )
 
-            return [self._row_to_pattern_record(row) for row in cursor.fetchall()]
+            results = [self._row_to_pattern_record(row) for row in cursor.fetchall()]
+
+            # An empty result is indistinguishable to the caller between "empty
+            # DB", "everything below min_priority", "instrument_name mismatch",
+            # etc. — so pattern injection can silently stop with no trail. Log
+            # the applied filters at debug level so "why did the agent stop
+            # improving?" is answerable without manual SQLite spelunking (#324).
+            if not results:
+                self._logger.debug(
+                    "patterns.query_empty",
+                    pattern_type=pattern_type,
+                    min_priority=min_priority,
+                    instrument_name=instrument_name,
+                    include_universal=include_universal,
+                    exclude_quarantined=exclude_quarantined,
+                    quarantine_status=(
+                        quarantine_status.value if quarantine_status else None
+                    ),
+                    min_trust=min_trust,
+                    max_trust=max_trust,
+                    include_inactive=include_inactive,
+                    context_tags=context_tags,
+                    limit=limit,
+                )
+
+            return results
 
     def _row_to_discovery_event(self, row: sqlite3.Row) -> PatternDiscoveryEvent:
         """Convert a database row to a PatternDiscoveryEvent.
