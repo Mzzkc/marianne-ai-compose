@@ -236,6 +236,42 @@ class TestPublishingBackend:
         inner.save.assert_awaited_once_with(state)
 
     @pytest.mark.asyncio
+    async def test_callback_error_is_logged_with_job_id(self):
+        """#259: a publish-callback failure must be diagnosable — the disk save
+        still happened (persistent state is correct), and the failure is logged
+        with job_id + traceback so a stale in-memory `mzt status` isn't silent."""
+        from unittest.mock import patch
+
+        from marianne.daemon import job_service as js
+
+        inner = AsyncMock()
+
+        def bad_callback(state: CheckpointState) -> None:
+            raise RuntimeError("callback boom")
+
+        backend = js._PublishingBackend(inner, bad_callback)
+        state = CheckpointState(
+            job_id="vis-test",
+            job_name="vis-test",
+            total_sheets=2,
+            status=JobStatus.RUNNING,
+        )
+
+        with patch.object(js, "_logger") as mock_logger:
+            await backend.save(state)
+
+        # Disk persistence happened FIRST (so on-disk state is current) ...
+        inner.save.assert_awaited_once_with(state)
+        # ... and the cache-publish failure is logged with identifying context.
+        warn_calls = [
+            c for c in mock_logger.warning.call_args_list
+            if c.args and c.args[0] == "state_publish_callback.error"
+        ]
+        assert len(warn_calls) == 1
+        assert warn_calls[0].kwargs["job_id"] == "vis-test"
+        assert warn_calls[0].kwargs.get("exc_info") is True
+
+    @pytest.mark.asyncio
     async def test_delegates_other_methods(self):
         """Non-save methods are delegated to the inner backend."""
         from marianne.daemon.job_service import _PublishingBackend
