@@ -2554,3 +2554,41 @@ class TestDaemonToCheckpointStatusMap:
             _DAEMON_TO_CHECKPOINT_STATUS[DaemonJobStatus.PAUSED_AT_CHAIN]
             == JobStatus.PAUSED_AT_CHAIN
         )
+
+
+class TestAutostartDoneCallback:
+    """#330: the deferred pending-autostart task is fire-and-forget, but a
+    crash in `_start_pending_jobs` must be LOGGED, not swallowed by a
+    `lambda t: None` — otherwise jobs stay PENDING forever with no error."""
+
+    async def test_autostart_failure_is_logged(self) -> None:
+        from marianne.daemon import manager as mgr_mod
+
+        async def _boom() -> None:
+            raise RuntimeError("autostart boom")
+
+        task = asyncio.create_task(_boom())
+        await asyncio.gather(task, return_exceptions=True)  # drive it to failure
+
+        with patch.object(mgr_mod, "_logger") as mock_logger:
+            mgr_mod.JobManager._on_autostart_done(task)
+
+        err_calls = [
+            c for c in mock_logger.error.call_args_list
+            if c.args and c.args[0] == "pending_autostart.failed"
+        ]
+        assert len(err_calls) == 1
+
+    async def test_autostart_success_does_not_log_error(self) -> None:
+        from marianne.daemon import manager as mgr_mod
+
+        async def _ok() -> None:
+            return None
+
+        task = asyncio.create_task(_ok())
+        await asyncio.gather(task)
+
+        with patch.object(mgr_mod, "_logger") as mock_logger:
+            mgr_mod.JobManager._on_autostart_done(task)
+
+        assert mock_logger.error.call_count == 0

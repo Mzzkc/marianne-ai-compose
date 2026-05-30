@@ -1158,14 +1158,26 @@ class JobManager:
                 _deferred_start(),
                 name=f"pending-autostart-{job_id}",
             )
-            # Fire-and-forget — just prevent "task was destroyed" warnings
-            task.add_done_callback(lambda t: None)
+            # Fire-and-forget, but #330: don't swallow a crash in
+            # _start_pending_jobs (would leave jobs PENDING forever, silently).
+            task.add_done_callback(self._on_autostart_done)
 
         return JobResponse(
             job_id=job_id,
             status="pending",
             message=f"Rate limit active ({limit_msg}). Score queued — starts when limits clear.",
         )
+
+    @staticmethod
+    def _on_autostart_done(task: asyncio.Task[Any]) -> None:
+        """Done-callback for the deferred pending-autostart task (#330).
+
+        Fire-and-forget, but a failure in ``_start_pending_jobs`` must be
+        surfaced — otherwise jobs stay PENDING forever with nothing in the log.
+        Delegates to the shared task-exception logger (consistent with the
+        other ``add_done_callback`` sites).
+        """
+        log_task_exception(task, _logger, "pending_autostart.failed")
 
     def _resolve_workspace_from_config(
         self,
