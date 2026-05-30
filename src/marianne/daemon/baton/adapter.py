@@ -450,6 +450,13 @@ class BatonAdapter:
         self._running = False
         self._baton_task: asyncio.Task[Any] | None = None
 
+        # Set when the adapter stops (run() exits or shutdown() is called) so
+        # waiters on wait_for_completion() don't sit on a completion event that
+        # will never fire once the engine is gone (#309). The wait stays free of
+        # any total timeout — jobs legitimately run for hours — and leans on
+        # per-sheet StaleCheck for genuinely-stuck sheets.
+        self._shutdown_event = asyncio.Event()
+
     @property
     def baton(self) -> BatonCore:
         """The underlying BatonCore instance."""
@@ -1224,8 +1231,29 @@ class BatonAdapter:
         event = self._completion_events.get(job_id)
         if event is None:
             raise KeyError(f"Job '{job_id}' is not registered with the adapter")
-        await event.wait()
-        return self._completion_results.get(job_id, False)
+
+        # Shutdown-responsive wait (#309): block on the completion event OR the
+        # adapter shutdown, whichever happens first. NO total timeout — a job
+        # may legitimately run for hours; per-sheet StaleCheck handles stuck
+        # sheets, and the manager applies a 24h job ceiling. If shutdown wins
+        # while the job is still in-flight we RAISE rather than return False:
+        # returning False would record a healthy interrupted job as failed.
+        completion_task = asyncio.ensure_future(event.wait())
+        shutdown_task = asyncio.ensure_future(self._shutdown_event.wait())
+        try:
+            await asyncio.wait(
+                {completion_task, shutdown_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if self._shutdown_event.is_set() and not event.is_set():
+                raise asyncio.CancelledError(
+                    f"baton adapter shutting down while waiting for job '{job_id}'"
+                )
+            return self._completion_results.get(job_id, False)
+        finally:
+            for task in (completion_task, shutdown_task):
+                if not task.done():
+                    task.cancel()
 
     def has_completed_sheets(self, job_id: str) -> bool:
         """Check if any sheet in the job reached COMPLETED status.
@@ -2095,6 +2123,9 @@ class BatonAdapter:
             timer_task.cancel()
             await self._timer_wheel.shutdown()
             self._running = False
+            # Release any wait_for_completion() waiters — the loop is gone, so
+            # their completion events would otherwise never fire (#309).
+            self._shutdown_event.set()
             _logger.info("adapter.stopped")
 
     async def shutdown(self) -> None:
@@ -2102,6 +2133,10 @@ class BatonAdapter:
 
         Cancels all active musician tasks and closes the backend pool.
         """
+        # Release wait_for_completion() waiters first (#309) so a caller blocked
+        # on an in-flight job unblocks as the engine tears down.
+        self._shutdown_event.set()
+
         # Cancel all active tasks
         if self._active_tasks:
             affected = [
