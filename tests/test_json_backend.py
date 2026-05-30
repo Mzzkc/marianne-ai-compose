@@ -6,6 +6,7 @@ zombie detection, and listing/sorting behavior.
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -178,6 +179,32 @@ class TestCorruptionHandling:
 
         with pytest.raises(StateCorruptionError):
             await backend.load("empty-job")
+
+    async def test_list_jobs_logs_corrupt_entry_with_job_id_and_path(
+        self, backend: JsonStateBackend
+    ) -> None:
+        """#246: a corrupt job dropped from list_jobs must be IDENTIFIABLE in
+        logs (job_id + path), not vanish behind a context-free warning."""
+        await backend.save(_make_state("good-job"))
+        # Valid JSON, invalid schema (missing required fields) → fails
+        # model_validate in list_jobs' Phase-3 validation, not Phase-1 load.
+        corrupt = backend._get_state_file("broken-job")
+        corrupt.write_text(json.dumps({"job_id": "broken-job"}))
+
+        with patch("marianne.state.json_backend._logger") as mock_logger:
+            jobs = await backend.list_jobs()
+
+        # The healthy job is still listed; the corrupt one is dropped ...
+        assert [j.job_id for j in jobs] == ["good-job"]
+        # ... but the warning now identifies WHICH job/file was corrupt.
+        warn_calls = [
+            c for c in mock_logger.warning.call_args_list
+            if c.args and c.args[0] == "invalid_state_data"
+        ]
+        assert len(warn_calls) == 1
+        kwargs = warn_calls[0].kwargs
+        assert kwargs["job_id"] == "broken-job"
+        assert "broken-job" in kwargs["path"]
 
 
 # =============================================================================

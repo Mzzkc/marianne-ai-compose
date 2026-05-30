@@ -154,7 +154,9 @@ class JsonStateBackend(StateBackend):
         just to determine sort order.
         """
         # Phase 1: Read raw JSON and extract sort key (no Pydantic overhead)
-        raw_entries: list[tuple[str, dict[str, Any]]] = []  # (updated_at_str, data)
+        # (updated_at_str, data, path) — path is carried so a later validation
+        # failure can name the offending file (#246).
+        raw_entries: list[tuple[str, dict[str, Any], str]] = []
         for state_file in self.state_dir.glob("*.json"):
             if state_file.suffix == ".json" and not state_file.name.endswith(".tmp"):
                 try:
@@ -162,7 +164,7 @@ class JsonStateBackend(StateBackend):
                         data = json.load(f)
                     # Extract updated_at for sorting without full validation
                     updated_at = data.get("updated_at", "")
-                    raw_entries.append((updated_at, data))
+                    raw_entries.append((updated_at, data, str(state_file)))
                 except (json.JSONDecodeError, OSError) as exc:
                     _logger.warning("corrupt_state_file", path=str(state_file), error=str(exc))
                     continue
@@ -172,11 +174,18 @@ class JsonStateBackend(StateBackend):
 
         # Phase 3: Validate sorted entries
         states: list[CheckpointState] = []
-        for _, data in raw_entries:
+        for _, data, path in raw_entries:
             try:
                 states.append(CheckpointState.model_validate(data))
             except ValueError as exc:
-                _logger.warning("invalid_state_data", error=str(exc))
+                # #246: a corrupt job is dropped from the listing — name the
+                # job_id and file so it doesn't silently vanish with no trace.
+                _logger.warning(
+                    "invalid_state_data",
+                    path=path,
+                    job_id=data.get("job_id"),
+                    error=str(exc),
+                )
                 continue
         return states
 
