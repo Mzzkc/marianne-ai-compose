@@ -1350,6 +1350,30 @@ class BatonAdapter:
                     exc_info=True,
                 )
 
+    @staticmethod
+    def _job_succeeded(job: Any) -> bool:
+        """Whether a completed job's sheets represent success (#172).
+
+        A job succeeds when every sheet either COMPLETED or was *deliberately*
+        SKIPPED. The cascade-vs-deliberate discriminant is the one the baton
+        already uses in ``_is_dep_satisfied``: a SKIPPED sheet with
+        ``error_code is None`` was an intentional skip (``--start-sheet`` /
+        ``skip_when`` / escalation-skip) and should not fail the job; a SKIPPED
+        sheet with ``error_code`` set was cascade-blocked by a failed upstream
+        and IS a failure. FAILED/CANCELLED never count as success.
+
+        Previously this was ``all(status == COMPLETED)``, which marked a job
+        FAILED whenever any sheet was skipped — even when all intended work
+        finished (the #172 bug; also why ``--fresh -s N`` failed, #186).
+        """
+        for s in job.sheets.values():
+            if s.status == BatonSheetStatus.COMPLETED:
+                continue
+            if s.status == BatonSheetStatus.SKIPPED and s.error_code is None:
+                continue  # deliberate skip — not a failure
+            return False
+        return True
+
     def _check_completions(self) -> None:
         """Check all registered jobs for completion and signal waiters.
 
@@ -1361,14 +1385,9 @@ class BatonAdapter:
             if event.is_set():
                 continue  # Already signaled
             if self._baton.is_job_complete(job_id):
-                # Determine success: all sheets COMPLETED (not failed/cancelled)
+                # Determine success (#172): COMPLETED, or *deliberately* SKIPPED.
                 job = self._baton._jobs.get(job_id)
-                all_success = True
-                if job is not None:
-                    all_success = all(
-                        s.status == BatonSheetStatus.COMPLETED
-                        for s in job.sheets.values()
-                    )
+                all_success = True if job is None else self._job_succeeded(job)
                 self._completion_results[job_id] = all_success
                 event.set()
                 sheet_statuses = {
