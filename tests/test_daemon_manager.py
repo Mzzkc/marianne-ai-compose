@@ -2592,3 +2592,68 @@ class TestAutostartDoneCallback:
             mgr_mod.JobManager._on_autostart_done(task)
 
         assert mock_logger.error.call_count == 0
+
+
+# ─── _set_job_status three-store atomicity (#313) ──────────────────────
+
+
+class TestSetJobStatusAtomicity:
+    """#313: _set_job_status must be atomic across the three stores. If the
+    fallible registry write fails, the in-memory meta/live MUST NOT diverge
+    from the registry (the docstring promises "atomically"). The fix writes
+    the registry first; the in-memory assignments follow synchronously.
+    """
+
+    @staticmethod
+    async def _seed(manager: JobManager, job_id: str) -> None:
+        from marianne.core.checkpoint import CheckpointState, JobStatus
+
+        await manager._registry.register_job(
+            job_id, Path("/tmp/t.yaml"), Path("/tmp/ws")
+        )
+        await manager._registry.update_status(job_id, "running")
+        manager._job_meta[job_id] = JobMeta(
+            job_id=job_id,
+            config_path=Path("/tmp/t.yaml"),
+            workspace=Path("/tmp/ws"),
+            status=DaemonJobStatus.RUNNING,
+        )
+        manager._live_states[job_id] = CheckpointState(
+            job_id=job_id,
+            job_name=job_id,
+            total_sheets=1,
+            status=JobStatus.RUNNING,
+        )
+
+    @pytest.mark.asyncio
+    async def test_registry_failure_leaves_inmemory_unchanged(
+        self, manager: JobManager
+    ) -> None:
+        from marianne.core.checkpoint import JobStatus
+
+        await self._seed(manager, "j")
+        manager._registry.update_status = AsyncMock(  # type: ignore[method-assign]
+            side_effect=OSError("disk full")
+        )
+
+        with pytest.raises(OSError, match="disk full"):
+            await manager._set_job_status("j", DaemonJobStatus.COMPLETED)
+
+        # No divergence: meta + live stay at the OLD status since the durable
+        # write failed. Otherwise mzt list (registry=RUNNING) would contradict
+        # mzt status (live=COMPLETED) and a restart would revert the job.
+        assert manager._job_meta["j"].status == DaemonJobStatus.RUNNING
+        assert manager._live_states["j"].status == JobStatus.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_success_updates_all_three_stores(self, manager: JobManager) -> None:
+        from marianne.core.checkpoint import JobStatus
+
+        await self._seed(manager, "j")
+        await manager._set_job_status("j", DaemonJobStatus.COMPLETED)
+
+        assert manager._job_meta["j"].status == DaemonJobStatus.COMPLETED
+        assert manager._live_states["j"].status == JobStatus.COMPLETED
+        job = await manager._registry.get_job("j")
+        assert job is not None
+        assert job.status.value == "completed"

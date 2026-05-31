@@ -603,14 +603,32 @@ class JobManager:
             pid: Optional PID for RUNNING status.
             snapshot_path: Optional snapshot path for terminal statuses.
         """
-        # 1. In-memory metadata (always available for active jobs)
+        # Atomicity (#313): the persistent registry write is the only fallible
+        # step (disk full, SQLite lock), so it goes FIRST. If it raises, the
+        # in-memory meta/live below are never touched — all three stores stay
+        # at the old value and the exception propagates, so we never leave
+        # `mzt list` (registry) contradicting `mzt status` (live). The two
+        # in-memory assignments that follow are pure and run with no `await`
+        # between them, so on the single-threaded event loop they apply
+        # atomically — no observer can see a half-updated state.
+
+        # 1. Persistent registry (fallible — do this first).
+        await self._registry.update_status(
+            job_id,
+            status.value,
+            error_message=error_message,
+            pid=pid,
+            snapshot_path=snapshot_path,
+        )
+
+        # 2. In-memory metadata (always available for active jobs).
         meta = self._job_meta.get(job_id)
         if meta is not None:
             object.__setattr__(meta, "status", status)
             if error_message is not None:
                 meta.error_message = error_message
 
-        # 2. Live checkpoint state (may not exist yet for queued jobs)
+        # 3. Live checkpoint state (may not exist yet for queued jobs).
         live = self._live_states.get(job_id)
         if live is not None:
             cp_status = _DAEMON_TO_CHECKPOINT_STATUS.get(status)
@@ -626,15 +644,6 @@ class JobManager:
                     job_id=job_id,
                     status=status.value,
                 )
-
-        # 3. Persistent registry
-        await self._registry.update_status(
-            job_id,
-            status.value,
-            error_message=error_message,
-            pid=pid,
-            snapshot_path=snapshot_path,
-        )
 
     @staticmethod
     def _classify_orphan(orphan: JobRecord) -> DaemonJobStatus:
