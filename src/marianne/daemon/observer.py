@@ -9,6 +9,7 @@ the EventBus for downstream consumers (SSE dashboard, learning hub).
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -20,6 +21,19 @@ if TYPE_CHECKING:
     from marianne.daemon.types import ObserverEvent
 
 _logger = get_logger("daemon.observer")
+
+
+def _suppress_watchfiles_noise() -> None:
+    """Silence watchfiles' per-poll DEBUG chatter (#193).
+
+    watchfiles emits an unstructured ``"N change(s) detected"`` line via its own
+    stdlib logger at DEBUG on every poll. Under the daemon's debug-level logging
+    that floods conductor.log (139k such lines observed), bypassing the
+    structured JSON logger. Raising the watchfiles logger to WARNING suppresses
+    the per-poll chatter; the observer's own ``observer.file_*`` events use a
+    separate structlog logger and are unaffected.
+    """
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
 
 class JobObserver:
@@ -133,6 +147,8 @@ class JobObserver:
                 message="watchfiles not installed — filesystem monitoring disabled",
             )
             return
+
+        _suppress_watchfiles_noise()
 
         event_map = {
             watchfiles.Change.added: "observer.file_created",
