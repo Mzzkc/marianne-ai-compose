@@ -120,23 +120,26 @@ class JsonStateBackend(StateBackend):
                 detail=str(e),
             ) from e
 
+    @staticmethod
+    def _write_atomic(state_file: Path, payload: dict[str, Any]) -> None:
+        """Blocking atomic write (temp file + fsync + rename). Run off-loop."""
+        temp_file = state_file.with_suffix(".json.tmp")
+        with open(temp_file, "w") as f:
+            json.dump(payload, f, indent=2, default=str)  # default=str for datetimes
+            f.flush()
+            os.fsync(f.fileno())
+        temp_file.replace(state_file)
+
     async def save(self, state: CheckpointState) -> None:
         """Save state to JSON file."""
         state.updated_at = utc_now()
         state_file = self._get_state_file(state.job_id)
 
-        # Write atomically using temp file + rename
-        temp_file = state_file.with_suffix(".json.tmp")
-        with open(temp_file, "w") as f:
-            json.dump(
-                state.model_dump(mode="json"),
-                f,
-                indent=2,
-                default=str,  # Handle datetime serialization
-            )
-            f.flush()
-            os.fsync(f.fileno())
-        temp_file.replace(state_file)
+        # #243: the write does blocking disk I/O (open + fsync); run it in a
+        # thread so this async method never stalls the event loop when awaited
+        # on the conductor's path. model_dump runs in-loop (cheap, CPU-bound).
+        payload = state.model_dump(mode="json")
+        await asyncio.to_thread(self._write_atomic, state_file, payload)
 
         _logger.info(
             "checkpoint_saved",
