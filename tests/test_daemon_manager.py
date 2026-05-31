@@ -2657,3 +2657,56 @@ class TestSetJobStatusAtomicity:
         job = await manager._registry.get_job("j")
         assert job is not None
         assert job.status.value == "completed"
+
+
+# ─── list_jobs dict-shape consistency (#253) ──────────────────────────
+
+
+class TestListJobsShapeConsistency:
+    """#253: active jobs (JobMeta.to_dict) and registry jobs (JobRecord.to_dict)
+    must expose the same always-present keys, so list_jobs returns one shape and
+    consumers don't KeyError on active-only entries.
+    """
+
+    def test_jobmeta_and_jobrecord_share_required_keys(self) -> None:
+        from marianne.daemon.registry import JobRecord
+
+        meta = JobMeta(
+            job_id="j",
+            config_path=Path("/tmp/c.yaml"),
+            workspace=Path("/tmp/ws"),
+            status=DaemonJobStatus.RUNNING,
+        )
+        record = JobRecord(
+            job_id="j", config_path="/tmp/c.yaml", workspace="/tmp/ws"
+        )
+        # The always-present keys of the registry shape must all exist on the
+        # active-job shape (registry adds optional log_path/snapshot_path only
+        # when set; meta adds optional error_*/chain_depth only when set).
+        required = {
+            "job_id",
+            "status",
+            "config_path",
+            "workspace",
+            "submitted_at",
+            "started_at",
+            "pid",
+            "completed_at",
+            "current_sheet",
+            "total_sheets",
+        }
+        assert required <= set(meta.to_dict())
+        assert required <= set(record.to_dict())
+
+    def test_active_job_dict_has_completed_at_none(self) -> None:
+        meta = JobMeta(
+            job_id="j",
+            config_path=Path("/tmp/c.yaml"),
+            workspace=Path("/tmp/ws"),
+            status=DaemonJobStatus.RUNNING,
+        )
+        d = meta.to_dict()
+        # Present (shape) but None (an active job isn't completed).
+        assert d["completed_at"] is None
+        assert d["current_sheet"] is None
+        assert d["total_sheets"] is None

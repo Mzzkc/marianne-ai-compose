@@ -185,6 +185,15 @@ class JobMeta:
             "workspace": str(self.workspace),
             "submitted_at": self.submitted_at,
             "started_at": self.started_at,
+            # #253: emit the same always-present keys as JobRecord.to_dict so
+            # list_jobs returns one consistent shape for active and registry
+            # jobs (consumers can rely on these keys existing). JobMeta doesn't
+            # track these in-memory — None here; live progress (current/total
+            # sheet) is available from the checkpoint, not this summary dict.
+            "pid": None,
+            "completed_at": None,
+            "current_sheet": None,
+            "total_sheets": None,
         }
         if self.error_message:
             result["error_message"] = self.error_message
