@@ -73,6 +73,8 @@ if TYPE_CHECKING:
     from marianne.daemon.baton.prompt import PromptRenderer
     from marianne.daemon.event_bus import EventBus
     from marianne.daemon.types import ObserverEvent
+    from marianne.learning.store import GlobalLearningStore
+    from marianne.learning.store.models import PatternRecord
 
 from marianne.core.logging import get_logger
 
@@ -373,6 +375,7 @@ class BatonAdapter:
         max_concurrent_sheets: int = 10,
         state_sync_callback: StateSyncCallback | None = None,
         persist_callback: PersistCallback | None = None,
+        learning_store: GlobalLearningStore | None = None,
     ) -> None:
         """Initialize the BatonAdapter.
 
@@ -384,6 +387,9 @@ class BatonAdapter:
             persist_callback: Called with job_id after significant state
                 transitions (terminal, dispatch) to persist CheckpointState
                 to the registry. Replaces the sync layer.
+            learning_store: Optional GlobalLearningStore handle for injecting
+                learned patterns into prompts (#200). None (and store-less
+                paths) cleanly skip the layer.
         """
         from marianne.daemon.baton.timer import TimerWheel
 
@@ -396,6 +402,7 @@ class BatonAdapter:
         self._event_bus = event_bus
         self._max_concurrent_sheets = max_concurrent_sheets
         self._persist_callback = persist_callback
+        self._learning_store = learning_store
         # Deprecated compat attributes — tests set/read these directly
         self._state_sync_callback = state_sync_callback
         self._synced_status: dict[tuple[str, int], str] = {}
@@ -1050,6 +1057,58 @@ class BatonAdapter:
             sheet_num
         )
         return failures or None
+
+    async def _build_learned_patterns(
+        self, instrument_name: str
+    ) -> list[str] | None:
+        """Learned patterns for the executing instrument, for injection (#200).
+
+        Queries the GlobalLearningStore for instrument-specific + universal
+        patterns, excluding quarantined (untrusted) ones, and converts each to
+        a compact prompt string. ``get_patterns`` is a SYNCHRONOUS sqlite query
+        and this runs on the conductor event loop, so it is dispatched off-loop
+        via ``asyncio.to_thread`` — the #243 contract. Returns None when there's
+        no store handle or nothing relevant, so the renderer cleanly skips the
+        layer (matching #207's failure-history shape). ``limit`` is set a little
+        above the renderer's display cap (``_format_patterns_section`` shows the
+        top 5) to leave headroom for empty-description records dropped below.
+        """
+        if self._learning_store is None:
+            return None
+        records = await asyncio.to_thread(
+            self._learning_store.get_patterns,
+            instrument_name=instrument_name,
+            include_universal=True,
+            exclude_quarantined=True,
+            limit=10,
+            min_priority=0.1,
+        )
+        strings = [
+            s for r in records if (s := self._pattern_to_str(r)) is not None
+        ]
+        return strings or None
+
+    @staticmethod
+    def _pattern_to_str(pattern: PatternRecord) -> str | None:
+        """Render one PatternRecord as a compact prompt line, or None to skip.
+
+        The effectiveness marker matches ``_format_patterns_section``'s legend
+        (``prompts/templating.py``: ✓ = high, ○ = moderate, ⚠ = low/untested).
+        Records with no description carry nothing actionable, so they're
+        dropped rather than injected as a bare name.
+        """
+        if not pattern.description:
+            return None
+        if pattern.effectiveness_score >= 0.7:
+            marker = "✓"
+        elif pattern.effectiveness_score >= 0.4:
+            marker = "○"
+        else:
+            marker = "⚠"
+        line = f"[{marker}] {pattern.pattern_name}: {pattern.description}"
+        if pattern.suggested_action:
+            line += f" → {pattern.suggested_action}"
+        return line
 
     @staticmethod
     def _build_completion_suffix(state: SheetExecutionState) -> str:
@@ -1750,8 +1809,14 @@ class BatonAdapter:
             pre_rendered: str | None = None
             pre_preamble: str | None = None
             if renderer is not None:
+                # #200: learned-pattern lookup is a sync sqlite query — resolve
+                # it off the event loop (await) BEFORE the synchronous render().
+                learned_patterns = await self._build_learned_patterns(
+                    actual_instrument
+                )
                 rendered = renderer.render(
                     sheet, context,
+                    patterns=learned_patterns,
                     technique_manifest=technique_manifest,
                     technique_skill_docs=technique_skill_docs,
                     failure_history=self._build_failure_history(job_id, sheet.num),

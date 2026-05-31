@@ -468,6 +468,14 @@ class JobManager:
             event_bus=self._event_bus,
             max_concurrent_sheets=self._config.max_concurrent_sheets,
             persist_callback=self._on_baton_persist,
+            # #200: feed learned patterns into prompts. The hub is started at
+            # the top of this method, so the store is available; guard anyway
+            # so a store-less startup keeps the adapter functional (None skips).
+            learning_store=(
+                self._learning_hub.store
+                if self._learning_hub.is_running
+                else None
+            ),
         )
         self._baton_adapter.set_backend_pool(BackendPool(registry, pgroup=self._pgroup))
 
