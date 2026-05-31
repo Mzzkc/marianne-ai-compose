@@ -68,6 +68,7 @@ from marianne.utils.process import safe_killpg as _safe_killpg
 if TYPE_CHECKING:
     from marianne.core.checkpoint import CheckpointState
     from marianne.core.config.job import PromptConfig
+    from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
     from marianne.core.config.workspace import CrossSheetConfig
     from marianne.daemon.baton.backend_pool import BackendPool
     from marianne.daemon.baton.prompt import PromptRenderer
@@ -449,6 +450,13 @@ class BatonAdapter:
         # Per-job CrossSheetConfig — enables cross-sheet context (F-210)
         self._job_cross_sheet: dict[str, CrossSheetConfig] = {}
 
+        # Per-job spec corpus (#204). The manager loads + populates the frozen
+        # SpecCorpusConfig off-loop and passes it here; per-sheet tag filtering
+        # at dispatch is a pure dict op (no I/O). Only stored when fragments
+        # exist, so _build_spec_fragments returns None for spec-less jobs.
+        self._job_spec_config: dict[str, SpecCorpusConfig] = {}
+        self._job_spec_tags: dict[str, dict[int, list[str]]] = {}
+
         # Per-job completion events — set when all sheets reach terminal state
         self._completion_events: dict[str, asyncio.Event] = {}
 
@@ -520,6 +528,8 @@ class BatonAdapter:
         live_sheets: dict[int, SheetExecutionState] | None = None,
         techniques: dict[str, Any] | None = None,
         stale_detection: StaleDetectionConfig | None = None,
+        spec_config: SpecCorpusConfig | None = None,
+        spec_tags: dict[int, list[str]] | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -558,6 +568,13 @@ class BatonAdapter:
         # Store cross-sheet config (F-210)
         if cross_sheet is not None:
             self._job_cross_sheet[job_id] = cross_sheet
+
+        # Store spec corpus (#204). Only when fragments exist — an empty
+        # corpus stores nothing, so _build_spec_fragments returns None.
+        if spec_config is not None and spec_config.fragments:
+            self._job_spec_config[job_id] = spec_config
+        if spec_tags:
+            self._job_spec_tags[job_id] = spec_tags
 
         # Create PromptRenderer if config is available (F-104)
         if prompt_config is not None:
@@ -781,6 +798,8 @@ class BatonAdapter:
         self._job_sheets.pop(job_id, None)
         self._job_renderers.pop(job_id, None)
         self._job_cross_sheet.pop(job_id, None)
+        self._job_spec_config.pop(job_id, None)
+        self._job_spec_tags.pop(job_id, None)
         self._completion_events.pop(job_id, None)
         self._completion_results.pop(job_id, None)
         self._job_routers.pop(job_id, None)
@@ -827,6 +846,8 @@ class BatonAdapter:
         live_sheets: dict[int, SheetExecutionState] | None = None,
         techniques: dict[str, Any] | None = None,
         stale_detection: StaleDetectionConfig | None = None,
+        spec_config: SpecCorpusConfig | None = None,
+        spec_tags: dict[int, list[str]] | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -864,6 +885,13 @@ class BatonAdapter:
         # Store cross-sheet config (F-210)
         if cross_sheet is not None:
             self._job_cross_sheet[job_id] = cross_sheet
+
+        # Store spec corpus (#204). Only when fragments exist — an empty
+        # corpus stores nothing, so _build_spec_fragments returns None.
+        if spec_config is not None and spec_config.fragments:
+            self._job_spec_config[job_id] = spec_config
+        if spec_tags:
+            self._job_spec_tags[job_id] = spec_tags
 
         # Create PromptRenderer if config is available
         if prompt_config is not None:
@@ -1087,6 +1115,25 @@ class BatonAdapter:
             s for r in records if (s := self._pattern_to_str(r)) is not None
         ]
         return strings or None
+
+    def _build_spec_fragments(
+        self, job_id: str, sheet_num: int
+    ) -> list[SpecFragment] | None:
+        """Spec-corpus fragments for this sheet, tag-filtered, for injection (#204).
+
+        The manager loads + populates the per-job SpecCorpusConfig off the event
+        loop; this is a PURE dict op at dispatch (no I/O). Filters by the sheet's
+        declared ``spec_tags`` — an untagged sheet (no entry) gets ALL fragments,
+        the documented contract (JobConfig.spec_tags). Returns None when there's
+        no spec or the filter is empty, so the renderer cleanly skips the layer
+        (matching #200/#207).
+        """
+        spec_config = self._job_spec_config.get(job_id)
+        if spec_config is None:
+            return None
+        tags = self._job_spec_tags.get(job_id, {}).get(sheet_num, [])
+        fragments = spec_config.get_fragments_by_tags(tags)
+        return fragments or None
 
     @staticmethod
     def _pattern_to_str(pattern: PatternRecord) -> str | None:
@@ -1820,6 +1867,7 @@ class BatonAdapter:
                     technique_manifest=technique_manifest,
                     technique_skill_docs=technique_skill_docs,
                     failure_history=self._build_failure_history(job_id, sheet.num),
+                    spec_fragments=self._build_spec_fragments(job_id, sheet.num),
                     raw_prompt=(
                         getattr(profile, "raw_prompt", False)
                         if profile is not None

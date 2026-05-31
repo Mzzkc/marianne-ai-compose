@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from marianne.core.config.spec import SpecCorpusConfig
 from marianne.daemon.manager import JobManager
 
 
@@ -69,6 +70,8 @@ class TestBatonLiveStatesPopulation:
         config.parallel.enabled = True
         config.backend.type = "claude-code"
         config.cross_sheet = None
+        config.spec = SpecCorpusConfig(spec_dir="")  # #204: load no-ops
+        config.sheet.spec_tags = {}
 
         request = MagicMock()
         request.fresh = False
@@ -147,6 +150,8 @@ class TestBatonLiveStatesPopulation:
         config.parallel.enabled = True
         config.backend.type = "claude-code"
         config.cross_sheet = None
+        config.spec = SpecCorpusConfig(spec_dir="")  # #204: load no-ops
+        config.sheet.spec_tags = {}
 
         request = MagicMock()
         request.fresh = False

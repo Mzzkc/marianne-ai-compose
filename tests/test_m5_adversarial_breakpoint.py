@@ -629,6 +629,8 @@ class TestDeregisterJobCleanup:
         adapter._job_sheets = {job_id: {1: MagicMock()}}
         adapter._job_renderers = {job_id: MagicMock()}
         adapter._job_cross_sheet = {job_id: MagicMock()}
+        adapter._job_spec_config = {job_id: MagicMock()}
+        adapter._job_spec_tags = {job_id: {1: ["goals"]}}
         adapter._completion_events = {job_id: asyncio.Event()}
         adapter._completion_results = {job_id: True}
         adapter._job_routers = {job_id: MagicMock()}
@@ -650,6 +652,8 @@ class TestDeregisterJobCleanup:
         assert job_id not in adapter._job_sheets
         assert job_id not in adapter._job_renderers
         assert job_id not in adapter._job_cross_sheet
+        assert job_id not in adapter._job_spec_config
+        assert job_id not in adapter._job_spec_tags
         assert job_id not in adapter._completion_events
         assert job_id not in adapter._completion_results
         assert job_id not in adapter._job_routers
@@ -676,6 +680,8 @@ class TestDeregisterJobCleanup:
         adapter._job_sheets = {}
         adapter._job_renderers = {}
         adapter._job_cross_sheet = {}
+        adapter._job_spec_config = {}
+        adapter._job_spec_tags = {}
         adapter._completion_events = {}
         adapter._completion_results = {}
         adapter._job_routers = {}

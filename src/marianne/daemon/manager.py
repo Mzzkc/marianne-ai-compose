@@ -22,6 +22,7 @@ import yaml
 
 import marianne
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.logging import get_logger
 from marianne.daemon.backpressure import BackpressureController
 from marianne.daemon.config import DaemonConfig
@@ -2576,6 +2577,41 @@ class JobManager:
 
         await self._run_managed_task(job_id, _execute())
 
+    @staticmethod
+    async def _load_spec_corpus(
+        spec: SpecCorpusConfig, workspace: Path
+    ) -> SpecCorpusConfig | None:
+        """Load + populate the spec corpus for a job, off the event loop (#204).
+
+        Resolves ``spec.spec_dir`` against the job ``workspace`` (the same base
+        every sheet's working directory uses), reads the corpus and the optional
+        CLAUDE.md in a single ``asyncio.to_thread`` hop (the #243 contract — the
+        loader does synchronous file I/O), and returns a populated frozen
+        ``SpecCorpusConfig`` copy. Returns None when ``spec_dir`` is empty
+        (opt-in default). Raises ``SpecCorpusError`` when a configured ``spec_dir``
+        does not exist — the caller fails the job loudly (correctness >
+        reliability: a silently-dropped corpus means the Musician runs without
+        its declared context). A missing CLAUDE.md is optional ("include if
+        present") and is skipped silently.
+        """
+        if not spec.spec_dir:
+            return None
+
+        from marianne.spec.loader import SpecCorpusLoader
+
+        resolved_spec_dir = (workspace / spec.spec_dir).resolve()
+
+        def _load() -> list[Any]:
+            fragments = SpecCorpusLoader.load(resolved_spec_dir)
+            if spec.include_claude_md:
+                claude_frag = SpecCorpusLoader.load_claude_md(workspace)
+                if claude_frag is not None:
+                    fragments = fragments + [claude_frag]
+            return fragments
+
+        fragments = await asyncio.to_thread(_load)
+        return spec.model_copy(update={"fragments": fragments})
+
     async def _run_via_baton(
         self,
         job_id: str,
@@ -2667,6 +2703,25 @@ class JobManager:
         # baton uses stale terminal sheets → instant completion with 0 work.
         adapter.deregister_job(job_id)
 
+        # #204: load the spec corpus off-loop before registration. A
+        # configured-but-missing spec_dir fails the job loudly (the Musician
+        # must not run without its declared spec context).
+        from marianne.spec.loader import SpecCorpusError
+
+        try:
+            spec_config = await self._load_spec_corpus(
+                config.spec, Path(config.workspace)
+            )
+        except SpecCorpusError as exc:
+            _logger.error(
+                "manager.spec_load_failed",
+                job_id=job_id,
+                spec_dir=config.spec.spec_dir,
+                error=str(exc),
+            )
+            await self._set_job_status(job_id, DaemonJobStatus.FAILED)
+            return DaemonJobStatus.FAILED
+
         # Register job with the baton
         # F-158: Pass prompt_config and parallel_enabled so the adapter
         # creates a PromptRenderer for the full 9-layer prompt assembly.
@@ -2689,6 +2744,8 @@ class JobManager:
             live_sheets=initial_state.sheets,
             techniques=config.techniques or None,
             stale_detection=config.stale_detection,
+            spec_config=spec_config,  # #204
+            spec_tags=config.sheet.spec_tags or None,  # #204
         )
 
         try:
@@ -2880,6 +2937,25 @@ class JobManager:
             pid=os.getpid(),
         )
 
+        # #204: reload the spec corpus on resume too — per-job spec state lives
+        # in-memory on the adapter and is lost on conductor restart, so it must
+        # be re-loaded here or a resumed job silently loses its spec context.
+        from marianne.spec.loader import SpecCorpusError
+
+        try:
+            spec_config = await self._load_spec_corpus(
+                config.spec, Path(config.workspace)
+            )
+        except SpecCorpusError as exc:
+            _logger.error(
+                "manager.spec_load_failed",
+                job_id=job_id,
+                spec_dir=config.spec.spec_dir,
+                error=str(exc),
+            )
+            await self._set_job_status(job_id, DaemonJobStatus.FAILED)
+            return DaemonJobStatus.FAILED
+
         # Recover job with checkpoint state
         # F-158: Pass prompt_config and parallel_enabled (same as _run_via_baton)
         # Phase 2: pass checkpoint.sheets so the baton writes to the same
@@ -2898,6 +2974,8 @@ class JobManager:
             live_sheets=checkpoint.sheets,
             techniques=config.techniques or None,
             stale_detection=config.stale_detection,
+            spec_config=spec_config,  # #204
+            spec_tags=config.sheet.spec_tags or None,  # #204
         )
 
         # Reconcile live state with baton's view: recover_job resets

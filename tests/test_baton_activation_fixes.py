@@ -486,6 +486,8 @@ def _make_mock_manager() -> MagicMock:
     manager._run_via_baton = JobManager._run_via_baton.__get__(manager)
     manager._resume_via_baton = JobManager._resume_via_baton.__get__(manager)
     manager._set_job_status = JobManager._set_job_status.__get__(manager)
+    # #204: _run/_resume_via_baton now call this staticmethod (no self)
+    manager._load_spec_corpus = JobManager._load_spec_corpus
 
     # Registry must be async-compatible since _set_job_status awaits it
     manager._registry = MagicMock()
@@ -510,6 +512,13 @@ def _make_mock_config(parallel: bool = False) -> MagicMock:
     from marianne.core.config.job import PromptConfig
 
     config.prompt = PromptConfig(template="test prompt")
+
+    # Spec corpus (#204) — real empty config so the off-loop load no-ops
+    # (spec_dir="" → None) instead of trying to load a MagicMock path.
+    from marianne.core.config.spec import SpecCorpusConfig
+
+    config.spec = SpecCorpusConfig(spec_dir="")
+    config.sheet.spec_tags = {}
 
     # Parallel execution
     config.parallel.enabled = parallel
