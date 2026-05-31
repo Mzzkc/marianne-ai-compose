@@ -618,3 +618,54 @@ class TestCheckpointRoundTrip:
         assert s.next_retry_at is None
         assert s.dispatched_at is None
         assert s.attempt_results == []
+
+
+# ─── Status grouping coherence (#268) ─────────────────────────────────
+
+
+class TestStatusGroupings:
+    """The terminal/active status sets are derived from DaemonJobStatus (#268)
+    so a value rename can't leave a stale string literal behind. Pin the
+    semantic grouping so a future edit can't silently misclassify a status.
+    """
+
+    def test_groupings_are_valid_enum_values(self) -> None:
+        from marianne.daemon.registry import (
+            _ACTIVE_STATUSES,
+            _TERMINAL_STATUSES,
+            DaemonJobStatus,
+        )
+
+        valid = {s.value for s in DaemonJobStatus}
+        assert valid >= _TERMINAL_STATUSES
+        assert valid >= _ACTIVE_STATUSES
+
+    def test_terminal_and_active_are_disjoint(self) -> None:
+        from marianne.daemon.registry import _ACTIVE_STATUSES, _TERMINAL_STATUSES
+
+        assert _TERMINAL_STATUSES.isdisjoint(_ACTIVE_STATUSES)
+
+    def test_expected_membership(self) -> None:
+        from marianne.daemon.registry import (
+            _ACTIVE_STATUSES,
+            _TERMINAL_STATUSES,
+            DaemonJobStatus,
+        )
+
+        assert {
+            DaemonJobStatus.COMPLETED.value,
+            DaemonJobStatus.FAILED.value,
+            DaemonJobStatus.CANCELLED.value,
+        } == _TERMINAL_STATUSES
+        assert {
+            DaemonJobStatus.QUEUED.value,
+            DaemonJobStatus.RUNNING.value,
+        } == _ACTIVE_STATUSES
+        # PAUSED / PAUSED_AT_CHAIN / PENDING are deliberately in NEITHER set.
+        for st in (
+            DaemonJobStatus.PAUSED,
+            DaemonJobStatus.PAUSED_AT_CHAIN,
+            DaemonJobStatus.PENDING,
+        ):
+            assert st.value not in _TERMINAL_STATUSES
+            assert st.value not in _ACTIVE_STATUSES

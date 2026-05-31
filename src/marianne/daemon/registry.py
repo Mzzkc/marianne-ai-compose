@@ -26,12 +26,6 @@ from marianne.core.logging import get_logger
 
 _logger = get_logger("daemon.registry")
 
-# Statuses that represent a finished job (used for completed_at timestamps,
-# orphan detection, and delete_jobs safety checks).
-_TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
-_ACTIVE_STATUSES = frozenset({"queued", "running"})
-
-
 class DaemonJobStatus(str, Enum):
     """Status values for daemon-managed jobs.
 
@@ -47,6 +41,21 @@ class DaemonJobStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     PENDING = "pending"
+
+
+# Status groupings, derived from the enum (#268) so a value rename can't leave a
+# stale string literal behind. Terminal = finished job (used for completed_at
+# timestamps, orphan detection, delete_jobs safety); active = currently running.
+_TERMINAL_STATUSES = frozenset(
+    {
+        DaemonJobStatus.COMPLETED.value,
+        DaemonJobStatus.FAILED.value,
+        DaemonJobStatus.CANCELLED.value,
+    }
+)
+_ACTIVE_STATUSES = frozenset(
+    {DaemonJobStatus.QUEUED.value, DaemonJobStatus.RUNNING.value}
+)
 
 
 @dataclass

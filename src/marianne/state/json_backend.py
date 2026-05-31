@@ -66,9 +66,11 @@ class JsonStateBackend(StateBackend):
     async def load(self, job_id: str) -> CheckpointState | None:
         """Load state from JSON file.
 
-        Automatically detects and recovers zombie jobs (RUNNING status but
-        process dead). When a zombie is detected, the state is updated to
-        PAUSED and saved before returning.
+        Detects zombie jobs (RUNNING status but process dead) and marks the
+        returned in-memory state accordingly, but does NOT persist — ``load()``
+        is read-only so dashboard/CLI callers don't mutate stored state. Callers
+        that need the zombie transition persisted (e.g. the runner lifecycle)
+        save explicitly. (#244: the prior docstring wrongly claimed it saved.)
         """
         state_file = self._get_state_file(job_id)
         if not state_file.exists():
