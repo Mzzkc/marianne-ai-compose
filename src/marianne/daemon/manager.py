@@ -833,7 +833,10 @@ class JobManager:
                 if baton_state.attempt_results:
                     last = baton_state.attempt_results[-1]
                     error_msg = last.error_message or error_msg
-                    error_code = last.error_classification
+                    # #195: prefer the structured E-code; fall back to the
+                    # classification bucket for synthetic-writer attempts
+                    # (STALE/CANCELLED/E505/PROCESS_CRASH) that set no error_code.
+                    error_code = last.error_code or last.error_classification
                     exit_code = last.exit_code
             live.mark_sheet_failed(
                 sheet_num,

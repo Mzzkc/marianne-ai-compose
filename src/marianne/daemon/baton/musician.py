@@ -37,13 +37,15 @@ from __future__ import annotations
 import asyncio
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import jinja2
 
 from marianne.backends.base import Backend, ExecutionResult
 from marianne.core.config.job import InjectionCategory, InjectionItem
 from marianne.core.constants import SHEET_NUM_KEY, TRUNCATE_STDOUT_TAIL_CHARS
+from marianne.core.errors.classifier import ErrorClassifier
+from marianne.core.errors.codes import ErrorCategory
 from marianne.core.logging import get_logger
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult
@@ -190,7 +192,9 @@ async def sheet_task(
         # Step 6: Classify errors (redact credentials from error messages —
         # backend error_message can contain API keys from auth failures,
         # config errors, or URL parameters)
-        error_class, raw_error_msg = _classify_error(exec_result)
+        classification = _classify_error(exec_result)
+        error_class = classification.classification
+        raw_error_msg = classification.message
         error_msg = redact_credentials(raw_error_msg) if raw_error_msg else raw_error_msg
 
         # Build and report result
@@ -209,6 +213,7 @@ async def sheet_task(
             validation_details=val_details,
             error_classification=error_class,
             error_message=error_msg,
+            error_code=classification.error_code,
             rate_limited=exec_result.rate_limited,
             rate_limit_wait_seconds=exec_result.rate_limit_wait_seconds,
             cost_usd=_estimate_cost(
@@ -932,48 +937,96 @@ def _capture_output(exec_result: ExecutionResult) -> tuple[str, str]:
     return stdout, stderr
 
 
-def _classify_error(
-    exec_result: ExecutionResult,
-) -> tuple[str | None, str | None]:
-    """Classify execution errors for the baton's decision tree.
+class _ErrorClassification(NamedTuple):
+    """Result of classifying a failed execution for the baton's decision tree.
+
+    All three fields are None for a successful or rate-limited execution.
+    ``classification`` is one of the three legacy buckets the baton's decision
+    tree consumes; ``error_code`` is the structured E0xx-E9xx diagnostic code.
+    """
+
+    classification: str | None
+    message: str | None
+    error_code: str | None
+
+
+# Module-level singleton — ErrorClassifier compiles ~11 regex pattern lists on
+# construction, so build it once rather than per dispatch.
+_classifier = ErrorClassifier()
+
+# Map the mature ErrorClassifier taxonomy onto the baton's three legacy buckets
+# (#195). The buckets are PRESERVED exactly so both consumers of the overloaded
+# error_classification field stay bit-identical: the exact ``== "AUTH_FAILURE"``
+# auth-fallback branch (core.py) and the substring exhaustion-reason labeler
+# (whose dormant TIMEOUT/CRASH/STALE arms must not newly activate — none of the
+# non-auth bucket strings contain those substrings). AUTH is the only category
+# that may produce AUTH_FAILURE. The retriable/transient categories collapse to
+# TRANSIENT and the rest to EXECUTION_ERROR; the distinction is purely
+# diagnostic today (no consumer branches on TRANSIENT vs EXECUTION_ERROR) — the
+# precise category travels in the structured error_code instead.
+_CATEGORY_TO_BUCKET: dict[ErrorCategory, str] = {
+    ErrorCategory.AUTH: "AUTH_FAILURE",
+    ErrorCategory.RATE_LIMIT: "TRANSIENT",
+    ErrorCategory.TRANSIENT: "TRANSIENT",
+    ErrorCategory.NETWORK: "TRANSIENT",
+    ErrorCategory.TIMEOUT: "TRANSIENT",
+    ErrorCategory.SIGNAL: "TRANSIENT",
+    ErrorCategory.VALIDATION: "EXECUTION_ERROR",
+    ErrorCategory.FATAL: "EXECUTION_ERROR",
+    ErrorCategory.CONFIGURATION: "EXECUTION_ERROR",
+    ErrorCategory.PREFLIGHT: "EXECUTION_ERROR",
+    ErrorCategory.ESCALATION: "EXECUTION_ERROR",
+}
+
+
+def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
+    """Classify execution errors for the baton's decision tree (#195).
+
+    Delegates detection to the mature, tested ``ErrorClassifier`` (signal /
+    timeout / pattern / exit-code sub-classifiers + E0xx-E9xx taxonomy) and maps
+    its category onto one of the three legacy buckets the baton acts on, while
+    surfacing the structured ``error_code``. The bucket strings are preserved
+    exactly so the auth-fallback branch and the exhaustion-reason labeler are
+    unchanged.
 
     Returns:
-        (classification, message) — both None for successful executions.
+        ``_ErrorClassification(classification, message, error_code)`` — all None
+        for successful or rate-limited executions.
 
     Classifications:
-        AUTH_FAILURE — API key invalid, permission denied
-        TRANSIENT — timeout, signal kill, exit_code=None
-        EXECUTION_ERROR — other failures
+        AUTH_FAILURE — authentication/authorization failure (drives fallback)
+        TRANSIENT — retriable: timeout, signal kill, network, generic-unknown
+        EXECUTION_ERROR — validation / fatal / configuration / preflight / etc.
     """
     if exec_result.success:
-        return None, None
+        return _ErrorClassification(None, None, None)
 
+    # Rate limits are NOT errors — handled upstream (the baton's rate-limit
+    # timer / rate_limit_wait_seconds). Short-circuit BEFORE the classifier so
+    # a rate-limit is never mapped into an error bucket or counted toward
+    # exhaustion. Load-bearing: the classifier has a RATE_LIMIT category and
+    # would otherwise classify rate-limit stderr as an error.
     if exec_result.rate_limited:
-        return None, None  # Rate limits are NOT errors
+        return _ErrorClassification(None, None, None)
 
-    # exit_code=None → process killed by signal → TRANSIENT
-    if exec_result.exit_code is None:
-        return "TRANSIENT", exec_result.error_message or "Process killed by signal"
-
-    # Check for auth failures in error output
-    error_text = (exec_result.stderr or "").lower()
-    auth_patterns = [
-        "authentication",
-        "unauthorized",
-        "api key",
-        "permission denied",
-        "invalid_api_key",
-        "401",
-        "403",
-    ]
-    if any(pattern in error_text for pattern in auth_patterns):
-        return "AUTH_FAILURE", exec_result.error_message or "Authentication failure"
-
-    # Default: EXECUTION_ERROR
-    return (
-        "EXECUTION_ERROR",
-        exec_result.error_message or f"Exit code {exec_result.exit_code}",
+    classified = _classifier.classify(
+        # stdout is deliberately NOT passed: the baton matches error patterns
+        # against stderr ONLY. An agent writing "401" or "authentication" into
+        # stdout (e.g., building an auth module) is content, not an error — and
+        # the classifier's pattern matcher would otherwise read it and emit AUTH,
+        # wrongly burning the per-instrument auth fallback chain. Signal/timeout/
+        # exit classification uses exit_signal/exit_reason/exit_code, not stdout.
+        stdout="",
+        stderr=exec_result.stderr or "",
+        exit_code=exec_result.exit_code,
+        exit_signal=exec_result.exit_signal,
+        exit_reason=exec_result.exit_reason,
     )
+    bucket = _CATEGORY_TO_BUCKET.get(classified.category, "EXECUTION_ERROR")
+    # Preserve the backend's raw error_message when present (the user-facing
+    # text); fall back to the classifier's synthesized message otherwise.
+    message = exec_result.error_message or classified.message
+    return _ErrorClassification(bucket, message, classified.error_code.value)
 
 
 def _estimate_cost(

@@ -1504,7 +1504,7 @@ class TestCrossSystemIntegration:
             duration_seconds=1.0,
             exit_code=1,
         )
-        classification, _ = _classify_error(auth_result)
+        classification, _, _ = _classify_error(auth_result)
         assert classification == "AUTH_FAILURE"
 
         # TRANSIENT → baton should retry
@@ -1515,7 +1515,7 @@ class TestCrossSystemIntegration:
             duration_seconds=30.0,
             exit_code=None,
         )
-        classification, _ = _classify_error(killed_result)
+        classification, _, _ = _classify_error(killed_result)
         assert classification == "TRANSIENT"
 
         # Success → no classification (not an error)
@@ -1526,7 +1526,7 @@ class TestCrossSystemIntegration:
             duration_seconds=5.0,
             exit_code=0,
         )
-        classification, _ = _classify_error(success_result)
+        classification, _, _ = _classify_error(success_result)
         assert classification is None
 
     def test_credential_redaction_in_capture_output(self) -> None:

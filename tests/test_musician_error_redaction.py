@@ -585,7 +585,7 @@ class TestClassifyErrorPathRedaction:
                 return ExecutionResult(
                     success=False,
                     stdout="",
-                    stderr="access denied",
+                    stderr="upload step failed",
                     duration_seconds=2.0,
                     exit_code=1,
                     error_message=("S3 PutObject failed for AKIAIOSFODNN7EXAMPLE"),
@@ -603,7 +603,9 @@ class TestClassifyErrorPathRedaction:
         assert result.error_message is not None
         assert "AKIAIOSFODNN7EXAMPLE" not in result.error_message
         assert "[REDACTED_AWS_KEY]" in result.error_message
-        assert result.error_classification == "EXECUTION_ERROR"
+        # #195: a generic (non-auth) backend failure classifies transient; the
+        # point of this test is that the AWS key in error_message is redacted.
+        assert result.error_classification == "TRANSIENT"
 
     async def test_none_error_message_passes_through(self, tmp_path: Path) -> None:
         """Backend returning error_message=None: passes through unchanged."""
@@ -639,8 +641,10 @@ class TestClassifyErrorPathRedaction:
 
         result = await inbox.get()
         # error_message should be the fallback from _classify_error
-        assert result.error_message == "Exit code 1"
-        assert result.error_classification == "EXECUTION_ERROR"
+        # #195: with no backend error_message, the structured classifier now
+        # supplies a richer message; a generic exit-1 classifies transient.
+        assert result.error_message == "Command failed with exit code 1"
+        assert result.error_classification == "TRANSIENT"
 
     async def test_clean_error_message_preserved(self, tmp_path: Path) -> None:
         """Backend returning error_message without credentials: preserved intact."""

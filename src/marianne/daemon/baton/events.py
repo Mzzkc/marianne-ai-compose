@@ -83,6 +83,10 @@ class SheetAttemptResult:
     # Error classification (from ErrorClassifier)
     error_classification: str | None = None
     error_message: str | None = None
+    # Structured E0xx-E9xx code from ErrorClassifier (#195). Additive,
+    # backward compatible — None for the synthetic STALE/CANCELLED/E505/
+    # PROCESS_CRASH writers and the exception path that bypass _classify_error.
+    error_code: str | None = None
 
     # Rate limit signal — NOT a failure
     rate_limited: bool = False

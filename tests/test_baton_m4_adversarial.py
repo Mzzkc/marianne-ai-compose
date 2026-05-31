@@ -268,7 +268,7 @@ class TestClassifyErrorAdversarial:
             stderr="API Error: Rate limit reached. Please wait.",
             rate_limited=True,
         )
-        classification, message = _classify_error(result)
+        classification, message, _ = _classify_error(result)
         assert classification is None
         assert message is None
 
@@ -286,7 +286,7 @@ class TestClassifyErrorAdversarial:
             stdout="Implementing authentication module with 401 handler",
             stderr="Command failed with exit code 1",
         )
-        classification, _ = _classify_error(result)
+        classification, _, _ = _classify_error(result)
         # stdout "authentication" and "401" should NOT trigger AUTH_FAILURE
         assert classification != "AUTH_FAILURE"
 
@@ -302,7 +302,7 @@ class TestClassifyErrorAdversarial:
             exit_code=None,
             stderr="",
         )
-        classification, _ = _classify_error(result)
+        classification, _, _ = _classify_error(result)
         assert classification == "TRANSIENT"
 
     def test_success_returns_none_none(self) -> None:
@@ -310,7 +310,7 @@ class TestClassifyErrorAdversarial:
         from marianne.daemon.baton.musician import _classify_error
 
         result = _make_exec_result(success=True, exit_code=0)
-        classification, message = _classify_error(result)
+        classification, message, _ = _classify_error(result)
         assert classification is None
         assert message is None
 
@@ -326,7 +326,7 @@ class TestClassifyErrorAdversarial:
             exit_code=1,
             stderr="UNAUTHORIZED: Invalid API key provided",
         )
-        classification, _ = _classify_error(result)
+        classification, _, _ = _classify_error(result)
         assert classification == "AUTH_FAILURE"
 
     def test_empty_stderr_with_nonzero_exit(self) -> None:
@@ -341,7 +341,7 @@ class TestClassifyErrorAdversarial:
             exit_code=42,
             stderr="",
         )
-        classification, message = _classify_error(result)
+        classification, message, _ = _classify_error(result)
         assert classification == "EXECUTION_ERROR"
         assert "42" in (message or "")
 
@@ -359,7 +359,7 @@ class TestClassifyErrorAdversarial:
             stderr="unauthorized: rate limit exceeded",
             rate_limited=True,
         )
-        classification, _ = _classify_error(result)
+        classification, _, _ = _classify_error(result)
         assert classification is None  # Rate limit = not an error
 
 
