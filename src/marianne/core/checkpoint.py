@@ -477,6 +477,13 @@ class SheetState(BaseModel):
         default_factory=list,
         description="Resolved fallback instrument chain. Empty = no fallbacks.",
     )
+    fallback_configs: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Per-fallback config overrides, index-aligned with "
+        "fallback_chain (#342). Applied on advance_fallback (currently the "
+        "'model' key). Empty (default) = no overrides; bare-profile fallbacks "
+        "use an empty dict. Old checkpoints lacking it default to [].",
+    )
     current_instrument_index: int = Field(
         default=0,
         description="Position in the instrument chain. 0 = primary instrument.",
@@ -718,15 +725,22 @@ class SheetState(BaseModel):
         from_instrument = self.instrument_name or ""
         self.fallback_attempts[from_instrument] = self.normal_attempts
 
-        to_instrument = self.fallback_chain[self.current_instrument_index]
+        # Capture the index BEFORE incrementing — the fallback we advance TO
+        # (and its index-aligned config) live at the pre-increment position.
+        idx = self.current_instrument_index
+        to_instrument = self.fallback_chain[idx]
         self.current_instrument_index += 1
         self.instrument_name = to_instrument
 
-        # GH#337: clear model so the fallback instrument uses its own default.
-        # The primary's model (e.g. "gemini-3.1-pro-preview") may not be valid
-        # for the fallback (e.g. claude-code), and inheriting it across the
-        # boundary causes the CLI to reject the -m flag and exit immediately.
-        self.model = None
+        # Apply this fallback's own model override if its score-local alias
+        # configured one (#342); otherwise clear to None so the fallback uses
+        # its profile default (GH#337 — never inherit the *primary's* model,
+        # which may be invalid for a different instrument). The bounds check
+        # tolerates old checkpoints whose fallback_configs predates this field.
+        if idx < len(self.fallback_configs):
+            self.model = self.fallback_configs[idx].get("model")
+        else:
+            self.model = None
 
         # Fresh retry budget for the new instrument
         self.normal_attempts = 0

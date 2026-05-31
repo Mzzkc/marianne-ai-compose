@@ -228,6 +228,7 @@ def sheets_to_execution_states(
             max_retries=max_retries,
             max_completion=max_completion,
             fallback_chain=list(sheet.instrument_fallbacks),
+            fallback_configs=[dict(c) for c in sheet.instrument_fallback_configs],
             sheet_timeout_seconds=sheet.timeout_seconds,
         )
     return states
@@ -592,6 +593,7 @@ class BatonAdapter:
                     s.max_retries = max_retries
                     s.max_completion = max_completion
                     s.fallback_chain = list(sheet.instrument_fallbacks)
+                    s.fallback_configs = [dict(c) for c in sheet.instrument_fallback_configs]
                     s.sheet_timeout_seconds = sheet.timeout_seconds
             states = live_sheets
         else:
@@ -936,6 +938,7 @@ class BatonAdapter:
             state.max_retries = max_retries
             state.max_completion = max_completion
             state.fallback_chain = list(sheet.instrument_fallbacks)
+            state.fallback_configs = [dict(c) for c in sheet.instrument_fallback_configs]
             state.sheet_timeout_seconds = sheet.timeout_seconds
             state.status = baton_status
             state.normal_attempts = normal_attempts

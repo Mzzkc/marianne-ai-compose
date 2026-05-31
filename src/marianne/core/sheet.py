@@ -91,9 +91,15 @@ class Sheet(BaseModel):
     )
     instrument_fallbacks: list[str] = Field(
         default_factory=list,
-        description="Resolved fallback instrument chain for this sheet. "
-        "Tried in order when the primary instrument is unavailable or "
-        "rate-limited to exhaustion.",
+        description="Resolved fallback chain — registered profile names (score-"
+        "local aliases already resolved at build time). Tried in order when the "
+        "primary instrument is unavailable or rate-limited to exhaustion.",
+    )
+    instrument_fallback_configs: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Per-fallback config overrides, index-aligned with "
+        "instrument_fallbacks. Each entry is the resolved alias's config "
+        "(e.g. {'model': ...}); empty dict for a bare-profile fallback (#342).",
     )
 
     # --- Prompt ---
@@ -314,6 +320,22 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
         else:
             fallbacks = list(config.instrument_fallbacks)
 
+        # Resolve score-local aliases in the fallback chain to profile names and
+        # capture each alias's config, index-aligned (#342). Mirrors the primary
+        # resolution above (:261-268), but keeps each fallback's config separate
+        # rather than merging into the sheet's instrument_config — the baton
+        # applies it on fallback advance. A bare profile name → empty config.
+        resolved_fallbacks: list[str] = []
+        fallback_configs: list[dict[str, Any]] = []
+        for fb_name in fallbacks:
+            fb_def = config.instruments.get(fb_name)
+            if fb_def is not None:
+                resolved_fallbacks.append(fb_def.profile)
+                fallback_configs.append(dict(fb_def.config) if fb_def.config else {})
+            else:
+                resolved_fallbacks.append(fb_name)
+                fallback_configs.append({})
+
         sheets.append(
             Sheet(
                 num=sheet_num,
@@ -324,7 +346,8 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
                 workspace=config.workspace,
                 instrument_name=instrument_name,
                 instrument_config=instrument_config,
-                instrument_fallbacks=fallbacks,
+                instrument_fallbacks=resolved_fallbacks,
+                instrument_fallback_configs=fallback_configs,
                 prompt_template=prompt_template,
                 template_file=template_file,
                 variables=variables,
