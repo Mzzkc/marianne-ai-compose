@@ -648,7 +648,7 @@ class TestFailureHistoryStore:
     def test_query_similar_failures_all(self) -> None:
         """Test querying all failures without filters."""
         state = self._create_state_with_failures()
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
 
         failures = store.query_similar_failures(
             current_sheet=4,
@@ -666,7 +666,7 @@ class TestFailureHistoryStore:
     def test_query_similar_failures_by_rule_type(self) -> None:
         """Test filtering by rule type."""
         state = self._create_state_with_failures()
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
 
         failures = store.query_similar_failures(
             current_sheet=4,
@@ -682,7 +682,7 @@ class TestFailureHistoryStore:
     def test_query_similar_failures_by_category(self) -> None:
         """Test filtering by failure category."""
         state = self._create_state_with_failures()
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
 
         failures = store.query_similar_failures(
             current_sheet=4,
@@ -698,7 +698,7 @@ class TestFailureHistoryStore:
     def test_query_similar_failures_with_limit(self) -> None:
         """Test that limit restricts results."""
         state = self._create_state_with_failures()
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
 
         failures = store.query_similar_failures(
             current_sheet=4,
@@ -710,7 +710,7 @@ class TestFailureHistoryStore:
     def test_query_similar_failures_excludes_current_sheet(self) -> None:
         """Test that current sheet is excluded from results."""
         state = self._create_state_with_failures()
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
 
         # Query as if we're on sheet 3
         failures = store.query_similar_failures(
@@ -726,7 +726,7 @@ class TestFailureHistoryStore:
     def test_query_recent_failures(self) -> None:
         """Test querying recent failures with lookback."""
         state = self._create_state_with_failures()
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
 
         failures = store.query_recent_failures(
             current_sheet=4,
@@ -741,7 +741,7 @@ class TestFailureHistoryStore:
     def test_query_recent_failures_limited_lookback(self) -> None:
         """Test that lookback_sheets limits which sheets are checked."""
         state = self._create_state_with_failures()
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
 
         failures = store.query_recent_failures(
             current_sheet=4,
@@ -755,7 +755,7 @@ class TestFailureHistoryStore:
     def test_has_failures_true(self) -> None:
         """Test has_failures returns True when failures exist."""
         state = self._create_state_with_failures()
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
 
         assert store.has_failures(current_sheet=4) is True
         assert store.has_failures(current_sheet=3) is True  # Sheets 1, 2 have failures
@@ -775,7 +775,7 @@ class TestFailureHistoryStore:
         ]
         state.sheets[1] = sheet
 
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
         assert store.has_failures(current_sheet=2) is False
 
     def test_empty_state(self) -> None:
@@ -785,7 +785,7 @@ class TestFailureHistoryStore:
             job_name="empty-job",
             total_sheets=1,
         )
-        store = FailureHistoryStore(state)
+        store = FailureHistoryStore(state.sheets)
 
         failures = store.query_similar_failures(current_sheet=1)
         assert failures == []

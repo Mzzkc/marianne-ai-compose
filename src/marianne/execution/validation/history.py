@@ -6,11 +6,12 @@ avoid repeating the same mistakes across sheets.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from marianne.core.checkpoint import CheckpointState, ValidationDetailDict
+    from marianne.core.checkpoint import SheetState, ValidationDetailDict
 
 
 @dataclass
@@ -32,9 +33,15 @@ class FailureHistoryStore:
     failures from previous sheets and finding similar failures.
     """
 
-    def __init__(self, state: CheckpointState) -> None:
-        """Initialize failure history store."""
-        self._state = state
+    def __init__(self, sheets: Mapping[int, SheetState]) -> None:
+        """Initialize failure history store.
+
+        Takes the per-sheet execution-state map directly (#207): the store only
+        reads sheet ``validation_details``, so it needs the sheets, not a full
+        CheckpointState. The baton feeds it ``self._baton._jobs[job_id].sheets``
+        (the live SheetState objects carrying validation_details).
+        """
+        self._sheets = sheets
 
     @staticmethod
     def _detail_to_failure(
@@ -60,11 +67,11 @@ class FailureHistoryStore:
         """Query past validation failures similar to expected patterns."""
         failures: list[HistoricalFailure] = []
 
-        for sheet_num in sorted(self._state.sheets.keys(), reverse=True):
+        for sheet_num in sorted(self._sheets.keys(), reverse=True):
             if sheet_num >= current_sheet:
                 continue
 
-            sheet = self._state.sheets.get(sheet_num)
+            sheet = self._sheets.get(sheet_num)
             if not sheet or not sheet.validation_details:
                 continue
 
@@ -101,7 +108,7 @@ class FailureHistoryStore:
             if sheet_num <= 0:
                 break
 
-            sheet = self._state.sheets.get(sheet_num)
+            sheet = self._sheets.get(sheet_num)
             if not sheet or not sheet.validation_details:
                 continue
 
@@ -118,7 +125,7 @@ class FailureHistoryStore:
 
     def has_failures(self, current_sheet: int) -> bool:
         """Check if there are any historical failures to query."""
-        for sheet_num, sheet in self._state.sheets.items():
+        for sheet_num, sheet in self._sheets.items():
             if sheet_num >= current_sheet:
                 continue
 

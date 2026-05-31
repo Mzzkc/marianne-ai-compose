@@ -62,6 +62,7 @@ from marianne.daemon.baton.state import (
     SheetExecutionState,
 )
 from marianne.daemon.technique_router import TechniqueRouter
+from marianne.execution.validation.history import FailureHistoryStore, HistoricalFailure
 from marianne.utils.process import safe_killpg as _safe_killpg
 
 if TYPE_CHECKING:
@@ -1029,6 +1030,27 @@ class BatonAdapter:
     # Completion Mode Prompt
     # =========================================================================
 
+    def _build_failure_history(
+        self, job_id: str, sheet_num: int
+    ) -> list[HistoricalFailure] | None:
+        """Recent validation failures from PRIOR sheets, for prompt injection (#207).
+
+        Cross-sheet learning: a sheet sees what earlier sheets failed so it can
+        avoid the same mistakes. Reads the baton's live execution sheets (the
+        SheetState objects carrying validation_details — the same objects in
+        _live_states), excludes the current sheet, and returns the most recent
+        failures (capped). Returns None when there's nothing to inject so the
+        renderer cleanly skips the layer. This is orthogonal to the COMPLETION
+        suffix, which carries the *current* sheet's own last-attempt failures.
+        """
+        job_record = self._baton._jobs.get(job_id)
+        if job_record is None:
+            return None
+        failures = FailureHistoryStore(job_record.sheets).query_recent_failures(
+            sheet_num
+        )
+        return failures or None
+
     @staticmethod
     def _build_completion_suffix(state: SheetExecutionState) -> str:
         """Build a specific completion suffix from the last attempt's results.
@@ -1732,6 +1754,7 @@ class BatonAdapter:
                     sheet, context,
                     technique_manifest=technique_manifest,
                     technique_skill_docs=technique_skill_docs,
+                    failure_history=self._build_failure_history(job_id, sheet.num),
                     raw_prompt=(
                         getattr(profile, "raw_prompt", False)
                         if profile is not None
