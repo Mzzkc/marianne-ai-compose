@@ -223,7 +223,18 @@ class JobRegistry:
         error_message: str | None = None,
         snapshot_path: str | None = None,
     ) -> None:
-        """Update a job's status and optional fields."""
+        """Update a job's status and optional fields in the registry only.
+
+        Breadcrumb (#263): this writes ONLY the registry row. It does NOT touch
+        the daemon's in-memory ``_job_meta`` / ``_live_states``, so calling it
+        directly for a live job diverges ``mzt list`` from ``mzt status``.
+        Status changes for live jobs MUST go through
+        ``JobManager._set_job_status`` (the three-store update). Direct use is
+        reserved for paths with no in-memory state (startup orphan recovery,
+        task-creation-failure cleanup) or registry/live reconciliation
+        (shutdown flush) — see ``test_set_job_status_guard_263`` for the
+        enforced allow-list.
+        """
         updates = ["status = ?"]
         params: list[Any] = [status]
 
