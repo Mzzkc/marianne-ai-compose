@@ -80,12 +80,21 @@ class RequestHandler:
                 return None  # Notification for unknown method — ignore
             return method_not_found(request.id, request.method)
 
+        # #252: correlate IPC error logs to the job and the structured error
+        # type. The handler is generic, so job_id is best-effort from params
+        # (None for methods that don't carry one); error_type is the exception
+        # class name (e.g. JobSubmissionError) — the diagnostic signal behind
+        # the JSON-RPC code returned to the client.
+        job_id = request.params.get("job_id") if isinstance(request.params, dict) else None
+
         try:
             result = await handler(request.params or {}, writer)
         except DaemonError as exc:
             _logger.warning(
                 "rpc_handler_daemon_error",
                 method=request.method,
+                job_id=job_id,
+                error_type=type(exc).__name__,
                 error=str(exc),
             )
             if request.id is None:
@@ -95,6 +104,8 @@ class RequestHandler:
             _logger.warning(
                 "rpc_handler_param_error",
                 method=request.method,
+                job_id=job_id,
+                error_type=type(exc).__name__,
                 error=str(exc),
             )
             if request.id is None:
@@ -104,6 +115,8 @@ class RequestHandler:
             _logger.error(
                 "rpc_handler_internal_error",
                 method=request.method,
+                job_id=job_id,
+                error_type=type(exc).__name__,
                 error=str(exc),
                 exc_info=True,
             )
