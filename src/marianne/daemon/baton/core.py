@@ -1687,6 +1687,32 @@ class BatonCore:
                 self._check_job_cost_limit(event.job_id)
         self._state_dirty = True
 
+    def request_pause(self, job_id: str) -> bool:
+        """Eagerly close the dispatch gate for a job, synchronously (#184).
+
+        Called from the producer side (``JobManager.pause_job``) BEFORE the
+        ``PauseJob`` event is enqueued. ``dispatch_ready`` gates on ``job.paused``,
+        but that flag was previously set only when the ``PauseJob`` event was
+        *processed* — so a sheet completion queued ahead of the pause would
+        dispatch the next sheet before the pause was seen. Setting the gate here,
+        synchronously, closes the race: on the single-threaded event loop no
+        dispatch can run between this call and the caller's next ``await``.
+
+        Sets ``user_paused`` too (not just ``paused``): otherwise an escalation
+        timeout — which clears ``paused`` only ``if not user_paused`` — could
+        unpause a user-paused job in the window before the ``PauseJob`` event
+        lands (#326). ``_handle_pause_job`` then becomes an idempotent re-set.
+
+        Returns True if the job exists in the baton, False otherwise.
+        """
+        job = self._jobs.get(job_id)
+        if job is None:
+            return False
+        job.paused = True
+        job.user_paused = True
+        self._state_dirty = True
+        return True
+
     def _handle_pause_job(self, event: PauseJob) -> None:
         """Pause dispatching for a job (user-initiated)."""
         job = self._jobs.get(event.job_id)

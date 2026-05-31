@@ -1436,12 +1436,15 @@ class JobManager:
                 f"Job '{job_id}' has no running process (stale status after daemon restart)"
             )
 
-        # Baton path: inject PauseJob event directly into the baton.
-        # The baton sets job.paused=True immediately, which stops dispatch
-        # for this job regardless of whether sheets are active.
+        # Baton path: close the dispatch gate SYNCHRONOUSLY first (#184), then
+        # enqueue the PauseJob event. request_pause sets job.paused immediately,
+        # so a sheet completion already queued ahead of the pause cannot dispatch
+        # the next sheet before the pause is seen. The PauseJob event still flows
+        # through for user_paused/event semantics (an idempotent re-set).
         if self._baton_adapter is not None:
             from marianne.daemon.baton.events import PauseJob
 
+            self._baton_adapter._baton.request_pause(job_id)
             await self._baton_adapter._baton.inbox.put(PauseJob(job_id=job_id))
             _logger.info("job.baton_pause_sent", job_id=job_id)
             await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
