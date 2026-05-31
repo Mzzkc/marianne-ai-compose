@@ -7,6 +7,8 @@ approach in the original bash script.
 import asyncio
 import json
 import os
+import threading
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -122,13 +124,28 @@ class JsonStateBackend(StateBackend):
 
     @staticmethod
     def _write_atomic(state_file: Path, payload: dict[str, Any]) -> None:
-        """Blocking atomic write (temp file + fsync + rename). Run off-loop."""
-        temp_file = state_file.with_suffix(".json.tmp")
-        with open(temp_file, "w") as f:
-            json.dump(payload, f, indent=2, default=str)  # default=str for datetimes
-            f.flush()
-            os.fsync(f.fileno())
-        temp_file.replace(state_file)
+        """Blocking atomic write (temp file + fsync + rename). Run off-loop.
+
+        The temp filename is per-write unique (pid + thread id + a counter):
+        because save() now runs in a worker thread (#243), two concurrent
+        save() calls for the same job execute in parallel rather than being
+        serialized by the event loop — a shared fixed ``.json.tmp`` name would
+        let one writer's rename move the temp out from under another's, raising
+        FileNotFoundError. A unique temp per writer keeps each write atomic
+        (its own temp → atomic replace); the destination is last-writer-wins,
+        same as before, but never corrupt and never crashes.
+        """
+        unique = f"{os.getpid()}.{threading.get_ident()}.{uuid.uuid4().hex}"
+        temp_file = state_file.with_suffix(f".{unique}.json.tmp")
+        try:
+            with open(temp_file, "w") as f:
+                json.dump(payload, f, indent=2, default=str)  # default=str for datetimes
+                f.flush()
+                os.fsync(f.fileno())
+            temp_file.replace(state_file)
+        finally:
+            # If the write failed before the rename, don't leak the temp file.
+            temp_file.unlink(missing_ok=True)
 
     async def save(self, state: CheckpointState) -> None:
         """Save state to JSON file."""
