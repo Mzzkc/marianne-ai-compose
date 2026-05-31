@@ -21,7 +21,7 @@ from typing import Any, ClassVar
 import yaml
 
 import marianne
-from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.core.logging import get_logger
 from marianne.daemon.backpressure import BackpressureController
 from marianne.daemon.config import DaemonConfig
@@ -89,6 +89,71 @@ def _should_auto_fresh(config_path: Path, completed_at: float | None) -> bool:
         return False
     # Score was modified more than tolerance seconds after completion
     return mtime > completed_at + _MTIME_TOLERANCE_SECONDS
+
+
+# Resuming from these states preserves terminal sheets (a deliberate halt — its
+# completed/failed/skipped sheets reflect decisions the operator wants kept).
+# Any other resumable state (FAILED, CANCELLED) triggers intrinsic recovery.
+_RESUME_PRESERVE_TERMINAL_STATUSES = frozenset(
+    {DaemonJobStatus.PAUSED, DaemonJobStatus.PAUSED_AT_CHAIN}
+)
+
+
+def _reset_sheets_for_resume(
+    checkpoint: CheckpointState,
+    pre_resume_status: DaemonJobStatus | None,
+    from_sheet: int | None = None,
+) -> int:
+    """Reset sheets in-place for an intrinsic-recover resume (#185).
+
+    Makes ``mzt resume`` on a FAILED/CANCELLED job reset its unfinished sheets
+    to PENDING (clearing retry budgets) and redispatch — retiring the separate
+    ``mzt recover`` step. Returns the number of sheets reset.
+
+    Reset rules:
+
+    * ``from_sheet`` given (explicit operator override): reset every sheet with
+      ``sheet_num >= from_sheet`` regardless of status or job state — bypasses
+      the PAUSED guard and the cascade/deliberate-skip distinction.
+    * ``pre_resume_status`` is None or in PAUSED / PAUSED_AT_CHAIN: reset nothing.
+      A paused job's terminal sheets are deliberate and must be preserved; None
+      means the caller opted out of intrinsic recovery (legacy/preserve).
+    * otherwise (FAILED / CANCELLED): reset FAILED sheets and *cascade*-SKIPPED
+      sheets. A SKIPPED sheet is cascade-blocked iff ``error_code is not None``
+      (it was blocked by a failed dependency — work never done); a SKIPPED sheet
+      with ``error_code is None`` was deliberately skipped (skip_when /
+      --start-sheet / escalation-skip) and is preserved. This is the same
+      discriminant the baton uses in ``_is_dep_satisfied``.
+
+    Idempotent: only sheets in a resettable status are touched, so re-running on
+    an already-reset checkpoint resets nothing.
+
+    The caller must read ``pre_resume_status`` from the job's status *before* the
+    resume transitions it to QUEUED/RUNNING — by the time ``_resume_via_baton``
+    runs, ``meta.status`` is already RUNNING.
+    """
+    reset = 0
+    for sheet in checkpoint.sheets.values():
+        if from_sheet is not None:
+            if sheet.sheet_num >= from_sheet and sheet.status != SheetStatus.PENDING:
+                sheet.reset_for_retry()
+                reset += 1
+            continue
+        if (
+            pre_resume_status is None
+            or pre_resume_status in _RESUME_PRESERVE_TERMINAL_STATUSES
+        ):
+            continue
+        # Reset FAILED sheets and cascade-SKIPPED sheets (error_code set =
+        # blocked by a failed dependency). Deliberate skips (error_code None:
+        # skip_when / --start-sheet / escalation-skip) are preserved.
+        is_cascade_skip = (
+            sheet.status == SheetStatus.SKIPPED and sheet.error_code is not None
+        )
+        if sheet.status == SheetStatus.FAILED or is_cascade_skip:
+            sheet.reset_for_retry()
+            reset += 1
+    return reset
 
 
 @dataclass
@@ -1390,6 +1455,7 @@ class JobManager:
         workspace: Path | None = None,
         config_path: Path | None = None,
         no_reload: bool = False,
+        from_sheet: int | None = None,
     ) -> JobResponse:
         """Resume a paused or failed job by creating a new task.
 
@@ -1420,6 +1486,12 @@ class JobManager:
                 "only PAUSED, PAUSED_AT_CHAIN, FAILED, or CANCELLED scores can be resumed"
             )
 
+        # Capture the pre-resume status NOW, before the QUEUED/RUNNING
+        # transitions below overwrite it. The resume task's intrinsic recovery
+        # (#185) keys off this to decide whether to reset failed/cascade-skipped
+        # sheets (FAILED/CANCELLED) or preserve terminal sheets (PAUSED).
+        pre_resume_status = meta.status
+
         # PAUSED_AT_CHAIN: trigger the held chain instead of normal resume
         if meta.status == DaemonJobStatus.PAUSED_AT_CHAIN and meta.held_chain_hook:
             return await self._resume_held_chain(job_id, meta)
@@ -1445,7 +1517,13 @@ class JobManager:
         await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
 
         task = asyncio.create_task(
-            self._resume_job_task(job_id, ws, no_reload=no_reload),
+            self._resume_job_task(
+                job_id,
+                ws,
+                no_reload=no_reload,
+                pre_resume_status=pre_resume_status,
+                from_sheet=from_sheet,
+            ),
             name=f"job-resume-{job_id}",
         )
         self._jobs[job_id] = task
@@ -2634,18 +2712,28 @@ class JobManager:
         job_id: str,
         workspace: Path,
         no_reload: bool = False,
+        pre_resume_status: DaemonJobStatus | None = None,
+        from_sheet: int | None = None,
     ) -> DaemonJobStatus:
         """Resume a job through the baton adapter using checkpoint recovery.
 
         Step 29: Loads the persisted CheckpointState, rebuilds Sheet entities
         from the config, and registers the recovered state with the baton.
-        Terminal sheets are preserved; in-progress sheets are reset to PENDING.
+
+        Terminal sheets are preserved for a PAUSED resume; for a FAILED/CANCELLED
+        resume, FAILED + cascade-SKIPPED sheets are reset to PENDING and
+        redispatched (#185 — intrinsic recovery, no separate ``mzt recover``).
+        ``from_sheet`` forces a reset of every sheet >= N regardless of status.
 
         Args:
             job_id: Conductor job ID.
             workspace: Job workspace directory.
             no_reload: When True, use config from checkpoint snapshot
                 instead of reloading from disk (fix for #98).
+            pre_resume_status: The job's status BEFORE resume transitioned it to
+                QUEUED/RUNNING — drives intrinsic recovery (#185). When None,
+                no terminal-sheet reset is performed (legacy/preserve behavior).
+            from_sheet: When set, reset every sheet >= this number (#185).
 
         Returns:
             DaemonJobStatus reflecting the job's outcome.
@@ -2702,6 +2790,24 @@ class JobManager:
         # Build sheets and dependencies
         sheets = build_sheets(config)
         deps = extract_dependencies(config)
+
+        # #185: intrinsic recovery. Reset FAILED/cascade-SKIPPED sheets (or all
+        # sheets >= from_sheet) to PENDING on the loaded checkpoint BEFORE it is
+        # persisted (below) and handed to recover_job — so the daemon, registry,
+        # and baton all agree. A PAUSED resume preserves terminal sheets.
+        reset_count = _reset_sheets_for_resume(
+            checkpoint, pre_resume_status, from_sheet=from_sheet
+        )
+        if reset_count:
+            _logger.info(
+                "baton.resume.sheets_reset",
+                job_id=job_id,
+                reset_count=reset_count,
+                pre_resume_status=(
+                    pre_resume_status.value if pre_resume_status is not None else None
+                ),
+                from_sheet=from_sheet,
+            )
 
         # Extract retry/cost settings
         max_retries = config.retry.max_retries
@@ -2855,6 +2961,8 @@ class JobManager:
         job_id: str,
         workspace: Path,
         no_reload: bool = False,
+        pre_resume_status: DaemonJobStatus | None = None,
+        from_sheet: int | None = None,
     ) -> None:
         """Task coroutine that resumes a paused job."""
 
@@ -2864,6 +2972,8 @@ class JobManager:
                 job_id,
                 workspace,
                 no_reload=no_reload,
+                pre_resume_status=pre_resume_status,
+                from_sheet=from_sheet,
             )
 
         await self._run_managed_task(

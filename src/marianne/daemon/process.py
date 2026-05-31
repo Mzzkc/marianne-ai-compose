@@ -590,11 +590,14 @@ class DaemonProcess:
                 config_path_str = params.get("config_path")
                 config_path = Path(config_path_str) if config_path_str else None
                 no_reload = bool(params.get("no_reload", False))
+                from_sheet_raw = params.get("from_sheet")
+                from_sheet = int(from_sheet_raw) if from_sheet_raw is not None else None
                 response = await manager.resume_job(
                     params["job_id"],
                     _workspace_path(params.get("workspace")),
                     config_path=config_path,
                     no_reload=no_reload,
+                    from_sheet=from_sheet,
                 )
                 return response.model_dump()
             except JobSubmissionError as e:

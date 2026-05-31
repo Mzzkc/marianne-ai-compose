@@ -750,6 +750,32 @@ class SheetState(BaseModel):
 
         return to_instrument
 
+    def reset_for_retry(self) -> None:
+        """Reset this sheet to PENDING with a full, fresh retry budget.
+
+        Typed mirror of ``recover.py``'s ``_reset_sheet_data_for_retry`` (which
+        operates on the serialized dict). Used by the daemon resume path (#185)
+        so a recovered sheet starts over from the TOP of its instrument chain
+        with full budgets — not stuck on the fallback it died on (#187) with
+        exhausted budgets (which would immediately re-fail). Clears error
+        provenance so the status display doesn't show a phantom failure/fallback
+        tag (#190) after a clean restart.
+        """
+        self.status = SheetStatus.PENDING
+        self.error_message = None
+        self.error_code = None
+        self.completed_at = None
+        self.normal_attempts = 0
+        self.completion_attempts = 0
+        self.attempt_count = 0
+        self.healing_attempts = 0
+        # #187: restart from the primary instrument, not the dead fallback.
+        self.current_instrument_index = 0
+        # #190: drop the stale fallback record so a clean restart shows no
+        # phantom "(was X: rate_limit)" tag.
+        self.instrument_fallback_history = []
+        self.fallback_attempts = {}
+
     # --- Compatibility methods for Phase 2 transition ---
     # These match the SheetExecutionState dataclass API so the type alias
     # (SheetExecutionState = SheetState) works without changing callers.

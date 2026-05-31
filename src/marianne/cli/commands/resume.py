@@ -70,6 +70,15 @@ def resume(
         help="Use cached config snapshot instead of auto-reloading from YAML file. "
         "By default, Marianne reloads from the original config path if the file exists.",
     ),
+    from_sheet: int | None = typer.Option(
+        None,
+        "--from-sheet",
+        min=1,
+        help="Reset every sheet >= N to PENDING and re-run from there, regardless "
+        "of status (including COMPLETED). Explicit override — re-runs deliberately "
+        "skipped sheets too. Without this, resuming a FAILED score automatically "
+        "resets only its failed and cascade-skipped sheets.",
+    ),
     self_healing: bool = typer.Option(
         False,
         "--self-healing",
@@ -100,7 +109,7 @@ def resume(
     asyncio.run(
         _resume_job(
             job_id, config_file, force, escalation,
-            no_reload, self_healing, yes
+            no_reload, self_healing, yes, from_sheet
         )
     )
 
@@ -250,6 +259,7 @@ async def _resume_job(
     no_reload: bool = False,
     self_healing: bool = False,
     auto_confirm: bool = False,
+    from_sheet: int | None = None,
 ) -> None:
     """Resume a paused or failed job.
 
@@ -275,6 +285,7 @@ async def _resume_job(
         "workspace": None,
         "config_path": str(config_file) if config_file else None,
         "no_reload": no_reload,
+        "from_sheet": from_sheet,
     }
     try:
         routed, result = await try_daemon_route("job.resume", params)
