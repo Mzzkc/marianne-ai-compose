@@ -76,6 +76,9 @@ class SheetContext:
     start_item: int
     end_item: int
     workspace: Path
+    # Resolved instrument name (e.g. "claude-code", "musician-ember"). Exposed
+    # as {{ instrument_name }} — a documented core template variable (#336).
+    instrument_name: str = ""
     # Fan-out metadata (populated by the baton when fan_out is configured)
     stage: int = 0
     """Logical stage number (1-indexed). 0 = not set, falls back to sheet_num."""
@@ -116,6 +119,7 @@ class SheetContext:
             "start_item": self.start_item,
             "end_item": self.end_item,
             "workspace": str(self.workspace),
+            "instrument_name": self.instrument_name,
             # Old terminology (backward compat)
             "stage": effective_stage,
             "instance": self.instance,

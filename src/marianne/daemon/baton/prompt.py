@@ -214,6 +214,7 @@ class PromptRenderer:
             start_item=start_item,
             end_item=end_item,
             workspace=sheet.workspace,
+            instrument_name=sheet.instrument_name,
         )
 
         # Fan-out metadata from the Sheet entity

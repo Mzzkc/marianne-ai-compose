@@ -552,3 +552,45 @@ class TestRenderedPrompt:
         assert len(result.prompt) > 0
         assert len(result.preamble) > 0
         assert "<marianne-preamble>" in result.preamble
+
+
+# =========================================================================
+# #336: {{ instrument_name }} must be defined for ALL instruments
+# =========================================================================
+
+
+class TestInstrumentNameVariable:
+    """Regression for #336: the baton render context omitted instrument_name,
+    so ``{{ instrument_name }}`` raised 'instrument_name' is undefined and
+    killed the musician task. It is a documented core template variable and is
+    included by Sheet.get_template_variables(); SheetContext.to_dict() must
+    match. Must work for built-in, custom-profile, and aliased instruments.
+    """
+
+    def test_instrument_name_available_for_custom_profile(self) -> None:
+        sheet = _make_sheet(
+            prompt_template="You are {{ instrument_name }}.",
+            instrument_name="musician-ember",
+        )
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+        result = renderer.render(sheet, _make_context())
+        assert "You are musician-ember." in result.prompt
+
+    def test_instrument_name_available_for_builtin(self) -> None:
+        sheet = _make_sheet(
+            prompt_template="Instrument: {{ instrument_name }}",
+            instrument_name="claude-code",
+        )
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+        result = renderer.render(sheet, _make_context())
+        assert "Instrument: claude-code" in result.prompt
