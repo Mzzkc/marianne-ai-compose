@@ -10,6 +10,7 @@ from marianne.core.config import JobConfig
 from marianne.validation.base import ValidationCheck, ValidationIssue, ValidationSeverity
 from marianne.validation.checks import (
     EmptyPatternCheck,
+    FanOutStringFilterCheck,
     FanOutWithoutDependenciesCheck,
     FanOutWithoutParallelCheck,
     FileExistsOnlyCheck,
@@ -138,6 +139,7 @@ def create_default_checks() -> list[ValidationCheck]:
         # Jinja checks (most common issues)
         JinjaSyntaxCheck(),
         JinjaUndefinedVariableCheck(),
+        FanOutStringFilterCheck(),
         # Path checks
         WorkspaceParentExistsCheck(),
         TemplateFileExistsCheck(),

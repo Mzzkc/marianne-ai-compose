@@ -6,6 +6,7 @@ would cause runtime errors.
 
 import difflib
 from pathlib import Path
+from typing import Any
 
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
@@ -340,3 +341,135 @@ class JinjaUndefinedVariableCheck:
             return f"Define '{var}' in prompt.variables section"
 
         return f"Define '{var}' in prompt.variables section"
+
+
+class FanOutStringFilterCheck:
+    """Detect `dict[X | string]` on int-normalized variable dicts (V304, #132).
+
+    A per-instance dict with int-like string keys (``{"1": ...}``) has its keys
+    normalized to integers at render time (``_normalize_dict_keys``). A template
+    that subscripts it with ``dict[instance | string]`` re-stringifies the int
+    ``instance`` to ``"1"``, which no longer matches the int key ``1`` →
+    ``UndefinedError`` on every fan-out instance.
+
+    Detection is CORRELATED, not pure-AST: ``| string`` is correct for
+    genuinely string-keyed dicts, so the check fires ONLY when the subscripted
+    base Name resolves to a ``prompt.variables`` dict whose keys are ALL
+    integers after normalization (int, or int-normalizable strings). This gives
+    zero false positives — a string index never matches an all-int-keyed dict.
+    The filtered Name is not restricted: the dict's key types are the
+    precondition, and ``| string`` always produces a string index regardless of
+    what it filters.
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V304"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Detects '| string' filter on subscripts of int-keyed variable dicts"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        """Flag `dict[X | string]` where dict has all-int-normalizable keys."""
+        issues: list[ValidationIssue] = []
+        env = jinja2.Environment()
+        variables = config.prompt.variables
+
+        sources: list[tuple[str, str]] = []
+        if config.prompt.template:
+            sources.append((config.prompt.template, "prompt.template"))
+        if config.prompt.template_file:
+            template_path = resolve_path(config.prompt.template_file, config_path)
+            if template_path.exists():
+                try:
+                    sources.append(
+                        (template_path.read_text(), f"template_file ({template_path.name})")
+                    )
+                except Exception:  # noqa: BLE001 — unreadable file is V101's concern
+                    pass
+
+        seen: set[str] = set()
+        for template_str, source_name in sources:
+            try:
+                ast = env.parse(template_str)
+            except jinja2.TemplateSyntaxError:
+                continue  # Syntax errors are reported by V001.
+            for getitem in ast.find_all(jinja2_nodes.Getitem):
+                if not isinstance(getitem.node, jinja2_nodes.Name):
+                    continue
+                if not self._chain_has_string_filter(getitem.arg):
+                    continue
+                var_name = getitem.node.name
+                value = variables.get(var_name)
+                if not isinstance(value, dict) or not self._all_keys_int(value):
+                    continue
+                key = f"{source_name}:{var_name}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                issues.append(
+                    ValidationIssue(
+                        check_id="V304",
+                        severity=ValidationSeverity.WARNING,
+                        message=(
+                            f"'{var_name}[... | string]' will fail at render time: "
+                            f"{var_name}'s int-like keys are normalized to integers, "
+                            f"but '| string' produces a string index that never "
+                            f"matches them — UndefinedError on every fan-out instance."
+                        ),
+                        line=find_line_in_yaml(raw_yaml, "| string"),
+                        context=f"{source_name}: {var_name}[... | string]",
+                        suggestion=(
+                            f"Remove '| string' — use {var_name}[instance] directly; "
+                            f"the engine normalizes the dict's keys to int to match "
+                            f"the int fan-out variable."
+                        ),
+                        metadata={"variable": var_name},
+                    )
+                )
+        return issues
+
+    @staticmethod
+    def _chain_has_string_filter(node: Any) -> bool:
+        """True if a `| string` filter appears anywhere in the filter chain."""
+        current = node
+        while isinstance(current, jinja2_nodes.Filter):
+            if current.name == "string":
+                return True
+            current = current.node
+        return False
+
+    @staticmethod
+    def _all_keys_int(d: dict[Any, Any]) -> bool:
+        """True if every key is (or normalizes to) an integer — the bug precondition.
+
+        Mirrors `_normalize_dict_keys`: a str key counts when `int(key)` succeeds.
+        Genuine int keys also qualify (a string index won't match them either).
+        An empty dict, any genuine-string key, or any bool key disqualifies it
+        (so mixed and string-keyed dicts stay silent — zero false positives).
+        """
+        if not d:
+            return False
+        for key in d:
+            if isinstance(key, bool):
+                return False
+            if isinstance(key, int):
+                continue
+            if isinstance(key, str):
+                try:
+                    int(key)
+                except (ValueError, OverflowError):
+                    return False
+            else:
+                return False
+        return True
