@@ -104,6 +104,12 @@ def format_instrument_with_fallback(sheet: SheetState) -> str:
         "gemini-cli [dim](was claude-code: rate_limit_exhausted)[/dim]"
     """
     name = sheet.instrument_name or ""
+    # #334: surface the per-sheet model override so two sheets sharing a
+    # profile (e.g. two `instruments:` aliases over claude-code) but using
+    # different models are distinguishable at a glance. Only the explicit
+    # override is shown; a bare profile name means the profile default.
+    if sheet.instrument_model:
+        name = f"{name} ({sheet.instrument_model})"
     if not sheet.instrument_fallback_history:
         return name
     last = sheet.instrument_fallback_history[-1]

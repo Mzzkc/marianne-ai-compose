@@ -25,13 +25,47 @@ from marianne.core.checkpoint import SheetState, SheetStatus
 def _make_sheet(
     instrument: str = "claude-code",
     fallback_history: list[dict[str, str]] | None = None,
+    model: str | None = None,
 ) -> SheetState:
     return SheetState(
         sheet_num=1,
         status=SheetStatus.COMPLETED,
         instrument_name=instrument,
+        instrument_model=model,
         instrument_fallback_history=fallback_history or [],
     )
+
+
+class TestFormatInstrumentWithModel:
+    """#334: the status table surfaces the per-sheet model override so two
+    sheets sharing a profile but using different models are distinguishable.
+    """
+
+    def test_model_override_shown(self) -> None:
+        """An explicit model override is appended to the profile name."""
+        sheet = _make_sheet("claude-code", model="claude-sonnet-4-6")
+        result = format_instrument_with_fallback(sheet)
+        assert result == "claude-code (claude-sonnet-4-6)"
+
+    def test_no_model_override_plain(self) -> None:
+        """No model override → bare profile name (profile default, unchanged)."""
+        sheet = _make_sheet("claude-code", model=None)
+        result = format_instrument_with_fallback(sheet)
+        assert result == "claude-code"
+
+    def test_model_and_fallback_both_shown(self) -> None:
+        """Model override and a fallback annotation coexist."""
+        sheet = _make_sheet(
+            "gemini-cli",
+            fallback_history=[
+                {"from": "claude-code", "to": "gemini-cli", "reason": "rate_limit"},
+            ],
+            model="gemini-3.1-pro-preview",
+        )
+        result = format_instrument_with_fallback(sheet)
+        assert "gemini-cli (gemini-3.1-pro-preview)" in result
+        assert "was claude-code" in result
+        assert "rate_limit" in result
 
 
 class TestFormatInstrumentWithFallback:
