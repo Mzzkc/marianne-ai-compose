@@ -1,0 +1,108 @@
+"""Ordered, acknowledged checkpoint writer (#111).
+
+The conductor persists job state by serializing the full ``CheckpointState`` to
+the daemon registry. The previous path fired each save as an unawaited
+``asyncio.create_task(registry.save_checkpoint(...))`` — **unordered and
+unacknowledged**. Two rapid transitions for the same job could commit out of
+order, overwriting a newer full-state blob with an older one (a silent state
+regression). Today that is masked (the in-memory copy serves live reads and the
+shutdown flush writes the latest), but as the daemon DB becomes the sole source
+of truth it is a data-loss bug.
+
+``CheckpointWriter`` is a single-consumer, in-order writer:
+
+- One FIFO ``asyncio.Queue`` drained by one task ⇒ writes never reorder.
+- Per-job **coalescing**: only the latest snapshot for a ``job_id`` is written
+  (each ``CheckpointState`` blob is a full snapshot, so a newer one supersedes
+  any older queued one). This both fixes reordering and cuts write amplification
+  under bursts.
+- Errors are logged, never raised — a failed persist must not crash the
+  conductor loop (the next snapshot or the shutdown flush re-persists).
+
+It does NOT own durability-at-shutdown: the manager's existing synchronous
+final-flush writes the latest in-memory state for every job before closing the
+registry, which supersedes anything still queued. The writer is simply stopped
+first so the final-flush is the last write.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+from typing import TYPE_CHECKING
+
+from marianne.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from marianne.daemon.registry import JobRegistry
+
+_logger = get_logger("daemon.checkpoint_writer")
+
+# Generous bound so the consumer keeps up in practice, while still surfacing
+# backpressure (rather than letting memory run unbounded ahead of disk).
+_DEFAULT_MAX_QUEUE = 512
+
+
+class CheckpointWriter:
+    """Serialized, order-preserving writer for registry checkpoint saves."""
+
+    def __init__(self, registry: JobRegistry, *, max_queue: int = _DEFAULT_MAX_QUEUE) -> None:
+        self._registry = registry
+        self._queue: asyncio.Queue[str] = asyncio.Queue(maxsize=max_queue)
+        self._latest: dict[str, str] = {}
+        self._task: asyncio.Task[None] | None = None
+
+    def start(self) -> None:
+        """Start the consumer task (idempotent). Must run inside the event loop."""
+        if self._task is None:
+            self._task = asyncio.create_task(self._run(), name="checkpoint-writer")
+
+    @property
+    def running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    def enqueue(self, job_id: str, checkpoint_json: str) -> None:
+        """Record the latest snapshot for ``job_id`` and queue it for writing.
+
+        Non-blocking and safe to call from the conductor's event-loop callbacks.
+        The latest snapshot is always recorded; a full queue logs backpressure
+        (the snapshot is still written by the next enqueue for the job or the
+        shutdown flush).
+        """
+        self._latest[job_id] = checkpoint_json
+        try:
+            self._queue.put_nowait(job_id)
+        except asyncio.QueueFull:
+            _logger.warning("checkpoint_writer.queue_full", job_id=job_id)
+
+    async def _run(self) -> None:
+        while True:
+            job_id = await self._queue.get()
+            try:
+                payload = self._latest.pop(job_id, None)
+                if payload is not None:
+                    await self._registry.save_checkpoint(job_id, payload)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _logger.warning(
+                    "checkpoint_writer.write_failed", job_id=job_id, exc_info=True
+                )
+            finally:
+                self._queue.task_done()
+
+    async def drain(self) -> None:
+        """Wait until all queued writes have been processed."""
+        await self._queue.join()
+
+    async def stop(self) -> None:
+        """Cancel the consumer task cleanly (idempotent).
+
+        Pending coalesced snapshots are intentionally NOT flushed here — the
+        caller's final synchronous flush of live state supersedes them.
+        """
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None

@@ -26,6 +26,7 @@ from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
 from marianne.daemon.backpressure import BackpressureController
+from marianne.daemon.checkpoint_writer import CheckpointWriter
 from marianne.daemon.concurrency import ConcurrencyGate
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.event_bus import EventBus
@@ -336,6 +337,10 @@ class JobManager:
 
         self._baton_adapter: BatonAdapter | None = None
         self._baton_loop_task: asyncio.Task[Any] | None = None
+        # #111: ordered, acknowledged checkpoint writer. Created in start()
+        # (needs the running loop); replaces fire-and-forget save_checkpoint
+        # tasks so per-job persists never reorder.
+        self._checkpoint_writer: CheckpointWriter | None = None
 
     # ─── Lifecycle ────────────────────────────────────────────────────
 
@@ -493,6 +498,13 @@ class JobManager:
                     model.name,
                     model.max_concurrent,
                 )
+
+        # #111: start the ordered checkpoint writer BEFORE the baton loop, so
+        # every persist callback (which fires from that loop) has a consumer and
+        # writes are serialized in order.
+        checkpoint_writer = CheckpointWriter(self._registry)
+        checkpoint_writer.start()
+        self._checkpoint_writer = checkpoint_writer
 
         # Start the baton's event loop as a background task
         self._baton_loop_task = asyncio.create_task(
@@ -695,6 +707,23 @@ class JobManager:
                 )
         return DaemonJobStatus.FAILED
 
+    def _persist_checkpoint(self, job_id: str, checkpoint_json: str) -> None:
+        """Persist a checkpoint via the ordered writer (#111).
+
+        Routes through the serialized ``CheckpointWriter`` so per-job saves never
+        reorder. Falls back to a direct fire-and-forget task only if the writer
+        isn't running (e.g. a manager constructed without ``start()`` in tests);
+        the normal daemon path always has it running.
+        """
+        writer = self._checkpoint_writer
+        if writer is not None and writer.running:
+            writer.enqueue(job_id, checkpoint_json)
+            return
+        asyncio.get_event_loop().create_task(
+            self._registry.save_checkpoint(job_id, checkpoint_json),
+            name=f"checkpoint-save-{job_id}",
+        )
+
     def _on_baton_persist(self, job_id: str) -> None:
         """Phase 2 persist callback — save CheckpointState to registry.
 
@@ -733,10 +762,7 @@ class JobManager:
                 live.started_at = utc_now()
 
             checkpoint_json = live.model_dump_json()
-            asyncio.get_event_loop().create_task(
-                self._registry.save_checkpoint(job_id, checkpoint_json),
-                name=f"baton-persist-{job_id}",
-            )
+            self._persist_checkpoint(job_id, checkpoint_json)
         except Exception:
             _logger.warning(
                 "baton.persist_failed",
@@ -896,10 +922,7 @@ class JobManager:
         ):
             try:
                 checkpoint_json = live.model_dump_json()
-                asyncio.get_event_loop().create_task(
-                    self._registry.save_checkpoint(job_id, checkpoint_json),
-                    name=f"baton-checkpoint-{job_id}",
-                )
+                self._persist_checkpoint(job_id, checkpoint_json)
             except Exception:
                 _logger.warning(
                     "baton.state_sync.persist_failed",
@@ -2149,9 +2172,18 @@ class JobManager:
         # Stop centralized learning hub (final persist + cleanup)
         await self._learning_hub.stop()
 
+        # #111: stop the ordered checkpoint writer BEFORE the final flush, so
+        # the synchronous flush below is the authoritative last write. Any
+        # snapshots still queued in the writer are superseded by that flush
+        # (which serialises the latest in-memory state), so they are dropped
+        # rather than drained — preventing an older queued blob from landing
+        # after the newest one.
+        if self._checkpoint_writer is not None:
+            await self._checkpoint_writer.stop()
+            self._checkpoint_writer = None
+
         # Final checkpoint flush: persist ALL live states to registry before
-        # closing. Fire-and-forget saves from _on_baton_state_sync may be
-        # pending — this synchronous flush ensures no progress is lost.
+        # closing. This synchronous flush ensures no progress is lost.
         flushed = 0
         for jid, live in self._live_states.items():
             try:
@@ -2320,20 +2352,11 @@ class JobManager:
             state = state.model_copy(update={"job_id": conductor_key})
         self._live_states[conductor_key] = state
 
-        # Persist to registry (fire-and-forget — never block the runner)
+        # Persist to registry via the ordered writer (#111 — never block the
+        # runner, and never reorder per-job saves).
         try:
             checkpoint_json = state.model_dump_json()
-            task = asyncio.create_task(
-                self._registry.save_checkpoint(state.job_id, checkpoint_json),
-                name=f"checkpoint-save-{state.job_id}",
-            )
-            task.add_done_callback(
-                lambda t: log_task_exception(
-                    t,
-                    _logger,
-                    "registry.checkpoint_save_failed",
-                ),
-            )
+            self._persist_checkpoint(state.job_id, checkpoint_json)
         except Exception:
             _logger.debug(
                 "state_published.checkpoint_serialize_failed",
