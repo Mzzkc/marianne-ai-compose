@@ -16,6 +16,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from marianne.core.constants import STATE_DB_FILENAME
+
 if TYPE_CHECKING:
     from marianne.backends.base import Backend
     from marianne.core.config import BackendConfig, JobConfig
@@ -148,7 +150,7 @@ def create_state_backend(
     from marianne.state import JsonStateBackend, SQLiteStateBackend
 
     if backend_type == "sqlite":
-        return SQLiteStateBackend(workspace / ".marianne-state.db")
+        return SQLiteStateBackend(workspace / STATE_DB_FILENAME)
     else:
         return JsonStateBackend(workspace)
 

@@ -40,7 +40,7 @@ from marianne.core.checkpoint import (
     ErrorRecord,
     SheetStatus,
 )
-from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.constants import SHEET_NUM_KEY, STATE_DB_FILENAME
 from marianne.core.logging import find_log_files, get_default_log_path
 
 from ..helpers import (
@@ -1551,7 +1551,7 @@ async def _history_job(
         # Fallback to filesystem — load from SQLite backend directly
         from marianne.state import SQLiteStateBackend
 
-        sqlite_path = workspace / ".marianne-state.db"
+        sqlite_path = workspace / STATE_DB_FILENAME
         if sqlite_path.exists():
             backend = SQLiteStateBackend(sqlite_path)
             try:

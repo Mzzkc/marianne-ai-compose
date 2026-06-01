@@ -11,6 +11,14 @@ making them discoverable, consistent, and easy to modify.
 SHEET_NUM_KEY = "sheet_num"
 """Standard key for sheet number in dicts and serialised state."""
 
+STATE_DB_FILENAME = ".marianne-state.db"
+"""Filename for the per-workspace SQLite state database (#245).
+
+Centralizes a literal that was previously hand-constructed in 8+ path
+expressions across cli/, daemon/, execution/, and core/config/. Construct the
+path as ``workspace / STATE_DB_FILENAME`` so the filename has a single source of
+truth."""
+
 VALIDATION_PASS_RATE_KEY = "validation_pass_rate"
 """Standard key for validation pass rate in checkpoint/job data."""
 

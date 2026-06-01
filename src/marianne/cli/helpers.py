@@ -21,6 +21,7 @@ import typer
 from rich.console import Console
 
 from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import configure_logging, get_logger
 from marianne.state import JsonStateBackend, SQLiteStateBackend, StateBackend
 
@@ -201,7 +202,7 @@ def _find_job_workspace(job_id: str, hint: Path | None = None) -> Path | None:
         if json_state.exists():
             return path
 
-        sqlite_state = path / ".marianne-state.db"
+        sqlite_state = path / STATE_DB_FILENAME
         if sqlite_state.exists():
             return path
 
@@ -232,14 +233,14 @@ async def _find_job_state_fs(
     if workspace:
         if not workspace.exists():
             return None, None
-        sqlite_path = workspace / ".marianne-state.db"
+        sqlite_path = workspace / STATE_DB_FILENAME
         if sqlite_path.exists():
             backends.append(SQLiteStateBackend(sqlite_path))
         backends.append(JsonStateBackend(workspace))
     else:
         cwd = Path.cwd()
         backends.append(JsonStateBackend(cwd))
-        sqlite_cwd = cwd / ".marianne-state.db"
+        sqlite_cwd = cwd / STATE_DB_FILENAME
         if sqlite_cwd.exists():
             backends.append(SQLiteStateBackend(sqlite_cwd))
 

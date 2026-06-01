@@ -23,6 +23,7 @@ import yaml
 import marianne
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.core.config.spec import SpecCorpusConfig
+from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
 from marianne.daemon.backpressure import BackpressureController
 from marianne.daemon.config import DaemonConfig
@@ -1951,7 +1952,7 @@ class JobManager:
 
         from marianne.state import SQLiteStateBackend
 
-        sqlite_path = ws / ".marianne-state.db"
+        sqlite_path = ws / STATE_DB_FILENAME
         records: list[dict[str, Any]] = []
         has_history = False
 

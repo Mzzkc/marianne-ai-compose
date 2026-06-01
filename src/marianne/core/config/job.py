@@ -49,6 +49,7 @@ from marianne.core.config.workspace import (
     LogConfig,
     WorkspaceLifecycleConfig,
 )
+from marianne.core.constants import STATE_DB_FILENAME
 
 
 class InjectionCategory(str, Enum):
@@ -970,7 +971,7 @@ class JobConfig(BaseModel):
             return self.state_path
         if self.state_backend == "json":
             return self.workspace / ".marianne-state.json"
-        return self.workspace / ".marianne-state.db"
+        return self.workspace / STATE_DB_FILENAME
 
     def get_outcome_store_path(self) -> Path:
         """Get the resolved outcome store path for learning."""

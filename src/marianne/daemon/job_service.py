@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
 from marianne.daemon.exceptions import JobSubmissionError
 from marianne.daemon.output import NullOutput, OutputProtocol
@@ -300,7 +301,7 @@ class JobService:
         backends: list[tuple[str, StateBackend]] = []
 
         # Check for SQLite first (preferred for concurrent access)
-        sqlite_path = workspace / ".marianne-state.db"
+        sqlite_path = workspace / STATE_DB_FILENAME
         if sqlite_path.exists():
             backends.append(("sqlite", SQLiteStateBackend(sqlite_path)))
 
