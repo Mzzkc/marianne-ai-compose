@@ -176,6 +176,7 @@ class PromptRenderer:
             workspace=sheet.workspace,
             retry_count=retry_count,
             is_parallel=self._parallel_enabled,
+            healing_context=attempt_context.healing_context,
         )
 
         return RenderedPrompt(prompt=prompt, preamble=preamble)

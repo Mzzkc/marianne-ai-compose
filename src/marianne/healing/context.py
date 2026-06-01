@@ -13,6 +13,7 @@ from marianne.core.constants import HEALING_CONTEXT_TAIL_CHARS
 
 if TYPE_CHECKING:
     from marianne.backends.base import ExecutionResult
+    from marianne.core.checkpoint import SheetState
     from marianne.core.config import JobConfig
 
 
@@ -178,6 +179,54 @@ class ErrorContext:
             working_directory=config.backend.working_directory or config.workspace,
             environment=env_vars,
             raw_config_yaml=raw_yaml,
+        )
+
+    @classmethod
+    def from_sheet_state(
+        cls,
+        sheet: "SheetState",
+        sheet_number: int,
+        error_category: str = "execution",
+        *,
+        workspace: Path | None = None,
+        config_path: Path | None = None,
+        config: "JobConfig | None" = None,
+    ) -> "ErrorContext":
+        """Create context from the baton's per-sheet execution state (#201).
+
+        The baton drives healing from a ``SheetState`` (the unified
+        SheetExecutionState), not a full ``ExecutionResult``/``JobConfig`` — so
+        this reads what the baton has (error code/message, exit code/signal,
+        output tails, attempt counts) and accepts ``workspace``/``config_path``
+        explicitly (the baton stores them on its job record).
+
+        Forward-compatible for #133: it can later accept observer/resource data
+        as additional optional fields without reshaping callers.
+        """
+        import os
+
+        env_vars = {
+            "PATH": os.environ.get("PATH", ""),
+            "HOME": os.environ.get("HOME", ""),
+            "ANTHROPIC_API_KEY": "***" if os.environ.get("ANTHROPIC_API_KEY") else "",
+        }
+
+        return cls(
+            error_code=sheet.error_code or "E009",
+            error_message=sheet.error_message or "",
+            error_category=error_category,
+            exit_code=sheet.exit_code,
+            signal=sheet.exit_signal,
+            stdout_tail=sheet.stdout_tail or "",
+            stderr_tail=sheet.stderr_tail or "",
+            config_path=config_path,
+            config=config,
+            workspace=workspace,
+            sheet_number=sheet_number,
+            working_directory=workspace,
+            environment=env_vars,
+            retry_count=sheet.normal_attempts,
+            max_retries=sheet.max_retries,
         )
 
     def get_context_summary(self) -> dict[str, Any]:

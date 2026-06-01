@@ -14,7 +14,7 @@ from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 class TestCascadeTransitivePropagation:
     """Cascade-SKIPPED sheets must propagate to their own dependents."""
 
-    def test_linear_chain_propagates_through_skipped(self) -> None:
+    async def test_linear_chain_propagates_through_skipped(self) -> None:
         """In a chain 1->2->3, failing sheet 1 should SKIP both 2 and 3."""
         baton = BatonCore()
         sheets = {
@@ -26,7 +26,7 @@ class TestCascadeTransitivePropagation:
         baton.register_job("j1", sheets, deps)
 
         # Fail sheet 1
-        baton._handle_attempt_result(
+        await baton._handle_attempt_result(
             SheetAttemptResult(
                 job_id="j1",
                 sheet_num=1,
@@ -43,14 +43,14 @@ class TestCascadeTransitivePropagation:
             "Sheet 3 must be SKIPPED transitively through cascade-SKIPPED sheet 2"
         )
 
-    def test_deep_chain_four_levels(self) -> None:
+    async def test_deep_chain_four_levels(self) -> None:
         """Chain 1->2->3->4: failing 1 cascades all the way to 4."""
         baton = BatonCore()
         sheets = {i: SheetExecutionState(sheet_num=i, max_retries=0) for i in range(1, 5)}
         deps = {2: [1], 3: [2], 4: [3]}
         baton.register_job("j1", sheets, deps)
 
-        baton._handle_attempt_result(
+        await baton._handle_attempt_result(
             SheetAttemptResult(
                 job_id="j1",
                 sheet_num=1,
@@ -66,7 +66,7 @@ class TestCascadeTransitivePropagation:
                 f"Sheet {i} must be transitively SKIPPED"
             )
 
-    def test_fan_out_waits_for_all_deps(self) -> None:
+    async def test_fan_out_waits_for_all_deps(self) -> None:
         """Fan-out: voice1+voice2 -> synthesis. One voice fails, one completes.
         Synthesis should be SKIPPED (blocked by failed voice)."""
         baton = BatonCore()
@@ -79,7 +79,7 @@ class TestCascadeTransitivePropagation:
         baton.register_job("j1", sheets, deps)
 
         # Voice 1 completes
-        baton._handle_attempt_result(
+        await baton._handle_attempt_result(
             SheetAttemptResult(
                 job_id="j1",
                 sheet_num=1,
@@ -93,7 +93,7 @@ class TestCascadeTransitivePropagation:
         assert sheets[3].status == BatonSheetStatus.PENDING
 
         # Voice 2 fails
-        baton._handle_attempt_result(
+        await baton._handle_attempt_result(
             SheetAttemptResult(
                 job_id="j1",
                 sheet_num=2,
@@ -106,7 +106,7 @@ class TestCascadeTransitivePropagation:
         # NOW synthesis should be SKIPPED (all deps terminal, one failed)
         assert sheets[3].status == BatonSheetStatus.SKIPPED
 
-    def test_cascade_skipped_does_not_satisfy_dispatch(self) -> None:
+    async def test_cascade_skipped_does_not_satisfy_dispatch(self) -> None:
         """Cascade-SKIPPED sheets must NOT satisfy dependencies for dispatch."""
         baton = BatonCore()
         sheets = {
@@ -118,7 +118,7 @@ class TestCascadeTransitivePropagation:
         baton.register_job("j1", sheets, deps)
 
         # Fail sheet 1 -> cascades to 2 and 3
-        baton._handle_attempt_result(
+        await baton._handle_attempt_result(
             SheetAttemptResult(
                 job_id="j1",
                 sheet_num=1,
@@ -203,7 +203,7 @@ class TestSheetDispatchedEvent:
 class TestExhaustionPathOrder:
     """Exhaustion handler must try targeted recovery before normal retries."""
 
-    def test_fallback_before_normal_retry(self) -> None:
+    async def test_fallback_before_normal_retry(self) -> None:
         """When completion exhausts with fallback AND normal retries available,
         fallback should be tried first."""
         baton = BatonCore()
@@ -219,14 +219,14 @@ class TestExhaustionPathOrder:
         baton.register_job("j1", sheets, {})
         sheets[1].completion_attempts = 1  # At max_completion
 
-        baton._handle_exhaustion("j1", 1, sheets[1])
+        await baton._handle_exhaustion("j1", 1, sheets[1])
 
         assert sheets[1].instrument_name == "gemini-cli", (
             "Fallback should be tried before normal retry"
         )
         assert sheets[1].status == BatonSheetStatus.PENDING
 
-    def test_escalation_before_normal_retry(self) -> None:
+    async def test_escalation_before_normal_retry(self) -> None:
         """When completion exhausts with escalation enabled AND normal retries
         available (but no fallback), escalation should fire."""
         baton = BatonCore()
@@ -241,13 +241,13 @@ class TestExhaustionPathOrder:
         baton.register_job("j1", sheets, {}, escalation_enabled=True)
         sheets[1].completion_attempts = 1
 
-        baton._handle_exhaustion("j1", 1, sheets[1])
+        await baton._handle_exhaustion("j1", 1, sheets[1])
 
         assert sheets[1].status == BatonSheetStatus.FERMATA, (
             "Escalation should fire before normal retry"
         )
 
-    def test_normal_retry_as_last_resort(self) -> None:
+    async def test_normal_retry_as_last_resort(self) -> None:
         """When completion exhausts with normal retries but no fallback,
         no healing, no escalation -- normal retry fires."""
         baton = BatonCore()
@@ -262,7 +262,7 @@ class TestExhaustionPathOrder:
         baton.register_job("j1", sheets, {})
         sheets[1].completion_attempts = 1
 
-        baton._handle_exhaustion("j1", 1, sheets[1])
+        await baton._handle_exhaustion("j1", 1, sheets[1])
 
         assert sheets[1].status == BatonSheetStatus.RETRY_SCHEDULED
         assert sheets[1].normal_attempts == 1

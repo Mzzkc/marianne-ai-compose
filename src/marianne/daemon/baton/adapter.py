@@ -674,6 +674,7 @@ class BatonAdapter:
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
             pacing_seconds=pacing_seconds,
+            workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
         # Set cost limits if configured
@@ -1063,6 +1064,7 @@ class BatonAdapter:
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
             pacing_seconds=pacing_seconds,
+            workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
         # Set cost limits if configured
@@ -1269,6 +1271,43 @@ class BatonAdapter:
         )
 
         return "\n".join(parts)
+
+    @staticmethod
+    def _build_healing_context(
+        state: SheetExecutionState,
+    ) -> dict[str, Any] | None:
+        """Gather the prior attempt's failure signals for retry-prompt enrichment (#201).
+
+        Reads the deterministic, already-captured SheetState failure fields
+        (validation details, grounding guidance, error code/message, stderr,
+        error history) into an ephemeral dict consumed by ``build_preamble`` ->
+        ``format_failure_evidence``. The agent then sees specifically what failed
+        instead of retrying blind.
+
+        Must be called BEFORE the per-dispatch clear of ``validation_details`` /
+        ``error_code`` / ``error_message`` (they hold the prior attempt's values
+        at that point). Returns ``None`` when there is no failure signal (e.g.
+        the first attempt) so the caller falls back to the generic preamble.
+
+        Pure read into an ephemeral dict — no state mutation, no DB write, no
+        in-memory/on-disk drift point.
+        """
+        error_history = [
+            rec.error_code
+            for rec in (state.error_history or [])
+            if getattr(rec, "error_code", None)
+        ]
+        ctx: dict[str, Any] = {
+            "error_code": state.error_code,
+            "error_message": state.error_message,
+            "validation_details": state.validation_details,
+            "grounding_guidance": state.grounding_guidance,
+            "stderr_tail": state.stderr_tail,
+            "error_history": error_history or None,
+        }
+        if not any(v for v in ctx.values()):
+            return None
+        return ctx
 
     # Cross-Sheet Context — F-210
     # =========================================================================
@@ -1721,6 +1760,14 @@ class BatonAdapter:
             )
             return
 
+        # #201: capture the prior attempt's failure signals for retry-prompt
+        # enrichment BEFORE the clear below wipes them. This is a pure read of
+        # already-persisted SheetState into an ephemeral per-attempt dict — no
+        # state write, no in-memory/DB drift point. On the first attempt these
+        # are empty, so the helper returns None and the retry preamble stays
+        # generic.
+        prior_failure = self._build_healing_context(state)
+
         # Clear stale validation/error details from previous attempts.
         # Without this, status display shows old validation errors for the
         # current attempt's failure (misreporting).
@@ -1770,6 +1817,13 @@ class BatonAdapter:
             completion_prompt_suffix=completion_suffix,
             previous_outputs=prev_outputs,
             previous_files=prev_files,
+            # #201: enrich every non-completion retry with the prior attempt's
+            # failure evidence. Completion mode already carries targeted
+            # failed-validation detail in its suffix, so skip it there to avoid
+            # double-injection.
+            healing_context=(
+                prior_failure if mode != AttemptMode.COMPLETION else None
+            ),
         )
 
         # Resolve techniques for this sheet's phase before prompt rendering.

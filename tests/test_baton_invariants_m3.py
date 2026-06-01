@@ -464,7 +464,7 @@ class TestExhaustionDecisionTree:
             escalation_enabled=escalation,
         )
 
-        baton._handle_exhaustion("j1", 1, sheet)
+        asyncio.run(baton._handle_exhaustion("j1", 1, sheet))
 
         # Determine which path was taken
         # Path 1: Fallback (not tested here — no fallback configured)
@@ -512,7 +512,7 @@ class TestExhaustionDecisionTree:
             escalation_enabled=True,
         )
 
-        baton._handle_exhaustion("j1", 1, sheet)
+        asyncio.run(baton._handle_exhaustion("j1", 1, sheet))
 
         # Healing should take priority
         assert sheet.healing_attempts == 1
@@ -815,7 +815,7 @@ class TestF018NoValidationGuard:
             validations_passed=0,
             validation_pass_rate=pass_rate,  # Should be overridden by guard
         )
-        baton._handle_attempt_result(event)
+        asyncio.run(baton._handle_attempt_result(event))
 
         assert sheet.status == BatonSheetStatus.COMPLETED, (
             f"No-validation success with pass_rate={pass_rate} "
@@ -858,7 +858,7 @@ class TestTerminalStateResistance:
             execution_success=True,
             validation_pass_rate=100.0,
         )
-        baton._handle_attempt_result(event)
+        asyncio.run(baton._handle_attempt_result(event))
 
         assert sheet.status == baton_status
         assert len(sheet.attempt_results) == 0  # Not even recorded

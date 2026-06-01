@@ -31,6 +31,8 @@ see the same value as the emitted event.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from marianne.daemon.baton.core import BatonCore
@@ -97,7 +99,7 @@ def _exhaust_and_extract(
     # Ensure both ends of the fallback chain are registered so the handler
     # doesn't short-circuit on "unknown instrument".
     _register(baton, sheet.instrument_name or "claude-code", *sheet.fallback_chain)
-    baton._handle_exhaustion("j1", sheet.sheet_num, sheet)
+    asyncio.run(baton._handle_exhaustion("j1", sheet.sheet_num, sheet))
     assert len(baton._fallback_events) == 1, (
         f"Expected exactly one fallback event, got {baton._fallback_events!r}"
     )

@@ -30,6 +30,7 @@ Method: Property-based testing with hypothesis + invariant analysis
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -522,7 +523,7 @@ class TestBatonDecisionTreeInvariants:
             execution_success=False,
             rate_limited=True,
         )
-        baton._handle_attempt_result(result)
+        asyncio.run(baton._handle_attempt_result(result))
 
         assert sheets[1].status == BatonSheetStatus.WAITING
 
@@ -548,7 +549,7 @@ class TestBatonDecisionTreeInvariants:
             validation_pass_rate=pass_rate,
             validations_total=0,
         )
-        baton._handle_attempt_result(result)
+        asyncio.run(baton._handle_attempt_result(result))
 
         assert sheets[1].status == BatonSheetStatus.COMPLETED, (
             f"F-018 violated: execution_success=True, validations_total=0, "
@@ -569,7 +570,7 @@ class TestBatonDecisionTreeInvariants:
             validation_pass_rate=100.0,
             validations_total=3,
         )
-        baton._handle_attempt_result(result)
+        asyncio.run(baton._handle_attempt_result(result))
 
         assert sheets[1].status == BatonSheetStatus.COMPLETED
 
@@ -593,7 +594,7 @@ class TestBatonDecisionTreeInvariants:
             validation_pass_rate=pass_rate,
             validations_total=3,
         )
-        baton._handle_attempt_result(result)
+        asyncio.run(baton._handle_attempt_result(result))
 
         # Completion mode now schedules retry with backoff (RETRY_SCHEDULED)
         # instead of going directly to PENDING. This prevents tight loops
@@ -629,7 +630,7 @@ class TestBatonDecisionTreeInvariants:
                 validation_pass_rate=0.0,
                 validations_total=3,
             )
-            baton._handle_attempt_result(result)
+            asyncio.run(baton._handle_attempt_result(result))
 
         # After max_retries (2) attempts with 0% pass, should be exhausted
         assert sheets[1].status in _TERMINAL_BATON_STATUSES, (
@@ -653,7 +654,7 @@ class TestBatonDecisionTreeInvariants:
             execution_success=False,
             error_classification="AUTH_FAILURE",
         )
-        baton._handle_attempt_result(result)
+        asyncio.run(baton._handle_attempt_result(result))
 
         assert sheets[1].status == BatonSheetStatus.FAILED
         assert sheets[2].status == BatonSheetStatus.SKIPPED, (
@@ -680,7 +681,7 @@ class TestBatonDecisionTreeInvariants:
             validation_pass_rate=100.0,
             cost_usd=cost,
         )
-        baton._handle_attempt_result(result)
+        asyncio.run(baton._handle_attempt_result(result))
 
         job = baton._jobs["j1"]
         # Sheet completes, but job should be paused due to cost
@@ -729,7 +730,7 @@ class TestTerminalStateResistance:
                     rate_limited=rate_limited,
                     cost_usd=cost,
                 )
-                baton._handle_attempt_result(result)
+                asyncio.run(baton._handle_attempt_result(result))
                 assert sheet.status == status, (
                     f"Terminal status {status.value} changed to "
                     f"{sheet.status.value} by attempt result "
@@ -1097,7 +1098,7 @@ class TestFailurePropagationInvariants:
             execution_success=False,
             error_classification="AUTH_FAILURE",
         )
-        baton._handle_attempt_result(result)
+        asyncio.run(baton._handle_attempt_result(result))
 
         # Sheet 1 is the primary failure
         assert sheets[1].status == BatonSheetStatus.FAILED, (
@@ -1129,24 +1130,24 @@ class TestFailurePropagationInvariants:
         baton.register_job("j1", sheets, deps)
 
         # Complete sheet 1
-        baton._handle_attempt_result(
+        asyncio.run(baton._handle_attempt_result(
             _make_attempt_result(
                 job_id="j1",
                 sheet_num=1,
                 execution_success=True,
                 validation_pass_rate=100.0,
             )
-        )
+        ))
 
         # Fail sheet 2 with AUTH_FAILURE (immediate terminal)
-        baton._handle_attempt_result(
+        asyncio.run(baton._handle_attempt_result(
             _make_attempt_result(
                 job_id="j1",
                 sheet_num=2,
                 execution_success=False,
                 error_classification="AUTH_FAILURE",
             )
-        )
+        ))
 
         # Sheets 3 and 4 are independent — should NOT be failed or skipped
         assert sheets[3].status != BatonSheetStatus.FAILED

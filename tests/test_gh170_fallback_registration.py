@@ -87,7 +87,7 @@ class TestFallbackInstrumentRegistration:
         assert sheet.status == BatonSheetStatus.PENDING
         assert "opencode" in baton._instruments
 
-    def test_exhaustion_fallback_registers_new_instrument(self) -> None:
+    async def test_exhaustion_fallback_registers_new_instrument(self) -> None:
         baton = BatonCore()
         sheets = {
             1: SheetExecutionState(
@@ -103,7 +103,7 @@ class TestFallbackInstrumentRegistration:
         sheet = baton._jobs["j1"].sheets[1]
         sheet.normal_attempts = 3
 
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
 
         assert sheet.instrument_name == "opencode"
         assert sheet.status == BatonSheetStatus.PENDING

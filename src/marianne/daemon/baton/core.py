@@ -26,6 +26,7 @@ import random
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -84,6 +85,11 @@ class _JobRecord:
     self_healing_enabled: bool = False  # Try healing on exhaustion
     pacing_active: bool = False  # Inter-sheet pacing delay in progress
     pacing_seconds: float = 0.0  # pause_between_sheets_seconds from config
+    # #201: workspace + config path for building a healing ErrorContext on
+    # exhaustion (the baton drives self-healing off SheetState, which lacks
+    # these). Set at register time; immutable for the job's lifetime.
+    workspace: Path | None = None
+    config_path: Path | None = None
     created_at: float = field(default_factory=time.time)
 
 
@@ -114,6 +120,13 @@ class BatonCore:
 
     _DEFAULT_MAX_HEALING: int = 1
     """Default maximum healing attempts before falling through."""
+
+    _HEALING_TIMEOUT_SECONDS: float = 5.0
+    """#201: hard cap on a self-healing cycle. Current remedies are sub-10ms
+    (synchronous filesystem/regex), so this never fires for them; it enforces
+    "remedies stay fast" as an invariant and bounds any future remedy that
+    yields. If a remedy ever needs longer, that's the trigger to move healing
+    off the inline event-handler path (deferred-task re-entry, see #133)."""
 
     def __init__(
         self,
@@ -165,6 +178,10 @@ class BatonCore:
         # Keys: "instrument:model", values: max_concurrent.
         # Populated by set_model_concurrency() from instrument profiles.
         self._model_concurrency: dict[str, int] = {}
+
+        # #201: shared self-healing remedy registry, created lazily on the first
+        # healing attempt (cheap, but only needed when self_healing is enabled).
+        self._healing_registry: Any = None
 
         # Retry backoff configuration. These match RetryConfig's field defaults;
         # the manager overrides them via configure_retry() once per job/recovery
@@ -700,7 +717,49 @@ class BatonCore:
                 },
             )
 
-    def _handle_exhaustion(self, job_id: str, sheet_num: int, sheet: SheetExecutionState) -> None:
+    async def _run_healing(
+        self, sheet_num: int, sheet: SheetExecutionState, job: _JobRecord
+    ) -> Any:
+        """#201: run the self-healing coordinator for an exhausted sheet.
+
+        Returns the ``HealingReport``, or ``None`` on timeout/error — the caller
+        treats ``None`` as "not healed" and falls through to escalation
+        (fail-safe: a healing failure must never silently schedule a retry).
+        """
+        if self._healing_registry is None:
+            from marianne.healing.registry import create_default_registry
+
+            self._healing_registry = create_default_registry()
+
+        from marianne.healing.context import ErrorContext
+        from marianne.healing.coordinator import SelfHealingCoordinator
+
+        ctx = ErrorContext.from_sheet_state(
+            sheet,
+            sheet_num,
+            workspace=job.workspace,
+            config_path=job.config_path,
+        )
+        # Fresh coordinator per heal: the baton's sheet.healing_attempts is the
+        # authoritative cap, so a fresh instance sidesteps the coordinator's
+        # per-instance counter colliding across sheets. auto_confirm=False keeps
+        # SUGGESTED remedies skipped in the headless daemon; AUTOMATIC remedies
+        # are diagnosis-gated.
+        coordinator = SelfHealingCoordinator(self._healing_registry)
+        try:
+            return await asyncio.wait_for(
+                coordinator.heal(ctx), self._HEALING_TIMEOUT_SECONDS
+            )
+        except Exception as exc:  # noqa: BLE001 — fail-safe: any heal failure → no retry
+            _logger.warning(
+                "baton.healing.error",
+                extra={SHEET_NUM_KEY: sheet_num, "error": str(exc)},
+            )
+            return None
+
+    async def _handle_exhaustion(
+        self, job_id: str, sheet_num: int, sheet: SheetExecutionState
+    ) -> None:
         """Handle retry/completion budget exhaustion.
 
         The decision tree when a budget is exhausted:
@@ -756,19 +815,42 @@ class BatonCore:
                 )
                 return
 
-        # Path 2: Self-healing — try to diagnose and fix
+        # Path 2: Self-healing (#201). Schedule one targeted, *enriched* retry.
+        #
+        # The real healing for an agentic failure is not an environment fix — it
+        # is feeding the agent what specifically went wrong so the next attempt
+        # self-corrects. That enrichment happens at dispatch (the retry prompt
+        # carries the prior attempt's failure evidence; see
+        # BatonAdapter._build_healing_context). So healing ALWAYS schedules a
+        # retry when the healing budget allows: an enriched retry always beats a
+        # blind one, and gating on a remedy "succeeding" made healing a no-op for
+        # the dominant validation-failure case.
+        #
+        # The coordinator still runs as a complementary, NON-GATING
+        # environment-fix pass (e.g. recreate a missing workspace dir); its
+        # result is logged but does not decide whether we retry. Its agentic
+        # remedies rarely apply post-execution — relocating it to preflight is
+        # #202's scope.
         if job.self_healing_enabled and sheet.healing_attempts < self._DEFAULT_MAX_HEALING:
             sheet.healing_attempts += 1
-            self._schedule_retry(job_id, sheet_num, sheet)
-            _logger.info(
-                "baton.sheet.healing_attempt",
-                extra={
-                    "job_id": job_id,
-                    SHEET_NUM_KEY: sheet_num,
-                    "healing_attempt": sheet.healing_attempts,
-                },
-            )
-            return
+            report = await self._run_healing(sheet_num, sheet, job)
+            # Lifecycle re-check: a non-yielding heal can't be interrupted, but
+            # stay defensive against a future yielding remedy + concurrent
+            # pause/cancel.
+            if sheet.status not in _TERMINAL_BATON_STATUSES and not job.paused:
+                self._schedule_retry(job_id, sheet_num, sheet)
+                _logger.info(
+                    "baton.sheet.healing_retry",
+                    extra={
+                        "job_id": job_id,
+                        SHEET_NUM_KEY: sheet_num,
+                        "healing_attempt": sheet.healing_attempts,
+                        "env_remedy_applied": bool(report and report.should_retry),
+                    },
+                )
+                return
+            # Lifecycle changed mid-heal (cancelled/paused) → fall through to
+            # escalation (Path 3) / normal retries (Path 4).
 
         # Path 3: Escalation — pause for composer decision
         if job.escalation_enabled:
@@ -979,6 +1061,8 @@ class BatonCore:
         escalation_enabled: bool = False,
         self_healing_enabled: bool = False,
         pacing_seconds: float = 0.0,
+        workspace: Path | None = None,
+        config_path: Path | None = None,
     ) -> None:
         """Register a job's sheets with the baton for scheduling.
 
@@ -1008,6 +1092,8 @@ class BatonCore:
             dependencies=dependencies,
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
+            workspace=workspace,
+            config_path=config_path,
             pacing_seconds=pacing_seconds,
         )
         self._state_dirty = True
@@ -1149,7 +1235,7 @@ class BatonCore:
             match event:
                 # === Musician events ===
                 case SheetAttemptResult():
-                    self._handle_attempt_result(event)
+                    await self._handle_attempt_result(event)
 
                 case SheetSkipped():
                     self._handle_sheet_skipped(event)
@@ -1214,7 +1300,7 @@ class BatonCore:
 
                 # === Observer events ===
                 case ProcessExited():
-                    self._handle_process_exited(event)
+                    await self._handle_process_exited(event)
 
                 case ResourceAnomaly():
                     self._handle_resource_anomaly(event)
@@ -1264,7 +1350,7 @@ class BatonCore:
     # Event Handlers — private
     # =========================================================================
 
-    def _handle_attempt_result(self, event: SheetAttemptResult) -> None:
+    async def _handle_attempt_result(self, event: SheetAttemptResult) -> None:
         """Process a musician's execution report."""
         job = self._jobs.get(event.job_id)
         if job is None:
@@ -1404,7 +1490,7 @@ class BatonCore:
                         "completion_attempts": sheet.completion_attempts,
                     },
                 )
-                self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
+                await self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
             self._check_job_cost_limit(event.job_id)
             return
 
@@ -1475,7 +1561,7 @@ class BatonCore:
         # Validation failure (pass_rate == 0) or execution failure
         # Check if retries exhausted (record_attempt already incremented)
         if not sheet.can_retry:
-            self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
+            await self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
         else:
             # Schedule retry via timer wheel with backoff
             self._schedule_retry(event.job_id, event.sheet_num, sheet)
@@ -1832,7 +1918,7 @@ class BatonCore:
             extra={"graceful": event.graceful},
         )
 
-    def _handle_process_exited(self, event: ProcessExited) -> None:
+    async def _handle_process_exited(self, event: ProcessExited) -> None:
         """Backend process died — mark sheet as crashed if running.
 
         Process crashes are treated like execution failures: they consume
@@ -1866,7 +1952,7 @@ class BatonCore:
             sheet.record_attempt(crash_result)
             self._update_instrument_on_failure(sheet.instrument_name or "")
             if not sheet.can_retry:
-                self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
+                await self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
             else:
                 self._schedule_retry(event.job_id, event.sheet_num, sheet)
             self._state_dirty = True

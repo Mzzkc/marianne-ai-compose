@@ -116,7 +116,7 @@ class TestCoreFallbackEventEmission:
         assert result is False
         assert len(baton._fallback_events) == 0
 
-    def test_exhaustion_fallback_emits_event(self) -> None:
+    async def test_exhaustion_fallback_emits_event(self) -> None:
         """When retry budget is exhausted and a fallback is available,
         _handle_exhaustion emits an InstrumentFallback event.
 
@@ -135,7 +135,7 @@ class TestCoreFallbackEventEmission:
         _register_instrument(baton, "claude-code")
         _register_instrument(baton, "gemini-cli")
 
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
 
         assert len(baton._fallback_events) == 1
         ev = baton._fallback_events[0]
@@ -146,7 +146,7 @@ class TestCoreFallbackEventEmission:
         assert ev.job_id == "j1"
         assert ev.sheet_num == 1
 
-    def test_no_fallback_on_exhaustion_no_event(self) -> None:
+    async def test_no_fallback_on_exhaustion_no_event(self) -> None:
         """When exhausted with no fallback chain, no event emitted."""
         baton = BatonCore()
         sheet = _make_sheet(1, "claude-code", [], max_retries=2)
@@ -155,7 +155,7 @@ class TestCoreFallbackEventEmission:
         baton.register_job("j1", {1: sheet}, {1: []})
         _register_instrument(baton, "claude-code")
 
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
 
         assert len(baton._fallback_events) == 0
 

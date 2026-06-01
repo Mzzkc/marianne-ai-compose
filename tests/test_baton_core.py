@@ -571,7 +571,7 @@ class TestExhaustionPathOrdering:
             max_retries=3, fallback_chain=["gemini-cli"],
         )
         baton = self._register(sheet)  # can_retry is True AND fallback available
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.status == BatonSheetStatus.PENDING        # fallback path
         assert sheet.current_instrument_index == 1             # advanced
         assert sheet.normal_attempts == 0                      # retry NOT consumed
@@ -582,7 +582,7 @@ class TestExhaustionPathOrdering:
             sheet_num=1, instrument_name="claude-code", max_retries=3,
         )  # no fallback
         baton = self._register(sheet, healing=True)
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.healing_attempts == 1                     # healing path
         assert sheet.normal_attempts == 0                      # retry NOT consumed
         assert sheet.status == BatonSheetStatus.RETRY_SCHEDULED
@@ -592,7 +592,7 @@ class TestExhaustionPathOrdering:
             sheet_num=1, instrument_name="claude-code", max_retries=3,
         )
         baton = self._register(sheet, escalation=True)
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.status == BatonSheetStatus.FERMATA        # escalation path
         assert sheet.normal_attempts == 0
 
@@ -601,7 +601,7 @@ class TestExhaustionPathOrdering:
             sheet_num=1, instrument_name="claude-code", max_retries=3,
         )
         baton = self._register(sheet)  # no fallback/healing/escalation
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.normal_attempts == 1                      # retry path
         assert sheet.status == BatonSheetStatus.RETRY_SCHEDULED
 
@@ -611,5 +611,5 @@ class TestExhaustionPathOrdering:
         )
         sheet.normal_attempts = 1  # can_retry is now False
         baton = self._register(sheet)
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.status == BatonSheetStatus.FAILED

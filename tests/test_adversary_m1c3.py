@@ -230,7 +230,7 @@ class TestBatonStateEdgeCases:
             validations_total=1,
             cost_usd=0.50,
         )
-        baton._handle_attempt_result(result)
+        await baton._handle_attempt_result(result)
 
         sheet = baton._jobs["test-job"].sheets[1]
         assert sheet.status == BatonSheetStatus.COMPLETED
@@ -267,7 +267,7 @@ class TestBatonStateEdgeCases:
             validations_total=1,
         )
         # Should not crash
-        baton._handle_attempt_result(result)
+        await baton._handle_attempt_result(result)
 
     @pytest.mark.adversarial
     async def test_attempt_result_for_unknown_sheet(self):
@@ -290,7 +290,7 @@ class TestBatonStateEdgeCases:
             validations_total=1,
         )
         # Should not crash
-        baton._handle_attempt_result(result)
+        await baton._handle_attempt_result(result)
 
 
 # =============================================================================

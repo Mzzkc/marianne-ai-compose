@@ -49,7 +49,7 @@ def _make_sheet(
 class TestEmptyFallbackChain:
     """Empty fallback chain → no fallback, normal failure behavior."""
 
-    def test_exhaustion_with_empty_chain_fails(self) -> None:
+    async def test_exhaustion_with_empty_chain_fails(self) -> None:
         """Sheet with empty fallback chain goes to FAILED on exhaustion."""
         baton = BatonCore()
         sheet = _make_sheet(1, "claude-code", [], max_retries=1)
@@ -57,7 +57,7 @@ class TestEmptyFallbackChain:
         sheet.completion_attempts = 5
         baton.register_job("j1", {1: sheet}, {1: []})
 
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
 
         assert sheet.status == BatonSheetStatus.FAILED
         assert len(baton._fallback_events) == 0
@@ -78,7 +78,7 @@ class TestEmptyFallbackChain:
 class TestAllFallbacksExhausted:
     """When every instrument in the chain is exhausted, sheet fails."""
 
-    def test_chain_fully_walked_then_fail(self) -> None:
+    async def test_chain_fully_walked_then_fail(self) -> None:
         """Walk claude-code → gemini-cli → ollama, all exhaust → FAILED."""
         baton = BatonCore()
         sheet = _make_sheet(1, "claude-code", ["gemini-cli", "ollama"], max_retries=1)
@@ -87,21 +87,21 @@ class TestAllFallbacksExhausted:
         # Exhaust claude-code
         sheet.normal_attempts = 1
         sheet.completion_attempts = 5
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.instrument_name == "gemini-cli"
         assert sheet.status == BatonSheetStatus.PENDING
 
         # Exhaust gemini-cli
         sheet.normal_attempts = 1
         sheet.completion_attempts = 5
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.instrument_name == "ollama"
         assert sheet.status == BatonSheetStatus.PENDING
 
         # Exhaust ollama — no more fallbacks
         sheet.normal_attempts = 1
         sheet.completion_attempts = 5
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.status == BatonSheetStatus.FAILED
 
         # Three fallback events: claude→gemini, gemini→ollama
@@ -133,7 +133,7 @@ class TestAllFallbacksExhausted:
 class TestDuplicateInstrumentsInChain:
     """Duplicate instrument names in the fallback chain."""
 
-    def test_same_instrument_appears_twice(self) -> None:
+    async def test_same_instrument_appears_twice(self) -> None:
         """Chain [claude-code, gemini-cli, claude-code] — second claude-code
         gets fresh retry budget."""
         baton = BatonCore()
@@ -143,14 +143,14 @@ class TestDuplicateInstrumentsInChain:
         # Exhaust first claude-code run
         sheet.normal_attempts = 1
         sheet.completion_attempts = 5
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.instrument_name == "gemini-cli"
         assert sheet.normal_attempts == 0  # Fresh budget
 
         # Exhaust gemini-cli
         sheet.normal_attempts = 1
         sheet.completion_attempts = 5
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
         assert sheet.instrument_name == "claude-code"
         assert sheet.normal_attempts == 0  # Fresh budget again
 
@@ -163,7 +163,7 @@ class TestExhaustionVsUnavailableReason:
     fallbacks always carry ``"unavailable"``.
     """
 
-    def test_exhaustion_reason_is_derived_not_hardcoded(self) -> None:
+    async def test_exhaustion_reason_is_derived_not_hardcoded(self) -> None:
         """With no attempt history recorded, exhaustion falls back to the
         generic ``"exhausted"`` label — never silently labelled as a rate
         limit when the actual cause is unknown."""
@@ -173,7 +173,7 @@ class TestExhaustionVsUnavailableReason:
         sheet.completion_attempts = 5
         baton.register_job("j1", {1: sheet}, {1: []})
 
-        baton._handle_exhaustion("j1", 1, sheet)
+        await baton._handle_exhaustion("j1", 1, sheet)
 
         ev = baton._fallback_events[0]
         assert ev.reason == "exhausted"

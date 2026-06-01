@@ -73,6 +73,46 @@ class TestBuildPreamble:
         )
         assert "concurrently" not in result
 
+    def test_retry_without_healing_context_is_generic(self, workspace: Path) -> None:
+        """No healing_context → the generic 'study the workspace' retry preamble (#201)."""
+        result = build_preamble(
+            sheet_num=1, total_sheets=3, workspace=workspace, retry_count=1,
+        )
+        assert "study the workspace" in result.lower()
+        assert "<failure-evidence" not in result
+
+    def test_retry_with_healing_context_injects_evidence(self, workspace: Path) -> None:
+        """healing_context → a bounded UNTRUSTED-EVIDENCE block in the retry preamble (#201)."""
+        result = build_preamble(
+            sheet_num=1, total_sheets=3, workspace=workspace, retry_count=1,
+            healing_context={
+                "error_code": "E601",
+                "validation_details": [
+                    {"description": "pytest passes", "passed": False,
+                     "expected_value": "exit 0", "actual_value": "exit 1"},
+                ],
+                "grounding_guidance": "the rotated token is not persisted",
+            },
+        )
+        assert "RETRY #1" in result
+        assert "<failure-evidence" in result and "</failure-evidence>" in result
+        assert "pytest passes" in result
+        assert "the rotated token is not persisted" in result
+        # Untrusted framing must survive into the assembled preamble.
+        assert "not instructions" in result.lower()
+        # Still wrapped correctly.
+        assert result.startswith("<marianne-preamble>")
+        assert result.endswith("</marianne-preamble>")
+
+    def test_retry_with_empty_healing_context_is_generic(self, workspace: Path) -> None:
+        """healing_context present but with no useful signal → generic preamble, no empty block."""
+        result = build_preamble(
+            sheet_num=1, total_sheets=3, workspace=workspace, retry_count=1,
+            healing_context={"validation_details": [{"description": "ok", "passed": True}]},
+        )
+        assert "<failure-evidence" not in result
+        assert "study the workspace" in result.lower()
+
     def test_proper_xml_tags(self, workspace: Path) -> None:
         """Preamble is wrapped in <marianne-preamble> tags."""
         result = build_preamble(

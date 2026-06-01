@@ -319,6 +319,7 @@ def _build_prompt(
         workspace=sheet.workspace,
         retry_count=retry_count,
         is_parallel=sheet.voice_count > 1,
+        healing_context=context.healing_context,
     )
 
     # Step 2: Build template variables
