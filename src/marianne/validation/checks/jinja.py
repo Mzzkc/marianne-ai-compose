@@ -473,3 +473,75 @@ class FanOutStringFilterCheck:
             else:
                 return False
         return True
+
+
+class BashArrayLengthCheck:
+    """Detect bash `${#...}` length syntax in templates (V305, #362).
+
+    Jinja2 tokenizes the literal `{#` as a comment opener. Bash array/string
+    length expansion (`${#ARR[@]}`, `${#var}`) contains `{#`, so Jinja silently
+    consumes everything from `{#` to the next `#}` — truncating the rendered
+    prompt mid-token. The `cli` instrument then runs a broken script and dies
+    with a bare "Exit code 2" and no stderr. There is no legitimate `${#` in a
+    Jinja template (it always opens a comment), so this scan is zero-false-
+    positive. Recommends a length-free idiom (the issue's documented workaround).
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V305"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Detects bash '${#...}' length syntax that Jinja eats as a comment"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        """Scan prompt.template and template_file for the `${#` collision."""
+        issues: list[ValidationIssue] = []
+        sources: list[tuple[str, str]] = []
+        if config.prompt.template:
+            sources.append((config.prompt.template, "prompt.template"))
+        if config.prompt.template_file:
+            template_path = resolve_path(config.prompt.template_file, config_path)
+            if template_path.exists():
+                try:
+                    sources.append(
+                        (template_path.read_text(), f"template_file ({template_path.name})")
+                    )
+                except Exception:  # noqa: BLE001 — unreadable file is V101's concern
+                    pass
+
+        for template_str, source_name in sources:
+            if "${#" not in template_str:
+                continue
+            issues.append(
+                ValidationIssue(
+                    check_id="V305",
+                    severity=ValidationSeverity.WARNING,
+                    message=(
+                        f"{source_name} contains bash '${{#...}}' length syntax. "
+                        "Jinja reads the '{#' as a comment opener and silently "
+                        "deletes the template from there to the next '#}', "
+                        "truncating the rendered prompt — the cli instrument then "
+                        "fails with a bare 'Exit code 2' and no stderr."
+                    ),
+                    line=find_line_in_yaml(raw_yaml, "${#"),
+                    context=source_name,
+                    suggestion=(
+                        "Avoid '${#...}'. For array length use "
+                        "`printf '%s\\n' \"${ARR[@]:-}\" | grep -c .` or "
+                        "`find DIR -name PAT | wc -l`; for empty-check use "
+                        "`[ -z \"${ARR[0]:-}\" ]`."
+                    ),
+                )
+            )
+        return issues

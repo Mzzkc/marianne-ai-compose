@@ -9,6 +9,7 @@ from pathlib import Path
 from marianne.core.config import JobConfig
 from marianne.validation.base import ValidationCheck, ValidationIssue, ValidationSeverity
 from marianne.validation.checks import (
+    BashArrayLengthCheck,
     EmptyPatternCheck,
     FanOutStringFilterCheck,
     FanOutWithoutDependenciesCheck,
@@ -140,6 +141,7 @@ def create_default_checks() -> list[ValidationCheck]:
         JinjaSyntaxCheck(),
         JinjaUndefinedVariableCheck(),
         FanOutStringFilterCheck(),
+        BashArrayLengthCheck(),
         # Path checks
         WorkspaceParentExistsCheck(),
         TemplateFileExistsCheck(),

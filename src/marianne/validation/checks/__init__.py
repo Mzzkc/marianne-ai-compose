@@ -29,6 +29,7 @@ from marianne.validation.checks.config import (
     VersionReferenceCheck,
 )
 from marianne.validation.checks.jinja import (
+    BashArrayLengthCheck,
     FanOutStringFilterCheck,
     JinjaSyntaxCheck,
     JinjaUndefinedVariableCheck,
@@ -51,6 +52,7 @@ __all__ = [
     "JinjaSyntaxCheck",
     "JinjaUndefinedVariableCheck",
     "FanOutStringFilterCheck",
+    "BashArrayLengthCheck",
     # Path checks
     "WorkspaceParentExistsCheck",
     "TemplateFileExistsCheck",
