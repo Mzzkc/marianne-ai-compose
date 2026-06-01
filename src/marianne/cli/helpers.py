@@ -21,7 +21,7 @@ import typer
 from rich.console import Console
 
 from marianne.core.checkpoint import CheckpointState, JobStatus
-from marianne.core.constants import STATE_DB_FILENAME
+from marianne.core.constants import DAEMON_STATE_DB_PATH, STATE_DB_FILENAME
 from marianne.core.logging import configure_logging, get_logger
 from marianne.state import JsonStateBackend, SQLiteStateBackend, StateBackend
 
@@ -288,7 +288,7 @@ async def _find_job_state_from_registry(
     """
     import json
 
-    db_path = Path("~/.marianne/daemon-state.db").expanduser()
+    db_path = DAEMON_STATE_DB_PATH.expanduser()
     if not db_path.exists():
         return None
 

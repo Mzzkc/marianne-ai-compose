@@ -28,7 +28,7 @@ from rich.panel import Panel
 
 from marianne.core.checkpoint import JobStatus, SheetStatus
 from marianne.core.config import JobConfig
-from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY
 from marianne.core.logging import get_logger
 from marianne.execution.validation import ValidationEngine
 
@@ -80,7 +80,7 @@ def _get_db_path() -> Path:
 
     Extracted so tests can monkeypatch it to use a temp DB.
     """
-    return Path("~/.marianne/daemon-state.db").expanduser()
+    return DAEMON_STATE_DB_PATH.expanduser()
 
 
 def _reset_sheet_data_for_retry(sdata: dict[str, Any]) -> None:

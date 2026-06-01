@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import typer
 
-from marianne.core.constants import SHEET_NUM_KEY
+from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY
 from marianne.core.logging import get_logger
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.pgroup import ProcessGroupManager
@@ -405,7 +405,7 @@ class DaemonProcess:
                 (
                     "state_db_path",
                     str(self._config.state_db_path),
-                    "~/.marianne/daemon-state.db",
+                    str(DAEMON_STATE_DB_PATH),
                     "config.reserved_field_ignored",
                     "state_db_path is reserved for future use and has no "
                     "effect. Daemon state persistence is not yet implemented.",

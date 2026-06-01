@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from marianne.core.config.backend import BackendConfig
 from marianne.core.config.execution import PreflightConfig
+from marianne.core.constants import DAEMON_STATE_DB_PATH
 from marianne.daemon.keyring_config import KeyringConfig
 from marianne.daemon.profiler.models import ProfilerConfig
 
@@ -333,7 +334,7 @@ class DaemonConfig(BaseModel):
         "Setting a non-default value will log a warning at startup.",
     )
     state_db_path: Path = Field(
-        default=Path("~/.marianne/daemon-state.db"),
+        default=DAEMON_STATE_DB_PATH,
         description="Reserved for future use; not yet implemented. "
         "Will be the path for daemon state database. "
         "Tilde is expanded at runtime. Stores job registry and metrics.",

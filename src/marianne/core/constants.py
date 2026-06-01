@@ -4,6 +4,8 @@ Centralizes magic numbers used throughout the codebase,
 making them discoverable, consistent, and easy to modify.
 """
 
+from pathlib import Path
+
 # =============================================================================
 # JSON/Dict Key Constants
 # =============================================================================
@@ -18,6 +20,20 @@ Centralizes a literal that was previously hand-constructed in 8+ path
 expressions across cli/, daemon/, execution/, and core/config/. Construct the
 path as ``workspace / STATE_DB_FILENAME`` so the filename has a single source of
 truth."""
+
+DAEMON_STATE_DB_PATH = Path("~/.marianne/daemon-state.db")
+"""Path to the conductor's registry/state SQLite database (#312).
+
+Centralizes a literal previously hand-constructed in 4 sites: the reserved
+``DaemonConfig.state_db_path`` default, the reserved-field warning baseline in
+``daemon/process.py``, and the two functional conductor-down readers in
+``cli/helpers.py`` and ``cli/commands/recover.py``. Tilde is expanded at the
+point of use (``DAEMON_STATE_DB_PATH.expanduser()``); the constant itself keeps
+the ``~`` form so it matches the config default verbatim.
+
+Note: this only deduplicates the literal. Config-driven *override* of the path
+remains a deliberately deferred feature — ``state_db_path`` is documented as
+reserved and logs a warning when set."""
 
 VALIDATION_PASS_RATE_KEY = "validation_pass_rate"
 """Standard key for validation pass rate in checkpoint/job data."""
