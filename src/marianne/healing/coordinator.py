@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from marianne.core.logging import get_logger
 from marianne.healing.diagnosis import Diagnosis, DiagnosisEngine
 from marianne.healing.registry import RemedyRegistry
-from marianne.healing.remedies.base import RemedyCategory, RemedyResult
+from marianne.healing.remedies.base import Remedy, RemedyCategory, RemedyResult
 
 _logger = get_logger("healing.coordinator")
 
@@ -184,6 +184,29 @@ class SelfHealingCoordinator:
         self._healing_attempt = 0
         self._diagnosis_engine = DiagnosisEngine(registry)
 
+    def _safe_apply(self, remedy: "Remedy", context: "ErrorContext") -> RemedyResult:
+        """Apply a remedy, converting any exception into a failed result.
+
+        #201: ``heal()`` runs on the conductor's critical path now (the baton
+        invokes it on sheet exhaustion). An unguarded ``remedy.apply()`` that
+        raised would crash the whole heal and mask the original failure. A
+        crashing remedy is recorded as a failed action so the report stays
+        truthful and ``should_retry`` is unaffected by it.
+        """
+        try:
+            return remedy.apply(context)
+        except Exception as exc:
+            _logger.warning(
+                "healing.remedy_apply_crashed",
+                remedy=remedy.name,
+                error=str(exc),
+            )
+            return RemedyResult(
+                success=False,
+                message=f"Remedy raised during apply: {exc}",
+                action_taken="apply_crashed",
+            )
+
     async def heal(self, context: "ErrorContext") -> HealingReport:
         """Run the self-healing process.
 
@@ -247,7 +270,7 @@ class SelfHealingCoordinator:
                     )
                 else:
                     # remedy.apply() is synchronous — safe for fast I/O ops
-                    result = remedy.apply(context)
+                    result = self._safe_apply(remedy, context)
                     if not result.success:
                         _logger.warning(
                             "healing.remedy_failed",
@@ -265,7 +288,7 @@ class SelfHealingCoordinator:
                             (remedy.name, f"Dry run: would {preview}")
                         )
                     else:
-                        result = remedy.apply(context)
+                        result = self._safe_apply(remedy, context)
                         if not result.success:
                             _logger.warning(
                                 "healing.remedy_failed",

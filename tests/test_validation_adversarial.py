@@ -322,14 +322,15 @@ class TestHealingEdgeCases:
         coordinator = SelfHealingCoordinator(registry)
         ctx = _make_error_context()
 
-        # The coordinator calls remedy.apply() which raises — but
-        # the coordinator wraps apply in the heal loop. Let's verify
-        # the report is still returned (the exception propagates from apply,
-        # meaning the coordinator records it as a failed action).
-        # Actually coordinator does NOT try/except apply() — it lets
-        # it propagate. So we expect the exception.
-        with pytest.raises(RuntimeError, match="Simulated remedy explosion"):
-            await coordinator.heal(ctx)
+        # #201: heal() now guards remedy.apply() — a remedy that raises is
+        # caught and recorded as a failed action (not propagated), so heal()
+        # produces a report without crashing (as this test's docstring always
+        # intended). Previously the exception propagated; that pinned a real bug,
+        # exposed once the baton invokes heal() on its critical path.
+        report = await coordinator.heal(ctx)
+        assert not report.any_remedies_applied  # the crashing remedy did not succeed
+        assert any(not result.success for _, result in report.actions_taken)
+        assert report.should_retry is False
 
     @pytest.mark.adversarial
     @pytest.mark.asyncio
