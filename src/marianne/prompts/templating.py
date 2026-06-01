@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import jinja2
+import jinja2.meta
 
 from marianne.core.config import PromptConfig, ValidationRule
 from marianne.core.config.spec import SpecFragment
@@ -217,6 +218,70 @@ class PromptBuilder:
             workspace=workspace,
         )
 
+    def _resolve_variable_refs(
+        self,
+        template_context: dict[str, Any],
+        var_keys: list[str],
+    ) -> None:
+        """#331: pre-resolve variable values that reference other variables.
+
+        Each string value in ``var_keys`` is rendered against the context with
+        its variable references resolved first (recursively), mutating
+        ``template_context`` in place. Conservative by design:
+
+        - **Each value is rendered at most once** (memoized). This is what makes
+          a chain (``a -> b -> c``) resolve while a ``{% raw %}`` block — whose
+          ``{{ ... }}`` output references no *variable* — is rendered once and
+          never re-processed, so it stays literal as the user intended.
+        - Uses ``DebugUndefined`` so a reference to something NOT in context is
+          left **literal** (``{{ x }}``) — preserving prior behavior, never
+          raising StrictUndefined and never silently blanking.
+        - Only string values are touched (dict/list/non-str vars untouched).
+        - A reference **cycle** is broken by a visiting-set (the cyclic ref is
+          left as its original value) — no infinite recursion.
+        - A malformed value (TemplateError) is left as-is.
+        """
+        debug_env = jinja2.Environment(
+            undefined=jinja2.DebugUndefined,
+            autoescape=False,
+            keep_trailing_newline=True,
+        )
+        var_set = set(var_keys)
+        cache: dict[str, Any] = {}
+        visiting: set[str] = set()
+
+        def resolve(key: str) -> Any:
+            if key in cache:
+                return cache[key]
+            value = template_context.get(key)
+            if not isinstance(value, str) or ("{{" not in value and "{%" not in value):
+                return value
+            if key in visiting:
+                # Reference cycle — leave this ref at its original value.
+                return value
+            visiting.add(key)
+            try:
+                referenced = (
+                    jinja2.meta.find_undeclared_variables(debug_env.parse(value))
+                    & var_set
+                )
+                local_ctx = dict(template_context)
+                for ref in referenced:
+                    if ref != key:
+                        local_ctx[ref] = resolve(ref)
+                rendered = debug_env.from_string(value).render(**local_ctx)
+            except jinja2.TemplateError:
+                rendered = value
+            finally:
+                visiting.discard(key)
+            cache[key] = rendered
+            return rendered
+
+        for key in var_keys:
+            resolved = resolve(key)
+            if isinstance(resolved, str):
+                template_context[key] = resolved
+
     def build_sheet_prompt(
         self,
         context: SheetContext,
@@ -261,11 +326,19 @@ class PromptBuilder:
         # converts integer dict keys to strings. Jinja2 templates use
         # ``dict[instance]`` where ``instance`` is an integer, so string-keyed
         # dicts cause UndefinedError. Restore integer keys where possible.
-        template_context.update(_normalize_variable_keys(self.config.variables))
+        normalized_vars = _normalize_variable_keys(self.config.variables)
+        template_context.update(normalized_vars)
 
         # Add stakes and thinking method
         template_context["stakes"] = self.config.stakes or ""
         template_context["thinking_method"] = self.config.thinking_method or ""
+
+        # #331: resolve variables that reference other variables (or context).
+        # Jinja's single-pass render inserts a variable's VALUE verbatim, so a
+        # value that is itself a template string (e.g. "Hello, I am {{ name }}")
+        # rendered literally. Pre-resolve config.variables string values against
+        # the full context to a fixpoint before the main render.
+        self._resolve_variable_refs(template_context, list(normalized_vars))
 
         # Raw-prompt bypass: render template only, skip all wrapping.
         # The instrument knows what it's doing — give it exactly what was
