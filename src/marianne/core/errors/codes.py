@@ -316,6 +316,15 @@ class ErrorCode(str, Enum):
     CONFIG_CLI_MODE_ERROR = "E306"
     """Claude CLI mode mismatch (e.g., streaming mode incompatible with operation)."""
 
+    MODEL_NOT_FOUND = "E307"
+    """Requested model id is invalid/unavailable for the target instrument (#351).
+
+    A bad model id (typo, renamed/removed model) makes the CLI exit non-zero
+    almost immediately. Classified as a fatal config error so the baton fails
+    fast to the next instrument instead of retrying a doomed model, and so the
+    cause is surfaced distinctly in diagnostics rather than looking like a
+    generic execution failure."""
+
     # E4xx: State errors
     STATE_CORRUPTION = "E401"
     """Checkpoint state file is corrupted or inconsistent."""

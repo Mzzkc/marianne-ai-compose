@@ -141,6 +141,20 @@ _DEFAULT_STALE_PATTERNS: list[str] = [
     r"idle.{0,10}timeout",
 ]
 
+# #351: an invalid/unavailable model id makes the CLI exit immediately. These
+# patterns are deliberately "model"-anchored so a generic "not available" /
+# "not found" (network, ENOENT) is not misread as a model error.
+_DEFAULT_MODEL_NOT_FOUND_PATTERNS: list[str] = [
+    r"model[\s_'\"-]+.{0,40}?not found",
+    r"invalid[\s_-]+model",
+    r"unknown[\s_-]+model",
+    r"no such model",
+    r"model[\s_'\"-]+.{0,40}?does not exist",
+    r"not a valid model",
+    r"model[\s_'\"-]+.{0,40}?(?:is )?not available",
+    r"model[\s_'\"-]+.{0,40}?not supported",
+]
+
 # Output substrings that indicate a non-transient (non-retriable) failure
 # for exit codes 1/2 in _classify_by_exit_code.
 _NON_TRANSIENT_INDICATORS: tuple[str, ...] = (
@@ -197,6 +211,7 @@ class ErrorClassifier:
         self.cli_mode_patterns = _compile_patterns(_DEFAULT_CLI_MODE_PATTERNS)
         self.enoent_patterns = _compile_patterns(_DEFAULT_ENOENT_PATTERNS)
         self.stale_patterns = _compile_patterns(_DEFAULT_STALE_PATTERNS)
+        self.model_not_found_patterns = _compile_patterns(_DEFAULT_MODEL_NOT_FOUND_PATTERNS)
 
         # Pre-computed combined regex patterns for _matches_any().
         # Each pattern list is merged into a single alternation regex so that
@@ -207,6 +222,7 @@ class ErrorClassifier:
             "dns_patterns", "ssl_patterns", "capacity_patterns",
             "quota_exhaustion_patterns", "mcp_patterns",
             "cli_mode_patterns", "enoent_patterns", "stale_patterns",
+            "model_not_found_patterns",
         ):
             patterns = getattr(self, attr_name)
             if patterns:
@@ -600,6 +616,10 @@ class ErrorClassifier:
             (self.cli_mode_patterns, ErrorCategory.CONFIGURATION,
              "CLI mode mismatch - streaming mode incompatible with operation",
              ErrorCode.CONFIG_CLI_MODE_ERROR, False, None),
+            (self.model_not_found_patterns, ErrorCategory.CONFIGURATION,
+             "Invalid or unavailable model id for this instrument (#351) - "
+             "check the model id in the instrument profile or score",
+             ErrorCode.MODEL_NOT_FOUND, False, None),
             (self.auth_patterns, ErrorCategory.AUTH,
              "Authentication or authorization failure",
              ErrorCode.BACKEND_AUTH, False, None),
