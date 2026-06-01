@@ -13,6 +13,7 @@ from marianne.validation.checks import (
     FanOutWithoutDependenciesCheck,
     FanOutWithoutParallelCheck,
     FileExistsOnlyCheck,
+    FoldedCommandScalarCheck,
     FormatSyntaxInTemplateCheck,
     InstrumentFallbackCheck,
     InstrumentNameCheck,
@@ -150,6 +151,7 @@ def create_default_checks() -> list[ValidationCheck]:
         TimeoutRangeCheck(),
         EmptyPatternCheck(),
         VersionReferenceCheck(),
+        FoldedCommandScalarCheck(),
         # Instrument checks
         InstrumentNameCheck(),
         InstrumentFallbackCheck(),

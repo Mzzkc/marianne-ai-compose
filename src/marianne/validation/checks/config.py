@@ -699,3 +699,64 @@ class InstrumentFallbackCheck:
                 "location": location,
             },
         )
+
+
+class FoldedCommandScalarCheck:
+    """Detect folded YAML block scalars on command fields (V303, #106).
+
+    A folded scalar (``>``, ``>-``, ``>+``) collapses newlines into spaces, so a
+    multi-line shell command — typically a ``python3 -c`` with several
+    statements in a ``command_succeeds`` validation — becomes one physical line
+    and fails with a ``SyntaxError`` at runtime. The validation can then never
+    pass regardless of content. The bug is invisible in the parsed config (the
+    newlines are already gone); only the raw YAML reveals the ``>`` scalar, so
+    this check scans ``raw_yaml`` and warns, recommending a literal block scalar
+    (``|``) which preserves newlines.
+    """
+
+    # A ``command:`` key whose value is a folded block scalar indicator with
+    # nothing meaningful after it (optionally a trailing comment). Literal
+    # scalars (``|``) and inline values (``command: echo hi``) do not match.
+    _FOLDED_COMMAND = re.compile(r"^\s*command:\s*>[-+]?\s*(?:#.*)?$")
+
+    @property
+    def check_id(self) -> str:
+        return "V303"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Detects folded YAML scalars on command fields (collapses newlines)"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        """Scan the raw YAML for folded command scalars."""
+        issues: list[ValidationIssue] = []
+        for line_num, line in enumerate(raw_yaml.split("\n"), 1):
+            if self._FOLDED_COMMAND.match(line):
+                issues.append(
+                    ValidationIssue(
+                        check_id="V303",
+                        severity=ValidationSeverity.WARNING,
+                        message=(
+                            "Folded YAML scalar (>) on a command field collapses "
+                            "newlines into spaces, which breaks multi-line shell "
+                            "commands (e.g. python3 -c) at runtime — the validation "
+                            "can never pass."
+                        ),
+                        line=line_num,
+                        context=line.strip(),
+                        suggestion=(
+                            "Use a literal block scalar (|) instead of folded (>) "
+                            "to preserve newlines in the command."
+                        ),
+                    )
+                )
+        return issues

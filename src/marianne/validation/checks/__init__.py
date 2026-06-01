@@ -20,6 +20,7 @@ from marianne.validation.checks.best_practices import (
 )
 from marianne.validation.checks.config import (
     EmptyPatternCheck,
+    FoldedCommandScalarCheck,
     InstrumentFallbackCheck,
     InstrumentNameCheck,
     RegexPatternCheck,
@@ -56,6 +57,7 @@ __all__ = [
     "PreludeCadenzaFileCheck",
     "SkillFilesExistCheck",
     # Config checks
+    "FoldedCommandScalarCheck",
     "RegexPatternCheck",
     "ValidationTypeCheck",
     "TimeoutRangeCheck",
