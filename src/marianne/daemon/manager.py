@@ -26,6 +26,7 @@ from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.constants import STATE_DB_FILENAME
 from marianne.core.logging import get_logger
 from marianne.daemon.backpressure import BackpressureController
+from marianne.daemon.concurrency import ConcurrencyGate
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.event_bus import EventBus
 from marianne.daemon.exceptions import DaemonError, JobSubmissionError
@@ -268,7 +269,10 @@ class JobManager:
         # Jobs queued as PENDING during rate limit backpressure.
         # Keyed by conductor job_id.  Auto-started when limits clear.
         self._pending_jobs: dict[str, JobRequest] = {}
-        self._concurrency_semaphore = asyncio.Semaphore(
+        # #231: a live-resizable gate, not a raw Semaphore — apply_config()
+        # adjusts the limit in place so a SIGHUP reload never orphans in-flight
+        # acquisitions (replacing the object over-admits; see ConcurrencyGate).
+        self._concurrency_semaphore = ConcurrencyGate(
             config.max_concurrent_jobs,
         )
         self._id_gen_lock = asyncio.Lock()
@@ -530,16 +534,18 @@ class JobManager:
         """Hot-apply reloadable config fields from a SIGHUP reload.
 
         Compares the new config against the current one and applies
-        changes that can be safely updated at runtime.  Rebuilds the
-        concurrency semaphore if ``max_concurrent_jobs`` changed.
+        changes that can be safely updated at runtime. Adjusts the
+        concurrency gate's limit in place if ``max_concurrent_jobs`` changed.
 
-        Safe because asyncio is single-threaded — this runs in the
-        event loop, so no concurrent access to ``_config`` or
-        ``_concurrency_semaphore`` is possible.
+        #231: the limit is resized via ``ConcurrencyGate.set_limit()`` — NOT by
+        replacing the object. Replacing it orphaned in-flight acquisitions (they
+        release into the dead object) while the new object started with all
+        permits free, so a lower over-admitted. In-flight jobs are unaffected by
+        a resize; a lowered limit takes effect as running jobs drain.
         """
         old = self._config
 
-        # Rebuild semaphore if concurrency limit changed
+        # Resize the concurrency gate in place if the limit changed.
         if new_config.max_concurrent_jobs != old.max_concurrent_jobs:
             _logger.info(
                 "manager.config_reloaded",
@@ -547,7 +553,7 @@ class JobManager:
                 old_value=old.max_concurrent_jobs,
                 new_value=new_config.max_concurrent_jobs,
             )
-            self._concurrency_semaphore = asyncio.Semaphore(
+            self._concurrency_semaphore.set_limit(
                 new_config.max_concurrent_jobs,
             )
 

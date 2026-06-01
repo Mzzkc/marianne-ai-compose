@@ -326,8 +326,10 @@ class TestLoadConfig:
 class TestJobManagerApplyConfig:
     """Tests for JobManager.apply_config() hot-reload method."""
 
-    def test_apply_config_rebuilds_semaphore_on_change(self):
-        """apply_config creates a new semaphore when max_concurrent_jobs changes."""
+    def test_apply_config_resizes_gate_in_place_on_change(self):
+        """apply_config resizes the concurrency gate IN PLACE (#231) — it does
+        NOT replace the object. Replacing it orphaned in-flight acquisitions and
+        over-admitted; the gate's limit is now adjusted via set_limit()."""
         from marianne.daemon.manager import JobManager
 
         config = DaemonConfig(max_concurrent_jobs=5)
@@ -337,7 +339,8 @@ class TestJobManagerApplyConfig:
         new_config = DaemonConfig(max_concurrent_jobs=10)
         manager.apply_config(new_config)
 
-        assert manager._concurrency_semaphore is not old_sem
+        assert manager._concurrency_semaphore is old_sem  # same object, resized
+        assert manager._concurrency_semaphore.limit == 10
         assert manager._config.max_concurrent_jobs == 10
 
     def test_apply_config_no_semaphore_change_when_unchanged(self):

@@ -155,9 +155,10 @@ class TestConcurrencyLimit:
 
     @pytest.mark.asyncio
     async def test_semaphore_initial_value(self, manager: JobManager):
-        """Semaphore is initialized with max_concurrent_jobs."""
+        """Concurrency gate is initialized with max_concurrent_jobs (#231)."""
         # DaemonConfig has max_concurrent_jobs=2
-        assert manager._concurrency_semaphore._value == 2
+        assert manager._concurrency_semaphore.limit == 2
+        assert manager._concurrency_semaphore.available == 2
 
     @pytest.mark.asyncio
     async def test_concurrency_limits_parallel_execution(self, daemon_config: DaemonConfig):
