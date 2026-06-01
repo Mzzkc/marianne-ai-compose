@@ -26,3 +26,6 @@ files:
   - name: interface-reference.md
     purpose: "Programmatic interface generator — typed stubs, runtime module, JSON-RPC contract"
     status: active
+  - name: state-migration-guide.md
+    purpose: "State reset & schema migration — automated forward migration (state v1-4, learning v15), forward-only/no-downgrade, hard-reset (--fresh) + recover procedures, dev guide for adding migrations"
+    status: active

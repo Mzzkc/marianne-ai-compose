@@ -263,6 +263,9 @@ directories:
       - name: score-composition-guide.md
         added: 2026-04-12
         source: "scores-internal/rosetta-modernize/ (promoted)"
+      - name: state-migration-guide.md
+        added: 2026-06-01
+        source: "M5 task 5.6 (#288)"
 
   handoffs:
     description: "Session continuity documents (gitignored — local to each checkout)"
@@ -311,7 +314,9 @@ semantic_index:
   safety: [plans/quality/2026-03-26-safety-hardening-design.md]
   four-disciplines: [plans/four-disciplines]
   rosetta: [plans/rosetta]
-  schema: [plans/architecture/2026-02-25-unified-schema-management-design.md]
+  schema: [plans/architecture/2026-02-25-unified-schema-management-design.md, guides/state-migration-guide.md]
+  migration: [guides/state-migration-guide.md]
+  state_reset: [guides/state-migration-guide.md]
   libretto: [plans/architecture/2026-03-04-libretto-system-design.md]
   state: [plans/architecture/2026-04-07-unified-state-spec.md]
   learning: [plans/architecture/2026-03-26-learning-store-remediation-design.md]
