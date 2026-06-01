@@ -24,9 +24,10 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from pydantic import ValidationError
 from rich.panel import Panel
 
-from marianne.core.checkpoint import JobStatus, SheetStatus
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
 from marianne.core.config import JobConfig
 from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY
 from marianne.core.logging import get_logger
@@ -36,6 +37,24 @@ from ..helpers import configure_global_logging
 from ..output import console, output_error
 
 _logger = get_logger("cli.recover")
+
+
+def _validated_checkpoint_json(checkpoint: dict[str, Any]) -> str:
+    """Validate a (hand-mutated) checkpoint dict and return its canonical JSON (#111).
+
+    ``recover`` mutates the loaded checkpoint dict in place, then writes it back
+    to the daemon DB — the (de facto sole) source of truth for job state. Writing
+    an unvalidated dict can poison the registry: the conductor crashes on the next
+    resume when ``CheckpointState.model_validate`` rejects it. Validating here and
+    re-serialising through the model guarantees the written state is loadable and
+    canonical (stray/legacy keys dropped). Raises ``ValueError`` on invalid input
+    so the caller aborts the write rather than corrupt the source of truth.
+    """
+    try:
+        state = CheckpointState.model_validate(checkpoint)
+    except ValidationError as exc:
+        raise ValueError(f"refusing to write an invalid checkpoint: {exc}") from exc
+    return state.model_dump_json()
 
 
 def _load_recovery_config(
@@ -255,8 +274,14 @@ async def _recover_cascade(
     # Set job status to paused for clean resume
     checkpoint["status"] = JobStatus.PAUSED.value
 
-    # Save
-    checkpoint_json = json.dumps(checkpoint)
+    # Save — validate through CheckpointState first so a bad mutation can never
+    # poison the source of truth (#111).
+    try:
+        checkpoint_json = _validated_checkpoint_json(checkpoint)
+    except ValueError as exc:
+        conn.close()
+        output_error(str(exc))
+        return
     cur.execute(
         "UPDATE jobs SET checkpoint_json=?, status='paused' WHERE job_id=?",
         (checkpoint_json, job_id),
@@ -425,8 +450,14 @@ async def _recover_job(
     elif checkpoint.get("status") == JobStatus.FAILED.value:
         checkpoint["status"] = JobStatus.PAUSED.value
 
-    # Save
-    checkpoint_json = json.dumps(checkpoint)
+    # Save — validate through CheckpointState first so a bad mutation can never
+    # poison the source of truth (#111).
+    try:
+        checkpoint_json = _validated_checkpoint_json(checkpoint)
+    except ValueError as exc:
+        conn.close()
+        output_error(str(exc))
+        return
     conn.execute(
         "UPDATE jobs SET checkpoint_json=?, status=? WHERE job_id=?",
         (checkpoint_json, checkpoint["status"], job_id),
