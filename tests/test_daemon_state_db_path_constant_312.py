@@ -24,7 +24,7 @@ from marianne.core.constants import DAEMON_STATE_DB_PATH
 
 def test_constant_value_matches_legacy_literal() -> None:
     # Pins the value so any future relocation is a deliberate one-line change.
-    assert DAEMON_STATE_DB_PATH == Path("~/.marianne/daemon-state.db")
+    assert Path("~/.marianne/daemon-state.db") == DAEMON_STATE_DB_PATH
 
 
 def test_daemon_config_default_uses_constant() -> None:
