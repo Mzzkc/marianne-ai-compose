@@ -186,6 +186,12 @@ class BatonCore:
         # DispatchRetry pending; it is cleared when the loop handles it.
         self._dispatch_retry_pending: bool = False
 
+        # #340: at most one delayed stagger wake-up DispatchRetry pending at a
+        # time (dispatch_ready may stagger-skip on many cycles within a window;
+        # one delayed wake suffices to re-evaluate). Cleared when a DispatchRetry
+        # is handled, alongside _dispatch_retry_pending.
+        self._stagger_wake_pending: bool = False
+
         # Inbox-depth observability (#222). The inbox is intentionally UNBOUNDED
         # — dropping a baton event (a completion, rate-limit hit, retry-due,
         # control command, ...) would strand a sheet or corrupt state, and the
@@ -293,7 +299,9 @@ class BatonCore:
         """Get the tracking state for a specific instrument."""
         return self._instruments.get(name)
 
-    def build_dispatch_config(self, *, max_concurrent_sheets: int = 10) -> DispatchConfig:
+    def build_dispatch_config(
+        self, *, max_concurrent_sheets: int = 10, stagger_delay_ms: int = 0
+    ) -> DispatchConfig:
         """Build a DispatchConfig from the current instrument state.
 
         This bridges the gap between the baton's instrument tracking
@@ -329,6 +337,7 @@ class BatonCore:
             model_concurrency=dict(self._model_concurrency),
             rate_limited_instruments=rate_limited,
             open_circuit_breakers=open_breakers,
+            stagger_delay_ms=stagger_delay_ms,
         )
 
     def set_job_cost_limit(self, job_id: str, max_cost_usd: float) -> None:
@@ -1224,6 +1233,9 @@ class BatonCore:
                     # next cascade can enqueue a fresh wake (#222). Dispatch and
                     # completion checks run in the adapter loop after this.
                     self._dispatch_retry_pending = False
+                    # #340: a stagger wake (also a DispatchRetry) is now consumed
+                    # too — allow the next stagger-skip cycle to schedule one.
+                    self._stagger_wake_pending = False
 
                 case CircuitBreakerRecovery():
                     self._handle_circuit_breaker_recovery(event)

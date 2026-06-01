@@ -27,13 +27,14 @@ See: ``docs/plans/2026-03-26-baton-design.md`` — Dispatch Logic section
 
 from __future__ import annotations
 
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
 from marianne.daemon.baton.core import BatonCore
-from marianne.daemon.baton.events import SheetDispatched
+from marianne.daemon.baton.events import DispatchRetry, SheetDispatched
 from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 
 _logger = get_logger("daemon.baton.dispatch")
@@ -56,6 +57,11 @@ class DispatchConfig:
             instrument_concurrency when the sheet has a known model.
         rate_limited_instruments: Set of instrument names currently rate-limited.
         open_circuit_breakers: Set of instrument names with open circuit breakers.
+        stagger_delay_ms: Minimum spacing (ms) between dispatches of sheets
+            sharing an instrument (#340). 0 = no stagger (all same-instrument
+            ready sheets dispatch in one cycle, the historical behavior).
+        time_fn: Monotonic clock source for the stagger gate. Injectable for
+            deterministic tests; defaults to ``time.monotonic``.
     """
 
     max_concurrent_sheets: int = 10
@@ -63,6 +69,8 @@ class DispatchConfig:
     model_concurrency: dict[str, int] = field(default_factory=dict)
     rate_limited_instruments: set[str] = field(default_factory=set)
     open_circuit_breakers: set[str] = field(default_factory=set)
+    stagger_delay_ms: int = 0
+    time_fn: Callable[[], float] = time.monotonic
 
 
 @dataclass
@@ -111,6 +119,11 @@ async def dispatch_ready(
     # Don't dispatch during shutdown
     if baton._shutting_down:
         return result
+
+    # #340: dispatch stagger — `now` and the skip flag drive the per-instrument
+    # last-dispatch-time gate below.
+    now = config.time_fn()
+    stagger_skipped = False
 
     # Track running counts per model key (instrument:model or just instrument)
     model_running: dict[str, int] = _count_dispatched_per_model(baton)
@@ -218,6 +231,22 @@ async def dispatch_ready(
             if _skipped:
                 continue
 
+            # #340: stagger gate — skip if a sheet on this instrument was
+            # dispatched within the stagger window. Spreads a burst of
+            # simultaneously-ready same-instrument sheets to avoid a
+            # same-provider API burst. A sheet arriving more than stagger_delay
+            # after the previous dispatch passes immediately (collision-only).
+            if config.stagger_delay_ms > 0:
+                inst_state = baton.get_instrument_state(instrument)
+                if (
+                    inst_state is not None
+                    and now - inst_state.last_dispatch_at
+                    < config.stagger_delay_ms / 1000.0
+                ):
+                    result.record_skip(f"stagger:{instrument}")
+                    stagger_skipped = True
+                    continue
+
             # Dispatch!
             try:
                 await callback(job_id, sheet.sheet_num, sheet)
@@ -232,6 +261,10 @@ async def dispatch_ready(
                 result.record_dispatch(job_id, sheet.sheet_num)
                 global_running += 1
                 model_running[model_key] = model_count + 1
+                # #340: record dispatch time for the per-instrument stagger gate.
+                inst_state = baton.get_instrument_state(instrument)
+                if inst_state is not None:
+                    inst_state.last_dispatch_at = now
             except Exception:
                 _logger.error(
                     "baton.dispatch.callback_failed",
@@ -246,6 +279,20 @@ async def dispatch_ready(
             # Recheck global limit after each dispatch
             if global_running >= config.max_concurrent_sheets:
                 return result
+
+    # #340: if any sheet was held back purely by the stagger gate, schedule a
+    # single delayed wake so the loop re-evaluates after the window elapses
+    # (liveness — no other event may arrive in an idle system). The gate keeps
+    # all sheets in the ready pool (no deferred state), so the wake just re-runs
+    # a normal dispatch cycle. Guarded so repeated cycles within a window don't
+    # accumulate timers; the flag clears when the DispatchRetry is handled.
+    if (
+        stagger_skipped
+        and baton._timer is not None
+        and not baton._stagger_wake_pending
+    ):
+        baton._stagger_wake_pending = True
+        baton._timer.schedule(config.stagger_delay_ms / 1000.0, DispatchRetry())
 
     if result.dispatched_count > 0:
         _logger.info(

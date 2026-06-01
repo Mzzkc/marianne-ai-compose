@@ -2749,6 +2749,7 @@ class JobManager:
             stale_detection=config.stale_detection,
             spec_config=spec_config,  # #204
             spec_tags=config.sheet.spec_tags or None,  # #204
+            stagger_delay_ms=config.parallel.stagger_delay_ms,  # #340
         )
 
         # #196: thread the score's retry backoff (base/exp/max + jitter) into
@@ -2988,6 +2989,7 @@ class JobManager:
             stale_detection=config.stale_detection,
             spec_config=spec_config,  # #204
             spec_tags=config.sheet.spec_tags or None,  # #204
+            stagger_delay_ms=config.parallel.stagger_delay_ms,  # #340
         )
 
         # #196: re-thread retry backoff on resume too — BatonCore is in-memory

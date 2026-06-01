@@ -402,6 +402,9 @@ class BatonAdapter:
         self._baton = BatonCore(timer=self._timer_wheel, inbox=inbox)
         self._event_bus = event_bus
         self._max_concurrent_sheets = max_concurrent_sheets
+        # #340: per-instrument dispatch stagger (ms), threaded from the score's
+        # parallel.stagger_delay_ms at register/recover. 0 = no stagger.
+        self._stagger_delay_ms: int = 0
         self._persist_callback = persist_callback
         self._learning_store = learning_store
         # Deprecated compat attributes — tests set/read these directly
@@ -551,6 +554,7 @@ class BatonAdapter:
         stale_detection: StaleDetectionConfig | None = None,
         spec_config: SpecCorpusConfig | None = None,
         spec_tags: dict[int, list[str]] | None = None,
+        stagger_delay_ms: int = 0,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -589,6 +593,10 @@ class BatonAdapter:
         # Store cross-sheet config (F-210)
         if cross_sheet is not None:
             self._job_cross_sheet[job_id] = cross_sheet
+
+        # #340: per-instrument dispatch stagger (adapter-level; last register
+        # wins for concurrent jobs — acceptable v1, most scores share a value).
+        self._stagger_delay_ms = stagger_delay_ms
 
         # Store spec corpus (#204). Only when fragments exist — an empty
         # corpus stores nothing, so _build_spec_fragments returns None.
@@ -869,6 +877,7 @@ class BatonAdapter:
         stale_detection: StaleDetectionConfig | None = None,
         spec_config: SpecCorpusConfig | None = None,
         spec_tags: dict[int, list[str]] | None = None,
+        stagger_delay_ms: int = 0,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -906,6 +915,10 @@ class BatonAdapter:
         # Store cross-sheet config (F-210)
         if cross_sheet is not None:
             self._job_cross_sheet[job_id] = cross_sheet
+
+        # #340: per-instrument dispatch stagger (adapter-level; last register
+        # wins for concurrent jobs — acceptable v1, most scores share a value).
+        self._stagger_delay_ms = stagger_delay_ms
 
         # Store spec corpus (#204). Only when fragments exist — an empty
         # corpus stores nothing, so _build_spec_fragments returns None.
@@ -2332,6 +2345,7 @@ class BatonAdapter:
             # (e.g., a completion from another job) triggers dispatch.
             config = self._baton.build_dispatch_config(
                 max_concurrent_sheets=self._max_concurrent_sheets,
+                stagger_delay_ms=self._stagger_delay_ms,  # #340
             )
             initial_result = await dispatch_ready(
                 self._baton, config, self._dispatch_callback
@@ -2381,6 +2395,7 @@ class BatonAdapter:
                 # Dispatch ready sheets after every event
                 config = self._baton.build_dispatch_config(
                     max_concurrent_sheets=self._max_concurrent_sheets,
+                    stagger_delay_ms=self._stagger_delay_ms,  # #340
                 )
                 dispatch_result = await dispatch_ready(
                     self._baton, config, self._dispatch_callback

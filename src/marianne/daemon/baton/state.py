@@ -193,6 +193,14 @@ class InstrumentState:
     running_count: int = 0
     """Number of currently running sheets on this instrument."""
 
+    last_dispatch_at: float = 0.0
+    """Monotonic time of the most recent dispatch on this instrument (#340).
+
+    The dispatch stagger gate skips a same-instrument sheet when
+    ``now - last_dispatch_at < stagger_delay_ms``, spreading a burst of
+    simultaneously-ready same-instrument sheets to avoid a same-provider API
+    burst. Default 0.0 means "never dispatched" (gate passes immediately)."""
+
     rate_limited: bool = False
     """Whether this instrument is currently rate-limited."""
 
