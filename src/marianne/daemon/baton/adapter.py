@@ -506,6 +506,27 @@ class BatonAdapter:
         """
         self._backend_pool = pool
 
+    def configure_retry(
+        self,
+        *,
+        base_delay: float | None = None,
+        exponential_base: float | None = None,
+        max_delay: float | None = None,
+        jitter: bool | None = None,
+    ) -> None:
+        """Thread the score's RetryConfig backoff settings to the baton (#196).
+
+        Pass-through to ``BatonCore.configure_retry``. Called once per job at
+        registration (and recovery) so score-level ``retry:`` timing reaches the
+        scheduler instead of the hardcoded defaults.
+        """
+        self._baton.configure_retry(
+            base_delay=base_delay,
+            exponential_base=exponential_base,
+            max_delay=max_delay,
+            jitter=jitter,
+        )
+
     # =========================================================================
     # Job Registration — Surface 1
     # =========================================================================

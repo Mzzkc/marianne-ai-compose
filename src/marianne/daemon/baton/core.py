@@ -22,7 +22,9 @@ See: ``docs/plans/2026-03-26-baton-design.md`` for the full architecture.
 from __future__ import annotations
 
 import asyncio
+import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -164,10 +166,18 @@ class BatonCore:
         # Populated by set_model_concurrency() from instrument profiles.
         self._model_concurrency: dict[str, int] = {}
 
-        # Retry backoff configuration (from RetryConfig defaults)
+        # Retry backoff configuration. These match RetryConfig's field defaults;
+        # the manager overrides them via configure_retry() once per job/recovery
+        # so score-level `retry:` settings are honored (#196). Jitter defaults
+        # OFF here (= the historical no-jitter behavior, so bare-BatonCore tests
+        # stay deterministic); production turns it ON by threading
+        # RetryConfig.jitter (default True). _jitter_fn is injectable for
+        # deterministic boundary tests.
         self._base_retry_delay: float = 10.0
         self._retry_exponential_base: float = 2.0
         self._max_retry_delay: float = 3600.0
+        self._jitter: bool = False
+        self._jitter_fn: Callable[[float, float], float] = random.uniform
 
         # DispatchRetry coalescing (#222). DispatchRetry is a pure wake signal:
         # the loop runs dispatch_ready + completion checks after EVERY event, so
@@ -599,17 +609,58 @@ class BatonCore:
             return True
         return False
 
+    def configure_retry(
+        self,
+        *,
+        base_delay: float | None = None,
+        exponential_base: float | None = None,
+        max_delay: float | None = None,
+        jitter: bool | None = None,
+        jitter_fn: Callable[[float, float], float] | None = None,
+    ) -> None:
+        """Configure per-job retry backoff (#196).
+
+        Threaded once from the manager out of the score's ``RetryConfig`` (at
+        registration and recovery) so score-level ``retry:`` settings reach the
+        scheduler instead of the hardcoded defaults. Backoff params are
+        BatonCore-level (one set per active job) — distinct from the per-sheet
+        ``max_retries``. Only non-None args override, so partial reconfiguration
+        and the constructor defaults both work. ``jitter_fn`` is injectable for
+        deterministic boundary tests; production uses ``random.uniform``.
+        """
+        if base_delay is not None:
+            self._base_retry_delay = base_delay
+        if exponential_base is not None:
+            self._retry_exponential_base = exponential_base
+        if max_delay is not None:
+            self._max_retry_delay = max_delay
+        if jitter is not None:
+            self._jitter = jitter
+        if jitter_fn is not None:
+            self._jitter_fn = jitter_fn
+
     def calculate_retry_delay(self, attempt: int) -> float:
-        """Calculate retry delay using exponential backoff.
+        """Calculate retry delay using exponential backoff (#196: optional jitter).
 
         Args:
             attempt: 0-based attempt index (0 = first retry).
 
         Returns:
-            Delay in seconds, clamped to ``_max_retry_delay``.
+            Delay in seconds, clamped to ``_max_retry_delay``. When jitter is
+            enabled, EQUAL jitter is applied: ``raw/2 + U(0, raw/2)`` — the floor
+            of ``raw/2`` preserves at least half the exponential backoff (unlike
+            full jitter, which can collapse to ~0 and hammer a recovering API),
+            while the spread across ``[raw/2, raw]`` desynchronizes a thundering
+            herd of simultaneously-failing fan-out sheets. This is the ONLY
+            backoff path; authoritative rate-limit waits are scheduled
+            separately and never jittered.
         """
         delay = self._base_retry_delay * (self._retry_exponential_base**attempt)
-        return min(delay, self._max_retry_delay)
+        delay = min(delay, self._max_retry_delay)
+        if self._jitter:
+            half = delay / 2
+            delay = half + self._jitter_fn(0, half)
+        return delay
 
     def _schedule_retry(self, job_id: str, sheet_num: int, sheet: SheetExecutionState) -> None:
         """Schedule a retry via the timer wheel with backoff delay.

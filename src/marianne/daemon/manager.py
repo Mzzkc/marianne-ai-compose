@@ -2751,6 +2751,15 @@ class JobManager:
             spec_tags=config.sheet.spec_tags or None,  # #204
         )
 
+        # #196: thread the score's retry backoff (base/exp/max + jitter) into
+        # the baton so `retry:` settings are honored, not the hardcoded defaults.
+        adapter.configure_retry(
+            base_delay=config.retry.base_delay_seconds,
+            exponential_base=config.retry.exponential_base,
+            max_delay=config.retry.max_delay_seconds,
+            jitter=config.retry.jitter,
+        )
+
         try:
             # Wait for the baton to complete all sheets
             all_success = await adapter.wait_for_completion(job_id)
@@ -2979,6 +2988,16 @@ class JobManager:
             stale_detection=config.stale_detection,
             spec_config=spec_config,  # #204
             spec_tags=config.sheet.spec_tags or None,  # #204
+        )
+
+        # #196: re-thread retry backoff on resume too — BatonCore is in-memory
+        # and reset on restart, so a resumed job must re-apply its `retry:`
+        # settings or it would silently fall back to the hardcoded defaults.
+        self._baton_adapter.configure_retry(
+            base_delay=config.retry.base_delay_seconds,
+            exponential_base=config.retry.exponential_base,
+            max_delay=config.retry.max_delay_seconds,
+            jitter=config.retry.jitter,
         )
 
         # Reconcile live state with baton's view: recover_job resets
