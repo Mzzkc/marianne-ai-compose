@@ -45,7 +45,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from marianne.core.config.execution import StaleDetectionConfig
+from marianne.core.config.execution import SkipWhenCommand, StaleDetectionConfig
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.core import BatonCore
@@ -55,6 +55,7 @@ from marianne.daemon.baton.events import (
     StaleCheck,
 )
 from marianne.daemon.baton.musician import sheet_task
+from marianne.daemon.baton.skip import evaluate_skip_command
 from marianne.daemon.baton.state import (
     AttemptContext,
     AttemptMode,
@@ -475,6 +476,11 @@ class BatonAdapter:
         # from this map (backward compat — resolution skipped, manifest None).
         self._job_techniques: dict[str, dict[str, Any]] = {}
 
+        # #360: per-job, per-sheet skip_when_command predicates. Evaluated at
+        # dispatch time in _musician_wrapper before any render/backend work;
+        # exit 0 → terminal skip. Absent job/sheet → no predicate (no-op).
+        self._job_skip_commands: dict[str, dict[int, SkipWhenCommand]] = {}
+
         # Per-job completion status: True = all sheets completed, False = has failures
         self._completion_results: dict[str, bool] = {}
 
@@ -555,6 +561,7 @@ class BatonAdapter:
         spec_config: SpecCorpusConfig | None = None,
         spec_tags: dict[int, list[str]] | None = None,
         stagger_delay_ms: int = 0,
+        skip_when_command: dict[int, SkipWhenCommand] | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -604,6 +611,8 @@ class BatonAdapter:
             self._job_spec_config[job_id] = spec_config
         if spec_tags:
             self._job_spec_tags[job_id] = spec_tags
+        if skip_when_command:
+            self._job_skip_commands[job_id] = dict(skip_when_command)
 
         # Create PromptRenderer if config is available (F-104)
         if prompt_config is not None:
@@ -833,6 +842,7 @@ class BatonAdapter:
         self._completion_results.pop(job_id, None)
         self._job_routers.pop(job_id, None)
         self._job_techniques.pop(job_id, None)
+        self._job_skip_commands.pop(job_id, None)
 
         # Idle stale-detection cleanup (#349/#350): drop the job config and any
         # per-sheet idle-window / stale-marker state for this job.
@@ -878,6 +888,7 @@ class BatonAdapter:
         spec_config: SpecCorpusConfig | None = None,
         spec_tags: dict[int, list[str]] | None = None,
         stagger_delay_ms: int = 0,
+        skip_when_command: dict[int, SkipWhenCommand] | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -926,6 +937,8 @@ class BatonAdapter:
             self._job_spec_config[job_id] = spec_config
         if spec_tags:
             self._job_spec_tags[job_id] = spec_tags
+        if skip_when_command:
+            self._job_skip_commands[job_id] = dict(skip_when_command)
 
         # Create PromptRenderer if config is available
         if prompt_config is not None:
@@ -1873,6 +1886,36 @@ class BatonAdapter:
             total_sheets = len(job_sheets)
             # Count distinct movements across all sheets
             total_movements = len({s.movement for s in job_sheets.values()}) or 1
+
+            # #360: runtime skip_when_command evaluation. A score may declare a
+            # per-sheet shell predicate; if it exits 0, skip this sheet BEFORE
+            # any render or backend execution. Fail-open on timeout/error (a
+            # broken predicate must never silently drop real work). The sheet is
+            # cleanly DISPATCHED at this point (this wrapper runs as a task after
+            # dispatch_ready emitted SheetDispatched), so emitting SheetSkipped
+            # transitions DISPATCHED → SKIPPED (error_code=None), which releases
+            # dependents on the next dispatch cycle. The done-callback still
+            # fires on this early return, releasing the acquired backend.
+            swc = self._job_skip_commands.get(job_id, {}).get(sheet.num)
+            if swc is not None:
+                should_skip, reason = await evaluate_skip_command(
+                    swc,
+                    workspace=sheet.workspace,
+                    context=sheet.template_variables(
+                        total_sheets=total_sheets,
+                        total_movements=total_movements,
+                    ),
+                    sheet_num=sheet.num,
+                )
+                if should_skip:
+                    # Put on the real (untyped) baton inbox — the local `inbox`
+                    # is narrowed to SheetAttemptResult for sheet_task's contract.
+                    await self._baton.inbox.put(
+                        SheetSkipped(
+                            job_id=job_id, sheet_num=sheet.num, reason=reason
+                        )
+                    )
+                    return
 
             # Resolve the instrument profile once — used for raw_prompt
             # bypass on the renderer AND profile-pricing lookup below.

@@ -635,6 +635,7 @@ class TestDeregisterJobCleanup:
         adapter._completion_results = {job_id: True}
         adapter._job_routers = {job_id: MagicMock()}
         adapter._job_techniques = {job_id: {"workspace": MagicMock()}}
+        adapter._job_skip_commands = {job_id: {1: MagicMock()}}
         adapter._synced_status = {
             (job_id, 1): "completed",
             (job_id, 2): "pending",
@@ -658,6 +659,7 @@ class TestDeregisterJobCleanup:
         assert job_id not in adapter._completion_results
         assert job_id not in adapter._job_routers
         assert job_id not in adapter._job_techniques
+        assert job_id not in adapter._job_skip_commands
         # _synced_status: all entries for this job removed, others preserved
         assert (job_id, 1) not in adapter._synced_status
         assert (job_id, 2) not in adapter._synced_status
@@ -686,6 +688,7 @@ class TestDeregisterJobCleanup:
         adapter._completion_results = {}
         adapter._job_routers = {}
         adapter._job_techniques = {}
+        adapter._job_skip_commands = {}
         adapter._synced_status = {}
         adapter._active_tasks = {}
         adapter._active_pids = {}
