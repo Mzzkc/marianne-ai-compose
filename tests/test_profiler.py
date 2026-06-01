@@ -587,7 +587,9 @@ class TestAnomalyDetector:
 
         now = time.time()
         baseline_proc = _make_process(pid=42, rss_mb=100.0)
-        current_proc = _make_process(pid=42, rss_mb=160.0)  # 60% increase
+        # age past the #157 grace period so the spike is evaluated (young
+        # startup growth is now suppressed).
+        current_proc = _make_process(pid=42, rss_mb=160.0, age_seconds=120.0)  # 60% increase
 
         baseline = _make_snapshot(timestamp=now - 10, processes=[baseline_proc])
         current = _make_snapshot(timestamp=now, processes=[current_proc])
@@ -684,7 +686,10 @@ class TestAnomalyDetector:
 
         # Process with memory spike
         baseline_proc1 = _make_process(pid=10, rss_mb=100.0, cpu_percent=5.0)
-        current_proc1 = _make_process(pid=10, rss_mb=200.0, cpu_percent=5.0)
+        # age_seconds past the #157 grace period so the spike is evaluated.
+        current_proc1 = _make_process(
+            pid=10, rss_mb=200.0, cpu_percent=5.0, age_seconds=120.0
+        )
 
         # Process with runaway CPU
         baseline_proc2 = _make_process(pid=20, rss_mb=100.0, cpu_percent=95.0)
@@ -848,7 +853,7 @@ class TestProfilerCollector:
         # Patch collect_snapshot to return a snapshot with a spiked process
         spiked_snap = _make_snapshot(
             timestamp=now,
-            processes=[_make_process(pid=42, rss_mb=200.0)],
+            processes=[_make_process(pid=42, rss_mb=200.0, age_seconds=120.0)],  # #157: past grace
         )
 
         with (

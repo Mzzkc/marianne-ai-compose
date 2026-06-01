@@ -312,7 +312,8 @@ class TestEventBusMonitorEvents:
         # Create a snapshot that triggers a memory spike anomaly
         spiked_snapshot = _make_snapshot(
             timestamp=now,
-            processes=[_make_process(pid=42, rss_mb=200.0)],
+            # #157: age past the grace period so the spike is evaluated.
+            processes=[_make_process(pid=42, rss_mb=200.0, age_seconds=120.0)],
         )
 
         # Detect and publish anomalies

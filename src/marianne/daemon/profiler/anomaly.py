@@ -103,6 +103,17 @@ class AnomalyDetector:
         for proc in current.processes:
             if proc.rss_mb <= 0:
                 continue
+            # #157: skip young processes — CLI subprocesses legitimately grow
+            # 8-10x during startup (module load / runtime init) in their first
+            # seconds. A real leak persists past the grace window so it is still
+            # caught once the process ages past it.
+            if proc.age_seconds < self.config.memory_spike_grace_seconds:
+                continue
+            # #157: optional absolute-RSS floor — a high growth ratio on a
+            # trivially-small process (on a large-RAM host) is not an anomaly.
+            # Default floor is 0 (disabled), preserving ratio-only detection.
+            if proc.rss_mb < self.config.memory_spike_min_rss_mb:
+                continue
             prev_rss = baseline_rss.get(proc.pid)
             if prev_rss is None or prev_rss <= 0:
                 continue

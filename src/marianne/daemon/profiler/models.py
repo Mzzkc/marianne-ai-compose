@@ -299,6 +299,22 @@ class AnomalyConfig(BaseModel):
         gt=0.0,
         description="Time window (seconds) over which to measure memory spikes",
     )
+    memory_spike_grace_seconds: float = Field(
+        default=60.0,
+        ge=0.0,
+        description="Don't flag memory_spike for processes younger than this "
+        "(#157). CLI subprocesses legitimately grow 8-10x during startup "
+        "(module load, runtime init) in their first seconds; a real leak "
+        "persists past this window so it is still caught.",
+    )
+    memory_spike_min_rss_mb: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Only flag memory_spike when the resulting RSS (MB) is at "
+        "least this value (#157). Default 0 disables the floor — a small "
+        "process with a high growth ratio (but trivial absolute size on a "
+        "large-RAM host) is then still flagged once past the grace period.",
+    )
     runaway_cpu_threshold: float = Field(
         default=90.0,
         ge=50.0,
