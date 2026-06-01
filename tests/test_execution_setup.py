@@ -67,12 +67,30 @@ class TestCreateBackend:
         with pytest.raises(ValueError, match="recursive_light"):
             create_backend(config)
 
-    def test_unknown_type_falls_through_to_cli(self, base_config_dict: dict) -> None:
-        """Unrecognized type falls through to ClaudeCliBackend (else branch)."""
-        config = _make_config(base_config_dict)
-        # The default is claude_cli; any unrecognized type hits the else
-        backend = create_backend(config)
-        assert backend.name == "claude-cli"
+    def test_unknown_type_falls_through_to_cli_with_warning(
+        self, base_config_dict: dict
+    ) -> None:
+        """An unrecognized backend type falls through to ClaudeCliBackend but
+        logs a WARNING (#250) — previously the typo routed silently.
+
+        Behavior (the fallback) is preserved: the native backend factory is a
+        legacy path with no production callers (the daemon resolves backends
+        via the instrument registry, which raises on unknown types). The fix is
+        observability-only — convert the silent footgun into a logged one.
+        """
+        from unittest.mock import patch
+
+        config = _make_config(
+            base_config_dict,
+            backend={"type": "calude_cli"},  # deliberate typo — unknown type
+        )
+        with patch("marianne.execution.setup._logger") as mock_logger:
+            backend = create_backend(config)
+        assert backend.name == "claude-cli"  # fallback preserved
+        mock_logger.warning.assert_called_once()
+        # The unknown type must appear in the warning for diagnosability.
+        warn_call = mock_logger.warning.call_args
+        assert "calude_cli" in str(warn_call)
 
 
 # ── setup_learning ──────────────────────────────────────────────────────

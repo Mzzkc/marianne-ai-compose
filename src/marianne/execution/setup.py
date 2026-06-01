@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from marianne.core.constants import STATE_DB_FILENAME
+from marianne.core.logging import get_logger
+
+_logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from marianne.backends.base import Backend
@@ -54,7 +57,19 @@ def create_backend_from_config(backend_config: BackendConfig) -> Backend:
         return AnthropicApiBackend.from_config(backend_config)
     elif backend_config.type == "ollama":
         return OllamaBackend.from_config(backend_config)
+    elif backend_config.type == "claude_cli":
+        return ClaudeCliBackend.from_config(backend_config)
     else:
+        # #250: an unrecognized type falls back to the Claude CLI backend, but
+        # warn rather than route silently — a typo like 'calude_cli' previously
+        # resolved to Claude with no signal. (Production resolves backends via
+        # the instrument registry, which raises on unknown types; this native
+        # factory is the legacy path. Hardening this to raise is deferred to the
+        # backend-atlas migration sequencing — see #250.)
+        _logger.warning(
+            "setup.backend.unknown_type_fallback",
+            extra={"requested_type": backend_config.type, "fallback": "claude_cli"},
+        )
         return ClaudeCliBackend.from_config(backend_config)
 
 
