@@ -1856,7 +1856,15 @@ class JobManager:
                     continue
             to_remove.append(jid)
 
+        # #111: capture workspaces BEFORE popping so we can also remove the
+        # cleared jobs' workspace state below (the registry row + in-memory
+        # entry going away isn't enough — stale workspace state would otherwise
+        # be resurrected by a later offline read or re-submit).
+        to_clean: list[tuple[str, Path]] = []
         for jid in to_remove:
+            removed_meta = self._job_meta.get(jid)
+            if removed_meta is not None:
+                to_clean.append((jid, removed_meta.workspace))
             self._job_meta.pop(jid, None)
             self._live_states.pop(jid, None)
 
@@ -1866,12 +1874,56 @@ class JobManager:
             older_than_seconds=older_than_seconds,
         )
 
+        # #111: remove each cleared job's workspace state (per job, so a shared
+        # workspace keeps other jobs' rows). Best-effort; never fails the clear.
+        for jid, ws in to_clean:
+            await self._delete_workspace_state(jid, ws)
+
         _logger.info(
             "manager.clear_jobs",
             in_memory_removed=len(to_remove),
             registry_deleted=deleted,
         )
         return {"deleted": deleted}
+
+    @staticmethod
+    async def _delete_workspace_state(job_id: str, workspace: Path) -> None:
+        """Remove a cleared job's per-job state from the workspace backends (#111).
+
+        ``clear`` removes a job from the registry and in-memory; this also
+        removes its state from ``workspace/.marianne-state.db`` and
+        ``workspace/<job_id>.json`` so a later offline read or re-submit can't
+        resurrect it. Per-job (a shared-workspace SQLite DB keeps other jobs'
+        rows) and best-effort/non-fatal. This implements the "no authoritative
+        state in a workspace" invariant for the explicit clear path; the READ
+        path is intentionally untouched so workspace-only jobs (no registry
+        entry) still read normally.
+        """
+        if not workspace.exists():
+            return
+        from marianne.state import JsonStateBackend, SQLiteStateBackend
+
+        sqlite_path = workspace / STATE_DB_FILENAME
+        if sqlite_path.exists():
+            sqlite_backend = SQLiteStateBackend(sqlite_path)
+            try:
+                await sqlite_backend.delete(job_id)
+            except Exception:
+                _logger.warning(
+                    "clear.workspace_sqlite_delete_failed", job_id=job_id, exc_info=True
+                )
+            finally:
+                await sqlite_backend.close()
+
+        json_backend = JsonStateBackend(workspace)
+        try:
+            await json_backend.delete(job_id)
+        except Exception:
+            _logger.warning(
+                "clear.workspace_json_delete_failed", job_id=job_id, exc_info=True
+            )
+        finally:
+            await json_backend.close()
 
     async def clear_rate_limits(
         self,
