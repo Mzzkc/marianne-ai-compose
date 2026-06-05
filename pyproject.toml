@@ -80,7 +80,7 @@ dev = [
     # Newer majors change rules (ruff 0.15 UP042, mypy 2.x) — let Dependabot
     # propose those bumps deliberately rather than break CI on a tooling release.
     "ruff>=0.14,<0.15",
-    "mypy>=1.19,<1.20",
+    "mypy>=2.1.0,<2.2",
     # Type stubs for untyped runtime deps (needed by mypy --strict).
     "types-PyYAML>=6.0",
     "types-psutil>=6.0",
