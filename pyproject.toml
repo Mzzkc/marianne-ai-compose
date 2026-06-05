@@ -22,7 +22,7 @@ dependencies = [
     # Capped <2.13: pydantic 2.13 changed schema generation in a way that fails
     # to build the SheetState model. Verified green on 2.12.x; Dependabot
     # can propose the 2.13 bump with the accompanying model fix.
-    "pydantic>=2.5.0,<2.13",
+    "pydantic>=2.13.4,<2.14",
     "pyyaml>=6.0",
     "jinja2>=3.1.0",
 
@@ -31,7 +31,7 @@ dependencies = [
     # stopped aliasing typer.Exit to the top-level click.exceptions.Exit, which
     # several CLI tests assert against. Dependabot can propose the bump + the
     # accompanying test migration deliberately.
-    "typer>=0.12.0,<0.21",
+    "typer>=0.26.7,<0.27",
     "rich>=13.0.0",
 
     # HTTP (for API backend + notifications)
@@ -73,13 +73,13 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "pytest-timeout>=2.3.0",
-    "hypothesis>=6.100.0",
+    "hypothesis>=6.155.2",
     "pytest-xdist>=3.5.0",
     "pytest-randomly>=3.15.0",
     # Quality tools pinned to the versions the gates are verified green against.
     # Newer majors change rules (ruff 0.15 UP042, mypy 2.x) — let Dependabot
     # propose those bumps deliberately rather than break CI on a tooling release.
-    "ruff>=0.14,<0.15",
+    "ruff>=0.15.16,<0.16",
     "mypy>=1.19,<1.20",
     # Type stubs for untyped runtime deps (needed by mypy --strict).
     "types-PyYAML>=6.0",
