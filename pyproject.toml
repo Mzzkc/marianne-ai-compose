@@ -60,7 +60,7 @@ dependencies = [
 [project.optional-dependencies]
 daemon = ["psutil>=5.9", "watchfiles>=0.21"]
 # Terminal UI (`mzt top`). Lazily imported, so the core CLI works without it.
-tui = ["textual>=7,<8"]
+tui = ["textual>=8.2.7,<9"]
 docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.24",
