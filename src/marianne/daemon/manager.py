@@ -2071,7 +2071,10 @@ class JobManager:
         setup in the daemon.
         """
         ws = await self._resolve_job_workspace(job_id, workspace)
-        state = await self._checked_service.get_status(job_id, ws)
+        # #111: read the authoritative daemon DB, not per-workspace state. Baton
+        # jobs don't write workspace state, so the old get_status() read empty
+        # (and created an empty workspace .marianne-state.db as a side effect).
+        state = await self._load_checkpoint(job_id, ws)
         if state is None:
             raise JobSubmissionError(f"No state found for job '{job_id}'")
 
