@@ -13,9 +13,11 @@ onto ``daemon.JobRegistry`` — ``state/`` must not import ``daemon/``.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from marianne.core.checkpoint import CheckpointState, SheetStatus
+from marianne.core.constants import DAEMON_STATE_DB_PATH
 from marianne.core.logging import get_logger
 from marianne.state.base import StateBackend
 
@@ -89,3 +91,62 @@ class RegistryStateBackend(StateBackend):
 
     async def close(self) -> None:
         await self._registry.close()
+
+
+class RegistryFirstReadBackend(StateBackend):
+    """Read the authoritative daemon DB first, fall back to the workspace (#111).
+
+    For read-only consumers (the MCP server, the dashboard's offline fallback)
+    that previously read stale per-workspace state: ``load()`` tries the daemon
+    registry first and falls back to the per-workspace backend for jobs absent
+    from the registry (workspace-only / pre-daemon). The registry is opened
+    transiently per ``load`` (no long-lived handle to leak), and absence falls
+    back rather than suppresses — so legitimate workspace-only reads are
+    preserved. All non-load operations delegate to the workspace fallback (these
+    consumers only ever call ``load``).
+    """
+
+    def __init__(self, workspace: Path, *, db_path: Path | None = None) -> None:
+        from marianne.state.json_backend import JsonStateBackend
+
+        self._fallback: StateBackend = JsonStateBackend(workspace)
+        self._db_path = (db_path or DAEMON_STATE_DB_PATH).expanduser()
+
+    async def load(self, job_id: str) -> CheckpointState | None:
+        if self._db_path.exists():
+            try:
+                from marianne.daemon.registry import JobRegistry
+
+                async with JobRegistry(self._db_path) as registry:
+                    state = await RegistryStateBackend(registry).load(job_id)
+                if state is not None:
+                    return state
+            except Exception:
+                _logger.warning(
+                    "registry_first.read_failed", job_id=job_id, exc_info=True
+                )
+        return await self._fallback.load(job_id)
+
+    async def save(self, state: CheckpointState) -> None:
+        await self._fallback.save(state)
+
+    async def delete(self, job_id: str) -> bool:
+        return await self._fallback.delete(job_id)
+
+    async def list_jobs(self) -> list[CheckpointState]:
+        return await self._fallback.list_jobs()
+
+    async def get_next_sheet(self, job_id: str) -> int | None:
+        return await self._fallback.get_next_sheet(job_id)
+
+    async def mark_sheet_status(
+        self,
+        job_id: str,
+        sheet_num: int,
+        status: SheetStatus,
+        error_message: str | None = None,
+    ) -> None:
+        await self._fallback.mark_sheet_status(job_id, sheet_num, status, error_message)
+
+    async def close(self) -> None:
+        await self._fallback.close()

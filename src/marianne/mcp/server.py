@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ..state.json_backend import JsonStateBackend
+from ..daemon.registry_backend import RegistryFirstReadBackend
 from .resources import ConfigResources
 from .tools import ArtifactTools, ControlTools, JobTools, ScoreTools
 
@@ -51,7 +51,9 @@ class MCPServer:
                            Defaults to current working directory.
         """
         self.workspace_root = workspace_root or Path.cwd()
-        self.state_backend = JsonStateBackend(self.workspace_root)
+        # #111: read the authoritative daemon DB first, fall back to workspace
+        # files. Previously read stale per-workspace state for running jobs.
+        self.state_backend = RegistryFirstReadBackend(self.workspace_root)
 
         # Initialize tool categories
         self.job_tools = JobTools(self.state_backend, self.workspace_root)

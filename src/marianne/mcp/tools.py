@@ -22,7 +22,7 @@ from ..daemon.detect import _resolve_socket_path
 from ..daemon.exceptions import DaemonNotRunningError
 from ..daemon.ipc.client import DaemonClient
 from ..dashboard.services.job_control import JobControlService
-from ..state.json_backend import JsonStateBackend
+from ..state.base import StateBackend
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class JobTools:
     Routes through the conductor for all operations.
     """
 
-    def __init__(self, state_backend: JsonStateBackend, workspace_root: Path):
+    def __init__(self, state_backend: StateBackend, workspace_root: Path):
         self.state_backend = state_backend
         self._daemon_client = DaemonClient(_resolve_socket_path(None))
         self.job_control = JobControlService(self._daemon_client)
@@ -317,7 +317,7 @@ class ControlTools:
     Routes through the conductor for all operations.
     """
 
-    def __init__(self, state_backend: JsonStateBackend, workspace_root: Path):
+    def __init__(self, state_backend: StateBackend, workspace_root: Path):
         self.state_backend = state_backend
         daemon_client = DaemonClient(_resolve_socket_path(None))
         self.job_control = JobControlService(daemon_client)
