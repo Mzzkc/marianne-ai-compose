@@ -17,8 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from marianne.daemon.ipc.client import DaemonClient
+from marianne.daemon.registry_backend import RegistryFirstReadBackend
 from marianne.state.base import StateBackend
-from marianne.state.json_backend import JsonStateBackend
 
 # Module-level references set by create_app().
 _state_backend: StateBackend | None = None
@@ -109,13 +109,13 @@ def create_app(
     if state_backend is not None:
         _state_backend = state_backend
     elif state_dir is not None:
-        _state_backend = JsonStateBackend(Path(state_dir))
+        _state_backend = RegistryFirstReadBackend(Path(state_dir))
     elif daemon_client is not None:
         from marianne.dashboard.state.daemon_adapter import DaemonStateAdapter
 
         _state_backend = DaemonStateAdapter(daemon_client)
     else:
-        _state_backend = JsonStateBackend(Path.cwd() / ".marianne-state")
+        _state_backend = RegistryFirstReadBackend(Path.cwd() / ".marianne-state")
 
     # Create app
     app = FastAPI(
