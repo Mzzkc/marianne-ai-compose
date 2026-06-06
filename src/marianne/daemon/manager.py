@@ -1478,28 +1478,32 @@ class JobManager:
         if meta.status != DaemonJobStatus.RUNNING:
             raise JobSubmissionError(f"Job '{job_id}' is {meta.status.value}, not running")
 
-        # Verify there's an actual running task (guards against stale
-        # "running" status restored from registry after daemon restart)
+        # Baton path FIRST (#162): it works for auto-recovered jobs that have no
+        # manager `_jobs` wrapper task — a conductor restart re-runs them in the
+        # baton event loop. `request_pause` returns True iff the baton actually
+        # has the job (the real "is it running" signal for baton jobs) and closes
+        # the dispatch gate SYNCHRONOUSLY (#184) so a sheet completion queued
+        # ahead of the pause can't dispatch the next sheet; it is a safe no-op
+        # (returns False, no side effect) when the baton doesn't have the job.
+        # Trying this before the wrapper-task check below stops a stale-status
+        # guard from destructively marking a still-running recovered job FAILED.
+        if self._baton_adapter is not None and self._baton_adapter._baton.request_pause(job_id):
+            from marianne.daemon.baton.events import PauseJob
+
+            await self._baton_adapter._baton.inbox.put(PauseJob(job_id=job_id))
+            _logger.info("job.baton_pause_sent", job_id=job_id)
+            await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
+            return True
+
+        # Non-baton / not-in-baton: verify an actual running task. A job the baton
+        # doesn't have AND with no wrapper task is genuinely stale ("running"
+        # status restored from the registry after a restart with no live work).
         task = self._jobs.get(job_id)
         if task is None or task.done():
             await self._set_job_status(job_id, DaemonJobStatus.FAILED)
             raise JobSubmissionError(
                 f"Job '{job_id}' has no running process (stale status after daemon restart)"
             )
-
-        # Baton path: close the dispatch gate SYNCHRONOUSLY first (#184), then
-        # enqueue the PauseJob event. request_pause sets job.paused immediately,
-        # so a sheet completion already queued ahead of the pause cannot dispatch
-        # the next sheet before the pause is seen. The PauseJob event still flows
-        # through for user_paused/event semantics (an idempotent re-set).
-        if self._baton_adapter is not None:
-            from marianne.daemon.baton.events import PauseJob
-
-            self._baton_adapter._baton.request_pause(job_id)
-            await self._baton_adapter._baton.inbox.put(PauseJob(job_id=job_id))
-            _logger.info("job.baton_pause_sent", job_id=job_id)
-            await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
-            return True
 
         # Prefer in-process event (no filesystem access needed)
         event = self._pause_events.get(job_id)
