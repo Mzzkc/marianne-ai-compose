@@ -220,14 +220,60 @@ async def _close_backends(
             await backend.close()
 
 
+async def _try_registry_state(
+    job_id: str,
+) -> tuple[CheckpointState, StateBackend] | None:
+    """Read job state from the authoritative daemon DB, registry-first (#111).
+
+    Returns ``(state, backend)`` with an OPEN registry-backed ``StateBackend``
+    (the caller closes it) when the daemon DB exists and lists this job — so
+    offline reads see the CURRENT state, not stale per-workspace files. Returns
+    ``None`` (registry closed) when there is no daemon DB or the job isn't in it,
+    so the caller falls back to the workspace. Never suppresses: a job merely
+    absent from the registry (e.g. a workspace-only / pre-daemon job) simply
+    isn't found here and the workspace read proceeds.
+    """
+    db_path = DAEMON_STATE_DB_PATH.expanduser()
+    if not db_path.exists():
+        return None
+
+    from marianne.daemon.registry import JobRegistry
+    from marianne.daemon.registry_backend import RegistryStateBackend
+
+    registry = JobRegistry(db_path)
+    try:
+        await registry.open()
+        backend = RegistryStateBackend(registry)
+        state = await backend.load(job_id)
+        if state is not None:
+            return state, backend  # caller closes backend → closes registry
+        await registry.close()
+        return None
+    except Exception:
+        try:
+            await registry.close()
+        except Exception:
+            _logger.debug("find_job_state.registry_close_failed", job_id=job_id)
+        _logger.warning(
+            "find_job_state.registry_read_failed", job_id=job_id, exc_info=True
+        )
+        return None
+
+
 async def _find_job_state_fs(
     job_id: str,
     workspace: Path | None,
 ) -> tuple[CheckpointState | None, StateBackend | None]:
-    """Find job state in available backends (filesystem fallback).
+    """Find job state, preferring the authoritative daemon DB (#111).
 
-    Private helper used when conductor is unavailable.
+    Private helper used when the conductor is unavailable. Tries the daemon
+    registry first (current state); falls back to per-workspace files for
+    workspace-only / pre-daemon jobs.
     """
+    registry_result = await _try_registry_state(job_id)
+    if registry_result is not None:
+        return registry_result
+
     backends: list[StateBackend] = []
 
     if workspace:
