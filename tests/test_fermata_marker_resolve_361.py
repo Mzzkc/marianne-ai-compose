@@ -168,6 +168,24 @@ class TestRestartPreservation:
         assert "BatonSheetStatus.IN_PROGRESS" in block  # sanity: transient states still reset
 
 
+class TestStatusResolveHint:
+    def test_hint_shows_marker_path_and_decisions(self) -> None:
+        from marianne.cli.commands.status import fermata_resolve_hint
+
+        lines = fermata_resolve_hint("job-abc", 3, "retry budget exhausted")
+        text = "\n".join(lines)
+        # Every decision's marker path is shown, job-id-scoped, for sheet 3.
+        for decision in ("retry", "skip", "accept", "fail"):
+            assert f"markers/fermata/job-abc/sheet-3.{decision}" in text
+        assert "retry budget exhausted" in text
+
+    def test_hint_without_reason(self) -> None:
+        from marianne.cli.commands.status import fermata_resolve_hint
+
+        lines = fermata_resolve_hint("j", 1, None)
+        assert any("markers/fermata/j/sheet-1.retry" in line for line in lines)
+
+
 class TestPath3SetsFermataFields:
     async def test_exhaustion_path3_records_entry_and_reason(self) -> None:
         from marianne.core.checkpoint import SheetState

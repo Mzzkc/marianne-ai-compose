@@ -1208,6 +1208,44 @@ def _render_sheet_details(job: CheckpointState) -> None:
                     console.print(f"  Sheet {sheet_num}: [red]{desc}[/red]")
 
 
+def fermata_resolve_hint(job_id: str, sheet_num: int, reason: str | None) -> list[str]:
+    """Lines telling the composer how to resolve a FERMATA'd sheet (#361).
+
+    FERMATA pauses a sheet for a composer decision; resolution is a marker file
+    the baton polls. Surface the reason + the (workspace-relative) marker path +
+    the decisions inline so `mzt status` is actionable without docs.
+    """
+    rel = f"markers/fermata/{job_id}/sheet-{sheet_num}"
+    return [
+        f"  Sheet {sheet_num}: [magenta]⏸ FERMATA — awaiting composer decision[/magenta]"
+        + (f" ({reason})" if reason else ""),
+        "    Resolve: create ONE marker under the job workspace —",
+        f"      [dim]{rel}.retry[/dim]   re-run the sheet from scratch",
+        f"      [dim]{rel}.skip[/dim]    skip it, continue dependents",
+        f"      [dim]{rel}.accept[/dim]  accept the last attempt as success",
+        f"      [dim]{rel}.fail[/dim]    fail it, propagate to dependents",
+    ]
+
+
+def _render_fermata_hints(job: CheckpointState) -> None:
+    """Show resolution instructions for any FERMATA'd sheet (#361).
+
+    Runs for all score sizes (after the detail/summary sheet view) so a paused
+    sheet's marker path + decisions are always discoverable from `mzt status`.
+    """
+    fermata_nums = [
+        n for n in sorted(job.sheets) if job.sheets[n].status == SheetStatus.FERMATA
+    ]
+    if not fermata_nums:
+        return
+    console.print("\n[bold magenta]Awaiting Composer Decision (FERMATA)[/bold magenta]")
+    for sheet_num in fermata_nums:
+        for line in fermata_resolve_hint(
+            job.job_id, sheet_num, job.sheets[sheet_num].fermata_reason
+        ):
+            console.print(line)
+
+
 def _render_sheet_summary(job: CheckpointState) -> None:
     """Render a compact summary for large scores (50+ sheets).
 
@@ -1799,6 +1837,9 @@ def _output_status_rich(job: CheckpointState) -> None:
 
     _render_synthesis_results(job)
     _render_sheet_details(job)
+
+    # #361: how to resolve any FERMATA'd (composer-decision) sheet.
+    _render_fermata_hints(job)
 
     # Progress snapshots for in-progress sheets
     _render_progress_snapshots(job)
