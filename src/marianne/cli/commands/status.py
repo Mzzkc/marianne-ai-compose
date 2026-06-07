@@ -787,6 +787,8 @@ def _output_status_json(job: CheckpointState) -> None:
             sheet_data["execution_duration_seconds"] = sheet.execution_duration_seconds
         if sheet.estimated_cost is not None:
             sheet_data["estimated_cost"] = sheet.estimated_cost
+        if getattr(sheet, "cost_uncertain", False):
+            sheet_data["cost_uncertain"] = True  # #373: $0 = unknown, not free
         if sheet.status == SheetStatus.IN_PROGRESS and sheet.started_at:
             elapsed = (datetime.now(UTC) - sheet.started_at).total_seconds()
             sheet_data["elapsed_seconds"] = round(elapsed, 1)
@@ -1542,6 +1544,17 @@ def _render_cost_summary(job: CheckpointState) -> None:
         console.print(f"  Cost: [yellow]{cost_display}[/yellow] {limit_str} (from sheets)")
     else:
         console.print(f"  Cost: $0.00 {limit_str}")
+
+    # #373: distinguish a "cost-uncertain" $0 (instrument had no per-token
+    # pricing, so cost was NOT computed) from a genuine $0 — a separate axis
+    # from the character-estimate confidence above (#346).
+    uncertain = sum(1 for s in job.sheets.values() if getattr(s, "cost_uncertain", False))
+    if uncertain:
+        console.print(
+            f"  [yellow]⚠ {uncertain} sheet(s) ran on an instrument with no pricing"
+            " — their cost is reported as $0 (unknown, not free). Add ModelCapacity"
+            " pricing to the instrument profile for real tracking.[/yellow]"
+        )
 
     if not cost_limits_enabled:
         console.print(

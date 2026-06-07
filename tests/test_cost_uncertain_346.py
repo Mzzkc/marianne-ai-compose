@@ -78,6 +78,46 @@ class TestSheetAttemptResultFlag:
         assert r.cost_uncertain is True
 
 
+class TestStatusSurfacing:
+    """#373: `mzt status` distinguishes a cost-uncertain $0 from a genuine $0."""
+
+    def test_json_status_marks_cost_uncertain_sheet(self, capsys: object) -> None:
+        from marianne.cli.commands.status import _output_status_json
+        from marianne.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import JobStatus as CPJobStatus
+
+        job = CheckpointState(
+            job_id="j1",
+            job_name="demo",
+            total_sheets=2,
+            status=CPJobStatus.RUNNING,
+            sheets={
+                1: SheetState(sheet_num=1, cost_uncertain=True),
+                2: SheetState(sheet_num=2, cost_uncertain=False),
+            },
+        )
+        _output_status_json(job)
+        out = capsys.readouterr().out  # type: ignore[attr-defined]
+        # Emitted only for the uncertain sheet (set-only-when-True).
+        assert out.count("cost_uncertain") == 1
+
+    def test_cost_summary_warns_on_uncertain(self, capsys: object) -> None:
+        from marianne.cli.commands.status import _render_cost_summary
+        from marianne.core.checkpoint import CheckpointState
+        from marianne.core.checkpoint import JobStatus as CPJobStatus
+
+        job = CheckpointState(
+            job_id="j1",
+            job_name="demo",
+            total_sheets=1,
+            status=CPJobStatus.RUNNING,
+            sheets={1: SheetState(sheet_num=1, cost_uncertain=True)},
+        )
+        _render_cost_summary(job)
+        out = capsys.readouterr().out  # type: ignore[attr-defined]
+        assert "no pricing" in out and "$0" in out
+
+
 class TestSheetStateCostUncertainPropagation:
     def test_record_attempt_marks_sheet_cost_uncertain(self) -> None:
         sheet = SheetState(sheet_num=1)
