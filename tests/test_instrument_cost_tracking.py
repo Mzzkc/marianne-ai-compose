@@ -190,50 +190,39 @@ def test_ollama_zero_cost_profile_pricing_produces_zero_cost(
 # ---------------------------------------------------------------------------
 
 
-def test_fallback_path_applies_sonnet_rates_when_pricing_absent() -> None:
-    """Characterization test for the fallback branch at musician.py:1005-1008.
+def test_missing_pricing_reports_zero_not_sonnet() -> None:
+    """When pricing is ``None``, report $0 — never fabricate Sonnet rates (#346).
 
-    This test documents the CURRENT behaviour: when pricing is ``None``, the
-    Claude Sonnet rates ($3/1M in, $15/1M out) are applied. This is the
-    doctrine-flagged bug — per the atlas, this fallback is instrument-
-    insensitive. The test exists so that the fix is detectable: once the
-    fallback is replaced with an instrument-aware path, this assertion will
-    change or move.
+    Previously the fallback billed $18 (Sonnet $3/1M in + $15/1M out) for this
+    1M/1M run. The doctrine fix: no profile pricing → $0 (cost-uncertain),
+    because inventing Sonnet numbers over-reports non-Anthropic/free-tier work
+    and can falsely trip cost limits.
 
     Doctrine: RULE "cost tracking must use instrument profile pricing" —
-    this test captures the pre-fix baseline.
+    satisfied by sourcing every real number from the profile and inventing none.
     """
     result = _make_exec_result(input_tokens=1_000_000, output_tokens=1_000_000)
 
     cost = _estimate_cost(result, cost_per_1k_input=None, cost_per_1k_output=None)
 
-    # Sonnet fallback: 1M * $3/1M + 1M * $15/1M = $3 + $15 = $18
-    expected_sonnet_fallback = 18.0
-    assert cost == pytest.approx(expected_sonnet_fallback), (
-        "Characterization failure (RULE cost tracking must use instrument "
-        "profile pricing): the fallback branch no longer yields the Sonnet "
-        f"numbers. Expected {expected_sonnet_fallback}, got {cost}. If this "
-        "failed because the fallback was fixed, delete this test and wire "
-        "the new path into the instrument-aware tests instead."
+    assert cost == 0.0, (
+        "Doctrine violated (RULE cost tracking must use instrument profile "
+        f"pricing): missing pricing must report $0, not a fabricated rate. Got {cost}."
     )
 
 
-def test_recursive_light_instrument_without_pricing_silently_hits_sonnet_fallback(
+def test_recursive_light_instrument_without_pricing_reports_zero(
     registry: InstrumentRegistry,
 ) -> None:
-    """Non-Claude instrument + missing profile pricing = Sonnet rates applied.
+    """Non-Claude instrument + missing profile pricing = $0, not Sonnet (#346).
 
     The ``recursive_light`` profile registers with ``models=[]`` (no pricing
-    info available). The baton code at ``adapter.py:1620-1639`` treats a
-    missing model list as "use None, None" — which then lands in the
-    Sonnet fallback in ``_estimate_cost``. A Recursive Light job is therefore
-    billed at Claude Sonnet rates today. The doctrine says this is WRONG.
-
-    This test pins the current wrong behaviour so the fix is detectable.
-    When the doctrine rule is satisfied, this test's expectation changes.
+    info available), so the baton passes ``None, None`` to ``_estimate_cost``.
+    Previously a Recursive Light job was billed at Claude Sonnet rates; the
+    doctrine fix reports $0 and flags the sheet cost-uncertain instead.
 
     Doctrine: RULE "cost tracking must use instrument profile pricing, not
-    hardcoded Claude Sonnet rates" — this test captures the violation.
+    hardcoded Claude Sonnet rates".
     """
     profile = registry.get("recursive_light")
     assert profile is not None
@@ -247,12 +236,10 @@ def test_recursive_light_instrument_without_pricing_silently_hits_sonnet_fallbac
     result = _make_exec_result(input_tokens=10_000, output_tokens=5_000)
     cost = _estimate_cost(result, cost_per_1k_input=None, cost_per_1k_output=None)
 
-    sonnet_rate_cost = (10_000 * 3.0 / 1_000_000) + (5_000 * 15.0 / 1_000_000)
-    assert cost == pytest.approx(sonnet_rate_cost), (
-        "Doctrine check (RULE cost tracking must use instrument profile "
-        "pricing): Recursive Light falls through to the Claude Sonnet "
-        f"fallback. Expected {sonnet_rate_cost} (Sonnet rates), got {cost}. "
-        "This test characterizes the violation the doctrine flags."
+    assert cost == 0.0, (
+        "Doctrine violated (RULE cost tracking must use instrument profile "
+        "pricing): Recursive Light has no pricing, so cost must be $0 "
+        f"(cost-uncertain), not a fabricated Sonnet figure. Got {cost}."
     )
 
 

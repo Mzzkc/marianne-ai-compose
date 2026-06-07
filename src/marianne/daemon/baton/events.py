@@ -102,6 +102,10 @@ class SheetAttemptResult:
     cost_usd: float = 0.0
     input_tokens: int = 0
     output_tokens: int = 0
+    # #346: True when the instrument profile had no per-token pricing, so
+    # cost_usd is a $0 placeholder (not a fabricated rate). The sheet is
+    # flagged cost-uncertain rather than billed at invented Claude Sonnet rates.
+    cost_uncertain: bool = False
 
     # Model that actually executed (may differ from config default)
     model_used: str | None = None

@@ -222,6 +222,7 @@ async def sheet_task(
                 cost_per_1k_output=cost_per_1k_output,
                 instrument_name=effective_instrument,
             ),
+            cost_uncertain=_pricing_missing(cost_per_1k_input, cost_per_1k_output),
             input_tokens=exec_result.input_tokens or 0,
             output_tokens=exec_result.output_tokens or 0,
             model_used=exec_result.model,
@@ -1030,6 +1031,21 @@ def _classify_error(exec_result: ExecutionResult) -> _ErrorClassification:
     return _ErrorClassification(bucket, message, classified.error_code.value)
 
 
+def _pricing_missing(
+    cost_per_1k_input: float | None,
+    cost_per_1k_output: float | None,
+) -> bool:
+    """Whether profile pricing is incomplete, so cost cannot be computed.
+
+    The single source of truth for "is this estimate cost-uncertain" (#346):
+    both ``_estimate_cost`` (to take the $0 path) and the caller (to flag the
+    attempt ``cost_uncertain``) call this, so the two can never drift. A
+    declared ``$0`` price (local/free instruments) is NOT missing — only
+    ``None`` is.
+    """
+    return cost_per_1k_input is None or cost_per_1k_output is None
+
+
 def _estimate_cost(
     exec_result: ExecutionResult,
     cost_per_1k_input: float | None = None,
@@ -1039,54 +1055,52 @@ def _estimate_cost(
     """Estimate cost from token counts and instrument pricing.
 
     When profile pricing is provided (from InstrumentProfile.ModelCapacity),
-    uses that for accurate per-instrument cost tracking. Falls back to
-    conservative Claude Sonnet estimates when no pricing is available —
-    the fallback is doctrine-flagged (RULE "cost tracking must use
-    instrument profile pricing") so the fallback branch now emits a
-    warning that names the instrument whose pricing is missing. Phase 5
-    wires the warning; follow-up phases must wire pricing into every
-    instrument profile so the fallback stops firing in production.
+    uses that for accurate per-instrument cost tracking. When pricing is
+    missing, reports ``$0`` and emits a warning naming the instrument —
+    it does NOT fabricate Claude Sonnet rates (#346). Fabricating rates
+    over-reported $0 runs for non-Anthropic / free-tier / local instruments
+    and could falsely trip ``max_cost_per_job``; $0 + the caller's
+    ``cost_uncertain`` flag is the honest signal. Doctrine RULE "cost
+    tracking must use instrument profile pricing" is satisfied by sourcing
+    every real number from the profile and never inventing one.
 
     Args:
         exec_result: The execution result with token counts.
         cost_per_1k_input: Cost per 1000 input tokens (USD) from instrument
-            profile. None falls back to hardcoded estimate.
+            profile. None → cost-uncertain, reports $0.
         cost_per_1k_output: Cost per 1000 output tokens (USD) from instrument
-            profile. None falls back to hardcoded estimate.
+            profile. None → cost-uncertain, reports $0.
         instrument_name: Name of the instrument whose pricing is being
-            estimated. Used only to enrich the fallback warning — the
-            numeric fallback is independent of the name today.
+            estimated. Used to name the instrument in the missing-pricing
+            warning.
     """
     input_tokens = exec_result.input_tokens or 0
     output_tokens = exec_result.output_tokens or 0
 
-    if cost_per_1k_input is not None and cost_per_1k_output is not None:
-        # Profile pricing: cost_per_1k means USD per 1000 tokens
-        cost = (input_tokens * cost_per_1k_input / 1_000) + (
-            output_tokens * cost_per_1k_output / 1_000
-        )
-    else:
-        # Fallback: conservative Claude Sonnet pricing ($3/1M input,
-        # $15/1M output). Doctrine-flagged — emit a warning that names
-        # the instrument whose pricing is missing so the gap is visible
-        # in logs. This satisfies the xfail guard in
-        # tests/test_instrument_cost_tracking.py and Doctrine RULE
-        # "Cost tracking must use instrument profile pricing".
-        cost = (input_tokens * 3.0 / 1_000_000) + (
-            output_tokens * 15.0 / 1_000_000
-        )
+    if _pricing_missing(cost_per_1k_input, cost_per_1k_output):
+        # #346: no profile pricing → report $0 rather than inventing Sonnet
+        # numbers. The caller flags the attempt cost_uncertain. Warn (naming
+        # the instrument) so the missing-pricing gap is visible in logs.
         _logger.warning(
             "musician.cost_pricing_fallback",
             extra={
                 "instrument": instrument_name or "unknown",
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
-                "estimated_cost_usd": cost,
+                "estimated_cost_usd": 0.0,
                 "note": (
-                    "Instrument profile pricing missing — falling back "
-                    "to hardcoded Claude Sonnet rates. Add ModelCapacity "
-                    "pricing to the instrument profile to fix."
+                    "Instrument profile pricing missing — reporting $0 and "
+                    "flagging the sheet cost-uncertain (no rates fabricated). "
+                    "Add ModelCapacity pricing to the instrument profile to "
+                    "get real cost tracking."
                 ),
             },
         )
-    return cost
+        return 0.0
+
+    # mypy: both are not-None inside this branch (guaranteed by _pricing_missing)
+    assert cost_per_1k_input is not None and cost_per_1k_output is not None
+    # Profile pricing: cost_per_1k means USD per 1000 tokens
+    return (input_tokens * cost_per_1k_input / 1_000) + (
+        output_tokens * cost_per_1k_output / 1_000
+    )

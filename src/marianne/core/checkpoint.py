@@ -450,6 +450,12 @@ class SheetState(BaseModel):
         default=0.0,
         description="Cumulative cost across all attempts for this sheet.",
     )
+    cost_uncertain: bool = Field(
+        default=False,
+        description="True when any attempt ran on an instrument with no "
+        "per-token pricing, so total_cost_usd is a $0 placeholder rather than "
+        "a real figure (#346). Sticky — once uncertain, stays uncertain.",
+    )
     total_duration_seconds: float = Field(
         default=0.0,
         description="Cumulative execution duration across all attempts.",
@@ -681,6 +687,10 @@ class SheetState(BaseModel):
         """
         self.attempt_results.append(result)
         self.total_cost_usd += result.cost_usd
+        # #346: sticky — once any attempt lacked instrument pricing, the
+        # accumulated cost is a $0-placeholder mix and stays cost-uncertain.
+        if getattr(result, "cost_uncertain", False):
+            self.cost_uncertain = True
         self.total_duration_seconds += result.duration_seconds
 
         if not result.rate_limited and not result.execution_success:

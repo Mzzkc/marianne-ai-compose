@@ -197,24 +197,21 @@ class TestCostEstimationPricing:
         expected = (1000 * 0.01 / 1000) + (500 * 0.03 / 1000)
         assert abs(cost - expected) < 1e-10
 
-    def test_fallback_when_input_pricing_none(self) -> None:
-        """Only cost_per_1k_input is None → fallback to hardcoded."""
+    def test_partial_pricing_input_none_reports_zero(self) -> None:
+        """#346: only cost_per_1k_input is None → $0 (cost-uncertain), no fabrication."""
         from marianne.daemon.baton.musician import _estimate_cost
 
         result = MagicMock(input_tokens=1000, output_tokens=1000)
         cost = _estimate_cost(result, cost_per_1k_input=None, cost_per_1k_output=0.03)
-        # Should use fallback: $3/1M input + $15/1M output
-        expected_fallback = (1000 * 3.0 / 1_000_000) + (1000 * 15.0 / 1_000_000)
-        assert abs(cost - expected_fallback) < 1e-10
+        assert cost == 0.0
 
-    def test_fallback_when_output_pricing_none(self) -> None:
-        """Only cost_per_1k_output is None → fallback to hardcoded."""
+    def test_partial_pricing_output_none_reports_zero(self) -> None:
+        """#346: only cost_per_1k_output is None → $0 (cost-uncertain), no fabrication."""
         from marianne.daemon.baton.musician import _estimate_cost
 
         result = MagicMock(input_tokens=1000, output_tokens=1000)
         cost = _estimate_cost(result, cost_per_1k_input=0.01, cost_per_1k_output=None)
-        expected_fallback = (1000 * 3.0 / 1_000_000) + (1000 * 15.0 / 1_000_000)
-        assert abs(cost - expected_fallback) < 1e-10
+        assert cost == 0.0
 
     def test_zero_pricing_yields_zero_cost(self) -> None:
         """Zero cost per token (free/local model) → $0 cost."""

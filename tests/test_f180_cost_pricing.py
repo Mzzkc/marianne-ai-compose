@@ -21,16 +21,14 @@ from marianne.daemon.baton.musician import _estimate_cost
 class TestEstimateCostWithProfilePricing:
     """_estimate_cost uses profile pricing when provided."""
 
-    def test_hardcoded_fallback_when_no_pricing(self) -> None:
-        """Without profile pricing, falls back to hardcoded Claude Sonnet rates."""
+    def test_zero_cost_when_no_pricing(self) -> None:
+        """Without profile pricing, reports $0 — no fabricated Sonnet rates (#346)."""
         result = MagicMock(spec=ExecutionResult)
         result.input_tokens = 1_000_000
         result.output_tokens = 100_000
 
-        cost = _estimate_cost(result)
-        # Hardcoded: $3/1M input + $15/1M output
-        expected = (1_000_000 * 3.0 / 1_000_000) + (100_000 * 15.0 / 1_000_000)
-        assert abs(cost - expected) < 0.001
+        # #346: pricing missing → $0 (cost-uncertain), not invented Sonnet numbers.
+        assert _estimate_cost(result) == 0.0
 
     def test_uses_profile_pricing_when_provided(self) -> None:
         """When profile pricing is given, uses that instead of hardcoded rates."""

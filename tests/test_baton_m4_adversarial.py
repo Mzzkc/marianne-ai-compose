@@ -1351,12 +1351,21 @@ class TestEstimateCostAdversarial:
         assert _estimate_cost(result) == 0.0
 
     def test_large_token_count_reasonable_cost(self) -> None:
-        """1M tokens should produce a cost between $0 and $100."""
+        """1M tokens with profile pricing produces a cost between $0 and $100."""
         from marianne.daemon.baton.musician import _estimate_cost
 
         result = _make_exec_result(input_tokens=1_000_000, output_tokens=100_000)
-        cost = _estimate_cost(result)
+        # #346: cost requires profile pricing; without it the result is $0
+        # (cost-uncertain), so pass pricing to exercise the magnitude check.
+        cost = _estimate_cost(result, cost_per_1k_input=0.003, cost_per_1k_output=0.015)
         assert 0 < cost < 100
+
+    def test_no_pricing_reports_zero(self) -> None:
+        """#346: no profile pricing → $0, never a fabricated Sonnet rate."""
+        from marianne.daemon.baton.musician import _estimate_cost
+
+        result = _make_exec_result(input_tokens=1_000_000, output_tokens=100_000)
+        assert _estimate_cost(result) == 0.0
 
     def test_cost_is_non_negative(self) -> None:
         """Cost must never be negative regardless of input."""
