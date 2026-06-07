@@ -704,6 +704,10 @@ class SheetState(BaseModel):
         # accumulated cost is a $0-placeholder mix and stays cost-uncertain.
         if getattr(result, "cost_uncertain", False):
             self.cost_uncertain = True
+        # #202: fold in warn-only preflight notes (deduped) for status/diagnose.
+        for warning in getattr(result, "preflight_warnings", None) or []:
+            if warning not in self.preflight_warnings:
+                self.preflight_warnings.append(warning)
         self.total_duration_seconds += result.duration_seconds
 
         if not result.rate_limited and not result.execution_success:

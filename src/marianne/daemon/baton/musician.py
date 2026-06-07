@@ -48,6 +48,7 @@ from marianne.core.errors.classifier import ErrorClassifier
 from marianne.core.errors.codes import ErrorCategory
 from marianne.core.logging import get_logger
 from marianne.core.sheet import Sheet
+from marianne.core.tokens import estimate_tokens, get_effective_window_size
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import AttemptContext
 from marianne.daemon.technique_router import ClassifiedOutput, OutputKind, TechniqueRouter
@@ -61,6 +62,12 @@ from marianne.prompts.preamble import build_preamble
 from marianne.utils.credential_scanner import redact_credentials
 
 _logger = get_logger("daemon.baton.musician")
+
+# #202: warn-only preflight — fraction of the effective context window above
+# which the rendered prompt earns an advisory warning. Heuristic estimate, so
+# this only WARNS (never blocks): a wrong over-estimate must never false-reject
+# a runnable sheet, and an actually-oversized prompt fails loudly at the backend.
+_PREFLIGHT_WARN_RATIO = 0.9
 
 
 async def sheet_task(
@@ -117,6 +124,8 @@ async def sheet_task(
     start_time = time.monotonic()
     # Resolve the effective instrument name — fallback may have changed it
     effective_instrument = instrument_override or sheet.instrument_name
+    # #202: warn-only preflight notes, computed once the prompt is rendered.
+    preflight_warnings: list[str] = []
 
     try:
         # Step 1: Build prompt
@@ -133,6 +142,12 @@ async def sheet_task(
                 total_sheets=total_sheets,
                 total_movements=total_movements,
             )
+
+        # #202: warn-only token preflight on the rendered prompt (advisory —
+        # never blocks). Computed before execution so it reflects what will run.
+        preflight_warnings = _preflight_token_warnings(
+            prompt, effective_instrument, sheet.instrument_config.get("model")
+        )
 
         # Step 2-3: Execute through backend
         exec_result = await _execute(backend, prompt, sheet.timeout_seconds)
@@ -229,6 +244,7 @@ async def sheet_task(
             stdout_tail=stdout_tail,
             stderr_tail=stderr_tail,
             output_kind=output_kind_value,
+            preflight_warnings=preflight_warnings,
         )
 
     except Exception as exc:
@@ -262,6 +278,7 @@ async def sheet_task(
             error_classification="TRANSIENT",
             error_message=error_msg,
             rate_limited=False,
+            preflight_warnings=preflight_warnings,
         )
 
     # Always report — the baton must know what happened
@@ -281,6 +298,40 @@ async def sheet_task(
 # =========================================================================
 # Internal helpers
 # =========================================================================
+
+
+def _preflight_token_warnings(
+    prompt: str,
+    instrument: str | None,
+    model: str | None,
+) -> list[str]:
+    """Warn-only token preflight on the rendered prompt (#202).
+
+    Estimates the rendered prompt's tokens against the instrument/model
+    effective context window and returns advisory warning strings when it is
+    near/over the window. Best-effort: NEVER raises and NEVER blocks dispatch —
+    ``estimate_tokens`` is a char-heuristic, so a wrong over-estimate must not
+    false-reject a runnable sheet (and a genuinely oversized prompt fails loudly
+    at the backend). A configurable hard-fail threshold is a deliberate
+    follow-on (must be non-retryable to avoid the #201 healing-enrichment loop).
+    """
+    try:
+        estimated = estimate_tokens(prompt)
+        window = get_effective_window_size(model=model, instrument=instrument)
+        if window > 0 and estimated > window * _PREFLIGHT_WARN_RATIO:
+            pct = round(estimated / window * 100)
+            target = instrument or "instrument"
+            if model:
+                target = f"{target}/{model}"
+            return [
+                f"preflight: rendered prompt is ~{estimated} tokens (~{pct}% of the "
+                f"{window}-token effective window for {target}); heuristic estimate — "
+                f"may exceed the limit at the backend"
+            ]
+    except Exception:
+        # Preflight is advisory; a probe failure must never break dispatch.
+        return []
+    return []
 
 
 def _build_prompt(

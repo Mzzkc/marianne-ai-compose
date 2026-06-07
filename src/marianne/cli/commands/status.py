@@ -1248,6 +1248,26 @@ def _render_fermata_hints(job: CheckpointState) -> None:
             console.print(line)
 
 
+def _render_preflight_warnings(job: CheckpointState) -> None:
+    """Show warn-only preflight notes for any sheet that has them (#202).
+
+    Advisory only (e.g. rendered prompt estimated near/over the context window).
+    These never blocked dispatch; surfacing them gives the composer visibility
+    into prompt sizing before a backend token-limit failure.
+    """
+    flagged = [
+        (n, job.sheets[n])
+        for n in sorted(job.sheets)
+        if getattr(job.sheets[n], "preflight_warnings", None)
+    ]
+    if not flagged:
+        return
+    console.print("\n[bold yellow]Preflight Warnings[/bold yellow]")
+    for sheet_num, sheet in flagged:
+        for warning in sheet.preflight_warnings:
+            console.print(f"  Sheet {sheet_num}: [yellow]{warning}[/yellow]")
+
+
 def _render_sheet_summary(job: CheckpointState) -> None:
     """Render a compact summary for large scores (50+ sheets).
 
@@ -1853,6 +1873,9 @@ def _output_status_rich(job: CheckpointState) -> None:
 
     # #361: how to resolve any FERMATA'd (composer-decision) sheet.
     _render_fermata_hints(job)
+
+    # #202: warn-only preflight notes (prompt sizing vs context window).
+    _render_preflight_warnings(job)
 
     # Progress snapshots for in-progress sheets
     _render_progress_snapshots(job)

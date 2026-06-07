@@ -106,6 +106,11 @@ class SheetAttemptResult:
     # cost_usd is a $0 placeholder (not a fabricated rate). The sheet is
     # flagged cost-uncertain rather than billed at invented Claude Sonnet rates.
     cost_uncertain: bool = False
+    # #202: warn-only preflight notes (e.g. rendered prompt estimated near/over
+    # the instrument/model context window). Advisory — never blocks dispatch
+    # (the estimate is a heuristic; a wrong over-estimate must not false-reject
+    # a runnable sheet). The baton folds these into SheetState.preflight_warnings.
+    preflight_warnings: list[str] = field(default_factory=list)
 
     # Model that actually executed (may differ from config default)
     model_used: str | None = None
