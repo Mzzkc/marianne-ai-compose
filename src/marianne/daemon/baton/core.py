@@ -1156,6 +1156,16 @@ class BatonCore:
             return False
         return all(sheet.status in _TERMINAL_BATON_STATUSES for sheet in job.sheets.values())
 
+    def has_job(self, job_id: str) -> bool:
+        """Whether the baton is currently tracking this job.
+
+        The presence predicate for jobs running in the baton event loop,
+        including auto-recovered jobs that have no manager wrapper task. Used
+        by cancel/pause to tell a genuinely-stale "running" status (no live
+        work anywhere) from a live baton job.
+        """
+        return job_id in self._jobs
+
     # =========================================================================
     # Ready Sheet Resolution
     # =========================================================================

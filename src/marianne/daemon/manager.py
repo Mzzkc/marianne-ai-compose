@@ -1753,6 +1753,27 @@ class JobManager:
 
         task = self._jobs.get(job_id)
         if task is None:
+            # Auto-recovered baton jobs (#162): a conductor restart re-runs
+            # orphaned jobs in the baton loop with NO manager wrapper task, so
+            # there is nothing to `task.cancel()`. The wrapped path stops a
+            # baton job via `adapter.deregister_job` (the CancelledError handler
+            # in `_execute_via_baton` — kills subprocess groups, cancels
+            # musician tasks, deregisters). Converge the unwrapped path onto
+            # the SAME call so both cancel identically; without it cancel was a
+            # silent no-op that left the recovered job running. A job the baton
+            # doesn't have AND with no wrapper is genuinely absent → False.
+            if self._baton_adapter is not None and self._baton_adapter.has_job(job_id):
+                self._baton_adapter.deregister_job(job_id)
+                await self._set_job_status(job_id, DaemonJobStatus.CANCELLED)
+                cleanup = asyncio.create_task(
+                    self._cancel_cleanup(job_id),
+                    name=f"cancel-cleanup-{job_id}",
+                )
+                cleanup.add_done_callback(
+                    lambda t: log_task_exception(t, _logger, "cancel_cleanup.failed"),
+                )
+                _logger.info("job.baton_cancelled_recovered", job_id=job_id)
+                return True
             return False
 
         task.cancel(msg=f"explicit cancel_job({job_id}) via IPC")

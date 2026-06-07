@@ -1506,6 +1506,14 @@ class BatonAdapter:
                 if not task.done():
                     task.cancel()
 
+    def has_job(self, job_id: str) -> bool:
+        """Whether the baton is currently tracking this job.
+
+        Delegates to the baton's presence predicate. Used by the manager to
+        cancel auto-recovered baton jobs that have no wrapper task (#162).
+        """
+        return self._baton.has_job(job_id)
+
     def has_completed_sheets(self, job_id: str) -> bool:
         """Check if any sheet in the job reached COMPLETED status.
 

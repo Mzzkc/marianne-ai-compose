@@ -90,6 +90,16 @@ class TestSheetRegistry:
         baton.deregister_job("nonexistent")
         assert baton.job_count == 0
 
+    async def test_has_job_presence_predicate(self) -> None:
+        # #162: presence predicate for cancel/pause of auto-recovered jobs.
+        baton = BatonCore()
+        sheets = {1: SheetExecutionState(sheet_num=1, instrument_name="claude-code")}
+        assert baton.has_job("test-job") is False
+        baton.register_job("test-job", sheets, {})
+        assert baton.has_job("test-job") is True
+        baton.deregister_job("test-job")
+        assert baton.has_job("test-job") is False
+
     async def test_get_sheet_state(self) -> None:
         baton = BatonCore()
         sheets = {

@@ -200,6 +200,7 @@ class TestCancelPendingJob:
             mgr._pending_jobs = {}
             mgr._jobs = {}
             mgr._job_meta = {}
+            mgr._baton_adapter = None  # #162: cancel now checks the baton
 
             result = await mgr.cancel_job("no-such-job")
             assert result is False

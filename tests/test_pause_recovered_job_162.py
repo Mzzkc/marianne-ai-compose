@@ -51,6 +51,7 @@ def _running_meta(job_id: str) -> JobMeta:
 def _baton_adapter(job_present: bool) -> MagicMock:
     adapter = MagicMock()
     adapter._baton.request_pause.return_value = job_present
+    adapter.has_job.return_value = job_present
     adapter._baton.inbox = asyncio.Queue()
     return adapter
 
@@ -77,3 +78,42 @@ class TestPauseRecoveredJob:
         with pytest.raises(JobSubmissionError):
             await manager.pause_job("s")
         assert manager._job_meta["s"].status == DaemonJobStatus.FAILED
+
+
+class TestCancelRecoveredJob:
+    """#162 (cancel half): cancel must stop auto-recovered baton jobs.
+
+    The wrapped path cancels a baton job by cancelling the manager wrapper
+    task; the CancelledError handler in `_execute_via_baton` then calls
+    `adapter.deregister_job` (kills subprocess groups + cancels musician tasks
+    + deregisters). Auto-recovered jobs have no wrapper, so `cancel_job`'s
+    `self._jobs.get` was None and it returned False — a silent no-op that left
+    the job running. The unwrapped path must converge on the SAME adapter
+    deregister the wrapped path reaches.
+    """
+
+    async def test_cancel_recovered_baton_job_deregisters(
+        self, manager: JobManager
+    ) -> None:
+        # Auto-recovered: RUNNING meta, baton HAS the job, no _jobs wrapper.
+        manager._job_meta["j"] = _running_meta("j")
+        manager._baton_adapter = _baton_adapter(job_present=True)
+        assert "j" not in manager._jobs
+
+        ok = await manager.cancel_job("j")
+
+        assert ok is True
+        manager._baton_adapter.deregister_job.assert_called_once_with("j")
+        assert manager._job_meta["j"].status == DaemonJobStatus.CANCELLED
+
+    async def test_cancel_unknown_job_with_no_wrapper_returns_false(
+        self, manager: JobManager
+    ) -> None:
+        # Not pending, no wrapper, baton doesn't have it → genuinely absent.
+        manager._job_meta["s"] = _running_meta("s")
+        manager._baton_adapter = _baton_adapter(job_present=False)
+
+        ok = await manager.cancel_job("s")
+
+        assert ok is False
+        manager._baton_adapter.deregister_job.assert_not_called()
