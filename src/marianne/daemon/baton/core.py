@@ -855,6 +855,19 @@ class BatonCore:
         # Path 3: Escalation — pause for composer decision
         if job.escalation_enabled:
             sheet.status = BatonSheetStatus.FERMATA
+            # #361: record entry time + reason so FERMATA survives restart and
+            # `mzt status` can show wait duration + why. The adapter detects the
+            # FERMATA transition, publishes EscalationNeeded, and starts polling
+            # for a resolution marker (the non-gated resolve producer).
+            sheet.fermata_entered_at = time.time()
+            sheet.fermata_reason = (
+                f"retry budget exhausted after {sheet.normal_attempts} attempt(s)"
+                + (
+                    f", {sheet.healing_attempts} healing attempt(s)"
+                    if sheet.healing_attempts
+                    else ""
+                )
+            )
             job.paused = True
             self._state_dirty = True
             _logger.info(

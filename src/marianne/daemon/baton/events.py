@@ -220,6 +220,21 @@ class StaleCheck:
 
 
 @dataclass(frozen=True)
+class FermataCheck:
+    """Timer fired — poll for a composer's resolution marker on a FERMATA sheet (#361).
+
+    A sheet in FERMATA is paused awaiting a composer decision. The adapter
+    polls ``{workspace}/markers/fermata/{job_id}/sheet-{N}.{decision}`` and, on
+    a valid marker, emits the existing ``EscalationResolved`` event. The poll
+    reschedules itself only while the sheet remains FERMATA.
+    """
+
+    job_id: str
+    sheet_num: int
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass(frozen=True)
 class CronTick:
     """Timer fired — a cron-scheduled job should be submitted.
 
@@ -573,6 +588,7 @@ BatonEvent = (
     | RateLimitExpired
     | RetryDue
     | StaleCheck
+    | FermataCheck
     | CronTick
     | JobTimeout
     | PacingComplete
@@ -674,6 +690,15 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": event.sheet_num,
                 "event": "baton.sheet.stale_check",
+                "data": {},
+                "timestamp": event.timestamp,
+            }
+
+        case FermataCheck():
+            return {
+                "job_id": event.job_id,
+                "sheet_num": event.sheet_num,
+                "event": "baton.sheet.fermata_check",
                 "data": {},
                 "timestamp": event.timestamp,
             }

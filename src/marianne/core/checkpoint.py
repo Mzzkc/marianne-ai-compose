@@ -433,6 +433,19 @@ class SheetState(BaseModel):
     # These fields were previously on SheetExecutionState (baton/state.py).
     # Moved here so the baton writes to SheetState directly — no sync layer.
 
+    fermata_entered_at: float | None = Field(
+        default=None,
+        description="Wall-clock time the sheet entered FERMATA (composer-decision "
+        "pause), or None. Set in the baton's exhaustion Path 3; checkpointed so "
+        "FERMATA survives a conductor restart and status can show how long it has "
+        "been waiting (#361).",
+    )
+    fermata_reason: str | None = Field(
+        default=None,
+        description="Human-readable reason the sheet entered FERMATA (e.g. retry "
+        "exhaustion summary), surfaced by `mzt status`. None when not in FERMATA (#361).",
+    )
+
     normal_attempts: int = Field(
         default=0,
         description="Number of failed execution attempts (excludes rate-limited and "

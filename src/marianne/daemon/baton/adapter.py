@@ -50,6 +50,8 @@ from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import (
+    EscalationResolved,
+    FermataCheck,
     SheetAttemptResult,
     SheetSkipped,
     StaleCheck,
@@ -432,6 +434,12 @@ class BatonAdapter:
         # wait looks idle but is not stuck); only after
         # ``max_idle_checks_before_kill`` strikes is an alive sheet killed.
         self._stale_idle_strikes: dict[tuple[str, int], int] = {}
+        # #361: sheets currently being polled for a FERMATA resolution marker.
+        # The run loop reconciles this against FERMATA status: a newly-FERMATA
+        # sheet gets EscalationNeeded published + a FermataCheck scheduled; a
+        # sheet that has left FERMATA is discarded. Handles both fresh entry and
+        # restart-recovery uniformly.
+        self._fermata_polling: set[tuple[str, int]] = set()
 
         # Last time an inbox high-water WARNING was emitted (#222), so the loop
         # doesn't spam a log line on every event once the queue is deep.
@@ -860,6 +868,8 @@ class BatonAdapter:
             self._stale_idle_strikes.pop(k, None)
         for k in [k for k in self._stale_idle_strikes if k[0] == job_id]:
             self._stale_idle_strikes.pop(k, None)
+        for k in [k for k in self._fermata_polling if k[0] == job_id]:
+            self._fermata_polling.discard(k)
 
         # Clean up vestigial _synced_status entries (Phase 2: sync layer
         # removed but dict retained for compatibility). Defensive cleanup
@@ -991,7 +1001,10 @@ class BatonAdapter:
                     BatonSheetStatus.DISPATCHED,
                     BatonSheetStatus.WAITING,
                     BatonSheetStatus.RETRY_SCHEDULED,
-                    BatonSheetStatus.FERMATA,
+                    # #361: FERMATA is NOT reset — a composer-decision pause must
+                    # survive restart (silent re-run of a sheet that already
+                    # touched production is catastrophic). The run loop's
+                    # reconcile re-arms marker polling for recovered FERMATA sheets.
                 })
                 baton_status = (
                     BatonSheetStatus.PENDING
@@ -2499,6 +2512,158 @@ class BatonAdapter:
         )
         await self._baton.handle_event(event)
 
+    # === FERMATA resolution polling (#361) =================================
+
+    _FERMATA_POLL_INTERVAL_SECONDS = 5.0
+    _FERMATA_DECISIONS = frozenset({"retry", "skip", "accept", "fail"})
+
+    def _fermata_marker_dir(self, job_id: str, sheet_num: int) -> Path | None:
+        """Job-id-scoped marker directory for a FERMATA sheet, or None.
+
+        Job-id scoping (the per-invocation id) is the unanimous-lab mitigation
+        for the top hazard: a stale ``sheet-N.<decision>`` marker from a PREVIOUS
+        run silently auto-resolving a NEW run's FERMATA (#361).
+        """
+        sheet = self._job_sheets.get(job_id, {}).get(sheet_num)
+        if sheet is None or sheet.workspace is None:
+            return None
+        return Path(sheet.workspace) / "markers" / "fermata" / job_id
+
+    async def _reconcile_fermata_polling(self) -> None:
+        """Match FERMATA marker-polling to current FERMATA status (#361).
+
+        Run after every event. A sheet newly in FERMATA gets ``EscalationNeeded``
+        published (dashboard/notification observability) + a first ``FermataCheck``
+        scheduled; a sheet that has left FERMATA is dropped. This uniformly covers
+        fresh exhaustion entry AND restart-recovered FERMATA sheets — no separate
+        recovery path needed.
+        """
+        current: set[tuple[str, int]] = set()
+        for job_id, job in self._baton._jobs.items():
+            for sheet_num, sheet in job.sheets.items():
+                if sheet.status != BatonSheetStatus.FERMATA:
+                    continue
+                key = (job_id, sheet_num)
+                current.add(key)
+                if key in self._fermata_polling:
+                    continue
+                self._fermata_polling.add(key)
+                marker_dir = self._fermata_marker_dir(job_id, sheet_num)
+                await self.publish_job_event(
+                    job_id,
+                    "baton.sheet.escalation_needed",
+                    {
+                        "sheet_num": sheet_num,
+                        "reason": sheet.fermata_reason or "composer decision required",
+                        "options": sorted(self._FERMATA_DECISIONS),
+                        "marker_dir": str(marker_dir) if marker_dir else "",
+                    },
+                )
+                self._timer_wheel.schedule(
+                    self._FERMATA_POLL_INTERVAL_SECONDS,
+                    FermataCheck(job_id=job_id, sheet_num=sheet_num),
+                )
+                _logger.info(
+                    "adapter.fermata.polling_started",
+                    extra={"job_id": job_id, "sheet_num": sheet_num},
+                )
+        for key in self._fermata_polling - current:
+            self._fermata_polling.discard(key)
+
+    @staticmethod
+    def _scan_fermata_markers(marker_dir: Path, sheet_num: int) -> list[Path]:
+        """Valid decision-marker files for a sheet (sync — run in executor)."""
+        try:
+            entries = list(marker_dir.iterdir())
+        except OSError:
+            return []
+        return [
+            p
+            for p in entries
+            if p.is_file()
+            and p.stem == f"sheet-{sheet_num}"
+            and p.suffix.lstrip(".") in BatonAdapter._FERMATA_DECISIONS
+        ]
+
+    @staticmethod
+    def _consume_fermata_marker(marker: Path) -> None:
+        """Rename a consumed marker into ``consumed/`` (audit, no re-trigger)."""
+        consumed_dir = marker.parent / "consumed"
+        consumed_dir.mkdir(parents=True, exist_ok=True)
+        marker.rename(consumed_dir / marker.name)
+
+    async def _handle_fermata_check(self, event: FermataCheck) -> None:
+        """Poll for a composer resolution marker on a FERMATA sheet (#361).
+
+        A valid ``{marker_dir}/sheet-{N}.<decision>`` is consumed (atomic rename
+        into ``consumed/``) and turned into the existing ``EscalationResolved``
+        event for ``_handle_escalation_resolved``. Filesystem work runs off the
+        event loop via ``run_in_executor``. Reschedules itself only while the
+        sheet stays FERMATA; the reconcile loop re-arms a sheet that is still
+        FERMATA after this returns without rescheduling.
+        """
+        key = (event.job_id, event.sheet_num)
+        state = self._baton.get_sheet_state(event.job_id, event.sheet_num)
+        if state is None or state.status != BatonSheetStatus.FERMATA:
+            self._fermata_polling.discard(key)  # left FERMATA / gone → stop
+            return
+
+        marker_dir = self._fermata_marker_dir(event.job_id, event.sheet_num)
+        markers: list[Path] = []
+        if marker_dir is not None:
+            markers = await asyncio.get_running_loop().run_in_executor(
+                None, self._scan_fermata_markers, marker_dir, event.sheet_num
+            )
+
+        def _reschedule() -> None:
+            self._timer_wheel.schedule(
+                self._FERMATA_POLL_INTERVAL_SECONDS,
+                FermataCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+            )
+
+        if len(markers) > 1:
+            # Ambiguous — refuse to choose; keep polling until disambiguated.
+            _logger.warning(
+                "adapter.fermata.ambiguous_markers",
+                extra={
+                    "job_id": event.job_id,
+                    "sheet_num": event.sheet_num,
+                    "markers": sorted(m.name for m in markers),
+                },
+            )
+            _reschedule()
+            return
+        if not markers:
+            _reschedule()
+            return
+
+        marker = markers[0]
+        decision = marker.suffix.lstrip(".")
+        try:
+            await asyncio.get_running_loop().run_in_executor(
+                None, self._consume_fermata_marker, marker
+            )
+        except OSError:
+            _reschedule()  # vanished/raced → retry next poll
+            return
+        # Hand the decision to the existing resolve handler. Stop polling this
+        # sheet; the resolve transitions it out of FERMATA, and reconcile re-arms
+        # only if (unexpectedly) it is still FERMATA next cycle.
+        self._fermata_polling.discard(key)
+        self._baton.inbox.put_nowait(
+            EscalationResolved(
+                job_id=event.job_id, sheet_num=event.sheet_num, decision=decision
+            )
+        )
+        _logger.info(
+            "adapter.fermata.resolved_from_marker",
+            extra={
+                "job_id": event.job_id,
+                "sheet_num": event.sheet_num,
+                "decision": decision,
+            },
+        )
+
     async def run(self) -> None:
         """Run the baton's event loop with dispatch integration.
 
@@ -2577,8 +2742,17 @@ class BatonAdapter:
                 # busy/disabled → reschedule.
                 if isinstance(event, StaleCheck):
                     await self._handle_stale_check(event)
+                elif isinstance(event, FermataCheck):
+                    # #361: poll for a composer's resolution marker on a paused
+                    # (FERMATA) sheet — its own handler, not the baton's.
+                    await self._handle_fermata_check(event)
                 else:
                     await self._baton.handle_event(event)
+
+                # #361: start/stop FERMATA marker polling to match status —
+                # arms newly-FERMATA sheets (fresh exhaustion OR restart-recovered)
+                # and drops resolved/timed-out ones.
+                await self._reconcile_fermata_polling()
 
                 # Phase 2: persist to registry if state changed.
                 # The baton writes directly to SheetState objects in
