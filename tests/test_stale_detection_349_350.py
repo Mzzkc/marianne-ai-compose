@@ -142,6 +142,10 @@ class TestIdleEscalation:
         adapter._stale_dispatch_time[_KEY] = time.time() - 200.0
         task = _alive_task()
         adapter._active_tasks[_KEY] = task
+        # #344: a kill now requires the subprocess to be DEAD (idle + alive is
+        # deferred). Model a dead subprocess so the idle→STALE kill still fires.
+        adapter._active_pids[_KEY] = (123, 123)
+        adapter._process_is_alive = lambda pid: False  # type: ignore[assignment]
 
         await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
 
@@ -157,6 +161,9 @@ class TestIdleEscalation:
         adapter._stale_dispatch_time[_KEY] = time.time() - 100.0
         task = _alive_task()
         adapter._active_tasks[_KEY] = task
+        # #344: dead subprocess → idle kill fires (alive would defer).
+        adapter._active_pids[_KEY] = (123, 123)
+        adapter._process_is_alive = lambda pid: False  # type: ignore[assignment]
 
         await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
         await _cancel_and_collect(task)

@@ -427,6 +427,11 @@ class BatonAdapter:
         self._stale_configs: dict[str, StaleDetectionConfig] = {}
         self._stale_dispatch_time: dict[tuple[str, int], float] = {}
         self._stale_markers: set[tuple[str, int]] = set()
+        # #344: consecutive idle-AND-alive strikes per sheet. The kill is
+        # deferred while the subprocess is alive (a silent finalize / network
+        # wait looks idle but is not stuck); only after
+        # ``max_idle_checks_before_kill`` strikes is an alive sheet killed.
+        self._stale_idle_strikes: dict[tuple[str, int], int] = {}
 
         # Last time an inbox high-water WARNING was emitted (#222), so the loop
         # doesn't spam a log line on every event once the queue is deep.
@@ -852,6 +857,9 @@ class BatonAdapter:
         for k in stale_keys:
             self._stale_dispatch_time.pop(k, None)
             self._stale_markers.discard(k)
+            self._stale_idle_strikes.pop(k, None)
+        for k in [k for k in self._stale_idle_strikes if k[0] == job_id]:
+            self._stale_idle_strikes.pop(k, None)
 
         # Clean up vestigial _synced_status entries (Phase 2: sync layer
         # removed but dict retained for compatibility). Defensive cleanup
@@ -2126,6 +2134,7 @@ class BatonAdapter:
         is_stale = (job_id, sheet_num) in self._stale_markers
         self._stale_markers.discard((job_id, sheet_num))
         self._stale_dispatch_time.pop((job_id, sheet_num), None)
+        self._stale_idle_strikes.pop((job_id, sheet_num), None)
 
         if task.cancelled():
             # Cancelled tasks never report to the baton — the sheet stays
@@ -2330,6 +2339,40 @@ class BatonAdapter:
             newest = max(newest, mtime)
         return newest
 
+    @staticmethod
+    def _process_is_alive(pid: int) -> bool:
+        """Whether ``pid`` is a live (non-zombie) process (#344).
+
+        Reads ``/proc/<pid>/stat`` (a virtual-FS read — microseconds, never
+        blocks the event loop on disk). Returns:
+
+        * ``False`` only when the process is provably gone or a zombie
+          (``Z``/``X``) — safe to kill.
+        * ``True`` for any live state, AND fails OPEN: any read/parse error
+          (process not found is the one definitive ``False``; permission
+          errors, non-Linux platforms, malformed stat) returns ``True`` so a
+          probe gap can never cause a false-kill of a working agent.
+
+        PID reuse, if it ever occurred within a check interval, would make a
+        gone process look alive → extra deferral (the safe direction), never a
+        false-kill, so no start-time guard is needed for correctness.
+        """
+        try:
+            with open(f"/proc/{pid}/stat", "rb") as fh:
+                raw = fh.read()
+        except FileNotFoundError:
+            return False  # process is gone
+        except OSError:
+            return True  # cannot probe (permissions/platform) → fail open
+        try:
+            # comm (field 2) is parenthesised and may contain spaces/parens;
+            # the state char is the first token after the final ')'.
+            close = raw.rfind(b")")
+            state = raw[close + 2 : close + 3].decode("ascii", "replace")
+        except (ValueError, IndexError):
+            return True  # malformed → fail open
+        return state not in ("Z", "X", "x")
+
     async def _handle_stale_check(self, event: StaleCheck) -> None:
         """Handle a StaleCheck event.
 
@@ -2380,22 +2423,69 @@ class BatonAdapter:
                 )
             idle_seconds = time.time() - last_active
             if idle_seconds >= cfg.idle_timeout_seconds:
-                _logger.warning(
-                    "adapter.stale_check.idle_cancel",
-                    extra={
-                        "job_id": event.job_id,
-                        "sheet_num": event.sheet_num,
-                        "idle_seconds": round(idle_seconds, 1),
-                        "idle_timeout_seconds": cfg.idle_timeout_seconds,
-                    },
-                )
-                # Mark BEFORE cancel so _on_musician_done classifies the
-                # synthetic failure as STALE. Do NOT inject here — the
-                # done-callback injects exactly one result (no double-fire).
+                # #344: idle (no file writes) does NOT prove stuck. Probe the
+                # subprocess; while it is alive, defer the kill — a silent
+                # finalize or a network/model-API wait looks idle but is
+                # working. Kill an ALIVE-but-idle sheet only after
+                # ``max_idle_checks_before_kill`` consecutive strikes (bounded
+                # backstop; the subprocess timeout is the ultimate wall). A
+                # dead/zombie/gone subprocess is killed immediately. The probe
+                # fails OPEN (no PID / unreadable → treat as alive → defer) so
+                # a probe gap can never cause a false-kill.
+                pid_entry = self._active_pids.get(key)
+                alive = self._process_is_alive(pid_entry[0]) if pid_entry else True
+                if alive:
+                    strikes = self._stale_idle_strikes.get(key, 0) + 1
+                    self._stale_idle_strikes[key] = strikes
+                    if strikes < cfg.max_idle_checks_before_kill:
+                        _logger.warning(
+                            "adapter.stale_check.alive_idle_deferred",
+                            extra={
+                                "job_id": event.job_id,
+                                "sheet_num": event.sheet_num,
+                                "idle_seconds": round(idle_seconds, 1),
+                                "idle_timeout_seconds": cfg.idle_timeout_seconds,
+                                "strike": strikes,
+                                "max_idle_checks_before_kill": (
+                                    cfg.max_idle_checks_before_kill
+                                ),
+                            },
+                        )
+                        self._timer_wheel.schedule(
+                            cfg.check_interval_seconds,
+                            StaleCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+                        )
+                        await self._baton.handle_event(event)
+                        return
+                    _logger.error(
+                        "adapter.stale_check.alive_idle_backstop_kill",
+                        extra={
+                            "job_id": event.job_id,
+                            "sheet_num": event.sheet_num,
+                            "idle_seconds": round(idle_seconds, 1),
+                            "strikes": strikes,
+                        },
+                    )
+                else:
+                    _logger.warning(
+                        "adapter.stale_check.dead_subprocess_kill",
+                        extra={
+                            "job_id": event.job_id,
+                            "sheet_num": event.sheet_num,
+                            "idle_seconds": round(idle_seconds, 1),
+                        },
+                    )
+                # Dead/zombie, OR alive past the backstop → kill. Mark BEFORE
+                # cancel so _on_musician_done classifies the synthetic failure
+                # as STALE. Do NOT inject here — the done-callback injects
+                # exactly one result (no double-fire).
+                self._stale_idle_strikes.pop(key, None)
                 self._stale_markers.add(key)
                 task.cancel()
                 await self._baton.handle_event(event)
                 return
+            # Active again (workspace write within the timeout) → reset strikes.
+            self._stale_idle_strikes.pop(key, None)
             self._timer_wheel.schedule(
                 cfg.check_interval_seconds,
                 StaleCheck(job_id=event.job_id, sheet_num=event.sheet_num),

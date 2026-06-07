@@ -300,6 +300,18 @@ class StaleDetectionConfig(BaseModel):
         description="How often (seconds) to check for idle executions. "
         "Lower values detect stale sheets faster but add minor overhead.",
     )
+    max_idle_checks_before_kill: int = Field(
+        default=3,
+        ge=1,
+        description="Consecutive idle-AND-still-alive checks required before an "
+        "idle sheet is killed (#344). The detector probes the subprocess; while "
+        "it is alive the kill is deferred, because a silently-finalizing or "
+        "network-blocked agent looks idle but is NOT stuck. Only a dead/zombie "
+        "subprocess is killed immediately. This bounded backstop kills a "
+        "genuinely-hung-but-alive process after N idle checks; the subprocess "
+        "execution timeout is the ultimate safety net. 1 = kill on first idle "
+        "check (legacy behaviour, may false-kill working agents).",
+    )
 
     @model_validator(mode="after")
     def _validate_interval_vs_timeout(self) -> StaleDetectionConfig:
