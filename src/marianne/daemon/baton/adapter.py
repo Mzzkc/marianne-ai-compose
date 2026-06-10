@@ -41,7 +41,7 @@ import asyncio
 import os
 import signal
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -52,6 +52,7 @@ from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import (
     EscalationResolved,
     FermataCheck,
+    RateLimitHit,
     SheetAttemptResult,
     SheetSkipped,
     StaleCheck,
@@ -91,6 +92,13 @@ _logger = get_logger("daemon.baton.adapter")
 # two state representations. Now there's one shared SheetState —
 # persistence is all that's needed.
 PersistCallback = Callable[[str], None]
+
+# #206: async reporter mirroring baton rate limits to the daemon-level
+# RateLimitCoordinator. Signature: (instrument, wait_seconds, job_id,
+# sheet_num). The manager injects its ``_on_rate_limit`` here; the adapter
+# only ever WRITES through it (the baton's own InstrumentState remains the
+# single authority for dispatch decisions).
+RateLimitReporter = Callable[[str, float, str, int], Awaitable[None]]
 
 # Backward compat aliases — tests may import these
 StateSyncCallback = Callable[[str, int, str, SheetExecutionState | None], None]
@@ -380,6 +388,7 @@ class BatonAdapter:
         state_sync_callback: StateSyncCallback | None = None,
         persist_callback: PersistCallback | None = None,
         learning_store: GlobalLearningStore | None = None,
+        rate_limit_reporter: RateLimitReporter | None = None,
     ) -> None:
         """Initialize the BatonAdapter.
 
@@ -394,6 +403,12 @@ class BatonAdapter:
             learning_store: Optional GlobalLearningStore handle for injecting
                 learned patterns into prompts (#200). None (and store-less
                 paths) cleanly skip the layer.
+            rate_limit_reporter: Optional async write-through to the daemon's
+                RateLimitCoordinator (#206). Every RateLimitHit the run loop
+                processes is mirrored here so daemon-level consumers
+                (backpressure, submit-time warnings, the scheduler) see the
+                same limits the baton is already enforcing at dispatch.
+                None (tests, standalone use) skips the mirror.
         """
         from marianne.daemon.baton.timer import TimerWheel
 
@@ -410,6 +425,7 @@ class BatonAdapter:
         self._stagger_delay_ms: int = 0
         self._persist_callback = persist_callback
         self._learning_store = learning_store
+        self._rate_limit_reporter = rate_limit_reporter
         # Deprecated compat attributes — tests set/read these directly
         self._state_sync_callback = state_sync_callback
         self._synced_status: dict[tuple[str, int], str] = {}
@@ -2664,6 +2680,37 @@ class BatonAdapter:
             },
         )
 
+    async def _report_rate_limit_cross_job(self, event: RateLimitHit) -> None:
+        """Mirror a rate limit to the daemon-level coordinator (#206).
+
+        The baton's own InstrumentState already blocks dispatch for ALL
+        jobs (instrument state is baton-wide) — this write-through keeps
+        the daemon's ``RateLimitCoordinator`` truthful so its consumers
+        (backpressure escalation, submit-time warnings, the scheduler)
+        see the same limits. Fail-open: a broken mirror must never break
+        the dispatch loop — a missed report only costs observability,
+        never correctness.
+        """
+        if self._rate_limit_reporter is None:
+            return
+        try:
+            await self._rate_limit_reporter(
+                event.instrument,
+                event.wait_seconds,
+                event.job_id,
+                event.sheet_num,
+            )
+        except Exception:
+            _logger.warning(
+                "adapter.rate_limit_report_failed",
+                exc_info=True,
+                extra={
+                    "instrument": event.instrument,
+                    "job_id": event.job_id,
+                    "sheet_num": event.sheet_num,
+                },
+            )
+
     async def run(self) -> None:
         """Run the baton's event loop with dispatch integration.
 
@@ -2748,6 +2795,13 @@ class BatonAdapter:
                     await self._handle_fermata_check(event)
                 else:
                     await self._baton.handle_event(event)
+
+                # #206: mirror instrument rate limits to the daemon-level
+                # coordinator AFTER the baton has applied its own state
+                # (WAITING transitions, expiry timer). The baton remains the
+                # sole dispatch authority; this is observability write-through.
+                if isinstance(event, RateLimitHit):
+                    await self._report_rate_limit_cross_job(event)
 
                 # #361: start/stop FERMATA marker polling to match status —
                 # arms newly-FERMATA sheets (fresh exhaustion OR restart-recovered)

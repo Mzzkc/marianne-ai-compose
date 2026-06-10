@@ -1,22 +1,29 @@
-"""Cross-job rate limit coordination.
+"""Daemon-level mirror of instrument rate limits.
 
-Phase 3 infrastructure — write path active, read path not yet driving
-execution.
+Cross-job dispatch backoff does NOT live here — it is structural in the
+baton: ``BatonCore._instruments`` is shared by every job, so a
+``RateLimitHit`` from any job marks the instrument baton-wide, moves all
+jobs' affected sheets to WAITING, and blocks dispatch until the baton's
+own ``RateLimitExpired`` timer fires. The baton is the single authority
+for dispatch decisions.
 
-The write side (``report_rate_limit()``) is wired into the daemon via
-``JobManager._on_rate_limit`` → ``JobService`` →
-``RunnerContext.rate_limit_callback``.  Rate limit events from job
-runners flow into the coordinator in real time.
+This coordinator is the daemon-level OBSERVABILITY mirror of that state,
+fed by a write-through in the baton adapter's run loop
+(``BatonAdapter._report_rate_limit_cross_job`` →
+``JobManager._on_rate_limit`` → ``report_rate_limit()``, #206).
+Consumers:
 
-The read side (``is_rate_limited()``) is consumed by
-``GlobalSheetScheduler``, which is built and tested but not yet
-driving execution (Phase 3).  When the scheduler is integrated into
-the execution path (see ``scheduler.py`` module docstring), the
-collected rate limit data will inform cross-job scheduling decisions.
+- ``BackpressureController`` — escalates pressure to HIGH while any
+  instrument is rate-limited;
+- submit-time warnings (``JobManager.submit_job``) — "X clears in Ns";
+- ``GlobalSheetScheduler`` via ``is_rate_limited()`` — built and tested
+  but not yet driving execution (#238).
 
-When any job hits a rate limit, ALL jobs using that backend are notified
-to back off.  Much faster than the SQLite cross-process approach in
-``marianne.learning.store.rate_limits`` since everything is in-process.
+Keys are instrument NAMES — the same key space the baton's
+``InstrumentState`` uses and that ``mzt clear-rate-limits --instrument``
+passes (the manager clears the baton and this mirror with the same
+string). Do not key by provider/backend type: that would split the key
+space and break the shared clear contract.
 
 Satisfies the ``RateLimitChecker`` protocol defined in ``scheduler.py``
 so the ``GlobalSheetScheduler`` can query limits before dispatching.
@@ -49,7 +56,7 @@ MAX_WAIT_SECONDS: float = 3600.0  # 1 hour
 class RateLimitEvent:
     """A single rate limit event reported by a job."""
 
-    backend_type: str
+    instrument: str
     detected_at: float
     suggested_wait_seconds: float
     job_id: str
@@ -57,19 +64,17 @@ class RateLimitEvent:
 
 
 class RateLimitCoordinator:
-    """In-memory rate limit coordination across all daemon jobs.
+    """In-memory daemon-level mirror of instrument rate limits.
 
-    **Status: Write path active, read path partially active.**
+    Fed by the baton adapter's write-through (#206): every
+    ``RateLimitHit`` the baton processes is reported here via
+    ``JobManager._on_rate_limit``. The baton itself already enforces
+    cross-job dispatch backoff (its instrument state is baton-wide);
+    this mirror exists so daemon-level consumers — backpressure,
+    submit-time warnings, the scheduler — see the same limits.
 
-    The write side (``report_rate_limit()``) is wired into the daemon
-    via ``JobManager._on_rate_limit`` → ``JobService`` →
-    ``RunnerContext.rate_limit_callback``.  The read side
-    (``is_rate_limited()``) is consumed by ``GlobalSheetScheduler``
-    which is built and tested but not yet driving execution (Phase 3).
-
-    When any job hits a rate limit, ALL jobs using that backend
-    are notified to back off.  The coordinator tracks per-backend
-    resume times.
+    Keys are instrument names; entries self-expire via per-entry
+    resume times (``active_limits`` filters, ``prune_stale`` removes).
 
     The async ``is_rate_limited`` method satisfies the
     ``RateLimitChecker`` protocol so the scheduler can consult
@@ -78,25 +83,27 @@ class RateLimitCoordinator:
 
     def __init__(self) -> None:
         self._events: list[RateLimitEvent] = []
-        self._active_limits: dict[str, float] = {}  # backend_type → resume_at (monotonic)
+        self._active_limits: dict[str, float] = {}  # instrument → resume_at (monotonic)
         self._lock = asyncio.Lock()
 
     # ─── Reporting ─────────────────────────────────────────────────
 
     async def report_rate_limit(
         self,
-        backend_type: str,
+        instrument: str,
         wait_seconds: float,
         job_id: str,
         sheet_num: int,
     ) -> None:
-        """Report a rate limit hit — all jobs using this backend back off.
+        """Record a rate limit hit for an instrument.
 
-        If a limit is already active for the backend, the resume time
+        If a limit is already active for the instrument, the resume time
         is extended to whichever is later (existing or newly reported).
 
         Args:
-            backend_type: Backend that was rate-limited (e.g. ``"claude_cli"``).
+            instrument: Instrument that was rate-limited (e.g.
+                ``"claude-code"`` — the same name the baton's
+                InstrumentState and ``mzt clear-rate-limits`` use).
             wait_seconds: Suggested wait duration in seconds.
             job_id: Job that encountered the limit.
             sheet_num: Sheet that triggered the limit.
@@ -120,12 +127,12 @@ class RateLimitCoordinator:
         now = time.monotonic()
         async with self._lock:
             resume_at = now + wait_seconds
-            self._active_limits[backend_type] = max(
-                self._active_limits.get(backend_type, 0.0),
+            self._active_limits[instrument] = max(
+                self._active_limits.get(instrument, 0.0),
                 resume_at,
             )
             self._events.append(RateLimitEvent(
-                backend_type=backend_type,
+                instrument=instrument,
                 detected_at=now,
                 suggested_wait_seconds=wait_seconds,
                 job_id=job_id,
@@ -137,7 +144,7 @@ class RateLimitCoordinator:
 
         _logger.warning(
             "rate_limit.reported",
-            backend=backend_type,
+            instrument=instrument,
             wait_seconds=wait_seconds,
             job_id=job_id,
             sheet_num=sheet_num,
@@ -147,19 +154,19 @@ class RateLimitCoordinator:
 
     async def is_rate_limited(
         self,
-        backend_type: str,
+        instrument: str,
         model: str | None = None,
     ) -> tuple[bool, float]:
-        """Check if a backend is currently rate-limited.
+        """Check if an instrument is currently rate-limited.
 
         Satisfies the ``RateLimitChecker`` protocol used by
         ``GlobalSheetScheduler.next_sheet()``.
 
         The ``model`` parameter is accepted for protocol compatibility
-        but currently unused — limits are tracked per backend type.
+        but currently unused — limits are tracked per instrument.
 
         Args:
-            backend_type: Backend to check.
+            instrument: Instrument to check.
             model: Unused; accepted for protocol compatibility.
 
         Returns:
@@ -168,7 +175,7 @@ class RateLimitCoordinator:
         """
         del model  # accepted for RateLimitChecker protocol compatibility
         async with self._lock:
-            resume_at = self._active_limits.get(backend_type, 0.0)
+            resume_at = self._active_limits.get(instrument, 0.0)
         remaining = resume_at - time.monotonic()
         if remaining > 0:
             return True, remaining
@@ -176,11 +183,11 @@ class RateLimitCoordinator:
 
     @property
     def active_limits(self) -> dict[str, float]:
-        """Currently active limits as ``{backend_type: seconds_remaining}``."""
+        """Currently active limits as ``{instrument: seconds_remaining}``."""
         now = time.monotonic()
         return {
-            backend: round(resume_at - now, 1)
-            for backend, resume_at in self._active_limits.items()
+            instrument: round(resume_at - now, 1)
+            for instrument, resume_at in self._active_limits.items()
             if resume_at > now
         }
 

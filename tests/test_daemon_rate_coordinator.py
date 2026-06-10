@@ -37,7 +37,7 @@ class TestReporting:
     ):
         """Reporting a limit makes the backend rate-limited."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=1,
@@ -55,13 +55,13 @@ class TestReporting:
     ):
         """A longer wait replaces a shorter existing limit."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=10.0,
             job_id="job-a",
             sheet_num=1,
         )
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=60.0,
             job_id="job-b",
             sheet_num=2,
@@ -79,13 +79,13 @@ class TestReporting:
     ):
         """A shorter wait does NOT reduce an existing longer limit."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=60.0,
             job_id="job-a",
             sheet_num=1,
         )
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=5.0,
             job_id="job-b",
             sheet_num=2,
@@ -102,7 +102,7 @@ class TestReporting:
     ):
         """Limits on one backend don't affect others."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=1,
@@ -119,7 +119,7 @@ class TestReporting:
     ):
         """Reported events are stored and accessible."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=3,
@@ -127,7 +127,7 @@ class TestReporting:
 
         events = coordinator.recent_events
         assert len(events) == 1
-        assert events[0].backend_type == "claude_cli"
+        assert events[0].instrument == "claude_cli"
         assert events[0].job_id == "job-a"
         assert events[0].sheet_num == 3
         assert events[0].suggested_wait_seconds == 30.0
@@ -146,7 +146,7 @@ class TestProtocolCompliance:
     ):
         """Returns (True, float) when limited."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=1,
@@ -193,13 +193,13 @@ class TestProperties:
     ):
         """active_limits returns only currently active limits."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=1,
         )
         await coordinator.report_rate_limit(
-            backend_type="openai",
+            instrument="openai",
             wait_seconds=60.0,
             job_id="job-b",
             sheet_num=2,
@@ -220,7 +220,7 @@ class TestProperties:
         """Expired limits are not included in active_limits."""
         # Report a limit that expires almost immediately
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=0.01,
             job_id="job-a",
             sheet_num=1,
@@ -238,7 +238,7 @@ class TestProperties:
         """recent_events returns newest events first."""
         for i in range(3):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=float(i + 1),
                 job_id=f"job-{i}",
                 sheet_num=i + 1,
@@ -265,7 +265,7 @@ class TestEventPruning:
         """Events older than 1 hour are pruned when new events arrive."""
         # Manually inject an old event
         old_event = RateLimitEvent(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             detected_at=time.monotonic() - 7200,  # 2 hours ago
             suggested_wait_seconds=30.0,
             job_id="old-job",
@@ -276,7 +276,7 @@ class TestEventPruning:
 
         # Report a new event — old one should be pruned
         await coordinator.report_rate_limit(
-            backend_type="openai",
+            instrument="openai",
             wait_seconds=10.0,
             job_id="new-job",
             sheet_num=1,
@@ -299,7 +299,7 @@ class TestPruneStale:
     ):
         """prune_stale() removes events older than 1 hour."""
         old_event = RateLimitEvent(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             detected_at=time.monotonic() - 7200,
             suggested_wait_seconds=30.0,
             job_id="old-job",
@@ -318,7 +318,7 @@ class TestPruneStale:
     ):
         """prune_stale() preserves events from the last hour."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=30.0,
             job_id="recent-job",
             sheet_num=1,
@@ -361,7 +361,7 @@ class TestPruneStale:
         for i in range(5):
             coordinator._events.append(
                 RateLimitEvent(
-                    backend_type="cli",
+                    instrument="cli",
                     detected_at=now - 7200,  # 2 hours ago
                     suggested_wait_seconds=10.0,
                     job_id=f"old-{i}",
@@ -370,7 +370,7 @@ class TestPruneStale:
             )
         coordinator._events.append(
             RateLimitEvent(
-                backend_type="cli",
+                instrument="cli",
                 detected_at=now,  # fresh
                 suggested_wait_seconds=10.0,
                 job_id="fresh",
@@ -406,7 +406,7 @@ class TestInputValidation:
     ):
         """Negative wait_seconds is clamped to 0 (no blocking)."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=-10.0,
             job_id="job-a",
             sheet_num=1,
@@ -423,7 +423,7 @@ class TestInputValidation:
     ):
         """wait_seconds=0 should not create a blocking limit."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=0.0,
             job_id="job-a",
             sheet_num=1,
@@ -441,7 +441,7 @@ class TestInputValidation:
         from marianne.daemon.rate_coordinator import MAX_WAIT_SECONDS
 
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=999999.0,  # ~11.5 days
             job_id="job-a",
             sheet_num=1,
@@ -470,7 +470,7 @@ class TestNonFiniteWaitSeconds:
     ):
         """NaN wait_seconds is clamped to 0 — no blocking."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=float("nan"),
             job_id="job-a",
             sheet_num=1,
@@ -486,7 +486,7 @@ class TestNonFiniteWaitSeconds:
     ):
         """Positive inf wait_seconds is clamped to 0 — no permanent blocking."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=float("inf"),
             job_id="job-a",
             sheet_num=1,
@@ -502,7 +502,7 @@ class TestNonFiniteWaitSeconds:
     ):
         """Negative inf wait_seconds is clamped to 0."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=float("-inf"),
             job_id="job-a",
             sheet_num=1,
@@ -518,7 +518,7 @@ class TestNonFiniteWaitSeconds:
     ):
         """NaN wait results in an event recorded with wait=0."""
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=float("nan"),
             job_id="job-a",
             sheet_num=1,
@@ -548,7 +548,7 @@ class TestConcurrentRateLimitStress:
 
         async def reporter(idx: int):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=float(idx % 10 + 1),
                 job_id=f"job-{idx}",
                 sheet_num=idx,
@@ -571,7 +571,7 @@ class TestConcurrentRateLimitStress:
         async def reporter():
             for i in range(30):
                 await coordinator.report_rate_limit(
-                    backend_type=f"backend-{i % 3}",
+                    instrument=f"backend-{i % 3}",
                     wait_seconds=0.1,
                     job_id=f"job-{i}",
                     sheet_num=i,
@@ -624,7 +624,7 @@ class TestConcurrentRateLimitStress:
         async def report_backend(backend_idx: int):
             for j in range(reports_per_backend):
                 await coordinator.report_rate_limit(
-                    backend_type=f"backend-{backend_idx}",
+                    instrument=f"backend-{backend_idx}",
                     wait_seconds=5.0,
                     job_id=f"job-{backend_idx}-{j}",
                     sheet_num=j,
@@ -654,7 +654,7 @@ class TestConcurrentRateLimitStress:
         async def reporter():
             for i in range(30):
                 await coordinator.report_rate_limit(
-                    backend_type="claude_cli",
+                    instrument="claude_cli",
                     wait_seconds=0.05,
                     job_id=f"job-{i}",
                     sheet_num=i,
@@ -708,7 +708,7 @@ class TestReportExpireReportCycle:
         """Report → wait for expiry → verify clear → re-report → verify active."""
         # Phase 1: Report a short limit
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=0.03,
             job_id="job-a",
             sheet_num=1,
@@ -725,7 +725,7 @@ class TestReportExpireReportCycle:
 
         # Phase 3: Re-report on the same backend
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=0.03,
             job_id="job-b",
             sheet_num=2,
@@ -748,13 +748,13 @@ class TestReportExpireReportCycle:
         """Expire/re-report on one backend doesn't affect another."""
         # Report on both backends
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=0.03,
             job_id="job-a",
             sheet_num=1,
         )
         await coordinator.report_rate_limit(
-            backend_type="openai",
+            instrument="openai",
             wait_seconds=60.0,
             job_id="job-b",
             sheet_num=1,
@@ -771,7 +771,7 @@ class TestReportExpireReportCycle:
 
         # Re-report claude_cli — openai unchanged
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=2,
@@ -789,7 +789,7 @@ class TestReportExpireReportCycle:
         """Multiple rapid report/expire cycles don't accumulate stale state."""
         for i in range(10):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=0.01,
                 job_id=f"job-{i}",
                 sheet_num=i,
@@ -825,14 +825,14 @@ class TestSchedulerIntegration:
 
         # Register sheets with different backends
         sheets = [
-            SheetInfo(job_id="job-a", sheet_num=1, backend_type="claude_cli"),
-            SheetInfo(job_id="job-a", sheet_num=2, backend_type="openai"),
+            SheetInfo(job_id="job-a", sheet_num=1, instrument="claude_cli"),
+            SheetInfo(job_id="job-a", sheet_num=2, instrument="openai"),
         ]
         await scheduler.register_job("job-a", sheets)
 
         # Rate-limit claude_cli
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=60.0,
             job_id="job-a",
             sheet_num=1,
@@ -841,7 +841,7 @@ class TestSchedulerIntegration:
         # Only the openai sheet should dispatch
         entry = await scheduler.next_sheet()
         assert entry is not None
-        assert entry.info.backend_type == "openai"
+        assert entry.info.instrument == "openai"
 
         # claude_cli sheet stays in queue
         assert scheduler.queued_count == 1
@@ -858,13 +858,13 @@ class TestSchedulerIntegration:
         scheduler.set_rate_limiter(coordinator)
 
         sheets = [
-            SheetInfo(job_id="job-a", sheet_num=1, backend_type="claude_cli"),
+            SheetInfo(job_id="job-a", sheet_num=1, instrument="claude_cli"),
         ]
         await scheduler.register_job("job-a", sheets)
 
         # Rate-limit for a very short time
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=0.01,
             job_id="job-a",
             sheet_num=1,
@@ -876,4 +876,4 @@ class TestSchedulerIntegration:
         # Now it should dispatch
         entry = await scheduler.next_sheet()
         assert entry is not None
-        assert entry.info.backend_type == "claude_cli"
+        assert entry.info.instrument == "claude_cli"

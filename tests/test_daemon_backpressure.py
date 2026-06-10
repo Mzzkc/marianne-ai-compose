@@ -749,7 +749,7 @@ class TestRateCoordinatorPublicAPI:
 
             # Report via public API
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -785,7 +785,7 @@ class TestRateCoordinatorPublicAPI:
             assert controller.should_accept_job() is True
 
             await coordinator.report_rate_limit(
-                backend_type="openai",
+                instrument="openai",
                 wait_seconds=30.0,
                 job_id="job-b",
                 sheet_num=2,
@@ -826,7 +826,7 @@ class TestRateLimitExpiryTransitions:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=0.5,
                 job_id="job-a",
                 sheet_num=1,
@@ -863,7 +863,7 @@ class TestRateLimitExpiryTransitions:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=0.02,
                 job_id="job-a",
                 sheet_num=1,
@@ -911,7 +911,7 @@ class TestRateLimitedRejection:
         ):
             # Report rate limit
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -953,7 +953,7 @@ class TestRateLimitedRejection:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -985,7 +985,7 @@ class TestRateLimitedRejection:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -1034,7 +1034,7 @@ class TestCombinedConditions:
 
             # Add rate limit
             await coordinator.report_rate_limit(
-                backend_type="openai",
+                instrument="openai",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -1066,7 +1066,7 @@ class TestCombinedConditions:
             assert controller.current_level() == PressureLevel.MEDIUM
 
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=30.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -1098,7 +1098,7 @@ class TestCombinedConditions:
             assert controller.current_level() == PressureLevel.HIGH
 
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=30.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -1127,7 +1127,7 @@ class TestCombinedConditions:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=30.0,
                 job_id="job-a",
                 sheet_num=1,

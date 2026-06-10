@@ -1352,7 +1352,7 @@ class TestOnRateLimit:
         await manager._on_rate_limit("claude_cli", 60.0, "job-1", 3)
 
         manager._rate_coordinator.report_rate_limit.assert_awaited_once_with(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=60.0,
             job_id="job-1",
             sheet_num=3,

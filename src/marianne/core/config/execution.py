@@ -136,19 +136,31 @@ class CircuitBreakerConfig(BaseModel):
         le=3600,
         description="Seconds to wait in OPEN state before testing recovery (max 1 hour)",
     )
-    # Evolution #8: Cross-Workspace Circuit Breaker options
+    # Evolution #8: Cross-Workspace Circuit Breaker options.
+    #
+    # #206 (verified 2026-06-10): cross-job rate-limit backoff is STRUCTURAL
+    # in the daemon — all jobs share one baton, whose per-instrument rate
+    # state is baton-wide, so a limit hit by any job already blocks dispatch
+    # to that instrument for every job until expiry. These flags therefore
+    # describe behaviour that is always on in-process and cannot be opted
+    # out of per-job; they are retained for score compatibility and reserved
+    # for a future cross-PROCESS (multi-conductor) coordination layer.
     cross_workspace_coordination: bool = Field(
         default=True,
         description=(
-            "Enable cross-workspace coordination via global learning store. "
-            "When enabled, rate limit events are shared between parallel jobs."
+            "Reserved. In-process cross-job rate-limit coordination is "
+            "structural (all jobs share one baton) and always on; this flag "
+            "is kept for score compatibility and reserved for future "
+            "cross-process (multi-conductor) coordination."
         ),
     )
     honor_other_jobs_rate_limits: bool = Field(
         default=True,
         description=(
-            "When enabled, honor rate limits detected by other parallel jobs. "
-            "This prevents redundant rate limit hits when multiple jobs are running."
+            "Reserved. Rate limits detected by any job already pause "
+            "dispatch to the limited instrument for ALL jobs in the "
+            "conductor (structural, matches this default). Setting False "
+            "has no effect in-process; kept for score compatibility."
         ),
     )
 

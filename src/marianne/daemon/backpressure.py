@@ -115,9 +115,11 @@ class BackpressureController:
 
         if memory_pct > 0.95 or not accepting_work:
             return PressureLevel.CRITICAL
-        # Rate limit escalation: when any backend is actively rate-limited,
+        # Rate limit escalation: when any instrument is actively rate-limited,
         # escalate to HIGH even if memory is below the 85% threshold.
-        # Data flows via JobManager._on_rate_limit → RateLimitCoordinator.
+        # Data flows via the baton adapter's write-through (#206):
+        # RateLimitHit → BatonAdapter._report_rate_limit_cross_job →
+        # JobManager._on_rate_limit → RateLimitCoordinator.
         if memory_pct > 0.85 or self._rate_coordinator.active_limits:
             return PressureLevel.HIGH
         if memory_pct > 0.70:

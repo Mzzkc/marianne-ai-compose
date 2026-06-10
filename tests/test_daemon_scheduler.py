@@ -54,7 +54,7 @@ def _sheet(
         job_priority=job_priority,
         dag_depth=dag_depth,
         retries_so_far=retries,
-        backend_type=backend,
+        instrument=backend,
     )
 
 
@@ -428,10 +428,10 @@ class TestRateLimitIntegration:
         class MockRateLimiter:
             async def is_rate_limited(
                 self,
-                backend_type: str,
+                instrument: str,
                 model: str | None = None,
             ) -> tuple[bool, float]:
-                return (backend_type == "claude_cli", 30.0)
+                return (instrument == "claude_cli", 30.0)
 
         scheduler.set_rate_limiter(MockRateLimiter())
 
@@ -444,7 +444,7 @@ class TestRateLimitIntegration:
         # Only the openai sheet should dispatch
         entry = await scheduler.next_sheet()
         assert entry is not None
-        assert entry.info.backend_type == "openai"
+        assert entry.info.instrument == "openai"
 
         # The claude_cli sheet should be skipped (put back in queue)
         assert scheduler.queued_count == 1
@@ -463,7 +463,7 @@ class TestRateLimitIntegration:
         class AllLimitedRateLimiter:
             async def is_rate_limited(
                 self,
-                backend_type: str,
+                instrument: str,
                 model: str | None = None,
             ) -> tuple[bool, float]:
                 return (True, 60.0)
@@ -1518,7 +1518,7 @@ class TestEndToEndIntegration:
 
         # Report rate limit on claude_cli via coordinator
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=60.0,
             job_id="job-claude",
             sheet_num=1,
@@ -1532,7 +1532,7 @@ class TestEndToEndIntegration:
         # Scheduler should skip claude_cli sheets, dispatch openai
         entry = await scheduler.next_sheet()
         assert entry is not None
-        assert entry.info.backend_type == "openai"
+        assert entry.info.instrument == "openai"
         assert entry.info.job_id == "job-openai"
 
         # claude_cli sheets should still be queued (skipped, not dropped)
@@ -1624,7 +1624,7 @@ class TestEndToEndIntegration:
 
             # Report a rate limit
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -1684,7 +1684,7 @@ class TestEndToEndIntegration:
 
         # Phase 3: Rate limit hits claude_cli
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=0.05,  # Short for testing
             job_id="job-a",
             sheet_num=1,
@@ -1697,7 +1697,7 @@ class TestEndToEndIntegration:
             if entry is None:
                 break
             openai_dispatched.append(entry)
-            assert entry.info.backend_type == "openai"
+            assert entry.info.instrument == "openai"
 
         # Phase 4: Complete running sheets and wait for rate limit expiry
         for entry in dispatched + openai_dispatched:
@@ -1766,7 +1766,7 @@ class TestEndToEndIntegration:
 
         # Rate limit hits
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=0.05,
             job_id="job-dag",
             sheet_num=1,
@@ -1812,7 +1812,7 @@ class TestEndToEndIntegration:
 
         # Rate-limit claude_cli
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=60.0,
             job_id="job-a",
             sheet_num=1,
@@ -1821,7 +1821,7 @@ class TestEndToEndIntegration:
         # Dispatch only what's available (openai)
         entry = await scheduler.next_sheet()
         assert entry is not None
-        assert entry.info.backend_type == "openai"
+        assert entry.info.instrument == "openai"
 
         # Check stats
         stats = await scheduler.get_stats()
@@ -2137,7 +2137,7 @@ class TestRateLimiterExceptionResilience:
         class BrokenRateLimiter:
             async def is_rate_limited(
                 self,
-                backend_type: str,
+                instrument: str,
                 model: str | None = None,
             ) -> tuple[bool, float]:
                 raise RuntimeError("Connection refused")
@@ -2166,7 +2166,7 @@ class TestRateLimiterExceptionResilience:
         class FlakyRateLimiter:
             async def is_rate_limited(
                 self,
-                backend_type: str,
+                instrument: str,
                 model: str | None = None,
             ) -> tuple[bool, float]:
                 nonlocal call_count
@@ -2330,7 +2330,7 @@ class TestTripleComponentIntegration:
 
         # Rate-limit claude_cli
         await coordinator.report_rate_limit(
-            backend_type="claude_cli",
+            instrument="claude_cli",
             wait_seconds=60.0,
             job_id="job-a",
             sheet_num=1,
@@ -2358,7 +2358,7 @@ class TestTripleComponentIntegration:
 
         entry = await scheduler_rate_only.next_sheet()
         assert entry is not None
-        assert entry.info.backend_type == "openai"
+        assert entry.info.instrument == "openai"
 
         # claude_cli sheets still queued
         assert scheduler_rate_only.queued_count == 2

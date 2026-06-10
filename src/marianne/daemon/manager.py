@@ -419,7 +419,6 @@ class JobManager:
         self._service = JobService(
             output=StructuredOutput(event_bus=self._event_bus),
             global_learning_store=self._learning_hub.store,
-            rate_limit_callback=self._on_rate_limit,
             event_callback=self._on_event,
             state_publish_callback=self._on_state_published,
             registry=self._registry,
@@ -487,6 +486,9 @@ class JobManager:
                 if self._learning_hub.is_running
                 else None
             ),
+            # #206: mirror baton rate limits into the daemon coordinator so
+            # backpressure / submit-time warnings / the scheduler see them.
+            rate_limit_reporter=self._on_rate_limit,
         )
         self._baton_adapter.set_backend_pool(BackendPool(registry, pgroup=self._pgroup))
 
@@ -2482,21 +2484,21 @@ class JobManager:
 
     async def _on_rate_limit(
         self,
-        backend_type: str,
+        instrument: str,
         wait_seconds: float,
         job_id: str,
         sheet_num: int,
     ) -> None:
-        """Forward rate limit events from runners to the coordinator.
+        """Forward baton rate limit events to the coordinator (#206).
 
-        Wiring prerequisite (P025): This callback is passed through
-        JobService → RunnerContext → RecoveryMixin._handle_rate_limit()
-        so that rate limit detections from any running job feed into the
-        daemon's centralized RateLimitCoordinator.  The coordinator
-        then informs the scheduler to skip the limited backend.
+        Injected into the BatonAdapter as ``rate_limit_reporter`` — the
+        adapter's run loop calls this for every RateLimitHit it processes,
+        keeping the daemon-level RateLimitCoordinator a truthful mirror of
+        the baton's instrument state. Consumers: backpressure escalation,
+        submit-time "clears in Ns" warnings, the (inactive) scheduler.
         """
         await self._rate_coordinator.report_rate_limit(
-            backend_type=backend_type,
+            instrument=instrument,
             wait_seconds=wait_seconds,
             job_id=job_id,
             sheet_num=sheet_num,

@@ -32,9 +32,6 @@ if TYPE_CHECKING:
 
 _logger = get_logger("daemon.job_service")
 
-# Type alias for rate-limit callbacks: (backend_type, wait_seconds, job_id, sheet_num)
-RateLimitCallback = Callable[[str, float, str, int], Any]
-
 # Type alias for event callbacks: (job_id, sheet_num, event, data)
 EventCallback = Callable[[str, int, str, dict[str, Any] | None], Any]
 
@@ -99,7 +96,6 @@ class JobService:
         *,
         output: OutputProtocol | None = None,
         global_learning_store: GlobalLearningStore | None = None,
-        rate_limit_callback: RateLimitCallback | None = None,
         event_callback: EventCallback | None = None,
         state_publish_callback: StatePublishCallback | None = None,
         registry: JobRegistry | None = None,
@@ -109,7 +105,6 @@ class JobService:
     ) -> None:
         self._output = output or NullOutput()
         self._learning_store = global_learning_store
-        self._rate_limit_callback = rate_limit_callback
         self._event_callback = event_callback
         self._state_publish_callback = state_publish_callback
         self._registry = registry

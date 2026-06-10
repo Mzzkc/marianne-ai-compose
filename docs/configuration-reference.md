@@ -638,8 +638,8 @@ Prevents cascading failures by temporarily blocking requests after repeated fail
 | `enabled` | `bool` | `true` | | Enable circuit breaker pattern |
 | `failure_threshold` | `int` | `5` | `1–100` | Consecutive failures before opening circuit |
 | `recovery_timeout_seconds` | `float` | `300.0` | `> 0`, `<= 3600` | Seconds in OPEN state before testing recovery (max 1 hour) |
-| `cross_workspace_coordination` | `bool` | `true` | | Enable cross-workspace coordination via global learning store. Rate limit events shared between parallel jobs. |
-| `honor_other_jobs_rate_limits` | `bool` | `true` | | Honor rate limits detected by other parallel jobs |
+| `cross_workspace_coordination` | `bool` | `true` | | Reserved. In-process cross-job rate-limit coordination is structural (all jobs share one conductor) and always on; reserved for future cross-process coordination. |
+| `honor_other_jobs_rate_limits` | `bool` | `true` | | Reserved. A rate limit detected by any job already pauses dispatch to that instrument for all jobs (matches this default). Setting `false` has no effect in-process. |
 
 ```yaml
 circuit_breaker:

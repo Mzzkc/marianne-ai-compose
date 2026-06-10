@@ -82,7 +82,7 @@ class TestF149RateLimitsDoNotBlockJobs:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -111,13 +111,13 @@ class TestF149RateLimitsDoNotBlockJobs:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
             )
             await coordinator.report_rate_limit(
-                backend_type="gemini_cli",
+                instrument="gemini_cli",
                 wait_seconds=120.0,
                 job_id="job-b",
                 sheet_num=2,
@@ -146,7 +146,7 @@ class TestF149RateLimitsDoNotBlockJobs:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="openai",
+                instrument="openai",
                 wait_seconds=30.0,
                 job_id="job-b",
                 sheet_num=2,
@@ -198,7 +198,7 @@ class TestF149RateLimitsDoNotBlockJobs:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -240,7 +240,7 @@ class TestSheetDispatchStillConsidersRateLimits:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -269,7 +269,7 @@ class TestSheetDispatchStillConsidersRateLimits:
             ),
         ):
             await coordinator.report_rate_limit(
-                backend_type="claude_cli",
+                instrument="claude_cli",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,

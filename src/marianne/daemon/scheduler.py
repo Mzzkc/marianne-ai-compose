@@ -44,7 +44,7 @@ class RateLimitChecker(Protocol):
     """Protocol for rate limit checking (satisfied by RateLimitCoordinator)."""
 
     async def is_rate_limited(
-        self, backend_type: str, model: str | None = None,
+        self, instrument: str, model: str | None = None,
     ) -> tuple[bool, float]: ...
 
 
@@ -68,11 +68,11 @@ class SheetInfo:
     # is only used when the scheduler is asked about a job that has no
     # resolved instrument yet (e.g. pre-dispatch); rate-limit lookups
     # should skip such entries rather than match a Claude-specific limiter.
-    backend_type: str = ""
+    instrument: str = ""
     # Optional model identifier for per-model rate limit tracking.
     # When set, the scheduler forwards it to ``RateLimitChecker.is_rate_limited()``
     # so rate limits can be tracked per model (e.g. claude-sonnet vs claude-haiku)
-    # rather than per backend type only.
+    # rather than per instrument only.
     model: str | None = None
     # Expected range 0-100 (relative units).  The priority formula applies
     # a 0.1× weight, so a cost of 100 adds +10 priority — comparable to
@@ -378,7 +378,7 @@ class GlobalSheetScheduler:
                 if self._rate_limiter is not None:
                     try:
                         is_limited, _ = await self._rate_limiter.is_rate_limited(
-                            entry.info.backend_type,
+                            entry.info.instrument,
                             model=entry.info.model,
                         )
                     except (RuntimeError, ValueError, OSError) as e:
