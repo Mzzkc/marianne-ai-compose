@@ -541,15 +541,17 @@ class TestCloneSanitizationAdversarial:
         assert _sanitize_name(None) == ""
 
     def test_only_special_chars_produces_hyphen(self) -> None:
-        """A name made entirely of special characters sanitizes to a single hyphen.
+        """A name made entirely of special characters maps to one hyphen each.
 
-        Hyphens are not stripped (preserves uniqueness between clone names).
-        The result is distinct from the default clone (empty string).
+        Hyphen runs are preserved, not collapsed — collapsing made the
+        function lossy ('-' and '--' collided in clone paths; Hypothesis
+        falsified it). The result stays distinct from the default clone
+        (empty string) AND from other special-char-run names.
         """
         from marianne.daemon.clone import _sanitize_name
 
         result = _sanitize_name("!@#$%^&*()")
-        assert result == "-"
+        assert result == "-" * 10  # one hyphen per char, runs preserved
 
     def test_unicode_name_handled(self) -> None:
         """Unicode characters should be replaced, not crash."""

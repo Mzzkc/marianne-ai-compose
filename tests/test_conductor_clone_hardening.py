@@ -80,12 +80,13 @@ class TestCloneNameSanitizationAdversarial:
         assert _sanitize_name("my clone") == "my-clone"
 
     def test_consecutive_special_chars_collapse(self) -> None:
-        """Multiple consecutive special chars collapse to single hyphen."""
+        """Consecutive special chars each map to a hyphen (no collapse)."""
         from marianne.daemon.clone import _sanitize_name
 
         result = _sanitize_name("a///b...c")
-        assert "---" not in result  # Should collapse
-        assert result == "a-b-c"
+        # Each illegal char maps to its own hyphen — runs are PRESERVED
+        # (collapsing made the function lossy: '-' and '--' collided).
+        assert result == "a---b---c"
 
     def test_leading_trailing_hyphens_preserved(self) -> None:
         """Leading/trailing hyphens are preserved for uniqueness.
@@ -97,7 +98,7 @@ class TestCloneNameSanitizationAdversarial:
         from marianne.daemon.clone import _sanitize_name
 
         assert _sanitize_name("-test-") == "-test-"
-        assert _sanitize_name("---test---") == "-test-"  # hyphen collapse, not strip
+        assert _sanitize_name("---test---") == "---test---"  # no collapse, no strip
 
 
 # =============================================================================

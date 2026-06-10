@@ -69,12 +69,13 @@ def _sanitize_name(name: str | None) -> str:
     # Replace spaces, slashes, and other unsafe chars with hyphens.
     # Underscores are filesystem-safe and kept to preserve name uniqueness.
     sanitized = re.sub(r"[^a-zA-Z0-9_-]", "-", name)
-    # Collapse multiple hyphens
-    sanitized = re.sub(r"-+", "-", sanitized)
-    # Do NOT strip leading/trailing hyphens — stripping is cosmetic but
-    # makes the function lossy, causing path collisions between distinct
-    # names (e.g., '0' and '_0' both sanitize to '0'). Hyphens in the
-    # middle of path components like /tmp/marianne-clone--test.sock are safe.
+    # Do NOT collapse hyphen runs and do NOT strip leading/trailing
+    # hyphens — both are cosmetic but make the function lossy, causing
+    # clone path collisions between distinct names (collapse: '-' and
+    # '--' both became '-'; strip: '0' and '_0' both became '0').
+    # Hypothesis found the collapse collision (test_baton_invariants_m2c2
+    # TestClonePathMutualExclusion). Ugly-but-unique beats pretty-but-
+    # colliding for paths that isolate state.
     # Truncate to stay within Unix socket path limits (~108 chars).
     # #227: sockets live under ~/.config/mzt — e.g.
     # /home/<user>/.config/mzt/clone-{name}.sock ≈ 25 + len(user) + len(name).
