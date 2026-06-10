@@ -1828,14 +1828,17 @@ class BatonAdapter:
         # but the backend pool acquires the original instrument's backend.
         effective_instrument = state.instrument_name or ""
 
-        # Interactive mode opt-in (per-sheet, from the merged instrument
-        # config). Interactive sheets get a tmux-session backend and skip
-        # the workspace-mtime stale kill (the driver owns idle handling).
-        # isinstance guard: fail-open to headless on a malformed config
-        # rather than crashing dispatch.
+        # Interactive-mode request (per-sheet, from the merged instrument
+        # config). Tri-state: key absent → None (the pool applies the
+        # profile's default — interactive for instruments with verified
+        # support); explicit true/false wins. Interactive sheets get a
+        # tmux-session backend and skip the workspace-mtime stale kill
+        # (the driver owns idle handling). isinstance guard: fail-open to
+        # the profile default on a malformed config rather than crashing.
         _icfg = sheet.instrument_config
-        interactive_mode = (
-            bool(_icfg.get("interactive", False)) if isinstance(_icfg, dict) else False
+        _raw_interactive = _icfg.get("interactive") if isinstance(_icfg, dict) else None
+        interactive_requested: bool | None = (
+            None if _raw_interactive is None else bool(_raw_interactive)
         )
 
         try:
@@ -1851,19 +1854,21 @@ class BatonAdapter:
                     effective_instrument,
                     model=str(model_override) if model_override is not None else None,
                     working_directory=sheet.workspace,
-                    interactive=interactive_mode,
+                    interactive=interactive_requested,
                 )
             except ValueError:
                 if (
-                    interactive_mode
+                    interactive_requested
                     and effective_instrument != sheet.instrument_name
                 ):
-                    # Interactive was requested for the PRIMARY instrument,
-                    # but we are on a FALLBACK that lacks verified
-                    # interactive support. Degrade to headless rather than
-                    # dead-ending the sheet (reliability > features). The
-                    # primary-instrument misconfiguration case still fails
-                    # fast above (effective == sheet.instrument_name).
+                    # Interactive was explicitly requested for the PRIMARY
+                    # instrument, but we are on a FALLBACK that lacks
+                    # verified interactive support. Degrade to headless
+                    # rather than dead-ending the sheet (reliability >
+                    # features). The primary-instrument misconfiguration
+                    # case still fails fast (effective == instrument_name).
+                    # A None request never raises here — the pool resolves
+                    # it per the fallback's own profile.
                     _logger.warning(
                         "adapter.dispatch.interactive_fallback_degraded",
                         extra={
@@ -1873,7 +1878,6 @@ class BatonAdapter:
                             "primary_instrument": sheet.instrument_name,
                         },
                     )
-                    interactive_mode = False
                     backend = await self._backend_pool.acquire(
                         effective_instrument,
                         model=str(model_override)
@@ -1940,17 +1944,29 @@ class BatonAdapter:
         # the sheet so the stale check skips the workspace-mtime idle kill
         # (the driver owns idle handling — two independent kill-deciders
         # would race; see docs/specs/2026-06-10-interactive-mode-design.md).
-        if interactive_mode:
-            if hasattr(backend, "set_attempt_identity"):
-                backend.set_attempt_identity(job_id, sheet_num, attempt_number)
-            if hasattr(backend, "configure_interactive"):
-                raw_max = sheet.instrument_config.get("interactive_max_nudges")
-                raw_msg = sheet.instrument_config.get("interactive_nudge_message")
-                backend.configure_interactive(
-                    max_nudges=int(raw_max) if raw_max is not None else None,
-                    nudge_message=str(raw_msg) if raw_msg is not None else None,
-                )
+        # The RESOLVED mode is observable from the backend type — the pool
+        # owns the tri-state resolution (score request vs profile default).
+        from marianne.execution.instruments.interactive import (
+            InteractiveCliBackend,
+        )
+
+        if isinstance(backend, InteractiveCliBackend):
+            backend.set_attempt_identity(job_id, sheet_num, attempt_number)
+            _knobs = sheet.instrument_config if isinstance(_icfg, dict) else {}
+            raw_max = _knobs.get("interactive_max_nudges")
+            raw_msg = _knobs.get("interactive_nudge_message")
+            backend.configure_interactive(
+                max_nudges=int(raw_max) if raw_max is not None else None,
+                nudge_message=str(raw_msg) if raw_msg is not None else None,
+            )
             self._interactive_sheets.setdefault(job_id, set()).add(sheet_num)
+        else:
+            # Re-dispatch hygiene: an earlier attempt may have run
+            # interactively (e.g. before a fallback degraded to headless) —
+            # the stale-skip must not outlive the mode.
+            sheets_set = self._interactive_sheets.get(job_id)
+            if sheets_set is not None:
+                sheets_set.discard(sheet_num)
 
         mode = AttemptMode.NORMAL
         completion_suffix: str | None = None

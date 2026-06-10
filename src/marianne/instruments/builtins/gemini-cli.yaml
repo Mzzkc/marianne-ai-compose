@@ -100,6 +100,26 @@ cli:
     extra_flags:
       - "--sandbox"
       - "false"
+  # Interactive mode — drive the gemini TUI in a tmux session.
+  # Patterns spike-verified 2026-06-11 against gemini-cli (Node 20 install).
+  # NOTE: Google has announced gemini-cli deprecation for Google One /
+  # unpaid tiers (June 18) in favor of Antigravity CLI — patterns may need
+  # re-verification after migration.
+  interactive:
+    startup_gates:
+      # Trust dialog on first launch in a new directory; option 1
+      # ("Trust folder") is pre-selected. The CLI restarts itself after
+      # accepting and comes back ready without re-showing the gate.
+      - pattern: "Do you trust the files in this folder"
+        keys: ["Enter"]
+    # Input-box placeholder — rendered only while the box is empty, so it
+    # doubles as the bare-input (submit-verified) signal.
+    ready_pattern: 'Type your message or @path/to/file'
+    busy_patterns:
+      - 'esc to cancel'
+    quiet_seconds: 15.0
+    poll_interval_seconds: 2.0
+    startup_timeout_seconds: 90.0
   output:
     format: json
     result_path: "response"

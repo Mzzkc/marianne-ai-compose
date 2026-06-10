@@ -401,6 +401,33 @@ class InteractiveCliConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    enabled_by_default: bool = Field(
+        default=True,
+        description="When True (default), sheets on this instrument run "
+        "interactively unless the score explicitly sets interactive: false. "
+        "Interactive is the standard execution mode for instruments with "
+        "verified interactive support; set False to make this profile "
+        "opt-in only.",
+    )
+    subcommand: str | None = Field(
+        default=None,
+        description="Subcommand for the interactive launch, e.g. 'session' "
+        "for goose. The headless subcommand (e.g. 'run', 'exec') is never "
+        "used interactively — most TUIs launch from the bare executable.",
+    )
+    inherit_auto_approve: bool = Field(
+        default=True,
+        description="Include the command's auto_approve_flag in the "
+        "interactive launch. Set False when the flag is headless-only "
+        "(e.g. codex's --full-auto is rejected by its TUI) and supply the "
+        "interactive equivalent via extra_args.",
+    )
+    inherit_mcp_disable_args: bool = Field(
+        default=True,
+        description="Include the command's mcp_disable_args in the "
+        "interactive launch (when no shared MCP pool config is active). "
+        "Set False when those flags are headless-only.",
+    )
     extra_args: list[str] = Field(
         default_factory=list,
         description="Extra CLI args for the interactive launch, appended "

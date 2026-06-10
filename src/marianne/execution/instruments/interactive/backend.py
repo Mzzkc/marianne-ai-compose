@@ -245,21 +245,26 @@ class InteractiveCliBackend(Backend):
         """Build the interactive launch argv.
 
         Interactive launch deliberately omits the headless machinery
-        (prompt flag, output-format, timeout flag, subcommand — headless
-        subcommands like ``exec`` usually do not apply interactively; a
-        profile that needs one interactively declares it in
-        ``interactive.extra_args``). MCP handling matches headless (F-271).
+        (prompt flag, output-format, timeout flag, the HEADLESS subcommand).
+        The interactive config controls what carries over: its own
+        ``subcommand`` (e.g. goose's ``session``), whether the
+        auto-approve flag applies interactively (codex's ``--full-auto``
+        is exec-only and rejected by its TUI), and whether mcp_disable_args
+        carry over (F-271 — verified for claude-code).
         """
         cmd = self._cli.command
+        interactive = self._interactive
         args: list[str] = [cmd.executable]
-        if cmd.auto_approve_flag:
+        if interactive.subcommand:
+            args.append(interactive.subcommand)
+        if cmd.auto_approve_flag and interactive.inherit_auto_approve:
             args.append(cmd.auto_approve_flag)
         if cmd.model_flag and self._model:
             args.append(cmd.model_flag)
             args.append(self._model)
-        if cmd.mcp_disable_args:
+        if cmd.mcp_disable_args and interactive.inherit_mcp_disable_args:
             args.extend(cmd.mcp_disable_args)
-        args.extend(self._interactive.extra_args)
+        args.extend(interactive.extra_args)
         return args
 
     def _build_prompt(self, prompt: str, marker: Path) -> str:

@@ -40,6 +40,20 @@ cli:
     extra_flags:
       - "--no-session"
       - "--quiet"
+  # Interactive mode — drive a goose session in a tmux session.
+  # Patterns spike-verified 2026-06-11 against goose (GLM-5.1 provider).
+  # Interactive launch is 'goose session' (the headless 'run' subcommand
+  # and its --no-session/--quiet extra_flags are never used here).
+  interactive:
+    subcommand: "session"
+    # Input hint line — rendered only while the input box is empty, so it
+    # doubles as the bare-input (submit-verified) signal.
+    ready_pattern: 'Enter to send'
+    busy_patterns:
+      - 'Ctrl\+C to interrupt'
+    quiet_seconds: 15.0
+    poll_interval_seconds: 2.0
+    startup_timeout_seconds: 90.0
   output:
     format: json
     result_path: "response"

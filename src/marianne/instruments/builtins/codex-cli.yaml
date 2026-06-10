@@ -49,6 +49,25 @@ cli:
     output_format_value: null  # boolean flag, no value
     extra_flags:
       - "--skip-git-repo-check"
+  # Interactive mode — drive the codex TUI in a tmux session.
+  # Patterns spike-verified 2026-06-11 against codex v0.139.0.
+  # The headless auto-approve flag (--full-auto) is exec-only and REJECTED
+  # by the TUI — the interactive equivalent goes via extra_args.
+  interactive:
+    inherit_auto_approve: false
+    extra_args:
+      - "--dangerously-bypass-approvals-and-sandbox"
+    startup_gates:
+      - pattern: "Do you trust the contents of this directory"
+        keys: ["Enter"]
+    # Input prompt line: "› " (placeholder suggestion may follow it).
+    ready_pattern: '(?m)^›'
+    busy_patterns:
+      - 'esc to interrupt'
+      - 'Working \(\d+s'
+    quiet_seconds: 15.0
+    poll_interval_seconds: 2.0
+    startup_timeout_seconds: 90.0
   output:
     format: jsonl
     completion_event_type: "item.completed"

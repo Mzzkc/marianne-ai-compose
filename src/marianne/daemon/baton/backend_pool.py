@@ -308,13 +308,29 @@ class BackendPool:
 
         self._closed = False
 
+    @staticmethod
+    def _profile_default_interactive(profile: InstrumentProfile) -> bool:
+        """Whether this profile runs interactively when the score is silent.
+
+        Interactive is the standard execution mode for instruments with
+        verified interactive support (a ``cli.interactive`` block) unless
+        the profile opts out via ``enabled_by_default: false``. Profiles
+        without verified support always default to headless.
+        """
+        return (
+            profile.kind == "cli"
+            and profile.cli is not None
+            and profile.cli.interactive is not None
+            and profile.cli.interactive.enabled_by_default
+        )
+
     async def acquire(
         self,
         instrument_name: str,
         *,
         model: str | None = None,
         working_directory: Path | None = None,
-        interactive: bool = False,
+        interactive: bool | None = None,
     ) -> Backend:
         """Acquire a Backend instance for an instrument.
 
@@ -326,16 +342,19 @@ class BackendPool:
             instrument_name: Name of the instrument (from registry).
             model: Optional model override for this execution.
             working_directory: Working directory for the backend.
-            interactive: When True, acquire an interactive (tmux-session)
-                backend. Interactive instances live in their own free
-                list — they never cross-pollinate with headless ones.
+            interactive: Tri-state execution-mode request. None (default)
+                = use the profile's default — interactive when the profile
+                carries verified interactive support, headless otherwise.
+                True = force interactive (error if unsupported). False =
+                force headless. Interactive instances live in their own
+                free list — they never cross-pollinate with headless ones.
 
         Returns:
             A Backend instance ready for execution.
 
         Raises:
             ValueError: If the instrument is not registered, or interactive
-                was requested for an instrument without verified
+                was explicitly requested for an instrument without verified
                 interactive support.
             RuntimeError: If the pool has been closed.
         """
@@ -365,13 +384,20 @@ class BackendPool:
                         exc_info=True,
                     )
 
+        # Resolve the tri-state: score silence → the profile's default.
+        resolved_interactive = (
+            self._profile_default_interactive(profile)
+            if interactive is None
+            else interactive
+        )
+
         async with self._lock:
             backend = self._acquire_locked(
                 profile,
                 model=model,
                 working_directory=working_directory,
                 api_key=api_key,
-                interactive=interactive,
+                interactive=resolved_interactive,
             )
 
         _logger.debug(
@@ -380,7 +406,8 @@ class BackendPool:
                 "instrument": instrument_name,
                 "in_flight": self._in_flight.get(instrument_name, 0),
                 "model": model,
-                "interactive": interactive,
+                "interactive": resolved_interactive,
+                "interactive_requested": interactive,
             },
         )
         return backend

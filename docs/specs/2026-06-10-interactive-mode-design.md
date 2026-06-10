@@ -97,11 +97,24 @@ cli:
     volatile_tail_lines: 2          # status lines excluded from change hash
 ```
 
-Interactive is **opt-in per verified instrument**: `interactive: true` on a
-profile with no `cli.interactive` block is a structured config error at
-backend creation (and a pre-execution validation failure where wired).
-Builtins gain the block only with spike-verified patterns (claude-code in
-V1); no speculative gates.
+**Interactive is the DEFAULT execution mode for verified instruments**
+(composer decision, 2026-06-11). Resolution is tri-state, owned by the
+BackendPool: score silence → the profile's default (interactive when the
+profile carries a `cli.interactive` block with `enabled_by_default: true`,
+headless otherwise); explicit `interactive: true`/`false` in
+instrument_config always wins. `interactive: true` on a profile with no
+`cli.interactive` block remains a structured config error at backend
+creation (and a V211 validation failure).
+
+Builtins gain the block only with spike-verified patterns — no speculative
+gates. Verified 2026-06-10/11: **claude-code, gemini-cli, codex-cli,
+opencode, goose**. Unverified (headless default): crush (no auth on this
+machine), aider (browser onboarding), cline-cli (not installed), cli (raw
+runner — interactive is meaningless). The interactive launch is
+independently configurable where TUI flags differ from headless:
+`interactive.subcommand` (goose `session`), `inherit_auto_approve: false`
+(codex's `--full-auto` is exec-only — TUI bypass goes via `extra_args`;
+opencode's permission flag is run-only), `inherit_mcp_disable_args`.
 
 **Job side** (flat keys in `instrument_config`, matching the existing flat
 style and the merge chain in `core/sheet.py`):

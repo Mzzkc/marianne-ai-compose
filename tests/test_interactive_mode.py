@@ -727,6 +727,119 @@ class TestBackendPoolInteractive:
         with pytest.raises(ValueError, match="interactive"):
             await pool.acquire("fake-agent", interactive=True)
 
+    async def test_default_resolution_supported_profile_is_interactive(
+        self,
+    ) -> None:
+        """Score silence + verified profile → interactive (the new default)."""
+        from marianne.daemon.baton.backend_pool import BackendPool
+
+        pool = BackendPool(self._registry())
+        backend = await pool.acquire("fake-agent")  # no interactive arg
+        assert isinstance(backend, InteractiveCliBackend)
+
+    async def test_default_resolution_unsupported_profile_is_headless(
+        self,
+    ) -> None:
+        """Score silence + no verified support → headless, no error."""
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.instruments.registry import InstrumentRegistry
+
+        registry = InstrumentRegistry()
+        registry.register(make_profile(interactive=None))
+        pool = BackendPool(registry)
+        backend = await pool.acquire("fake-agent")
+        assert isinstance(backend, PluginCliBackend)
+
+    async def test_explicit_false_forces_headless_on_supported_profile(
+        self,
+    ) -> None:
+        """interactive: false opts a supported instrument back to headless."""
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+
+        pool = BackendPool(self._registry())
+        backend = await pool.acquire("fake-agent", interactive=False)
+        assert isinstance(backend, PluginCliBackend)
+
+    async def test_profile_opt_out_of_default(self) -> None:
+        """enabled_by_default: false keeps a verified profile opt-in."""
+        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+        from marianne.instruments.registry import InstrumentRegistry
+
+        registry = InstrumentRegistry()
+        registry.register(make_profile(
+            interactive=make_interactive_config(enabled_by_default=False),
+        ))
+        pool = BackendPool(registry)
+        # Silence → headless (profile opted out of the default)
+        backend = await pool.acquire("fake-agent")
+        assert isinstance(backend, PluginCliBackend)
+        # Explicit request still works
+        inter = await pool.acquire("fake-agent", interactive=True)
+        assert isinstance(inter, InteractiveCliBackend)
+
+
+class TestInteractiveLaunchInheritance:
+    def test_interactive_subcommand_used(self) -> None:
+        """goose-style: interactive subcommand, headless subcommand ignored."""
+        profile = make_profile(interactive=make_interactive_config(
+            subcommand="session",
+        ))
+        backend = InteractiveCliBackend(profile, tmux=FakeTmux())  # type: ignore[arg-type]
+        cmd = backend._build_command()
+        assert cmd[:2] == ["fake-agent", "session"]
+
+    def test_inherit_auto_approve_false(self) -> None:
+        """codex-style: headless-only approval flag replaced via extra_args."""
+        profile = make_profile(interactive=make_interactive_config(
+            inherit_auto_approve=False,
+            extra_args=["--bypass-everything"],
+        ))
+        backend = InteractiveCliBackend(profile, tmux=FakeTmux())  # type: ignore[arg-type]
+        cmd = backend._build_command()
+        assert "--yolo" not in cmd  # headless auto_approve_flag suppressed
+        assert "--bypass-everything" in cmd
+
+    def test_inherit_mcp_disable_args_false(self) -> None:
+        profile = make_profile(interactive=make_interactive_config(
+            inherit_mcp_disable_args=False,
+        ))
+        backend = InteractiveCliBackend(profile, tmux=FakeTmux())  # type: ignore[arg-type]
+        assert "--no-mcp" not in backend._build_command()
+
+    def test_all_verified_builtins_have_interactive_blocks(self) -> None:
+        """The five spike-verified builtins ship default-on interactive."""
+        import yaml
+
+        builtins_dir = (
+            Path(__file__).parent.parent
+            / "src" / "marianne" / "instruments" / "builtins"
+        )
+        for name in ("claude-code", "gemini-cli", "codex-cli", "opencode", "goose"):
+            data = yaml.safe_load((builtins_dir / f"{name}.yaml").read_text())
+            profile = InstrumentProfile.model_validate(data)
+            assert profile.cli is not None
+            assert profile.cli.interactive is not None, f"{name} lost its block"
+            assert profile.cli.interactive.enabled_by_default, name
+
+    def test_unverified_builtins_stay_headless(self) -> None:
+        """No guessed patterns: unverified CLIs must have NO interactive block."""
+        import yaml
+
+        builtins_dir = (
+            Path(__file__).parent.parent
+            / "src" / "marianne" / "instruments" / "builtins"
+        )
+        for name in ("aider", "crush", "cline-cli", "cli"):
+            data = yaml.safe_load((builtins_dir / f"{name}.yaml").read_text())
+            profile = InstrumentProfile.model_validate(data)
+            if profile.cli is not None:
+                assert profile.cli.interactive is None, (
+                    f"{name} gained an interactive block without spike verification"
+                )
+
 
 # =============================================================================
 # V211 pre-execution validation
@@ -768,15 +881,15 @@ instrument_config:
         assert issues == []
 
     def test_interactive_on_unsupported_instrument_errors(self) -> None:
-        # opencode has no cli.interactive block (unverified)
+        # crush has no cli.interactive block (unverified — no auth to spike)
         yaml_text = self.BASE + """
-instrument: opencode
+instrument: crush
 instrument_config:
   interactive: true
 """
         errors = [i for i in self._check(yaml_text) if i.severity.value == "error"]
         assert len(errors) == 1
-        assert "opencode" in errors[0].message
+        assert "crush" in errors[0].message
         assert errors[0].check_id == "V211"
 
     def test_interactive_alias_resolution(self) -> None:
@@ -784,13 +897,13 @@ instrument_config:
 instrument: my-agent
 instruments:
   my-agent:
-    profile: opencode
+    profile: crush
     config:
       interactive: true
 """
         errors = [i for i in self._check(yaml_text) if i.severity.value == "error"]
         assert len(errors) == 1
-        assert "opencode" in errors[0].message
+        assert "crush" in errors[0].message
 
 
 # =============================================================================
