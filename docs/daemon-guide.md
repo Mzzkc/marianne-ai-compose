@@ -50,7 +50,7 @@ Start it with: mzt start
 When `mzt run` is invoked:
 
 1. The CLI calls `is_daemon_available()` from `marianne.daemon.detect`
-2. This resolves the socket path (default: `/tmp/marianne.sock`)
+2. This resolves the socket path (default: `~/.config/mzt/mzt.sock`)
 3. A `DaemonClient` attempts to open a Unix socket connection
 4. If the connection succeeds, the job is submitted via JSON-RPC
 5. If the connection fails (socket missing, refused, timeout), the CLI reports the conductor is not running
@@ -164,10 +164,10 @@ The conductor is configured via a YAML file passed to `mzt start --config <path>
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `socket.path` | `Path` | `/tmp/marianne.sock` | Unix domain socket path |
+| `socket.path` | `Path` | `~/.config/mzt/mzt.sock` | Unix domain socket path |
 | `socket.permissions` | `int` | `0o660` | Socket file permissions (octal) |
 | `socket.backlog` | `int` | `5` | Max pending connections |
-| `pid_file` | `Path` | `/tmp/marianne.pid` | PID file path |
+| `pid_file` | `Path` | `~/.config/mzt/mzt.pid` | PID file path |
 | `shutdown_timeout_seconds` | `float` | `300.0` | Max wait for graceful shutdown (5 min) |
 | `monitor_interval_seconds` | `float` | `15.0` | Resource check interval |
 | `max_job_history` | `int` | `1000` | Terminal jobs kept in memory before eviction |
@@ -290,7 +290,7 @@ The conductor supports hot-reloading configuration without a restart. Send `SIGH
 
 ```bash
 # Reload config after editing ~/.marianne/conductor.yaml
-kill -SIGHUP $(cat /tmp/marianne.pid)
+kill -SIGHUP $(cat ~/.config/mzt/mzt.pid)
 ```
 
 **Reloadable fields** (take effect immediately):
@@ -379,8 +379,8 @@ mzt --conductor-clone stop
 
 **Key behaviors:**
 - The clone inherits your production `~/.marianne/conductor.yaml` config.
-- Clone paths: `/tmp/marianne-clone.sock` (socket), `/tmp/marianne-clone.pid` (PID).
-- Named clones: `/tmp/marianne-clone-staging.sock`, etc.
+- Clone paths: `~/.config/mzt/clone.sock` (socket), `~/.config/mzt/clone.pid` (PID).
+- Named clones: `~/.config/mzt/clone-staging.sock`, etc.
 - Clone names are sanitized (64-character limit, safe characters only).
 - Commands that don't interact with the conductor (`validate`, `--help`) ignore the flag.
 
@@ -487,7 +487,7 @@ This installs the `daemon` extras group, which includes `psutil` for the `Resour
 
 ### "Marianne conductor is not running"
 
-The conductor is not reachable at the default socket path (`/tmp/marianne.sock`).
+The conductor is not reachable at the default socket path (`~/.config/mzt/mzt.sock`).
 
 ```bash
 # Start the conductor
@@ -518,7 +518,7 @@ mzt start
 If `mzt stop` reports "conductor is not running" but a PID file exists, the file is automatically cleaned up. If it persists:
 
 ```bash
-rm /tmp/marianne.pid
+rm ~/.config/mzt/mzt.pid
 mzt start
 ```
 

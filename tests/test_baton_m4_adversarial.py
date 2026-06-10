@@ -501,12 +501,14 @@ class TestCloneSanitizationAdversarial:
     """
 
     def test_path_traversal_rejected(self) -> None:
-        """../../../etc/passwd must not produce paths outside /tmp."""
+        """../../../etc/passwd must not escape the runtime dir (#227)."""
+        from pathlib import Path
+
         from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("../../../etc/passwd")
         assert "/etc/" not in str(paths.socket)
-        assert "/tmp/" in str(paths.socket)
+        assert paths.socket.parent == Path.home() / ".config" / "mzt"
 
     def test_absolute_path_injection(self) -> None:
         """/tmp/evil must not override the path construction."""

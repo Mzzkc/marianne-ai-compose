@@ -24,7 +24,7 @@ import typer
 
 from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY
 from marianne.core.logging import get_logger
-from marianne.daemon.config import DaemonConfig
+from marianne.daemon.config import LEGACY_PID_PATH, DaemonConfig
 from marianne.daemon.pgroup import ProcessGroupManager
 from marianne.daemon.task_utils import log_task_exception
 
@@ -77,16 +77,29 @@ def start_conductor(
         config.log_level = cast(Any, log_level)
         config.log_file = clone_paths.log_file
 
-    pid = _read_pid(config.pid_file)
+    # #227: probe the legacy /tmp PID too — a conductor started before the
+    # path move must block a second `mzt start` (both would share the state
+    # DB). Clones keep their own explicit paths.
+    pid_probe_file = (
+        config.pid_file
+        if clone_name is not None
+        else _resolve_live_pid_file(config.pid_file)
+    )
+    pid = _read_pid(pid_probe_file)
     if pid is not None:
         if _pid_alive(pid):
             label = "clone conductor" if clone_name is not None else "Marianne conductor"
-            typer.echo(f"{label} is already running (PID {pid})")
+            legacy_note = (
+                " (on legacy /tmp paths — `mzt stop && mzt start` to migrate)"
+                if pid_probe_file != config.pid_file
+                else ""
+            )
+            typer.echo(f"{label} is already running (PID {pid}){legacy_note}")
             raise typer.Exit(1)
         else:
             # Stale PID file — process is dead, clean up before starting
             typer.echo(f"Cleaned up stale PID file (PID {pid} is no longer running)")
-            config.pid_file.unlink(missing_ok=True)
+            pid_probe_file.unlink(missing_ok=True)
 
     # Detect concurrent start race via advisory lock
     if config.pid_file.exists() and not config.pid_file.is_symlink():
@@ -169,7 +182,12 @@ def stop_conductor(
     the user and asks for confirmation before proceeding (#94).
     Force mode (``--force``) skips the safety check entirely.
     """
-    resolved_pid_file = pid_file or DaemonConfig().pid_file
+    # Explicit pid_file always wins; only the default probes legacy (#227).
+    resolved_pid_file = (
+        pid_file
+        if pid_file is not None
+        else _resolve_live_pid_file(DaemonConfig().pid_file)
+    )
     pid = _read_pid(resolved_pid_file)
     if pid is None or not _pid_alive(pid):
         typer.echo("Marianne conductor is not running")
@@ -206,8 +224,19 @@ def get_conductor_status(
     Called by ``mzt conductor-status`` via ``cli/commands/conductor.py``.
     """
     _defaults = DaemonConfig()
-    resolved_pid_file = pid_file or _defaults.pid_file
+    # Explicit pid_file always wins; only the default probes legacy (#227).
+    resolved_pid_file = (
+        pid_file
+        if pid_file is not None
+        else _resolve_live_pid_file(_defaults.pid_file)
+    )
     resolved_socket = socket_path or _defaults.socket.path
+    # #227 transitional: a pre-move conductor serves on the legacy socket.
+    if socket_path is None and not resolved_socket.exists():
+        from marianne.daemon.config import LEGACY_SOCKET_PATH
+
+        if LEGACY_SOCKET_PATH.exists():
+            resolved_socket = LEGACY_SOCKET_PATH
 
     pid = _read_pid(resolved_pid_file)
     if pid is None or not _pid_alive(pid):
@@ -1057,6 +1086,25 @@ def _pid_alive(pid: int) -> bool:
         return True  # Process exists but we can't signal it
 
 
+def _resolve_live_pid_file(preferred: Path) -> Path:
+    """Resolve the PID file that points at a LIVE conductor (#227).
+
+    Prefers ``preferred`` (the configured/new default). Transitional: when
+    the preferred file holds no live PID but the legacy ``/tmp`` PID file
+    does — a conductor started before the /tmp → ~/.config/mzt move —
+    return the legacy path so ``mzt stop``/``conductor-status`` still see
+    it and ``mzt start`` refuses to spawn a second conductor beside it.
+    Self-eliminating once the conductor restarts on the new paths.
+    """
+    pid = _read_pid(preferred)
+    if pid is not None and _pid_alive(pid):
+        return preferred
+    legacy_pid = _read_pid(LEGACY_PID_PATH)
+    if legacy_pid is not None and _pid_alive(legacy_pid):
+        return LEGACY_PID_PATH
+    return preferred
+
+
 def wait_for_conductor_exit(
     pid_file: Path | None = None,
     timeout: float = 30.0,
@@ -1068,7 +1116,12 @@ def wait_for_conductor_exit(
 
     Returns ``True`` if the process exited within the timeout.
     """
-    resolved = pid_file or DaemonConfig().pid_file
+    # Explicit pid_file always wins; only the default probes legacy (#227).
+    resolved = (
+        pid_file
+        if pid_file is not None
+        else _resolve_live_pid_file(DaemonConfig().pid_file)
+    )
     pid = _read_pid(resolved)
     if pid is None:
         return True

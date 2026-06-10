@@ -224,10 +224,10 @@ mzt status --conductor-clone=staging     # Query clone
 ```
 
 Each clone gets isolated paths:
-- Socket: `/tmp/marianne-clone-{name}.sock`
-- PID: `/tmp/marianne-clone-{name}.pid`
+- Socket: `~/.config/mzt/clone-{name}.sock`
+- PID: `~/.config/mzt/clone-{name}.pid`
 - State DB: `~/.marianne/clone-{name}-state.db`
-- Log: `/tmp/marianne-clone-{name}.log`
+- Log: `~/.config/mzt/clone-{name}.log`
 
 ### Job IDs
 

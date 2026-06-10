@@ -9,7 +9,7 @@ import pytest
     reason="Live daemon integration script — requires running conductor, not a unit test"
 )
 async def test_stream():
-    socket_path = Path("/tmp/marianne.sock")
+    socket_path = Path.home() / ".config" / "mzt" / "mzt.sock"
     if not socket_path.exists():
         print(f"Socket not found at {socket_path}")
         return

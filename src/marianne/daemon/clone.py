@@ -76,8 +76,10 @@ def _sanitize_name(name: str | None) -> str:
     # names (e.g., '0' and '_0' both sanitize to '0'). Hyphens in the
     # middle of path components like /tmp/marianne-clone--test.sock are safe.
     # Truncate to stay within Unix socket path limits (~108 chars).
-    # /tmp/marianne-clone-{name}.sock = 21 + len(name) + 5 = 26 + len(name)
-    # Cap at 64 chars to leave headroom.
+    # #227: sockets live under ~/.config/mzt — e.g.
+    # /home/<user>/.config/mzt/clone-{name}.sock ≈ 25 + len(user) + len(name).
+    # Cap at 64 chars; assumes a typical home path, which leaves headroom
+    # under the 108-char limit.
     if len(sanitized) > 64:
         sanitized = sanitized[:64]
     return sanitized
@@ -101,19 +103,22 @@ def resolve_clone_paths(name: str | None) -> ClonePaths:
 
     Returns:
         ClonePaths with socket, PID, state DB, and log paths.
-        All paths are in /tmp for socket/PID (matching production convention)
-        and ~/.marianne for state DB/log.
+        Runtime artifacts (socket/PID/log) live in ~/.config/mzt (#227,
+        matching the production convention); state DB in ~/.marianne.
     """
     suffix = _sanitize_name(name)
     tag = f"-{suffix}" if suffix else ""
 
+    from marianne.daemon.config import mzt_runtime_dir
+
+    runtime_dir = mzt_runtime_dir()
     marianne_dir = Path.home() / ".marianne"
 
     return ClonePaths(
-        socket=Path(f"/tmp/marianne-clone{tag}.sock"),
-        pid_file=Path(f"/tmp/marianne-clone{tag}.pid"),
+        socket=runtime_dir / f"clone{tag}.sock",
+        pid_file=runtime_dir / f"clone{tag}.pid",
         state_db=marianne_dir / f"clone{tag}-state.db",
-        log_file=Path(f"/tmp/marianne-clone{tag}.log"),
+        log_file=runtime_dir / f"clone{tag}.log",
     )
 
 

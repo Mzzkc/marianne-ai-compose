@@ -16,8 +16,16 @@ from pathlib import Path
 from typing import Any
 
 from marianne.core.logging import get_logger
+from marianne.daemon.config import LEGACY_SOCKET_PATH
 
 _logger = get_logger("daemon.detect")
+
+
+def _default_socket_path() -> Path:
+    """The production socket default (separate fn so tests can patch it)."""
+    from marianne.daemon.config import SocketConfig
+
+    return SocketConfig().path
 
 
 def _resolve_socket_path(socket_path: Path | None) -> Path:
@@ -27,6 +35,10 @@ def _resolve_socket_path(socket_path: Path | None) -> Path:
     1. Explicit socket_path parameter (always wins)
     2. Clone socket path (if --conductor-clone is active)
     3. SocketConfig default (production path)
+    4. #227 transitional: if the new default doesn't exist but a conductor
+       started before the /tmp → ~/.config/mzt move is still serving on the
+       legacy path, use the legacy path. Self-eliminating — once the
+       conductor restarts on the new path the legacy socket is gone.
     """
     if socket_path is not None:
         return socket_path
@@ -38,9 +50,10 @@ def _resolve_socket_path(socket_path: Path | None) -> Path:
     if clone_name is not None:
         return resolve_clone_paths(clone_name).socket
 
-    from marianne.daemon.config import SocketConfig
-
-    return SocketConfig().path
+    default = _default_socket_path()
+    if not default.exists() and LEGACY_SOCKET_PATH.exists():
+        return LEGACY_SOCKET_PATH
+    return default
 
 
 async def is_daemon_available(socket_path: Path | None = None) -> bool:

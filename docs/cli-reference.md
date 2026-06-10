@@ -49,8 +49,8 @@ mzt --conductor-clone stop
 
 **Key behaviors:**
 - The clone inherits your production `~/.marianne/conductor.yaml` config unless overridden.
-- Clone paths: `/tmp/marianne-clone.sock` (socket), `/tmp/marianne-clone.pid` (PID file).
-- Named clones use the name in the path: `/tmp/marianne-clone-staging.sock`.
+- Clone paths: `~/.config/mzt/clone.sock` (socket), `~/.config/mzt/clone.pid` (PID file).
+- Named clones use the name in the path: `~/.config/mzt/clone-staging.sock`.
 - Clone names are sanitized (64 character limit, safe characters only).
 - Commands that don't interact with the conductor (`validate`, `--help`) ignore this flag.
 
@@ -1632,7 +1632,7 @@ Usage: mzt stop [OPTIONS]
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--pid-file` | | `/tmp/marianne.pid` | Path to PID file |
+| `--pid-file` | | `~/.config/mzt/mzt.pid` | Path to PID file |
 | `--force` | | false | Skip safety check, send SIGKILL instead of SIGTERM |
 
 **Safety guard:** When jobs are running, `mzt stop` probes the conductor via IPC to check for active jobs. If any are found, it warns with the job count and asks for confirmation. The `--force` flag bypasses this check entirely and sends SIGKILL.
@@ -1660,7 +1660,7 @@ Usage: mzt restart [OPTIONS]
 | `--config` | `-c` | | Path to conductor config file |
 | `--foreground` | `-f` | false | Run in foreground (for development) |
 | `--log-level` | `-l` | `info` | Logging level |
-| `--pid-file` | | `/tmp/marianne.pid` | Path to PID file |
+| `--pid-file` | | `~/.config/mzt/mzt.pid` | Path to PID file |
 | `--profile` | `-p` | | Daemon operational profile: `dev`, `intensive`, `minimal`. Overrides config file defaults. |
 
 ```bash
@@ -1680,8 +1680,8 @@ Usage: mzt conductor-status [OPTIONS]
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--pid-file` | | `/tmp/marianne.pid` | Path to PID file |
-| `--socket` | | `/tmp/marianne.sock` | Path to Unix socket |
+| `--pid-file` | | `~/.config/mzt/mzt.pid` | Path to PID file |
+| `--socket` | | `~/.config/mzt/mzt.sock` | Path to Unix socket |
 
 ```bash
 mzt conductor-status

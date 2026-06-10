@@ -111,6 +111,26 @@ class ResourceLimitConfig(BaseModel):
         return self
 
 
+def mzt_runtime_dir() -> Path:
+    """Directory for mzt runtime artifacts: socket, PID file, clone files.
+
+    #227: ``~/.config/mzt`` — durable across reboots (unlike /tmp) and
+    consistent with standard tooling conventions. Single source of truth;
+    everything that places a runtime artifact derives from this.
+    """
+    return Path.home() / ".config" / "mzt"
+
+
+# #227 transitional legacy paths: a conductor started before the move still
+# serves on these. Client-side resolvers (detect._resolve_socket_path,
+# process._resolve_live_pid_file) probe them ONLY when the new default is
+# absent, so a live pre-move conductor stays reachable and `mzt start`
+# cannot spawn a second conductor beside it. The probe self-eliminates once
+# the conductor restarts on the new paths; remove these after that.
+LEGACY_SOCKET_PATH = Path("/tmp/marianne.sock")
+LEGACY_PID_PATH = Path("/tmp/marianne.pid")
+
+
 class SocketConfig(BaseModel):
     """Unix domain socket configuration for daemon IPC.
 
@@ -121,7 +141,7 @@ class SocketConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     path: Path = Field(
-        default=Path("/tmp/marianne.sock"),
+        default_factory=lambda: mzt_runtime_dir() / "mzt.sock",
         description="Unix domain socket path for client-daemon communication",
     )
     permissions: int = Field(
@@ -302,7 +322,7 @@ class DaemonConfig(BaseModel):
         description="Unix domain socket configuration for IPC",
     )
     pid_file: Path = Field(
-        default=Path("/tmp/marianne.pid"),
+        default_factory=lambda: mzt_runtime_dir() / "mzt.pid",
         description="PID file for daemon process management. "
         "Used to detect already-running daemons and for signal delivery.",
     )

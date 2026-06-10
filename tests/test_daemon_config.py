@@ -81,7 +81,7 @@ class TestSocketConfig:
     def test_defaults(self):
         """Test default values are applied."""
         config = SocketConfig()
-        assert config.path == Path("/tmp/marianne.sock")
+        assert config.path == Path.home() / ".config" / "mzt" / "mzt.sock"
         assert config.permissions == 0o660
         assert config.backlog == 5
 
@@ -120,7 +120,7 @@ class TestDaemonConfig:
     def test_defaults(self):
         """Test default values are applied."""
         config = DaemonConfig()
-        assert config.pid_file == Path("/tmp/marianne.pid")
+        assert config.pid_file == Path.home() / ".config" / "mzt" / "mzt.pid"
         assert config.max_concurrent_jobs == 15
         assert config.max_concurrent_sheets == 25
         assert config.state_backend_type == "sqlite"
@@ -132,7 +132,7 @@ class TestDaemonConfig:
         """Test socket config is initialized with defaults."""
         config = DaemonConfig()
         assert isinstance(config.socket, SocketConfig)
-        assert config.socket.path == Path("/tmp/marianne.sock")
+        assert config.socket.path == Path.home() / ".config" / "mzt" / "mzt.sock"
 
     def test_nested_resource_limits_defaults(self):
         """Test resource limits config is initialized with defaults."""

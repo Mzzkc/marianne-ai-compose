@@ -1240,7 +1240,7 @@ Available but rarely need changing:
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `socket` | `SocketConfig` | *(see sub-config)* | | Unix domain socket configuration |
-| `pid_file` | `Path` | `/tmp/marianne.pid` | | PID file for daemon process management |
+| `pid_file` | `Path` | `~/.config/mzt/mzt.pid` | | PID file for daemon process management |
 | `max_concurrent_sheets` | `int` | `10` | `1–100` | **Reserved for Phase 3 scheduler — not yet enforced.** Global parallel sheet limit. |
 | `resource_limits` | `ResourceLimitConfig` | *(see sub-config)* | | Resource constraints |
 | `state_backend_type` | `"sqlite"` | `"sqlite"` | **Reserved — frozen to sqlite.** Changing has no effect. |
@@ -1282,7 +1282,7 @@ Profiles are partial overrides merged on top of your config file. Resolution ord
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `path` | `Path` | `/tmp/marianne.sock` | | Unix domain socket path |
+| `path` | `Path` | `~/.config/mzt/mzt.sock` | | Unix domain socket path |
 | `permissions` | `int` | `0o660` | | Socket file permissions (owner+group read/write) |
 | `backlog` | `int` | `5` | `>= 1` | Maximum pending connections in listen queue |
 

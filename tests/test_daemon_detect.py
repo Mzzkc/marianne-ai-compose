@@ -28,10 +28,14 @@ class TestResolveSocketPath:
         p = Path("/custom/socket.sock")
         assert _resolve_socket_path(p) == p
 
-    def test_falls_back_to_socket_config_default(self):
+    def test_falls_back_to_socket_config_default(self, tmp_path, monkeypatch):
         """None triggers fallback to SocketConfig().path."""
+        from marianne.daemon import detect
+
+        # Isolate from the host: a real legacy /tmp socket must not leak in.
+        monkeypatch.setattr(detect, "LEGACY_SOCKET_PATH", tmp_path / "none.sock")
         result = _resolve_socket_path(None)
-        assert result == Path("/tmp/marianne.sock")
+        assert result == Path.home() / ".config" / "mzt" / "mzt.sock"
 
 
 # =============================================================================
@@ -109,8 +113,12 @@ class TestIsDaemonAvailable:
 
         assert result is False
 
-    async def test_none_socket_uses_default(self):
+    async def test_none_socket_uses_default(self, tmp_path, monkeypatch):
         """None socket_path triggers SocketConfig fallback."""
+        from marianne.daemon import detect
+
+        # Isolate from the host: a real legacy /tmp socket must not leak in.
+        monkeypatch.setattr(detect, "LEGACY_SOCKET_PATH", tmp_path / "none.sock")
         with (
             patch(
                 "marianne.daemon.clone.get_clone_name",
@@ -125,7 +133,7 @@ class TestIsDaemonAvailable:
 
         assert result is True
         # Client was created with the default path (no clone active)
-        MockClient.assert_called_once_with(Path("/tmp/marianne.sock"))
+        MockClient.assert_called_once_with(Path.home() / ".config" / "mzt" / "mzt.sock")
 
 
 # =============================================================================

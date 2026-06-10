@@ -25,13 +25,13 @@ class TestClonePathResolution:
     """Test that clone names produce correct isolated paths."""
 
     def test_default_clone_paths(self) -> None:
-        """Default clone uses /tmp/marianne-clone.* paths."""
+        """Default clone uses ~/.config/mzt/clone.* paths (#227)."""
         from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths(None)
-        assert paths.socket == Path("/tmp/marianne-clone.sock")
-        assert paths.pid_file == Path("/tmp/marianne-clone.pid")
-        assert paths.log_file == Path("/tmp/marianne-clone.log")
+        assert paths.socket == Path.home() / ".config" / "mzt" / "clone.sock"
+        assert paths.pid_file == Path.home() / ".config" / "mzt" / "clone.pid"
+        assert paths.log_file == Path.home() / ".config" / "mzt" / "clone.log"
         assert "clone" in str(paths.state_db)
 
     def test_named_clone_paths(self) -> None:
@@ -39,9 +39,9 @@ class TestClonePathResolution:
         from marianne.daemon.clone import resolve_clone_paths
 
         paths = resolve_clone_paths("test-1")
-        assert paths.socket == Path("/tmp/marianne-clone-test-1.sock")
-        assert paths.pid_file == Path("/tmp/marianne-clone-test-1.pid")
-        assert paths.log_file == Path("/tmp/marianne-clone-test-1.log")
+        assert paths.socket == Path.home() / ".config" / "mzt" / "clone-test-1.sock"
+        assert paths.pid_file == Path.home() / ".config" / "mzt" / "clone-test-1.pid"
+        assert paths.log_file == Path.home() / ".config" / "mzt" / "clone-test-1.log"
         assert "clone-test-1" in str(paths.state_db)
 
     def test_clone_paths_isolated_from_production(self) -> None:
@@ -127,7 +127,17 @@ class TestSocketPathOverride:
         from marianne.daemon.detect import _resolve_socket_path
 
         set_clone_name(None)
-        path = _resolve_socket_path(None)
+        # Isolate from the host: a real legacy /tmp socket must not leak in.
+        import pytest as _pytest
+
+        from marianne.daemon import detect
+
+        mp = _pytest.MonkeyPatch()
+        try:
+            mp.setattr(detect, "LEGACY_SOCKET_PATH", Path("/nonexistent-legacy.sock"))
+            path = _resolve_socket_path(None)
+        finally:
+            mp.undo()
         assert path == SocketConfig().path
 
     def test_clone_overrides_socket_path(self) -> None:
@@ -493,7 +503,7 @@ class TestCloneNameAdversarial:
         # No path traversal in the resulting paths
         assert ".." not in paths.socket.name
         assert "etc" not in str(paths.socket.parent)
-        assert paths.socket.parent == Path("/tmp")
+        assert paths.socket.parent == Path.home() / ".config" / "mzt"
 
     def test_very_long_clone_name(self) -> None:
         """Very long clone names should not break file paths."""
@@ -502,7 +512,7 @@ class TestCloneNameAdversarial:
         long_name = "a" * 200
         paths = resolve_clone_paths(long_name)
         # Should still resolve without error
-        assert paths.socket.parent == Path("/tmp")
+        assert paths.socket.parent == Path.home() / ".config" / "mzt"
         assert "clone" in str(paths.socket)
 
     def test_null_bytes_in_clone_name(self) -> None:
@@ -518,7 +528,7 @@ class TestCloneNameAdversarial:
 
         paths = resolve_clone_paths("tëst-clöne")
         # Non-ASCII chars replaced with hyphens by sanitizer
-        assert paths.socket.parent == Path("/tmp")
+        assert paths.socket.parent == Path.home() / ".config" / "mzt"
 
     def test_clone_isolation_invariant(self) -> None:
         """No clone should ever share a path with production."""
@@ -564,11 +574,18 @@ class TestConfigCmdCloneAwareness:
         finally:
             set_clone_name(None)
 
-    def test_try_live_config_uses_production_without_clone(self) -> None:
+    def test_try_live_config_uses_production_without_clone(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """_try_live_config uses production socket when no clone is active."""
+        from marianne.daemon import detect
         from marianne.daemon.clone import set_clone_name
         from marianne.daemon.config import SocketConfig
 
+        # Isolate from the host: a real legacy /tmp socket must not leak in.
+        monkeypatch.setattr(
+            detect, "LEGACY_SOCKET_PATH", Path("/nonexistent-legacy.sock")
+        )
         set_clone_name(None)
         with patch(
             "marianne.daemon.ipc.client.DaemonClient",

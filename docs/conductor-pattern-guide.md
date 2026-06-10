@@ -123,7 +123,7 @@ mzt --conductor-clone stop
 
 Clone conductors:
 - Inherit your production config (`~/.marianne/conductor.yaml`)
-- Use isolated socket paths (`/tmp/marianne-clone.sock`, `/tmp/marianne-clone-staging.sock`)
+- Use isolated socket paths (`~/.config/mzt/clone.sock`, `~/.config/mzt/clone-staging.sock`)
 - Maintain separate state databases
 - Don't interfere with production jobs
 
@@ -252,7 +252,7 @@ The conductor's persistent registry (SQLite) survives restarts. Jobs marked as `
 
 ```bash
 vim ~/.marianne/conductor.yaml
-kill -SIGHUP $(cat /tmp/marianne.pid)
+kill -SIGHUP $(cat ~/.config/mzt/mzt.pid)
 mzt conductor-status   # Verify new config loaded
 ```
 
@@ -437,7 +437,7 @@ mzt start              # Start if not running
 If the conductor is running but unreachable, check socket permissions:
 
 ```bash
-ls -l /tmp/marianne.sock
+ls -l ~/.config/mzt/mzt.sock
 # Expected: srw-rw---- (0660 permissions)
 
 # If missing or wrong permissions:
@@ -493,7 +493,7 @@ mzt clear-rate-limits
 # Option 2: Reduce concurrent job count to avoid future collisions
 vim ~/.marianne/conductor.yaml
 # Set: max_concurrent_jobs: 5 (lower than current)
-kill -SIGHUP $(cat /tmp/marianne.pid)   # Reload config
+kill -SIGHUP $(cat ~/.config/mzt/mzt.pid)   # Reload config
 ```
 
 The baton execution engine (default since Phase 2) includes **rate limit auto-resume** — when a rate limit expires, the conductor automatically clears it and resumes waiting sheets. If auto-resume doesn't trigger, manual clearing via `mzt clear-rate-limits` forces an immediate retry.
@@ -530,7 +530,7 @@ mzt start
 
 # Method 2: Hot reload (for reloadable fields only)
 vim ~/.marianne/conductor.yaml
-kill -SIGHUP $(cat /tmp/marianne.pid)
+kill -SIGHUP $(cat ~/.config/mzt/mzt.pid)
 mzt conductor-status   # Verify reload succeeded
 
 # Verify new config active
