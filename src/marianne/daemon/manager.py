@@ -2118,6 +2118,8 @@ class JobManager:
         Returns all fields required by the ``DaemonStatus`` Pydantic model
         so ``DaemonClient.status()`` can deserialize without crashing.
         """
+        from marianne.daemon.ipc.protocol import PROTOCOL_VERSION
+
         mem = self._monitor.current_memory_mb()
         return {
             "pid": os.getpid(),
@@ -2126,6 +2128,7 @@ class JobManager:
             "total_jobs_active": self.active_job_count,
             "memory_usage_mb": round(mem, 1) if mem is not None else 0.0,
             "version": getattr(marianne, "__version__", "0.1.0"),
+            "protocol_version": PROTOCOL_VERSION,
         }
 
     # ─── Shutdown ─────────────────────────────────────────────────────

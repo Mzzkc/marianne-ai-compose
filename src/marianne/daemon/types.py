@@ -175,3 +175,12 @@ class DaemonStatus(BaseModel):
     version: str = Field(
         description="Marianne version string",
     )
+    protocol_version: int = Field(
+        default=0,
+        description=(
+            "Marianne IPC protocol version advertised by the conductor "
+            "(#265). 0 means a pre-versioning conductor that did not send "
+            "the field. Clients compare against their own PROTOCOL_VERSION "
+            "to detect CLI/conductor skew."
+        ),
+    )

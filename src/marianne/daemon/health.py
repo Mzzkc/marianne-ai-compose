@@ -70,12 +70,19 @@ class HealthChecker:
         This is the cheapest possible check — if the daemon can execute
         this handler and return a response, it's alive.  No resource
         checks or I/O are performed.
+
+        Also advertises the IPC ``protocol_version`` (#265) — liveness is
+        the handshake every ``mzt status`` performs, so clients detect a
+        CLI/conductor protocol skew here without an extra round trip.
         """
+        from marianne.daemon.ipc.protocol import PROTOCOL_VERSION
+
         return {
             "status": "ok",
             "pid": os.getpid(),
             "uptime_seconds": round(time.monotonic() - self._start_time, 1),
             "shutting_down": self._manager.shutting_down,
+            "protocol_version": PROTOCOL_VERSION,
         }
 
     async def readiness(self) -> dict[str, Any]:

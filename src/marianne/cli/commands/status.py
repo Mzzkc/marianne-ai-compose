@@ -425,6 +425,28 @@ _ACTIVE_STATUSES = {"queued", "running", "paused"}
 _RECENT_TERMINAL = {"completed", "failed", "cancelled"}
 
 
+def protocol_mismatch_warning(daemon_protocol_version: int) -> str | None:
+    """Build a warning when the conductor speaks a different IPC version (#265).
+
+    Args:
+        daemon_protocol_version: The ``protocol_version`` the conductor
+            advertised (0 when an older conductor omitted the field).
+
+    Returns:
+        A user-facing warning string, or None when versions match.
+    """
+    from marianne.daemon.ipc.protocol import PROTOCOL_VERSION
+
+    if daemon_protocol_version == PROTOCOL_VERSION:
+        return None
+    return (
+        f"Conductor speaks IPC protocol v{daemon_protocol_version}, this CLI "
+        f"expects v{PROTOCOL_VERSION} — responses may not parse correctly. "
+        "Restart the conductor on the installed version: wait for active "
+        "scores to finish, then `mzt stop && mzt start`."
+    )
+
+
 async def _status_overview(json_output: bool) -> None:
     """Show overview of all scores — like 'git status' for Marianne.
 
@@ -465,6 +487,12 @@ async def _status_overview(json_output: bool) -> None:
     recent.sort(key=lambda j: j.get("submitted_at", 0) or 0, reverse=True)
     recent = recent[:5]
 
+    health = result if isinstance(result, dict) else {}
+    # #265: surface a CLI/conductor IPC protocol skew (0 = pre-versioning).
+    skew_warning = protocol_mismatch_warning(
+        int(health.get("protocol_version", 0) or 0)
+    )
+
     if json_output:
         output_json({
             "conductor": "running",
@@ -472,16 +500,18 @@ async def _status_overview(json_output: bool) -> None:
             "active": active,
             "recent_count": len(recent),
             "recent": recent,
+            "protocol_mismatch": skew_warning,
         })
         return
 
     # Conductor header
-    health = result if isinstance(result, dict) else {}
     uptime_str = _format_uptime(health.get("uptime_seconds"))
     console.print(
         f"[bold]Marianne Conductor:[/bold] [green]RUNNING[/green]"
         f"{f'  ({uptime_str})' if uptime_str else ''}"
     )
+    if skew_warning:
+        console.print(f"[yellow]⚠ {skew_warning}[/yellow]")
     console.print()
 
     # Active scores
