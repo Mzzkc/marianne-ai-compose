@@ -45,6 +45,10 @@ cli:
   # Interactive launch is 'goose session' (the headless 'run' subcommand
   # and its --no-session/--quiet extra_flags are never used here).
   interactive:
+    # Verified, but opt-in: interactive-by-default is claude-code only
+    # (composer decision 2026-06-11). Scores enable per-sheet/score via
+    # instrument_config: {interactive: true}.
+    enabled_by_default: false
     subcommand: "session"
     # Input hint line — rendered only while the input box is empty, so it
     # doubles as the bare-input (submit-verified) signal.

@@ -54,6 +54,10 @@ cli:
   # The headless auto-approve flag (--full-auto) is exec-only and REJECTED
   # by the TUI — the interactive equivalent goes via extra_args.
   interactive:
+    # Verified, but opt-in: interactive-by-default is claude-code only
+    # (composer decision 2026-06-11). Scores enable per-sheet/score via
+    # instrument_config: {interactive: true}.
+    enabled_by_default: false
     inherit_auto_approve: false
     extra_args:
       - "--dangerously-bypass-approvals-and-sandbox"

@@ -810,7 +810,12 @@ class TestInteractiveLaunchInheritance:
         assert "--no-mcp" not in backend._build_command()
 
     def test_all_verified_builtins_have_interactive_blocks(self) -> None:
-        """The five spike-verified builtins ship default-on interactive."""
+        """Five builtins ship verified interactive blocks.
+
+        Default-on is claude-code ONLY (composer decision 2026-06-11);
+        the other verified instruments are opt-in via
+        instrument_config: {interactive: true}.
+        """
         import yaml
 
         builtins_dir = (
@@ -822,7 +827,10 @@ class TestInteractiveLaunchInheritance:
             profile = InstrumentProfile.model_validate(data)
             assert profile.cli is not None
             assert profile.cli.interactive is not None, f"{name} lost its block"
-            assert profile.cli.interactive.enabled_by_default, name
+            expected_default = name == "claude-code"
+            assert profile.cli.interactive.enabled_by_default is expected_default, (
+                f"{name}: enabled_by_default should be {expected_default}"
+            )
 
     def test_unverified_builtins_stay_headless(self) -> None:
         """No guessed patterns: unverified CLIs must have NO interactive block."""

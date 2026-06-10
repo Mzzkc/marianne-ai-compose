@@ -106,6 +106,10 @@ cli:
   # unpaid tiers (June 18) in favor of Antigravity CLI — patterns may need
   # re-verification after migration.
   interactive:
+    # Verified, but opt-in: interactive-by-default is claude-code only
+    # (composer decision 2026-06-11). Scores enable per-sheet/score via
+    # instrument_config: {interactive: true}.
+    enabled_by_default: false
     startup_gates:
       # Trust dialog on first launch in a new directory; option 1
       # ("Trust folder") is pre-selected. The CLI restarts itself after

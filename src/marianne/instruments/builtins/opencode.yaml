@@ -179,6 +179,10 @@ cli:
   # The headless permission flag is run-subcommand-only; the TUI's default
   # Build agent executes tools without permission prompts.
   interactive:
+    # Verified, but opt-in: interactive-by-default is claude-code only
+    # (composer decision 2026-06-11). Scores enable per-sheet/score via
+    # instrument_config: {interactive: true}.
+    enabled_by_default: false
     inherit_auto_approve: false
     # Bottom status line, present at boot and after every response.
     ready_pattern: 'tab agents'
