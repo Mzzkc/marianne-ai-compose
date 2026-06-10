@@ -233,7 +233,7 @@ def main(
             "--conductor-clone",
             callback=conductor_clone_callback,
             is_eager=True,
-            help="Route all daemon interactions to a clone conductor. "
+            help="Route all conductor interactions to a clone conductor. "
             "Use --conductor-clone= (with equals sign) for default clone, "
             "or --conductor-clone=NAME for a named clone. "
             "The clone has its own socket, PID file, state DB, and log.",

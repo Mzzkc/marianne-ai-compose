@@ -1,7 +1,7 @@
 """Compile command for Marianne CLI.
 
 Implements ``mzt compile`` — takes semantic agent definitions and produces
-complete Mozart score YAML files via the composition compiler.
+complete Marianne score YAML files via the composition compiler.
 
 This is the Marianne-side wrapper that delegates to the
 ``marianne_compiler`` package. The compiler is an optional dependency:
@@ -59,10 +59,10 @@ def compile_scores(
         help="Show compilation summary without writing files.",
     ),
 ) -> None:
-    """Compile semantic agent definitions into Mozart scores.
+    """Compile semantic agent definitions into Marianne scores.
 
     Reads a YAML config that defines agents as people (voice, focus,
-    techniques, instruments) and produces complete Mozart score YAML
+    techniques, instruments) and produces complete Marianne score YAML
     for each agent, plus identity directories and fleet configs.
     """
     from marianne_compiler.fleet import FleetGenerator

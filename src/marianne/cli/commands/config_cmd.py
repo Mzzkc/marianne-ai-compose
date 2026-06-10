@@ -161,7 +161,7 @@ def show(
         None,
         "--config",
         "-c",
-        help="Path to daemon config file (default: ~/.marianne/daemon.yaml)",
+        help="Path to conductor config file (default: ~/.marianne/daemon.yaml)",
     ),
     show_all: bool = typer.Option(
         False,
@@ -176,7 +176,7 @@ def show(
         help="Show only fields in a section (e.g., profiler, learning, socket)",
     ),
 ) -> None:
-    """Display current daemon configuration as a table.
+    """Display current conductor configuration as a table.
 
     By default shows only essential fields.  Use --all for the full config
     or --section to drill into a specific section.
@@ -218,7 +218,7 @@ def show(
 
         source_label = f"[dim]{path}[/dim]" if path.exists() else "[dim](defaults)[/dim]"
 
-    console.print(f"\nDaemon configuration — {source_label}\n")
+    console.print(f"\nConductor configuration — {source_label}\n")
 
     table = Table(show_header=True, header_style="bold cyan", padding=(0, 1))
     table.add_column("Key", style="white", min_width=30)
@@ -284,10 +284,10 @@ def set_value(
         None,
         "--config",
         "-c",
-        help="Path to daemon config file (default: ~/.marianne/daemon.yaml)",
+        help="Path to conductor config file (default: ~/.marianne/daemon.yaml)",
     ),
 ) -> None:
-    """Update a daemon configuration value.
+    """Update a conductor configuration value.
 
     Values are validated against the DaemonConfig schema before saving.
     Use dot notation for nested keys (e.g., socket.path, resource_limits.max_memory_mb).
@@ -326,10 +326,10 @@ def path(
         None,
         "--config",
         "-c",
-        help="Path to daemon config file (default: ~/.marianne/daemon.yaml)",
+        help="Path to conductor config file (default: ~/.marianne/daemon.yaml)",
     ),
 ) -> None:
-    """Show the daemon config file location.
+    """Show the conductor config file location.
 
     Displays the resolved path and whether the file exists.
 
@@ -349,7 +349,7 @@ def init(
         None,
         "--config",
         "-c",
-        help="Path to create config file (default: ~/.marianne/daemon.yaml)",
+        help="Path to create conductor config file (default: ~/.marianne/daemon.yaml)",
     ),
     force: bool = typer.Option(
         False,
@@ -396,7 +396,7 @@ def check(
         None,
         "--config",
         "-c",
-        help="Path to daemon config file to validate",
+        help="Path to conductor config file to validate",
     ),
 ) -> None:
     """Validate a daemon config file against the DaemonConfig schema.

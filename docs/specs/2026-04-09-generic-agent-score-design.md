@@ -120,7 +120,7 @@ Not every sheet needs the full identity context. Loading L2+L3 (~4000 tokens) on
 
 Sheets 10-13 (Consolidate, Reflect, Maturity Check, Resurrect) are the identity write path. If they fail, the agent's learning and identity updates for that cycle are lost. This is the most critical failure mode in the system.
 
-**Mozart's retry mechanism handles transient failures.** Each sheet has `retry_count` (default 3) with exponential backoff. If Consolidate fails due to a rate limit or timeout, it retries. This covers most failure modes.
+**Marianne's retry mechanism handles transient failures.** Each sheet has `retry_count` (default 3) with exponential backoff. If Consolidate fails due to a rate limit or timeout, it retries. This covers most failure modes.
 
 **If retries are exhausted:** The self-chain still fires (the score completed, just with failed sheets). The next cycle's Recon sheet will see the failed state — the agent's L3 wasn't updated, their AAR output exists but wasn't consolidated. The gather pattern naturally surfaces this: "my recent.md is stale, my last cycle's beliefs weren't consolidated." The agent can attempt recovery in the next cycle's consolidate phase.
 

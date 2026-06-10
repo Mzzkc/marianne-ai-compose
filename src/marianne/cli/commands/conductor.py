@@ -22,7 +22,7 @@ def start(
     log_level: str = typer.Option("info", "--log-level", "-l", help="Log level"),
     profile: str | None = typer.Option(
         None, "--profile", "-p",
-        help="Daemon operational profile (dev, intensive, minimal). "
+        help="Conductor operational profile (dev, intensive, minimal). "
         "Overrides config file defaults.",
     ),
     conductor_clone: Annotated[
@@ -109,7 +109,7 @@ def restart(
     pid_file: Path | None = typer.Option(None, "--pid-file", help="PID file path"),
     profile: str | None = typer.Option(
         None, "--profile", "-p",
-        help="Daemon operational profile (dev, intensive, minimal). "
+        help="Conductor operational profile (dev, intensive, minimal). "
         "Overrides config file defaults.",
     ),
     conductor_clone: Annotated[
