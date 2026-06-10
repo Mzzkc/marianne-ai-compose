@@ -11,29 +11,13 @@ from __future__ import annotations
 
 import importlib
 import inspect
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-import yaml
 from typer.testing import CliRunner
 
 from marianne.cli import app
 
 runner = CliRunner()
-
-
-def _make_config(tmp_path: Path) -> Path:
-    """Create a minimal valid config file for testing."""
-    config = {
-        "name": "test-job",
-        "instrument": "claude-code",
-        "sheet": {"size": 10, "total_items": 10},
-        "prompt": {"template": "test"},
-    }
-    config_path = tmp_path / "test.yaml"
-    with open(config_path, "w") as f:
-        yaml.dump(config, f)
-    return config_path
 
 
 def _assert_hints_present(captured_calls: list[dict[str, object]], context: str) -> None:
@@ -96,29 +80,12 @@ class TestLoggingConfigErrorHints:
 
 
 # =============================================================================
-# run.py:160 — escalation not supported error
+# run.py — escalation rejection REMOVED (#361): --escalation is supported now.
+# The old "not available in daemon mode" error (and its hints) predates
+# marker-file/`mzt resolve` resolution; with no daemon running, --escalation
+# falls through to the ordinary conductor-not-running error, whose hints are
+# audited by TestRunDaemonNotRunningHints-style cases below.
 # =============================================================================
-
-
-class TestEscalationNotSupportedHints:
-    """When --escalation is used, tell the user why and what to do instead."""
-
-    def test_escalation_error_has_hints(self, tmp_path: Path) -> None:
-        """The escalation not-supported error should include hints."""
-        config_path = _make_config(tmp_path)
-        ws = tmp_path / "ws"
-        ws.mkdir()
-
-        captured, spy = _make_spy()
-
-        with patch("marianne.cli.commands.run.output_error", side_effect=spy):
-            runner.invoke(
-                app,
-                ["run", str(config_path), "--workspace", str(ws), "--escalation"],
-                catch_exceptions=True,
-            )
-
-        _assert_hints_present(captured, "run.py escalation error")
 
 
 # =============================================================================

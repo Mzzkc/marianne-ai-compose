@@ -138,6 +138,8 @@ class TestManagerResumeNoReload:
             no_reload: bool = False,
             pre_resume_status: DaemonJobStatus | None = None,
             from_sheet: int | None = None,
+            escalation: bool = False,
+            self_healing: bool = False,
         ) -> None:
             captured_args.append({"no_reload": no_reload})
 
@@ -171,6 +173,8 @@ class TestManagerResumeNoReload:
             no_reload: bool = False,
             pre_resume_status: DaemonJobStatus | None = None,
             from_sheet: int | None = None,
+            escalation: bool = False,
+            self_healing: bool = False,
         ) -> None:
             captured_args.append({"no_reload": no_reload})
 

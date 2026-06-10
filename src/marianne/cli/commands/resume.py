@@ -62,7 +62,9 @@ def resume(
         False,
         "--escalation",
         "-e",
-        help="Enable human-in-the-loop escalation for low-confidence sheets",
+        help="Pause sheets in FERMATA on retry exhaustion for a composer "
+        "decision (resolve with `mzt resolve`). Adds to the run's persisted "
+        "setting; cannot disable it.",
     ),
     no_reload: bool = typer.Option(
         False,
@@ -286,6 +288,11 @@ async def _resume_job(
         "config_path": str(config_file) if config_file else None,
         "no_reload": no_reload,
         "from_sheet": from_sheet,
+        # #361: previously collected client-side but never sent — the resume
+        # flags were silently dropped. Checkpoint values are inherited; these
+        # can additionally enable (never disable).
+        "escalation": escalation,
+        "self_healing": self_healing,
     }
     try:
         routed, result = await try_daemon_route("job.resume", params)

@@ -11,6 +11,7 @@ from .init_cmd import init
 from .pause import modify, pause
 from .rate_limits import clear_rate_limits
 from .recover import recover
+from .resolve import resolve
 from .resume import resume
 from .run import run
 from .status import clear, list_jobs, status
@@ -39,6 +40,8 @@ __all__ = [
     "clear_rate_limits",
     # recover.py
     "recover",
+    # resolve.py
+    "resolve",
     # resume.py
     "resume",
     # run.py

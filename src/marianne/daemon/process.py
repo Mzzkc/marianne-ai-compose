@@ -598,6 +598,10 @@ class DaemonProcess:
                     config_path=config_path,
                     no_reload=no_reload,
                     from_sheet=from_sheet,
+                    # #361: resume can additionally enable (never disable)
+                    # escalation/healing; checkpoint values are inherited.
+                    escalation=bool(params.get("escalation", False)),
+                    self_healing=bool(params.get("self_healing", False)),
                 )
                 return response.model_dump()
             except JobSubmissionError as e:
@@ -606,6 +610,17 @@ class DaemonProcess:
         async def handle_cancel(params: dict[str, Any], _w: Any) -> dict[str, Any]:
             ok = await manager.cancel_job(params["job_id"])
             return {"cancelled": ok}
+
+        async def handle_resolve_escalation(
+            params: dict[str, Any], _w: Any
+        ) -> dict[str, Any]:
+            # #361: backs `mzt resolve` — conductor-side marker write +
+            # immediate consumption through the existing fermata poll.
+            return await manager.resolve_escalation(
+                params["job_id"],
+                int(params["sheet_num"]),
+                str(params["decision"]),
+            )
 
         async def handle_list(_p: dict[str, Any], _w: Any) -> list[dict[str, Any]]:
             return await manager.list_jobs()
@@ -684,6 +699,7 @@ class DaemonProcess:
         handler.register("job.status", handle_job_status)
         handler.register("job.pause", handle_pause)
         handler.register("job.resume", handle_resume)
+        handler.register("job.resolve_escalation", handle_resolve_escalation)
         handler.register("job.modify", handle_modify)
         handler.register("job.cancel", handle_cancel)
         handler.register("job.list", handle_list)

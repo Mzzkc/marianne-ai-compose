@@ -67,7 +67,9 @@ def run(
         False,
         "--escalation",
         "-e",
-        help="Enable human-in-the-loop escalation for low-confidence sheets",
+        help="Pause sheets in FERMATA on retry exhaustion for a composer "
+        "decision (resolve via mzt status instructions). Works without "
+        "--self-healing.",
     ),
     self_healing: bool = typer.Option(
         False,
@@ -147,26 +149,6 @@ def run(
             "cost_limits: {enabled: true, max_cost_per_job: 10.00}"
         )
 
-    # Validate flag compatibility
-    if escalation:
-        _msg = (
-            "--escalation requires interactive console prompts which are "
-            "not available in daemon mode. Escalation is not currently "
-            "supported."
-        )
-        if json_output:
-            output_json({"error": _msg})
-        else:
-            output_error(
-                _msg,
-                hints=[
-                    "Remove the --escalation flag to run without interactive escalation.",
-                    "Escalation requires a human-in-the-loop and is not yet "
-                    "supported in daemon mode.",
-                ],
-            )
-        raise typer.Exit(1)
-
     if dry_run:
         if not json_output:
             console.print("\n[yellow]Dry run - not executing[/yellow]")
@@ -185,6 +167,7 @@ def run(
         _try_daemon_submit(
             config_file, workspace, fresh, self_healing, yes, json_output,
             start_sheet=start_sheet,
+            escalation=escalation,
         ),
     )
     if routed:
@@ -212,6 +195,7 @@ async def _try_daemon_submit(
     json_output: bool,
     *,
     start_sheet: int | None = None,
+    escalation: bool = False,
 ) -> bool:
     """Submit a job to the running conductor.
 
@@ -230,6 +214,7 @@ async def _try_daemon_submit(
             "fresh": fresh,
             "self_healing": self_healing,
             "self_healing_auto_confirm": auto_confirm,
+            "escalation": escalation,  # #361: decoupled from self_healing
             "client_cwd": str(Path.cwd()),
         }
         if workspace is not None:

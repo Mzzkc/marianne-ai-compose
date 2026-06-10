@@ -169,21 +169,23 @@ class TestRestartPreservation:
 
 
 class TestStatusResolveHint:
-    def test_hint_shows_marker_path_and_decisions(self) -> None:
+    def test_hint_shows_resolve_command_and_decisions(self) -> None:
         from marianne.cli.commands.status import fermata_resolve_hint
 
         lines = fermata_resolve_hint("job-abc", 3, "retry budget exhausted")
         text = "\n".join(lines)
-        # Every decision's marker path is shown, job-id-scoped, for sheet 3.
+        # `mzt resolve` is the primary path; markers remain the file fallback.
+        assert "mzt resolve job-abc 3" in text
         for decision in ("retry", "skip", "accept", "fail"):
-            assert f"markers/fermata/job-abc/sheet-3.{decision}" in text
+            assert decision in text
+        assert "markers/fermata/job-abc/sheet-3" in text
         assert "retry budget exhausted" in text
 
     def test_hint_without_reason(self) -> None:
         from marianne.cli.commands.status import fermata_resolve_hint
 
         lines = fermata_resolve_hint("j", 1, None)
-        assert any("markers/fermata/j/sheet-1.retry" in line for line in lines)
+        assert any("mzt resolve j 1" in line for line in lines)
 
 
 class TestPath3SetsFermataFields:

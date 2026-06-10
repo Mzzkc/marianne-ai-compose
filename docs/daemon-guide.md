@@ -538,9 +538,20 @@ pip install -e ".[dev]"
 mzt restart
 ```
 
-### "--escalation incompatible with conductor"
+### Resolving FERMATA (escalation) pauses
 
-The `--escalation` flag requires interactive console prompts which are not available in conductor mode. Escalation is not currently supported when running through the conductor.
+With `--escalation` (or `--self-healing`), a sheet that exhausts its retries
+pauses in FERMATA awaiting a composer decision instead of failing. `mzt status`
+lists pending decisions. Resolve with:
+
+```bash
+mzt resolve <job_id> <sheet_num> <decision>   # retry | skip | accept | fail
+```
+
+or create a marker file under the job workspace
+(`markers/fermata/<job_id>/sheet-<N>.<decision>`). FERMATA state survives
+conductor restarts; the run's escalation/healing settings are inherited on
+resume.
 
 ### Orphan Recovery on Restart
 

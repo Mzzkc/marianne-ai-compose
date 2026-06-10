@@ -2608,6 +2608,57 @@ class BatonAdapter:
         consumed_dir.mkdir(parents=True, exist_ok=True)
         marker.rename(consumed_dir / marker.name)
 
+    def resolve_fermata(
+        self, job_id: str, sheet_num: int, decision: str
+    ) -> tuple[bool, str]:
+        """Resolve a FERMATA sheet on the composer's behalf (#361).
+
+        Backs ``mzt resolve`` via the ``job.resolve_escalation`` IPC method.
+        Writes the SAME decision marker a composer would create by hand,
+        then enqueues an immediate ``FermataCheck`` so the existing poll
+        handler consumes it — one consumption path, restart-safe (the
+        marker survives a crash between write and consumption), and the
+        ``consumed/`` audit trail is preserved.
+
+        Returns:
+            ``(ok, message)`` — ``ok`` False with a diagnostic message when
+            the decision is invalid or the sheet is not in FERMATA.
+        """
+        if decision not in self._FERMATA_DECISIONS:
+            valid = ", ".join(sorted(self._FERMATA_DECISIONS))
+            return False, f"Invalid decision '{decision}' — expected one of: {valid}"
+
+        state = self._baton.get_sheet_state(job_id, sheet_num)
+        if state is None:
+            return False, f"Unknown sheet {sheet_num} for job '{job_id}'"
+        if state.status != BatonSheetStatus.FERMATA:
+            return False, (
+                f"Sheet {sheet_num} is {state.status.value}, not FERMATA — "
+                "only FERMATA sheets await a resolution"
+            )
+
+        marker_dir = self._fermata_marker_dir(job_id, sheet_num)
+        if marker_dir is None:
+            return False, f"No workspace known for job '{job_id}' sheet {sheet_num}"
+        try:
+            marker_dir.mkdir(parents=True, exist_ok=True)
+            (marker_dir / f"sheet-{sheet_num}.{decision}").touch()
+        except OSError as exc:
+            return False, f"Failed to write resolution marker: {exc}"
+
+        self._baton.inbox.put_nowait(
+            FermataCheck(job_id=job_id, sheet_num=sheet_num)
+        )
+        _logger.info(
+            "adapter.fermata.resolved_via_ipc",
+            extra={
+                "job_id": job_id,
+                "sheet_num": sheet_num,
+                "decision": decision,
+            },
+        )
+        return True, f"Resolution '{decision}' recorded for sheet {sheet_num}"
+
     async def _handle_fermata_check(self, event: FermataCheck) -> None:
         """Poll for a composer resolution marker on a FERMATA sheet (#361).
 

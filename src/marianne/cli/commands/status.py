@@ -1251,11 +1251,12 @@ def fermata_resolve_hint(job_id: str, sheet_num: int, reason: str | None) -> lis
     return [
         f"  Sheet {sheet_num}: [magenta]⏸ FERMATA — awaiting composer decision[/magenta]"
         + (f" ({reason})" if reason else ""),
-        "    Resolve: create ONE marker under the job workspace —",
-        f"      [dim]{rel}.retry[/dim]   re-run the sheet from scratch",
-        f"      [dim]{rel}.skip[/dim]    skip it, continue dependents",
-        f"      [dim]{rel}.accept[/dim]  accept the last attempt as success",
-        f"      [dim]{rel}.fail[/dim]    fail it, propagate to dependents",
+        f"    Resolve: [bold]mzt resolve {job_id} {sheet_num} <decision>[/bold] —",
+        "      [dim]retry[/dim]   re-run the sheet from scratch",
+        "      [dim]skip[/dim]    skip it, continue dependents",
+        "      [dim]accept[/dim]  accept the last attempt as success",
+        "      [dim]fail[/dim]    fail it, propagate to dependents",
+        f"    (or create a marker file under the job workspace: [dim]{rel}.<decision>[/dim])",
     ]
 
 

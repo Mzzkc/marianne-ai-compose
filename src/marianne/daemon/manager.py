@@ -1525,6 +1525,8 @@ class JobManager:
         config_path: Path | None = None,
         no_reload: bool = False,
         from_sheet: int | None = None,
+        escalation: bool = False,
+        self_healing: bool = False,
     ) -> JobResponse:
         """Resume a paused or failed job by creating a new task.
 
@@ -1592,6 +1594,8 @@ class JobManager:
                 no_reload=no_reload,
                 pre_resume_status=pre_resume_status,
                 from_sheet=from_sheet,
+                escalation=escalation,
+                self_healing=self_healing,
             ),
             name=f"job-resume-{job_id}",
         )
@@ -2111,6 +2115,21 @@ class JobManager:
             "dry_run": dry_run,
             "sheet_num": sheet_num,
         }
+
+    async def resolve_escalation(
+        self, job_id: str, sheet_num: int, decision: str
+    ) -> dict[str, Any]:
+        """Resolve a FERMATA sheet via IPC (#361, backs ``mzt resolve``).
+
+        Delegates to the baton adapter, which writes the decision marker
+        and triggers immediate consumption through the existing poll path.
+        """
+        if self._baton_adapter is None:
+            return {"resolved": False, "message": "Baton adapter not initialized"}
+        ok, message = self._baton_adapter.resolve_fermata(
+            job_id, sheet_num, decision
+        )
+        return {"resolved": ok, "message": message}
 
     async def get_daemon_status(self) -> dict[str, Any]:
         """Build daemon status summary.
@@ -2792,6 +2811,10 @@ class JobManager:
                 instrument_name=sheet.instrument_name,  # F-151
                 instrument_model=model if isinstance(model, str) else None,
             )
+        # #361: escalation decoupled from healing — either flag enables
+        # FERMATA-on-exhaustion; healing keeps it as its designed end state.
+        # Persisted on the checkpoint so resume/restart recovery inherit it.
+        escalation_enabled = request.escalation or request.self_healing
         initial_state = CheckpointState(
             job_id=job_id,
             job_name=config.name,
@@ -2801,6 +2824,8 @@ class JobManager:
             sheets=initial_sheets,
             instruments_used=list({s.instrument_name for s in sheets if s.instrument_name}),
             total_movements=max((s.movement for s in sheets), default=None),
+            escalation_enabled=escalation_enabled,
+            self_healing_enabled=request.self_healing,
         )
         self._live_states[job_id] = initial_state
 
@@ -2853,7 +2878,7 @@ class JobManager:
             deps,
             max_cost_usd=max_cost,
             max_retries=max_retries,
-            escalation_enabled=request.self_healing,
+            escalation_enabled=escalation_enabled,  # #361: decoupled from healing
             self_healing_enabled=request.self_healing,
             prompt_config=config.prompt,
             parallel_enabled=config.parallel.enabled,
@@ -2929,6 +2954,8 @@ class JobManager:
         no_reload: bool = False,
         pre_resume_status: DaemonJobStatus | None = None,
         from_sheet: int | None = None,
+        escalation: bool = False,
+        self_healing: bool = False,
     ) -> DaemonJobStatus:
         """Resume a job through the baton adapter using checkpoint recovery.
 
@@ -2972,6 +2999,21 @@ class JobManager:
                 workspace=str(workspace),
             )
             return DaemonJobStatus.FAILED
+
+        # #361: inherit the run's persisted escalation/healing options; an
+        # explicit resume flag can additionally enable (never disable) them.
+        # Write the effective values back so the NEXT resume/restart inherits
+        # the upgraded setting too.
+        effective_self_healing = bool(
+            getattr(checkpoint, "self_healing_enabled", False) or self_healing
+        )
+        effective_escalation = bool(
+            getattr(checkpoint, "escalation_enabled", False)
+            or escalation
+            or effective_self_healing
+        )
+        checkpoint.escalation_enabled = effective_escalation
+        checkpoint.self_healing_enabled = effective_self_healing
 
         # Load config — respect no_reload flag (#98)
         config: JobConfig | None = None
@@ -3096,6 +3138,8 @@ class JobManager:
             checkpoint,
             max_cost_usd=max_cost,
             max_retries=max_retries,
+            escalation_enabled=effective_escalation,  # #361: inherited+flags
+            self_healing_enabled=effective_self_healing,
             prompt_config=config.prompt,
             parallel_enabled=config.parallel.enabled,
             cross_sheet=config.cross_sheet,  # F-210
@@ -3211,6 +3255,8 @@ class JobManager:
         no_reload: bool = False,
         pre_resume_status: DaemonJobStatus | None = None,
         from_sheet: int | None = None,
+        escalation: bool = False,
+        self_healing: bool = False,
     ) -> None:
         """Task coroutine that resumes a paused job."""
 
@@ -3222,6 +3268,8 @@ class JobManager:
                 no_reload=no_reload,
                 pre_resume_status=pre_resume_status,
                 from_sheet=from_sheet,
+                escalation=escalation,
+                self_healing=self_healing,
             )
 
         await self._run_managed_task(

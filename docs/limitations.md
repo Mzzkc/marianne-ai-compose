@@ -25,19 +25,15 @@ mzt run my-job.yaml  # now works
 
 ---
 
-### Escalation Incompatible with Daemon
+### ~~Escalation Incompatible with Daemon~~ (resolved)
 
-The `--escalation` flag (human-in-the-loop prompts for low-confidence sheets) is explicitly blocked when the daemon routes jobs.
-
-**What this means:** You cannot use `mzt run my-job.yaml --escalation`. The CLI exits with an error:
-
-> `--escalation requires interactive console prompts which are not available in daemon mode. Escalation is not currently supported.`
-
-**Why:** The daemon runs jobs as background tasks without an attached terminal. Interactive console prompts have no UI surface to display through.
-
-**Workaround:** None currently. The escalation feature exists in the codebase (`src/marianne/learning/store/escalation.py`) but has no supported execution path.
-
-**Status:** Blocked until the dashboard or IPC layer supports interactive prompts.
+**Resolved (#361):** escalation no longer requires interactive prompts. With
+`mzt run my-job.yaml --escalation` (no `--self-healing` needed), a sheet that
+exhausts its retries pauses in FERMATA instead of failing. `mzt status` shows
+the pending decision; resolve it with `mzt resolve <job_id> <sheet> <decision>`
+(decisions: `retry`, `skip`, `accept`, `fail`) or by creating a marker file
+under the job workspace (`markers/fermata/<job_id>/sheet-<N>.<decision>`).
+FERMATA survives conductor restarts.
 
 ---
 

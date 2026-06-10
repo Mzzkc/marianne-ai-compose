@@ -982,6 +982,21 @@ class CheckpointState(BaseModel):
         "None for legacy jobs that don't use movements.",
     )
 
+    # Run options (#361): request-level flags persisted so resume and
+    # conductor-restart recovery inherit them. Before these fields, every
+    # resume silently dropped escalation/healing to False (the flags lived
+    # only on the original JobRequest, which is not persisted).
+    escalation_enabled: bool = Field(
+        default=False,
+        description="Enter FERMATA on retry exhaustion (effective value: "
+        "the run's --escalation OR --self-healing). Inherited on resume.",
+    )
+    self_healing_enabled: bool = Field(
+        default=False,
+        description="Self-healing pipeline enabled for this run. "
+        "Inherited on resume.",
+    )
+
     # Execution metadata
     pid: int | None = Field(default=None, description="Process ID of running orchestrator")
     error_message: str | None = None

@@ -257,6 +257,8 @@ class TestFromSheetThreading:
             no_reload: bool = False,
             pre_resume_status: DaemonJobStatus | None = None,
             from_sheet: int | None = None,
+            escalation: bool = False,
+            self_healing: bool = False,
         ) -> None:
             captured.append(
                 {"pre_resume_status": pre_resume_status, "from_sheet": from_sheet}

@@ -33,6 +33,7 @@ class JobSubmitParams(TypedDict, total=False):
     fresh: bool
     self_healing: bool
     self_healing_auto_confirm: bool
+    escalation: bool
     start_sheet: int | None
     dry_run: bool
     chain_depth: int | None
@@ -84,6 +85,12 @@ class JobRequest(BaseModel):
     self_healing_auto_confirm: bool = Field(
         default=False,
         description="Auto-confirm suggested fixes in self-healing mode",
+    )
+    escalation: bool = Field(
+        default=False,
+        description="Enter FERMATA (pause for a composer decision) on retry "
+        "exhaustion, independent of self-healing (#361). Resolved via "
+        "marker files or `mzt resolve`. self_healing implies this.",
     )
     start_sheet: int | None = Field(
         default=None,

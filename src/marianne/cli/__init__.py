@@ -77,6 +77,8 @@ from .commands import (
     pause,
     # recover.py
     recover,
+    # resolve.py
+    resolve,
     # resume.py
     resume,
     # run.py
@@ -284,6 +286,7 @@ app.command(name="compile", rich_help_panel="Getting Started")(compile_scores)
 app.command(rich_help_panel="Jobs")(run)
 app.command(rich_help_panel="Jobs")(resume)
 app.command(rich_help_panel="Jobs")(pause)
+app.command(rich_help_panel="Jobs")(resolve)  # #361: resolve FERMATA sheets
 app.command(rich_help_panel="Jobs")(modify)
 app.command(rich_help_panel="Jobs")(cancel)
 app.command(rich_help_panel="Jobs")(validate)

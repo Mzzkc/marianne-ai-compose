@@ -110,29 +110,46 @@ class TestRunCommandExecution:
         result = runner.invoke(app, ["run", str(bad_config), "--json"])
         assert result.exit_code != 0
 
-    def test_run_escalation_rejected_in_daemon_mode(self, sample_yaml_config: Path) -> None:
-        """--escalation should be rejected since daemon is non-interactive."""
-        result = runner.invoke(
-            app,
-            ["run", str(sample_yaml_config), "--escalation"],
-        )
-        assert result.exit_code == 1
-        assert (
-            "not available in daemon mode" in result.stdout
-            or "not currently supported" in result.stdout
-        )
+    def test_run_escalation_accepted_and_forwarded(
+        self, sample_yaml_config: Path
+    ) -> None:
+        """#361: --escalation is no longer rejected — it reaches job.submit.
 
-    def test_run_escalation_json_error(self, sample_yaml_config: Path) -> None:
-        """--escalation with --json should produce JSON-shaped error."""
-        result = runner.invoke(
-            app,
-            ["run", str(sample_yaml_config), "--json", "--escalation"],
-        )
-        assert result.exit_code == 1
-        # Rich console.print may wrap long JSON lines, so we don't
-        # parse strictly — just verify the error content is present.
-        assert '"error"' in result.stdout
-        assert "daemon mode" in result.stdout
+        The old hard rejection ("requires interactive console prompts")
+        predates marker-file resolution; escalation is non-interactive now.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        submitted: dict = {}
+
+        async def fake_route(method: str, params: dict) -> tuple[bool, dict]:
+            submitted["method"] = method
+            submitted["params"] = params
+            return True, {
+                "status": "accepted",
+                "job_id": "j-esc",
+                "message": "queued",
+            }
+
+        with (
+            patch(
+                "marianne.daemon.detect.is_daemon_available",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "marianne.daemon.detect.try_daemon_route",
+                side_effect=fake_route,
+            ),
+        ):
+            result = runner.invoke(
+                app,
+                ["run", str(sample_yaml_config), "--escalation", "--json"],
+            )
+
+        assert result.exit_code == 0
+        assert submitted["method"] == "job.submit"
+        assert submitted["params"]["escalation"] is True
+        assert submitted["params"]["self_healing"] is False
 
     def test_run_shows_config_panel(self, sample_yaml_config: Path) -> None:
         """Run command should display configuration panel."""

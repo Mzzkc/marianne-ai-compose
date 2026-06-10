@@ -80,7 +80,7 @@ Usage: mzt run [OPTIONS] CONFIG_FILE
 | `--start-sheet` | `-s` | | Override starting sheet number |
 | `--workspace` | `-w` | | Override workspace directory (creates if missing; takes precedence over YAML config) |
 | `--json` | `-j` | false | Output result as JSON for machine parsing |
-| `--escalation` | `-e` | false | Enable human-in-the-loop escalation — **not currently supported** (blocked in conductor mode) |
+| `--escalation` | `-e` | false | Pause sheets in FERMATA on retry exhaustion for a composer decision; resolve with `mzt resolve`. Works without `--self-healing` |
 | `--self-healing` | `-H` | false | Enable automatic diagnosis and remediation when retries are exhausted |
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
 | `--fresh` | | false | Delete existing state before running, ensuring a fresh start. Use for self-chaining scores or re-running completed scores from scratch |
@@ -164,7 +164,7 @@ Loads the score state and continues execution from where it left off. By default
 | `--config` | `-c` | | Path to config file (optional if `config_snapshot` exists in state) |
 | `--workspace` | `-w` | | *(hidden)* Debug override: bypass conductor for resume |
 | `--force` | `-f` | false | Force resume even if score appears completed |
-| `--escalation` | `-e` | false | Enable human-in-the-loop escalation — **not currently supported** (blocked in conductor mode) |
+| `--escalation` | `-e` | false | Pause sheets in FERMATA on retry exhaustion for a composer decision; resolve with `mzt resolve`. Works without `--self-healing` |
 | `--no-reload` | | false | Use cached config snapshot instead of auto-reloading from YAML file |
 | `--self-healing` | `-H` | false | Enable automatic diagnosis and remediation when retries are exhausted |
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
@@ -233,6 +233,46 @@ mzt pause my-job
 
 # Pause and wait for acknowledgment
 mzt pause my-job --wait --timeout 30
+```
+
+---
+
+### `mzt resolve`
+
+Resolve a sheet paused in FERMATA awaiting a composer decision (#361).
+
+```
+Usage: mzt resolve [OPTIONS] JOB_ID SHEET_NUM DECISION
+```
+
+When escalation is enabled (`--escalation` or `--self-healing`), a sheet that
+exhausts its retries pauses in FERMATA instead of failing. `mzt status` lists
+pending decisions; this command records yours and the score continues
+immediately. (Equivalent to creating a marker file
+`markers/fermata/<job_id>/sheet-<N>.<decision>` under the job workspace.)
+
+#### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `JOB_ID` | Yes | Score ID with a sheet paused in FERMATA |
+| `SHEET_NUM` | Yes | Sheet number awaiting the decision |
+| `DECISION` | Yes | `retry` (re-run from scratch), `skip` (skip, continue dependents), `accept` (accept the last attempt as success), `fail` (fail it, propagate to dependents) |
+
+#### Options
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--json` | `-j` | false | Output result as JSON |
+
+#### Examples
+
+```bash
+# Re-run a FERMATA'd sheet from scratch
+mzt resolve my-score 3 retry
+
+# Accept the sheet's last attempt as success
+mzt resolve my-score 3 accept
 ```
 
 ---
