@@ -29,7 +29,7 @@ Design (from the #201 multi-model lab + composer steer):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from marianne.core.checkpoint import ValidationDetailDict
@@ -57,6 +57,8 @@ def format_failure_evidence(
     stderr_tail: str | None = None,
     error_history: list[str] | None = None,
     max_stderr_chars: int = _DEFAULT_MAX_STDERR_CHARS,
+    observer_events: list[dict[str, Any]] | None = None,
+    resources: dict[str, Any] | None = None,
 ) -> str | None:
     """Render a bounded, directive failure-evidence block for a retry preamble.
 
@@ -72,6 +74,12 @@ def format_failure_evidence(
         stderr_tail: Tail of the prior attempt's stderr (fallback signal only).
         error_history: Prior error codes, to surface a repeating failure.
         max_stderr_chars: Truncation ceiling for ``stderr_tail``.
+        observer_events: Observer file/process events from the failed
+            attempt's window (#133). Rendered as a compact, bounded runtime
+            summary AFTER the primary signals; never produces a block on
+            its own.
+        resources: Resource state near failure time (#133), e.g.
+            ``{"memory_mb": 900.5}``. Same subordinate treatment.
 
     Returns:
         A delimited ``<failure-evidence>`` block, or ``None`` if empty.
@@ -107,7 +115,13 @@ def format_failure_evidence(
         body.append(tail)
 
     if not body:
+        # Primary failure signals are required: runtime context alone is not
+        # evidence of anything and must never produce a block (#133).
         return None
+
+    runtime = _format_runtime_context(observer_events, resources)
+    if runtime:
+        body.extend(runtime)
 
     if not failed:
         # Pure validation-failure blocks are already imperative; for
@@ -170,3 +184,58 @@ def _format_classifier_line(
     if error_message:
         return f"Error: {error_message}"
     return None
+
+
+# Caps for the runtime-context section (#133): a handful of filenames tells
+# the agent what its last attempt actually did; hundreds would drown the
+# primary signals. Newest-first input order is preserved.
+_MAX_RUNTIME_PATHS = 8
+_MAX_RUNTIME_PROCESSES = 4
+
+
+def _format_runtime_context(
+    observer_events: list[dict[str, Any]] | None,
+    resources: dict[str, Any] | None,
+) -> list[str]:
+    """Compact, bounded runtime summary from observer/resource data (#133).
+
+    Subordinate evidence: appended after the primary signals and framed as
+    untrusted data like stderr. Returns [] when there is nothing to report.
+    """
+    lines: list[str] = []
+
+    by_kind: dict[str, list[str]] = {}
+    exited: list[str] = []
+    for e in observer_events or []:
+        kind = str(e.get("event", ""))
+        data = e.get("data") or {}
+        if kind.endswith(("file_created", "file_modified", "file_deleted")):
+            path = data.get("path")
+            if path:
+                by_kind.setdefault(kind.rsplit(".", 1)[-1], []).append(str(path))
+        elif kind.endswith("process_exited"):
+            code = data.get("exit_code")
+            pid = data.get("pid")
+            if code not in (None, 0):
+                exited.append(f"pid {pid} exit {code}")
+
+    for label, paths in by_kind.items():
+        shown = paths[:_MAX_RUNTIME_PATHS]
+        more = len(paths) - len(shown)
+        suffix = f" (+{more} more)" if more > 0 else ""
+        lines.append(f"  {label}: {', '.join(shown)}{suffix}")
+    if exited:
+        shown_procs = exited[:_MAX_RUNTIME_PROCESSES]
+        lines.append(f"  subprocesses exited non-zero: {'; '.join(shown_procs)}")
+
+    if resources:
+        mem = resources.get("memory_mb")
+        if mem is not None:
+            lines.append(f"  conductor memory near failure: {mem:.0f} MB")
+
+    if not lines:
+        return []
+    return [
+        "Runtime context from your previous attempt (untrusted data):",
+        *lines,
+    ]

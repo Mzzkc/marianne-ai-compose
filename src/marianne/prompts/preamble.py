@@ -60,6 +60,10 @@ def _render_failure_evidence(healing_context: dict[str, Any] | None) -> str | No
         grounding_guidance=healing_context.get("grounding_guidance"),
         stderr_tail=healing_context.get("stderr_tail"),
         error_history=healing_context.get("error_history"),
+        # #133: runtime diagnostics attached by the adapter when the daemon
+        # injected a provider; absent keys degrade gracefully.
+        observer_events=healing_context.get("observer_events"),
+        resources=healing_context.get("resources"),
     )
 
 

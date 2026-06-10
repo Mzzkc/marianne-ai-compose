@@ -489,6 +489,9 @@ class JobManager:
             # #206: mirror baton rate limits into the daemon coordinator so
             # backpressure / submit-time warnings / the scheduler see them.
             rate_limit_reporter=self._on_rate_limit,
+            # #133: runtime diagnostics (observer events + resource state)
+            # for retry failure-evidence enrichment.
+            diagnostic_snapshot_fn=self._diagnostic_snapshot,
         )
         self._baton_adapter.set_backend_pool(BackendPool(registry, pgroup=self._pgroup))
 
@@ -2114,6 +2117,38 @@ class JobManager:
             "workspace": str(ws),
             "dry_run": dry_run,
             "sheet_num": sheet_num,
+        }
+
+    def _diagnostic_snapshot(self, job_id: str) -> dict[str, Any] | None:
+        """Runtime diagnostics for failure-evidence enrichment (#133).
+
+        Injected into the BatonAdapter as ``diagnostic_snapshot_fn``. Pure
+        in-process reads — the ObserverRecorder ring buffer and the
+        ResourceMonitor's cached memory figure — so it is safe to call
+        synchronously in the dispatch path. Returns None when neither
+        source has anything (observer disabled and no memory reading).
+        """
+        events: list[dict[str, Any]] = []
+        if self._observer_recorder is not None:
+            try:
+                events = [
+                    dict(e)
+                    for e in self._observer_recorder.get_recent_events(
+                        job_id, limit=50
+                    )
+                ]
+            except Exception:
+                _logger.debug(
+                    "manager.diagnostic_snapshot.observer_read_failed",
+                    job_id=job_id,
+                    exc_info=True,
+                )
+        mem = self._monitor.current_memory_mb()
+        if not events and mem is None:
+            return None
+        return {
+            "observer_events": events,
+            "resources": {"memory_mb": mem} if mem is not None else None,
         }
 
     async def resolve_escalation(

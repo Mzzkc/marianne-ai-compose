@@ -100,6 +100,13 @@ PersistCallback = Callable[[str], None]
 # single authority for dispatch decisions).
 RateLimitReporter = Callable[[str, float, str, int], Awaitable[None]]
 
+# #133: sync provider of runtime diagnostics for failure-evidence enrichment.
+# job_id -> {"observer_events": [ObserverEvent-shaped dicts, newest first],
+# "resources": {"memory_mb": ...}} or None. Manager injects a closure over
+# ObserverRecorder's in-memory ring + ResourceMonitor's cached memory read —
+# both pure in-process reads, safe in the dispatch path. READ-only.
+DiagnosticSnapshotFn = Callable[[str], "dict[str, Any] | None"]
+
 # Backward compat aliases — tests may import these
 StateSyncCallback = Callable[[str, int, str, SheetExecutionState | None], None]
 
@@ -389,6 +396,7 @@ class BatonAdapter:
         persist_callback: PersistCallback | None = None,
         learning_store: GlobalLearningStore | None = None,
         rate_limit_reporter: RateLimitReporter | None = None,
+        diagnostic_snapshot_fn: DiagnosticSnapshotFn | None = None,
     ) -> None:
         """Initialize the BatonAdapter.
 
@@ -409,6 +417,11 @@ class BatonAdapter:
                 (backpressure, submit-time warnings, the scheduler) see the
                 same limits the baton is already enforcing at dispatch.
                 None (tests, standalone use) skips the mirror.
+            diagnostic_snapshot_fn: Optional sync runtime-diagnostics
+                provider (#133): observer file/process events + resource
+                state attached to the retry failure-evidence context so the
+                agent sees what its previous attempt actually did. Fail-open;
+                None skips enrichment (plain #201 evidence).
         """
         from marianne.daemon.baton.timer import TimerWheel
 
@@ -426,6 +439,7 @@ class BatonAdapter:
         self._persist_callback = persist_callback
         self._learning_store = learning_store
         self._rate_limit_reporter = rate_limit_reporter
+        self._diagnostic_snapshot_fn = diagnostic_snapshot_fn
         # Deprecated compat attributes — tests set/read these directly
         self._state_sync_callback = state_sync_callback
         self._synced_status: dict[tuple[str, int], str] = {}
@@ -1309,9 +1323,11 @@ class BatonAdapter:
 
         return "\n".join(parts)
 
-    @staticmethod
     def _build_healing_context(
+        self,
         state: SheetExecutionState,
+        job_id: str,
+        sheet_num: int,
     ) -> dict[str, Any] | None:
         """Gather the prior attempt's failure signals for retry-prompt enrichment (#201).
 
@@ -1319,7 +1335,9 @@ class BatonAdapter:
         (validation details, grounding guidance, error code/message, stderr,
         error history) into an ephemeral dict consumed by ``build_preamble`` ->
         ``format_failure_evidence``. The agent then sees specifically what failed
-        instead of retrying blind.
+        instead of retrying blind. #133 additionally attaches runtime
+        diagnostics (observer events from the failed attempt's window +
+        resource state) when the daemon injected a provider.
 
         Must be called BEFORE the per-dispatch clear of ``validation_details`` /
         ``error_code`` / ``error_message`` (they hold the prior attempt's values
@@ -1344,6 +1362,36 @@ class BatonAdapter:
         }
         if not any(v for v in ctx.values()):
             return None
+
+        # #133: enrich an EXISTING failure context with runtime diagnostics —
+        # observer file/process events from the failed attempt's window and
+        # resource state. Never creates a context from runtime data alone
+        # (a clean first attempt stays None). Fail-open: a raising provider
+        # degrades to the plain #201 evidence.
+        if self._diagnostic_snapshot_fn is not None:
+            try:
+                snap = self._diagnostic_snapshot_fn(job_id)
+            except Exception:
+                _logger.warning(
+                    "adapter.diagnostic_snapshot_failed",
+                    exc_info=True,
+                    extra={"job_id": job_id, "sheet_num": sheet_num},
+                )
+                snap = None
+            if snap:
+                events = snap.get("observer_events") or []
+                dispatched_at = self._stale_dispatch_time.get(
+                    (job_id, sheet_num), 0.0
+                )
+                attempt_events = [
+                    e
+                    for e in events
+                    if float(e.get("timestamp", 0.0)) >= dispatched_at
+                ]
+                if attempt_events:
+                    ctx["observer_events"] = attempt_events
+                if snap.get("resources"):
+                    ctx["resources"] = snap["resources"]
         return ctx
 
     # Cross-Sheet Context — F-210
@@ -1811,7 +1859,7 @@ class BatonAdapter:
         # state write, no in-memory/DB drift point. On the first attempt these
         # are empty, so the helper returns None and the retry preamble stays
         # generic.
-        prior_failure = self._build_healing_context(state)
+        prior_failure = self._build_healing_context(state, job_id, sheet_num)
 
         # Clear stale validation/error details from previous attempts.
         # Without this, status display shows old validation errors for the
