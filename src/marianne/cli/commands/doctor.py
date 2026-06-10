@@ -15,6 +15,7 @@ import os
 import platform
 import shutil
 import sys
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -126,14 +127,116 @@ def _get_all_profiles() -> dict[str, InstrumentProfile]:
     return load_all_profiles()
 
 
+def _dir_size_bytes(path: Path) -> int:
+    """Total size of a directory tree (best-effort; 0 on errors)."""
+    total = 0
+    try:
+        for p in path.rglob("*"):
+            try:
+                if p.is_file():
+                    total += p.stat().st_size
+            except OSError:
+                continue
+    except OSError:
+        return total
+    return total
+
+
+def _human_size(num_bytes: int) -> str:
+    value = float(num_bytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GB"
+
+
+# Stale one-off backup patterns under ~/.marianne (#352): created by
+# ad-hoc maintenance (pre-vacuum/pre-fix copies) and never reaped.
+_BACKUP_GLOBS = ("*.bak", "*.pre-*")
+_BACKUP_STALE_SECONDS = 24 * 3600
+
+
+def _scan_storage_findings(marianne_dir: Path | None = None) -> list[dict[str, Any]]:
+    """Scan ~/.marianne for storage-hygiene findings (#352).
+
+    Pure read — returns findings; deletion happens only via
+    ``mzt doctor --clean`` after explicit confirmation.
+    """
+    base = marianne_dir or (Path.home() / ".marianne")
+    findings: list[dict[str, Any]] = []
+
+    # 1. Dead nested tree — the historical working-directory bug resolved
+    # "~/.marianne" against a cwd of ~/.marianne, duplicating the whole
+    # state tree. Anything in there is from a fixed bug era.
+    nested = base / ".marianne"
+    if nested.is_dir():
+        findings.append({
+            "kind": "dead_nested_tree",
+            "path": str(nested),
+            "size_bytes": _dir_size_bytes(nested),
+            "cleanable": True,
+            "detail": "nested state tree from the fixed working-directory "
+            "bug — dead data",
+        })
+
+    # 2. Stale one-off backups (>24h old).
+    import time as _time
+
+    cutoff = _time.time() - _BACKUP_STALE_SECONDS
+    for pattern in _BACKUP_GLOBS:
+        try:
+            matches = sorted(base.glob(pattern))
+        except OSError:
+            continue
+        for f in matches:
+            try:
+                if f.is_file() and f.stat().st_mtime < cutoff:
+                    findings.append({
+                        "kind": "stale_backup",
+                        "path": str(f),
+                        "size_bytes": f.stat().st_size,
+                        "cleanable": True,
+                        "detail": "one-off backup file older than 24h",
+                    })
+            except OSError:
+                continue
+
+    return findings
+
+
+def _clean_storage_findings(findings: list[dict[str, Any]]) -> list[str]:
+    """Delete cleanable findings. Caller MUST have confirmed first."""
+    removed: list[str] = []
+    for f in findings:
+        if not f.get("cleanable"):
+            continue
+        path = Path(f["path"])
+        try:
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink(missing_ok=True)
+            removed.append(f["path"])
+        except OSError:
+            continue
+    return removed
+
+
 def doctor(
     json: bool = typer.Option(False, "--json", help="Output results as JSON"),
+    clean: bool = typer.Option(
+        False,
+        "--clean",
+        help="Delete storage-hygiene findings (dead nested state tree, "
+        "stale one-off backups) after explicit confirmation (#352).",
+    ),
 ) -> None:
     """Check Marianne environment health.
 
     Validates Python version, Marianne installation, conductor status,
-    available instruments, and safety configuration. Use this after
-    installation to verify everything is set up correctly.
+    available instruments, safety configuration, and storage hygiene.
+    Use this after installation to verify everything is set up correctly.
     """
     out = default_console
 
@@ -214,6 +317,26 @@ def doctor(
     # The default CostLimitConfig has enabled=False
     safety_warnings.append("No cost limits configured. Recommend: cost_limits.max_cost_per_job")
 
+    # --- Storage hygiene (#352) ---
+    storage_findings = _scan_storage_findings()
+    cleaned_paths: list[str] = []
+    if clean and storage_findings:
+        total = sum(f["size_bytes"] for f in storage_findings)
+        out.print()
+        out.print("[bold]Storage cleanup candidates:[/bold]")
+        for f in storage_findings:
+            out.print(
+                f"  - {f['path']} ({_human_size(f['size_bytes'])}) — {f['detail']}"
+            )
+        if typer.confirm(
+            f"Delete the above ({_human_size(total)} total)?", default=False
+        ):
+            cleaned_paths = _clean_storage_findings(storage_findings)
+            out.print(f"[green]Removed {len(cleaned_paths)} item(s).[/green]")
+            storage_findings = _scan_storage_findings()
+        else:
+            out.print("Aborted — nothing deleted.")
+
     # --- JSON output ---
     if json:
         result: dict[str, Any] = {
@@ -225,7 +348,10 @@ def doctor(
             },
             "instruments": instrument_results,
             "safety_warnings": safety_warnings,
-            "warnings_count": len(warnings) + len(safety_warnings),
+            "storage_findings": storage_findings,
+            "cleaned_paths": cleaned_paths,
+            "warnings_count": len(warnings) + len(safety_warnings)
+            + len(storage_findings),
             "errors_count": len(errors),
         }
         out.print_json(json_mod.dumps(result))
@@ -258,6 +384,18 @@ def doctor(
         for warn in safety_warnings:
             out.print(f"  [yellow]![/yellow] {warn}")
             warnings.append(warn)
+
+    # Storage hygiene section (#352)
+    if storage_findings:
+        out.print()
+        out.print("  [bold]Storage:[/bold]")
+        for f in storage_findings:
+            out.print(
+                f"  [yellow]![/yellow] {f['path']} "
+                f"({_human_size(f['size_bytes'])}) — {f['detail']}"
+            )
+            warnings.append(f"storage: {f['path']}")
+        out.print("    [dim]Reclaim with: mzt doctor --clean[/dim]")
 
     # Summary
     out.print()

@@ -190,6 +190,24 @@ class MonitorStorage:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
             async with self._connect() as db:
+                # #352: retention DELETEs never shrank the file — SQLite
+                # keeps freed pages without VACUUM (observed: 165MB holding
+                # ~2.5h of rows). auto_vacuum=INCREMENTAL lets cleanup()
+                # return pages in bounded chunks. Enabling it on an EXISTING
+                # database requires one full VACUUM to restructure; this
+                # runs once at startup (the pragma persists in the file, so
+                # the check self-gates) — never on the live cadence.
+                cursor = await db.execute("PRAGMA auto_vacuum")
+                row = await cursor.fetchone()
+                if row is not None and row[0] != 2:
+                    await db.execute("PRAGMA auto_vacuum = INCREMENTAL")
+                    await db.commit()
+                    _logger.info(
+                        "storage.auto_vacuum_migration_started",
+                        db_path=str(self._db_path),
+                    )
+                    await db.execute("VACUUM")
+                    _logger.info("storage.auto_vacuum_migration_complete")
                 await db.executescript(_SCHEMA_SQL)
                 await db.commit()
 
@@ -628,6 +646,21 @@ class MonitorStorage:
             )
 
             await db.commit()
+
+            # #352: return freed pages to the OS in a bounded chunk
+            # (≈4MB at the default page size, ~10-50ms) — without this the
+            # file only ever grows. Full VACUUM never runs here (a full
+            # rewrite of a large DB would freeze the event loop); the
+            # one-time restructure happens in initialize().
+            # NOTE: incremental_vacuum does its work as the statement is
+            # STEPPED — the cursor must be drained, not just executed. In
+            # WAL mode the file truncation lands at checkpoint, so follow
+            # with a truncating checkpoint (bounded: only the WAL).
+            cursor = await db.execute("PRAGMA incremental_vacuum(1000)")
+            await cursor.fetchall()
+            await db.commit()
+            cursor = await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            await cursor.fetchall()
 
         _logger.info(
             "storage.cleanup_complete",
