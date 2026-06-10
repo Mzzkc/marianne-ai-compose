@@ -83,34 +83,16 @@ class TestSheetConfig:
         assert config.start_item == 1
 
     def test_skip_when_default_empty(self):
-        """Test skip_when defaults to empty dict."""
+        """skip_when defaults to empty dict."""
         config = SheetConfig(size=1, total_items=5)
         assert config.skip_when == {}
 
-    def test_skip_when_accepts_conditions(self):
-        """Test skip_when accepts condition strings per sheet."""
-        config = SheetConfig(
-            size=1,
-            total_items=5,
-            skip_when={
-                3: "sheets.get(1) and sheets[1].validation_passed",
-                5: "job.total_retry_count > 10",
-            },
-        )
-        assert config.skip_when[3] == "sheets.get(1) and sheets[1].validation_passed"
-        assert config.skip_when[5] == "job.total_retry_count > 10"
-
-    def test_skip_when_command_default_empty(self):
-        """Test skip_when_command defaults to empty dict."""
-        config = SheetConfig(size=1, total_items=5)
-        assert config.skip_when_command == {}
-
-    def test_skip_when_command_accepts_rules(self):
-        """Test skip_when_command accepts SkipWhenCommand per sheet."""
+    def test_skip_when_accepts_command_rules(self):
+        """#119: skip_when carries command predicates (was skip_when_command)."""
         config = SheetConfig(
             size=1,
             total_items=10,
-            skip_when_command={
+            skip_when={
                 8: {
                     "command": 'grep -q "TOTAL_PHASES: [1]$" "{workspace}/plan.md"',
                     "description": "Skip phase 2 if plan has only 1 phase",
@@ -118,28 +100,46 @@ class TestSheetConfig:
                 9: {"command": 'grep -q "TOTAL_PHASES: [1]$" "{workspace}/plan.md"'},
             },
         )
-        assert 8 in config.skip_when_command
-        assert config.skip_when_command[8].command.startswith("grep")
-        assert config.skip_when_command[8].description == "Skip phase 2 if plan has only 1 phase"
-        assert config.skip_when_command[9].description is None
+        assert 8 in config.skip_when
+        assert config.skip_when[8].command.startswith("grep")
+        assert config.skip_when[8].description == "Skip phase 2 if plan has only 1 phase"
+        assert config.skip_when[9].description is None
 
-    def test_skip_when_command_in_jobconfig(self):
-        """Test skip_when_command works in full JobConfig."""
+    def test_old_skip_when_command_key_rejected_with_guidance(self):
+        """#119: the renamed key fails loudly with migration guidance."""
+        with pytest.raises(ValidationError, match="renamed to skip_when"):
+            SheetConfig(
+                size=1,
+                total_items=5,
+                skip_when_command={8: {"command": "true"}},
+            )
+
+    def test_old_expression_skip_when_rejected_with_guidance(self):
+        """#119: expression-style values (never evaluated) fail loudly."""
+        with pytest.raises(ValidationError, match="command predicate"):
+            SheetConfig(
+                size=1,
+                total_items=5,
+                skip_when={3: "sheets.get(1) and sheets[1].validation_passed"},
+            )
+
+    def test_skip_when_in_jobconfig(self):
+        """#119: skip_when (command predicates) works in full JobConfig."""
         config = JobConfig.model_validate(
             {
                 "name": "test",
                 "sheet": {
                     "size": 1,
                     "total_items": 5,
-                    "skip_when_command": {
+                    "skip_when": {
                         3: {"command": "test -f /tmp/skip", "description": "test"},
                     },
                 },
                 "prompt": {"template": "{{ sheet_num }}"},
             }
         )
-        assert 3 in config.sheet.skip_when_command
-        assert config.sheet.skip_when_command[3].timeout_seconds == 10.0
+        assert 3 in config.sheet.skip_when
+        assert config.sheet.skip_when[3].timeout_seconds == 10.0
 
     def test_prompt_extensions_default_empty(self):
         """Test sheet prompt_extensions defaults to empty dict."""
@@ -1283,10 +1283,11 @@ class TestSkipWhenCommand:
 
 
 class TestSkipWhenFanOutExpansion128:
-    """Bug #128: skip_when / skip_when_command not expanded during fan-out.
+    """Bug #128: skip_when not expanded during fan-out.
 
-    All tests marked fail-before-pass must have failed on unmodified
-    expand_fan_out_config before the fix was applied.
+    #119: skip_when now carries command predicates (the expression form is
+    removed and skip_when_command was renamed); the remap semantics under
+    fan-out are unchanged.
     """
 
     def _make_sheet(self, **kwargs: object) -> SheetConfig:
@@ -1296,105 +1297,88 @@ class TestSkipWhenFanOutExpansion128:
         return SheetConfig(**defaults)  # type: ignore[arg-type]
 
     def test_128a_skip_when_keys_remapped_for_fanned_stage(self) -> None:
-        """TEST-128-A: fan_out {2: 2} remaps skip_when stage 2 → sheets 2, 3."""
-        cfg = self._make_sheet(
-            total_items=3,
-            fan_out={2: 2},
-            skip_when={2: "sheets[1].validation_passed"},
-        )
-        # Stage 2 expands to sheets 2 and 3; stage 3 becomes sheet 4
-        assert 2 in cfg.skip_when
-        assert 3 in cfg.skip_when
-        assert cfg.skip_when[2] == "sheets[1].validation_passed"
-        assert cfg.skip_when[3] == "sheets[1].validation_passed"
-        assert cfg.fan_out == {}  # cleared after expansion
-
-    def test_128b_skip_when_command_keys_remapped_for_fanned_stage(self) -> None:
-        """TEST-128-B: fan_out {2: 3} remaps skip_when_command stage 2 → sheets 2, 3, 4."""
+        """TEST-128-A: fan_out {2: 3} remaps skip_when stage 2 → sheets 2, 3, 4."""
         cmd = SkipWhenCommand(command="grep DONE {workspace}/status.txt")
         cfg = self._make_sheet(
             total_items=3,
             fan_out={2: 3},
-            skip_when_command={2: cmd},
+            skip_when={2: cmd},
         )
         # Stage 2 → sheets 2, 3, 4; stage 3 → sheet 5
-        assert 2 in cfg.skip_when_command
-        assert 3 in cfg.skip_when_command
-        assert 4 in cfg.skip_when_command
-        assert cfg.skip_when_command[2].command == "grep DONE {workspace}/status.txt"
-        assert cfg.skip_when_command[3].command == "grep DONE {workspace}/status.txt"
-        assert cfg.skip_when_command[4].command == "grep DONE {workspace}/status.txt"
+        for sheet in (2, 3, 4):
+            assert sheet in cfg.skip_when
+            assert cfg.skip_when[sheet].command == "grep DONE {workspace}/status.txt"
         # Stage 3 becomes sheet 5 — should NOT inherit stage 2's command
-        assert 5 not in cfg.skip_when_command
+        assert 5 not in cfg.skip_when
+        assert cfg.fan_out == {}  # cleared after expansion
 
     def test_128c_non_fanned_stage_identity_preserved(self) -> None:
-        """TEST-128-C: Non-fanned stage 1 key survives intact (regression gate).
-
-        This test must pass both before and after the fix — it is a non-regression gate.
-        """
+        """TEST-128-C: Non-fanned stage 1 key survives intact (regression gate)."""
         cfg = self._make_sheet(
             total_items=3,
             fan_out={2: 2},
-            skip_when={1: "False"},
+            skip_when={1: SkipWhenCommand(command="false")},
         )
         assert 1 in cfg.skip_when
-        assert cfg.skip_when[1] == "False"
+        assert cfg.skip_when[1].command == "false"
 
     def test_128d_mixed_fanned_and_nonfanned_no_cross_contamination(self) -> None:
         """TEST-128-D: Stages 1,2 non-fanned; stage 3 fans out — no cross-contamination."""
         cfg = self._make_sheet(
             total_items=4,
             fan_out={3: 2},
-            skip_when={1: "A", 2: "B", 3: "C"},
+            skip_when={
+                1: SkipWhenCommand(command="a.sh"),
+                2: SkipWhenCommand(command="b.sh"),
+                3: SkipWhenCommand(command="c.sh"),
+            },
         )
         # Stage 3 → sheets 3, 4; stage 4 → sheet 5
-        assert cfg.skip_when[1] == "A"
-        assert cfg.skip_when[2] == "B"
-        assert cfg.skip_when[3] == "C"
-        assert cfg.skip_when[4] == "C"
+        assert cfg.skip_when[1].command == "a.sh"
+        assert cfg.skip_when[2].command == "b.sh"
+        assert cfg.skip_when[3].command == "c.sh"
+        assert cfg.skip_when[4].command == "c.sh"
         # Stage 4 had no skip_when — must not appear
         assert 5 not in cfg.skip_when
         assert len(cfg.skip_when) == 4
 
     def test_128e_fan_out_n_produces_n_copies(self) -> None:
-        """TEST-128-E: fan_out {2: 5} produces 5 copies of the skip_when_command."""
+        """TEST-128-E: fan_out {2: 5} produces 5 copies of the skip_when command."""
         cmd = SkipWhenCommand(command="check.sh")
         cfg = self._make_sheet(
             total_items=2,
             fan_out={2: 5},
-            skip_when_command={2: cmd},
+            skip_when={2: cmd},
         )
         # Stage 2 → sheets 2..6; sheet 1 is non-fanned
         for sheet in range(2, 7):
-            assert sheet in cfg.skip_when_command
-            assert cfg.skip_when_command[sheet].command == "check.sh"
+            assert sheet in cfg.skip_when
+            assert cfg.skip_when[sheet].command == "check.sh"
         assert cfg.total_items == 6
 
     def test_128f_exact_issue_reproducer(self) -> None:
         """TEST-128-F: Exact reproducer from Bug #128 issue.
 
-        fan_out: {2: 3}, 3 original stages, skip_when_command: {3: cmd}
-        targets stage 3. Stage 2 expands to sheets 2,3,4; stage 3 becomes sheet 5.
+        fan_out: {2: 3}, 3 original stages, skip_when: {3: cmd} targets
+        stage 3. Stage 2 expands to sheets 2,3,4; stage 3 becomes sheet 5.
         """
         cmd = SkipWhenCommand(command="verify.sh")
         cfg = self._make_sheet(
             total_items=3,
             fan_out={2: 3},
-            skip_when_command={3: cmd},
+            skip_when={3: cmd},
         )
         # Stage 3 is now sheet 5
-        assert 5 in cfg.skip_when_command
-        assert cfg.skip_when_command[5].command == "verify.sh"
+        assert 5 in cfg.skip_when
+        assert cfg.skip_when[5].command == "verify.sh"
         # Stale key 3 (now a fan-out sheet of stage 2) must NOT survive
-        assert 3 not in cfg.skip_when_command
+        assert 3 not in cfg.skip_when
 
     def test_128g_empty_skip_when_survives_without_error(self) -> None:
-        """TEST-128-G: Empty skip_when/skip_when_command dicts don't cause errors."""
+        """TEST-128-G: Empty skip_when dict doesn't cause errors."""
         cfg = self._make_sheet(
             total_items=3,
             fan_out={2: 3},
             skip_when={},
-            skip_when_command={},
         )
         assert cfg.skip_when == {}
-        assert cfg.skip_when_command == {}

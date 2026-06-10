@@ -194,7 +194,7 @@ sheet:
 
   # CEGAR check-termination: skip expensive stages when no REAL candidates.
   # Exit 0 from grep = pattern found = skip the stage.
-  skip_when_command:
+  skip_when:
     6:
       command: 'grep -q "status: CONVERGED" "{workspace}/05-gate-status.yaml"'
       description: "Skip rewrite if no REAL candidates remain"

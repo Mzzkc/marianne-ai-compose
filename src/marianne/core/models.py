@@ -132,7 +132,7 @@ class JobCompletionSummary(BaseModel):
         """Calculate sheet success rate as percentage.
 
         Skipped sheets are excluded from the denominator since they were
-        never attempted (e.g., skip_when_command conditions met).
+        never attempted (e.g., skip_when conditions met).
         """
         executed = self.total_sheets - self.skipped_sheets
         if executed == 0:

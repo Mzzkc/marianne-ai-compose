@@ -505,7 +505,7 @@ class BatonAdapter:
         # from this map (backward compat — resolution skipped, manifest None).
         self._job_techniques: dict[str, dict[str, Any]] = {}
 
-        # #360: per-job, per-sheet skip_when_command predicates. Evaluated at
+        # #360/#119: per-job, per-sheet skip_when command predicates. Evaluated at
         # dispatch time in _musician_wrapper before any render/backend work;
         # exit 0 → terminal skip. Absent job/sheet → no predicate (no-op).
         self._job_skip_commands: dict[str, dict[int, SkipWhenCommand]] = {}
@@ -590,7 +590,7 @@ class BatonAdapter:
         spec_config: SpecCorpusConfig | None = None,
         spec_tags: dict[int, list[str]] | None = None,
         stagger_delay_ms: int = 0,
-        skip_when_command: dict[int, SkipWhenCommand] | None = None,
+        skip_when: dict[int, SkipWhenCommand] | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -640,8 +640,8 @@ class BatonAdapter:
             self._job_spec_config[job_id] = spec_config
         if spec_tags:
             self._job_spec_tags[job_id] = spec_tags
-        if skip_when_command:
-            self._job_skip_commands[job_id] = dict(skip_when_command)
+        if skip_when:
+            self._job_skip_commands[job_id] = dict(skip_when)
 
         # Create PromptRenderer if config is available (F-104)
         if prompt_config is not None:
@@ -923,7 +923,7 @@ class BatonAdapter:
         spec_config: SpecCorpusConfig | None = None,
         spec_tags: dict[int, list[str]] | None = None,
         stagger_delay_ms: int = 0,
-        skip_when_command: dict[int, SkipWhenCommand] | None = None,
+        skip_when: dict[int, SkipWhenCommand] | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -972,8 +972,8 @@ class BatonAdapter:
             self._job_spec_config[job_id] = spec_config
         if spec_tags:
             self._job_spec_tags[job_id] = spec_tags
-        if skip_when_command:
-            self._job_skip_commands[job_id] = dict(skip_when_command)
+        if skip_when:
+            self._job_skip_commands[job_id] = dict(skip_when)
 
         # Create PromptRenderer if config is available
         if prompt_config is not None:
@@ -1986,7 +1986,7 @@ class BatonAdapter:
             # Count distinct movements across all sheets
             total_movements = len({s.movement for s in job_sheets.values()}) or 1
 
-            # #360: runtime skip_when_command evaluation. A score may declare a
+            # #360/#119: runtime skip_when evaluation. A score may declare a
             # per-sheet shell predicate; if it exits 0, skip this sheet BEFORE
             # any render or backend execution. Fail-open on timeout/error (a
             # broken predicate must never silently drop real work). The sheet is

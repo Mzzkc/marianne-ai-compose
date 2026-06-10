@@ -524,7 +524,7 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 | V208 | User variable shadows a built-in template variable |
 | V210 | Instrument name not found in known profiles |
 | V211 | Instrument fallback name not found in known profiles |
-| V212 | `skip_when`/`skip_when_command` keys reference out-of-range sheets |
+| V212 | `skip_when` keys reference out-of-range sheets |
 
 **Info** (suggestions):
 

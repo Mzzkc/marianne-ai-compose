@@ -655,7 +655,7 @@ number of concurrent jobs in the conductor config.
 The chain depth limit was reached. This is working as intended — it prevents
 runaway chaining. If you need more iterations, increase `max_chain_depth`.
 If the concert should have stopped earlier, add conditional logic to your
-score (e.g., `skip_when_command` to check whether more work is needed).
+score (e.g., `skip_when` to check whether more work is needed).
 
 ---
 

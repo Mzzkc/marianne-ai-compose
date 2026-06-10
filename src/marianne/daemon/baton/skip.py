@@ -1,9 +1,9 @@
-"""Runtime evaluation of ``skip_when_command`` predicates (#360).
+"""Runtime evaluation of ``skip_when`` command predicates (#360, renamed #119).
 
 A score may declare, per sheet, a shell command that decides at dispatch time
 whether the sheet should be skipped:
 
-    skip_when_command:
+    skip_when:
       8: {command: 'grep -q "PHASES: 1" {workspace}/plan.md'}
 
 Semantics (mirroring :class:`SkipWhenCommand`'s own docstring):
@@ -66,7 +66,7 @@ async def evaluate_skip_command(
     context: dict[str, Any],
     sheet_num: int | None = None,
 ) -> tuple[bool, str]:
-    """Evaluate a ``skip_when_command`` predicate.
+    """Evaluate a ``skip_when`` command predicate.
 
     Args:
         swc: The command rule (command string + timeout).
@@ -187,7 +187,7 @@ async def evaluate_skip_command(
             return (False, "")
 
         if proc.returncode == 0:
-            reason = f"skip_when_command exited 0: {_truncate(expanded)}"
+            reason = f"skip_when exited 0: {_truncate(expanded)}"
             return (True, reason)
         return (False, "")
 

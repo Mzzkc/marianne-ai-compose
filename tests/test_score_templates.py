@@ -103,23 +103,23 @@ class TestFanOutStage12:
         assert config.sheet.fan_out == {}
 
 
-# ─── Test 5: skip_when_command targets valid sheets ─────────────────────
+# ─── Test 5: skip_when targets valid sheets ─────────────────────
 
 
 class TestSkipWhenCommandTargetsValidSheets:
-    """All skip_when_command keys are within the valid stage range."""
+    """All skip_when keys are within the valid stage range."""
 
-    def test_skip_when_command_targets_valid_sheets(self, raw_yaml: dict) -> None:
+    def test_skip_when_targets_valid_sheets(self, raw_yaml: dict) -> None:
         total_stages = raw_yaml["sheet"]["total_items"]  # 17 (pre-expansion)
-        skip_keys = raw_yaml["sheet"]["skip_when_command"]
+        skip_keys = raw_yaml["sheet"]["skip_when"]
         for stage_num in skip_keys:
             assert 1 <= stage_num <= total_stages, (
-                f"skip_when_command key {stage_num} is outside valid stage range 1-{total_stages}"
+                f"skip_when key {stage_num} is outside valid stage range 1-{total_stages}"
             )
 
-    def test_skip_when_command_has_expected_stages(self, raw_yaml: dict) -> None:
+    def test_skip_when_has_expected_stages(self, raw_yaml: dict) -> None:
         """Stages 6-11 (phases 2-4 fix+completion) should have skip conditions."""
-        skip_keys = set(raw_yaml["sheet"]["skip_when_command"].keys())
+        skip_keys = set(raw_yaml["sheet"]["skip_when"].keys())
         assert skip_keys == {6, 7, 8, 9, 10, 11}
 
 

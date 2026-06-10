@@ -186,7 +186,7 @@ sheet:
   # level whether each phase sheet runs — no prompt cost for skipped phases.
   # Patterns include `0` to propagate the NO_ISSUES_REMAINING sentinel
   # (Stage 3 writes TOTAL_PHASES: 0 on the sentinel path).
-  skip_when_command:
+  skip_when:
     6:
       command: 'grep -qE "^TOTAL_PHASES: [01]$" "{workspace}/03-plan.md"'
       description: "Skip phase 2 fix — plan has 0 or 1 phases (sentinel or single-phase)"

@@ -129,7 +129,7 @@ of the 24x7-trader flagship score family in
 | **Score & stage** | All execution phases checking for bootstrap completion + fermata file |
 | **The claim** | The score halts cleanly when external preconditions aren't met (bootstrap unrun, fermata pending) |
 | **Why validation can't catch it** | Validations run AFTER a stage executes. Preconditions need to abort BEFORE the agent burns tokens. We've placed bash blocks in the prompt that exit non-zero, plus stage-1 validations as backstops. This is duplicative. |
-| **Suggested capability** | A score-level `preconditions:` block with `command_succeeds`-style checks evaluated before any sheet runs. Or extend `skip_when_command` to support `fail_when_command` (skip = success today, but precondition violation is a failure not a skip). |
+| **Suggested capability** | A score-level `preconditions:` block with `command_succeeds`-style checks evaluated before any sheet runs. Or extend `skip_when` to support `fail_when_command` (skip = success today, but precondition violation is a failure not a skip). |
 | **Status** | mitigated-in-score-prompt |
 | **Reviewer concurrence** | Opus, GLM, GPT-5.5 |
 

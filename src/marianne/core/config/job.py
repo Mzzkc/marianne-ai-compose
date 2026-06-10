@@ -242,16 +242,17 @@ class SheetConfig(BaseModel):
         ),
     )
 
-    # Conditional execution: skip sheets based on runtime state (GH#13)
-    skip_when: dict[int, str] = Field(
+    # Conditional execution (#119, formerly skip_when_command / GH#71).
+    # The old expression-based skip_when (GH#13) was never evaluated at
+    # runtime — command predicates replaced it under the shorter name.
+    skip_when: dict[int, SkipWhenCommand] = Field(
         default_factory=dict,
         description=(
-            "Conditional skip rules. Map of sheet_num -> condition expression. "
-            "Expression is evaluated as a Python expression with access to 'sheets' dict "
-            "(sheet_num -> SheetState) and 'job' (CheckpointState). "
-            "If the expression evaluates to truthy, the sheet is SKIPPED. "
-            "Example: {5: \"sheets.get(3) and sheets[3].validation_passed\"} "
-            "skips sheet 5 when sheet 3's validations passed (only run on failure)."
+            "Command-based conditional skip rules. Map of sheet_num -> SkipWhenCommand. "
+            "The command is run via shell; exit 0 = skip the sheet, non-zero = run it. "
+            "Supports {workspace} template expansion in the command string. "
+            "On timeout or error, the sheet runs (fail-open). "
+            "Example: {8: {command: 'grep -q \"PHASES: 1\" plan.md', description: 'Skip phase 2'}}"
         ),
     )
 
@@ -282,18 +283,6 @@ class SheetConfig(BaseModel):
             "Per-sheet context injections. Map of sheet_num -> list of InjectionItems. "
             "Applied in addition to prelude items for the specified sheet. "
             "Example: {2: [{file: 'extra-context.md', as: 'context'}]}"
-        ),
-    )
-
-    # Command-based conditional execution (GH#71)
-    skip_when_command: dict[int, SkipWhenCommand] = Field(
-        default_factory=dict,
-        description=(
-            "Command-based conditional skip rules. Map of sheet_num -> SkipWhenCommand. "
-            "The command is run via shell; exit 0 = skip the sheet, non-zero = run it. "
-            "Supports {workspace} template expansion in the command string. "
-            "On timeout or error, the sheet runs (fail-open). "
-            "Example: {8: {command: 'grep -q \"PHASES: 1\" plan.md', description: 'Skip phase 2'}}"
         ),
     )
 
@@ -368,9 +357,31 @@ class SheetConfig(BaseModel):
         total_sheets is computed from size/total_items, not configurable.
         Accept it silently for backward compatibility — rejecting it would
         break existing scores that include it.
+
+        #119 migration guidance: ``skip_when_command`` was renamed to
+        ``skip_when`` (the old expression-based skip_when was never
+        evaluated at runtime and is removed). Both legacy shapes fail
+        LOUDLY with the fix, instead of a generic pydantic error.
         """
-        if isinstance(data, dict) and "total_sheets" in data:
-            data.pop("total_sheets")
+        if isinstance(data, dict):
+            if "total_sheets" in data:
+                data.pop("total_sheets")
+            if "skip_when_command" in data:
+                raise ValueError(
+                    "sheet.skip_when_command was renamed to skip_when (#119). "
+                    "Rename the key — the value shape is unchanged "
+                    "({sheet_num: {command: ..., description: ...}})."
+                )
+            skip_when = data.get("skip_when")
+            if isinstance(skip_when, dict) and any(
+                isinstance(v, str) for v in skip_when.values()
+            ):
+                raise ValueError(
+                    "Expression-based skip_when was removed (#119) — it was "
+                    "never evaluated at runtime. skip_when now takes a "
+                    "command predicate per sheet: "
+                    "{sheet_num: {command: 'shell command (exit 0 = skip)'}}."
+                )
         return data
 
     @field_validator("per_sheet_instruments")
@@ -554,19 +565,11 @@ class SheetConfig(BaseModel):
 
         # Expand skip_when: stage-keyed → sheet-keyed
         if self.skip_when:
-            expanded_skip_when: dict[int, str] = {}
-            for stage, expr in self.skip_when.items():
+            expanded_skip_when: dict[int, SkipWhenCommand] = {}
+            for stage, cmd in self.skip_when.items():
                 for sheet_num in expansion.stage_sheets.get(stage, [stage]):
-                    expanded_skip_when[sheet_num] = expr
+                    expanded_skip_when[sheet_num] = cmd
             self.skip_when = expanded_skip_when
-
-        # Expand skip_when_command: stage-keyed → sheet-keyed
-        if self.skip_when_command:
-            expanded_skip_when_command: dict[int, SkipWhenCommand] = {}
-            for stage, cmd in self.skip_when_command.items():
-                for sheet_num in expansion.stage_sheets.get(stage, [stage]):
-                    expanded_skip_when_command[sheet_num] = cmd
-            self.skip_when_command = expanded_skip_when_command
 
         # Store serializable metadata for resume
         self.fan_out_stage_map = {

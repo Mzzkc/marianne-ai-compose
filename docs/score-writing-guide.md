@@ -369,8 +369,7 @@ Defines how work is divided into sheets.
 | `start_item` | int | `1` | First item number (1-indexed). |
 | `dependencies` | dict[int, list[int]] | `{}` | Sheet/stage dependency DAG. See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
 | `fan_out` | dict[int, int] | `{}` | Stage → instance count. See [Fan-Out and Dependencies](#fan-out-and-dependencies). |
-| `skip_when` | dict[int, str] | `{}` | Conditional skip rules. Expression evaluated with access to `sheets` dict and `job` state. |
-| `skip_when_command` | dict[int, SkipWhenCommand] | `{}` | Command-based conditional skip rules. Shell command exit 0 = skip, non-zero = run. See [Conditional Sheet Skipping](#conditional-sheet-skipping). |
+| `skip_when` | dict[int, SkipWhenCommand] | `{}` | Command-based conditional skip rules (#119, formerly `skip_when_command`). Shell command exit 0 = skip, non-zero = run. See [Conditional Sheet Skipping](#conditional-sheet-skipping). |
 | `prelude` | list[InjectionItem] | `[]` | Shared file injections for ALL sheets. See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
 | `cadenzas` | dict[int, list[InjectionItem]] | `{}` | Per-sheet file injections. See [Prelude and Cadenza](#prelude-and-cadenza-context-injection). |
 | `per_sheet_instruments` | dict[int, str] | `{}` | Per-sheet instrument overrides. See [Multi-Instrument Scores](#multi-instrument-scores). |
@@ -513,7 +512,7 @@ Available when `cross_sheet` is configured:
 |----------|------|-------------|
 | `previous_outputs` | dict[int, str] | Stdout from previous sheets. Keys are sheet numbers. Skipped upstream sheets appear as `[SKIPPED]` instead of being silently omitted. |
 | `previous_files` | dict[str, str] | File contents captured between sheets. Keys are file paths. |
-| `skipped_upstream` | list[int] | Sheet numbers of upstream sheets that were skipped (via `skip_when` or `skip_when_command`). Use this to handle incomplete fan-in data explicitly in your template. |
+| `skipped_upstream` | list[int] | Sheet numbers of upstream sheets that were skipped (via `skip_when`). Use this to handle incomplete fan-in data explicitly in your template. |
 
 **Example usage:**
 
@@ -1559,28 +1558,16 @@ The `stagger_delay_ms` option adds a small delay between launching parallel shee
 
 ### Conditional Sheet Skipping
 
-**Expression-based (`skip_when`):** Skip sheets based on runtime state
-using Python expressions with access to `sheets` dict and `job` state:
+`skip_when` skips sheets based on shell command exit codes (#119: the
+old expression-based form was removed — it was never evaluated at
+runtime; `skip_when_command` was renamed to this shorter key). Exit 0 =
+skip the sheet, non-zero = run the sheet. Supports `{workspace}` template
+expansion and configurable timeout. On timeout or error, the sheet runs
+(fail-open for safety).
 
 ```yaml
 sheet:
   skip_when:
-    5: "sheets.get(3) and sheets[3].validation_passed"
-```
-
-This skips sheet 5 when sheet 3's validations passed — useful for
-conditional error-handling stages that only run on failure.
-If the expression raises an exception, the sheet runs (fail-open). The
-error is logged at ERROR level.
-
-**Command-based (`skip_when_command`):** Skip sheets based on shell
-command exit codes. Exit 0 = skip the sheet, non-zero = run the sheet.
-Supports `{workspace}` template expansion and configurable timeout.
-On timeout or error, the sheet runs (fail-open for safety).
-
-```yaml
-sheet:
-  skip_when_command:
     6:
       command: 'grep -q "TOTAL_PHASES: 1$" "{workspace}/03-plan.md"'
       description: "Skip phase 2 — plan has only 1 phase"
@@ -1602,11 +1589,9 @@ decides how many implementation phases are needed.
 | `description` | str | `null` | Human-readable skip reason (shown in logs). |
 | `timeout_seconds` | float | `10.0` | Max seconds to wait (0-60). Fail-open on timeout. |
 
-**When to use which:**
-- `skip_when` — conditions based on previous sheet results (validation
-  pass/fail, sheet status) available in the checkpoint state
-- `skip_when_command` — conditions based on workspace file contents or
-  external state that requires I/O to check
+**Tip:** to skip based on previous sheet results, have the earlier sheet
+write a marker/summary file and grep it — workspace files are the
+contract between sheets.
 
 ---
 
@@ -1654,7 +1639,7 @@ cross_sheet:
 
 **Handling skipped upstream sheets:**
 
-When upstream sheets are skipped (via `skip_when` or `skip_when_command`),
+When upstream sheets are skipped (via `skip_when`),
 their entry in `previous_outputs` contains `[SKIPPED]` instead of being
 silently omitted. The `skipped_upstream` variable lists which sheet numbers
 were skipped, so your template can handle incomplete fan-in data:

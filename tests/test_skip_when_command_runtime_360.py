@@ -1,6 +1,6 @@
-"""#360: runtime wiring of ``skip_when_command`` into baton execution.
+"""#360: runtime wiring of ``skip_when`` command predicates into baton execution.
 
-Before this, ``skip_when_command`` was parsed, validated, and accepted by the
+Before this, ``skip_when`` (then named skip_when_command) was parsed, validated, and accepted by the
 CLI but never evaluated at runtime — every sheet dispatched regardless. These
 tests pin three properties of the wiring:
 
@@ -141,7 +141,7 @@ class TestSkipCommandWiring:
         sheets = [_make_sheet(num=1, workspace=str(tmp_path))]
         adapter.register_job(
             "job", sheets, dependencies={},
-            skip_when_command={1: SkipWhenCommand(command="exit 0")},
+            skip_when={1: SkipWhenCommand(command="exit 0")},
         )
         backend = _mock_backend()
         adapter._backend_pool = MagicMock()
@@ -163,7 +163,7 @@ class TestSkipCommandWiring:
         sheets = [_make_sheet(num=1, workspace=str(tmp_path))]
         adapter.register_job(
             "job", sheets, dependencies={},
-            skip_when_command={1: SkipWhenCommand(command="exit 1")},
+            skip_when={1: SkipWhenCommand(command="exit 1")},
         )
         backend = _mock_backend()
         adapter._backend_pool = MagicMock()
@@ -185,7 +185,7 @@ class TestSkipCommandWiring:
         sheets = [_make_sheet(num=1, workspace=str(tmp_path))]
         adapter.register_job(
             "job", sheets, dependencies={},
-            skip_when_command={1: SkipWhenCommand(command="sleep 30", timeout_seconds=0.2)},
+            skip_when={1: SkipWhenCommand(command="sleep 30", timeout_seconds=0.2)},
         )
         backend = _mock_backend()
         adapter._backend_pool = MagicMock()
@@ -228,7 +228,7 @@ class TestSkipReleasesDependents:
     def test_skipped_sheet_satisfies_dependents(self) -> None:
         """A SKIPPED sheet with error_code=None must release its dependents.
 
-        This pins the existing baton mechanism the skip_when_command wiring
+        This pins the existing baton mechanism the skip_when wiring
         relies on: skip → SheetSkipped → SKIPPED(error_code=None) → dependents
         become ready on the next dispatch cycle.
         """

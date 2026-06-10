@@ -714,8 +714,8 @@ def test_skip_when_sheet_range_invariant(
     config = MagicMock(spec=JobConfig)
     config.sheet = MagicMock(spec=SheetConfig)
     config.sheet.total_sheets = total_sheets
+    # V212 only inspects keys; the value shape is irrelevant to the check.
     config.sheet.skip_when = dict.fromkeys(skip_keys, "True")
-    config.sheet.skip_when_command = {}
 
     issues = check.check(config, Path("/tmp/score.yaml"), "")
 
@@ -806,7 +806,7 @@ def test_execution_config_models_roundtrip(data: dict[str, Any]) -> None:
 @pytest.mark.property_based
 @given(command=st.sampled_from(["echo ok", "true", "test -f /dev/null"]))
 @settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
-def test_skip_when_command_roundtrip(command: str) -> None:
+def test_skip_when_roundtrip(command: str) -> None:
     """SkipWhenCommand survives round-trip with valid command strings."""
     from marianne.core.config.execution import SkipWhenCommand
 
@@ -1098,8 +1098,8 @@ def test_property_based_tests_exist(
     config = MagicMock(spec=JobConfig)
     config.sheet = MagicMock(spec=SheetConfig)
     config.sheet.total_sheets = total_sheets
+    # V212 only inspects keys; the value shape is irrelevant to the check.
     config.sheet.skip_when = dict.fromkeys(skip_keys, "True")
-    config.sheet.skip_when_command = {}
 
     issues = check.check(config, Path("/tmp/score.yaml"), "")
 

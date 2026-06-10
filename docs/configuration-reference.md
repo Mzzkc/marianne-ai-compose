@@ -366,8 +366,7 @@ Defines how the work is divided into sheets (execution units).
 | `total_items` | `int` | **required** | `>= 1` | Total number of items to process |
 | `start_item` | `int` | `1` | `>= 1` | First item number (1-indexed) |
 | `dependencies` | `dict[int, list[int]]` | `{}` | No self-references | Sheet dependency declarations. Map of `sheet_num -> [prerequisites]`. Sheets without entries are independent. |
-| `skip_when` | `dict[int, str]` | `{}` | | Conditional skip rules. Map of `sheet_num -> condition`. Expression accesses `sheets` dict and `job` state. If truthy, sheet is skipped. |
-| `skip_when_command` | `dict[int, SkipWhenCommand]` | `{}` | | Command-based conditional skip rules. Map of `sheet_num -> SkipWhenCommand`. The command runs via shell; exit 0 = skip the sheet, non-zero = run it. Fail-open on timeout or error. |
+| `skip_when` | `dict[int, SkipWhenCommand]` | `{}` | | Command-based conditional skip rules (#119, formerly `skip_when_command`). Map of `sheet_num -> SkipWhenCommand`. The command runs via shell; exit 0 = skip the sheet, non-zero = run it. Fail-open on timeout or error. |
 | `prompt_extensions` | `dict[int, list[str]]` | `{}` | | Per-sheet prompt extensions. Map of `sheet_num -> list of extension strings`. Applied in addition to score-level `prompt.prompt_extensions`. |
 | `prelude` | `list[InjectionItem]` | `[]` | | Shared context injected into ALL sheets. Each item references a file and a category (`context`, `skill`, or `tool`). File paths support Jinja templating. Files are read at sheet execution time. |
 | `cadenzas` | `dict[int, list[InjectionItem]]` | `{}` | | Per-sheet context injections. Map of `sheet_num -> list of InjectionItems`. Applied in addition to prelude items for the specified sheet. |
@@ -388,8 +387,6 @@ sheet:
     3: [1]
     4: [2, 3]
   skip_when:
-    5: "sheets.get(3) and sheets[3].validation_passed"
-  skip_when_command:
     8:
       command: 'grep -q "PHASES: 1" {workspace}/plan.md'
       description: "Skip phase 2 if plan only has 1 phase"
@@ -436,7 +433,7 @@ Defines a command-based conditional skip rule for sheet execution. When the comm
 sheet:
   size: 1
   total_items: 10
-  skip_when_command:
+  skip_when:
     # Skip sheet 4 if tests already pass
     4:
       command: "cd {workspace} && pytest tests/ -x --tb=no -q"

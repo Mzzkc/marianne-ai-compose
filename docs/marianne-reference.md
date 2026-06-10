@@ -700,7 +700,7 @@ Key validation features:
 | Timeout overrides | `backend.timeout_overrides: {5: 7200}` | Per-sheet timeouts |
 | Allowed tools | `backend.allowed_tools: [Read, Grep]` | Restrict agent tools |
 | Spec corpus tags | `spec_tags: {3: [security, constraints]}` | Per-sheet knowledge filtering |
-| Skip conditions | `skip_when: {5: "movement == 2"}` | Conditional sheet skipping |
+| Skip conditions | `skip_when: {5: {command: 'test -f done.marker'}}` | Conditional sheet skipping (exit 0 = skip) |
 
 ---
 
