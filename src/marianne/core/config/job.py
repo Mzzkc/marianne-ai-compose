@@ -28,6 +28,7 @@ from marianne.core.config.execution import (
     StaleDetectionConfig,
     ValidationRule,
 )
+from marianne.core.config.judgment import JudgmentConfig
 from marianne.core.config.learning import (
     CheckpointConfig,
     GroundingConfig,
@@ -789,6 +790,16 @@ class JobConfig(BaseModel):
         default=None,
         description="Cross-sheet context configuration. "
         "Enables passing outputs and files between sheets for multi-phase workflows.",
+    )
+
+    # #203: automated FERMATA decider (judgment client). Additive; only
+    # meaningful when the run has escalation enabled.
+    judgment: JudgmentConfig = Field(
+        default_factory=JudgmentConfig,
+        description="AI judgment client for FERMATA'd sheets (#203). "
+        "Off by default; when enabled, an LLM judge may resolve a sheet "
+        "paused for a composer decision (retry/fail by default — never "
+        "accept) with confidence gating and a durable per-sheet cap.",
     )
     feedback: FeedbackConfig = Field(
         default_factory=FeedbackConfig,

@@ -1277,6 +1277,17 @@ def _render_fermata_hints(job: CheckpointState) -> None:
             job.job_id, sheet_num, job.sheets[sheet_num].fermata_reason
         ):
             console.print(line)
+        # #203: surface the judgment client's most recent outcome (a defer
+        # means the judge looked and handed it to you — its rationale is
+        # model-generated and non-authoritative).
+        judgment = job.sheets[sheet_num].last_judgment
+        if judgment:
+            verb = "resolved" if judgment.get("resolved") else "deferred"
+            console.print(
+                f"    [dim]Judge {verb}: {judgment.get('decision')} "
+                f"(confidence {judgment.get('confidence', 0):.2f}) — "
+                f"{judgment.get('rationale', '')}[/dim]"
+            )
 
 
 def _render_preflight_warnings(job: CheckpointState) -> None:

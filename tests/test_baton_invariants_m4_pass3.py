@@ -80,6 +80,7 @@ from marianne.core.config.job import (
     PromptConfig,
     SheetConfig,
 )
+from marianne.core.config.judgment import JudgmentConfig
 from marianne.core.config.learning import (
     AutoApplyConfig,
     CheckpointConfig,
@@ -194,6 +195,8 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     SheetConfig,
     PromptConfig,
     JobConfig,
+    # judgment.py
+    JudgmentConfig,
     # learning.py
     ExplorationBudgetConfig,
     EntropyResponseConfig,
@@ -314,6 +317,7 @@ class TestConfigStrictnessTotality:
                 "execution",
                 "instruments",
                 "job",
+                "judgment",
                 "learning",
                 "orchestration",
                 "spec",
@@ -778,6 +782,7 @@ class TestConfigFieldCountStability:
                 "execution",
                 "instruments",
                 "job",
+                "judgment",
                 "learning",
                 "orchestration",
                 "spec",

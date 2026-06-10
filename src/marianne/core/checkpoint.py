@@ -445,6 +445,21 @@ class SheetState(BaseModel):
         description="Human-readable reason the sheet entered FERMATA (e.g. retry "
         "exhaustion summary), surfaced by `mzt status`. None when not in FERMATA (#361).",
     )
+    judgment_count: int = Field(
+        default=0,
+        description="Number of times the AI judgment client has RESOLVED a "
+        "FERMATA on this sheet (#203). The durable loop-terminating cap "
+        "counter: incremented only on an actual judge resolution (which "
+        "itself persists state), so the cap survives restarts. Defers do "
+        "not count.",
+    )
+    last_judgment: dict[str, Any] | None = Field(
+        default=None,
+        description="Most recent judgment-client outcome for this sheet "
+        "(#203): {decision, confidence, rationale, resolved, timestamp}. "
+        "Surfaced by `mzt status`; model-generated content is "
+        "non-authoritative.",
+    )
 
     normal_attempts: int = Field(
         default=0,

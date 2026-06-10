@@ -323,6 +323,11 @@ class JobManager:
         # Initialized in start() after the event bus is ready.
         self._semantic_analyzer: SemanticAnalyzer | None = None
 
+        # #203: judgment client — automated FERMATA decider. Initialized in
+        # start() after the baton adapter exists (it produces decisions via
+        # adapter.resolve_fermata).
+        self._judgment_client: Any | None = None
+
         # Phase 4: Completion snapshots — captures workspace artifacts
         # at job completion with TTL-based cleanup.
         self._snapshot_manager = SnapshotManager()
@@ -527,6 +532,35 @@ class JobManager:
 
         # Recover paused orphans through the baton.
         await self._recover_baton_orphans()
+
+        # #203: judgment client — automated FERMATA decider. Started AFTER
+        # orphan recovery so its startup reconciliation sees restart-recovered
+        # FERMATA sheets. Failure must not prevent the conductor from starting
+        # (fail-open: sheets stay composer-resolvable).
+        try:
+            from marianne.core.config.backend import BackendConfig
+            from marianne.daemon.judgment import JudgmentClient
+
+            adapter = self._baton_adapter
+
+            def _judgment_backend(instrument: str) -> Any:
+                return create_backend_via_registry(
+                    registry, BackendConfig(type=instrument)
+                )
+
+            judgment_client = JudgmentClient(
+                live_states=self._live_states,
+                resolve_fn=adapter.resolve_fermata,
+                backend_factory=_judgment_backend,
+                diagnostic_fn=self._diagnostic_snapshot,
+            )
+            await judgment_client.start(self._event_bus)
+            self._judgment_client = judgment_client
+        except Exception:
+            _logger.warning(
+                "manager.judgment_client_start_failed", exc_info=True
+            )
+            self._judgment_client = None
 
         _logger.info(
             "manager.started",
@@ -2329,6 +2363,19 @@ class JobManager:
                 _logger.warning(
                     "manager.observer_recorder_stop_failed",
                     exc_info=True,
+                )
+
+        # #203: stop the judgment client before the event bus (unsubscribe);
+        # in-flight judgments are cancelled — affected sheets simply remain
+        # in composer-resolvable FERMATA.
+        if self._judgment_client is not None:
+            try:
+                await self._judgment_client.stop(self._event_bus)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _logger.warning(
+                    "manager.judgment_client_stop_failed", exc_info=True
                 )
 
         # Stop semantic analyzer before event bus (needs bus for unsubscribe,

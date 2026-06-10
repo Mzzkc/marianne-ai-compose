@@ -107,3 +107,48 @@ class TestPreflightConfigProperties:
             config = PreflightConfig(**data)
             assert config.token_warning_threshold == warn
             assert config.token_error_threshold == error
+
+
+class TestJudgmentConfigProperties:
+    """Property-based tests for JudgmentConfig (#203) invariants."""
+
+    @given(
+        data=st.fixed_dictionaries(
+            {
+                "enabled": st.booleans(),
+                "min_confidence": st.floats(min_value=0.0, max_value=1.0),
+                "max_judgments_per_sheet": st.integers(min_value=1, max_value=10),
+                "timeout_seconds": st.floats(
+                    min_value=0.1, max_value=600.0, allow_nan=False
+                ),
+                "allowed_decisions": st.lists(
+                    st.sampled_from(["retry", "skip", "accept", "fail"]),
+                    min_size=0,
+                    max_size=4,
+                    unique=True,
+                ),
+            }
+        )
+    )
+    @settings(max_examples=50)
+    def test_judgment_config_roundtrip(self, data: dict) -> None:
+        """JudgmentConfig roundtrips through serialization for valid inputs."""
+        from marianne.core.config.judgment import JudgmentConfig
+
+        config = JudgmentConfig.model_validate(data)
+        restored = JudgmentConfig.model_validate(config.model_dump())
+        assert restored.enabled == config.enabled
+        assert restored.allowed_decisions == config.allowed_decisions
+        assert restored.min_confidence == pytest.approx(config.min_confidence)
+        assert restored.max_judgments_per_sheet == config.max_judgments_per_sheet
+
+    @given(confidence=st.floats(min_value=1.0001, max_value=100.0, allow_nan=False))
+    @settings(max_examples=25)
+    def test_judgment_config_rejects_out_of_range_confidence(
+        self, confidence: float
+    ) -> None:
+        """min_confidence outside [0, 1] is rejected at config load."""
+        from marianne.core.config.judgment import JudgmentConfig
+
+        with pytest.raises(ValueError):
+            JudgmentConfig(min_confidence=confidence)
