@@ -649,6 +649,8 @@ class TestDeregisterJobCleanup:
         adapter._stale_markers = {(job_id, 1), ("other-job", 1)}
         adapter._stale_idle_strikes = {(job_id, 1): 2, ("other-job", 1): 1}
         adapter._fermata_polling = {(job_id, 1), ("other-job", 1)}
+        # Interactive-mode sheets (tmux-session sheets skip the idle kill)
+        adapter._interactive_sheets = {job_id: {1}, "other-job": {2}}
 
         adapter.deregister_job(job_id)
 
@@ -676,6 +678,8 @@ class TestDeregisterJobCleanup:
         assert ("other-job", 1) in adapter._stale_idle_strikes
         assert (job_id, 1) not in adapter._fermata_polling
         assert ("other-job", 1) in adapter._fermata_polling
+        assert job_id not in adapter._interactive_sheets
+        assert "other-job" in adapter._interactive_sheets
 
     def test_deregister_nonexistent_job_no_crash(self) -> None:
         """Deregistering a job that doesn't exist shouldn't crash."""
@@ -703,6 +707,7 @@ class TestDeregisterJobCleanup:
         adapter._stale_markers = set()
         adapter._stale_idle_strikes = {}
         adapter._fermata_polling = set()
+        adapter._interactive_sheets = {}
 
         # Should not raise
         adapter.deregister_job("nonexistent-job")

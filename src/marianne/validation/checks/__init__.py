@@ -23,6 +23,7 @@ from marianne.validation.checks.config import (
     FoldedCommandScalarCheck,
     InstrumentFallbackCheck,
     InstrumentNameCheck,
+    InteractiveSupportCheck,
     RegexPatternCheck,
     TimeoutRangeCheck,
     ValidationTypeCheck,
@@ -69,6 +70,7 @@ __all__ = [
     "VersionReferenceCheck",
     "InstrumentFallbackCheck",
     "InstrumentNameCheck",
+    "InteractiveSupportCheck",
     # Best-practice checks
     "JinjaInValidationPathCheck",
     "FormatSyntaxInTemplateCheck",

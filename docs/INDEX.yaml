@@ -255,6 +255,9 @@ directories:
       - name: 2026-04-19-marianne-unconscious-local-model-design.md
         added: 2026-04-19
         note: "Merged from two independent design runs with adversarial review; supersedes 2026-04-18 version"
+      - name: 2026-06-10-interactive-mode-design.md
+        added: 2026-06-10
+        note: "Interactive mode — tmux-driven instrument sessions; lab-validated 4-0"
 
   guides:
     description: "Methodology and reference guides"
@@ -336,6 +339,7 @@ semantic_index:
   scheduler: [plans/infrastructure/2026-03-26-scheduler-conductor-wiring-design.md]
   rate-limiting: [plans/infrastructure/2026-04-08-rate-limit-intelligence.md, specs/2026-04-16-rate-limit-primary-design.md]
   process-lifecycle: [specs/2026-04-16-process-lifecycle-design.md]
+  interactive-mode: [specs/2026-06-10-interactive-mode-design.md]
   composition-compiler: [specs/2026-04-13-composition-compiler-design.md, research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]
   a2a: [research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]
   techniques: [research/2026-04-19-capability-audit-compiler-techniques-mcp-a2a.md]

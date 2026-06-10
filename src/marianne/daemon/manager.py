@@ -518,6 +518,13 @@ class JobManager:
         )
         _logger.info("manager.baton_adapter_started")
 
+        # Interactive-mode hygiene: tmux sessions survive a daemon crash
+        # (the tmux server is not our child). Nothing has dispatched yet,
+        # so every mzt-* session on the marianne socket is residue from a
+        # previous daemon life — kill them. Best-effort: a sweep failure
+        # must never block conductor startup.
+        await self._sweep_orphan_interactive_sessions()
+
         # Recover paused orphans through the baton.
         await self._recover_baton_orphans()
 
@@ -530,6 +537,38 @@ class JobManager:
             observer_recorder="active" if self._observer_recorder else "unavailable",
             baton_adapter="active",
         )
+
+    async def _sweep_orphan_interactive_sessions(self) -> None:
+        """Kill orphaned interactive tmux sessions from a prior daemon life.
+
+        Runs at startup, before any sheet has dispatched — every ``mzt-*``
+        session on the marianne socket is therefore an orphan whose job is
+        being failed/recovered by the registry orphan pass above. Killing
+        them releases the agent processes and their MCP children. Without
+        tmux installed (or with no server running) this is a silent no-op.
+        """
+        from marianne.execution.instruments.interactive.tmux import (
+            SESSION_SWEEP_PREFIX,
+            TmuxControl,
+            TmuxError,
+        )
+
+        try:
+            tmux = TmuxControl()
+            orphans = await tmux.list_sessions(prefix=SESSION_SWEEP_PREFIX)
+            for session in orphans:
+                await tmux.kill_session(session)
+            if orphans:
+                _logger.warning(
+                    "manager.interactive_orphans_swept",
+                    count=len(orphans),
+                    sessions=orphans,
+                )
+        except TmuxError as e:
+            _logger.warning(
+                "manager.interactive_orphan_sweep_failed",
+                error=str(e),
+            )
 
     @property
     def _scheduler(self) -> GlobalSheetScheduler:

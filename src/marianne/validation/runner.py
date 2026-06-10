@@ -19,6 +19,7 @@ from marianne.validation.checks import (
     FormatSyntaxInTemplateCheck,
     InstrumentFallbackCheck,
     InstrumentNameCheck,
+    InteractiveSupportCheck,
     JinjaInValidationPathCheck,
     JinjaSyntaxCheck,
     JinjaUndefinedVariableCheck,
@@ -159,6 +160,7 @@ def create_default_checks() -> list[ValidationCheck]:
         # Instrument checks
         InstrumentNameCheck(),
         InstrumentFallbackCheck(),
+        InteractiveSupportCheck(),
         # Best-practice checks
         JinjaInValidationPathCheck(),
         FormatSyntaxInTemplateCheck(),

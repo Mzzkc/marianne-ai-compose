@@ -463,6 +463,129 @@ class EmptyPatternCheck:
         return issues
 
 
+class InteractiveSupportCheck:
+    """Check that interactive-mode opt-ins are runnable (V211).
+
+    ``interactive: true`` in any instrument_config requires the resolved
+    instrument profile to carry a verified ``cli.interactive`` block —
+    interactive mode drives the real TUI through screen patterns, which
+    only exist for verified instruments. Without the block, dispatch
+    fails; this check surfaces the problem at validation time instead.
+
+    Also warns when tmux is not on PATH (the interactive transport).
+
+    Severity is ERROR for a known profile without interactive support
+    (fail-fast — the sheet cannot run), and the check skips unknown
+    instrument names entirely (V210's domain).
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V211"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.ERROR
+
+    @property
+    def description(self) -> str:
+        return "Checks interactive opt-ins target instruments with verified support"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        """Validate every interactive: true opt-in against profile support."""
+        # Collect (location, instrument_name_or_alias) for each opt-in scope.
+        opt_ins: list[tuple[str, str | None]] = []
+        if config.instrument_config.get("interactive"):
+            opt_ins.append(("score-level instrument_config", config.instrument))
+        if config.movements:
+            for mov_num, mov_def in config.movements.items():
+                if mov_def.instrument_config.get("interactive"):
+                    opt_ins.append((
+                        f"movement {mov_num} instrument_config",
+                        mov_def.instrument or config.instrument,
+                    ))
+        if config.sheet.per_sheet_instrument_config:
+            for sheet_num, icfg in config.sheet.per_sheet_instrument_config.items():
+                if icfg.get("interactive"):
+                    per_sheet = (config.sheet.per_sheet_instruments or {}).get(
+                        sheet_num,
+                    )
+                    opt_ins.append((
+                        f"sheet {sheet_num} instrument_config",
+                        per_sheet or config.instrument,
+                    ))
+        for alias, instr_def in config.instruments.items():
+            if instr_def.config.get("interactive"):
+                opt_ins.append((f"instrument alias '{alias}'", instr_def.profile))
+
+        if not opt_ins:
+            return []
+
+        issues: list[ValidationIssue] = []
+
+        # tmux is the interactive transport — warn when absent.
+        import shutil
+
+        if shutil.which("tmux") is None:
+            issues.append(
+                ValidationIssue(
+                    check_id=self.check_id,
+                    severity=ValidationSeverity.WARNING,
+                    message=(
+                        "interactive: true is set but tmux is not on PATH — "
+                        "interactive sheets will fail their health check and "
+                        "fall back to other instruments (or fail)."
+                    ),
+                    line=find_line_in_yaml(raw_yaml, "interactive:"),
+                    suggestion="Install tmux >= 3.2 to run interactive sheets.",
+                )
+            )
+
+        # Load known profiles — gracefully degrade on failure (V210 pattern).
+        try:
+            from marianne.instruments.loader import load_all_profiles
+
+            profiles = load_all_profiles()
+        except Exception:
+            _logger.debug("V211: could not load instrument profiles, skipping check")
+            return issues
+
+        for location, name in opt_ins:
+            # Resolve score-local aliases to their profile name.
+            resolved = name
+            if resolved in config.instruments:
+                resolved = config.instruments[resolved].profile
+            if resolved is None or resolved not in profiles:
+                continue  # unknown name — V210's domain
+            profile = profiles[resolved]
+            if profile.cli is None or profile.cli.interactive is None:
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=ValidationSeverity.ERROR,
+                        message=(
+                            f"{location} sets interactive: true, but instrument "
+                            f"'{resolved}' has no cli.interactive block — its "
+                            f"interactive behavior has not been verified, so "
+                            f"interactive dispatch will fail."
+                        ),
+                        line=find_line_in_yaml(raw_yaml, "interactive:"),
+                        suggestion=(
+                            "Use an instrument with verified interactive support "
+                            "(e.g. claude-code), add a cli.interactive block to "
+                            "the instrument's profile, or remove interactive: true."
+                        ),
+                    )
+                )
+
+        return issues
+
+
 class InstrumentNameCheck:
     """Check that instrument names resolve to known profiles (V210).
 

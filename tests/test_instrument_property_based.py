@@ -23,6 +23,8 @@ from marianne.core.config.instruments import (
     CodeModeInterface,
     HttpProfile,
     InstrumentProfile,
+    InteractiveCliConfig,
+    InteractiveGate,
     ModelCapacity,
 )
 from marianne.core.config.job import InstrumentDef, MovementDef
@@ -88,6 +90,43 @@ def cli_profile_strategy() -> st.SearchStrategy[dict[str, Any]]:
             "command": cli_command_strategy(),
             "output": cli_output_config_strategy(),
         }
+    )
+
+
+def interactive_gate_strategy() -> st.SearchStrategy[dict[str, Any]]:
+    """Strategy for InteractiveGate as a dict.
+
+    Patterns are built from letters/digits only so they always compile —
+    invalid-regex rejection has its own dedicated test below.
+    """
+    return st.fixed_dictionaries(
+        {
+            "pattern": _nonempty_text,
+            "keys": st.lists(
+                st.sampled_from(["Enter", "Down", "Up", "Escape", "y"]),
+                min_size=1,
+                max_size=3,
+            ),
+        }
+    )
+
+
+def interactive_cli_config_strategy() -> st.SearchStrategy[dict[str, Any]]:
+    """Strategy for InteractiveCliConfig as a dict."""
+    return st.fixed_dictionaries(
+        {
+            "ready_pattern": _nonempty_text,
+        },
+        optional={
+            "busy_patterns": st.lists(_nonempty_text, max_size=3),
+            "startup_gates": st.lists(interactive_gate_strategy(), max_size=2),
+            "quiet_seconds": st.floats(min_value=0.1, max_value=600.0),
+            "poll_interval_seconds": st.floats(min_value=0.1, max_value=60.0),
+            "startup_timeout_seconds": st.floats(min_value=1.0, max_value=600.0),
+            "terminal_width": st.integers(min_value=40, max_value=500),
+            "terminal_height": st.integers(min_value=10, max_value=200),
+            "volatile_tail_lines": st.integers(min_value=0, max_value=10),
+        },
     )
 
 
@@ -196,6 +235,32 @@ def test_cli_profile_roundtrip(data: dict[str, Any]) -> None:
     profile = CliProfile.model_validate(data)
     restored = CliProfile.model_validate(profile.model_dump())
     assert restored.command.executable == profile.command.executable
+
+
+@pytest.mark.property_based
+@_pb_settings
+@given(data=interactive_gate_strategy())
+def test_interactive_gate_roundtrip(data: dict[str, Any]) -> None:
+    """InteractiveGate roundtrips through serialization."""
+    gate = InteractiveGate.model_validate(data)
+    assert gate.pattern == data["pattern"]
+    restored = InteractiveGate.model_validate(gate.model_dump())
+    assert restored.pattern == gate.pattern
+    assert restored.keys == gate.keys
+
+
+@pytest.mark.property_based
+@_pb_settings
+@given(data=interactive_cli_config_strategy())
+def test_interactive_cli_config_roundtrip(data: dict[str, Any]) -> None:
+    """InteractiveCliConfig roundtrips through serialization."""
+    cfg = InteractiveCliConfig.model_validate(data)
+    assert cfg.ready_pattern == data["ready_pattern"]
+    restored = InteractiveCliConfig.model_validate(cfg.model_dump())
+    assert restored.ready_pattern == cfg.ready_pattern
+    assert restored.busy_patterns == cfg.busy_patterns
+    assert restored.quiet_seconds == cfg.quiet_seconds
+    assert len(restored.startup_gates) == len(cfg.startup_gates)
 
 
 @pytest.mark.property_based

@@ -55,10 +55,13 @@ def _create_backend_for_profile(
     working_directory: Path | None = None,
     model: str | None = None,
     api_key: str | None = None,
+    interactive: bool = False,
 ) -> Backend:
     """Create a Backend instance from an InstrumentProfile.
 
-    For CLI instruments, creates a PluginCliBackend.
+    For CLI instruments, creates a PluginCliBackend — or an
+    InteractiveCliBackend when ``interactive`` is requested (the profile
+    must carry a verified ``cli.interactive`` block, else this raises).
     For HTTP instruments, creates the appropriate API backend.
 
     Falls back to the legacy ``create_backend_from_config`` for native
@@ -71,10 +74,35 @@ def _create_backend_for_profile(
         api_key: Optional API key from the keyring. When provided, the
             HTTP backend uses this key directly instead of reading from
             an environment variable.
+        interactive: When True, build an interactive (tmux-session)
+            backend instead of the headless CLI backend.
 
     Returns:
         A configured Backend instance.
+
+    Raises:
+        ValueError: interactive=True with a non-CLI profile or a profile
+            lacking ``cli.interactive`` (fail-fast — surfaced as a
+            dispatch failure with the structured message).
     """
+    if interactive:
+        if profile.kind != "cli":
+            raise ValueError(
+                f"Instrument '{profile.name}' is kind={profile.kind}; "
+                f"interactive mode only applies to CLI instruments."
+            )
+        from marianne.execution.instruments.interactive import (
+            InteractiveCliBackend,
+        )
+
+        interactive_backend: Backend = InteractiveCliBackend(
+            profile=profile,
+            working_directory=working_directory,
+        )
+        if model:
+            interactive_backend.apply_overrides({"model": model})
+        return interactive_backend
+
     if profile.kind == "cli":
         from marianne.execution.instruments.cli_backend import PluginCliBackend
 
@@ -286,6 +314,7 @@ class BackendPool:
         *,
         model: str | None = None,
         working_directory: Path | None = None,
+        interactive: bool = False,
     ) -> Backend:
         """Acquire a Backend instance for an instrument.
 
@@ -297,12 +326,17 @@ class BackendPool:
             instrument_name: Name of the instrument (from registry).
             model: Optional model override for this execution.
             working_directory: Working directory for the backend.
+            interactive: When True, acquire an interactive (tmux-session)
+                backend. Interactive instances live in their own free
+                list — they never cross-pollinate with headless ones.
 
         Returns:
             A Backend instance ready for execution.
 
         Raises:
-            ValueError: If the instrument is not registered.
+            ValueError: If the instrument is not registered, or interactive
+                was requested for an instrument without verified
+                interactive support.
             RuntimeError: If the pool has been closed.
         """
         if self._closed:
@@ -337,6 +371,7 @@ class BackendPool:
                 model=model,
                 working_directory=working_directory,
                 api_key=api_key,
+                interactive=interactive,
             )
 
         _logger.debug(
@@ -345,6 +380,7 @@ class BackendPool:
                 "instrument": instrument_name,
                 "in_flight": self._in_flight.get(instrument_name, 0),
                 "model": model,
+                "interactive": interactive,
             },
         )
         return backend
@@ -367,6 +403,8 @@ class BackendPool:
         # the backend to the free list. Without this, a model override from
         # sheet N would silently carry over to sheet N+1 that reuses the
         # same backend instance. This was F-150's secondary bug.
+        # For interactive backends this also resets the per-sheet driver
+        # knobs and the attempt identity, so free-list reuse is clean.
         backend.clear_overrides()
 
         async with self._lock:
@@ -375,10 +413,13 @@ class BackendPool:
 
             profile = self._registry.get(instrument_name)
             if profile is not None and profile.kind == "cli":
-                # Return CLI backend to free list for reuse
-                if instrument_name not in self._cli_free:
-                    self._cli_free[instrument_name] = []
-                self._cli_free[instrument_name].append(backend)
+                # Return CLI backend to free list for reuse. Interactive
+                # instances live under their own key — a headless acquire
+                # must never receive a session-driving backend or vice versa.
+                free_key = self._free_list_key(instrument_name, backend)
+                if free_key not in self._cli_free:
+                    self._cli_free[free_key] = []
+                self._cli_free[free_key].append(backend)
 
             # HTTP singletons are never "released" — they stay active
 
@@ -434,6 +475,17 @@ class BackendPool:
     # Internal
     # -----------------------------------------------------------------
 
+    @staticmethod
+    def _free_list_key(instrument_name: str, backend: Backend) -> str:
+        """Free-list key — interactive instances are pooled separately."""
+        from marianne.execution.instruments.interactive import (
+            InteractiveCliBackend,
+        )
+
+        if isinstance(backend, InteractiveCliBackend):
+            return f"{instrument_name}:interactive"
+        return instrument_name
+
     def _acquire_locked(
         self,
         profile: InstrumentProfile,
@@ -441,6 +493,7 @@ class BackendPool:
         model: str | None = None,
         working_directory: Path | None = None,
         api_key: str | None = None,
+        interactive: bool = False,
     ) -> Backend:
         """Acquire under lock. Returns a Backend instance."""
         name = profile.name
@@ -458,8 +511,10 @@ class BackendPool:
                 self._all_backends.append(backend)
             backend = self._http_singletons[name]
         else:
-            # CLI: pop from free list or create new
-            free_list = self._cli_free.get(name, [])
+            # CLI: pop from free list or create new. Interactive and
+            # headless instances use distinct keys.
+            free_key = f"{name}:interactive" if interactive else name
+            free_list = self._cli_free.get(free_key, [])
             if free_list:
                 backend = free_list.pop()
                 # Update working directory for reuse
@@ -472,6 +527,7 @@ class BackendPool:
                     profile,
                     working_directory=working_directory,
                     model=model,
+                    interactive=interactive,
                 )
                 self._all_backends.append(backend)
 

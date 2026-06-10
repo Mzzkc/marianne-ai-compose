@@ -351,13 +351,137 @@ class CliErrorConfig(BaseModel):
     )
 
 
+class InteractiveGate(BaseModel):
+    """A startup dialog the interactive driver may need to dismiss.
+
+    Some TUI agents present blocking dialogs before reaching their ready
+    prompt (e.g. Claude Code's trust-folder check). Each gate pairs a
+    screen pattern with the keys that dismiss it. Gates fire at most once
+    per session and are skipped entirely once the ready prompt has been
+    seen — a late-matching gate must never type into the agent's input.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    pattern: str = Field(
+        min_length=1,
+        description="Regex matched against the captured screen. Keep it "
+        "anchored to the dialog's distinctive text — broad patterns risk "
+        "sending keys into the wrong UI state.",
+    )
+    keys: list[str] = Field(
+        default_factory=lambda: ["Enter"],
+        description="tmux send-keys key names sent when the pattern "
+        "matches, e.g. ['Enter'] or ['Down', 'Enter'].",
+    )
+
+    @field_validator("pattern")
+    @classmethod
+    def _validate_pattern(cls, v: str) -> str:
+        """Reject invalid regex at config-load time, not mid-session."""
+        import re
+
+        try:
+            re.compile(v)
+        except re.error as e:
+            raise ValueError(f"Invalid gate pattern regex: {e}") from e
+        return v
+
+
+class InteractiveCliConfig(BaseModel):
+    """How to drive a CLI instrument through a live interactive session.
+
+    Present only on profiles whose interactive behavior has been verified
+    against the real TUI (screen patterns are empirical, not guessed).
+    When a score opts into interactive mode for an instrument without
+    this block, backend creation fails with a structured config error.
+
+    See docs/specs/2026-06-10-interactive-mode-design.md.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    extra_args: list[str] = Field(
+        default_factory=list,
+        description="Extra CLI args for the interactive launch, appended "
+        "after the auto-approve and model flags. Headless-only flags "
+        "(prompt/output-format) are never used in interactive mode.",
+    )
+    startup_gates: list[InteractiveGate] = Field(
+        default_factory=list,
+        description="Ordered startup dialogs that may appear before the "
+        "ready prompt. Each fires at most once.",
+    )
+    ready_pattern: str = Field(
+        min_length=1,
+        description="Regex on the captured screen that signals the agent "
+        "is at its input prompt and ready for text.",
+    )
+    busy_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regexes whose presence on the captured screen means "
+        "the agent is actively working (spinners, 'esc to interrupt'). "
+        "Primary busy signal — screen change alone never means busy.",
+    )
+    quiet_seconds: float = Field(
+        default=15.0,
+        gt=0,
+        description="Seconds the work area must stay unchanged, with no "
+        "busy pattern visible, before the agent is considered idle.",
+    )
+    poll_interval_seconds: float = Field(
+        default=2.0,
+        gt=0,
+        description="Seconds between screen polls in the drive loop.",
+    )
+    startup_timeout_seconds: float = Field(
+        default=90.0,
+        gt=0,
+        description="Deadline for the session to reach the ready prompt "
+        "(including dismissing startup gates).",
+    )
+    terminal_width: int = Field(
+        default=200,
+        ge=40,
+        description="Virtual terminal width for the tmux session.",
+    )
+    terminal_height: int = Field(
+        default=50,
+        ge=10,
+        description="Virtual terminal height for the tmux session.",
+    )
+    volatile_tail_lines: int = Field(
+        default=2,
+        ge=0,
+        description="Bottom screen lines excluded from the change hash "
+        "(status lines with live token counters/clocks would otherwise "
+        "defeat idle detection).",
+    )
+
+    @field_validator("ready_pattern", "busy_patterns")
+    @classmethod
+    def _validate_regexes(cls, v: str | list[str]) -> str | list[str]:
+        """Reject invalid regex at config-load time, not mid-session."""
+        import re
+
+        patterns = [v] if isinstance(v, str) else v
+        for pattern in patterns:
+            try:
+                re.compile(pattern)
+            except re.error as e:
+                raise ValueError(f"Invalid pattern regex {pattern!r}: {e}") from e
+        return v
+
+
 class CliProfile(BaseModel):
     """Everything needed to invoke a CLI instrument and parse its output.
 
-    Composed of three concerns:
+    Composed of four concerns:
     - command: how to build the CLI invocation
     - output: how to parse the result
     - errors: how to detect failures
+    - interactive: how to drive a live TUI session (optional, verified
+      instruments only)
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -371,6 +495,12 @@ class CliProfile(BaseModel):
     errors: CliErrorConfig = Field(
         default_factory=CliErrorConfig,
         description="How to detect errors from CLI output",
+    )
+    interactive: InteractiveCliConfig | None = Field(
+        default=None,
+        description="How to drive this CLI through a live interactive "
+        "tmux session. None = interactive mode unavailable for this "
+        "instrument (scores requesting it fail fast).",
     )
 
 

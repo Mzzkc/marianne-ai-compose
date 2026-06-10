@@ -488,6 +488,15 @@ class BatonAdapter:
         # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 3).
         self._active_pids: dict[tuple[str, int], tuple[int, int]] = {}
 
+        # Interactive-mode sheets per job. Recorded at dispatch when the
+        # sheet's merged instrument_config opts into interactive execution.
+        # The stale check consults this to SKIP the workspace-mtime idle
+        # kill for these sheets — the interactive driver owns idle handling
+        # (busy/idle screen detection + nudges); two independent
+        # kill-deciders would race. Dead-task detection still applies.
+        # Cleared on deregister.
+        self._interactive_sheets: dict[str, set[int]] = {}
+
         # BackendPool — injected via set_backend_pool()
         self._backend_pool: BackendPool | None = None
 
@@ -887,6 +896,7 @@ class BatonAdapter:
         self._job_routers.pop(job_id, None)
         self._job_techniques.pop(job_id, None)
         self._job_skip_commands.pop(job_id, None)
+        self._interactive_sheets.pop(job_id, None)
 
         # Idle stale-detection cleanup (#349/#350): drop the job config and any
         # per-sheet idle-window / stale-marker state for this job.
@@ -1818,6 +1828,16 @@ class BatonAdapter:
         # but the backend pool acquires the original instrument's backend.
         effective_instrument = state.instrument_name or ""
 
+        # Interactive mode opt-in (per-sheet, from the merged instrument
+        # config). Interactive sheets get a tmux-session backend and skip
+        # the workspace-mtime stale kill (the driver owns idle handling).
+        # isinstance guard: fail-open to headless on a malformed config
+        # rather than crashing dispatch.
+        _icfg = sheet.instrument_config
+        interactive_mode = (
+            bool(_icfg.get("interactive", False)) if isinstance(_icfg, dict) else False
+        )
+
         try:
             # Acquire backend from pool, passing model from the execution state.
             # F-150: instrument_config.model was silently ignored at dispatch.
@@ -1826,11 +1846,43 @@ class BatonAdapter:
             # instrument acquires a backend with its profile's default_model
             # instead of inheriting the primary's (possibly incompatible) model.
             model_override = state.model
-            backend = await self._backend_pool.acquire(
-                effective_instrument,
-                model=str(model_override) if model_override is not None else None,
-                working_directory=sheet.workspace,
-            )
+            try:
+                backend = await self._backend_pool.acquire(
+                    effective_instrument,
+                    model=str(model_override) if model_override is not None else None,
+                    working_directory=sheet.workspace,
+                    interactive=interactive_mode,
+                )
+            except ValueError:
+                if (
+                    interactive_mode
+                    and effective_instrument != sheet.instrument_name
+                ):
+                    # Interactive was requested for the PRIMARY instrument,
+                    # but we are on a FALLBACK that lacks verified
+                    # interactive support. Degrade to headless rather than
+                    # dead-ending the sheet (reliability > features). The
+                    # primary-instrument misconfiguration case still fails
+                    # fast above (effective == sheet.instrument_name).
+                    _logger.warning(
+                        "adapter.dispatch.interactive_fallback_degraded",
+                        extra={
+                            "job_id": job_id,
+                            "sheet_num": sheet_num,
+                            "fallback_instrument": effective_instrument,
+                            "primary_instrument": sheet.instrument_name,
+                        },
+                    )
+                    interactive_mode = False
+                    backend = await self._backend_pool.acquire(
+                        effective_instrument,
+                        model=str(model_override)
+                        if model_override is not None else None,
+                        working_directory=sheet.workspace,
+                        interactive=False,
+                    )
+                else:
+                    raise
         except Exception as exc:
             # F-152: Catch ALL exceptions, not just ValueError/RuntimeError.
             # NotImplementedError (unsupported instrument kind) previously
@@ -1882,6 +1934,23 @@ class BatonAdapter:
         # state_publish hook, but baton-driven sheets bypass that path,
         # which is why "Attempts" displayed 0 across the board.
         state.attempt_count = attempt_number
+
+        # Interactive sheets: hand the backend its attempt identity (session
+        # and completion-marker naming) and per-sheet driver knobs, and mark
+        # the sheet so the stale check skips the workspace-mtime idle kill
+        # (the driver owns idle handling — two independent kill-deciders
+        # would race; see docs/specs/2026-06-10-interactive-mode-design.md).
+        if interactive_mode:
+            if hasattr(backend, "set_attempt_identity"):
+                backend.set_attempt_identity(job_id, sheet_num, attempt_number)
+            if hasattr(backend, "configure_interactive"):
+                raw_max = sheet.instrument_config.get("interactive_max_nudges")
+                raw_msg = sheet.instrument_config.get("interactive_nudge_message")
+                backend.configure_interactive(
+                    max_nudges=int(raw_max) if raw_max is not None else None,
+                    nudge_message=str(raw_msg) if raw_msg is not None else None,
+                )
+            self._interactive_sheets.setdefault(job_id, set()).add(sheet_num)
 
         mode = AttemptMode.NORMAL
         completion_suffix: str | None = None
@@ -2487,6 +2556,20 @@ class BatonAdapter:
                         f"with no result reported"
                     ),
                 ))
+            await self._baton.handle_event(event)
+            return
+
+        # Interactive sheets: the tmux driver owns idle handling (busy/idle
+        # screen detection + nudge budget + the sheet timeout). Skip the
+        # workspace-mtime idle kill entirely — an interactive agent
+        # legitimately thinks/talks without writing files, and two
+        # independent kill-deciders racing on the same musician task would
+        # produce non-deterministic cancellations. The dead-task branch
+        # above still applies (a dead musician task is reaped normally).
+        if event.sheet_num in self._interactive_sheets.get(event.job_id, set()):
+            self._timer_wheel.schedule(
+                60.0, StaleCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+            )
             await self._baton.handle_event(event)
             return
 

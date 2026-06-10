@@ -54,3 +54,8 @@ files:
     status: rough-needs-design-session
     added: 2026-05-11
     deferred: true
+  - name: 2026-06-10-interactive-mode-design.md
+    purpose: "Interactive mode — tmux-driven instrument sessions. Driver state machine (busy/idle screen detection, nudges, per-attempt completion markers) pushes a live TUI agent to sheet completion instead of single-pass headless -p. Lab-validated 4-0 (2026-06-10); V1 deterministic driver, ContinuationPolicy seam for model-driven steering (V2) and the conductor agent (V3)."
+    status: final
+    added: 2026-06-10
+    related: [2026-04-16-process-lifecycle-design.md]

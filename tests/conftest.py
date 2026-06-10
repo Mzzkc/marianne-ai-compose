@@ -1,6 +1,7 @@
 """Pytest fixtures for Marianne tests."""
 
 import logging
+import os
 from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import patch
@@ -10,6 +11,13 @@ import structlog
 
 from marianne.core.checkpoint import CheckpointState
 from marianne.state.base import StateBackend
+
+# Interactive-mode isolation: any test that reaches a real TmuxControl with
+# the DEFAULT socket (e.g. daemon-manager startup tests, whose orphan sweep
+# kills mzt-* sessions) must never touch the production 'marianne' tmux
+# socket — a live conductor's interactive sheets would be killed mid-flight.
+# Per-process socket so xdist workers stay isolated from each other too.
+os.environ.setdefault("MARIANNE_TMUX_SOCKET", f"mzt-test-{os.getpid()}")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

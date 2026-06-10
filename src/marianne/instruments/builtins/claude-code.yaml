@@ -134,6 +134,35 @@ cli:
       - "--strict-mcp-config"
       - "--mcp-config"
       - '{"mcpServers":{}}'
+  # Interactive mode — drive the full Claude Code TUI in a tmux session
+  # instead of headless -p. Patterns spike-verified 2026-06-10 against
+  # Claude Code v2.1.172 (see docs/specs/2026-06-10-interactive-mode-design.md).
+  interactive:
+    # Trust-folder dialog appears on first launch in a new directory.
+    # Option 1 ("Yes, I trust this folder") is pre-selected; Enter accepts.
+    startup_gates:
+      - pattern: "Is this a project you created or one you trust"
+        keys: ["Enter"]
+      # First-ever --dangerously-skip-permissions use shows an acceptance
+      # dialog; "Yes, I accept" is reached with Down+Enter on v2.x.
+      - pattern: "Bypass Permissions mode"
+        keys: ["Down", "Enter"]
+    # The input prompt line: "❯ " at line start.
+    ready_pattern: '(?m)^\s*❯'
+    # Busy: tool-run hint, or a spinner line with elapsed time like
+    # "· Percolating… (2s)" / "✻ Baked for 24s".
+    busy_patterns:
+      - "esc to interrupt"
+      - '[·✻✽✶]\s+\w+…?\s*\(\d+'
+      - '…\s*\(\d+m?\s?\d*s'
+    quiet_seconds: 15.0
+    poll_interval_seconds: 2.0
+    startup_timeout_seconds: 90.0
+    terminal_width: 200
+    terminal_height: 50
+    # Bottom 2 lines hold the status bar (token counter, mode hints) which
+    # updates independently of work — excluded from the change hash.
+    volatile_tail_lines: 2
   output:
     format: json
     result_path: "result"
