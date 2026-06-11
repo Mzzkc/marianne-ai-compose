@@ -96,7 +96,17 @@ class TestAutoVacuumMigration:
         await storage.cleanup(RetentionConfig(full_resolution_hours=1))
         size_after = (tmp_path / "monitor.db").stat().st_size
 
-        assert size_after < size_before
+        # The property under test: freed pages are RETURNED, not hoarded.
+        # File size strictly-shrinking is environment-sensitive (SQLite
+        # versions differ in page allocation; py3.11 CI hit exact equality),
+        # so assert the freelist is drained plus no growth.
+        import aiosqlite
+
+        async with aiosqlite.connect(tmp_path / "monitor.db") as db:
+            cursor = await db.execute("PRAGMA freelist_count")
+            row = await cursor.fetchone()
+        assert row is not None and row[0] == 0
+        assert size_after <= size_before
 
 
 class TestStorageFindings:
