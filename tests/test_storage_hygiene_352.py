@@ -10,8 +10,10 @@ already count-capped at 2; snapshots already have a TTL.)
 Fixes under test:
 - MonitorStorage migrates to ``auto_vacuum=INCREMENTAL`` once at
   initialize() (pragma persists → self-gating) and runs a bounded
-  ``incremental_vacuum`` chunk after every retention cleanup — the file
-  can now SHRINK on the live cadence without a loop-freezing full VACUUM.
+  pages auto-return on every commit (auto_vacuum=FULL — version-proof,
+  unlike incremental_vacuum whose stepping semantics differ across
+  SQLite builds) — the file SHRINKS on the live cadence with no
+  loop-freezing full VACUUM.
 - ``mzt doctor`` reports hygiene findings; ``--clean`` deletes ONLY
   after explicit confirmation (user-data gate: scanning is pure,
   deletion is opt-in).
@@ -42,7 +44,7 @@ class TestAutoVacuumMigration:
         async with aiosqlite.connect(tmp_path / "monitor.db") as db:
             cursor = await db.execute("PRAGMA auto_vacuum")
             row = await cursor.fetchone()
-        assert row is not None and row[0] == 2  # INCREMENTAL
+        assert row is not None and row[0] == 1  # FULL
 
     async def test_existing_db_migrated_once(self, tmp_path: Path) -> None:
         """A pre-existing db (auto_vacuum=NONE) is restructured on init."""
@@ -62,7 +64,7 @@ class TestAutoVacuumMigration:
         async with aiosqlite.connect(db_path) as db:
             cursor = await db.execute("PRAGMA auto_vacuum")
             row = await cursor.fetchone()
-        assert row is not None and row[0] == 2
+        assert row is not None and row[0] == 1
 
     async def test_cleanup_reclaims_pages(self, tmp_path: Path) -> None:
         """After bulk deletes, cleanup() shrinks the file (the #352 bug
