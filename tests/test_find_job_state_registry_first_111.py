@@ -1,9 +1,11 @@
-"""#111: offline reads prefer the authoritative daemon DB (registry-first).
+"""#111 → #50: offline reads are conductor-ONLY (registry, no fallback).
 
-`_find_job_state_fs` now reads the daemon registry first and falls back to the
-workspace. Registry-present jobs return CURRENT registry state; jobs absent from
-the registry (workspace-only / pre-daemon) still read from the workspace — the
-read is never suppressed, which is what keeps the 51 status tests green.
+History: #111 made `_find_job_state_fs` registry-FIRST with a workspace
+fallback (the regression-safe shape at the time). #50 removed the
+fallback per the composer's ruling — "workspaces are for work to occur
+only, not for state tracking" — so the daemon registry DB is the ONLY
+state source. A job absent from the registry does not exist as far as
+state is concerned, and workspace state files are never read.
 """
 
 from __future__ import annotations
@@ -32,11 +34,11 @@ async def _registry_with_checkpoint(
         await reg.save_checkpoint(job_id, payload)
 
 
-class TestRegistryFirstOfflineRead:
+class TestConductorOnlyOfflineRead:
     async def test_registry_present_returns_current_state(self, tmp_path, monkeypatch) -> None:
         ws = tmp_path / "ws"
         ws.mkdir()
-        # Workspace has STALE state (last_completed=1)...
+        # Workspace has STALE state (last_completed=1) — it must be IGNORED...
         jb = JsonStateBackend(ws)
         await jb.save(_ckpt("j1", last_completed=1))
         await jb.close()
@@ -47,11 +49,12 @@ class TestRegistryFirstOfflineRead:
 
         state, backend = await _find_job_state_fs("j1", ws)
         assert state is not None
-        assert state.last_completed_sheet == 3  # registry won, not the stale workspace
+        assert state.last_completed_sheet == 3  # registry, never the workspace
         if backend is not None:
             await backend.close()
 
-    async def test_absent_falls_back_to_workspace(self, tmp_path, monkeypatch) -> None:
+    async def test_absent_from_registry_is_not_found(self, tmp_path, monkeypatch) -> None:
+        """#50: a job only in workspace files does NOT exist — no fallback."""
         ws = tmp_path / "ws"
         ws.mkdir()
         jb = JsonStateBackend(ws)
@@ -63,12 +66,11 @@ class TestRegistryFirstOfflineRead:
         monkeypatch.setattr(helpers, "DAEMON_STATE_DB_PATH", db)
 
         state, backend = await _find_job_state_fs("only-in-ws", ws)
-        assert state is not None  # not suppressed — workspace fallback
-        assert state.last_completed_sheet == 2
-        if backend is not None:
-            await backend.close()
+        assert state is None
+        assert backend is None
 
-    async def test_no_registry_db_reads_workspace(self, tmp_path, monkeypatch) -> None:
+    async def test_no_registry_db_is_not_found(self, tmp_path, monkeypatch) -> None:
+        """#50: with no daemon DB at all, workspace state is still never read."""
         ws = tmp_path / "ws"
         ws.mkdir()
         jb = JsonStateBackend(ws)
@@ -77,6 +79,5 @@ class TestRegistryFirstOfflineRead:
         monkeypatch.setattr(helpers, "DAEMON_STATE_DB_PATH", tmp_path / "nonexistent.db")
 
         state, backend = await _find_job_state_fs("legacy", ws)
-        assert state is not None and state.last_completed_sheet == 1
-        if backend is not None:
-            await backend.close()
+        assert state is None
+        assert backend is None

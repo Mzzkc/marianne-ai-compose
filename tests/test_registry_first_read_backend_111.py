@@ -1,9 +1,9 @@
-"""#111: RegistryFirstReadBackend — registry-first reads with workspace fallback.
+"""#111 → #50: RegistryFirstReadBackend — conductor-ONLY reads.
 
-For read-only consumers (MCP, dashboard offline). load() prefers the
-authoritative daemon DB and falls back to the workspace for jobs absent from the
-registry — so stale per-workspace state is bypassed for registry-present jobs,
-while workspace-only/pre-daemon jobs still read.
+For read-only consumers (MCP, dashboard offline). #50 removed the
+workspace fallback: load() reads the authoritative daemon DB and nothing
+else; a job absent from the registry does not exist as far as state is
+concerned, and workspace state files are never read.
 """
 
 from __future__ import annotations
@@ -43,7 +43,8 @@ class TestRegistryFirstReadBackend:
         assert state is not None and state.last_completed_sheet == 3
         await backend.close()
 
-    async def test_absent_from_registry_falls_back(self, tmp_path) -> None:
+    async def test_absent_from_registry_is_not_found(self, tmp_path) -> None:
+        """#50: workspace-only state is never read — absent means not found."""
         ws = tmp_path / "ws"
         ws.mkdir()
         jb = JsonStateBackend(ws)
@@ -53,11 +54,11 @@ class TestRegistryFirstReadBackend:
         await _registry_with(db, "other", ws, last_completed=3)
 
         backend = RegistryFirstReadBackend(ws, db_path=db)
-        state = await backend.load("only-ws")
-        assert state is not None and state.last_completed_sheet == 2  # workspace fallback
+        assert await backend.load("only-ws") is None
         await backend.close()
 
-    async def test_no_registry_db_reads_workspace(self, tmp_path) -> None:
+    async def test_no_registry_db_is_not_found(self, tmp_path) -> None:
+        """#50: with no daemon DB, workspace state is still never read."""
         ws = tmp_path / "ws"
         ws.mkdir()
         jb = JsonStateBackend(ws)
@@ -65,9 +66,18 @@ class TestRegistryFirstReadBackend:
         await jb.close()
 
         backend = RegistryFirstReadBackend(ws, db_path=tmp_path / "nonexistent.db")
-        state = await backend.load("legacy")
-        assert state is not None and state.last_completed_sheet == 1
+        assert await backend.load("legacy") is None
         await backend.close()
+
+    async def test_write_operations_raise(self, tmp_path) -> None:
+        """#50: the backend is read-only — state writes belong to the conductor."""
+        import pytest
+
+        backend = RegistryFirstReadBackend(tmp_path, db_path=tmp_path / "x.db")
+        with pytest.raises(NotImplementedError):
+            await backend.save(_ckpt("j", last_completed=0))
+        with pytest.raises(NotImplementedError):
+            await backend.delete("j")
 
     async def test_missing_everywhere_returns_none(self, tmp_path) -> None:
         ws = tmp_path / "ws"

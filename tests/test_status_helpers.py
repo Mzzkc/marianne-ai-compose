@@ -82,9 +82,34 @@ def _make_job(
     )
 
 
+@pytest.fixture(autouse=True)
+def _registry_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#50: state reads are conductor-ONLY — point the offline registry
+    read at this test's seeded daemon DB (workspace files are never read)."""
+    from marianne.cli import helpers
+
+    monkeypatch.setattr(
+        helpers, "DAEMON_STATE_DB_PATH", tmp_path / "daemon-state.db"
+    )
+
+
 def _write_state(tmp_path: Path, state: CheckpointState) -> Path:
-    fp = tmp_path / f"{state.job_id}.json"
-    fp.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+    """Seed the daemon registry DB with this job's state (#50)."""
+    import asyncio as _asyncio
+
+    from marianne.cli import helpers
+    from marianne.daemon.registry import JobRegistry
+
+    # Single source: always write where the patched offline reader looks,
+    # regardless of which directory the caller passed.
+    db = helpers.DAEMON_STATE_DB_PATH
+
+    async def _seed() -> None:
+        async with JobRegistry(db) as reg:
+            await reg.register_job(state.job_id, tmp_path / "cfg.yaml", tmp_path)
+            await reg.save_checkpoint(state.job_id, state.model_dump_json())
+
+    _asyncio.run(_seed())
     return tmp_path
 
 

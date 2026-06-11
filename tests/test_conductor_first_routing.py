@@ -630,14 +630,16 @@ class TestFilesystemFallbacksPrivate:
     """Verify filesystem fallback helpers exist but are private."""
 
     def test_private_helpers_exist(self):
-        """Private filesystem fallback helpers still exist for debug override."""
+        """#50: only the registry-backed offline readers remain — every
+        workspace-state helper (_find_job_workspace, pause-signal writers)
+        was deleted with the conductor-ONLY cut."""
         from marianne.cli import helpers
 
-        assert hasattr(helpers, "_find_job_workspace")
         assert hasattr(helpers, "_find_job_state_fs")
         assert hasattr(helpers, "_find_job_state_direct")
-        assert hasattr(helpers, "_create_pause_signal")
-        assert hasattr(helpers, "_wait_for_pause_ack")
+        assert not hasattr(helpers, "_find_job_workspace")
+        assert not hasattr(helpers, "_create_pause_signal")
+        assert not hasattr(helpers, "_wait_for_pause_ack")
 
     def test_public_api_has_require_conductor(self):
         """require_conductor is the new public conductor helper."""

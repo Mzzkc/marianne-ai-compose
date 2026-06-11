@@ -254,81 +254,25 @@ class TestKillOrphanedProcessAcceptsBaseException:
 
 
 class TestFindJobStateBackendErrors:
-    """Verify that find_job_state falls back to the next backend when one errors.
-
-    When SQLite backend raises (e.g., database locked during crash recovery),
-    the JSON fallback must still work so `mzt status` doesn't crash.
+    """#50: offline reads are conductor-ONLY (registry, no workspace
+    fallback). The SIGABRT hazard this class guards is unchanged: an
+    erroring backend during an offline state read must NEVER crash
+    `mzt status` — it degrades to not-found.
     """
 
-    @pytest.mark.asyncio
-    async def test_sqlite_error_falls_back_to_json(self, tmp_path: Path) -> None:
-        """SQLite backend error should not prevent JSON fallback from working."""
+    async def test_registry_error_degrades_to_not_found(self, tmp_path: Path) -> None:
+        """A corrupt/locked registry DB must not raise out of the read."""
+        from marianne.cli import helpers
         from marianne.cli.helpers import _find_job_state_fs as find_job_state
 
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
+        bad_db = tmp_path / "daemon-state.db"
+        bad_db.write_text("this is not a sqlite database")
 
-        # Create a fake SQLite file so it gets tried first
-        (workspace / ".marianne-state.db").touch()
+        with patch.object(helpers, "DAEMON_STATE_DB_PATH", bad_db):
+            state, backend = await find_job_state("test-job", None)
 
-        # Create a JSON state file that the fallback should find
-        import json
-
-        state_data = {
-            "job_id": "test-job",
-            "job_name": "test-job",
-            "total_sheets": 3,
-            "status": "running",
-            "current_sheet": 1,
-            "last_completed_sheet": 0,
-            "sheets": {},
-        }
-        (workspace / "test-job.json").write_text(json.dumps(state_data))
-
-        # find_job_state should succeed via JSON fallback
-        # The SQLite backend will fail to open the empty file but
-        # the JSON backend should work
-        found_state, found_backend = await find_job_state("test-job", workspace)
-
-        # Should have found the state (possibly via SQLite if it handles empty
-        # files, but definitely via JSON fallback)
-        assert found_state is not None
-        assert found_state.job_id == "test-job"
-
-    @pytest.mark.asyncio
-    async def test_all_backends_error_returns_none(self, tmp_path: Path) -> None:
-        """When all backends fail, find_job_state returns (None, None)."""
-        from marianne.cli.helpers import _find_job_state_fs as find_job_state
-
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
-
-        # No state files at all
-        found_state, found_backend = await find_job_state("nonexistent-job", workspace)
-
-        assert found_state is None
-        assert found_backend is None
-
-    @pytest.mark.asyncio
-    async def test_backend_exception_logged_not_raised(self, tmp_path: Path) -> None:
-        """Backend exceptions should be caught and logged, not propagated."""
-        from marianne.cli.helpers import _find_job_state_fs as find_job_state
-        from marianne.state import JsonStateBackend
-
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
-
-        # Patch JsonStateBackend.load to raise
-        with patch.object(
-            JsonStateBackend,
-            "load",
-            AsyncMock(side_effect=OSError("disk error")),
-        ):
-            # Should NOT raise — errors are caught internally
-            found_state, found_backend = await find_job_state("test-job", workspace)
-
-        assert found_state is None
-        assert found_backend is None
+        assert state is None
+        assert backend is None
 
 
 class TestLoggerKeywordArgs:
@@ -341,54 +285,26 @@ class TestLoggerKeywordArgs:
 
     @pytest.mark.asyncio
     async def test_find_job_state_logs_with_keyword_args(self, tmp_path: Path) -> None:
-        """find_job_state must use structlog keyword args, not printf-style %s."""
+        """The registry-read error path must use structlog keyword args."""
         import structlog
-        from structlog.types import EventDict, WrappedLogger
 
+        from marianne.cli import helpers
         from marianne.cli.helpers import _find_job_state_fs as find_job_state
-        from marianne.state import JsonStateBackend
 
-        captured_logs: list[dict] = []
-
-        def capture_to_list(
-            logger: WrappedLogger,
-            method_name: str,
-            event_dict: EventDict,
-        ) -> EventDict:
-            captured_logs.append({"level": method_name, **event_dict})
-            raise structlog.DropEvent
-
-        structlog.configure(
-            processors=[capture_to_list],
-            wrapper_class=structlog.stdlib.BoundLogger,
-            context_class=dict,
-            logger_factory=structlog.stdlib.LoggerFactory(),
-            cache_logger_on_first_use=False,
-        )
-
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
-
-        # Make backend raise to trigger the debug log
-        with patch.object(
-            JsonStateBackend,
-            "load",
-            AsyncMock(side_effect=RuntimeError("test error")),
+        # A corrupt registry DB triggers the registry_read_failed warning.
+        bad_db = tmp_path / "daemon-state.db"
+        bad_db.write_text("this is not a sqlite database")
+        with (
+            patch.object(helpers, "DAEMON_STATE_DB_PATH", bad_db),
+            structlog.testing.capture_logs() as captured_logs,
         ):
-            await find_job_state("test-job", workspace)
+            await find_job_state("test-job", None)
 
-        # Find the backend error log entry (unexpected errors use a different event name)
         error_logs = [
             log
             for log in captured_logs
-            if log.get("event") in ("error_querying_backend", "unexpected_error_querying_backend")
+            if log.get("event") == "find_job_state.registry_read_failed"
         ]
-
-        # Should have logged with keyword args
         assert len(error_logs) >= 1
-        log_entry = error_logs[0]
-        assert log_entry["job_id"] == "test-job"
-        assert "test error" in log_entry["error"]
-        # Should NOT have positional args (printf-style would put them
-        # in positional_args key or cause a formatting error)
-        assert "positional_args" not in log_entry
+        assert error_logs[0]["job_id"] == "test-job"
+        assert "positional_args" not in error_logs[0]

@@ -20,10 +20,10 @@ from typing import TYPE_CHECKING, Any, Literal
 import typer
 from rich.console import Console
 
-from marianne.core.checkpoint import CheckpointState, JobStatus
-from marianne.core.constants import DAEMON_STATE_DB_PATH, STATE_DB_FILENAME
+from marianne.core.checkpoint import CheckpointState
+from marianne.core.constants import DAEMON_STATE_DB_PATH
 from marianne.core.logging import configure_logging, get_logger
-from marianne.state import JsonStateBackend, SQLiteStateBackend, StateBackend
+from marianne.state import StateBackend
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -178,48 +178,6 @@ from marianne.notifications.factory import (
 )
 
 
-def _find_job_workspace(job_id: str, hint: Path | None = None) -> Path | None:
-    """Find workspace containing a job's state file.
-
-    Private fallback used when conductor is unavailable and --workspace
-    is explicitly provided.
-    """
-    search_paths: list[Path] = []
-
-    if hint:
-        search_paths.append(hint)
-
-    cwd = Path.cwd()
-    search_paths.append(cwd)
-    search_paths.append(cwd / "workspace")
-    search_paths.append(cwd / f"{job_id}-workspace")
-
-    for path in search_paths:
-        if not path.exists():
-            continue
-
-        json_state = path / f"{job_id}.json"
-        if json_state.exists():
-            return path
-
-        sqlite_state = path / STATE_DB_FILENAME
-        if sqlite_state.exists():
-            return path
-
-    return None
-
-
-async def _close_backends(
-    backends: list[StateBackend],
-    *,
-    keep: StateBackend | None = None,
-) -> None:
-    """Close backends, optionally keeping one open."""
-    for backend in backends:
-        if backend is not keep:
-            await backend.close()
-
-
 async def _try_registry_state(
     job_id: str,
 ) -> tuple[CheckpointState, StateBackend] | None:
@@ -227,11 +185,10 @@ async def _try_registry_state(
 
     Returns ``(state, backend)`` with an OPEN registry-backed ``StateBackend``
     (the caller closes it) when the daemon DB exists and lists this job — so
-    offline reads see the CURRENT state, not stale per-workspace files. Returns
-    ``None`` (registry closed) when there is no daemon DB or the job isn't in it,
-    so the caller falls back to the workspace. Never suppresses: a job merely
-    absent from the registry (e.g. a workspace-only / pre-daemon job) simply
-    isn't found here and the workspace read proceeds.
+    offline reads see the CURRENT state. Returns ``None`` (registry closed)
+    when there is no daemon DB or the job isn't in it. #50: there is no
+    workspace fallback anywhere — the registry is the ONLY state source;
+    a job absent here does not exist as far as state is concerned.
     """
     db_path = DAEMON_STATE_DB_PATH.expanduser()
     if not db_path.exists():
@@ -264,91 +221,23 @@ async def _find_job_state_fs(
     job_id: str,
     workspace: Path | None,
 ) -> tuple[CheckpointState | None, StateBackend | None]:
-    """Find job state, preferring the authoritative daemon DB (#111).
+    """Find job state in the authoritative daemon DB — conductor-ONLY (#50).
 
-    Private helper used when the conductor is unavailable. Tries the daemon
-    registry first (current state); falls back to per-workspace files for
-    workspace-only / pre-daemon jobs.
+    Private helper used when the conductor is unavailable: reads the daemon
+    registry DB directly. There is NO workspace fallback — per-workspace
+    state files were removed as a source of truth (composer ruling:
+    "workspaces are for work to occur only, not for state tracking").
+    A job absent from the registry does not exist as far as state is
+    concerned; the caller surfaces a conductor-oriented error.
+
+    The ``workspace`` parameter is retained for call-signature stability
+    but no longer consulted for state reads.
     """
+    del workspace  # #50: no workspace state reads, ever
     registry_result = await _try_registry_state(job_id)
     if registry_result is not None:
         return registry_result
-
-    backends: list[StateBackend] = []
-
-    if workspace:
-        if not workspace.exists():
-            return None, None
-        sqlite_path = workspace / STATE_DB_FILENAME
-        if sqlite_path.exists():
-            backends.append(SQLiteStateBackend(sqlite_path))
-        backends.append(JsonStateBackend(workspace))
-    else:
-        cwd = Path.cwd()
-        backends.append(JsonStateBackend(cwd))
-        sqlite_cwd = cwd / STATE_DB_FILENAME
-        if sqlite_cwd.exists():
-            backends.append(SQLiteStateBackend(sqlite_cwd))
-
-    for backend in backends:
-        try:
-            job = await backend.load(job_id)
-            if job:
-                await _close_backends(backends, keep=backend)
-                return job, backend
-        except (OSError, ValueError, KeyError) as e:
-            _logger.warning(
-                "error_querying_backend",
-                job_id=job_id,
-                backend=type(backend).__name__,
-                error=str(e),
-                exc_info=True,
-            )
-            continue
-        except Exception as e:
-            _logger.error(
-                "unexpected_error_querying_backend",
-                job_id=job_id,
-                backend=type(backend).__name__,
-                error=str(e),
-                exc_info=True,
-            )
-            continue
-
-    await _close_backends(backends)
     return None, None
-
-
-async def _find_job_state_from_registry(
-    job_id: str,
-) -> CheckpointState | None:
-    """Read job state from the daemon registry DB directly.
-
-    Used when the conductor is down but the registry DB exists.
-    The registry DB is always up to date (Phase 2 persist callback
-    writes after every state-dirty event). This replaces workspace
-    file fallback for baton-managed jobs.
-
-    Returns:
-        CheckpointState if found in registry, None otherwise.
-    """
-    import json
-
-    db_path = DAEMON_STATE_DB_PATH.expanduser()
-    if not db_path.exists():
-        return None
-
-    try:
-        from marianne.daemon.registry import JobRegistry
-
-        async with JobRegistry(db_path) as registry:
-            checkpoint_json = await registry.load_checkpoint(job_id)
-            if checkpoint_json is None:
-                return None
-            data = json.loads(checkpoint_json)
-            return CheckpointState.model_validate(data)
-    except Exception:
-        return None
 
 
 async def _find_job_state_direct(
@@ -392,39 +281,6 @@ async def _find_job_state_direct(
         raise typer.Exit(1)
 
     return found_state, found_backend
-
-
-def _create_pause_signal(workspace: Path, job_id: str) -> Path:
-    """Create pause signal file for a job (filesystem fallback)."""
-    signal_file = workspace / f".marianne-pause-{job_id}"
-    signal_file.touch()
-    return signal_file
-
-
-async def _wait_for_pause_ack(
-    state_backend: StateBackend,
-    job_id: str,
-    timeout: int,
-) -> bool:
-    """Wait for job to acknowledge pause signal (filesystem fallback)."""
-    start_time = asyncio.get_event_loop().time()
-    poll_interval = 1.0
-
-    while True:
-        elapsed = asyncio.get_event_loop().time() - start_time
-        if elapsed >= timeout:
-            return False
-
-        try:
-            state = await state_backend.load(job_id)
-            if state and state.status == JobStatus.PAUSED:
-                return True
-            if state and state.status not in {JobStatus.RUNNING, JobStatus.PAUSED}:
-                return True
-        except Exception:
-            _logger.warning("Error polling pause state", exc_info=True)
-
-        await asyncio.sleep(poll_interval)
 
 
 def require_conductor(

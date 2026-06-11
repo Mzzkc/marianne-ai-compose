@@ -94,50 +94,77 @@ class RegistryStateBackend(StateBackend):
 
 
 class RegistryFirstReadBackend(StateBackend):
-    """Read the authoritative daemon DB first, fall back to the workspace (#111).
+    """Read job state from the authoritative daemon DB — conductor-ONLY (#50).
 
-    For read-only consumers (the MCP server, the dashboard's offline fallback)
-    that previously read stale per-workspace state: ``load()`` tries the daemon
-    registry first and falls back to the per-workspace backend for jobs absent
-    from the registry (workspace-only / pre-daemon). The registry is opened
-    transiently per ``load`` (no long-lived handle to leak), and absence falls
-    back rather than suppresses — so legitimate workspace-only reads are
-    preserved. All non-load operations delegate to the workspace fallback (these
-    consumers only ever call ``load``).
+    For read-only consumers (the MCP server, the dashboard's offline
+    fallback). #111 gave this class a per-workspace fallback; #50 removed
+    it per the composer's ruling ("workspaces are for work to occur only,
+    not for state tracking") — ``load()`` reads the daemon registry and
+    NOTHING else. The registry is opened transiently per ``load`` (no
+    long-lived handle to leak). A job absent from the registry does not
+    exist as far as state is concerned.
+
+    The ``workspace`` constructor parameter is retained for call-signature
+    stability but no longer consulted. Write/list operations raise — these
+    consumers only ever read, and state writes belong to the conductor.
     """
 
     def __init__(self, workspace: Path, *, db_path: Path | None = None) -> None:
-        from marianne.state.json_backend import JsonStateBackend
-
-        self._fallback: StateBackend = JsonStateBackend(workspace)
+        del workspace  # #50: no workspace state access, ever
         self._db_path = (db_path or DAEMON_STATE_DB_PATH).expanduser()
 
     async def load(self, job_id: str) -> CheckpointState | None:
-        if self._db_path.exists():
-            try:
-                from marianne.daemon.registry import JobRegistry
+        if not self._db_path.exists():
+            return None
+        try:
+            from marianne.daemon.registry import JobRegistry
 
-                async with JobRegistry(self._db_path) as registry:
-                    state = await RegistryStateBackend(registry).load(job_id)
-                if state is not None:
-                    return state
-            except Exception:
-                _logger.warning(
-                    "registry_first.read_failed", job_id=job_id, exc_info=True
-                )
-        return await self._fallback.load(job_id)
+            async with JobRegistry(self._db_path) as registry:
+                return await RegistryStateBackend(registry).load(job_id)
+        except Exception:
+            _logger.warning(
+                "registry_first.read_failed", job_id=job_id, exc_info=True
+            )
+            return None
 
     async def save(self, state: CheckpointState) -> None:
-        await self._fallback.save(state)
+        raise NotImplementedError(
+            "RegistryFirstReadBackend is read-only (#50): state writes "
+            "belong to the conductor."
+        )
 
     async def delete(self, job_id: str) -> bool:
-        return await self._fallback.delete(job_id)
+        raise NotImplementedError(
+            "RegistryFirstReadBackend is read-only (#50): state writes "
+            "belong to the conductor."
+        )
 
     async def list_jobs(self) -> list[CheckpointState]:
-        return await self._fallback.list_jobs()
+        if not self._db_path.exists():
+            return []
+        try:
+            from marianne.daemon.registry import JobRegistry
+
+            async with JobRegistry(self._db_path) as registry:
+                records = await registry.list_jobs()
+                states: list[CheckpointState] = []
+                for record in records:
+                    state = await RegistryStateBackend(registry).load(
+                        record.job_id
+                    )
+                    if state is not None:
+                        states.append(state)
+                return states
+        except Exception:
+            _logger.warning("registry_first.list_failed", exc_info=True)
+            return []
 
     async def get_next_sheet(self, job_id: str) -> int | None:
-        return await self._fallback.get_next_sheet(job_id)
+        state = await self.load(job_id)
+        if state is None:
+            return None
+        nxt = state.last_completed_sheet + 1
+        return nxt if nxt <= state.total_sheets else None
 
     async def mark_sheet_status(
         self,
@@ -146,7 +173,10 @@ class RegistryFirstReadBackend(StateBackend):
         status: SheetStatus,
         error_message: str | None = None,
     ) -> None:
-        await self._fallback.mark_sheet_status(job_id, sheet_num, status, error_message)
+        raise NotImplementedError(
+            "RegistryFirstReadBackend is read-only (#50): state writes "
+            "belong to the conductor."
+        )
 
     async def close(self) -> None:
-        await self._fallback.close()
+        return None

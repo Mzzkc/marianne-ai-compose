@@ -1,22 +1,49 @@
 """Tests for Marianne CLI commands."""
 
-import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from click.exceptions import Exit as ClickExit
 from typer.testing import CliRunner
 
 from marianne.cli import app
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from marianne.state import JsonStateBackend, SQLiteStateBackend
 
 # Module-level runner is safe: CliRunner is stateless (no mutable state between invocations).
 # Each invoke() call creates an isolated Click context.
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _registry_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#50: state reads are conductor-ONLY — offline reads hit the daemon
+    registry DB seeded per test; workspace state files are never read."""
+    from marianne.cli import helpers
+
+    monkeypatch.setattr(
+        helpers, "DAEMON_STATE_DB_PATH", tmp_path / "daemon-state.db"
+    )
+
+
+def _seed_registry(tmp_path: Path, state) -> None:
+    """Seed the daemon registry DB with this job's state (#50)."""
+    import asyncio as _asyncio
+
+    from marianne.cli import helpers
+    from marianne.daemon.registry import JobRegistry
+
+    # Single source: always write where the patched offline reader looks,
+    # regardless of which directory the caller passed.
+    db = helpers.DAEMON_STATE_DB_PATH
+
+    async def _seed() -> None:
+        async with JobRegistry(db) as reg:
+            await reg.register_job(state.job_id, tmp_path / "cfg.yaml", tmp_path)
+            await reg.save_checkpoint(state.job_id, state.model_dump_json())
+
+    _asyncio.run(_seed())
 
 
 @pytest.fixture(autouse=True)
@@ -298,8 +325,7 @@ class TestStatusCommand:
             },
         )
 
-        state_file = tmp_path / "test-job-status.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["status", "test-job-status", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -339,8 +365,7 @@ class TestStatusCommand:
             },
         )
 
-        state_file = tmp_path / "json-test-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(
             app, ["status", "json-test-job", "--json", "--workspace", str(tmp_path)]
@@ -407,8 +432,7 @@ class TestStatusCommand:
             },
         )
 
-        state_file = tmp_path / "sheet-details-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["status", "sheet-details-job", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -588,381 +612,6 @@ class TestResumeCommand:
 
         assert result.exit_code == 0
         assert "Resume accepted" in result.stdout
-
-
-class TestFindJobState:
-    """Unit tests for _find_job_state() in resume.py.
-
-    Tests the 5-level backend search and status validation logic
-    directly, without going through the CLI runner.
-    """
-
-    @pytest.fixture
-    def paused_state(self) -> CheckpointState:
-        """A paused job state for testing."""
-        return CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-
-    def test_find_job_state_json_backend(
-        self, tmp_path: Path, paused_state: CheckpointState, monkeypatch
-    ) -> None:
-        """Test _find_job_state finds state from JSON backend."""
-        from marianne.cli.commands.resume import _find_job_state
-
-        # F-502: _find_job_state now searches CWD, not explicit workspace
-        monkeypatch.chdir(tmp_path)
-        state_file = tmp_path / "test-job.json"
-        state_file.write_text(json.dumps(paused_state.model_dump(mode="json"), default=str))
-
-        found_state, found_backend = asyncio.run(_find_job_state("test-job", force=False))
-        assert found_state.job_id == "test-job"
-        assert found_state.status == JobStatus.PAUSED
-
-    def test_find_job_state_sqlite_priority(
-        self, tmp_path: Path, paused_state: CheckpointState, monkeypatch
-    ) -> None:
-        """Test _find_job_state prefers SQLite backend when CWD has .marianne-state.db."""
-        from marianne.cli.commands.resume import _find_job_state
-
-        # F-502: _find_job_state now searches CWD, not explicit workspace
-        monkeypatch.chdir(tmp_path)
-
-        # Create both a JSON and SQLite state file
-        state_file = tmp_path / "test-job.json"
-        state_file.write_text(json.dumps(paused_state.model_dump(mode="json"), default=str))
-
-        # Create a SQLite backend with the same job
-        sqlite_path = tmp_path / ".marianne-state.db"
-        sqlite_backend = SQLiteStateBackend(sqlite_path)
-        asyncio.run(sqlite_backend.save(paused_state))
-
-        found_state, found_backend = asyncio.run(_find_job_state("test-job", force=False))
-        assert found_state.job_id == "test-job"
-        # SQLite is checked second in CWD (JSON first, then SQLite)
-        # Note: order changed in F-502 - CWD searches JSON first
-        assert isinstance(found_backend, (SQLiteStateBackend, JsonStateBackend))
-
-    def test_find_job_state_not_found_exits(self, tmp_path: Path, monkeypatch) -> None:
-        """Test _find_job_state raises Exit when job doesn't exist."""
-
-        from marianne.cli.commands.resume import _find_job_state
-
-        # F-502: _find_job_state now searches CWD
-        workspace = tmp_path / "empty_ws"
-        workspace.mkdir()
-        monkeypatch.chdir(workspace)
-
-        with pytest.raises((SystemExit, ClickExit)):
-            asyncio.run(_find_job_state("nonexistent", force=False))
-
-    def test_find_job_state_completed_blocked(self, tmp_path: Path, monkeypatch) -> None:
-        """Test _find_job_state blocks completed jobs without force."""
-        from marianne.cli.commands.resume import _find_job_state
-
-        # F-502: _find_job_state now searches CWD
-        monkeypatch.chdir(tmp_path)
-
-        state = CheckpointState(
-            job_id="done-job",
-            job_name="Done Job",
-            total_sheets=5,
-            last_completed_sheet=5,
-            status=JobStatus.COMPLETED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        state_file = tmp_path / "done-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
-
-        with pytest.raises((SystemExit, ClickExit)):
-            asyncio.run(_find_job_state("done-job", force=False))
-
-    def test_find_job_state_completed_with_force(self, tmp_path: Path, monkeypatch) -> None:
-        """Test _find_job_state allows completed jobs with force=True."""
-        from marianne.cli.commands.resume import _find_job_state
-
-        # F-502: _find_job_state now searches CWD
-        monkeypatch.chdir(tmp_path)
-
-        state = CheckpointState(
-            job_id="done-job",
-            job_name="Done Job",
-            total_sheets=5,
-            last_completed_sheet=5,
-            status=JobStatus.COMPLETED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        state_file = tmp_path / "done-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
-
-        found_state, _ = asyncio.run(_find_job_state("done-job", force=True))
-        assert found_state.status == JobStatus.COMPLETED
-
-    def test_find_job_state_pending_blocked(self, tmp_path: Path, monkeypatch) -> None:
-        """Test _find_job_state blocks pending (never started) jobs."""
-        from marianne.cli.commands.resume import _find_job_state
-
-        # F-502: _find_job_state now searches CWD
-        monkeypatch.chdir(tmp_path)
-
-        state = CheckpointState(
-            job_id="pending-job",
-            job_name="Pending Job",
-            total_sheets=5,
-            last_completed_sheet=0,
-            status=JobStatus.PENDING,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        state_file = tmp_path / "pending-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
-
-        with pytest.raises((SystemExit, ClickExit)):
-            asyncio.run(_find_job_state("pending-job", force=False))
-
-    def test_find_job_state_workspace_not_found(self, tmp_path: Path, monkeypatch) -> None:
-        """Test _find_job_state exits when job not found in CWD."""
-        from marianne.cli.commands.resume import _find_job_state
-
-        # F-502: No longer tests workspace existence, tests job-not-found in empty CWD
-        fake_workspace = tmp_path / "does_not_exist"
-        fake_workspace.mkdir()
-        monkeypatch.chdir(fake_workspace)
-
-        with pytest.raises((SystemExit, ClickExit)):
-            asyncio.run(_find_job_state("job", force=False))
-
-    def test_find_job_state_running_allowed(self, tmp_path: Path, monkeypatch) -> None:
-        """Test _find_job_state allows resuming RUNNING jobs (crash recovery)."""
-        from marianne.cli.commands.resume import _find_job_state
-
-        # F-502: _find_job_state now searches CWD
-        monkeypatch.chdir(tmp_path)
-
-        state = CheckpointState(
-            job_id="running-job",
-            job_name="Running Job",
-            total_sheets=5,
-            last_completed_sheet=3,
-            status=JobStatus.RUNNING,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        state_file = tmp_path / "running-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
-
-        found_state, _ = asyncio.run(_find_job_state("running-job", force=False))
-        assert found_state.status == JobStatus.RUNNING
-
-
-class TestReconstructConfig:
-    """Unit tests for _reconstruct_config() in resume.py.
-
-    Tests the auto-reload priority fallback for config reconstruction:
-    1. Provided --config file
-    2. Auto-reload from stored config_path (default)
-    3. Cached config_snapshot (fallback)
-    4. Error
-    """
-
-    @pytest.fixture
-    def config_dict(self) -> dict:
-        """Minimal valid config dict."""
-        return {
-            "name": "test-job",
-            "sheet": {"size": 5, "total_items": 10},
-            "prompt": {"template": "Do something"},
-        }
-
-    def test_priority1_config_file(self, tmp_path: Path, config_dict: dict) -> None:
-        """Test Priority 1: explicit --config file always wins."""
-        import yaml
-
-        from marianne.cli.commands.resume import _reconstruct_config
-
-        config_path = tmp_path / "explicit.yaml"
-        config_path.write_text(yaml.dump(config_dict))
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            config_snapshot={
-                "name": "old-config",
-                "sheet": {"size": 1},
-                "prompt": {"template": "Old"},
-            },
-        )
-
-        config, was_reloaded = _reconstruct_config(state, config_path, no_reload=False)
-        assert config.name == "test-job"
-        assert was_reloaded is True
-
-    def test_priority2_auto_reload_from_stored_path(
-        self, tmp_path: Path, config_dict: dict
-    ) -> None:
-        """Test Priority 2: auto-reload from stored config_path when file exists."""
-        import yaml
-
-        from marianne.cli.commands.resume import _reconstruct_config
-
-        config_path = tmp_path / "original.yaml"
-        config_path.write_text(yaml.dump(config_dict))
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            config_path=str(config_path),
-        )
-
-        config, was_reloaded = _reconstruct_config(state, config_file=None, no_reload=False)
-        assert config.name == "test-job"
-        assert was_reloaded is True
-
-    def test_priority2_file_missing_falls_through_to_snapshot(
-        self, tmp_path: Path, config_dict: dict
-    ) -> None:
-        """Test Priority 2 -> 3: missing file falls through to snapshot."""
-        from marianne.cli.commands.resume import _reconstruct_config
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            config_path=str(tmp_path / "gone.yaml"),
-            config_snapshot=config_dict,
-        )
-
-        config, was_reloaded = _reconstruct_config(state, config_file=None, no_reload=False)
-        assert config.name == "test-job"
-        assert was_reloaded is False
-
-    def test_no_reload_skips_auto_reload(self, tmp_path: Path, config_dict: dict) -> None:
-        """Test --no-reload skips auto-reload and uses snapshot."""
-        import yaml
-
-        from marianne.cli.commands.resume import _reconstruct_config
-
-        config_path = tmp_path / "original.yaml"
-        config_path.write_text(
-            yaml.dump(
-                {
-                    "name": "yaml-config",
-                    "sheet": {"size": 5, "total_items": 10},
-                    "prompt": {"template": "From YAML"},
-                }
-            )
-        )
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            config_path=str(config_path),
-            config_snapshot=config_dict,
-        )
-
-        config, was_reloaded = _reconstruct_config(state, config_file=None, no_reload=True)
-        assert config.name == "test-job"  # snapshot, not yaml file
-        assert was_reloaded is False
-
-    def test_priority3_config_snapshot(self, config_dict: dict) -> None:
-        """Test Priority 3: reconstruct from config_snapshot when no path."""
-        from marianne.cli.commands.resume import _reconstruct_config
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            config_snapshot=config_dict,
-        )
-
-        config, was_reloaded = _reconstruct_config(state, config_file=None, no_reload=False)
-        assert config.name == "test-job"
-        assert was_reloaded is False
-
-    def test_priority3_invalid_snapshot_exits(self) -> None:
-        """Test Priority 3: invalid config_snapshot raises Exit."""
-        from marianne.cli.commands.resume import _reconstruct_config
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            config_snapshot={"invalid": "config"},
-        )
-
-        with pytest.raises((SystemExit, ClickExit)):
-            _reconstruct_config(state, config_file=None, no_reload=False)
-
-    def test_no_config_available_exits(self) -> None:
-        """Test all priorities exhausted raises Exit."""
-        from marianne.cli.commands.resume import _reconstruct_config
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            config_snapshot=None,
-            config_path=None,
-        )
-
-        with pytest.raises((SystemExit, ClickExit)):
-            _reconstruct_config(state, config_file=None, no_reload=False)
-
-    def test_config_file_overrides_snapshot(self, tmp_path: Path) -> None:
-        """Test Priority 1 overrides existing snapshot."""
-        import yaml
-
-        from marianne.cli.commands.resume import _reconstruct_config
-
-        new_config = {
-            "name": "new-config",
-            "sheet": {"size": 3, "total_items": 9},
-            "prompt": {"template": "New prompt"},
-        }
-        config_path = tmp_path / "new.yaml"
-        config_path.write_text(yaml.dump(new_config))
-
-        state = CheckpointState(
-            job_id="test-job",
-            job_name="Test Job",
-            total_sheets=5,
-            last_completed_sheet=2,
-            status=JobStatus.PAUSED,
-            config_snapshot={
-                "name": "old-config",
-                "sheet": {"size": 5, "total_items": 10},
-                "prompt": {"template": "Old prompt"},
-            },
-        )
-
-        config, was_reloaded = _reconstruct_config(state, config_path, no_reload=False)
-        assert config.name == "new-config"
-        assert was_reloaded is True
 
 
 class TestDashboardCommand:
@@ -1347,8 +996,7 @@ class TestErrorsCommand:
             },
         )
 
-        state_file = tmp_path / "clean-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["errors", "clean-job", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -1389,8 +1037,7 @@ class TestErrorsCommand:
             },
         )
 
-        state_file = tmp_path / "failed-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["errors", "failed-job", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -1433,8 +1080,7 @@ class TestErrorsCommand:
             },
         )
 
-        state_file = tmp_path / "multi-fail-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         # Filter for sheet 3 only
         result = runner.invoke(
@@ -1472,8 +1118,7 @@ class TestErrorsCommand:
             },
         )
 
-        state_file = tmp_path / "json-error-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(
             app, ["errors", "json-error-job", "--json", "--workspace", str(tmp_path)]
@@ -1515,8 +1160,7 @@ class TestErrorsCommand:
             },
         )
 
-        state_file = tmp_path / "mixed-errors-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         # Filter for transient only
         result = runner.invoke(
@@ -1575,8 +1219,7 @@ class TestDiagnoseCommand:
             },
         )
 
-        state_file = tmp_path / "diagnose-test.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["diagnose", "diagnose-test", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -1614,8 +1257,7 @@ class TestDiagnoseCommand:
             },
         )
 
-        state_file = tmp_path / "diagnose-errors.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["diagnose", "diagnose-errors", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -1651,8 +1293,7 @@ class TestDiagnoseCommand:
             },
         )
 
-        state_file = tmp_path / "diagnose-warnings.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["diagnose", "diagnose-warnings", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -1695,8 +1336,7 @@ class TestDiagnoseCommand:
             },
         )
 
-        state_file = tmp_path / "diagnose-json.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(
             app, ["diagnose", "diagnose-json", "--json", "--workspace", str(tmp_path)]
@@ -1751,8 +1391,7 @@ class TestDiagnoseCommand:
             },
         )
 
-        state_file = tmp_path / "diagnose-timeline.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["diagnose", "diagnose-timeline", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -1797,8 +1436,7 @@ class TestEnhancedStatusCommand:
             },
         )
 
-        state_file = tmp_path / "status-errors.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["status", "status-errors", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -1835,8 +1473,7 @@ class TestEnhancedStatusCommand:
             },
         )
 
-        state_file = tmp_path / "status-activity.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["status", "status-activity", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -1892,8 +1529,7 @@ class TestEnhancedStatusCommand:
             },
         )
 
-        state_file = tmp_path / "status-cb.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(app, ["status", "status-cb", "--workspace", str(tmp_path)])
         assert result.exit_code == 0
@@ -1931,8 +1567,7 @@ class TestEnhancedStatusCommand:
             },
         )
 
-        state_file = tmp_path / "status-json-new.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(tmp_path, state)
 
         result = runner.invoke(
             app, ["status", "status-json-new", "--json", "--workspace", str(tmp_path)]

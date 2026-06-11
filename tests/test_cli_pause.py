@@ -9,7 +9,6 @@ Comprehensive tests covering:
 - Edge cases and error conditions
 """
 
-import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,13 +20,7 @@ import pytest
 from typer.testing import CliRunner
 
 from marianne.cli import app
-from marianne.cli.helpers import (
-    _create_pause_signal,
-    _find_job_workspace,
-    _wait_for_pause_ack,
-)
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
-from marianne.state.json_backend import JsonStateBackend
 
 runner = CliRunner()
 
@@ -247,157 +240,6 @@ def sample_invalid_config(tmp_path: Path) -> Path:
 
 # ============================================================================
 # Test Helper Functions
-# ============================================================================
-
-
-class TestFindJobWorkspace:
-    """Tests for _find_job_workspace helper function."""
-
-    def test_find_with_hint_path(self, running_job_state: tuple[CheckpointState, Path]) -> None:
-        """Test finding workspace with hint path."""
-        state, workspace = running_job_state
-        found = _find_job_workspace(state.job_id, hint=workspace)
-        assert found == workspace
-
-    def test_find_without_hint(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test workspace not found without hint when not in cwd."""
-        # Isolate from real workspace dirs in project root
-        monkeypatch.chdir(tmp_path)
-        # Without hint and not in cwd patterns, should return None
-        found = _find_job_workspace("nonexistent-job")
-        assert found is None
-
-    def test_find_in_cwd_workspace_subdir(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Test finding job in ./workspace subdirectory."""
-        # Create workspace subdirectory structure
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
-
-        state = CheckpointState(
-            job_id="cwd-test-job",
-            job_name="CWD Test",
-            total_sheets=3,
-            status=JobStatus.RUNNING,
-        )
-        state_file = workspace / f"{state.job_id}.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
-
-        monkeypatch.chdir(tmp_path)
-        found = _find_job_workspace(state.job_id)
-        assert found == workspace
-
-    def test_find_nonexistent_job(
-        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Test searching for nonexistent job returns None."""
-        # Isolate from real workspace dirs in project root
-        monkeypatch.chdir(temp_workspace.parent)
-        found = _find_job_workspace("does-not-exist", hint=temp_workspace)
-        assert found is None
-
-
-class TestCreatePauseSignal:
-    """Tests for _create_pause_signal helper function."""
-
-    def test_creates_signal_file(self, temp_workspace: Path) -> None:
-        """Test signal file creation."""
-        signal_path = _create_pause_signal(temp_workspace, "my-job")
-        assert signal_path.exists()
-        assert signal_path.name == ".marianne-pause-my-job"
-
-    def test_signal_file_idempotent(self, temp_workspace: Path) -> None:
-        """Test creating signal file twice is idempotent."""
-        _create_pause_signal(temp_workspace, "my-job")
-        _create_pause_signal(temp_workspace, "my-job")
-        signal_path = temp_workspace / ".marianne-pause-my-job"
-        assert signal_path.exists()
-
-    def test_permission_error_propagates(self, tmp_path: Path) -> None:
-        """Test permission errors are raised."""
-        # Use a path that doesn't exist
-        nonexistent = tmp_path / "nonexistent-dir"
-        with pytest.raises(OSError):
-            _create_pause_signal(nonexistent, "my-job")
-
-
-class TestWaitForPauseAck:
-    """Tests for _wait_for_pause_ack helper function."""
-
-    @pytest.mark.asyncio
-    async def test_returns_true_when_paused(self, temp_workspace: Path) -> None:
-        """Test returns True when job becomes paused."""
-        state_backend = JsonStateBackend(temp_workspace)
-
-        # Create initial running state
-        state = CheckpointState(
-            job_id="wait-test-job",
-            job_name="Wait Test",
-            total_sheets=3,
-            status=JobStatus.RUNNING,
-        )
-        await state_backend.save(state)
-
-        # Update to paused in background
-        async def update_state():
-            await asyncio.sleep(0.1)
-            state.status = JobStatus.PAUSED
-            await state_backend.save(state)
-
-        # Run both concurrently
-        task = asyncio.create_task(update_state())
-        result = await _wait_for_pause_ack(state_backend, state.job_id, timeout=5)
-        await task
-
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_returns_false_on_timeout(self, temp_workspace: Path) -> None:
-        """Test returns False when timeout is reached."""
-        state_backend = JsonStateBackend(temp_workspace)
-
-        # Create running state that never changes
-        state = CheckpointState(
-            job_id="timeout-test-job",
-            job_name="Timeout Test",
-            total_sheets=3,
-            status=JobStatus.RUNNING,
-        )
-        await state_backend.save(state)
-
-        # Very short timeout
-        result = await _wait_for_pause_ack(state_backend, state.job_id, timeout=1)
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_returns_true_when_completed(self, temp_workspace: Path) -> None:
-        """Test returns True when job completes (non-running state)."""
-        state_backend = JsonStateBackend(temp_workspace)
-
-        state = CheckpointState(
-            job_id="complete-test-job",
-            job_name="Complete Test",
-            total_sheets=3,
-            status=JobStatus.RUNNING,
-        )
-        await state_backend.save(state)
-
-        # Update to completed
-        async def complete_job():
-            await asyncio.sleep(0.1)
-            state.status = JobStatus.COMPLETED
-            await state_backend.save(state)
-
-        task = asyncio.create_task(complete_job())
-        result = await _wait_for_pause_ack(state_backend, state.job_id, timeout=5)
-        await task
-
-        assert result is True
-
-
-# ============================================================================
-# Test Pause Command
 # ============================================================================
 
 

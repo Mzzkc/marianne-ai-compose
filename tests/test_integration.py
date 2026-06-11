@@ -9,7 +9,6 @@ These tests verify that all components work together correctly:
 All tests use mocked backends to avoid actual Claude/API calls.
 """
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -26,6 +25,36 @@ from marianne.dashboard import create_app
 from marianne.state.json_backend import JsonStateBackend
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _registry_path(tmp_path, monkeypatch):
+    """#50: state reads are conductor-ONLY — offline reads hit the daemon
+    registry DB seeded per test; workspace state files are never read."""
+    from marianne.cli import helpers
+
+    monkeypatch.setattr(
+        helpers, "DAEMON_STATE_DB_PATH", tmp_path / "daemon-state.db"
+    )
+
+
+def _seed_registry(tmp_path, state) -> None:
+    """Seed the daemon registry DB with this job's state (#50)."""
+    import asyncio as _asyncio
+
+    from marianne.cli import helpers
+    from marianne.daemon.registry import JobRegistry
+
+    # Single source: always write where the patched offline reader looks,
+    # regardless of which directory the caller passed.
+    db = helpers.DAEMON_STATE_DB_PATH
+
+    async def _seed() -> None:
+        async with JobRegistry(db) as reg:
+            await reg.register_job(state.job_id, tmp_path / "cfg.yaml", tmp_path)
+            await reg.save_checkpoint(state.job_id, state.model_dump_json())
+
+    _asyncio.run(_seed())
 
 
 @pytest.fixture(autouse=True)
@@ -176,8 +205,7 @@ def multi_job_workspace(tmp_path: Path) -> Path:
     ]
 
     for job in jobs:
-        state_file = workspace / f"{job.job_id}.json"
-        state_file.write_text(json.dumps(job.model_dump(mode="json"), default=str))
+        _seed_registry(workspace, job)
 
     return workspace
 
@@ -276,8 +304,7 @@ class TestRunStatusResumeWorkflow:
                 ),
             },
         )
-        state_file = workspace / "integration-test-job.json"
-        state_file.write_text(json.dumps(state.model_dump(mode="json"), default=str))
+        _seed_registry(workspace, state)
 
         # Check status
         result = runner.invoke(
@@ -353,8 +380,7 @@ class TestRunStatusResumeWorkflow:
                 ),
             },
         )
-        state_file = workspace / "e2e-test-job.json"
-        state_file.write_text(json.dumps(paused_state.model_dump(mode="json"), default=str))
+        _seed_registry(workspace, paused_state)
 
         # Step 2: Check status
         result = runner.invoke(app, ["status", "e2e-test-job", "--workspace", str(workspace)])
@@ -493,8 +519,13 @@ class TestDashboardAPIIntegration:
 
     @pytest.fixture
     def dashboard_client(self, dashboard_workspace: Path) -> TestClient:
-        """Create test client for dashboard."""
-        state_backend = JsonStateBackend(dashboard_workspace)
+        """Create test client for dashboard — conductor-ONLY reads (#50)."""
+        from marianne.daemon.registry_backend import RegistryFirstReadBackend
+
+        state_backend = RegistryFirstReadBackend(
+            dashboard_workspace,
+            db_path=dashboard_workspace.parent / "daemon-state.db",
+        )
         test_app = create_app(state_backend=state_backend)
         return TestClient(test_app)
 
@@ -516,8 +547,7 @@ class TestDashboardAPIIntegration:
             last_completed_sheet=3,
             status=JobStatus.RUNNING,
         )
-        state_file = dashboard_workspace / f"{job.job_id}.json"
-        state_file.write_text(json.dumps(job.model_dump(mode="json"), default=str))
+        _seed_registry(dashboard_workspace, job)
 
         # List should show the job
         response = dashboard_client.get("/api/jobs")
