@@ -15,12 +15,8 @@ import pytest
 from pydantic import ValidationError
 
 from marianne.core.config.backend import (
-    BackendConfig,
     BridgeConfig,
     MCPServerConfig,
-    OllamaConfig,
-    RecursiveLightConfig,
-    SheetBackendOverride,
 )
 from marianne.core.config.execution import (
     CircuitBreakerConfig,
@@ -187,20 +183,12 @@ class TestNestedConfigModelsRejectUnknownFields:
     @pytest.mark.parametrize(
         "model_cls,kwargs",
         [
-            pytest.param(BackendConfig, {"bogus": 1}, id="BackendConfig"),
-            pytest.param(RecursiveLightConfig, {"bogus": 1}, id="RecursiveLightConfig"),
-            pytest.param(OllamaConfig, {"bogus": 1}, id="OllamaConfig"),
             pytest.param(
                 MCPServerConfig,
                 {"name": "test", "type": "stdio", "command": "echo", "bogus": 1},
                 id="MCPServerConfig",
             ),
             pytest.param(BridgeConfig, {"bogus": 1}, id="BridgeConfig"),
-            pytest.param(
-                SheetBackendOverride,
-                {"sheet": 1, "bogus": 1},
-                id="SheetBackendOverride",
-            ),
         ],
     )
     def test_backend_models_reject_unknown(self, model_cls: type, kwargs: dict) -> None:

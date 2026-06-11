@@ -115,7 +115,7 @@ class TechniqueMcpInstrumentCheck:
         if not mcp_techniques:
             return []
 
-        instrument_name = config.backend.type
+        instrument_name = config.effective_instrument_name
         if not instrument_name:
             return []
 

@@ -425,37 +425,28 @@ class TestSemanticLearningConfig:
         """Test default values are applied correctly."""
         config = SemanticLearningConfig()
         assert config.enabled is True
-        assert config.backend.type == "anthropic_api"
-        assert config.backend.model == "claude-sonnet-4-5-20250929"
-        assert config.backend.temperature == 0.3
-        assert config.backend.max_tokens == 4096
-        assert config.backend.timeout_seconds == 120.0
+        assert config.instrument == "anthropic_api"
+        assert config.model is None
+        assert config.timeout_seconds == 120.0
         assert config.analyze_on == ["success", "failure"]
         assert config.max_concurrent_analyses == 3
 
     def test_custom_backend(self):
         """Test custom backend config overrides defaults."""
-        from marianne.core.config.backend import BackendConfig
-
         config = SemanticLearningConfig(
             enabled=False,
-            backend=BackendConfig(
-                type="ollama",
-                model="llama3.1:8b",
-                temperature=0.5,
-                max_tokens=2048,
-                timeout_seconds=60.0,
-            ),
+            instrument="ollama",
+            model="llama3.1:8b",
+            timeout_seconds=60.0,
             analyze_on=["failure"],
             max_concurrent_analyses=5,
         )
         assert config.enabled is False
-        assert config.backend.type == "ollama"
-        assert config.backend.model == "llama3.1:8b"
+        assert config.instrument == "ollama"
+        assert config.model == "llama3.1:8b"
         assert config.analyze_on == ["failure"]
         assert config.max_concurrent_analyses == 5
-        assert config.backend.timeout_seconds == 60.0
-        assert config.backend.max_tokens == 2048
+        assert config.timeout_seconds == 60.0
 
     def test_max_concurrent_analyses_minimum(self):
         """Test max_concurrent_analyses must be >= 1."""
@@ -499,26 +490,20 @@ class TestSemanticLearningConfig:
         assert hasattr(config, "learning")
         assert isinstance(config.learning, SemanticLearningConfig)
         assert config.learning.enabled is True
-        assert config.learning.backend.model == "claude-sonnet-4-5-20250929"
+        assert config.learning.instrument == "anthropic_api"
 
     def test_daemon_config_custom_learning(self):
-        """Test DaemonConfig accepts custom learning config via nested backend."""
-        from marianne.core.config.backend import BackendConfig
-
+        """Test DaemonConfig accepts custom learning config."""
         config = DaemonConfig(
             learning=SemanticLearningConfig(
                 enabled=False,
-                backend=BackendConfig(
-                    type="anthropic_api",
-                    model="claude-haiku-4-5-20251001",
-                    temperature=0.3,
-                    max_tokens=4096,
-                    timeout_seconds=120.0,
-                ),
+                instrument="anthropic_api",
+                model="claude-haiku-4-5-20251001",
+                timeout_seconds=120.0,
             ),
         )
         assert config.learning.enabled is False
-        assert config.learning.backend.model == "claude-haiku-4-5-20251001"
+        assert config.learning.model == "claude-haiku-4-5-20251001"
 
     def test_daemon_config_learning_from_dict(self):
         """Test DaemonConfig constructs learning from nested dict (YAML-style)."""
@@ -526,58 +511,41 @@ class TestSemanticLearningConfig:
             {
                 "learning": {
                     "enabled": False,
-                    "backend": {
-                        "type": "anthropic_api",
-                        "model": "claude-haiku-4-5-20251001",
-                    },
                     "max_concurrent_analyses": 5,
                 },
             }
         )
         assert config.learning.enabled is False
-        assert config.learning.backend.model == "claude-haiku-4-5-20251001"
         assert config.learning.max_concurrent_analyses == 5
 
     def test_serialization_roundtrip(self):
         """Test SemanticLearningConfig survives model_dump -> model_validate."""
-        from marianne.core.config.backend import BackendConfig
-
         original = SemanticLearningConfig(
             enabled=False,
-            backend=BackendConfig(
-                type="anthropic_api",
-                model="test-model",
-                temperature=0.3,
-                max_tokens=4096,
-                timeout_seconds=120.0,
-            ),
+            instrument="anthropic_api",
+            model="test-model",
+            timeout_seconds=120.0,
             analyze_on=["failure"],
             max_concurrent_analyses=7,
         )
         dumped = original.model_dump()
         restored = SemanticLearningConfig.model_validate(dumped)
         assert restored.enabled == original.enabled
-        assert restored.backend.model == original.backend.model
+        assert restored.model == original.model
+        assert restored.instrument == original.instrument
         assert restored.analyze_on == original.analyze_on
         assert restored.max_concurrent_analyses == original.max_concurrent_analyses
 
     def test_daemon_config_roundtrip_preserves_learning(self):
         """Test DaemonConfig roundtrip preserves learning field."""
-        from marianne.core.config.backend import BackendConfig
-
         original = DaemonConfig(
             learning=SemanticLearningConfig(
                 enabled=False,
-                backend=BackendConfig(
-                    type="anthropic_api",
-                    model="claude-haiku-4-5-20251001",
-                    temperature=0.3,
-                    max_tokens=4096,
-                    timeout_seconds=120.0,
-                ),
+                instrument="anthropic_api",
+                model="claude-haiku-4-5-20251001",
             ),
         )
         dumped = original.model_dump()
         restored = DaemonConfig.model_validate(dumped)
         assert restored.learning.enabled is False
-        assert restored.learning.backend.model == "claude-haiku-4-5-20251001"
+        assert restored.learning.model == "claude-haiku-4-5-20251001"

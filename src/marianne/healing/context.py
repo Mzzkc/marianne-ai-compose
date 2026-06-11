@@ -127,7 +127,7 @@ class ErrorContext:
             config=config,
             workspace=config.workspace,
             sheet_number=sheet_number,
-            working_directory=config.backend.working_directory or config.workspace,
+            working_directory=config.workspace,
             environment=env_vars,
             retry_count=retry_count,
             max_retries=max_retries,
@@ -176,7 +176,7 @@ class ErrorContext:
             config=config,
             workspace=config.workspace,
             sheet_number=sheet_number,
-            working_directory=config.backend.working_directory or config.workspace,
+            working_directory=config.workspace,
             environment=env_vars,
             raw_config_yaml=raw_yaml,
         )

@@ -212,7 +212,6 @@ class TestServiceResumeNoReload:
         config_file = tmp_path / "score.yaml"
         config_file.write_text(
             "name: disk-version\n"
-            "backend:\n  type: claude_cli\n"
             "sheet:\n  size: 3\n  total_items: 9\n"
             "prompt:\n  template: 'Test {{ sheet_num }}'\n"
         )
@@ -225,7 +224,6 @@ class TestServiceResumeNoReload:
             config_path=str(config_file),
             config_snapshot={
                 "name": "snapshot-version",
-                "backend": {"type": "claude_cli"},
                 "sheet": {"size": 3, "total_items": 9},
                 "prompt": {"template": "Test {{ sheet_num }}"},
             },
@@ -244,7 +242,6 @@ class TestServiceResumeNoReload:
         config_file = tmp_path / "score.yaml"
         config_file.write_text(
             "name: disk-version\n"
-            "backend:\n  type: claude_cli\n"
             "sheet:\n  size: 3\n  total_items: 9\n"
             "prompt:\n  template: 'Test {{ sheet_num }}'\n"
         )
@@ -257,7 +254,6 @@ class TestServiceResumeNoReload:
             config_path=str(config_file),
             config_snapshot={
                 "name": "snapshot-version",
-                "backend": {"type": "claude_cli"},
                 "sheet": {"size": 3, "total_items": 9},
                 "prompt": {"template": "Test {{ sheet_num }}"},
             },

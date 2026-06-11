@@ -6,7 +6,6 @@ import pytest
 from pydantic import ValidationError
 
 from marianne.core.config import (
-    BackendConfig,
     ConductorConfig,
     ConductorPreferences,
     ConductorRole,
@@ -286,326 +285,6 @@ class TestValidationRule:
         assert rule.pattern == "SUCCESS"
 
 
-class TestBackendConfig:
-    """Tests for BackendConfig model."""
-
-    def test_claude_cli_default(self):
-        """Test claude_cli is the default backend type."""
-        config = BackendConfig()
-        assert config.type == "claude_cli"
-        assert config.skip_permissions is True
-
-    def test_anthropic_api_config(self):
-        """Test anthropic_api backend configuration."""
-        config = BackendConfig(
-            type="anthropic_api",
-            model="claude-sonnet-4-5-20250929",
-            api_key_env="ANTHROPIC_API_KEY",
-        )
-        assert config.type == "anthropic_api"
-        assert config.model == "claude-sonnet-4-5-20250929"
-
-    def test_disable_mcp_default(self):
-        """Test disable_mcp defaults to True for faster batch execution."""
-        config = BackendConfig()
-        assert config.disable_mcp is True
-
-    def test_disable_mcp_can_be_disabled(self):
-        """Test MCP can be re-enabled when needed."""
-        config = BackendConfig(disable_mcp=False)
-        assert config.disable_mcp is False
-
-    def test_output_format_default(self):
-        """Test output_format defaults to text for human-readable output."""
-        config = BackendConfig()
-        assert config.output_format == "text"
-
-    def test_output_format_json(self):
-        """Test output_format can be json."""
-        config = BackendConfig(output_format="json")
-        assert config.output_format == "json"
-
-    def test_output_format_text(self):
-        """Test output_format can be text."""
-        config = BackendConfig(output_format="text")
-        assert config.output_format == "text"
-
-    def test_output_format_stream_json(self):
-        """Test output_format can be stream-json."""
-        config = BackendConfig(output_format="stream-json")
-        assert config.output_format == "stream-json"
-
-    def test_cli_model_default_none(self):
-        """Test cli_model defaults to None (uses Claude Code default)."""
-        config = BackendConfig()
-        assert config.cli_model is None
-
-    def test_cli_model_override(self):
-        """Test cli_model can be set to specific model."""
-        config = BackendConfig(cli_model="claude-sonnet-4-5-20250929")
-        assert config.cli_model == "claude-sonnet-4-5-20250929"
-
-    def test_allowed_tools_default_none(self):
-        """Test allowed_tools defaults to None (all tools available)."""
-        config = BackendConfig()
-        assert config.allowed_tools is None
-
-    def test_allowed_tools_restriction(self):
-        """Test allowed_tools can restrict to specific tools."""
-        config = BackendConfig(allowed_tools=["Read", "Grep", "Glob"])
-        assert config.allowed_tools == ["Read", "Grep", "Glob"]
-
-    def test_allowed_tools_empty_list(self):
-        """Test allowed_tools as empty list (very restrictive)."""
-        config = BackendConfig(allowed_tools=[])
-        assert config.allowed_tools == []
-
-    def test_system_prompt_file_default_none(self):
-        """Test system_prompt_file defaults to None (default prompt)."""
-        config = BackendConfig()
-        assert config.system_prompt_file is None
-
-    def test_system_prompt_file_path(self):
-        """Test system_prompt_file accepts Path."""
-        config = BackendConfig(system_prompt_file=Path("/custom/prompt.md"))
-        assert config.system_prompt_file == Path("/custom/prompt.md")
-
-    def test_timeout_seconds_default(self):
-        """Test timeout_seconds default is 30 minutes."""
-        config = BackendConfig()
-        assert config.timeout_seconds == 1800.0
-
-    def test_timeout_overrides_default_empty(self):
-        """Test timeout_overrides defaults to empty dict."""
-        config = BackendConfig()
-        assert config.timeout_overrides == {}
-
-    def test_timeout_overrides_per_sheet(self):
-        """Test per-sheet timeout overrides."""
-        config = BackendConfig(timeout_overrides={1: 60.0, 7: 28800.0})
-        assert config.timeout_overrides == {1: 60.0, 7: 28800.0}
-        assert config.timeout_overrides.get(1) == 60.0
-        assert config.timeout_overrides.get(7) == 28800.0
-        assert config.timeout_overrides.get(2) is None
-
-    def test_timeout_overrides_does_not_affect_global(self):
-        """Test that per-sheet overrides don't change the global timeout."""
-        config = BackendConfig(
-            timeout_seconds=2400.0,
-            timeout_overrides={7: 28800.0},
-        )
-        assert config.timeout_seconds == 2400.0
-        assert config.timeout_overrides[7] == 28800.0
-
-    def test_cli_extra_args_default_empty(self):
-        """Test cli_extra_args defaults to empty list."""
-        config = BackendConfig()
-        assert config.cli_extra_args == []
-
-    def test_cli_extra_args_escape_hatch(self):
-        """Test cli_extra_args allows raw flags as escape hatch."""
-        config = BackendConfig(cli_extra_args=["--verbose", "--some-new-flag"])
-        assert config.cli_extra_args == ["--verbose", "--some-new-flag"]
-
-    def test_backwards_compatibility_minimal(self):
-        """Test minimal config (pre-new-fields) still works."""
-        # This is what old configs would look like
-        config = BackendConfig(
-            type="claude_cli",
-            skip_permissions=True,
-        )
-        assert config.type == "claude_cli"
-        assert config.skip_permissions is True
-        # New fields should have sensible defaults
-        assert config.disable_mcp is True
-        assert config.output_format == "text"
-        assert config.cli_model is None
-        assert config.allowed_tools is None
-
-    def test_backwards_compatibility_with_cli_extra_args(self):
-        """Test old configs using cli_extra_args still work."""
-        # This simulates configs that used cli_extra_args for MCP disable
-        config = BackendConfig(
-            type="claude_cli",
-            skip_permissions=True,
-            cli_extra_args=["--strict-mcp-config", "{}"],
-        )
-        assert config.cli_extra_args == ["--strict-mcp-config", "{}"]
-        # Note: Both disable_mcp=True default AND cli_extra_args will
-        # add the flag, but CLI should handle duplicate gracefully
-
-    def test_full_cli_config(self):
-        """Test fully specified CLI config with all new options."""
-        config = BackendConfig(
-            type="claude_cli",
-            skip_permissions=True,
-            disable_mcp=False,  # Explicitly enable MCP
-            output_format="stream-json",
-            cli_model="claude-sonnet-4-5-20250929",
-            allowed_tools=["Read", "Edit", "Write"],
-            system_prompt_file=Path("./prompts/custom.md"),
-            working_directory=Path("/project"),
-            timeout_seconds=3600,
-            cli_extra_args=["--verbose"],
-        )
-        assert config.type == "claude_cli"
-        assert config.skip_permissions is True
-        assert config.disable_mcp is False
-        assert config.output_format == "stream-json"
-        assert config.cli_model == "claude-sonnet-4-5-20250929"
-        assert config.allowed_tools == ["Read", "Edit", "Write"]
-        assert config.system_prompt_file == Path("./prompts/custom.md")
-        assert config.working_directory == Path("/project")
-        assert config.timeout_seconds == 3600
-        assert config.cli_extra_args == ["--verbose"]
-
-
-class TestSheetBackendOverride:
-    """Tests for SheetBackendOverride per-sheet backend control (GH#78)."""
-
-    def test_sheet_overrides_default_empty(self):
-        """Test sheet_overrides defaults to empty dict."""
-        config = BackendConfig()
-        assert config.sheet_overrides == {}
-
-    def test_sheet_overrides_model_override(self):
-        """Test per-sheet model override."""
-        from marianne.core.config.backend import SheetBackendOverride
-
-        config = BackendConfig(
-            type="anthropic_api",
-            model="claude-sonnet-4-5-20250929",
-            sheet_overrides={
-                1: SheetBackendOverride(model="claude-opus-4-6"),
-            },
-        )
-        override = config.sheet_overrides[1]
-        assert override.model == "claude-opus-4-6"
-        assert override.temperature is None  # Not overridden
-
-    def test_sheet_overrides_temperature_validation(self):
-        """Test temperature must be 0-1 in sheet overrides."""
-        import pytest
-
-        from marianne.core.config.backend import SheetBackendOverride
-
-        with pytest.raises(Exception):  # noqa: B017
-            SheetBackendOverride(temperature=1.5)
-
-    def test_sheet_overrides_cli_model(self):
-        """Test per-sheet CLI model override."""
-        from marianne.core.config.backend import SheetBackendOverride
-
-        config = BackendConfig(
-            type="claude_cli",
-            sheet_overrides={
-                3: SheetBackendOverride(cli_model="claude-opus-4-6"),
-            },
-        )
-        assert config.sheet_overrides[3].cli_model == "claude-opus-4-6"
-
-    def test_sheet_overrides_timeout_override(self):
-        """Test per-sheet timeout via sheet_overrides."""
-        from marianne.core.config.backend import SheetBackendOverride
-
-        config = BackendConfig(
-            sheet_overrides={
-                5: SheetBackendOverride(timeout_seconds=600.0),
-            },
-        )
-        assert config.sheet_overrides[5].timeout_seconds == 600.0
-
-    def test_sheet_overrides_multiple_sheets(self):
-        """Test overrides for multiple sheets simultaneously."""
-        from marianne.core.config.backend import SheetBackendOverride
-
-        config = BackendConfig(
-            type="anthropic_api",
-            sheet_overrides={
-                1: SheetBackendOverride(model="claude-opus-4-6", temperature=0.0),
-                5: SheetBackendOverride(max_tokens=16384),
-                10: SheetBackendOverride(timeout_seconds=3600.0),
-            },
-        )
-        assert len(config.sheet_overrides) == 3
-        assert config.sheet_overrides[1].model == "claude-opus-4-6"
-        assert config.sheet_overrides[1].temperature == 0.0
-        assert config.sheet_overrides[5].max_tokens == 16384
-        assert config.sheet_overrides[10].timeout_seconds == 3600.0
-
-    def test_sheet_overrides_model_dump_excludes_none(self):
-        """Test model_dump only includes non-None fields for override application."""
-        from marianne.core.config.backend import SheetBackendOverride
-
-        override = SheetBackendOverride(model="claude-opus-4-6", temperature=0.2)
-        dumped = {k: v for k, v in override.model_dump().items() if v is not None}
-        assert dumped == {"model": "claude-opus-4-6", "temperature": 0.2}
-
-
-import warnings as _warnings_mod
-
-
-class TestBackendConfigCrossValidation:
-    """Tests for BackendConfig cross-field type validation (Q018)."""
-
-    def test_cli_defaults_no_warning(self):
-        """Default BackendConfig (type=claude_cli) emits no warnings."""
-        with _warnings_mod.catch_warnings(record=True) as w:
-            _warnings_mod.simplefilter("always")
-            BackendConfig()
-            backend_warnings = [x for x in w if "different backend" in str(x.message)]
-            assert len(backend_warnings) == 0
-
-    def test_api_type_with_cli_fields_warns(self):
-        """Setting CLI-specific fields with type=anthropic_api emits a warning."""
-        with _warnings_mod.catch_warnings(record=True) as w:
-            _warnings_mod.simplefilter("always")
-            config = BackendConfig(
-                type="anthropic_api",
-                cli_model="some-model",
-                disable_mcp=False,
-            )
-            backend_warnings = [x for x in w if "different backend" in str(x.message)]
-            assert len(backend_warnings) == 1
-            msg = str(backend_warnings[0].message)
-            assert "cli_model" in msg
-            assert "disable_mcp" in msg
-            assert config.type == "anthropic_api"
-
-    def test_cli_type_with_api_fields_warns(self):
-        """Setting API-specific fields with type=claude_cli emits a warning."""
-        with _warnings_mod.catch_warnings(record=True) as w:
-            _warnings_mod.simplefilter("always")
-            config = BackendConfig(
-                type="claude_cli",
-                model="some-other-model",
-                temperature=0.5,
-            )
-            backend_warnings = [x for x in w if "different backend" in str(x.message)]
-            assert len(backend_warnings) == 1
-            msg = str(backend_warnings[0].message)
-            assert "model" in msg
-            assert "temperature" in msg
-            assert config.type == "claude_cli"
-
-    def test_api_type_with_api_defaults_no_warning(self):
-        """API type with default API values should not warn (defaults are allowed)."""
-        with _warnings_mod.catch_warnings(record=True) as w:
-            _warnings_mod.simplefilter("always")
-            BackendConfig(type="anthropic_api")
-            backend_warnings = [x for x in w if "different backend" in str(x.message)]
-            assert len(backend_warnings) == 0
-
-    def test_ollama_type_with_cli_fields_warns(self):
-        """Setting CLI fields with type=ollama should warn."""
-        with _warnings_mod.catch_warnings(record=True) as w:
-            _warnings_mod.simplefilter("always")
-            BackendConfig(type="ollama", skip_permissions=False)
-            backend_warnings = [x for x in w if "different backend" in str(x.message)]
-            assert len(backend_warnings) == 1
-            assert "skip_permissions" in str(backend_warnings[0].message)
-
-
 class TestConductorPreferences:
     """Tests for ConductorPreferences model."""
 
@@ -812,7 +491,7 @@ class TestJobConfig:
         config = JobConfig(**sample_config_dict)
         assert config.name == "test-job"
         assert config.sheet.total_items == 30
-        assert config.backend.type == "claude_cli"
+        assert config.effective_instrument_name == "claude-code"
 
     def test_from_yaml(self, sample_yaml_config: Path):
         """Test loading JobConfig from YAML file."""
@@ -1129,7 +808,6 @@ class TestJobConfigEdgeCases:
         config = JobConfig.model_validate(
             {
                 "name": "minimal",
-                "backend": {"type": "claude_cli"},
                 "sheet": {"size": 5, "total_items": 10},
                 "prompt": {"template": "{{ sheet_num }}"},
             }
@@ -1141,7 +819,6 @@ class TestJobConfigEdgeCases:
         with pytest.raises(ValidationError):
             JobConfig.model_validate(
                 {
-                    "backend": {"type": "claude_cli"},
                     "sheet": {"size": 5, "total_items": 10},
                     "prompt": {"template": "x"},
                 }
@@ -1152,7 +829,6 @@ class TestJobConfigEdgeCases:
         config = JobConfig.model_validate(
             {
                 "name": "test",
-                "backend": {"type": "claude_cli"},
                 "sheet": {"size": 5, "total_items": 10},
                 "prompt": {"template": "x"},
                 "workspace": "/tmp/test-workspace",
@@ -1166,7 +842,6 @@ class TestJobConfigEdgeCases:
         config = JobConfig.model_validate(
             {
                 "name": "test",
-                "backend": {"type": "claude_cli"},
                 "sheet": {"size": 5, "total_items": 10},
                 "prompt": {"template": "x"},
                 "validations": [
@@ -1184,7 +859,6 @@ class TestJobConfigEdgeCases:
         original = JobConfig.model_validate(
             {
                 "name": "roundtrip",
-                "backend": {"type": "claude_cli"},
                 "sheet": {"size": 10, "total_items": 50},
                 "prompt": {"template": "{{ sheet_num }}"},
                 "retry": {"max_retries": 5},

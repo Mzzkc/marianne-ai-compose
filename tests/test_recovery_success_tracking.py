@@ -261,63 +261,6 @@ def test_learned_wait_time_ignores_failures(global_store: GlobalLearningStore):
     )
 
 
-def test_get_effective_model_for_claude_cli():
-    """Test that _get_effective_model() returns cli_model for Claude CLI backend.
-
-    This is the root cause of the 0% recovery success rate: recovery tracking
-    in sheet.py was using `config.backend.model` (None for Claude CLI) instead
-    of `_get_effective_model()` which correctly resolves cli_model.
-
-    Evolution #25 Candidate 4: Fix Recovery Success Tracking
-    """
-    from marianne.core.config import BackendConfig
-
-    # Test Claude CLI backend with cli_model set
-    cli_backend = BackendConfig(
-        type="claude_cli",
-        cli_model="claude-sonnet-4",
-    )
-
-    # Simulate the _get_effective_model logic
-    if cli_backend.type == "claude_cli":
-        effective_model = cli_backend.cli_model
-    else:
-        effective_model = cli_backend.model
-
-    assert effective_model == "claude-sonnet-4", (
-        "_get_effective_model should return cli_model for Claude CLI backend"
-    )
-    assert cli_backend.cli_model == "claude-sonnet-4"
-
-    # Test that directly using backend.model would give the wrong value
-    # (the API default, not the CLI model)
-    assert cli_backend.model != cli_backend.cli_model, (
-        "backend.model should be different from cli_model for CLI backend"
-    )
-
-
-def test_get_effective_model_for_anthropic_api():
-    """Test that _get_effective_model() returns model for Anthropic API backend."""
-    from marianne.core.config import BackendConfig
-
-    # Test Anthropic API backend
-    api_backend = BackendConfig(
-        type="anthropic_api",
-        model="claude-opus-4-6",
-    )
-
-    # Simulate the _get_effective_model logic
-    if api_backend.type == "claude_cli":
-        effective_model = api_backend.cli_model
-    else:
-        effective_model = api_backend.model
-
-    assert effective_model == "claude-opus-4-6", (
-        "_get_effective_model should return model for Anthropic API backend"
-    )
-    assert api_backend.model == "claude-opus-4-6"
-
-
 def test_recovery_tracking_with_null_model_vs_effective_model(global_store: GlobalLearningStore):
     """Test the difference between recording with model=None vs effective model.
 

@@ -61,27 +61,6 @@ _short_text = st.text(
 )
 
 
-# --- backend.py strategies ---
-
-
-def backend_config_strategy() -> st.SearchStrategy[dict[str, Any]]:
-    """Strategy for BackendConfig as a dict (to pass to model_validate)."""
-    return st.fixed_dictionaries(
-        {
-            "type": st.sampled_from(["claude_cli", "anthropic_api", "recursive_light", "ollama"]),
-            "skip_permissions": st.booleans(),
-            "disable_mcp": st.booleans(),
-            "output_format": st.sampled_from(["json", "text", "stream-json"]),
-            "timeout_seconds": st.floats(
-                min_value=0.01, max_value=7200.0, allow_nan=False, allow_infinity=False
-            ),
-            "model": _short_text,
-            "temperature": _unit_float,
-            "max_tokens": _positive_int,
-        }
-    )
-
-
 # --- execution.py strategies ---
 
 

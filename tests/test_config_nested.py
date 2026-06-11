@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from marianne.core.config import (
     AIReviewConfig,
     AutoApplyConfig,
-    BackendConfig,
     CheckpointConfig,
     CheckpointTriggerConfig,
     CircuitBreakerConfig,
@@ -31,7 +30,6 @@ from marianne.core.config import (
     ParallelConfig,
     PromptConfig,
     RateLimitConfig,
-    RecursiveLightConfig,
     RetryConfig,
     SheetConfig,
 )
@@ -426,69 +424,6 @@ class TestNotificationConfig:
         assert "url" in config.config
 
 
-class TestRecursiveLightConfig:
-    """Tests for RecursiveLightConfig nested model."""
-
-    def test_defaults(self):
-        """Test default values are correct."""
-        config = RecursiveLightConfig()
-        assert config.endpoint == "http://localhost:8080"
-        assert config.user_id is None
-        assert config.timeout == 30.0
-
-    def test_custom_config(self):
-        """Test custom configuration."""
-        config = RecursiveLightConfig(
-            endpoint="http://custom:9000",
-            user_id="test-user-123",
-            timeout=60.0,
-        )
-        assert config.endpoint == "http://custom:9000"
-        assert config.user_id == "test-user-123"
-
-
-class TestBackendConfig:
-    """Tests for BackendConfig nested model."""
-
-    def test_claude_cli_default(self):
-        """Test Claude CLI backend config."""
-        config = BackendConfig(type="claude_cli")
-        assert config.type == "claude_cli"
-        assert config.skip_permissions is True
-        assert config.disable_mcp is True
-
-    def test_anthropic_api_config(self):
-        """Test Anthropic API backend config."""
-        config = BackendConfig(
-            type="anthropic_api",
-            model="claude-3-opus-20240229",
-        )
-        assert config.type == "anthropic_api"
-        assert config.model == "claude-3-opus-20240229"
-
-    def test_recursive_light_backend(self):
-        """Test with recursive light config."""
-        config = BackendConfig(
-            type="recursive_light",
-            recursive_light=RecursiveLightConfig(
-                endpoint="http://localhost:9090",
-                timeout=45.0,
-            ),
-        )
-        assert config.type == "recursive_light"
-        assert config.recursive_light.endpoint == "http://localhost:9090"
-
-    def test_circuit_breaker_embedding(self):
-        """Test circuit breaker config on backend."""
-        # Note: circuit_breaker is a top-level JobConfig field, not in BackendConfig
-        # This test validates the BackendConfig model itself
-        config = BackendConfig(
-            type="anthropic_api",
-            model="claude-3-sonnet-20240229",
-        )
-        assert config.type == "anthropic_api"
-
-
 class TestParallelConfig:
     """Tests for ParallelConfig nested model."""
 
@@ -533,10 +468,7 @@ class TestJobConfigNestedIntegration:
             prompt=PromptConfig(template="Do task {sheet_num}"),
             retry=RetryConfig(max_retries=5),
             logging=LogConfig(level="DEBUG", format="json"),
-            backend=BackendConfig(
-                type="anthropic_api",
-                model="claude-3-sonnet-20240229",
-            ),
+            instrument="anthropic_api",
             learning=LearningConfig(
                 enabled=True,
                 exploration_budget=ExplorationBudgetConfig(enabled=True),
@@ -549,7 +481,6 @@ class TestJobConfigNestedIntegration:
 
         assert config.retry.max_retries == 5
         assert config.logging.level == "DEBUG"
-        assert config.backend.type == "anthropic_api"
         assert config.learning.exploration_budget.enabled is True
         assert config.isolation.enabled is True
         assert len(config.notifications) == 1

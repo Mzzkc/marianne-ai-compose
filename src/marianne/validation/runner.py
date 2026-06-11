@@ -23,20 +23,16 @@ from marianne.validation.checks import (
     JinjaInValidationPathCheck,
     JinjaSyntaxCheck,
     JinjaUndefinedVariableCheck,
-    MissingDisableMcpCheck,
-    MissingSkipPermissionsCheck,
     NoValidationsCheck,
     PreludeCadenzaFileCheck,
     RegexPatternCheck,
     SkillFilesExistCheck,
     SkipWhenSheetRangeCheck,
-    SystemPromptFileCheck,
     TemplateFileExistsCheck,
     TimeoutRangeCheck,
     ValidationTypeCheck,
     VariableShadowingCheck,
     VersionReferenceCheck,
-    WorkingDirectoryCheck,
     WorkspaceParentExistsCheck,
 )
 
@@ -146,8 +142,6 @@ def create_default_checks() -> list[ValidationCheck]:
         # Path checks
         WorkspaceParentExistsCheck(),
         TemplateFileExistsCheck(),
-        SystemPromptFileCheck(),
-        WorkingDirectoryCheck(),
         SkillFilesExistCheck(),
         PreludeCadenzaFileCheck(),
         # Config checks
@@ -165,12 +159,10 @@ def create_default_checks() -> list[ValidationCheck]:
         JinjaInValidationPathCheck(),
         FormatSyntaxInTemplateCheck(),
         NoValidationsCheck(),
-        MissingSkipPermissionsCheck(),
         FileExistsOnlyCheck(),
         FanOutWithoutDependenciesCheck(),
         FanOutWithoutParallelCheck(),
         VariableShadowingCheck(),
-        MissingDisableMcpCheck(),
         SkipWhenSheetRangeCheck(),
     ]
     return checks

@@ -151,12 +151,11 @@ class ConfigResources:
 job_id: example-review
 description: Example Marianne job configuration
 
-# Phase 5: prefer the top-level ``instrument:`` key — it resolves
-# through the instrument registry and works for any registered
-# instrument profile (claude_cli, anthropic_api, gemini-cli, etc.).
-instrument: claude_cli
-backend:
-  disable_mcp: true  # For faster execution
+# The top-level ``instrument:`` key resolves through the instrument
+# registry and works for any registered instrument profile
+# (claude-code, anthropic_api, gemini-cli, etc.).
+instrument: claude-code
+instrument_config:
   timeout_seconds: 300
 
 sheets:

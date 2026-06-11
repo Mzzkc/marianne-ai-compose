@@ -7,7 +7,6 @@ from marianne.core.checkpoint import (
     SheetStatus,
 )
 from marianne.core.config import (
-    BackendConfig,
     JobConfig,
     NotificationConfig,
     PromptConfig,
@@ -33,7 +32,6 @@ from marianne.core.summary import (
 )
 
 __all__ = [
-    "BackendConfig",
     "SheetConfig",
     "SheetState",
     "SheetStatus",

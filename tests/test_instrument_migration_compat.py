@@ -1,364 +1,125 @@
-"""Observer tests: instrument migration backward compatibility.
+"""Post-strip contract for the instrument-only execution config (#347).
 
-These tests pin the contract that must hold throughout Phases 1-4 of the
-pre-instrument execution removal atlas. They are deliberately written to
-fail loudly the moment a migration step breaks backward compatibility for
-existing scores or for the test-suite infrastructure.
+The legacy ``backend:`` score syntax and its models (BackendConfig and
+friends) were fully stripped — the instrument plugin system is the only
+execution-config path. These tests pin the post-strip contract:
 
-Doctrine rule enforced (from Atlas Doctrine — Rules Ledger):
-
-    RULE: conftest.py defaults must work throughout the migration
-    SCOPE: tests/conftest.py, tests/conftest_adversarial.py
-    RATIONALE: The shared test default ``backend.type = "claude_cli"`` is
-      used across the entire test suite. The ``register_native_instruments()``
-      bridge and the open Literal union together ensure this value remains
-      valid. Breaking test infrastructure stability would cascade across
-      hundreds of tests.
-
-    RULE: Backward compatibility for existing scores is mandatory during
-      Phases 1-4
-    SCOPE: All score YAML files using ``backend:`` syntax, including 25+
-      examples.
-    RATIONALE: The instrument-plugin design explicitly chose coexistence —
-      ``backend:`` is not deprecated in v1. Scores using ``backend:`` must
-      continue to work alongside ``instrument:`` until Phase 4 declares
-      the transition complete. The mutual exclusion validator at
-      ``core/config/job.py:879`` enforces that ``backend:`` and
-      ``instrument:`` cannot coexist in a single score.
-
-    EVIDENCE: core/config/backend.py:290-291 (closed Literal), core/config/
-      job.py:864-886 (mutual exclusion validator).
-
-Coverage gaps addressed:
-    - G-11: backward-compat of legacy backend.type values during Phase 2
-            union opening.
-    - G-12: coexistence of instrument: and backend: paths during transition.
-
-Migration phase expectations (for future auditors):
-    - TODAY (pre-Phase 2): closed Literal rejects novel strings. The
-      "accepts novel strings" test is xfail.
-    - AFTER Phase 2: closed Literal opens to ``str``; the xfail test flips
-      to pass. The other tests must KEEP passing throughout.
-    - AFTER Phase 4: register_native_instruments() bridge resolves all
-      four legacy names; the fallback test must still pass.
-
-Integration notes:
-    These tests use real imports (``marianne.core.config.*``). No mocks
-    are applied to the module under test, per the observer-test protocol.
+- ``backend:`` in score YAML fails loudly at parse time (never silently
+  ignored).
+- Scores with no ``instrument:`` resolve to the default instrument
+  (claude-code).
+- The instrument path\'s per-scope ``timeout_seconds`` is honored.
 """
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
+from pydantic import ValidationError
 
-from marianne.core.config.backend import BackendConfig
 from marianne.core.config.job import JobConfig
-
-# Sentinel set of the four legacy backend.type strings that the atlas
-# declares MUST remain valid throughout the migration.
-LEGACY_TYPES: tuple[str, ...] = (
-    "claude_cli",
-    "anthropic_api",
-    "recursive_light",
-    "ollama",
-)
-
-# Doctrine rule tag embedded in failure messages so any regressor sees
-# the exact constraint they broke.
-_RULE_LEGACY = (
-    "Atlas Doctrine RULE: conftest.py defaults must work throughout the "
-    "migration — legacy backend.type values must remain valid for Phases 1-4."
-)
-_RULE_COEXIST = (
-    "Atlas Doctrine RULE: Backward compatibility for existing scores is "
-    "mandatory during Phases 1-4 — backend: and instrument: cannot both be "
-    "set on a single score (mutual exclusion validator, job.py:864-886)."
-)
-_RULE_FALLBACKS = (
-    "Atlas Doctrine RULE: register_native_instruments() must bridge legacy "
-    "names until all native backends are removed — instrument_fallbacks with "
-    "legacy names must resolve."
-)
+from marianne.core.constants import DEFAULT_INSTRUMENT_NAME
+from marianne.core.sheet import build_sheets
 
 
-# ---------------------------------------------------------------------------
-# Behaviour 1: claude_cli default remains valid (the conftest anchor).
-# ---------------------------------------------------------------------------
+def _minimal(**extra: object) -> dict[str, object]:
+    data: dict[str, object] = {
+        "name": "strip-test",
+        "sheet": {"size": 1, "total_items": 2},
+        "prompt": {"template": "work {{ sheet_num }}"},
+    }
+    data.update(extra)
+    return data
 
 
-class TestClaudeCliDefaultSurvives:
-    """The shared ``backend.type = "claude_cli"`` conftest default must
-    remain a legal value at EVERY phase of the migration, or the entire
-    test suite collapses.
-    """
+class TestBackendSyntaxRejected:
+    """backend: must fail loudly — a silently ignored block would let old
+    scores run with entirely different settings than their authors wrote."""
 
-    def test_claude_cli_default_constructs(self) -> None:
-        """BackendConfig() with no args produces type='claude_cli'."""
-        cfg = BackendConfig()
-        assert cfg.type == "claude_cli", _RULE_LEGACY
+    def test_backend_block_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            JobConfig(**_minimal(backend={"type": "claude_cli"}))
 
-    def test_claude_cli_explicit_constructs(self) -> None:
-        """BackendConfig(type='claude_cli') is accepted."""
-        cfg = BackendConfig(type="claude_cli")
-        assert cfg.type == "claude_cli", _RULE_LEGACY
+    def test_backend_block_rejected_with_instrument_present(self) -> None:
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            JobConfig(**_minimal(
+                instrument="claude-code",
+                backend={"skip_permissions": True},
+            ))
 
-    def test_claude_cli_does_not_warn(self) -> None:
-        """The default value must not emit a deprecation/migration warning.
+    def test_empty_backend_block_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            JobConfig(**_minimal(backend={}))
 
-        A warning on the default would render thousands of test-suite
-        constructions noisy and mask real issues.
-        """
-        with warnings.catch_warnings(record=True) as captured:
-            warnings.simplefilter("always")
-            BackendConfig(type="claude_cli")
-        # Some unrelated warnings (e.g. third-party) might leak in; filter
-        # for ones mentioning "backend" or "instrument" which would be
-        # the migration-introduced kind.
-        migration_warnings = [
-            w for w in captured
-            if "backend" in str(w.message).lower()
-            or "instrument" in str(w.message).lower()
-        ]
-        assert migration_warnings == [], (
-            f"{_RULE_LEGACY}\nUnexpected migration warnings: "
-            f"{[str(w.message) for w in migration_warnings]}"
+
+class TestDefaultInstrumentResolution:
+    def test_no_instrument_resolves_to_default(self) -> None:
+        config = JobConfig(**_minimal())
+        assert config.effective_instrument_name == DEFAULT_INSTRUMENT_NAME
+
+    def test_explicit_instrument_wins(self) -> None:
+        config = JobConfig(**_minimal(instrument="opencode"))
+        assert config.effective_instrument_name == "opencode"
+
+    def test_sheets_inherit_default_instrument(self) -> None:
+        config = JobConfig(**_minimal())
+        sheets = build_sheets(config)
+        assert all(s.instrument_name == DEFAULT_INSTRUMENT_NAME for s in sheets)
+
+
+class TestInstrumentConfigTimeout:
+    """timeout_seconds now flows from the merged instrument_config —
+    score, movement, alias, and per-sheet scopes all compose."""
+
+    def test_default_timeout(self) -> None:
+        config = JobConfig(**_minimal())
+        sheets = build_sheets(config)
+        assert sheets[0].timeout_seconds == 1800.0
+
+    def test_score_level_timeout(self) -> None:
+        config = JobConfig(**_minimal(
+            instrument="claude-code",
+            instrument_config={"timeout_seconds": 600},
+        ))
+        sheets = build_sheets(config)
+        assert all(s.timeout_seconds == 600.0 for s in sheets)
+
+    def test_per_sheet_timeout_overrides_score(self) -> None:
+        data = _minimal(
+            instrument="claude-code",
+            instrument_config={"timeout_seconds": 600},
         )
+        sheet_block = data["sheet"]
+        assert isinstance(sheet_block, dict)
+        sheet_block["per_sheet_instrument_config"] = {2: {"timeout_seconds": 3600}}
+        config = JobConfig(**data)
+        sheets = build_sheets(config)
+        assert sheets[0].timeout_seconds == 600.0
+        assert sheets[1].timeout_seconds == 3600.0
+
+    def test_malformed_timeout_falls_back_to_default(self) -> None:
+        config = JobConfig(**_minimal(
+            instrument="claude-code",
+            instrument_config={"timeout_seconds": "not-a-number"},
+        ))
+        sheets = build_sheets(config)
+        assert sheets[0].timeout_seconds == 1800.0
 
 
-# ---------------------------------------------------------------------------
-# Behaviour 2: all four legacy strings parse, and none of them warn.
-# ---------------------------------------------------------------------------
+class TestCliModelAliasNormalization:
+    """Legacy \'cli_model\' spelling normalizes onto \'model\' at sheet build."""
 
+    def test_cli_model_aliased(self) -> None:
+        config = JobConfig(**_minimal(
+            instrument="claude-code",
+            instrument_config={"cli_model": "claude-opus-4-8"},
+        ))
+        sheets = build_sheets(config)
+        assert sheets[0].instrument_config["model"] == "claude-opus-4-8"
 
-class TestLegacyTypesAcceptedWithoutWarning:
-    """Each of the four legacy backend.type values must parse cleanly.
-
-    This contract must hold through Phase 2's union opening: even after
-    the Literal becomes ``str``, the four legacy values are canonical
-    and must not trigger the "unknown backend" warning.
-    """
-
-    @pytest.mark.parametrize("legacy_type", LEGACY_TYPES)
-    def test_legacy_type_constructs(self, legacy_type: str) -> None:
-        """Each of the four legacy strings is accepted."""
-        cfg = BackendConfig(type=legacy_type)
-        assert cfg.type == legacy_type, (
-            f"{_RULE_LEGACY}\nExpected type={legacy_type!r}, got {cfg.type!r}"
-        )
-
-    @pytest.mark.parametrize("legacy_type", LEGACY_TYPES)
-    def test_legacy_type_does_not_warn(self, legacy_type: str) -> None:
-        """Legacy values must not produce a migration-guidance warning."""
-        with warnings.catch_warnings(record=True) as captured:
-            warnings.simplefilter("always")
-            BackendConfig(type=legacy_type)
-        migration_warnings = [
-            w for w in captured
-            if "instrument:" in str(w.message)
-            or "unknown backend" in str(w.message).lower()
-            or "unrecognized" in str(w.message).lower()
-        ]
-        assert migration_warnings == [], (
-            f"{_RULE_LEGACY}\nLegacy type {legacy_type!r} produced migration "
-            f"warning: {[str(w.message) for w in migration_warnings]}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Behaviour 3: Novel type strings (Phase 2 promise).
-#
-# PRE-Phase 2:  closed Literal REJECTS with ValidationError.  Marked xfail.
-# POST-Phase 2: open str accepts with a warning pointing at ``instrument:``.
-# ---------------------------------------------------------------------------
-
-
-class TestNovelTypeAcceptedWithWarning:
-    """Phase 2 opens the Literal union to arbitrary strings.
-
-    After Phase 2, a novel ``backend.type`` value must parse but should
-    emit a non-fatal warning suggesting the user adopt the
-    ``instrument:`` path instead. Until Phase 2 lands the closed Literal
-    keeps this strict.
-    """
-
-    def test_novel_type_is_accepted(self) -> None:
-        """A made-up backend type string must parse without raising."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            cfg = BackendConfig(type="custom_cli")
-        assert cfg.type == "custom_cli"
-
-    def test_novel_type_emits_instrument_suggestion(self) -> None:
-        """After Phase 2, novel types must nudge users toward instrument:."""
-        with warnings.catch_warnings(record=True) as captured:
-            warnings.simplefilter("always")
-            BackendConfig(type="custom_cli")
-        messages = [str(w.message) for w in captured]
-        # At least one warning should guide the user to the instrument path.
-        assert any("instrument" in m.lower() for m in messages), (
-            f"Expected an 'instrument:' migration hint in warnings, got: "
-            f"{messages}"
-        )
-
-    def test_novel_type_post_phase2_is_accepted_not_rejected(self) -> None:
-        """Phase-2 post-condition: previously-rejected novel types now succeed.
-
-        The original closed Literal rejected anything outside the four
-        native names. Phase 2 opened the union to ``str`` with a warning
-        rather than a ValidationError, so this test now asserts that no
-        ValidationError is raised. If this test ever starts raising, the
-        Literal was re-closed (Doctrine RULE violation).
-        """
-        # Must NOT raise — Phase 2 opened the type system.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            cfg = BackendConfig(type="custom_cli")
-        assert cfg.type == "custom_cli"
-
-
-# ---------------------------------------------------------------------------
-# Behaviour 4: Mutual-exclusion validator at job.py:864-886 still bites.
-# ---------------------------------------------------------------------------
-
-
-class TestBackendInstrumentMutualExclusion:
-    """Mutual exclusion between ``instrument:`` and explicit
-    ``backend.type`` must continue to be enforced at the JobConfig layer.
-
-    The validator only fires when backend.type is NON-default
-    ("claude_cli" is the default and coexists with instrument:).
-    """
-
-    def test_rejects_both_set_non_default(self) -> None:
-        """instrument + backend.type=anthropic_api must be rejected."""
-        with pytest.raises(ValueError, match="Cannot specify both"):
-            JobConfig(
-                name="mutual-excl-reject",
-                workspace="./workspaces/test",
-                instrument="gemini-cli",
-                backend={"type": "anthropic_api"},
-                sheet={"size": 1, "total_items": 1},
-                prompt={"template": "hi"},
-            )
-
-    def test_rejects_both_set_recursive_light(self) -> None:
-        """Any non-default backend.type value triggers the validator."""
-        with pytest.raises(ValueError, match="Cannot specify both"):
-            JobConfig(
-                name="mutual-excl-rl",
-                workspace="./workspaces/test",
-                instrument="gemini-cli",
-                backend={"type": "recursive_light"},
-                sheet={"size": 1, "total_items": 1},
-                prompt={"template": "hi"},
-            )
-
-    def test_allows_instrument_only(self) -> None:
-        """instrument: alone with default backend must succeed."""
-        cfg = JobConfig(
-            name="instrument-only",
-            workspace="./workspaces/test",
-            instrument="gemini-cli",
-            sheet={"size": 1, "total_items": 1},
-            prompt={"template": "hi"},
-        )
-        assert cfg.instrument == "gemini-cli", _RULE_COEXIST
-        # backend field always has a default; that is intentional.
-        assert cfg.backend.type == "claude_cli"
-
-    def test_allows_backend_only(self) -> None:
-        """backend: with explicit non-default and no instrument: succeeds."""
-        cfg = JobConfig(
-            name="backend-only",
-            workspace="./workspaces/test",
-            backend={"type": "anthropic_api"},
-            sheet={"size": 1, "total_items": 1},
-            prompt={"template": "hi"},
-        )
-        assert cfg.instrument is None, _RULE_COEXIST
-        assert cfg.backend.type == "anthropic_api", _RULE_COEXIST
-
-    def test_allows_instrument_with_default_backend(self) -> None:
-        """instrument: plus the implicit default backend is OK.
-
-        ``backend`` is always present with defaults; the mutual-exclusion
-        validator only fires when the user explicitly raises backend.type
-        above its default.
-        """
-        cfg = JobConfig(
-            name="inst-plus-default-bk",
-            workspace="./workspaces/test",
-            instrument="gemini-cli",
-            backend={"type": "claude_cli"},
-            sheet={"size": 1, "total_items": 1},
-            prompt={"template": "hi"},
-        )
-        assert cfg.instrument == "gemini-cli"
-        assert cfg.backend.type == "claude_cli"
-
-
-# ---------------------------------------------------------------------------
-# Behaviour 5: instrument_fallbacks: [anthropic_api] still constructs.
-# ---------------------------------------------------------------------------
-
-
-class TestInstrumentFallbacksAcceptsLegacyNames:
-    """25+ example scores pass ``instrument_fallbacks: [anthropic_api]``.
-
-    This contract is load-bearing: removing it breaks every example and
-    the transition bridge (registry.py:277-304) that resolves legacy
-    names to instrument profiles.
-    """
-
-    def test_single_legacy_fallback(self) -> None:
-        """A single legacy name in the fallback chain is accepted."""
-        cfg = JobConfig(
-            name="fb-single",
-            workspace="./workspaces/test",
-            instrument_fallbacks=["anthropic_api"],
-            sheet={"size": 1, "total_items": 1},
-            prompt={"template": "hi"},
-        )
-        assert cfg.instrument_fallbacks == ["anthropic_api"], _RULE_FALLBACKS
-
-    def test_multiple_legacy_fallbacks(self) -> None:
-        """All four legacy names accepted in combination."""
-        cfg = JobConfig(
-            name="fb-multi",
-            workspace="./workspaces/test",
-            instrument_fallbacks=list(LEGACY_TYPES),
-            sheet={"size": 1, "total_items": 1},
-            prompt={"template": "hi"},
-        )
-        assert cfg.instrument_fallbacks == list(LEGACY_TYPES), _RULE_FALLBACKS
-
-    def test_fallbacks_coexist_with_primary_instrument(self) -> None:
-        """Primary instrument + legacy-named fallbacks — the common shape
-        used by 25+ examples.
-        """
-        cfg = JobConfig(
-            name="fb-with-primary",
-            workspace="./workspaces/test",
-            instrument="gemini-cli",
-            instrument_fallbacks=["anthropic_api", "claude_cli"],
-            sheet={"size": 1, "total_items": 1},
-            prompt={"template": "hi"},
-        )
-        assert cfg.instrument == "gemini-cli"
-        assert cfg.instrument_fallbacks == ["anthropic_api", "claude_cli"], (
-            _RULE_FALLBACKS
-        )
-
-    def test_fallbacks_default_empty(self) -> None:
-        """Omitting instrument_fallbacks yields an empty list (no surprise
-        mutation of defaults).
-        """
-        cfg = JobConfig(
-            name="fb-absent",
-            workspace="./workspaces/test",
-            sheet={"size": 1, "total_items": 1},
-            prompt={"template": "hi"},
-        )
-        assert cfg.instrument_fallbacks == [], _RULE_FALLBACKS
+    def test_explicit_model_wins_over_cli_model(self) -> None:
+        config = JobConfig(**_minimal(
+            instrument="claude-code",
+            instrument_config={"model": "a", "cli_model": "b"},
+        ))
+        sheets = build_sheets(config)
+        assert sheets[0].instrument_config["model"] == "a"

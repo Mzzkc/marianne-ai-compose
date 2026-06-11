@@ -13,7 +13,6 @@ import pytest
 
 from marianne.core.config import JobConfig
 from marianne.execution.setup import (
-    create_backend,
     create_state_backend,
     setup_learning,
     setup_notifications,
@@ -26,7 +25,6 @@ def base_config_dict() -> dict:
     return {
         "name": "test-job",
         "description": "Setup test job",
-        "backend": {"type": "claude_cli", "skip_permissions": True},
         "sheet": {"size": 10, "total_items": 30},
         "prompt": {"template": "Sheet {{ sheet_num }}"},
         "validations": [],
@@ -37,60 +35,6 @@ def _make_config(base: dict, **overrides: object) -> JobConfig:
     """Create a JobConfig with overrides merged into base dict."""
     merged = {**base, **overrides}
     return JobConfig.model_validate(merged)
-
-
-# ── create_backend ──────────────────────────────────────────────────────
-
-
-class TestCreateBackend:
-    """Test backend factory dispatch."""
-
-    def test_claude_cli_is_default(self, base_config_dict: dict) -> None:
-        config = _make_config(base_config_dict)
-        backend = create_backend(config)
-        assert backend.name == "claude-cli"
-
-    def test_anthropic_api_backend(self, base_config_dict: dict) -> None:
-        config = _make_config(
-            base_config_dict,
-            backend={"type": "anthropic_api", "model": "claude-sonnet-4-5-20250929"},
-        )
-        backend = create_backend(config)
-        assert backend.name == "anthropic-api"
-
-    def test_recursive_light_backend_raises(self, base_config_dict: dict) -> None:
-        """Phase 4a: 'recursive_light' backend type was removed."""
-        config = _make_config(
-            base_config_dict,
-            backend={"type": "recursive_light", "model": "claude-sonnet-4-5-20250929"},
-        )
-        with pytest.raises(ValueError, match="recursive_light"):
-            create_backend(config)
-
-    def test_unknown_type_falls_through_to_cli_with_warning(
-        self, base_config_dict: dict
-    ) -> None:
-        """An unrecognized backend type falls through to ClaudeCliBackend but
-        logs a WARNING (#250) — previously the typo routed silently.
-
-        Behavior (the fallback) is preserved: the native backend factory is a
-        legacy path with no production callers (the daemon resolves backends
-        via the instrument registry, which raises on unknown types). The fix is
-        observability-only — convert the silent footgun into a logged one.
-        """
-        from unittest.mock import patch
-
-        config = _make_config(
-            base_config_dict,
-            backend={"type": "calude_cli"},  # deliberate typo — unknown type
-        )
-        with patch("marianne.execution.setup._logger") as mock_logger:
-            backend = create_backend(config)
-        assert backend.name == "claude-cli"  # fallback preserved
-        mock_logger.warning.assert_called_once()
-        # The unknown type must appear in the warning for diagnosability.
-        warn_call = mock_logger.warning.call_args
-        assert "calude_cli" in str(warn_call)
 
 
 # ── setup_learning ──────────────────────────────────────────────────────

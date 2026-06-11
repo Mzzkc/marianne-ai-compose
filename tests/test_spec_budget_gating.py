@@ -29,7 +29,6 @@ pytestmark = pytest.mark.skip(
 from pathlib import Path
 from typing import Any
 
-from marianne.core.config.backend import BackendConfig
 from marianne.core.config.job import PromptConfig
 from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
 from marianne.core.logging import get_logger
@@ -78,8 +77,8 @@ def _make_fragment_of_tokens(
 class _FakeConfig:
     """Minimal config stand-in for testing _apply_spec_budget_gating."""
 
-    def __init__(self, backend: BackendConfig | None = None) -> None:
-        self.backend = backend or BackendConfig()
+    def __init__(self) -> None:
+        self.instrument = "claude-code"
 
 
 class _BudgetGatingHost:

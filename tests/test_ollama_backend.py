@@ -653,21 +653,6 @@ class TestBackendProperties:
         """Test name property includes model."""
         assert ollama_backend.name == "ollama:llama3.1:8b"
 
-    def test_from_config(self):
-        """Test backend creation from config."""
-        from marianne.core.config import BackendConfig
-
-        config = BackendConfig(
-            type="ollama",
-            ollama={"base_url": "http://custom:11434", "model": "qwen3-coder"},
-        )
-
-        backend = OllamaBackend.from_config(config)
-
-        assert backend.base_url == "http://custom:11434"
-        assert backend.model == "qwen3-coder"
-
-
 # =============================================================================
 # Test Close
 # =============================================================================

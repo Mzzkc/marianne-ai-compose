@@ -16,8 +16,6 @@ from marianne.validation.checks.best_practices import (
     FileExistsOnlyCheck,
     FormatSyntaxInTemplateCheck,
     JinjaInValidationPathCheck,
-    MissingDisableMcpCheck,
-    MissingSkipPermissionsCheck,
     NoValidationsCheck,
     VariableShadowingCheck,
 )
@@ -182,85 +180,6 @@ class TestNoValidationsCheck:
         assert len(issues) == 1
         assert issues[0].check_id == "V203"
         assert issues[0].severity == ValidationSeverity.WARNING
-
-
-# ============================================================================
-# V204 — MissingSkipPermissionsCheck
-# ============================================================================
-
-
-class TestMissingSkipPermissionsCheck:
-    """Tests for MissingSkipPermissionsCheck (V204)."""
-
-    def test_v204_skip_permissions_true_passes(self, tmp_path: Path) -> None:
-        """skip_permissions: true produces no V204 issues."""
-        yaml_content = dedent("""
-            name: test-job
-            sheet:
-              size: 10
-              total_items: 100
-            prompt:
-              template: "Test"
-            backend:
-              type: claude_cli
-              skip_permissions: true
-        """).strip()
-
-        config_path = tmp_path / "test.yaml"
-        config_path.write_text(yaml_content)
-        config = JobConfig.from_yaml(config_path)
-
-        check = MissingSkipPermissionsCheck()
-        issues = check.check(config, config_path, yaml_content)
-
-        assert len(issues) == 0
-
-    def test_v204_skip_permissions_false_triggers(self, tmp_path: Path) -> None:
-        """skip_permissions: false triggers V204."""
-        yaml_content = dedent("""
-            name: test-job
-            sheet:
-              size: 10
-              total_items: 100
-            prompt:
-              template: "Test"
-            backend:
-              type: claude_cli
-              skip_permissions: false
-        """).strip()
-
-        config_path = tmp_path / "test.yaml"
-        config_path.write_text(yaml_content)
-        config = JobConfig.from_yaml(config_path)
-
-        check = MissingSkipPermissionsCheck()
-        issues = check.check(config, config_path, yaml_content)
-
-        assert len(issues) == 1
-        assert issues[0].check_id == "V204"
-        assert issues[0].severity == ValidationSeverity.WARNING
-
-    def test_v204_non_claude_backend_passes(self, tmp_path: Path) -> None:
-        """Non-Claude backend produces no V204 issues."""
-        yaml_content = dedent("""
-            name: test-job
-            sheet:
-              size: 10
-              total_items: 100
-            prompt:
-              template: "Test"
-            backend:
-              type: anthropic_api
-        """).strip()
-
-        config_path = tmp_path / "test.yaml"
-        config_path.write_text(yaml_content)
-        config = JobConfig.from_yaml(config_path)
-
-        check = MissingSkipPermissionsCheck()
-        issues = check.check(config, config_path, yaml_content)
-
-        assert len(issues) == 0
 
 
 # ============================================================================
@@ -515,58 +434,3 @@ class TestVariableShadowingCheck:
         assert issues[0].severity == ValidationSeverity.WARNING
 
 
-# ============================================================================
-# V209 — MissingDisableMcpCheck
-# ============================================================================
-
-
-class TestMissingDisableMcpCheck:
-    """Tests for MissingDisableMcpCheck (V209)."""
-
-    def test_v209_disable_mcp_true_passes(self, tmp_path: Path) -> None:
-        """disable_mcp: true produces no V209 issues."""
-        yaml_content = dedent("""
-            name: test-job
-            sheet:
-              size: 10
-              total_items: 100
-            prompt:
-              template: "Test"
-            backend:
-              type: claude_cli
-              disable_mcp: true
-        """).strip()
-
-        config_path = tmp_path / "test.yaml"
-        config_path.write_text(yaml_content)
-        config = JobConfig.from_yaml(config_path)
-
-        check = MissingDisableMcpCheck()
-        issues = check.check(config, config_path, yaml_content)
-
-        assert len(issues) == 0
-
-    def test_v209_disable_mcp_false_triggers(self, tmp_path: Path) -> None:
-        """disable_mcp: false triggers V209."""
-        yaml_content = dedent("""
-            name: test-job
-            sheet:
-              size: 10
-              total_items: 100
-            prompt:
-              template: "Test"
-            backend:
-              type: claude_cli
-              disable_mcp: false
-        """).strip()
-
-        config_path = tmp_path / "test.yaml"
-        config_path.write_text(yaml_content)
-        config = JobConfig.from_yaml(config_path)
-
-        check = MissingDisableMcpCheck()
-        issues = check.check(config, config_path, yaml_content)
-
-        assert len(issues) == 1
-        assert issues[0].check_id == "V209"
-        assert issues[0].severity == ValidationSeverity.INFO

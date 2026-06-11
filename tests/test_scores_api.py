@@ -23,8 +23,6 @@ name: test-job
 sheet:
   size: 10
   total_items: 30
-backend:
-  type: claude_cli
 prompt:
   template: |
     Complete task {{ sheet_num }} of {{ total_items }}
@@ -43,10 +41,7 @@ name: test-job
 sheet:
   size: 10
   total_items: 30
-backend:
-  type: claude_cli
-  model: sonnet
-  invalid: yaml: syntax: here
+broken: yaml: syntax: here
 prompt:
   system_prompt_file: examples/system-prompt.md
 """
@@ -60,8 +55,6 @@ name: test-job
 sheet:
   size: "not_a_number"
   total_items: 30
-backend:
-  type: invalid_backend_type
 prompt:
   template: "test"
 """
@@ -75,8 +68,6 @@ name: test-job-warnings
 sheet:
   size: 1
   total_items: 2
-backend:
-  type: claude_cli
 prompt:
   template_file: nonexistent-template.md
   template: |
@@ -117,7 +108,7 @@ class TestValidationAPI:
         summary = data["config_summary"]
         assert summary["name"] == "test-job"
         assert summary["total_sheets"] == 3  # Computed: ceil(30/10) = 3
-        assert summary["backend_type"] == "claude_cli"
+        assert summary["backend_type"] == "claude-code"
 
         # Error message should be None for valid config
         assert data["error_message"] is None
@@ -257,8 +248,6 @@ name: minimal-job
 sheet:
   size: 1
   total_items: 1
-backend:
-  type: claude_cli
 prompt:
   template: "Simple task"
 """
@@ -277,7 +266,7 @@ prompt:
         summary = data["config_summary"]
         assert summary["name"] == "minimal-job"
         assert summary["total_sheets"] == 1  # Computed from size/total_items
-        assert summary["backend_type"] == "claude_cli"
+        assert summary["backend_type"] == "claude-code"
         assert summary["validation_count"] == 0
         assert summary["notification_count"] == 0
 
@@ -308,8 +297,6 @@ sheet:
     2: [1]
     5: [2]
 
-backend:
-  type: claude_cli
 
 prompt:
   template: |

@@ -305,75 +305,6 @@ class TestWrapStateBackend:
         assert result is inner
 
 
-# ─── create_backend (execution.setup) ─────────────────────────────────────
-
-
-class TestCreateBackend:
-    """Tests for execution.setup.create_backend().
-
-    These test the shared setup module that both CLI and daemon use.
-    """
-
-    def test_claude_cli_backend(self):
-        """Test create_backend creates ClaudeCliBackend for claude_cli."""
-        from marianne.execution.setup import create_backend
-
-        mock_config = MagicMock()
-        mock_config.backend.type = "claude_cli"
-
-        with patch(
-            "marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.from_config"
-        ) as mock_from_config:
-            mock_from_config.return_value = MagicMock()
-            create_backend(mock_config)
-            mock_from_config.assert_called_once_with(mock_config.backend)
-
-    def test_anthropic_api_backend(self):
-        """Test create_backend creates AnthropicApiBackend for anthropic_api."""
-        from marianne.execution.setup import create_backend
-
-        mock_config = MagicMock()
-        mock_config.backend.type = "anthropic_api"
-
-        with patch(
-            "marianne.backends.anthropic_api.AnthropicApiBackend.from_config"
-        ) as mock_from_config:
-            mock_from_config.return_value = MagicMock()
-            create_backend(mock_config)
-            mock_from_config.assert_called_once_with(mock_config.backend)
-
-    def test_recursive_light_backend_raises(self):
-        """Phase 4a: 'recursive_light' backend type is no longer supported.
-
-        The native RecursiveLightBackend was deleted in the Phase 4 backend
-        atlas migration. create_backend now raises ValueError with migration
-        guidance instead of constructing a backend.
-        """
-        import pytest
-
-        from marianne.execution.setup import create_backend
-
-        mock_config = MagicMock()
-        mock_config.backend.type = "recursive_light"
-
-        with pytest.raises(ValueError, match="recursive_light"):
-            create_backend(mock_config)
-
-    def test_unknown_backend_falls_back_to_claude_cli(self):
-        """Test create_backend defaults to ClaudeCliBackend for unknown types."""
-        from marianne.execution.setup import create_backend
-
-        mock_config = MagicMock()
-        mock_config.backend.type = "unknown_type"
-
-        with patch(
-            "marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.from_config"
-        ) as mock_from_config:
-            mock_from_config.return_value = MagicMock()
-            create_backend(mock_config)
-            mock_from_config.assert_called_once_with(mock_config.backend)
-
-
 # ─── _create_state_backend ────────────────────────────────────────────────
 
 
@@ -480,7 +411,6 @@ class TestReconstructConfig:
         config_file = tmp_path / "test.yaml"
         config_file.write_text(
             "name: reloaded-job\n"
-            "backend:\n  type: claude_cli\n"
             "sheet:\n  size: 3\n  total_items: 9\n"
             "prompt:\n  template: 'Test {{ sheet_num }}'\n"
         )
@@ -498,7 +428,6 @@ class TestReconstructConfig:
         mock_state.config_path = str(tmp_path / "deleted.yaml")
         mock_state.config_snapshot = {
             "name": "snapshot-job",
-            "backend": {"type": "claude_cli"},
             "sheet": {"size": 3, "total_items": 9},
             "prompt": {"template": "Test {{ sheet_num }}"},
         }
@@ -513,7 +442,6 @@ class TestReconstructConfig:
         mock_state.config_path = None
         mock_state.config_snapshot = {
             "name": "snapshot-job",
-            "backend": {"type": "claude_cli"},
             "sheet": {"size": 3, "total_items": 9},
             "prompt": {"template": "Test {{ sheet_num }}"},
         }
@@ -527,7 +455,6 @@ class TestReconstructConfig:
         config_file = tmp_path / "test.yaml"
         config_file.write_text(
             "name: reloaded-job\n"
-            "backend:\n  type: claude_cli\n"
             "sheet:\n  size: 3\n  total_items: 9\n"
             "prompt:\n  template: 'Test {{ sheet_num }}'\n"
         )
@@ -535,7 +462,6 @@ class TestReconstructConfig:
         mock_state.config_path = str(config_file)
         mock_state.config_snapshot = {
             "name": "snapshot-job",
-            "backend": {"type": "claude_cli"},
             "sheet": {"size": 3, "total_items": 9},
             "prompt": {"template": "Test {{ sheet_num }}"},
         }
@@ -549,7 +475,6 @@ class TestReconstructConfig:
         config_file = tmp_path / "override.yaml"
         config_file.write_text(
             "name: override-job\n"
-            "backend:\n  type: claude_cli\n"
             "sheet:\n  size: 3\n  total_items: 9\n"
             "prompt:\n  template: 'Test {{ sheet_num }}'\n"
         )
@@ -573,7 +498,6 @@ class TestReconstructConfig:
         # Create a real minimal config dict
         snapshot = {
             "name": "test-job",
-            "backend": {"type": "claude_cli"},
             "sheet": {"size": 5, "total_items": 10},
             "prompt": {"template": "{{ sheet_num }}"},
         }

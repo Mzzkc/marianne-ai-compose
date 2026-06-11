@@ -45,7 +45,7 @@ class SemanticAnalyzer:
     """Analyzes sheet completions via LLM to produce learning insights.
 
     Lifecycle:
-        backend = create_backend_from_config(config.backend)
+        backend = create_backend_for_instrument(registry, config.instrument)
         analyzer = SemanticAnalyzer(config, backend, learning_hub, live_states)
         await analyzer.start(event_bus)
         # ... events flow, analyses run ...
@@ -111,7 +111,7 @@ class SemanticAnalyzer:
             )
             done, _ = await asyncio.wait(
                 self._pending_tasks,
-                timeout=self._config.backend.timeout_seconds,
+                timeout=self._config.timeout_seconds,
             )
             # Cancel any tasks that didn't finish in time
             for task in self._pending_tasks - done:
@@ -324,7 +324,9 @@ Example:
     async def _call_llm(self, prompt: str) -> str:
         """Call the configured backend with the analysis prompt."""
         start = time.monotonic()
-        result = await self._backend.execute(prompt)
+        result = await self._backend.execute(
+            prompt, timeout_seconds=self._config.timeout_seconds,
+        )
         duration = time.monotonic() - start
 
         if not result.success:

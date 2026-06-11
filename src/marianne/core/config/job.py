@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from marianne.core.fan_out import FanOutMetadata  # noqa: F401
 
 from marianne.core.config.a2a import AgentCard
-from marianne.core.config.backend import BackendConfig, BridgeConfig
+from marianne.core.config.backend import BridgeConfig
 from marianne.core.config.execution import (
     CircuitBreakerConfig,
     CostLimitConfig,
@@ -50,7 +50,7 @@ from marianne.core.config.workspace import (
     LogConfig,
     WorkspaceLifecycleConfig,
 )
-from marianne.core.constants import STATE_DB_FILENAME
+from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, STATE_DB_FILENAME
 
 
 class InjectionCategory(str, Enum):
@@ -691,16 +691,14 @@ class JobConfig(BaseModel):
     description: str | None = Field(default=None, description="Human-readable description")
     workspace: Path = Field(default=Path("./workspace"), description="Output directory")
 
-    backend: BackendConfig = Field(default_factory=BackendConfig)
-
-    # Instrument plugin system (v1 — coexists with backend:)
+    # Instrument plugin system — the only execution-config path
+    # (the legacy backend: field was stripped, #347).
     instrument: str | None = Field(
         default=None,
         min_length=1,
         description="Name of a registered instrument profile, e.g. 'gemini-cli'. "
         "Resolved to an InstrumentProfile at job submission. "
-        "Mutually exclusive with backend.type (non-default). "
-        "When omitted, the backend: field determines execution.",
+        "When omitted, the default instrument (claude-code) executes.",
     )
     instrument_config: dict[str, Any] = Field(
         default_factory=dict,
@@ -877,30 +875,6 @@ class JobConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _validate_instrument_backend_coexistence(self) -> JobConfig:
-        """Validate mutual exclusion between instrument: and backend.type.
-
-        Per the instrument plugin system design spec:
-        - instrument: and backend: are two ways to specify execution
-        - If both present (backend.type non-default) → validation error
-        - If only backend: → works exactly as today
-        - If only instrument: → resolves via profile registry at runtime
-        - If neither → defaults to claude_cli
-
-        The backend: field always exists with defaults. The conflict is
-        only when the user explicitly sets backend.type to a non-default
-        value while also setting instrument:.
-        """
-        if self.instrument is not None and self.backend.type != "claude_cli":
-            raise ValueError(
-                f"Cannot specify both 'instrument: {self.instrument}' and "
-                f"'backend.type: {self.backend.type}'. Use instrument: for "
-                "config-driven instruments, or backend: for native backends. "
-                "Not both."
-            )
-        return self
-
-    @model_validator(mode="after")
     def _warn_parallel_isolation(self) -> JobConfig:
         """Warn when parallel execution and worktree isolation are both enabled (#29).
 
@@ -1000,12 +974,8 @@ class JobConfig(BaseModel):
         """Return the name used to resolve this score's execution instrument.
 
         The explicit ``instrument:`` field wins when set; otherwise the
-        legacy ``backend.type`` name is returned. The 4 native backend
-        names (``claude_cli``, ``anthropic_api``, ``ollama``,
-        ``recursive_light``) are also valid instrument registry names
-        thanks to the ``register_native_instruments()`` bridge, so
-        display and dispatch paths can both rely on this single
-        identifier without inspecting the legacy ``backend.type`` field
-        directly.
+        default instrument (claude-code, Marianne's reference instrument)
+        is returned. Display and dispatch paths rely on this single
+        identifier.
         """
-        return self.instrument or self.backend.type
+        return self.instrument or DEFAULT_INSTRUMENT_NAME

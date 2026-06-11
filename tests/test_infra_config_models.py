@@ -770,20 +770,6 @@ class TestOpenRouterBackend:
 
         assert OpenRouterBackend is not None
 
-    def test_from_config(self) -> None:
-        from marianne.core.config import BackendConfig
-        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
-
-        # BackendConfig.type doesn't include "openrouter" yet, but from_config
-        # only reads model/timeout_seconds which are type-agnostic fields.
-        config = BackendConfig(
-            model="minimax/minimax-2.5",
-            timeout_seconds=120.0,
-        )
-        backend = OpenRouterBackend.from_config(config)
-        assert backend.model == "minimax/minimax-2.5"
-        assert backend.timeout_seconds == 120.0
-
     def test_default_model(self) -> None:
         from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
 

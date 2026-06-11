@@ -257,12 +257,9 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
                         **instrument_config,
                         **movement_def.instrument_config,
                     }
-            # Fall through to score-level or backend default
+            # Fall through to score-level or the default instrument
             if resolved_instrument is None:
-                if config.instrument is not None:
-                    resolved_instrument = config.instrument
-                else:
-                    resolved_instrument = config.backend.type
+                resolved_instrument = config.effective_instrument_name
 
         # Resolve score-level instrument aliases to profile names.
         # If the resolved name matches a key in config.instruments, replace
@@ -282,15 +279,23 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
                 **config.sheet.per_sheet_instrument_config[sheet_num],
             }
 
+        # Normalize the legacy 'cli_model' spelling onto 'model' (the key
+        # dispatch reads). Scores written against the backend-era docs use
+        # cli_model; without this they silently ran the profile default.
+        if "model" not in instrument_config and "cli_model" in instrument_config:
+            instrument_config["model"] = instrument_config["cli_model"]
+
         # --- Timeout ---
-        # Resolution: sheet_overrides.timeout_seconds > timeout_overrides > backend.timeout_seconds
-        timeout = config.backend.timeout_seconds
-        if sheet_num in config.backend.timeout_overrides:
-            timeout = config.backend.timeout_overrides[sheet_num]
-        if sheet_num in config.backend.sheet_overrides:
-            override = config.backend.sheet_overrides[sheet_num]
-            if override.timeout_seconds is not None:
-                timeout = override.timeout_seconds
+        # From the merged instrument_config (score -> movement -> alias ->
+        # per-sheet merges above), so per-scope timeout_seconds overrides
+        # compose exactly like every other instrument knob. Falls back to
+        # the 30-minute default. (Replaced the legacy backend.timeout_*
+        # fields when backend: was stripped, #347.)
+        raw_timeout = instrument_config.get("timeout_seconds")
+        try:
+            timeout = float(raw_timeout) if raw_timeout is not None else 1800.0
+        except (TypeError, ValueError):
+            timeout = 1800.0
 
         # --- Prompt ---
         prompt_template = config.prompt.template

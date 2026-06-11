@@ -16,7 +16,6 @@ from pathlib import Path
 import anthropic
 
 from marianne.backends.base import Backend, ExecutionResult
-from marianne.core.config import BackendConfig
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
 
@@ -74,17 +73,6 @@ class AnthropicApiBackend(Backend):
         self._saved_temperature: float | None = None
         self._saved_max_tokens: int | None = None
         self._has_overrides: bool = False
-
-    @classmethod
-    def from_config(cls, config: BackendConfig) -> "AnthropicApiBackend":
-        """Create backend from configuration."""
-        return cls(
-            model=config.model,
-            api_key_env=config.api_key_env,
-            max_tokens=config.max_tokens,
-            temperature=config.temperature,
-            timeout_seconds=config.timeout_seconds,
-        )
 
     @property
     def name(self) -> str:

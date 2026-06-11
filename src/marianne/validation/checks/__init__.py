@@ -12,8 +12,6 @@ from marianne.validation.checks.best_practices import (
     FileExistsOnlyCheck,
     FormatSyntaxInTemplateCheck,
     JinjaInValidationPathCheck,
-    MissingDisableMcpCheck,
-    MissingSkipPermissionsCheck,
     NoValidationsCheck,
     SkipWhenSheetRangeCheck,
     VariableShadowingCheck,
@@ -38,9 +36,7 @@ from marianne.validation.checks.jinja import (
 from marianne.validation.checks.paths import (
     PreludeCadenzaFileCheck,
     SkillFilesExistCheck,
-    SystemPromptFileCheck,
     TemplateFileExistsCheck,
-    WorkingDirectoryCheck,
     WorkspaceParentExistsCheck,
 )
 from marianne.validation.checks.techniques import (
@@ -57,8 +53,6 @@ __all__ = [
     # Path checks
     "WorkspaceParentExistsCheck",
     "TemplateFileExistsCheck",
-    "SystemPromptFileCheck",
-    "WorkingDirectoryCheck",
     "PreludeCadenzaFileCheck",
     "SkillFilesExistCheck",
     # Config checks
@@ -75,12 +69,10 @@ __all__ = [
     "JinjaInValidationPathCheck",
     "FormatSyntaxInTemplateCheck",
     "NoValidationsCheck",
-    "MissingSkipPermissionsCheck",
     "FileExistsOnlyCheck",
     "FanOutWithoutDependenciesCheck",
     "FanOutWithoutParallelCheck",
     "VariableShadowingCheck",
-    "MissingDisableMcpCheck",
     "SkipWhenSheetRangeCheck",
     # Technique checks
     "TechniqueSkillPathCheck",

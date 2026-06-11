@@ -27,8 +27,6 @@ class TestRealtimeValidationAPI:
 name: "test-job"
 description: "Test job for validation"
 
-backend:
-  type: "claude_cli"
 
 sheet:
   size: 1
@@ -406,8 +404,6 @@ class TestValidationIntegration:
 name: "integration-test"
 description: "End-to-end validation test"
 
-backend:
-  type: "claude_cli"
 
 sheet:
   size: 1
@@ -458,8 +454,6 @@ workspace: "./test-workspace"
 
         config_with_files = f"""
 name: "file-ref-test"
-backend:
-  type: "claude_cli"
 
 sheet:
   size: 1

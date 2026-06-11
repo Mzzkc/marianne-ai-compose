@@ -145,39 +145,20 @@ class TestScoreInstrumentField:
         )
         assert config.instrument == "gemini-cli"
 
-    def test_backend_still_works(self) -> None:
-        """Old `backend:` syntax still works unchanged."""
-        from marianne.core.config.job import JobConfig
+    def test_backend_rejected(self) -> None:
+        """Old `backend:` syntax is fully stripped — fails loudly (#347)."""
+        import pytest as _pytest
+        from pydantic import ValidationError
 
-        config = JobConfig(
-            name="test-backend",
-            workspace="./workspaces/test",
-            backend={"type": "claude_cli"},
-            sheet={"size": 1, "total_items": 1},
-            prompt={"template": "hello"},
-        )
-        assert config.backend.type == "claude_cli"
-        assert config.instrument is None
+        from marianne.core.config.job import JobConfig, PromptConfig, SheetConfig
 
-    def test_instrument_and_backend_both_present_raises(self) -> None:
-        """Having both `instrument:` and non-default `backend:` is a validation error.
-
-        The validator only fires when backend.type is NOT the default (claude_cli),
-        because backend always has a default value. Conflict = user explicitly set
-        both instrument: and backend.type to something non-default.
-        """
-        from marianne.core.config.job import JobConfig
-
-        with pytest.raises(ValueError, match="Cannot specify both"):
+        with _pytest.raises(ValidationError, match="extra_forbidden"):
             JobConfig(
-                name="test-both",
-                workspace="./workspaces/test",
-                instrument="gemini-cli",
-                backend={"type": "anthropic_api"},
-                sheet={"size": 1, "total_items": 1},
-                prompt={"template": "hello"},
+                name="test-backend",
+                sheet=SheetConfig(size=1, total_items=1),
+                prompt=PromptConfig(template="t"),
+                backend={"type": "claude_cli"},
             )
-
 
 # =============================================================================
 # Story 3: Custom Instrument

@@ -277,7 +277,7 @@ def _recursive_light_profile() -> InstrumentProfile:
 def register_native_instruments(registry: InstrumentRegistry) -> None:
     """Register Marianne's 4 built-in backends as named instruments.
 
-    This bridges the native backend system (BackendConfig → Backend) with
+    This bridges the native backends with
     the new instrument system (InstrumentProfile → registry lookup). After
     calling this, the registry contains profiles for claude_cli, anthropic_api,
     ollama, and recursive_light.

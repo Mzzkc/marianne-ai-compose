@@ -228,7 +228,13 @@ class TimeoutRangeCheck:
         """Check timeout values."""
         issues: list[ValidationIssue] = []
 
-        timeout = config.backend.timeout_seconds
+        raw_timeout = config.instrument_config.get("timeout_seconds")
+        if raw_timeout is None:
+            return issues
+        try:
+            timeout = float(raw_timeout)
+        except (TypeError, ValueError):
+            return issues
 
         if timeout < self.MIN_REASONABLE_TIMEOUT:
             issues.append(

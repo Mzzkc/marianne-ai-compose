@@ -134,30 +134,6 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
             headers=headers,
         )
 
-    @classmethod
-    def from_config(cls, config: object) -> OpenRouterBackend:
-        """Create backend from a BackendConfig.
-
-        Args:
-            config: A BackendConfig instance (typed as object to avoid
-                circular import — BackendConfig lives in core.config).
-
-        Returns:
-            Configured OpenRouterBackend instance.
-        """
-        model = getattr(config, "model", _DEFAULT_MODEL) or _DEFAULT_MODEL
-        timeout = getattr(config, "timeout_seconds", 300.0)
-        api_key_env = getattr(config, "api_key_env", "OPENROUTER_API_KEY")
-        max_tokens = getattr(config, "max_tokens", 16384)
-        temperature = getattr(config, "temperature", 0.7)
-        return cls(
-            model=model,
-            api_key_env=api_key_env,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            timeout_seconds=timeout,
-        )
-
     @property
     def name(self) -> str:
         """Human-readable backend name including model."""

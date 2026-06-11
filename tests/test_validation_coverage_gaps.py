@@ -25,8 +25,6 @@ from marianne.validation.checks.best_practices import (
     FileExistsOnlyCheck,
     FormatSyntaxInTemplateCheck,
     JinjaInValidationPathCheck,
-    MissingDisableMcpCheck,
-    MissingSkipPermissionsCheck,
     NoValidationsCheck,
     VariableShadowingCheck,
 )
@@ -224,53 +222,6 @@ class TestNoValidationsCheck:
         config_path = tmp_path / "test.yaml"
         config = _make_config(yaml_str, config_path)
         check = NoValidationsCheck()
-        issues = check.check(config, config_path, yaml_str)
-        assert len(issues) == 0
-
-
-class TestMissingSkipPermissionsCheck:
-    """V204: missing skip_permissions for Claude CLI."""
-
-    def test_properties(self) -> None:
-        check = MissingSkipPermissionsCheck()
-        assert check.check_id == "V204"
-        assert check.severity == ValidationSeverity.WARNING
-        assert "skip_permissions" in check.description
-
-    def test_fires_without_skip_permissions(self, tmp_path: Path) -> None:
-        yaml_str = dedent("""\
-            name: test
-            sheet:
-              size: 5
-              total_items: 5
-            prompt:
-              template: "Work"
-            backend:
-              type: claude_cli
-              skip_permissions: false
-        """)
-        config_path = tmp_path / "test.yaml"
-        config = _make_config(yaml_str, config_path)
-        check = MissingSkipPermissionsCheck()
-        issues = check.check(config, config_path, yaml_str)
-        assert len(issues) == 1
-        assert issues[0].check_id == "V204"
-
-    def test_passes_with_skip_permissions(self, tmp_path: Path) -> None:
-        yaml_str = dedent("""\
-            name: test
-            sheet:
-              size: 5
-              total_items: 5
-            prompt:
-              template: "Work"
-            backend:
-              type: claude_cli
-              skip_permissions: true
-        """)
-        config_path = tmp_path / "test.yaml"
-        config = _make_config(yaml_str, config_path)
-        check = MissingSkipPermissionsCheck()
         issues = check.check(config, config_path, yaml_str)
         assert len(issues) == 0
 
@@ -482,58 +433,6 @@ class TestVariableShadowingCheck:
         check = VariableShadowingCheck()
         issues = check.check(config, config_path, yaml_str)
         assert len(issues) == 0
-
-
-class TestMissingDisableMcpCheck:
-    """V209: missing disable_mcp for Claude CLI."""
-
-    def test_properties(self) -> None:
-        check = MissingDisableMcpCheck()
-        assert check.check_id == "V209"
-        assert check.severity == ValidationSeverity.INFO
-        assert "disable_mcp" in check.description
-
-    def test_fires_without_disable_mcp(self, tmp_path: Path) -> None:
-        yaml_str = dedent("""\
-            name: test
-            sheet:
-              size: 5
-              total_items: 5
-            prompt:
-              template: "Work"
-            backend:
-              type: claude_cli
-              disable_mcp: false
-        """)
-        config_path = tmp_path / "test.yaml"
-        config = _make_config(yaml_str, config_path)
-        check = MissingDisableMcpCheck()
-        issues = check.check(config, config_path, yaml_str)
-        assert len(issues) == 1
-        assert issues[0].check_id == "V209"
-
-    def test_passes_with_disable_mcp(self, tmp_path: Path) -> None:
-        yaml_str = dedent("""\
-            name: test
-            sheet:
-              size: 5
-              total_items: 5
-            prompt:
-              template: "Work"
-            backend:
-              type: claude_cli
-              disable_mcp: true
-        """)
-        config_path = tmp_path / "test.yaml"
-        config = _make_config(yaml_str, config_path)
-        check = MissingDisableMcpCheck()
-        issues = check.check(config, config_path, yaml_str)
-        assert len(issues) == 0
-
-
-# ============================================================================
-# config.py — regex suggestion helpers, rate limit patterns
-# ============================================================================
 
 
 class TestRegexPatternCheckSuggestions:

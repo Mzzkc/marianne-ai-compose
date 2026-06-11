@@ -977,8 +977,6 @@ sheet:
   total_items: 1
 prompt:
   template: "Test"
-backend:
-  working_directory: {workspace}
 isolation:
   enabled: true
   fallback_on_error: true
@@ -1042,9 +1040,10 @@ class TestBackendWorkingDirectory:
         """Test that backend working_directory can be overridden."""
         from pathlib import Path
 
-        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+        from tests.test_interactive_mode import make_profile
 
-        backend = ClaudeCliBackend(working_directory=Path("/original"))
+        backend = PluginCliBackend(make_profile(), working_directory=Path("/original"))
         assert backend.working_directory == Path("/original")
 
         # Simulate worktree override
@@ -1060,9 +1059,10 @@ class TestBackendWorkingDirectory:
         """Test dynamic attribute access works for working_directory."""
         from pathlib import Path
 
-        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+        from tests.test_interactive_mode import make_profile
 
-        backend = ClaudeCliBackend(working_directory=Path("/test"))
+        backend = PluginCliBackend(make_profile(), working_directory=Path("/test"))
 
         # hasattr check
         assert hasattr(backend, "working_directory")

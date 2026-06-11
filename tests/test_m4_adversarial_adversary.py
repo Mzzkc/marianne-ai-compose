@@ -27,7 +27,6 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from marianne.core.config.backend import BackendConfig
 from marianne.core.config.execution import (
     StaleDetectionConfig,
     ValidationRule,
@@ -194,17 +193,16 @@ class TestF441StrictnessEdges:
                 {"name": "Planning", "instrument": "claude-code", "description": "desc"}
             )
 
-    def test_backend_config_still_accepted_alongside_instrument(self) -> None:
-        """The backend: -> instrument: bridge coexistence works with forbid.
+    def test_backend_field_rejected(self) -> None:
+        """The legacy backend: field is fully stripped (#347).
 
-        Both backend and instrument are declared fields on JobConfig.
-        A score using instrument: should not cause backend: (with its
-        default value) to be rejected.
+        Scores still carrying backend: must fail loudly at parse time
+        rather than silently ignoring the block.
         """
         data = _minimal_job_config(instrument="claude-code")
-        config = JobConfig(**data)
-        assert config.instrument == "claude-code"
-        assert isinstance(config.backend, BackendConfig)
+        data["backend"] = {"type": "claude_cli"}
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            JobConfig(**data)
 
     def test_deeply_nested_cost_limit_unknown_field(self) -> None:
         """Unknown field in deeply nested cost_limits config."""

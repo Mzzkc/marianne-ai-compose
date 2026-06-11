@@ -440,7 +440,7 @@ class TestInstrumentResolutionChain:
         assert sheets[0].instrument_config == {"model": "gemini-2.5-flash"}
         assert sheets[1].instrument_config == {}
 
-    def test_build_sheets_falls_back_to_backend_type(self) -> None:
+    def test_build_sheets_falls_back_to_default_instrument(self) -> None:
         """When no instrument: is set, falls back to backend.type."""
         from marianne.core.sheet import build_sheets
 
@@ -450,7 +450,7 @@ class TestInstrumentResolutionChain:
             prompt={"template": "test"},
         )
         sheets = build_sheets(config)
-        assert sheets[0].instrument_name == "claude_cli"
+        assert sheets[0].instrument_name == "claude-code"
 
 
 # ---------------------------------------------------------------------------
@@ -466,8 +466,6 @@ class TestBackwardCompatibility:
         yaml_str = """
 name: test
 workspace: /tmp/test
-backend:
-  type: claude_cli
 sheet:
   size: 1
   total_items: 3

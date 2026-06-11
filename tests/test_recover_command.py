@@ -56,7 +56,6 @@ def _make_state(
     if include_config:
         config_snapshot = {
             "name": job_id,
-            "backend": {"type": "claude_cli", "skip_permissions": True},
             "sheet": {"size": 10, "total_items": 30},
             "prompt": {"template": "Sheet {{ sheet_num }}"},
             "workspace": str(workspace),
@@ -329,7 +328,6 @@ class TestLoadRecoveryConfig:
     def _valid_snapshot(workspace: Path) -> dict:
         return {
             "name": "ok-job",
-            "backend": {"type": "claude_cli", "skip_permissions": True},
             "sheet": {"size": 10, "total_items": 30},
             "prompt": {"template": "Sheet {{ sheet_num }}"},
             "workspace": str(workspace),

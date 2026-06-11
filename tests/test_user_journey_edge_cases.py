@@ -164,8 +164,6 @@ class TestMarcusMultiInstrument:
             name: dual-config
             workspace: ../workspaces/dual
             instrument: claude-code
-            backend:
-              type: anthropic_api
             sheet:
               size: 1
               total_items: 1
@@ -191,8 +189,6 @@ class TestMarcusMultiInstrument:
             name: instrument-ok
             workspace: {tmp_path}/workspaces/ok
             instrument: claude-code
-            backend:
-              type: claude_cli
             sheet:
               size: 1
               total_items: 1

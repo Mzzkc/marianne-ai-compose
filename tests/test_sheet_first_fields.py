@@ -76,54 +76,27 @@ class TestJobConfigInstrumentField:
 
 
 # =============================================================================
-# Coexistence: instrument: and backend:
+# Post-strip: backend: rejected, instrument: is the only path (#347)
 # =============================================================================
 
 
-class TestInstrumentBackendCoexistence:
-    """Tests for the mutual exclusion between instrument: and backend:."""
+class TestBackendStripped:
+    """The legacy backend: field is gone — these pin the replacement rules."""
 
-    def test_backend_only_works_unchanged(self) -> None:
-        """backend: without instrument: works exactly as before."""
-        config = JobConfig.model_validate(
-            _minimal_job_config(
-                backend={"type": "claude_cli", "allowed_tools": ["Read"]},
-            )
-        )
-        assert config.backend.type == "claude_cli"
-        assert config.instrument is None
+    def test_backend_field_rejected(self) -> None:
+        import pytest as _pytest
+        from pydantic import ValidationError
 
-    def test_instrument_only_works(self) -> None:
-        """instrument: without backend: is accepted."""
-        config = JobConfig.model_validate(_minimal_job_config(instrument="codex-cli"))
-        assert config.instrument == "codex-cli"
+        with _pytest.raises(ValidationError, match="extra_forbidden"):
+            JobConfig(**_minimal_job_config(backend={"type": "anthropic_api"}))
 
-    def test_both_instrument_and_backend_type_raises(self) -> None:
-        """instrument: + backend.type (non-default) raises validation error."""
-        with pytest.raises(ValidationError, match="instrument.*backend|backend.*instrument"):
-            JobConfig.model_validate(
-                _minimal_job_config(
-                    instrument="gemini-cli",
-                    backend={"type": "anthropic_api"},
-                )
-            )
+    def test_no_instrument_uses_default(self) -> None:
+        config = JobConfig(**_minimal_job_config())
+        assert config.effective_instrument_name == "claude-code"
 
-    def test_instrument_with_default_backend_is_ok(self) -> None:
-        """instrument: with default backend (no explicit type) is fine.
-
-        The backend field always exists with defaults. The conflict is only
-        when the user explicitly sets backend.type to a non-default value.
-        """
-        config = JobConfig.model_validate(_minimal_job_config(instrument="gemini-cli"))
-        # backend exists with default values — that's fine
-        assert config.backend is not None
-        assert config.instrument == "gemini-cli"
-
-    def test_neither_instrument_nor_backend_uses_default(self) -> None:
-        """No instrument: and no backend: → default backend (claude_cli)."""
-        config = JobConfig.model_validate(_minimal_job_config())
-        assert config.instrument is None
-        assert config.backend.type == "claude_cli"
+    def test_instrument_only_path_works(self) -> None:
+        config = JobConfig(**_minimal_job_config(instrument="gemini-cli"))
+        assert config.effective_instrument_name == "gemini-cli"
 
 
 # =============================================================================

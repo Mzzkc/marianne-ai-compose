@@ -207,7 +207,7 @@ class TestConfigResources:
         result = await resources.read_resource("config://example")
         content = result["contents"][0]
         assert "sheets:" in content["text"]
-        assert "backend:" in content["text"]
+        assert "instrument:" in content["text"]
 
     async def test_get_backend_options(self) -> None:
         resources = ConfigResources()

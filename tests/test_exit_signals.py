@@ -8,7 +8,6 @@ Tests cover:
 """
 
 import signal
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -21,7 +20,6 @@ from marianne.core.errors import (
     ErrorClassifier,
     get_signal_name,
 )
-from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
 
 # ============================================================================
 # ExecutionResult Tests
@@ -103,178 +101,6 @@ class TestExecutionResultSignalFields:
             exit_reason=reason,
         )
         assert result.exit_reason == reason
-
-
-# ============================================================================
-# ClaudeCliBackend Signal Tests
-# ============================================================================
-
-
-class TestClaudeCliBackendSignalNames:
-    """Test signal name helper functions."""
-
-    @pytest.mark.parametrize(
-        ("sig", "expected"),
-        [
-            (signal.SIGTERM, "SIGTERM"),
-            (signal.SIGKILL, "SIGKILL"),
-            (signal.SIGSEGV, "SIGSEGV"),
-            (signal.SIGABRT, "SIGABRT"),
-            (signal.SIGHUP, "SIGHUP"),
-            (signal.SIGINT, "SIGINT"),
-            (signal.SIGPIPE, "SIGPIPE"),
-        ],
-    )
-    def test_known_signal_names(self, sig: int, expected: str) -> None:
-        """Test that known signals return correct names."""
-        assert get_signal_name(sig) == expected
-
-    def test_unknown_signal_name(self) -> None:
-        """Test that unknown signals return 'signal N'."""
-        # Use a signal number not in SIGNAL_NAMES
-        unknown_sig = 99
-        assert get_signal_name(unknown_sig) == "signal 99"
-
-
-class TestClaudeCliBackendSignalDetection:
-    """Test ClaudeCliBackend signal detection in execute()."""
-
-    @pytest.fixture
-    def backend(self) -> ClaudeCliBackend:
-        """Create backend with mock claude path."""
-        backend = ClaudeCliBackend(timeout_seconds=5.0)
-        backend._claude_path = "/usr/bin/claude"
-        return backend
-
-    @pytest.mark.asyncio
-    async def test_normal_exit_success(self, backend: ClaudeCliBackend) -> None:
-        """Test normal successful exit."""
-        mock_process = AsyncMock()
-        mock_process.returncode = 0
-        mock_process.pid = 12345
-
-        with (
-            patch("asyncio.create_subprocess_exec", return_value=mock_process),
-            patch.object(backend, "_stream_with_progress", return_value=(b"output", b"")),
-        ):
-            result = await backend.execute("test")
-
-        assert result.success is True
-        assert result.exit_code == 0
-        assert result.exit_signal is None
-        assert result.exit_reason == "completed"
-
-    @pytest.mark.asyncio
-    async def test_normal_exit_failure(self, backend: ClaudeCliBackend) -> None:
-        """Test normal exit with non-zero code."""
-        mock_process = AsyncMock()
-        mock_process.returncode = 1
-        mock_process.pid = 12345
-
-        with (
-            patch("asyncio.create_subprocess_exec", return_value=mock_process),
-            patch.object(backend, "_stream_with_progress", return_value=(b"", b"error")),
-        ):
-            result = await backend.execute("test")
-
-        assert result.success is False
-        assert result.exit_code == 1
-        assert result.exit_signal is None
-        assert result.exit_reason == "completed"
-
-    @pytest.mark.asyncio
-    async def test_signal_kill_detection(self, backend: ClaudeCliBackend) -> None:
-        """Test detection of signal-killed process."""
-        mock_process = AsyncMock()
-        # Negative returncode means signal: -15 = SIGTERM
-        mock_process.returncode = -signal.SIGTERM
-        mock_process.pid = 12345
-
-        with (
-            patch("asyncio.create_subprocess_exec", return_value=mock_process),
-            patch.object(backend, "_stream_with_progress", return_value=(b"partial", b"")),
-        ):
-            result = await backend.execute("test")
-
-        assert result.success is False
-        assert result.exit_code is None
-        assert result.exit_signal == signal.SIGTERM
-        assert result.exit_reason == "killed"
-        assert "SIGTERM" in result.stderr
-
-    @pytest.mark.asyncio
-    async def test_segfault_detection(self, backend: ClaudeCliBackend) -> None:
-        """Test detection of segmentation fault."""
-        mock_process = AsyncMock()
-        mock_process.returncode = -signal.SIGSEGV
-        mock_process.pid = 12345
-
-        with (
-            patch("asyncio.create_subprocess_exec", return_value=mock_process),
-            patch.object(backend, "_stream_with_progress", return_value=(b"", b"")),
-        ):
-            result = await backend.execute("test")
-
-        assert result.exit_signal == signal.SIGSEGV
-        assert result.exit_reason == "killed"
-        assert "SIGSEGV" in result.stderr
-
-    @pytest.mark.asyncio
-    async def test_timeout_handling(self, backend: ClaudeCliBackend) -> None:
-        """Test timeout produces correct signal info."""
-        backend.timeout_seconds = 0.001  # Very short timeout
-
-        mock_process = AsyncMock()
-        mock_process.terminate = MagicMock()
-        mock_process.kill = MagicMock()
-        mock_process.wait = AsyncMock()
-        mock_process.pid = 12345
-        mock_process.returncode = None
-
-        async def _raise_timeout(*args, **kwargs):
-            raise TimeoutError("timeout")
-
-        with (
-            patch("asyncio.create_subprocess_exec", return_value=mock_process),
-            patch.object(backend, "_stream_with_progress", side_effect=_raise_timeout),
-        ):
-            result = await backend.execute("test")
-
-        assert result.success is False
-        assert result.exit_code is None
-        # Backend sends SIGTERM first for graceful shutdown; SIGKILL only
-        # escalates when the process doesn't exit within the grace period.
-        # Mock process.wait() returns immediately, so SIGTERM succeeds.
-        assert result.exit_signal == signal.SIGTERM
-        assert result.exit_reason == "timeout"
-        assert "timed out" in result.stderr.lower()
-
-    @pytest.mark.asyncio
-    async def test_file_not_found(self, backend: ClaudeCliBackend) -> None:
-        """Test FileNotFoundError produces error exit reason."""
-        with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError("not found")):
-            result = await backend.execute("test")
-
-        assert result.success is False
-        assert result.exit_code == 127
-        assert result.exit_signal is None
-        assert result.exit_reason == "error"
-
-    @pytest.mark.asyncio
-    async def test_general_exception(self, backend: ClaudeCliBackend) -> None:
-        """Test general exception produces error exit reason."""
-        with patch("asyncio.create_subprocess_exec", side_effect=RuntimeError("unexpected")):
-            result = await backend.execute("test")
-
-        assert result.success is False
-        assert result.exit_code is None
-        assert result.exit_signal is None
-        assert result.exit_reason == "error"
-
-
-# ============================================================================
-# ErrorClassifier Signal Tests
-# ============================================================================
 
 
 class TestErrorClassifierSignalHandling:

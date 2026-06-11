@@ -33,7 +33,6 @@ def sample_yaml_config(tmp_path: Path) -> Path:
     config = {
         "name": "test-job",
         "description": "Test job for CLI tests",
-        "backend": {"type": "claude_cli", "skip_permissions": True},
         "sheet": {"size": 10, "total_items": 30},
         "prompt": {"template": "Process sheet {{ sheet_num }}."},
         "retry": {"max_retries": 2},
@@ -200,7 +199,6 @@ class TestRunCommandExecution:
 
         config = {
             "name": "cost-enabled-job",
-            "backend": {"type": "claude_cli", "skip_permissions": True},
             "sheet": {"size": 10, "total_items": 10},
             "prompt": {"template": "Test {{ sheet_num }}."},
             "cost_limits": {

@@ -14,12 +14,8 @@ from marianne.core.config.a2a import (
 
 # Backend configuration
 from marianne.core.config.backend import (
-    BackendConfig,
     BridgeConfig,
     MCPServerConfig,
-    OllamaConfig,
-    RecursiveLightConfig,
-    SheetBackendOverride,
 )
 
 # Execution configuration
@@ -115,12 +111,8 @@ __all__ = [
     "A2ASkill",
     "AgentCard",
     # Backend
-    "BackendConfig",
     "BridgeConfig",
     "MCPServerConfig",
-    "OllamaConfig",
-    "RecursiveLightConfig",
-    "SheetBackendOverride",
     # Instruments
     "CliCommand",
     "CliErrorConfig",

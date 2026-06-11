@@ -84,7 +84,6 @@ def running_job_state(temp_workspace: Path) -> tuple[CheckpointState, Path]:
             "name": "test-pause-job",
             "sheet": {"size": 10, "total_items": 50},
             "prompt": {"template": "Test prompt {{ sheet_num }}"},
-            "backend": {"type": "claude_cli"},
         },
         sheets={
             1: SheetState(
@@ -125,7 +124,6 @@ def paused_job_state(temp_workspace: Path) -> tuple[CheckpointState, Path]:
             "name": "test-paused-job",
             "sheet": {"size": 10, "total_items": 50},
             "prompt": {"template": "Test prompt {{ sheet_num }}"},
-            "backend": {"type": "claude_cli"},
         },
     )
 
@@ -173,7 +171,6 @@ def failed_job_state(temp_workspace: Path) -> tuple[CheckpointState, Path]:
             "name": "test-failed-job",
             "sheet": {"size": 10, "total_items": 50},
             "prompt": {"template": "Test prompt {{ sheet_num }}"},
-            "backend": {"type": "claude_cli"},
         },
     )
 
@@ -210,10 +207,6 @@ def sample_valid_config(tmp_path: Path) -> Path:
     config_dict = {
         "name": "modified-job",
         "description": "Modified job configuration",
-        "backend": {
-            "type": "claude_cli",
-            "skip_permissions": True,
-        },
         "sheet": {
             "size": 15,
             "total_items": 45,
@@ -1269,7 +1262,6 @@ class TestModifyConductorRouted:
 
         cfg = {
             "name": "test-modify-job",
-            "backend": {"type": "claude_cli", "skip_permissions": True},
             "sheet": {"size": 10, "total_items": 30},
             "prompt": {"template": "Test {{ sheet_num }}"},
         }

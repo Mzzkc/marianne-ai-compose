@@ -64,9 +64,6 @@ def _create_backend_for_profile(
     must carry a verified ``cli.interactive`` block, else this raises).
     For HTTP instruments, creates the appropriate API backend.
 
-    Falls back to the legacy ``create_backend_from_config`` for native
-    instruments that don't have a profile-based constructor.
-
     Args:
         profile: The instrument profile.
         working_directory: Working directory for subprocess execution.
@@ -124,6 +121,41 @@ def _create_backend_for_profile(
         working_directory=working_directory,
         model=model,
         api_key=api_key,
+    )
+
+
+def create_backend_for_instrument(
+    registry: InstrumentRegistry,
+    instrument_name: str,
+    *,
+    model: str | None = None,
+    working_directory: Path | None = None,
+) -> Backend:
+    """Create a one-off Backend for a registered instrument by name.
+
+    The single creation path for daemon services that need an LLM backend
+    outside the sheet-dispatch pool (semantic analyzer, judgment client).
+    Routes through the same profile dispatch as the BackendPool, so service
+    backends and musician backends can never drift.
+
+    Service calls are always HEADLESS: their callers parse structured
+    output from ``result.stdout``, which an interactive session cannot
+    provide (its stdout is a rendered screen).
+
+    Raises:
+        ValueError: If the instrument is not registered.
+    """
+    profile = registry.get(instrument_name)
+    if profile is None:
+        raise ValueError(
+            f"Instrument '{instrument_name}' not found in registry. "
+            f"Available: {', '.join(p.name for p in registry.list_all())}"
+        )
+    return _create_backend_for_profile(
+        profile,
+        working_directory=working_directory,
+        model=model,
+        interactive=False,
     )
 
 

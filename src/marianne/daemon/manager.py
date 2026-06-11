@@ -438,9 +438,11 @@ class JobManager:
         # The semantic analyzer and the baton adapter share a single
         # registry instance so that both observe the same set of profiles.
         from marianne.daemon.baton.adapter import BatonAdapter
-        from marianne.daemon.baton.backend_pool import BackendPool
+        from marianne.daemon.baton.backend_pool import (
+            BackendPool,
+            create_backend_for_instrument,
+        )
         from marianne.instruments.loader import load_all_profiles
-        from marianne.instruments.native_factory import create_backend_via_registry
         from marianne.instruments.registry import InstrumentRegistry
 
         profiles = load_all_profiles()
@@ -451,9 +453,10 @@ class JobManager:
         # Start semantic analyzer after event bus (needs bus for subscription).
         # Failure must not prevent the conductor from starting.
         try:
-            semantic_backend = create_backend_via_registry(
+            semantic_backend = create_backend_for_instrument(
                 registry,
-                self._config.learning.backend,
+                self._config.learning.instrument,
+                model=self._config.learning.model,
             )
             self._semantic_analyzer = SemanticAnalyzer(
                 config=self._config.learning,
@@ -538,15 +541,12 @@ class JobManager:
         # FERMATA sheets. Failure must not prevent the conductor from starting
         # (fail-open: sheets stay composer-resolvable).
         try:
-            from marianne.core.config.backend import BackendConfig
             from marianne.daemon.judgment import JudgmentClient
 
             adapter = self._baton_adapter
 
             def _judgment_backend(instrument: str) -> Any:
-                return create_backend_via_registry(
-                    registry, BackendConfig(type=instrument)
-                )
+                return create_backend_for_instrument(registry, instrument)
 
             judgment_client = JudgmentClient(
                 live_states=self._live_states,
@@ -2911,7 +2911,7 @@ class JobManager:
             "job.started",
             {
                 "sheet_count": len(sheets),
-                "instrument": config.backend.type,
+                "instrument": config.effective_instrument_name,
             },
         )
 

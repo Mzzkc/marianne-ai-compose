@@ -920,33 +920,6 @@ def test_checkpoint_trigger_grounding_hook_roundtrip(sheet_num: int) -> None:
 
 
 @pytest.mark.property_based
-@given(data=st.just({}))
-@settings(max_examples=1, suppress_health_check=[HealthCheck.too_slow])
-def test_backend_config_models_roundtrip(data: dict[str, Any]) -> None:
-    """BackendConfig, BridgeConfig, OllamaConfig, RecursiveLightConfig,
-    SheetBackendOverride survive round-trip."""
-    from marianne.core.config.backend import (
-        BackendConfig,
-        BridgeConfig,
-        OllamaConfig,
-        RecursiveLightConfig,
-        SheetBackendOverride,
-    )
-
-    for ModelClass in [
-        BackendConfig,
-        BridgeConfig,
-        OllamaConfig,
-        RecursiveLightConfig,
-        SheetBackendOverride,
-    ]:
-        obj = ModelClass.model_validate(data)
-        dumped = obj.model_dump()
-        restored = ModelClass.model_validate(dumped)
-        assert restored is not None
-
-
-@pytest.mark.property_based
 @given(
     name=st.text(
         min_size=1,
@@ -963,6 +936,21 @@ def test_mcp_server_config_roundtrip(name: str) -> None:
     dumped = obj.model_dump()
     restored = MCPServerConfig.model_validate(dumped)
     assert restored.name == name
+
+
+@pytest.mark.property_based
+@given(
+    enabled=st.booleans(),
+)
+@settings(max_examples=3, suppress_health_check=[HealthCheck.too_slow])
+def test_bridge_config_roundtrip(enabled: bool) -> None:
+    """BridgeConfig survives round-trip."""
+    from marianne.core.config.backend import BridgeConfig
+
+    obj = BridgeConfig(enabled=enabled)
+    dumped = obj.model_dump()
+    restored = BridgeConfig.model_validate(dumped)
+    assert restored.enabled == enabled
 
 
 # ---------------------------------------------------------------------------

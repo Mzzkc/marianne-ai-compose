@@ -22,70 +22,11 @@ from marianne.core.logging import get_logger
 _logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from marianne.backends.base import Backend
-    from marianne.core.config import BackendConfig, JobConfig
+    from marianne.core.config import JobConfig
     from marianne.learning.global_store import GlobalLearningStore
     from marianne.learning.outcomes import OutcomeStore
     from marianne.notifications.base import NotificationManager
     from marianne.state.base import StateBackend
-
-
-def create_backend_from_config(backend_config: BackendConfig) -> Backend:
-    """Create the appropriate execution backend from a BackendConfig.
-
-    Supports: claude_cli, anthropic_api, ollama. (Phase 4a: recursive_light
-    removed — use the instrument: path with an HTTP profile.)
-
-    Args:
-        backend_config: Backend configuration with type and settings.
-
-    Returns:
-        Configured Backend instance.
-    """
-    from marianne.backends.anthropic_api import AnthropicApiBackend
-    from marianne.backends.ollama import OllamaBackend
-    from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
-
-    if backend_config.type == "recursive_light":
-        raise ValueError(
-            "Backend type 'recursive_light' was removed in Phase 4 of the "
-            "backend atlas migration. The native RecursiveLightBackend has "
-            "been deleted. Migrate to the 'instrument:' path with a "
-            "registered HTTP instrument profile."
-        )
-    elif backend_config.type == "anthropic_api":
-        return AnthropicApiBackend.from_config(backend_config)
-    elif backend_config.type == "ollama":
-        return OllamaBackend.from_config(backend_config)
-    elif backend_config.type == "claude_cli":
-        return ClaudeCliBackend.from_config(backend_config)
-    else:
-        # #250: an unrecognized type falls back to the Claude CLI backend, but
-        # warn rather than route silently — a typo like 'calude_cli' previously
-        # resolved to Claude with no signal. (Production resolves backends via
-        # the instrument registry, which raises on unknown types; this native
-        # factory is the legacy path. Hardening this to raise is deferred to the
-        # backend-atlas migration sequencing — see #250.)
-        _logger.warning(
-            "setup.backend.unknown_type_fallback",
-            extra={"requested_type": backend_config.type, "fallback": "claude_cli"},
-        )
-        return ClaudeCliBackend.from_config(backend_config)
-
-
-def create_backend(config: JobConfig) -> Backend:
-    """Create the appropriate execution backend from job config.
-
-    Convenience wrapper around ``create_backend_from_config`` that
-    extracts the backend config from a full job config.
-
-    Args:
-        config: Job configuration with backend settings.
-
-    Returns:
-        Configured Backend instance.
-    """
-    return create_backend_from_config(config.backend)
 
 
 def setup_learning(
@@ -171,8 +112,6 @@ def create_state_backend(
 
 
 __all__ = [
-    "create_backend",
-    "create_backend_from_config",
     "create_state_backend",
     "setup_learning",
     "setup_notifications",

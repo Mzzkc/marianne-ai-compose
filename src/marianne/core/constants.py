@@ -14,6 +14,10 @@ SHEET_NUM_KEY = "sheet_num"
 """Standard key for sheet number in dicts and serialised state."""
 
 STATE_DB_FILENAME = ".marianne-state.db"
+
+# The instrument used when a score names none. Claude Code is Marianne's
+# reference instrument (and runs interactively by default).
+DEFAULT_INSTRUMENT_NAME = "claude-code"
 """Filename for the per-workspace SQLite state database (#245).
 
 Centralizes a literal that was previously hand-constructed in 8+ path

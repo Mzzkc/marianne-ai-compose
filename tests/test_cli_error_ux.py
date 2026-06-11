@@ -100,7 +100,6 @@ class TestF110BackpressureUX:
 
         config = {
             "name": "test-job",
-            "backend": {"type": "claude_cli"},
             "sheet": {"size": 10, "total_items": 10},
             "prompt": {"template": "test"},
         }
@@ -208,7 +207,6 @@ class TestHintVsHintsAPIMismatch:
 
         config = {
             "name": "test-hint",
-            "backend": {"type": "claude_cli"},
             "sheet": {"size": 10, "total_items": 10},
             "prompt": {"template": "test"},
         }

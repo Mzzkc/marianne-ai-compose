@@ -144,10 +144,6 @@ movements:
   6:
     name: "Final Synthesis"
 
-backend:
-  skip_permissions: true
-  disable_mcp: true
-
 sheet:
   size: 1
   total_items: 6

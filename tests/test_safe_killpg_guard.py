@@ -30,21 +30,21 @@ class TestSafeKillpgGuardBlocks:
 
     def test_pgid_one_is_blocked(self) -> None:
         """pgid=1 is the F-490 trigger — killpg(1, SIGKILL) == kill(-1, SIGKILL)."""
-        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
+        with patch("marianne.utils.process.os.killpg") as mock_killpg:
             result = _safe_killpg(1, signal.SIGKILL, context="test")
         assert result is False, "guard must return False when blocking"
         mock_killpg.assert_not_called()
 
     def test_pgid_zero_is_blocked(self) -> None:
         """pgid=0 would signal the caller's own pgroup — also unsafe."""
-        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
+        with patch("marianne.utils.process.os.killpg") as mock_killpg:
             result = _safe_killpg(0, signal.SIGKILL, context="test")
         assert result is False
         mock_killpg.assert_not_called()
 
     def test_pgid_negative_is_blocked(self) -> None:
         """Negative pgid is invalid / kernel-special; always refuse."""
-        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
+        with patch("marianne.utils.process.os.killpg") as mock_killpg:
             result = _safe_killpg(-1, signal.SIGKILL, context="test")
         assert result is False
         mock_killpg.assert_not_called()
@@ -52,7 +52,7 @@ class TestSafeKillpgGuardBlocks:
     def test_own_pgroup_is_blocked(self) -> None:
         """Signaling our own pgroup would kill pytest + whatever shares the group."""
         own_pgid = os.getpgid(0)
-        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
+        with patch("marianne.utils.process.os.killpg") as mock_killpg:
             result = _safe_killpg(own_pgid, signal.SIGKILL, context="test")
         assert result is False
         mock_killpg.assert_not_called()
@@ -63,7 +63,7 @@ class TestSafeKillpgGuardBlocks:
         Marianne uses structlog which writes to stdout/stderr directly in the
         default configuration, so capsys is the right capture tool.
         """
-        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg"):
+        with patch("marianne.utils.process.os.killpg"):
             _safe_killpg(1, signal.SIGKILL, context="unit_test")
         captured = capsys.readouterr()
         combined = captured.out + captured.err
@@ -85,7 +85,7 @@ class TestSafeKillpgGuardAllows:
         # check liveness — it only checks the blast-radius conditions.
         fake_pgid = 999999 if own_pgid != 999999 else 999998
 
-        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
+        with patch("marianne.utils.process.os.killpg") as mock_killpg:
             result = _safe_killpg(fake_pgid, signal.SIGKILL, context="test")
 
         assert result is True, "guard must return True when allowing"
@@ -101,10 +101,10 @@ class TestSafeKillpgGuardAllows:
         fake_pgid = 999999
         with (
             patch(
-                "marianne.execution.instruments.claude_cli_legacy.os.getpgid",
+                "marianne.utils.process.os.getpgid",
                 side_effect=OSError("mocked"),
             ),
-            patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg,
+            patch("marianne.utils.process.os.killpg") as mock_killpg,
         ):
             result = _safe_killpg(fake_pgid, signal.SIGKILL, context="test")
 
@@ -127,7 +127,7 @@ class TestSafeKillpgGuardSignalTypes:
     def test_all_signals_blocked_on_pgid_one(self, sig: signal.Signals) -> None:
         """pgid=1 must be blocked regardless of signal — any signal to pgid=1
         translates to kill(-1, sig) which affects every process in the session."""
-        with patch("marianne.execution.instruments.claude_cli_legacy.os.killpg") as mock_killpg:
+        with patch("marianne.utils.process.os.killpg") as mock_killpg:
             result = _safe_killpg(1, sig, context="test")
         assert result is False
         mock_killpg.assert_not_called()
@@ -137,88 +137,69 @@ class TestCallSiteStructuralAudit:
     """Structural tests: verify no raw os.killpg calls bypass the guard.
 
     These tests read the source code to catch regressions where someone
-    adds a new os.killpg() call without routing through _safe_killpg.
-    Added by Ghost (M5 correctness review, F-490).
+    adds a new os.killpg() call without routing through safe_killpg.
+    Originally added by Ghost (M5 correctness review, F-490); retargeted to
+    the live modules when the legacy claude_cli backend was deleted (#347).
     """
 
+    _AUDITED_MODULES = (
+        "marianne.utils.process",
+        "marianne.execution.instruments.cli_backend",
+        "marianne.daemon.baton.adapter",
+    )
+
     def test_no_raw_os_killpg_outside_guard(self) -> None:
-        """All os.killpg calls in claude_cli.py must go through _safe_killpg."""
+        """All os.killpg calls must live inside safe_killpg (utils.process)."""
+        import importlib
         import inspect
         import re
 
-        from marianne.execution.instruments import claude_cli_legacy as claude_cli
+        for module_name in self._AUDITED_MODULES:
+            module = importlib.import_module(module_name)
+            source = inspect.getsource(module)
 
-        source = inspect.getsource(claude_cli)
+            raw_calls: list[tuple[int, str]] = []
+            in_safe_killpg = False
+            for i, line in enumerate(source.split("\n"), 1):
+                stripped = line.strip()
+                if "def safe_killpg" in stripped:
+                    in_safe_killpg = True
+                elif stripped.startswith("def ") and in_safe_killpg:
+                    in_safe_killpg = False
 
-        raw_calls: list[tuple[int, str]] = []
-        in_safe_killpg = False
-        for i, line in enumerate(source.split("\n"), 1):
-            stripped = line.strip()
-            if "def _safe_killpg" in stripped:
-                in_safe_killpg = True
-            elif stripped.startswith("def ") and in_safe_killpg:
-                in_safe_killpg = False
+                if in_safe_killpg:
+                    continue
 
-            if in_safe_killpg:
-                continue
+                if re.search(r"\bos\.killpg\b", stripped):
+                    raw_calls.append((i, stripped))
 
-            if re.search(r"\bos\.killpg\b", stripped):
-                raw_calls.append((i, stripped))
-
-        assert raw_calls == [], (
-            f"Found raw os.killpg calls outside _safe_killpg: {raw_calls}. "
-            f"All os.killpg calls must go through _safe_killpg (F-490)."
-        )
-
-    def test_exactly_six_call_sites(self) -> None:
-        """Exactly 6 _safe_killpg call sites exist in claude_cli.py.
-
-        Phase 4c moved ``_reap_descendant_trees`` and its ``_safe_killpg``
-        call to ``marianne.utils.process``, so claude_cli.py lost one call
-        site (count went from 7 to 6).
-
-        Remaining call sites (as of Phase 4c):
-          1. timeout_escalation  (~line 421 before the refactor)
-          2. kill_orphaned_process
-          3. await_exit_graceful
-          4. await_exit_force
-          5. cancel_graceful
-          6. cancel_force
-        """
-        import inspect
-
-        from marianne.execution.instruments import claude_cli_legacy as claude_cli
-
-        source = inspect.getsource(claude_cli)
-
-        # Count _safe_killpg( call sites (definition moved to utils.process)
-        call_count = source.count("_safe_killpg(")
-        assert call_count == 6, (
-            f"Expected 6 _safe_killpg call sites, found {call_count}. "
-            f"If you added a call, update this count. If you removed one, "
-            f"verify the cleanup path still kills orphans correctly."
-        )
+            assert raw_calls == [], (
+                f"Found raw os.killpg calls outside safe_killpg in "
+                f"{module_name}: {raw_calls}. All os.killpg calls must go "
+                f"through safe_killpg (F-490)."
+            )
 
     def test_all_call_sites_have_context(self) -> None:
-        """Every _safe_killpg call must include a context= kwarg for logging."""
+        """Every safe_killpg call must include a context= kwarg for logging."""
+        import importlib
         import inspect
 
-        from marianne.execution.instruments import claude_cli_legacy as claude_cli
+        for module_name in self._AUDITED_MODULES:
+            module = importlib.import_module(module_name)
+            source = inspect.getsource(module)
+            lines = source.split("\n")
 
-        source = inspect.getsource(claude_cli)
-        lines = source.split("\n")
-
-        # Find lines containing _safe_killpg( that are call sites (not def)
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if "_safe_killpg(" in stripped and "def _safe_killpg" not in stripped:
-                # Gather the full call: scan forward until balanced parens
-                block = stripped
-                for j in range(i + 1, min(i + 10, len(lines))):
-                    block += " " + lines[j].strip()
-                    if block.count("(") <= block.count(")"):
-                        break
-                assert "context=" in block, (
-                    f"_safe_killpg call at line {i + 1} missing context= kwarg: "
-                    f"{block!r}. Every call site must identify itself for log tracing."
-                )
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if (
+                    "_safe_killpg(" in stripped or "safe_killpg(" in stripped
+                ) and "def safe_killpg" not in stripped and "import" not in stripped:
+                    block = stripped
+                    for j in range(i + 1, min(i + 10, len(lines))):
+                        block += " " + lines[j].strip()
+                        if block.count("(") <= block.count(")"):
+                            break
+                    assert "context=" in block, (
+                        f"safe_killpg call in {module_name} line {i + 1} missing "
+                        f"context= kwarg: {block!r}."
+                    )

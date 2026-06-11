@@ -30,7 +30,6 @@ from marianne.validation.checks.jinja import (
 )
 from marianne.validation.checks.paths import (
     TemplateFileExistsCheck,
-    WorkingDirectoryCheck,
     WorkspaceParentExistsCheck,
 )
 from marianne.validation.reporter import ValidationReporter
@@ -348,66 +347,6 @@ class TestTemplateFileExistsCheck:
         assert issues[0].severity == ValidationSeverity.ERROR
 
 
-class TestWorkingDirectoryCheck:
-    """Tests for WorkingDirectoryCheck (V005)."""
-
-    def test_existing_working_dir_passes(self, tmp_path: Path) -> None:
-        """No error when working directory exists."""
-        working_dir = tmp_path / "work"
-        working_dir.mkdir()
-
-        yaml_content = dedent(f"""
-            name: test-job
-            sheet:
-              size: 10
-              total_items: 100
-            prompt:
-              template: "Test"
-            backend:
-              type: claude_cli
-              working_directory: {working_dir}
-        """).strip()
-
-        config_path = tmp_path / "test.yaml"
-        config_path.write_text(yaml_content)
-        config = JobConfig.from_yaml(config_path)
-
-        check = WorkingDirectoryCheck()
-        issues = check.check(config, config_path, yaml_content)
-
-        assert len(issues) == 0
-
-    def test_catches_missing_working_dir(self, tmp_path: Path) -> None:
-        """Error when working directory doesn't exist."""
-        yaml_content = dedent("""
-            name: test-job
-            sheet:
-              size: 10
-              total_items: 100
-            prompt:
-              template: "Test"
-            backend:
-              type: claude_cli
-              working_directory: /nonexistent/dir
-        """).strip()
-
-        config_path = tmp_path / "test.yaml"
-        config_path.write_text(yaml_content)
-        config = JobConfig.from_yaml(config_path)
-
-        check = WorkingDirectoryCheck()
-        issues = check.check(config, config_path, yaml_content)
-
-        assert len(issues) == 1
-        assert issues[0].check_id == "V005"
-        assert issues[0].auto_fixable is True
-
-
-# ============================================================================
-# Config Check Tests
-# ============================================================================
-
-
 class TestRegexPatternCheck:
     """Tests for RegexPatternCheck (V007)."""
 
@@ -539,8 +478,7 @@ class TestTimeoutRangeCheck:
               total_items: 100
             prompt:
               template: "Test"
-            backend:
-              type: claude_cli
+            instrument_config:
               timeout_seconds: 30
         """).strip()
 
@@ -564,8 +502,7 @@ class TestTimeoutRangeCheck:
               total_items: 100
             prompt:
               template: "Test"
-            backend:
-              type: claude_cli
+            instrument_config:
               timeout_seconds: 10800
         """).strip()
 
@@ -590,9 +527,6 @@ class TestTimeoutRangeCheck:
               total_items: 100
             prompt:
               template: "Test"
-            backend:
-              type: claude_cli
-              timeout_seconds: 60
         """).strip()
 
         config_path = tmp_path / "test.yaml"
@@ -613,9 +547,6 @@ class TestTimeoutRangeCheck:
               total_items: 100
             prompt:
               template: "Test"
-            backend:
-              type: claude_cli
-              timeout_seconds: 7200
         """).strip()
 
         config_path = tmp_path / "test.yaml"
@@ -1049,8 +980,7 @@ class TestValidationRunner:
               total_items: 100
             prompt:
               template: "{{ undefined_var }}"
-            backend:
-              type: claude_cli
+            instrument_config:
               timeout_seconds: 30
         """).strip()
 

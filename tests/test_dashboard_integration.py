@@ -76,9 +76,6 @@ name: "test-integration-job"
 description: "Integration test job"
 workspace: "./workspace"
 
-backend:
-  type: claude_cli
-  timeout_seconds: 300
 
 sheet:
   size: 1

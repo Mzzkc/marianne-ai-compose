@@ -41,12 +41,8 @@ from pydantic import BaseModel, ValidationError
 # Import all config models for exhaustive testing
 # =============================================================================
 from marianne.core.config.backend import (
-    BackendConfig,
     BridgeConfig,
     MCPServerConfig,
-    OllamaConfig,
-    RecursiveLightConfig,
-    SheetBackendOverride,
 )
 from marianne.core.config.execution import (
     CircuitBreakerConfig,
@@ -172,12 +168,8 @@ _JSON_STRINGS = st.one_of(
 # Models that have `extra="forbid"` set
 ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     # backend.py
-    RecursiveLightConfig,
-    OllamaConfig,
     MCPServerConfig,
     BridgeConfig,
-    SheetBackendOverride,
-    BackendConfig,
     # execution.py
     RetryConfig,
     RateLimitConfig,
@@ -400,64 +392,6 @@ class TestIPCErrorCodeMapping:
         assert type(exc) is MethodNotFoundError
         # Must NOT be collapsed into the base DaemonError
         assert type(exc) is not DaemonError.__class__
-
-
-# =============================================================================
-# Invariant 77: Token extraction defensive parsing
-# =============================================================================
-
-
-class TestTokenExtractionDefensiveParsing:
-    """_extract_tokens_from_json handles ANY input without crashing.
-
-    Invariant: For any string S, _extract_tokens_from_json(S) returns
-    a tuple (int|None, int|None) — never raises, never returns non-int
-    values (other than None).
-    """
-
-    @given(stdout=_JSON_STRINGS)
-    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
-    def test_always_returns_valid_tuple(self, stdout: str) -> None:
-        """Any input produces a (int|None, int|None) tuple."""
-        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
-
-        backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
-        backend.output_format = "json"
-
-        result = backend._extract_tokens_from_json(stdout)
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        input_tokens, output_tokens = result
-        assert input_tokens is None or isinstance(input_tokens, int)
-        assert output_tokens is None or isinstance(output_tokens, int)
-
-    @given(stdout=st.text(max_size=500))
-    @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
-    def test_non_json_format_returns_none(self, stdout: str) -> None:
-        """When output_format != 'json', always returns (None, None)."""
-        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
-
-        backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
-        backend.output_format = "text"
-
-        result = backend._extract_tokens_from_json(stdout)
-        assert result == (None, None)
-
-    @given(
-        input_tokens=st.integers(min_value=0, max_value=10_000_000),
-        output_tokens=st.integers(min_value=0, max_value=10_000_000),
-    )
-    @settings(max_examples=50)
-    def test_valid_json_preserves_values(self, input_tokens: int, output_tokens: int) -> None:
-        """Well-formed JSON with integer tokens preserves exact values."""
-        from marianne.execution.instruments.claude_cli_legacy import ClaudeCliBackend
-
-        backend = ClaudeCliBackend.__new__(ClaudeCliBackend)
-        backend.output_format = "json"
-
-        data = {"usage": {"input_tokens": input_tokens, "output_tokens": output_tokens}}
-        result = backend._extract_tokens_from_json(json.dumps(data))
-        assert result == (input_tokens, output_tokens)
 
 
 # =============================================================================

@@ -42,7 +42,6 @@ class TestParallelConfigStagger:
         config = JobConfig.model_validate(
             {
                 "name": "test",
-                "backend": {"type": "claude_cli"},
                 "sheet": {"size": 3, "total_items": 9},
                 "prompt": {"template": "Test {{ sheet_num }}"},
                 "parallel": {

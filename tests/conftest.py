@@ -228,10 +228,7 @@ def sample_config_dict() -> dict:
     return {
         "name": "test-job",
         "description": "Test job for unit tests",
-        "backend": {
-            "type": "claude_cli",
-            "skip_permissions": True,
-        },
+        "instrument": "claude-code",
         "sheet": {
             "size": 10,
             "total_items": 30,

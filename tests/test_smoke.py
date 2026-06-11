@@ -80,7 +80,6 @@ IMPORTABLE_MODULES = [
     # Backends
     "marianne.backends",
     "marianne.backends.base",
-    "marianne.execution.instruments.claude_cli_legacy",
     # State
     "marianne.state",
     "marianne.state.base",

@@ -29,7 +29,6 @@ from marianne.utils.time import utc_now
 
 if TYPE_CHECKING:
     from marianne.bridge.mcp_proxy import MCPProxyService, MCPTool, ToolResult
-    from marianne.core.config import BackendConfig
 
 _logger = get_logger("backend.ollama")
 
@@ -172,26 +171,6 @@ class OllamaBackend(HttpxClientMixin, Backend):
 
         # HTTP client lifecycle via shared mixin
         self._init_httpx_mixin(self.base_url, self.timeout, connect_timeout=10.0)
-
-    @classmethod
-    def from_config(cls, config: BackendConfig) -> OllamaBackend:
-        """Create backend from configuration.
-
-        Args:
-            config: Backend configuration with ollama settings
-
-        Returns:
-            Configured OllamaBackend instance
-        """
-        ollama_cfg = config.ollama
-        return cls(
-            base_url=ollama_cfg.base_url,
-            model=ollama_cfg.model,
-            timeout=ollama_cfg.timeout_seconds,
-            num_ctx=ollama_cfg.num_ctx,
-            keep_alive=ollama_cfg.keep_alive,
-            max_tool_iterations=ollama_cfg.max_tool_iterations,
-        )
 
     @property
     def name(self) -> str:

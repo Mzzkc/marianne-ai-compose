@@ -780,36 +780,6 @@ class TestDiagnoseIncludeLogsFlag:
         assert "log_contents" in data
 
 
-class TestMaxOutputCaptureConfig:
-    """Tests for configurable max_output_capture_bytes in BackendConfig."""
-
-    def test_default_value(self) -> None:
-        from marianne.core.config import BackendConfig
-
-        config = BackendConfig()
-        assert config.max_output_capture_bytes == 51200
-
-    def test_custom_value(self) -> None:
-        from marianne.core.config import BackendConfig
-
-        config = BackendConfig(max_output_capture_bytes=20480)
-        assert config.max_output_capture_bytes == 20480
-
-    def test_capture_output_respects_max_bytes(self) -> None:
-        """SheetState.capture_output uses the configured max_bytes."""
-        sheet = SheetState(sheet_num=1)
-        big_output = "x" * 50000
-        sheet.capture_output(big_output, "", max_bytes=1000)
-        assert sheet.stdout_tail is not None
-        assert len(sheet.stdout_tail.encode("utf-8")) <= 1000
-        assert sheet.output_truncated is True
-
-
-# ---------------------------------------------------------------------------
-# Log rotation hint tests
-# ---------------------------------------------------------------------------
-
-
 class TestLogRotationHint:
     """Tests for the log rotation hint when hook log files accumulate."""
 

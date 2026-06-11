@@ -45,20 +45,20 @@ class TestBuildSheetsBasic:
         sheets = build_sheets(config)
         assert [s.num for s in sheets] == [1, 2, 3]
 
-    def test_instrument_name_from_backend_type(self):
-        """When no instrument: field exists, use backend.type."""
+    def test_instrument_name_default(self):
+        """When no instrument: field exists, the default instrument is used."""
         from marianne.core.sheet import build_sheets
 
         config = self._make_config()
         sheets = build_sheets(config)
         for sheet in sheets:
-            assert sheet.instrument_name == "claude_cli"
+            assert sheet.instrument_name == "claude-code"
 
     def test_instrument_name_from_anthropic_api(self):
         """Backend type anthropic_api maps correctly."""
         from marianne.core.sheet import build_sheets
 
-        config = self._make_config(backend={"type": "anthropic_api"})
+        config = self._make_config(instrument="anthropic_api")
         sheets = build_sheets(config)
         for sheet in sheets:
             assert sheet.instrument_name == "anthropic_api"
@@ -109,12 +109,12 @@ class TestBuildSheetsBasic:
         for sheet in sheets:
             assert sheet.workspace == Path("/home/user/work").resolve()
 
-    def test_timeout_from_backend(self):
-        """Timeout comes from backend.timeout_seconds."""
+    def test_timeout_from_instrument_config(self):
+        """Timeout comes from instrument_config.timeout_seconds."""
         from marianne.core.sheet import build_sheets
 
         config = self._make_config(
-            backend={"type": "claude_cli", "timeout_seconds": 600.0},
+            instrument_config={"timeout_seconds": 600.0},
         )
         sheets = build_sheets(config)
         for sheet in sheets:
@@ -125,10 +125,12 @@ class TestBuildSheetsBasic:
         from marianne.core.sheet import build_sheets
 
         config = self._make_config(
-            backend={
-                "type": "claude_cli",
-                "timeout_seconds": 1800.0,
-                "timeout_overrides": {2: 300.0},
+            instrument_config={"timeout_seconds": 1800.0},
+            sheet={
+                "size": 1,
+                "total_items": 3,
+                "start_item": 1,
+                "per_sheet_instrument_config": {2: {"timeout_seconds": 300.0}},
             },
         )
         sheets = build_sheets(config)

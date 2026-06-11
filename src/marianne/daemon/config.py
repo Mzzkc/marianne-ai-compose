@@ -11,7 +11,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from marianne.core.config.backend import BackendConfig
 from marianne.core.config.execution import PreflightConfig
 from marianne.core.constants import DAEMON_STATE_DB_PATH
 from marianne.daemon.keyring_config import KeyringConfig
@@ -211,35 +210,14 @@ class ObserverConfig(BaseModel):
 _DEFAULT_SEMANTIC_INSTRUMENT: str = "anthropic_api"
 
 
-def _default_semantic_backend() -> BackendConfig:
-    """Default backend config for semantic analysis.
-
-    Uses the Anthropic API via the instrument registry with analytical
-    defaults (low temperature, moderate token limit, shorter timeout). This
-    preserves the original behaviour for users who don't set
-    ``learning.backend`` explicitly. The instrument name is looked up through
-    the registry bridge rather than hardcoded as a ``type=`` literal so the
-    Phase-2 audit hook AUDIT-CFG-2 passes while the instrument-plugin system
-    remains the single source of truth.
-    """
-    return BackendConfig(
-        type=_DEFAULT_SEMANTIC_INSTRUMENT,
-        model="claude-sonnet-4-5-20250929",
-        temperature=0.3,
-        max_tokens=4096,
-        timeout_seconds=120.0,
-    )
-
-
 class SemanticLearningConfig(BaseModel):
     """Configuration for conductor-level semantic learning via LLM.
 
     Controls how the conductor analyzes sheet completions using an LLM
     to produce semantic insights stored in the learning database.
 
-    The ``backend`` field accepts the same ``BackendConfig`` used by job
-    execution, so any backend type (claude_cli, anthropic_api, ollama,
-    recursive_light) can power semantic analysis.
+    Analysis runs through the instrument plugin system — any registered
+    instrument profile can power semantic analysis.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -249,12 +227,24 @@ class SemanticLearningConfig(BaseModel):
         description="Enable semantic learning. When True, the conductor "
         "analyzes sheet completions via LLM to produce learning insights.",
     )
-    backend: BackendConfig = Field(
-        default_factory=_default_semantic_backend,
-        description="Backend configuration for semantic analysis LLM calls. "
-        "Accepts any backend type: claude_cli (uses Claude Code, no API key "
-        "needed), anthropic_api, ollama (free local models), or recursive_light. "
-        "Defaults to anthropic_api with analytical settings (temperature=0.3).",
+    instrument: str = Field(
+        default=_DEFAULT_SEMANTIC_INSTRUMENT,
+        min_length=1,
+        description="Instrument profile name for semantic-analysis LLM calls "
+        "(any registered instrument: claude-code, opencode, ollama, "
+        "anthropic_api, ...). Replaced the legacy backend: config when the "
+        "backend path was stripped (#347).",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Model override for semantic analysis. None uses the "
+        "instrument profile's default model.",
+    )
+    timeout_seconds: float = Field(
+        default=120.0,
+        gt=0,
+        description="Per-analysis LLM call timeout (also bounds the "
+        "shutdown drain wait).",
     )
     analyze_on: list[Literal["success", "failure"]] = Field(
         default=["success", "failure"],

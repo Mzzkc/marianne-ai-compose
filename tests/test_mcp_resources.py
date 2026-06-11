@@ -128,7 +128,7 @@ class TestConfigResources:
         assert "sheet" in schema["required"]
 
         # Check that key configuration sections are defined
-        assert "backend" in schema["properties"]
+        assert "instrument" in schema["properties"]
         assert "sheet" in schema["properties"]
         assert "retry" in schema["properties"]
 
@@ -143,7 +143,7 @@ class TestConfigResources:
 
         text = content["text"]
         assert "job_id: example-review" in text
-        assert "backend:" in text
+        assert "instrument:" in text
         assert "sheets:" in text
         assert "validation:" in text
 
