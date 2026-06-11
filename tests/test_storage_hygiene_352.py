@@ -8,12 +8,13 @@ tree from the fixed working-directory bug. (monitor.jsonl rotation is
 already count-capped at 2; snapshots already have a TTL.)
 
 Fixes under test:
-- MonitorStorage migrates to ``auto_vacuum=INCREMENTAL`` once at
-  initialize() (pragma persists → self-gating) and runs a bounded
-  pages auto-return on every commit (auto_vacuum=FULL — version-proof,
-  unlike incremental_vacuum whose stepping semantics differ across
-  SQLite builds) — the file SHRINKS on the live cadence with no
-  loop-freezing full VACUUM.
+- MonitorStorage migrates to ``auto_vacuum=FULL`` once at initialize()
+  (pragma persists → self-gating; one-time VACUUM to restructure).
+  FULL returns freed pages automatically on every commit and is
+  version-proof — unlike ``PRAGMA incremental_vacuum``, whose stepping
+  semantics differ across SQLite builds (3.50 frees one page per
+  execute; 3.45 frees all). cleanup() keeps only the truncating WAL
+  checkpoint so the file itself shrinks.
 - ``mzt doctor`` reports hygiene findings; ``--clean`` deletes ONLY
   after explicit confirmation (user-data gate: scanning is pure,
   deletion is opt-in).
@@ -83,7 +84,6 @@ class TestAutoVacuumMigration:
                 system_memory_available_mb=500.0,
                 system_memory_used_mb=500.0,
                 daemon_rss_mb=100.0,
-                child_count=0,
                 zombie_count=0,
                 load_avg_1=0.0,
                 load_avg_5=0.0,
