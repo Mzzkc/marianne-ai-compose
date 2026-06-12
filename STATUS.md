@@ -7,6 +7,23 @@ Do not trust this file blindly. Run `pytest tests/ -x`, `mypy src/`, and `ruff c
 v0.1.0-alpha — **P0 "Ship" complete** (2026-05-29); **P1 Launch in progress**. CI enforces
 ruff + mypy --strict + pytest (85% coverage) on every push. Baton is the sole execution model.
 
+### M6 Onboarding & Pre-Launch — in progress (2026-06-12)
+
+Closed this arc: **#165** (the P0 onboarding blocker) — the flagship `hello` score was rebuilt
+**free, local-capable, and orchestration-across-mediums**: a deep instrument fallback chain
+(free OpenRouter → local Ollama), four movements (world → 3 parallel vignettes → a *deterministic*
+tool assembles a website → an agent polishes it), with the vignettes rendered as gallery cards so
+the fan-out is *visible*. Verified end-to-end FREE on local gemma4:26b (~5 min, $0). `hello-local.yaml`
+is the pure-offline twin; docs + website quickstart updated. Also closed: **#292** (dashboard security
+review — no critical findings, localhost-only posture), **#338** (`mzt recover` discoverable),
+**#322/#266** (real `/health` status, no swallowed errors), **#289** (CONTRIBUTING.md). #290 half-done
+(README links; mzt.dev cross-link waits on M7 #294). Filed #387 (dashboard hardening), #388 (examples
+don't ship with the wheel — the literal `pip install → run` path needs git clone).
+
+**Remaining M6 boundary:** #251 (broad-except cleanup — agent-doable); #115 (`mzt stop` non-blocking —
+daemon-lifecycle **escalation gate**, composer's call); #291 (recruit 3-5 beta users — **human-gated**);
+#64/#56 (P3 dashboard features, not launch-blocking).
+
 ### M5 Baton Stabilization — COMPLETE (2026-06-12); milestone open issues: 0
 
 Every M5 issue is closed, including #344 — its obs1 fix is now confirmed in the **live production
