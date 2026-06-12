@@ -16,7 +16,10 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
+
+if TYPE_CHECKING:
+    from marianne.core.config import JobConfig
 
 import yaml
 
@@ -221,6 +224,26 @@ class DaemonResourceChecker:
     async def can_start_parallel_sheet(self) -> bool:
         """Check if system resource pressure allows another parallel sheet."""
         return self._monitor.is_accepting_work()
+
+
+def _merge_runtime_variables(
+    config: JobConfig, runtime_variables: dict[str, str]
+) -> JobConfig:
+    """Merge #359 runtime variables into config.prompt.variables.
+
+    Module-level (not a method) so the single first-run/resume seam can
+    never be shadowed by a selectively-mocked manager — calling it via
+    ``self.`` on a MagicMock returns a mock and silently rewrites config
+    (the mock-binding trap). CLI variables override YAML on key collision
+    (the documented make/terraform contract). No-op when empty.
+    """
+    if not runtime_variables:
+        return config
+    merged = dict(config.prompt.variables)
+    merged.update(runtime_variables)
+    return config.model_copy(
+        update={"prompt": config.prompt.model_copy(update={"variables": merged})}
+    )
 
 
 class JobManager:
@@ -2821,6 +2844,9 @@ class JobManager:
                     update={"workspace": request.workspace},
                 )
 
+            # #359: merge per-invocation --var values (CLI overrides YAML).
+            config = _merge_runtime_variables(config, request.runtime_variables)
+
             # Populate explicit config.name → conductor_id mapping so
             # _on_state_published can resolve the correct owner in O(1)
             # when state.job_id == config.name != conductor job_id.
@@ -2989,6 +3015,7 @@ class JobManager:
             total_movements=max((s.movement for s in sheets), default=None),
             escalation_enabled=escalation_enabled,
             self_healing_enabled=request.self_healing,
+            runtime_variables=dict(request.runtime_variables),  # #359 durable
         )
         self._live_states[job_id] = initial_state
 
@@ -3206,6 +3233,14 @@ class JobManager:
                     error=str(exc),
                 )
                 return DaemonJobStatus.FAILED
+
+        # #359: re-apply persisted runtime variables. The default resume
+        # path re-reads the YAML from disk (no config_snapshot), so the
+        # --var values would be lost without this — mirrors the
+        # escalation_enabled re-apply above (the #361 durability lesson).
+        config = _merge_runtime_variables(
+            config, dict(checkpoint.runtime_variables)
+        )
 
         # Build sheets and dependencies
         sheets = build_sheets(config)

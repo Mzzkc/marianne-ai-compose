@@ -31,6 +31,25 @@ if TYPE_CHECKING:
     from marianne.core.config import JobConfig
 
 
+def _parse_runtime_vars(pairs: list[str] | None) -> dict[str, str]:
+    """Parse repeated ``--var key=value`` options into a dict (#359).
+
+    Values are strings and may contain ``=``; the key is everything
+    before the first ``=``. Later duplicates win. Raises ValueError on a
+    missing ``=`` or an empty key so a typo fails loudly at the CLI
+    rather than silently dropping the variable.
+    """
+    result: dict[str, str] = {}
+    for raw in pairs or []:
+        if "=" not in raw:
+            raise ValueError(f"--var {raw!r} is not key=value")
+        key, value = raw.split("=", 1)
+        if not key:
+            raise ValueError(f"--var {raw!r} has an empty key")
+        result[key] = value
+    return result
+
+
 def run(
     config_file: Path = typer.Argument(
         ...,
@@ -94,9 +113,30 @@ def run(
         "the score file also triggers this automatically for completed "
         "scores.)",
     ),
+    var: list[str] | None = typer.Option(
+        None,
+        "--var",
+        help="Per-invocation template variable as key=value (repeatable). "
+        "Merges into the score's prompt.variables, overriding YAML on "
+        "collision — so one generic score can be pointed at different "
+        "inputs without editing the file. Values are strings; typed "
+        "variables belong in YAML. Persisted across resume.",
+    ),
 ) -> None:
     """Run a score from a YAML configuration file."""
     from marianne.core.config import JobConfig
+
+    try:
+        runtime_vars = _parse_runtime_vars(var)
+    except ValueError as exc:
+        if json_output:
+            output_json({"error": str(exc)})
+        else:
+            output_error(
+                str(exc),
+                hints=["Use --var key=value (the value may contain '=')."],
+            )
+        raise typer.Exit(1) from None
 
     try:
         config = JobConfig.from_yaml(config_file)
@@ -172,6 +212,7 @@ def run(
             config_file, workspace, fresh, self_healing, yes, json_output,
             start_sheet=start_sheet,
             escalation=escalation,
+            runtime_vars=runtime_vars,
         ),
     )
     if routed:
@@ -200,6 +241,7 @@ async def _try_daemon_submit(
     *,
     start_sheet: int | None = None,
     escalation: bool = False,
+    runtime_vars: dict[str, str] | None = None,
 ) -> bool:
     """Submit a job to the running conductor.
 
@@ -225,6 +267,8 @@ async def _try_daemon_submit(
             params["workspace"] = str(Path(workspace).resolve())
         if start_sheet is not None:
             params["start_sheet"] = start_sheet
+        if runtime_vars:
+            params["runtime_variables"] = runtime_vars
 
         routed, result = await try_daemon_route("job.submit", params)
         if not routed:

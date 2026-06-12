@@ -112,6 +112,12 @@ class JobRequest(BaseModel):
         "Used by the conductor to resolve relative paths in config files "
         "against the client's cwd rather than the daemon's cwd.",
     )
+    runtime_variables: dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-invocation template variables from `mzt run --var "
+        "k=v` (#359). Merged into the score's prompt.variables (CLI wins "
+        "on collision) and persisted on the checkpoint for resume.",
+    )
 
 
 class JobResponse(BaseModel):

@@ -227,6 +227,9 @@ def _resume_manager_with_checkpoint(
     checkpoint.sheets = {}
     checkpoint.escalation_enabled = escalation_enabled
     checkpoint.self_healing_enabled = self_healing_enabled
+    # #359: a real CheckpointState defaults this to {}; the mock must too,
+    # or the resume re-merge sees a truthy MagicMock and rewrites config.
+    checkpoint.runtime_variables = {}
     manager._load_checkpoint = AsyncMock(return_value=checkpoint)
     return manager, adapter
 

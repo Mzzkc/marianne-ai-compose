@@ -516,6 +516,17 @@ Defined in `prompt.variables` and available in templates by name.
 > silently shadow core variables like `sheet_num`, `workspace`, or `stage`. Avoid
 > naming your variables with the same names as core variables listed above.
 
+**Per-invocation overrides (`--var`).** To reuse one generic score across
+many inputs without editing it, pass `mzt run score.yaml --var key=value`
+(repeatable). CLI values merge into `prompt.variables`, overriding YAML on
+collision, and persist across resume. Values are strings — keep typed or
+structured variables (lists, maps, ints) in YAML. Example:
+
+```bash
+mzt run scores/port-toolkit.yaml \
+  --var target=ovrm --var source_lang=C --var dest_lang=Rust
+```
+
 ```yaml
 prompt:
   variables:

@@ -967,6 +967,13 @@ class CheckpointState(BaseModel):
         default=None,
         description="Original config file path for fallback and debugging",
     )
+    runtime_variables: dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-invocation template variables from `mzt run --var "
+        "k=v` (#359). Persisted so resume re-applies them — the default "
+        "resume path re-reads the YAML and would otherwise drop them. "
+        "Merged into prompt.variables with CLI overriding YAML.",
+    )
 
     # Timestamps
     created_at: datetime = Field(default_factory=utc_now)

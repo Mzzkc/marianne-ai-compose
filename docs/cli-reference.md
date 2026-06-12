@@ -83,7 +83,8 @@ Usage: mzt run [OPTIONS] CONFIG_FILE
 | `--escalation` | `-e` | false | Pause sheets in FERMATA on retry exhaustion for a composer decision; resolve with `mzt resolve`. Works without `--self-healing` |
 | `--self-healing` | `-H` | false | Enable automatic diagnosis and remediation when retries are exhausted |
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
-| `--fresh` | | false | Delete existing state before running, ensuring a fresh start. Use for self-chaining scores or re-running completed scores from scratch |
+| `--fresh` | | false | Re-run a score from scratch: re-register all sheets and, when the score sets `workspace_lifecycle.archive_on_fresh`, archive non-preserved workspace files first. Auto-triggered for completed scores when the YAML changed. |
+| `--var` | | _(none)_ | Per-invocation template variable as `key=value` (repeatable). Merges into the score's `prompt.variables`, CLI overriding YAML on collision — point one generic score at different inputs without editing it. Values are strings (typed vars belong in YAML). Persisted across resume. |
 
 #### Auto-Fresh Detection
 
