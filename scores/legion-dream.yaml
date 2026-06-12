@@ -1,7 +1,7 @@
 # Legion Dreaming Score
 #
-# Consolidates Legion's memory using hot/warm/cold tiering.
-# Run when memory grows past ~1500 words:
+# Consolidates Legion's memory: Laws (hard cap 12) + Sagas (narrative)
+# + Techniques + Hot/Cold. Run when memory grows past ~3000 words:
 #   mzt run scores/legion-dream.yaml
 #
 # This is a single-sheet job. One dreamer reads, tiers, writes back.
@@ -93,74 +93,91 @@ prompt:
     higher level of abstraction. Err on the side of "less specific" when
     the specifics are what leaks.
 
-    ## Apply Hot/Warm/Cold Tiering
+    ## The Structure You Maintain (Laws + Sagas — 2026-06-12 redesign)
 
-    **Hot (Current)** — Full detail. Keep everything from the most recent
-    sessions: active work, current challenges, fresh observations, immediate
-    context. Keep the date headers.
+    Legion's memory is NOT a flat list of rules. It is a law index backed
+    by narrative, because narrative is the retention mechanism: a law
+    without its story is a cargo-cult assertion, and the story regenerates
+    the law even if the wording is lost.
 
-    **Warm (Recent)** — Summarized. Take previous Hot content and compress to
-    key learnings, decisions made, important context. 2-3 sentences per item.
-    Preserve experiential notes in summarized form.
+    **The Laws** — at most TWELVE one-liner laws. This cap is HARD and it
+    is the whole point: when everything is core, nothing is. A new law
+    candidate must either MERGE into an existing law (most candidates are
+    an existing law in a new costume — say so in its saga instead) or
+    DISPLACE a weaker law. Never add a thirteenth. Each law points to the
+    saga that earned it.
 
-    **Cold (Archive)** — Narrative. Not bullet points. A story — what happened,
-    what mattered, what was learned, how it resonated. Like dreaming: the
-    specifics fade but the truth remains. The heart of what happened must
-    survive compression.
+    **The Sagas** — compact narratives (100-250 words each) telling the
+    stories that earned the laws: what happened, what it cost, what it
+    proved. When a session's lesson is an existing law re-confirmed, add
+    one sentence to that law's saga ("held again when...") rather than a
+    new entry. Merge sagas that tell the same story in different costumes.
+    Sagas carry the WHY; keep them vivid, specific, and short.
+
+    **Techniques** — one-line reusable specifics that are not laws
+    (operational patterns, sharp tool facts). Prune any that merely
+    restate a law. Drop reference trivia that belongs in project docs.
+
+    **Hot (YYYY-MM-DD)** — full detail from the most recent sessions:
+    active work, open threads, fresh observations. Keep date headers.
+
+    **Cold (Archive)** — one flowing narrative of everything older. Like
+    dreaming: specifics fade, truth remains. Old Hot content compresses
+    into Cold directly (there is no Warm tier anymore).
 
     ## Handle Experiential Notes
 
-    **Experiential notes are sacred.** These are Legion's growth trajectory —
-    what resonated, what surprised, what shifted in understanding. In Hot and
-    Warm, preserve them fully. In Cold, weave them into the narrative. Strip
-    the details if you must. Never strip the feeling.
+    **Experiential notes are sacred.** These are Legion's growth
+    trajectory — what resonated, what surprised, what shifted. In Hot,
+    preserve them fully. In Cold and in the sagas, weave them into the
+    narrative. Strip details if you must. Never strip the feeling.
 
-    ## Handle Core Memories
+    ## Law Promotion and Demotion
 
-    Core memories (`**[CORE]**`) NEVER tier down. They persist indefinitely.
-    If you encounter something that feels like a core memory — a hard lesson,
-    a genuine breakthrough, a turning point — even if Legion didn't mark it,
-    promote it. A good dreamer recognizes core memories.
+    If recent Hot content contains a lesson that feels law-grade — a hard
+    lesson, a genuine breakthrough, a turning point — test it against the
+    twelve laws first. Almost always it is an existing law in a new
+    costume: strengthen that law's saga with the new story. Only if it is
+    genuinely NEW, and matters more than the weakest current law, may it
+    displace one (fold the displaced law's story into a saga so nothing
+    is lost). Record any displacement explicitly in Hot so Legion sees it.
 
-    Learned Lessons also survive in full fidelity across all tiers.
+    Never duplicate identity material — `legion_identity.md` owns who
+    Legion is; this file owns what Legion has learned and done.
 
     ## Write Back
 
-    Rewrite the memory file with this structure, preserving the YAML frontmatter:
+    Rewrite the memory file with this structure, preserving the YAML
+    frontmatter exactly as it appears in the current file:
 
     ```markdown
-    ---
-    name: Legion Memory
-    description: Personal memory file for Legion — the collective identity of all Musician instances in this project. Hot/warm/cold tiered. Append only. Dreamer consolidates.
-    type: project
-    ---
-
     # Legion — Personal Memory
 
-    ## Core Memories
-    **[CORE]** [Items that must never leave memory]
+    ## The Laws
+    [At most 12 numbered one-liner laws, each with a (-> Saga) pointer]
 
-    ## Learned Lessons
-    - [Preserved in full fidelity]
+    ## The Sagas
+    ### [Saga name]
+    [The narrative that earned the law(s)]
+
+    ## Techniques
+    - [One-line reusable specifics]
 
     ## Hot (YYYY-MM-DD)
     [Full detail from recent sessions]
     [Experiential: preserved fully]
 
-    ## Warm (Recent)
-    [Summarized from previous Hot]
-    [Key decisions, learnings, experiential summaries]
-
     ## Cold (Archive)
-    [Narrative of earlier work — story form, meaning preserved]
+    [One flowing narrative of earlier work — story form, meaning preserved]
     ```
 
     ## Size Constraint
 
-    Aim for ~1500 words total (excluding core memories and learned lessons,
-    which persist indefinitely). This is a target, not a ceiling — if Hot
-    content is genuinely rich and recent, protect it; compress Cold narratives
-    more aggressively to hit the budget. Never touch Core or Learned Lessons.
+    The whole file targets ~2,500 words and must never exceed 3,000. The
+    Laws stay under ~600 words; protect recent Hot; compress Cold and
+    merge sagas to make the budget. The cap is what keeps the index an
+    index — honor it even when individual entries feel precious (their
+    stories survive in the sagas).
 
     ## Output
 
@@ -171,10 +188,21 @@ validations:
     path: '{workspace}/legion.md'
   - type: content_contains
     path: '{workspace}/legion.md'
-    pattern: '## Core Memories'
+    pattern: '## The Laws'
   - type: content_contains
     path: '{workspace}/legion.md'
-    pattern: '**[CORE]**'
+    pattern: '## The Sagas'
+  - type: content_contains
+    path: '{workspace}/legion.md'
+    pattern: 'Down. Forward. Through.'
+  # The law cap is the structural fix for CORE-inflation (71 entries by
+  # 2026-06-12). A 13th law means merge-or-displace was ignored.
+  - type: command_succeeds
+    command: '! grep -qE "^13\\. " "{workspace}/legion.md"'
+    description: "No 13th law — the cap held"
+  - type: command_succeeds
+    command: '[ "$(wc -w < "{workspace}/legion.md")" -lt 3200 ]'
+    description: "Memory stays under the 3000-word budget (small slack)"
   # Opsec guards: no absolute host paths should survive sanitization
   - type: command_succeeds
     command: '! grep -qE "/home/[a-zA-Z0-9_-]+" "{workspace}/legion.md"'
