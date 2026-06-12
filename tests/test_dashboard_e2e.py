@@ -289,6 +289,7 @@ class TestSheetDetailsE2E:
             output_tokens=850,
             estimated_cost=0.045,
             cost_confidence=0.85,
+            cost_uncertain=True,
         )
 
         state = CheckpointState(
@@ -337,6 +338,8 @@ class TestSheetDetailsE2E:
         assert data["output_tokens"] == 850
         assert data["estimated_cost"] == 0.045
         assert data["cost_confidence"] == 0.85
+        # #373: $0-from-missing-pricing must be distinguishable from free
+        assert data["cost_uncertain"] is True
 
     async def test_get_sheet_details_errors(
         self,

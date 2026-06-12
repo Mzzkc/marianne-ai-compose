@@ -261,6 +261,10 @@ async def get_sheet_details(
         "output_tokens": sheet_state.output_tokens,
         "estimated_cost": sheet_state.estimated_cost,
         "cost_confidence": sheet_state.cost_confidence,
+        # #373: True when the instrument had no per-token pricing — the
+        # $0 cost means "unknown", not "free". Orthogonal to
+        # cost_confidence (estimate quality when pricing DOES exist).
+        "cost_uncertain": sheet_state.cost_uncertain,
     }
 
 

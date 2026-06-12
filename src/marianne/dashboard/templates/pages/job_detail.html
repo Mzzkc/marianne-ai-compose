@@ -288,10 +288,10 @@
                                             <span class="ml-1 text-gray-700 dark:text-gray-300"
                                                   x-text="sheetDetails[{{ sheet.sheet_num }}].execution_duration_seconds ? Math.round(sheetDetails[{{ sheet.sheet_num }}].execution_duration_seconds) + 's' : '—'"></span>
                                         </div>
-                                        <div x-show="sheetDetails[{{ sheet.sheet_num }}].estimated_cost">
+                                        <div x-show="sheetDetails[{{ sheet.sheet_num }}].estimated_cost || sheetDetails[{{ sheet.sheet_num }}].cost_uncertain">
                                             <span class="text-gray-500 dark:text-gray-400">Cost:</span>
                                             <span class="ml-1 text-gray-700 dark:text-gray-300"
-                                                  x-text="'$' + (sheetDetails[{{ sheet.sheet_num }}].estimated_cost || 0).toFixed(4)"></span>
+                                                  x-text="sheetDetails[{{ sheet.sheet_num }}].cost_uncertain ? '$' + (sheetDetails[{{ sheet.sheet_num }}].estimated_cost || 0).toFixed(4) + ' (unknown — no instrument pricing)' : '$' + (sheetDetails[{{ sheet.sheet_num }}].estimated_cost || 0).toFixed(4) + (sheetDetails[{{ sheet.sheet_num }}].cost_confidence < 0.9 ? ' (est.)' : '')"></span>
                                         </div>
                                         <div x-show="sheetDetails[{{ sheet.sheet_num }}].execution_mode">
                                             <span class="text-gray-500 dark:text-gray-400">Mode:</span>
