@@ -144,6 +144,32 @@ class TestStorageFindings:
         assert str(stale) in paths
         assert str(fresh) not in paths
 
+    def test_stale_clone_artifacts_detected(self, tmp_path: Path) -> None:
+        """Legacy clone state DBs in ~/.marianne are stale since #227 moved
+        clone runtime files to ~/.config/mzt — flag them (with sidecars)."""
+        for name in (
+            "clone-adversary-state.db",
+            "clone-adversary-state.db-wal",
+            "clone-NAME-state.db-shm",
+        ):
+            (tmp_path / name).write_bytes(b"z" * 8)
+        # A non-clone DB must NOT be flagged.
+        (tmp_path / "daemon-state.db").write_bytes(b"precious")
+
+        findings = _scan_storage_findings(tmp_path)
+
+        clone_paths = [
+            f["path"] for f in findings if f["kind"] == "stale_clone_artifact"
+        ]
+        assert len(clone_paths) == 3
+        assert all("clone-" in p for p in clone_paths)
+        assert str(tmp_path / "daemon-state.db") not in clone_paths
+        assert all(
+            f["cleanable"]
+            for f in findings
+            if f["kind"] == "stale_clone_artifact"
+        )
+
     def test_clean_removes_only_cleanable(self, tmp_path: Path) -> None:
         nested = tmp_path / ".marianne"
         nested.mkdir()

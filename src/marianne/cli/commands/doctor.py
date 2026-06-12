@@ -202,6 +202,27 @@ def _scan_storage_findings(marianne_dir: Path | None = None) -> list[dict[str, A
             except OSError:
                 continue
 
+    # 3. Legacy clone state DBs (+ -wal/-shm sidecars). Conductor clones
+    # write under the runtime dir (~/.config/mzt) since #227; clone-*
+    # files left in ~/.marianne predate the move (#191).
+    try:
+        clone_matches = sorted(base.glob("clone-*"))
+    except OSError:
+        clone_matches = []
+    for f in clone_matches:
+        try:
+            if f.is_file():
+                findings.append({
+                    "kind": "stale_clone_artifact",
+                    "path": str(f),
+                    "size_bytes": f.stat().st_size,
+                    "cleanable": True,
+                    "detail": "legacy clone state file — clones write to "
+                    "the runtime dir since #227",
+                })
+        except OSError:
+            continue
+
     return findings
 
 
