@@ -76,16 +76,19 @@ If you have a Claude Max subscription, a Google AI subscription, or a Z.AI
 Coding Plan, the `claude-code`, `gemini-cli`, or `opencode` (with the
 `zai-coding-plan` provider) instruments all work and are all sandbox-free.
 
-> **Avoid for a free quickstart:** the default `examples/getting-started/hello.yaml`
-> is wired to `claude-code` + the `anthropic_api` fallback, which require an
-> Anthropic account. Use `hello-local.yaml` (below) instead.
+> **Both flagship scores are free now.** `examples/getting-started/hello.yaml`
+> runs on a deep, free instrument fallback chain — free OpenRouter models first,
+> falling back to a local Ollama model — so it needs no paid account.
+> `hello-local.yaml` (below) is the pure-offline twin: identical orchestration,
+> but it skips the OpenRouter attempts and runs entirely on your local model.
 
 ## Step 3 — Run the curated example score
 
 [`examples/getting-started/hello-local.yaml`](https://github.com/Mzzkc/marianne-ai-compose/blob/main/examples/getting-started/hello-local.yaml)
-is a sandbox-free, free-tier clone of the flagship `hello` score. It writes a
-small solarpunk story collection across three movements (with a parallel
-fan-out) and renders it as a self-contained HTML page.
+runs entirely on a local Ollama model — no cloud, no account. Same orchestration
+as the flagship `hello`: parallel agents write a short solarpunk story, a
+deterministic tool builds it into a website, and an agent polishes it to fit
+the story.
 
 ```bash
 mzt start                                          # start the conductor
