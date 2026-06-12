@@ -34,12 +34,18 @@ from marianne.core.config.instruments import (
     ModelCapacity,
 )
 from marianne.core.sheet import Sheet
+from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.musician import (
     _is_nonzero_exit_rescuable,
     sheet_task,
 )
-from marianne.daemon.baton.state import AttemptContext, AttemptMode
+from marianne.daemon.baton.state import (
+    AttemptContext,
+    AttemptMode,
+    BatonSheetStatus,
+    SheetExecutionState,
+)
 from marianne.execution.instruments.cli_backend import PluginCliBackend
 
 
@@ -259,3 +265,66 @@ class TestRealSubprocessRescue:
         assert result.success is False
         assert result.exit_signal == signal.SIGKILL
         assert _is_nonzero_exit_rescuable(result, has_validations=True) is False
+
+
+class TestObs1EndToEndStatusRecording:
+    """obs1 was a BOUNDARY bug (two correct subsystems composing wrong): the
+    backend reported success purely from exit code, and the musician skipped
+    validation on a non-zero exit, so the baton RECORDED a sheet whose work
+    was done + committed as a failure. This is the conductor-free 'live-daemon
+    rung': a REAL subprocess that commits work then exits non-zero, driven
+    through the REAL musician, with the resulting attempt fed to a REAL
+    BatonCore — asserting the recorded sheet status is COMPLETED, not FAILED.
+    The production daemon repro is gated (the running conductor predates the
+    fix and can't be restarted while a job runs); this proves the same path
+    deterministically, with no LLM and no conductor."""
+
+    async def test_committed_work_nonzero_exit_records_completed(
+        self, tmp_path: Path
+    ) -> None:
+        proof = tmp_path / "proof.txt"
+        # Real subprocess: commit the work (write proof), THEN exit non-zero
+        # — the exact obs1 shape, produced by a real process, not a mock.
+        script = (
+            f"open({str(proof)!r}, 'w').write('ok')\n"
+            "import sys\n"
+            "sys.exit(1)\n"
+        )
+        backend = PluginCliBackend(_python_profile())
+        sheet = _sheet(
+            [{"type": "command_succeeds", "command": f"test -f {proof}"}],
+            tmp_path,
+        )
+        inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
+
+        await sheet_task(
+            job_id="j1",
+            sheet=sheet,
+            backend=backend,
+            attempt_context=AttemptContext(attempt_number=1, mode=AttemptMode.NORMAL),
+            inbox=inbox,
+            rendered_prompt=script,  # bypass Jinja assembly; the script IS the body
+        )
+        result = inbox.get_nowait()
+
+        # The real non-zero exit was rescued because the work's validation passed.
+        assert result.execution_success is True
+        assert result.validation_pass_rate == 100.0
+        assert result.exit_code == 1  # the truth is preserved, not laundered
+        assert proof.exists()  # the work really was committed by the subprocess
+
+        # The baton records the rescued attempt as a COMPLETED sheet — the
+        # status obs1 used to get wrong (execution_fail on committed work).
+        baton = BatonCore()
+        baton.register_instrument(sheet.instrument_name, max_concurrent=1)
+        sheets = {
+            1: SheetExecutionState(sheet_num=1, instrument_name=sheet.instrument_name)
+        }
+        sheets[1].status = BatonSheetStatus.DISPATCHED
+        baton.register_job("j1", sheets, {})
+
+        await baton.handle_event(result)
+
+        recorded = baton.get_sheet_state("j1", 1)
+        assert recorded is not None
+        assert recorded.status == BatonSheetStatus.COMPLETED
