@@ -20,11 +20,13 @@ gated items, the M5 baton-stabilization surface is essentially clear. Shipped CI
 | #171 / #332 | **shipped** (`155ae5f`) — SIGHUP instrument-profile hot-reload (composer corrected: the instrument system is plugin-only, not mid-unification). Issue **closed** 2026-06-12. |
 | #359 | **shipped** (`771feb6`) — `mzt run --var k=v` runtime variables. |
 | #137 | **closed** (`c62ac01` + `57b2232`) — cadenza-ordering validation via the composer-directed signal-proxy approach (no `produces:` field). V109 warns when a cadenza reads a file whose declared producer (a sheet-gated `file_exists`) is not a DAG-ancestor; V108 suppresses the false "not found" for runtime-produced files. |
-| #58 | **core shipped** (`0030c43`) — conductor auto-derives `~/workspaces/<score-name>` when `workspace:` is omitted; `--workspace` is now a hidden expert override; managed-root ensured for preflight. Issue kept **open** for the archive/fresh-state verification residual. |
+| #58 | **closed** (`0030c43` + `499a814`) — conductor auto-derives `~/workspaces/<score-name>` when `workspace:` is omitted (at the `from_yaml` loader seam); `MARIANNE_WORKSPACE_ROOT` overrides the root; `--workspace` is a hidden expert override; managed-root ensured for preflight. Archive/fresh-state residual verified in code (archiver MOVES never deletes; `--fresh` resets state never touches workspace files). |
 
-**Remaining (composer's call):**
-- **#344** — kept open for a live-repro confirmation (obs1 + obs2 both structurally fixed in code).
-- **#58** — archive/fresh-state verification residual (the auto-derivation core is done; the reuse/`--fresh` sub-items are not re-verified in code).
+**M5 open surface: only #344.** The cumulative HEAD (`499a814`) is CI-green across all five jobs.
+
+- **#344** — kept open for a *live*-repro confirmation (obs1 + obs2 both structurally fixed and unit-tested). Deferred: the conductor is running a brand-stake lab, so it cannot be restarted to guarantee the fix is installed, and a competing repro job would contend for the lab's instrument/rate-limit resources. The budget-free deterministic repro (scripted instrument: commit output → exit 1, through the real baton) is ready to build when the conductor frees.
+
+**Adjacent (not M5-blocking):**
 - **#384** — `produces:` schema primitive: now an *optional strengthening* of #137's proxy approach, no longer a blocker (the composer's design to specify).
 - **Action items** (named gates): plugins submodule push (cross-repo); `mzt doctor --clean` (deletes the measured ~1.2G dead nested tree + stale clone artifacts — confirmation-gated).
 
