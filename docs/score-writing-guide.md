@@ -2033,6 +2033,29 @@ done
 
 ---
 
+## Worktree Isolation (opt-in)
+
+For concurrent jobs that modify the same git repository, per-job worktree
+isolation gives each job its own checkout so they can't corrupt each
+other's working tree:
+
+```yaml
+isolation:
+  enabled: true            # default false
+  mode: worktree
+  cleanup_on_success: true # remove the worktree after a clean run
+  cleanup_on_failure: false # keep it for debugging on failure
+  fallback_on_error: true  # non-git workspace? run without isolation
+```
+
+When enabled, Marianne creates one detached worktree per job (under
+`workspace/.worktrees/` by default) and runs all the job's sheets there.
+Isolation is **per job, not per sheet** — sheets within a job share the
+worktree, so cross-sheet context (`previous_outputs`/`previous_files`)
+keeps working. The workspace must be a git repository; with
+`fallback_on_error: true` (default) a non-repo workspace simply runs
+without isolation rather than failing.
+
 ## Code Execution (opt-in)
 
 A score can let the agent's output be executed: when `code_execution.enabled`

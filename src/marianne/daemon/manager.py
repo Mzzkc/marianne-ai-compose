@@ -247,6 +247,88 @@ def _merge_runtime_variables(
     )
 
 
+async def _setup_worktree_isolation(
+    job_id: str, config: Any, worktrees: dict[str, Path]
+) -> Any:
+    """#197: per-JOB git worktree isolation. Module-level (not a method)
+    so a spec'd-mock manager can't shadow it and silently replace config
+    (the #359 mock-binding trap). Returns a config whose workspace points
+    at an isolated worktree, or the original config when isolation is off
+    / not applicable. On a non-git workspace or creation failure,
+    ``fallback_on_error`` decides: continue without isolation (default)
+    or fail the job loudly.
+    """
+    from marianne.core.config.workspace import IsolationMode
+
+    iso = config.isolation
+    if not iso.enabled or iso.mode != IsolationMode.WORKTREE:
+        return config
+
+    from marianne.isolation.worktree import GitWorktreeManager, WorktreeError
+
+    repo = Path(config.workspace)
+    mgr = GitWorktreeManager(repo)
+    try:
+        if not mgr.is_git_repository():
+            raise WorktreeError(
+                f"workspace {repo} is not a git repository — worktree "
+                "isolation needs one"
+            )
+        result = await mgr.create_worktree_detached(
+            job_id,
+            source_ref=iso.source_branch,
+            worktree_base=iso.get_worktree_base(repo),
+            lock=iso.lock_during_execution,
+        )
+        if not result.success or result.worktree is None:
+            raise WorktreeError(result.error or "worktree creation failed")
+    except WorktreeError:
+        if iso.fallback_on_error:
+            _logger.warning(
+                "worktree.isolation_fallback",
+                job_id=job_id,
+                workspace=str(repo),
+                exc_info=True,
+            )
+            return config
+        raise
+
+    wt_path = result.worktree.path
+    worktrees[job_id] = wt_path
+    _logger.info("worktree.isolation_active", job_id=job_id, worktree=str(wt_path))
+    return config.model_copy(update={"workspace": wt_path})
+
+
+async def _cleanup_worktree_isolation(
+    job_id: str, config: Any, worktrees: dict[str, Path], *, success: bool
+) -> None:
+    """#197: remove a job's worktree per cleanup_on_success/failure.
+    Module-level for the same anti-mock-shadow reason. No-op when the job
+    had no worktree. Fail-open.
+    """
+    wt_path = worktrees.pop(job_id, None)
+    if wt_path is None:
+        return
+    iso = config.isolation
+    should_remove = iso.cleanup_on_success if success else iso.cleanup_on_failure
+    if not should_remove:
+        _logger.info("worktree.preserved", job_id=job_id, worktree=str(wt_path))
+        return
+    try:
+        from marianne.isolation.worktree import GitWorktreeManager
+
+        mgr = GitWorktreeManager(Path(config.workspace))
+        await mgr.remove_worktree(wt_path, force=True)
+        _logger.info("worktree.removed", job_id=job_id, worktree=str(wt_path))
+    except Exception:
+        _logger.warning(
+            "worktree.cleanup_failed",
+            job_id=job_id,
+            worktree=str(wt_path),
+            exc_info=True,
+        )
+
+
 class JobManager:
     """Manages concurrent job execution within the daemon.
 
@@ -367,6 +449,8 @@ class JobManager:
         self._baton_adapter: BatonAdapter | None = None
         # #171: live instrument registry, retained for SIGHUP hot-reload.
         self._instrument_registry: InstrumentRegistry | None = None
+        # #197: per-job git worktree paths for isolation cleanup.
+        self._job_worktrees: dict[str, Path] = {}
         self._baton_loop_task: asyncio.Task[Any] | None = None
         # #111: ordered, acknowledged checkpoint writer. Created in start()
         # (needs the running loop); replaces fire-and-forget save_checkpoint
@@ -2993,6 +3077,18 @@ class JobManager:
         # a correctness bug, so an archive error fails the job diagnosably.
         await self._archive_workspace_on_fresh(config, fresh=request.fresh)
 
+        # #197: per-job worktree isolation (gated on isolation.enabled;
+        # default off). Redirects the job's workspace to an isolated
+        # worktree so all sheets run there — F-210 cross-sheet context is
+        # preserved (sheets share the one worktree). getattr guard: a
+        # real manager always has _job_worktrees; absent it (incomplete
+        # test mock) isolation is simply skipped.
+        _worktrees = getattr(self, "_job_worktrees", None)
+        if _worktrees is not None:
+            config = await _setup_worktree_isolation(
+                job_id, config, _worktrees
+            )
+
         # Build Sheet entities from config
         sheets = build_sheets(config)
         deps = extract_dependencies(config)
@@ -3123,9 +3219,11 @@ class JobManager:
             jitter=config.retry.jitter,
         )
 
+        job_succeeded = False
         try:
             # Wait for the baton to complete all sheets
             all_success = await adapter.wait_for_completion(job_id)
+            job_succeeded = all_success
 
             # F-145: Set completed_new_work flag for concert chaining.
             # The monolithic path sets this when summary.completed_sheets > 0.
@@ -3167,6 +3265,16 @@ class JobManager:
             )
             adapter.deregister_job(job_id)
             return DaemonJobStatus.FAILED
+        finally:
+            # #197: remove the job's worktree per cleanup policy. A
+            # cancelled/failed job counts as not-succeeded (preserve by
+            # default for debugging). Fail-open. getattr guard mirrors
+            # the setup call (test-mock resilience).
+            _worktrees = getattr(self, "_job_worktrees", None)
+            if _worktrees is not None:
+                await _cleanup_worktree_isolation(
+                    job_id, config, _worktrees, success=job_succeeded
+                )
 
     async def _resume_via_baton(
         self,
