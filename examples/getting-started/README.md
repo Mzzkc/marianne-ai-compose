@@ -6,7 +6,8 @@ These scores teach you how to orchestrate AI agents to produce outcomes no singl
 
 | Score | What It Does | Sheets | Patterns Used | Time | Cost |
 |-------|-------------|--------|--------------|------|------|
-| [hello](hello.yaml) | Creates an interactive fiction experience with parallel character development and HTML presentation | 5 | Fan-out + Synthesis, Stigmergic Workspace, Mission Command | ~5m | varies |
+| [hello](hello.yaml) | **Free & local-capable.** Parallel agents write a short story; a deterministic tool builds it into a website; an agent polishes it — orchestration across mediums | 6 | Fan-out + Synthesis, Tool-Chain, Stigmergic Workspace | ~5-15m | free |
+| [hello-local](hello-local.yaml) | The pure-local twin of `hello` — same orchestration, run entirely on a local Ollama model (no cloud, no account) | 6 | Fan-out + Synthesis, Tool-Chain | ~5-15m | free |
 | [simple-sheet](simple-sheet.yaml) | Demonstrates basic parallel execution with minimal configuration — the fastest path from zero to running job | 2 | none | ~2m | ~$0.10 |
 | [cross-sheet-test](cross-sheet-test.yaml) | Builds a three-stage research pipeline where each stage reads and transforms previous outputs | 3 | Succession Pipeline | ~3m | ~$0.15 |
 | [api-backend](api-backend.yaml) | Generates structured technical briefings using the Anthropic API directly — no CLI needed | 3 | Succession Pipeline | ~2m | ~$0.20 |
@@ -16,7 +17,9 @@ These scores teach you how to orchestrate AI agents to produce outcomes no singl
 
 ### hello.yaml — Your First Score
 
-Generates a complete solarpunk fiction experience in three movements. Movement 1 creates the world. Movement 2 fans out to three parallel character vignettes that develop independently. Movement 3 synthesizes them into an HTML presentation you can open in your browser. The output is a visual, immersive reading experience that demonstrates how orchestrated agents produce integrated work from parallel contributions.
+**Free, local-capable, and orchestrated across mediums.** Marianne is an orchestrator, not a prompt wrapper, and this score shows it in four movements: (1) one agent writes the shared world; (2) three agents fan out and write character vignettes *in parallel*, each reading the world but not each other; (3) a **deterministic tool** (no AI) folds the prose into one valid, styled website — your guaranteed result; (4) an agent reads that page and *polishes* it to fit the story told. The output is a webpage you open in your browser, built from parallel contributions and a tool-chain seam.
+
+It runs on a **deep, free instrument fallback chain** — free OpenRouter models first, falling back to a local Ollama model — so it completes whether you have an OpenRouter key or just a local model. No paid API required. (For a fully offline run that skips the OpenRouter attempts, use [`hello-local.yaml`](hello-local.yaml).)
 
 ### simple-sheet.yaml — Minimal Working Configuration
 

@@ -1,312 +1,184 @@
-# hello-local.yaml — Your First Marianne Score (sandbox-free, zero-cost)
+# hello-local.yaml — Your First Marianne Score (PURE-LOCAL, fully offline)
 #
-# Identical in structure to hello.yaml, but configured for the SANDBOX-FREE
-# QUICKSTART PATH: it drives the `opencode` CLI instrument on a free-tier
-# model, so it needs no Claude/Anthropic subscription and never touches
-# Marianne's (currently broken) code_mode bwrap sandbox. See
-# docs/sandbox-free-quickstart.md and KNOWN-ISSUES.md #2.
+# The local-only twin of hello.yaml. Identical orchestration — parallel agents
+# write a story, a deterministic tool builds a website, an agent polishes it —
+# but it runs ENTIRELY on a local Ollama model (no OpenRouter, no cloud, no
+# account). Use this when you want zero network calls; use hello.yaml if you'd
+# like it to try fast free OpenRouter models first and fall back to local.
 #
-# This score creates a short interactive fiction experience in three
-# movements. Movement 1 generates the world. Movement 2 writes three
-# parallel character vignettes. Movement 3 weaves them into a finale
-# and presents it as a beautifully designed HTML page you can open
-# in your browser.
+#   Movement 1 · The World     one agent writes the shared setting (prose)
+#         │  ▼ fan-out (parallel)
+#   Movement 2 · Vignettes     three agents each write one character at once
+#         │  ▼
+#   Movement 3 · Assembly      a DETERMINISTIC tool folds them into one valid
+#         │                    HTML page — you always get a real website
+#         │  ▼
+#   Movement 4 · Polish        an agent tailors that page to the story told
 #
-# Category: getting-started — First experience with Marianne orchestration
-#
-# Patterns Used:
-#   - Fan-out + Synthesis: Three parallel character vignettes converge in finale
-#   - Stigmergic Workspace: Shared world file coordinates independent vignettes
-#   - Mission Command: Characters read the world but develop independently
+# Mediums crossed: prose → parallel prose → a styled, openable web page.
+# Pattern: Fan-out + Synthesis + a Tool-Chain seam.
 #
 # Prerequisites (one-time):
-#   pip install -e ".[daemon]"           # install Marianne + conductor
-#   npm install -g opencode-ai           # install the opencode CLI
-#   opencode providers login             # choose OpenRouter, free tier (no card)
+#   pip install -e ".[daemon]"           # Marianne + conductor
+#   # a local model served by Ollama, reachable by the opencode-gemma instrument:
+#   ollama pull gemma4:26b               # (or adjust the instrument's model)
 #
 # Usage:
-#   mzt start                                          # Start the conductor
-#   mzt run examples/getting-started/hello-local.yaml  # Run the score
-#   mzt status hello-local                             # Watch progress
-#   open workspaces/hello-local/the-sky-library.html   # Read the result
+#   mzt start                                          # start the conductor
+#   mzt run examples/getting-started/hello-local.yaml  # run the score
+#   mzt status hello-local --watch                     # watch the orchestration
+#   open workspaces/hello-local/the-sky-library.html   # read the result
 #
-# How to Adapt:
-#   - Swap `instrument_config.model` for any `:free` model listed in
-#     src/marianne/instruments/builtins/opencode.yaml, or a local Ollama model.
-#   - Change genre, setting, themes in prompt.variables
-#   - Modify character definitions (add more via fan_out count)
+# Output (workspaces/hello-local/):
+#   01-world.md  02-character-1..3.md  site-base.html  the-sky-library.html
 #
-# Output:
-#   workspaces/hello-local/
-#     01-world.md              — The setting (raw material)
-#     02-character-1.md        — First vignette (raw material)
-#     02-character-2.md        — Second vignette (raw material)
-#     02-character-3.md        — Third vignette (raw material)
-#     the-sky-library.html     — The finished product: open in browser
-#
-# Time: ~5-10 minutes  |  Cost: $0 (free-tier model)  |  Sheets: 5
+# Time: ~5-15 min (local inference)  |  Cost: $0 (fully local)  |  Sheets: 6
 
 name: hello-local
-description: "Sandbox-free first score — runs on free-tier models via the opencode CLI instrument"
+description: "Pure-local first score — the same orchestration as hello.yaml, run entirely on a local Ollama model (no cloud, no account)."
 
 workspace: ../../workspaces/hello-local
 
-# Sandbox-free, zero-cost instrument. The `opencode` CLI instrument runs the
-# model in its own process and never touches Marianne's (currently broken)
-# code_mode bwrap sandbox — see KNOWN-ISSUES.md #2. The model below is a
-# free-tier OpenRouter general-purpose model; swap it for any `:free` model in
-# src/marianne/instruments/builtins/opencode.yaml, or a local Ollama model
-# (see docs/sandbox-free-quickstart.md).
-instrument: opencode
-instrument_config:
-  model: "google/gemma-4-31b-it:free"
-  timeout_seconds: 1800
+# Fully local — opencode drives a local Ollama model via its OpenAI-compatible
+# endpoint. No OpenRouter, no fallback chain, no network. Swap the model in
+# the opencode-gemma profile (~/.marianne/instruments/opencode-gemma.yaml) for
+# any Ollama tag you have pulled.
+instrument: opencode-gemma
 
-# Movement declarations — names appear in `mzt status` output
 movements:
   1:
     name: "The World"
   2:
     name: "Three Vignettes"
   3:
-    name: "The Finale"
+    name: "Assembly"
+    instrument: cli                  # deterministic — no AI, always valid
+  4:
+    name: "Polish"
 
 sheet:
   size: 1
-  total_items: 3
+  total_items: 4
   fan_out:
-    2: 3                    # Movement 2 fans out to 3 parallel characters
+    2: 3                             # Movement 2 → three parallel characters
   dependencies:
-    2: [1]                  # Characters depend on world
-    3: [2]                  # Finale depends on all characters
+    2: [1]
+    3: [2]
+    4: [3]
 
 parallel:
   enabled: true
-  max_concurrent: 3
+  max_concurrent: 1                  # single local GPU — serialize the voices
 
 cross_sheet:
   auto_capture_stdout: true
-  max_output_chars: 4000
-  lookback_sheets: 4
+  max_output_chars: 2000
+  lookback_sheets: 5
 
 retry:
   max_retries: 1
 
 prompt:
   variables:
-    genre: "solarpunk"
     setting: "a floating garden-city above the clouds, fifty years from now"
-    themes:
-      - "what we owe to the places that made us"
-      - "the courage it takes to stay vs the courage it takes to leave"
-      - "small acts of repair in a world that's healing"
     characters:
       1:
         name: "Lira"
         role: "a wind-mapper who reads the sky like sheet music"
-        secret: "she's been secretly repairing the oldest bridge — the one everyone says should be torn down"
+        secret: "she has been quietly repairing the oldest bridge — the one everyone says to tear down"
       2:
         name: "Fen"
-        role: "a soil-singer who tends the deep gardens where roots hold the city aloft"
-        secret: "he's growing something in the lowest garden that shouldn't be possible at this altitude"
+        role: "a soil-singer who tends the deep gardens whose roots hold the city aloft"
+        secret: "he is growing something in the lowest garden that should not survive at this altitude"
       3:
         name: "Cael"
-        role: "a memory-keeper who maintains the archive of weather patterns and old songs"
-        secret: "she's discovered that the city's founding song contains coordinates to something below the clouds"
+        role: "a memory-keeper who maintains the archive of weather and old songs"
+        secret: "she found that the city's founding song hides coordinates to something below the clouds"
 
   template: |
     {% if stage == 1 %}
-    # Movement 1: The World
+    You are a fiction writer. Write the shared SETTING for a short story
+    collection set in {{ setting }}.
 
-    You are a fiction writer. Your task is to create the setting for a
-    short interconnected story collection.
+    Write 250-400 words of vivid, sensory prose. Make the reader feel the
+    place — the light, the air, a small everyday detail or two. End with one
+    sentence hinting that something is quietly changing.
 
-    ## The Setting
-    Genre: {{ genre }}
-    Place: {{ setting }}
-    Themes: {{ themes | join("; ") }}
-
-    ## Characters Who Live Here
-    {% for id, char in characters.items() %}
-    - **{{ char.name }}**: {{ char.role }}
-    {% endfor %}
-
-    ## Your Task
-
-    Write a vivid, immersive introduction to this world (800-1200 words).
-    Make the reader FEEL the place — the light, the sounds, the way air
-    moves differently up here. Establish the culture without explaining it.
-    Show how the city works through small, specific details: what breakfast
-    looks like, how people greet each other, what the children play.
-
-    End with a single paragraph that hints — just hints — that something
-    is changing. A shift in the wind. A new sound from below the clouds.
-    Something the city hasn't heard in a long time.
-
-    Write the setting document with rich markdown formatting — headers,
-    emphasis, evocative section breaks. This is literature, not a report.
-
-    Save to: {{ workspace }}/01-world.md
+    Use simple markdown: a `#` title and short paragraphs. Write ONLY the
+    setting. Save it to {{ workspace }}/01-world.md and stop.
 
     {% elif stage == 2 %}
     {% set char = characters[instance] %}
-    # Movement 2, Voice {{ instance }}: {{ char.name }}
+    You are a fiction writer. First read the shared world at
+    {{ workspace }}/01-world.md and match its tone.
 
-    You are a fiction writer. You're writing one chapter of an interconnected
-    story collection set in a solarpunk floating city.
+    Write a 200-350 word vignette for ONE character:
+    - Name: {{ char.name }}
+    - Role: {{ char.role }}
+    - Quiet secret: {{ char.secret }}
 
-    ## Read the World First
-    Read {{ workspace }}/01-world.md — this is the shared setting that all
-    three character stories inhabit. Stay true to its tone and details.
-
-    ## Your Character
-    - **Name**: {{ char.name }}
-    - **Role**: {{ char.role }}
-    - **Secret**: {{ char.secret }}
-
-    ## Themes
-    {{ themes | join("; ") }}
-
-    ## Your Task
-
-    Write {{ char.name }}'s vignette (600-1000 words). This is one morning
-    in their life — but the morning when things begin to change.
-
-    Requirements:
-    - Start in the middle of {{ char.name }}'s daily routine
-    - Show their relationship to the city through their work
-    - Let their secret emerge naturally, not as exposition
-    - End on a moment of decision: something they see or hear that
-      connects to the "something changing" from the world document
-    - The ending should make the reader want to know what happens next
-
-    Write with literary quality — varied sentence rhythm, sensory detail,
-    internal thought. Use markdown formatting: headers, emphasis, section
-    breaks where they serve the story.
-
-    Save to: {{ workspace }}/02-character-{{ instance }}.md
+    Show one small moment of their morning in this city, let the secret
+    surface gently (don't explain it), and end on a beat that makes the
+    reader want more. Use a `#` title with the character's name and short
+    paragraphs. Write ONLY this vignette. Save it to
+    {{ workspace }}/02-character-{{ instance }}.md and stop.
 
     {% elif stage == 3 %}
-    # Movement 3: The Finale — A Visual Experience
+    python3 "{{ workspace }}/../../examples/getting-started/assets/assemble-site.py" "{{ workspace }}"
 
-    You are a fiction writer AND a web designer. You're creating the closing
-    chapter of an interconnected story collection AND presenting the entire
-    collection as a beautiful, self-contained HTML page.
+    {% elif stage == 4 %}
+    You are a web designer. A complete, valid website already exists at
+    {{ workspace }}/site-base.html — it presents a short story (a world and
+    three character vignettes found in {{ workspace }}/01-world.md and
+    {{ workspace }}/02-character-*.md).
 
-    ## Read Everything First
-    Read all files in {{ workspace }}/:
-    - 01-world.md — the shared setting
-    - 02-character-1.md — Lira's vignette
-    - 02-character-2.md — Fen's vignette
-    - 02-character-3.md — Cael's vignette
+    Read site-base.html and the story, then write an IMPROVED, single
+    self-contained HTML file to {{ workspace }}/the-sky-library.html that:
+    - keeps ALL the story text intact,
+    - tailors the visual design (colors, headings, small touches) to the
+      mood of THIS story,
+    - stays one file with inline CSS only — no external resources,
+    - begins with <!DOCTYPE html> and is valid HTML5.
 
-    ## Your Task
-
-    Create a single self-contained HTML file: `{{ workspace }}/the-sky-library.html`
-
-    This HTML file is a digital literary journal that presents ALL the stories
-    in one gorgeous, immersive reading experience. It must include:
-
-    ### Content Structure
-    1. **Opening** — The world setting (from 01-world.md), adapted for HTML
-    2. **Three character sections** — Each vignette (from 02-character-*.md)
-    3. **The Finale** (800-1200 words, NEW content you write now) where all
-       three paths converge:
-       - Pick up where each vignette left off
-       - Bring all three characters to the same place at the same time
-       - Their secrets, combined, reveal something larger about the city
-       - End on an image, not an answer — open doors rather than close them
-       - Reference specific details from each vignette
-    4. **Colophon** at the bottom explaining how this was made
-
-    ### Visual Design Requirements
-    - Self-contained: ALL CSS inline in a `<style>` tag. No external resources.
-    - Typography: Use system font stacks (serif for body text, sans-serif for
-      headers). Large, readable body text (18-20px). Generous line-height (1.7+).
-    - Color: A muted, atmospheric palette inspired by the solarpunk setting.
-      Think warm golds, soft greens, sky blues against a cream or warm-white
-      background. Dark text for readability.
-    - Layout: Centered content column (max 680px). Generous margins and padding.
-      Each section visually separated with decorative dividers (CSS, not images).
-    - Character sections: Each character's section should have a subtle visual
-      identity — a colored accent border or background tint that distinguishes
-      them from each other.
-    - The opening section should feel expansive — maybe a large title treatment
-      with the city name and a poetic subtitle.
-    - The finale section should feel like a convergence — perhaps the accent
-      colors from all three characters blending together.
-    - Responsive: Looks good on desktop (wide) and mobile (narrow).
-    - Include a small decorative element between sections — a CSS-only ornament
-      like centered dots, a thin gradient line, or a typographic flourish.
-    - The colophon at the bottom should be visually distinct (smaller, italicized)
-      and include this text:
-
-      "This story was composed by Marianne AI Compose — an orchestration system
-      that coordinates AI agents through declarative YAML scores. The world
-      was written first. Three character vignettes were generated in parallel,
-      each reading the shared world but not each other. This finale read
-      everything and wove the threads together.
-      Score: hello-local.yaml | Movements: 3 | Voices: 5"
-
-    ### Technical Requirements
-    - Valid HTML5. `<!DOCTYPE html>` at the top.
-    - `<html lang="en">` with proper `<head>` including meta charset and viewport.
-    - All content and styling in one file — no external dependencies.
-    - Must render correctly in Chrome, Firefox, Safari.
-    - Page title: "The Sky Library — A Marianne Composition"
-
-    Save ONLY the HTML file to: {{ workspace }}/the-sky-library.html
-
-    Also save the raw finale text to: {{ workspace }}/03-finale.md
-    (This is the finale prose only, without HTML, for cross-sheet context.)
+    If you are unsure, copy site-base.html and refine it. Write ONLY the
+    file {{ workspace }}/the-sky-library.html and stop.
     {% endif %}
 
 validations:
   - type: file_exists
     path: "{workspace}/01-world.md"
     condition: "stage == 1"
-    description: "World setting document exists"
-
-  - type: content_regex
-    path: "{workspace}/01-world.md"
-    pattern: "(?s)^#+ "
-    condition: "stage == 1"
-    description: "World document has markdown structure"
-
+    description: "World setting exists"
   - type: command_succeeds
-    command: 'test $(wc -w < "{workspace}/01-world.md") -ge 800'
+    command: 'test $(wc -w < "{workspace}/01-world.md") -ge 120'
     condition: "stage == 1"
-    description: "World document has substantive content (800+ words)"
+    description: "World has substantive prose (120+ words)"
 
   - type: file_exists
     path: "{workspace}/02-character-{instance}.md"
     condition: "stage == 2"
     description: "Character vignette exists"
-
-  - type: content_regex
-    path: "{workspace}/02-character-{instance}.md"
-    pattern: "(?s)^#+ "
-    condition: "stage == 2"
-    description: "Character vignette has markdown structure"
-
   - type: command_succeeds
-    command: 'test $(wc -w < "{workspace}/02-character-{instance}.md") -ge 600'
+    command: 'test $(wc -w < "{workspace}/02-character-{instance}.md") -ge 80'
     condition: "stage == 2"
-    description: "Character vignette has substantive content (600+ words)"
+    description: "Vignette has substantive prose (80+ words)"
+
+  - type: file_exists
+    path: "{workspace}/site-base.html"
+    condition: "stage == 3"
+    description: "Deterministic website assembled"
+  - type: content_contains
+    path: "{workspace}/site-base.html"
+    pattern: "<!DOCTYPE html>"
+    condition: "stage == 3"
+    description: "Assembled output is valid HTML5"
 
   - type: file_exists
     path: "{workspace}/the-sky-library.html"
-    condition: "stage == 3"
-    description: "HTML presentation exists"
-
+    condition: "stage == 4"
+    description: "Final website exists"
   - type: content_contains
     path: "{workspace}/the-sky-library.html"
     pattern: "<!DOCTYPE html>"
-    condition: "stage == 3"
-    description: "Output is valid HTML5"
-
-  - type: content_contains
-    path: "{workspace}/the-sky-library.html"
-    pattern: "Marianne AI Compose"
-    condition: "stage == 3"
-    description: "HTML contains colophon"
+    condition: "stage == 4"
+    description: "Final website is valid HTML5"
