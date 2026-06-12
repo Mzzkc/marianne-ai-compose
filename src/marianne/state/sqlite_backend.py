@@ -51,6 +51,17 @@ class SQLiteStateBackend(StateBackend):
         self._initialized = False
         self._init_lock = asyncio.Lock()
 
+    def _db_missing(self) -> bool:
+        """True when the database file doesn't exist on disk.
+
+        Pure reads must short-circuit on a missing file instead of
+        initializing the schema (#333): read-paths that ran migrations
+        left empty ``.marianne-state.db`` files in workspaces, making
+        them look like they hold local state. Writers (``save``,
+        ``record_execution``) still create the database on first use.
+        """
+        return not self.db_path.exists()
+
     @asynccontextmanager
     async def _connect(self) -> AsyncIterator[aiosqlite.Connection]:
         """Get a database connection with foreign keys enabled."""
@@ -335,6 +346,8 @@ class SQLiteStateBackend(StateBackend):
         process dead). When a zombie is detected, the state is updated to
         PAUSED and saved before returning.
         """
+        if self._db_missing():
+            return None
         await self._ensure_initialized()
 
         async with self._connect() as db:
@@ -601,6 +614,8 @@ class SQLiteStateBackend(StateBackend):
 
     async def delete(self, job_id: str) -> bool:
         """Delete state for a job."""
+        if self._db_missing():
+            return False
         await self._ensure_initialized()
 
         async with self._connect() as db:
@@ -618,6 +633,8 @@ class SQLiteStateBackend(StateBackend):
 
     async def list_jobs(self) -> list[CheckpointState]:
         """List all jobs with state."""
+        if self._db_missing():
+            return []
         await self._ensure_initialized()
 
         async with self._connect() as db:
@@ -733,6 +750,8 @@ class SQLiteStateBackend(StateBackend):
         Returns:
             List of execution history records
         """
+        if self._db_missing():
+            return []
         await self._ensure_initialized()
 
         async with self._connect() as db:
@@ -771,6 +790,8 @@ class SQLiteStateBackend(StateBackend):
         Returns:
             Total number of execution history records
         """
+        if self._db_missing():
+            return 0
         await self._ensure_initialized()
 
         async with self._connect() as db:
@@ -794,6 +815,8 @@ class SQLiteStateBackend(StateBackend):
             - avg_duration: Average execution duration
             - total_retries: Total retry count
         """
+        if self._db_missing():
+            return {}
         await self._ensure_initialized()
 
         async with self._connect() as db:
@@ -854,6 +877,8 @@ class SQLiteStateBackend(StateBackend):
         Returns:
             List of job summary dictionaries
         """
+        if self._db_missing():
+            return []
         await self._ensure_initialized()
 
         async with self._connect() as db:
