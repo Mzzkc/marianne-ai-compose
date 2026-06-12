@@ -20,7 +20,7 @@ constraint:
 | #137 | Schema decision | Lab-ruled infeasible without a producer signal; prerequisite filed as **#384** (`produces:` primitive). Build #384 → #137 becomes a bounded WARNING-first check. |
 | #197 | Architecture decision | Lab-ruled: per-sheet worktree isolation as filed silently breaks shipped F-210 (cross-sheet context). Needs per-job re-scope. |
 | #209 | Security review | Stage 2a (regex classification) is live-capable but cosmetic without Stage 3; Stage 3 executes agent-generated shell/python with no sandbox on bwrap-less hosts — needs a security review before activation. |
-| #344 (obs1) | Composer-scoped | obs2 (goose idle SIGKILL) resolved by the liveness gate (`d7c2b04`). obs1 (opus exit-nonzero-after-commit) structurally proven, repro'd 11× without firing, fix documented; scoped to reproduce-or-mark. |
+| #344 | ~~gated~~ **fixed** | obs2 (goose idle SIGKILL) resolved by the liveness gate (`d7c2b04`); obs1 (opus exit-nonzero-after-commit) structural fix shipped (`18226a9`) — a plain non-zero exit whose declared validations all pass is rescued to success. Issue kept open per the reproduce-or-mark instruction, pending a live-repro confirmation of the sporadic trigger. |
 | #171 / #332 | 0-drift sequencing | Profile hot-reload extends existing SIGHUP (no CLI gate), but the composer-directed single-instrument-system unification must land first to avoid drift. |
 | #58, #384 | Product/schema | Workspace-lifecycle vision (#58); the `produces:` schema primitive (#384). |
 
