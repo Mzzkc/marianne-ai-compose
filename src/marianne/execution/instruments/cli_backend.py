@@ -960,12 +960,6 @@ class PluginCliBackend(Backend):
                         ),
                         timeout=effective_timeout,
                     )
-                    stdout_data = b"".join(stdout_chunks).decode(
-                        "utf-8", errors="replace"
-                    )
-                    stderr_data = b"".join(stderr_chunks).decode(
-                        "utf-8", errors="replace"
-                    )
                     exit_code = proc.returncode
                 except TimeoutError:
                     _logger.warning(
@@ -980,6 +974,19 @@ class PluginCliBackend(Backend):
                 # and arbitrary exceptions. SIGTERM -> 2s grace -> SIGKILL of
                 # the process group. Closes RC-2 from the spec.
                 await _kill_process_group_if_alive(proc, pgid)
+                # Decode AFTER the try so partial output survives timeout
+                # and cancellation — the drain appends chunks in place
+                # precisely so the cancelled gather can't discard them,
+                # and a timing-out sheet's last words are the diagnostic
+                # payload. exit_code stays clean-completion-only: after
+                # the kill above, proc.returncode is OUR signal, not the
+                # agent's exit.
+                stdout_data = b"".join(stdout_chunks).decode(
+                    "utf-8", errors="replace"
+                )
+                stderr_data = b"".join(stderr_chunks).decode(
+                    "utf-8", errors="replace"
+                )
 
         except FileNotFoundError:
             # After ensuring cwd exists above, this is genuinely about

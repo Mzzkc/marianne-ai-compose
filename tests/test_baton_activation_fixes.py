@@ -488,6 +488,7 @@ def _make_mock_manager() -> MagicMock:
     manager._set_job_status = JobManager._set_job_status.__get__(manager)
     # #204: _run/_resume_via_baton now call this staticmethod (no self)
     manager._load_spec_corpus = JobManager._load_spec_corpus
+    manager._archive_workspace_on_fresh = JobManager._archive_workspace_on_fresh
 
     # Registry must be async-compatible since _set_job_status awaits it
     manager._registry = MagicMock()

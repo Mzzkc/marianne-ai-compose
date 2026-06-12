@@ -140,6 +140,8 @@ class TestDrainDeadlockBattery:
             "import sys, time\n"
             "sys.stdout.write('partial output before hang\\n')\n"
             "sys.stdout.flush()\n"
+            "sys.stderr.write('stderr breadcrumb\\n')\n"
+            "sys.stderr.flush()\n"
             "time.sleep(600)\n"
         )
         instrument = PluginCliBackend(_python_profile())
@@ -155,6 +157,12 @@ class TestDrainDeadlockBattery:
         assert elapsed < 60
         assert len(pids) == 1
         assert await _wait_pid_gone(pids[0])
+        # The drain's whole purpose: partial output survives the timeout.
+        # Timing-out sheets are exactly when the agent's last words are
+        # the diagnostic payload (the in-place chunk append exists for
+        # this; see _drain_stream's docstring).
+        assert "partial output before hang" in result.stdout
+        assert "stderr breadcrumb" in result.stderr
 
     async def test_cancel_mid_stream_reaps_child(self) -> None:
         """Cancelling execute() mid-stream must still reap the child via

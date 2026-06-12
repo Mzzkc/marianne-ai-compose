@@ -2844,6 +2844,31 @@ class JobManager:
         await self._run_managed_task(job_id, _execute())
 
     @staticmethod
+    async def _archive_workspace_on_fresh(config: Any, *, fresh: bool) -> None:
+        """Archive non-preserved workspace files for a --fresh submit.
+
+        Only fresh submits archive — resume and plain submits must leave
+        the workspace untouched. The archiver does synchronous file I/O,
+        so it runs off the event loop. ``WorkspaceArchiver.archive``
+        already downgrades OSError/ValueError to a logged no-op; anything
+        else propagates and fails the job loudly (a "fresh" run that
+        silently inherits stale outputs passes validations on work it
+        never did).
+        """
+        if not (fresh and config.workspace_lifecycle.archive_on_fresh):
+            return
+        from marianne.workspace.lifecycle import WorkspaceArchiver
+
+        archiver = WorkspaceArchiver(config.workspace, config.workspace_lifecycle)
+        archive_path = await asyncio.to_thread(archiver.archive)
+        if archive_path is not None:
+            _logger.info(
+                "workspace_archived_on_fresh",
+                workspace=str(config.workspace),
+                archive=str(archive_path),
+            )
+
+    @staticmethod
     async def _load_spec_corpus(
         spec: SpecCorpusConfig, workspace: Path
     ) -> SpecCorpusConfig | None:
@@ -2902,6 +2927,15 @@ class JobManager:
 
         assert self._baton_adapter is not None  # Caller checks this
         adapter = self._baton_adapter
+
+        # --fresh archives prior workspace files when the score opts in
+        # (workspace_lifecycle.archive_on_fresh). The original call site
+        # died with job_service's fresh block (9e8d475) and the baton path
+        # never reimplemented it — leaving stale outputs from the previous
+        # run in place, where file_exists validations would accept them as
+        # the new run's work. Loud failure: a contaminated "fresh" run is
+        # a correctness bug, so an archive error fails the job diagnosably.
+        await self._archive_workspace_on_fresh(config, fresh=request.fresh)
 
         # Build Sheet entities from config
         sheets = build_sheets(config)

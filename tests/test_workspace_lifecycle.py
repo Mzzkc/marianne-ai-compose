@@ -465,3 +465,121 @@ class TestSubdirectoryArchival:
         assert (result / "report.md").exists()
         assert not (workspace / "inner-run").exists()
         assert not (workspace / "report.md").exists()
+
+
+class TestFreshSubmitArchivesWorkspace:
+    """The archiver must be WIRED into the baton submit path.
+
+    The call site died with job_service's fresh block (9e8d475) and the
+    baton path never reimplemented it — archive_on_fresh became dead
+    config. Live consequence (2026-06-12, thinking-lab): a --fresh run
+    inherited the previous run's review files, so file_exists validations
+    could pass on stale outputs the new run never produced.
+    """
+
+    @pytest.mark.asyncio
+    async def test_run_via_baton_archives_on_fresh(self, tmp_path: Path) -> None:
+        from unittest.mock import AsyncMock, MagicMock
+
+        from marianne.core.config import JobConfig
+        from marianne.core.sheet import Sheet
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
+
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        (ws / "review-1.md").write_text("stale output from the previous run")
+
+        config = JobConfig.model_validate(
+            {
+                "name": "fresh-archive-test",
+                "workspace": str(ws),
+                "workspace_lifecycle": {"archive_on_fresh": True},
+                "sheet": {"size": 1, "total_items": 1},
+                "prompt": {"template": "do the thing"},
+            },
+        )
+
+        manager = MagicMock()
+        manager._baton_adapter = BatonAdapter()
+        manager._job_meta = {}
+        manager._config_name_to_conductor_id = {}
+        manager._config = MagicMock()
+        manager._config.default_thinking_method = None
+        manager._run_via_baton = JobManager._run_via_baton.__get__(manager)
+        manager._set_job_status = JobManager._set_job_status.__get__(manager)
+        manager._load_spec_corpus = JobManager._load_spec_corpus
+        manager._archive_workspace_on_fresh = JobManager._archive_workspace_on_fresh
+        manager._registry = MagicMock()
+        manager._registry.update_status = AsyncMock()
+        manager._registry.save_checkpoint = AsyncMock()
+        manager._job_meta["fresh-archive-test"] = JobMeta(
+            job_id="fresh-archive-test",
+            config_path=tmp_path / "score.yaml",
+            workspace=ws,
+            status=DaemonJobStatus.RUNNING,
+        )
+
+        adapter = manager._baton_adapter
+        adapter.wait_for_completion = AsyncMock(return_value=True)
+        adapter.register_job = MagicMock()
+        adapter.publish_job_event = AsyncMock()
+        adapter.has_completed_sheets = MagicMock(return_value=True)
+        adapter.deregister_job = MagicMock()
+
+        request = MagicMock()
+        request.workspace = None
+        request.fresh = True
+        request.start_sheet = None
+        request.escalation = False
+        request.self_healing = False
+        request.dry_run = False
+
+        sheet = Sheet(
+            num=1,
+            movement=1,
+            voice_count=1,
+            instrument_name="claude-code",
+            workspace=ws,
+            prompt_template="do the thing",
+        )
+        with (
+            patch("marianne.core.sheet.build_sheets", return_value=[sheet]),
+            patch(
+                "marianne.daemon.baton.adapter.extract_dependencies",
+                return_value={1: []},
+            ),
+        ):
+            await manager._run_via_baton("fresh-archive-test", config, request)
+
+        assert not (ws / "review-1.md").exists(), (
+            "stale output survived a --fresh submit with archive_on_fresh"
+        )
+        archive_root = ws / "archive"
+        assert archive_root.is_dir()
+        archived = list(archive_root.rglob("review-1.md"))
+        assert archived, "stale output was deleted, not archived"
+
+    @pytest.mark.asyncio
+    async def test_non_fresh_submit_does_not_archive(self, tmp_path: Path) -> None:
+        """resume/plain submits must never archive — only --fresh."""
+        from marianne.core.config import JobConfig
+        from marianne.workspace.lifecycle import WorkspaceArchiver  # noqa: F401
+
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        (ws / "keep.md").write_text("live artifact")
+        config = JobConfig.model_validate(
+            {
+                "name": "non-fresh-test",
+                "workspace": str(ws),
+                "workspace_lifecycle": {"archive_on_fresh": True},
+                "sheet": {"size": 1, "total_items": 1},
+                "prompt": {"template": "t"},
+            },
+        )
+        from marianne.daemon.manager import JobManager
+
+        await JobManager._archive_workspace_on_fresh(config, fresh=False)
+        assert (ws / "keep.md").exists()
+        assert not (ws / "archive").exists()
