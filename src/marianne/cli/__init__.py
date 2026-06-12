@@ -34,7 +34,7 @@ Package structure:
         ├── pause.py          # pause, modify commands
         ├── cancel.py         # cancel command
         ├── validate.py       # validate command
-        ├── recover.py        # recover command (hidden)
+        ├── recover.py        # recover command
         ├── diagnose.py       # logs, errors, diagnose commands
         ├── dashboard.py      # dashboard, mcp commands
         └── learning.py       # patterns-*, learning-* commands
@@ -306,7 +306,8 @@ app.command(rich_help_panel="Diagnostics")(errors)
 app.command(rich_help_panel="Diagnostics")(diagnose)
 app.command(rich_help_panel="Diagnostics")(history)
 app.command(rich_help_panel="Diagnostics")(doctor)
-app.command(hidden=True)(recover)  # Hidden - recovery is advanced operation
+# #338: discoverable — a user whose job failed must be able to find recovery.
+app.command(rich_help_panel="Jobs")(recover)
 
 # Server commands
 app.command(rich_help_panel="Services")(dashboard)

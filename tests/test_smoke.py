@@ -216,7 +216,7 @@ class TestCoreCommandsSmoke:
         assert result.exit_code == 0
 
     def test_recover_help(self) -> None:
-        """Test recover --help exits cleanly (hidden command)."""
+        """Test recover --help exits cleanly."""
         result = runner.invoke(app, ["recover", "--help"])
         assert result.exit_code == 0
 
