@@ -147,8 +147,11 @@ cli:
       # dialog; "Yes, I accept" is reached with Down+Enter on v2.x.
       - pattern: "Bypass Permissions mode"
         keys: ["Down", "Enter"]
-    # The input prompt line: "❯ " at line start.
-    ready_pattern: '(?m)^\s*❯'
+    # The BARE input prompt line: "❯ " with nothing typed after it.
+    # Must stay anchored — the trust dialog renders a selection cursor
+    # ("❯ 1. Yes, I trust this folder") that an unanchored pattern
+    # matches, and a prompt pasted into that dialog is silently lost.
+    ready_pattern: '(?m)^\s*❯\s*$'
     # Busy: tool-run hint, or a spinner line with elapsed time like
     # "· Percolating… (2s)" / "✻ Baked for 24s".
     busy_patterns:

@@ -50,6 +50,16 @@ GATE_SCREEN = (
     "Quick safety check: Is this a project you created or one you trust?\n"
     "Enter to confirm"
 )
+# The REAL claude-code trust dialog renders a selection cursor — a line that
+# a loose ready pattern (``(?m)^\s*❯``) also matches. Pasting into this
+# dialog silently discards the prompt (live repro: nudge-verification,
+# 2026-06-12). Tests against this screen pin the gate-before-ready ordering.
+TRUST_DIALOG_SCREEN = (
+    "Quick safety check: Is this a project you created or one you trust?\n"
+    "❯ 1. Yes, I trust this folder\n"
+    "  2. No, exit\n"
+    "status line"
+)
 
 
 def make_interactive_config(**overrides: Any) -> InteractiveCliConfig:
@@ -96,6 +106,11 @@ class FakeTmux:
     - Exception instance: raised by that capture
     - callable: invoked (for side effects like creating the marker), and
       its return value used as the screen text
+
+    Input-box fidelity: like a real TUI, pasted text is echoed into the
+    capture (appended as an input line) until an Enter submits it. Set
+    ``swallow_pastes`` to simulate a modal dialog that silently discards
+    paste input (the lost-prompt failure mode).
     """
 
     def __init__(self, screens: list[Any] | None = None) -> None:
@@ -108,6 +123,8 @@ class FakeTmux:
         self.piped_to: list[Path] = []
         self.pipe_off_count = 0
         self.fake_pane_pid: int | None = 4242
+        self.pending_input: str | None = None
+        self.swallow_pastes = False
 
     async def kill_session(self, session: str) -> None:
         self.killed_sessions.append(session)
@@ -135,16 +152,21 @@ class FakeTmux:
         entry = self.screens[idx]
         if isinstance(entry, Exception):
             raise entry
-        if callable(entry):
-            result = entry()
-            return str(result)
-        return str(entry)
+        screen = str(entry()) if callable(entry) else str(entry)
+        if self.pending_input is not None:
+            first_line = self.pending_input.splitlines()[0][:60]
+            screen = f"{screen}\n❯ {first_line}"
+        return screen
 
     async def paste_text(self, session: str, text: str) -> None:
         self.pasted.append(text)
+        if not self.swallow_pastes:
+            self.pending_input = text
 
     async def send_keys(self, session: str, keys: list[str]) -> None:
         self.sent_keys.append(list(keys))
+        if "Enter" in keys:
+            self.pending_input = None
 
     async def version(self) -> tuple[int, int] | None:
         return (3, 4)
@@ -230,6 +252,35 @@ class TestInteractiveConfigModels:
         assert profile.cli.interactive is not None
         assert profile.cli.interactive.startup_gates
         assert profile.cli.interactive.busy_patterns
+
+    def test_builtin_claude_code_ready_rejects_trust_dialog(self) -> None:
+        """The ready pattern must NOT match the trust dialog's selection
+        cursor (``❯ 1. Yes, I trust this folder``) — that screen swallows
+        pasted prompts (live repro 2026-06-12)."""
+        import re
+
+        import yaml
+
+        builtin = (
+            Path(__file__).parent.parent
+            / "src" / "marianne" / "instruments" / "builtins" / "claude-code.yaml"
+        )
+        data = yaml.safe_load(builtin.read_text())
+        profile = InstrumentProfile.model_validate(data)
+        assert profile.cli is not None and profile.cli.interactive is not None
+        ready_re = re.compile(profile.cli.interactive.ready_pattern)
+
+        assert ready_re.search(TRUST_DIALOG_SCREEN) is None, (
+            "ready_pattern matches the trust dialog's selection cursor"
+        )
+        assert ready_re.search(READY_SCREEN) is not None, (
+            "ready_pattern must still match a bare input prompt"
+        )
+        # The dialog must be covered by a startup gate instead.
+        assert any(
+            re.search(g.pattern, TRUST_DIALOG_SCREEN)
+            for g in profile.cli.interactive.startup_gates
+        )
 
 
 class TestSessionNaming:
@@ -366,6 +417,92 @@ class TestDriverGates:
         assert result.detail is not None and "ready prompt" in result.detail
         # Session still cleaned up
         assert "mzt-test-s1-a1" in fake.killed_sessions
+
+    async def test_dialog_cursor_does_not_read_as_ready(
+        self, tmp_path: Path,
+    ) -> None:
+        """A pending gate beats the ready check on the same screen.
+
+        The real trust dialog renders ``❯ 1. Yes, I trust this folder`` —
+        a loose ready pattern matches that line, the driver pastes the
+        prompt into the dialog, and the dialog discards it. The sheet then
+        sits idle with an agent that never saw its instructions (live
+        repro 2026-06-12). The gate must fire FIRST; the prompt may only
+        be pasted once the dialog is gone.
+        """
+        marker = tmp_path / "m.complete"
+        ops: list[str] = []
+
+        def dialog_then_ready() -> str:
+            # Dialog stays up until its Enter arrives.
+            if ["Enter"] in fake.sent_keys:
+                if not marker.exists() and fake.pasted:
+                    marker.touch()
+                return READY_SCREEN
+            return TRUST_DIALOG_SCREEN
+
+        cfg = make_interactive_config(
+            startup_gates=[
+                InteractiveGate(
+                    pattern="Is this a project you created", keys=["Enter"],
+                ),
+            ],
+        )
+        fake = FakeTmux([dialog_then_ready])
+        orig_paste = fake.paste_text
+        orig_send = fake.send_keys
+
+        async def paste_logged(session: str, text: str) -> None:
+            ops.append(f"paste:{text[:12]}")
+            await orig_paste(session, text)
+
+        async def send_logged(session: str, keys: list[str]) -> None:
+            ops.append(f"keys:{'+'.join(keys)}")
+            await orig_send(session, keys)
+
+        fake.paste_text = paste_logged  # type: ignore[method-assign]
+        fake.send_keys = send_logged  # type: ignore[method-assign]
+
+        result = await run_driver(fake, tmp_path, config=cfg, marker=marker)
+
+        assert result.outcome == "completed"
+        first_paste = next(i for i, op in enumerate(ops) if op.startswith("paste:"))
+        gate_enter = next(i for i, op in enumerate(ops) if op == "keys:Enter")
+        assert gate_enter < first_paste, (
+            f"prompt was pasted before the gate dismissed the dialog: {ops}"
+        )
+
+    async def test_swallowed_paste_repastes_bounded(self, tmp_path: Path) -> None:
+        """A screen that silently discards pastes triggers bounded re-paste.
+
+        Defense against UNKNOWN dialogs (not covered by startup_gates):
+        when the paste produces no visible change, the driver must retry
+        the paste a bounded number of times — and proceed afterwards
+        rather than dead-ending.
+        """
+        fake = FakeTmux([READY_SCREEN])
+        fake.swallow_pastes = True
+        result = await run_driver(fake, tmp_path, max_nudges=0)
+        # Nothing lands, agent never works: outcome is nudges_exhausted.
+        assert result.outcome == "nudges_exhausted"
+        # Original paste retried (bounded, >1 total), not infinite.
+        prompt_pastes = [p for p in fake.pasted if p == "do the task"]
+        assert 2 <= len(prompt_pastes) <= 4
+
+    async def test_landed_paste_not_repasted(self, tmp_path: Path) -> None:
+        """A paste that visibly lands must be pasted exactly once —
+        re-pasting a delivered prompt would duplicate the instructions."""
+        marker = tmp_path / "m.complete"
+
+        def make_done() -> str:
+            if fake.pasted:
+                marker.touch()
+            return READY_SCREEN
+
+        fake = FakeTmux([make_done])
+        result = await run_driver(fake, tmp_path, marker=marker)
+        assert result.outcome == "completed"
+        assert [p for p in fake.pasted if p == "do the task"] == ["do the task"]
 
 
 class TestDriverNudges:
@@ -640,9 +777,23 @@ class TestInteractiveBackendExecute:
         profile = make_profile(interactive=make_interactive_config())
         profile.cli.errors.rate_limit_patterns = ["You've hit your limit"]  # type: ignore[union-attr]
         limit_screen = "You've hit your limit · resets 9pm"
-        # READY ×2: ready-detection + submit-verification (bare prompt),
-        # then the limit banner, then the session dies.
-        fake = FakeTmux([READY_SCREEN, READY_SCREEN, limit_screen, TmuxError("dead")])
+
+        # Ready until the prompt is submitted; then one dying capture (ends
+        # the submit-verify), then the banner as the drive loop's last
+        # successful capture, then the session is gone.
+        calls = {"after_submit": 0}
+
+        def banner_then_dead() -> str:
+            if not any("Enter" in k for k in fake.sent_keys):
+                return READY_SCREEN
+            calls["after_submit"] += 1
+            if calls["after_submit"] == 1:
+                raise TmuxError("dying")
+            if calls["after_submit"] == 2:
+                return limit_screen
+            raise TmuxError("dead")
+
+        fake = FakeTmux([banner_then_dead])
         backend = InteractiveCliBackend(
             profile, working_directory=tmp_path, tmux=fake,  # type: ignore[arg-type]
         )

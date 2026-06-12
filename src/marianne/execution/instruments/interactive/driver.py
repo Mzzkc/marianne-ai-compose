@@ -57,6 +57,9 @@ _TRANSCRIPT_MAX_BYTES = 50 * 1024 * 1024
 _PASTE_SETTLE_SECONDS = 1.0
 _SUBMIT_VERIFY_SECONDS = 3.0
 _SUBMIT_MAX_ENTERS = 3
+# A paste that produces no visible screen change was swallowed (modal
+# dialog, etc.) — retry the paste this many times total before proceeding.
+_PASTE_MAX_ATTEMPTS = 3
 
 DriverOutcome = Literal[
     "completed",        # agent created the completion marker
@@ -305,6 +308,13 @@ class InteractiveSessionDriver:
         Gates fire in order, each at most once, and are never fired after
         the ready pattern has been seen — a late-matching gate must not
         type into the agent's input. Returns (ready, last_screen).
+
+        Gate checks run BEFORE the ready check, and a screen showing any
+        gate pattern is never declared ready: real dialogs render a
+        selection cursor (claude's trust prompt shows ``❯ 1. Yes, …``)
+        that a ready pattern can match, and a prompt pasted into a modal
+        dialog is silently discarded — the agent then runs with no
+        instructions at all (live repro: nudge-verification, 2026-06-12).
         """
         cfg = self._config
         ready_re = re.compile(cfg.ready_pattern)
@@ -322,21 +332,24 @@ class InteractiveSessionDriver:
                 if not await self._session_alive(session):
                     return False, screen
             else:
-                if ready_re.search(screen):
-                    return True, screen
+                gate_on_screen = False
                 for idx, gate in enumerate(cfg.startup_gates):
+                    if not re.search(gate.pattern, screen):
+                        continue
+                    gate_on_screen = True
                     if idx in fired:
                         continue
-                    if re.search(gate.pattern, screen):
-                        _logger.info(
-                            "interactive_startup_gate_fired",
-                            session=session,
-                            gate_index=idx,
-                            pattern=gate.pattern,
-                        )
-                        await self._tmux.send_keys(session, gate.keys)
-                        fired.add(idx)
-                        break  # one gate per poll; re-capture before the next
+                    _logger.info(
+                        "interactive_startup_gate_fired",
+                        session=session,
+                        gate_index=idx,
+                        pattern=gate.pattern,
+                    )
+                    await self._tmux.send_keys(session, gate.keys)
+                    fired.add(idx)
+                    break  # one gate per poll; re-capture before the next
+                if not gate_on_screen and ready_re.search(screen):
+                    return True, screen
             await asyncio.sleep(cfg.poll_interval_seconds)
 
         return False, screen
@@ -462,8 +475,36 @@ class InteractiveSessionDriver:
         busy_res = [re.compile(p) for p in cfg.busy_patterns]
         ready_re = re.compile(cfg.ready_pattern)
 
-        await self._tmux.paste_text(session, text)
-        await asyncio.sleep(_PASTE_SETTLE_SECONDS)
+        # Paste-landed verification: a paste must produce SOME visible
+        # change (input-box echo, or claude's "[Pasted text #N]" chip).
+        # An unchanged screen means a modal dialog or similar swallowed
+        # the paste — re-paste bounded, then proceed (the drive loop's
+        # nudge/timeout machinery owns the aftermath). Guards against
+        # dialogs NOT covered by startup_gates; the known ones are
+        # handled before ready in _await_ready.
+        before: str | None
+        try:
+            before = self._work_area(await self._tmux.capture_screen(session))
+        except TmuxError:
+            before = None
+
+        for paste_attempt in range(1, _PASTE_MAX_ATTEMPTS + 1):
+            await self._tmux.paste_text(session, text)
+            await asyncio.sleep(_PASTE_SETTLE_SECONDS)
+            if before is None:
+                break
+            try:
+                after = self._work_area(await self._tmux.capture_screen(session))
+            except TmuxError:
+                break
+            if after != before:
+                break
+            _logger.warning(
+                "interactive_paste_unverified",
+                session=session,
+                attempt=paste_attempt,
+                text_length=len(text),
+            )
 
         for attempt in range(1, _SUBMIT_MAX_ENTERS + 1):
             await self._tmux.send_keys(session, ["Enter"])
