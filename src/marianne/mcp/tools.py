@@ -1046,23 +1046,28 @@ class ArtifactTools:
         return "other"
 
     def _find_job_workspace(self, job_id: str) -> str:
-        """Find workspace directory for a job ID."""
-        # Try common workspace locations
-        possible_workspaces = [
+        """Find workspace directory for a job ID.
+
+        Post-#50 the conductor registry is the source of truth for job
+        state; workspaces hold WORK only. This finder serves artifact
+        browsing, so it probes for the job's directory — never for state
+        files (the old ``{job_id}.json`` / ``*.json`` probes matched a
+        state format nothing writes anymore; #50 residual, audit P2).
+        """
+        # Job-specific directory candidates, most specific first.
+        candidates = [
             self.workspace_root / job_id,
             self.workspace_root / f"{job_id}-workspace",
             self.workspace_root / "workspace" / job_id,
-            self.workspace_root,  # Job might be in root workspace
         ]
+        for ws in candidates:
+            if ws.is_dir():
+                return str(ws)
 
-        for ws in possible_workspaces:
-            # Look for state files or other Marianne artifacts
-            if (ws / f"{job_id}.json").exists():
-                return str(ws)
-            if (ws / "marianne.log").exists():
-                return str(ws)
-            if any(ws.glob("*.json")):  # Any state file
-                return str(ws)
+        # The job may run directly in the root workspace — accept it only
+        # when a Marianne artifact confirms work happened there.
+        if (self.workspace_root / "marianne.log").exists():
+            return str(self.workspace_root)
 
         # Default to job_id as workspace name
         return str(self.workspace_root / job_id)
