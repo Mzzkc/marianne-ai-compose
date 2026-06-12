@@ -635,6 +635,7 @@ class TestDeregisterJobCleanup:
         adapter._completion_results = {job_id: True}
         adapter._job_routers = {job_id: MagicMock()}
         adapter._job_techniques = {job_id: {"workspace": MagicMock()}}
+        adapter._job_code_execution = {job_id: MagicMock()}
         adapter._job_skip_commands = {job_id: {1: MagicMock()}}
         adapter._synced_status = {
             (job_id, 1): "completed",
@@ -705,6 +706,7 @@ class TestDeregisterJobCleanup:
         adapter._completion_results = {}
         adapter._job_routers = {}
         adapter._job_techniques = {}
+        adapter._job_code_execution = {}
         adapter._job_skip_commands = {}
         adapter._synced_status = {}
         adapter._active_tasks = {}

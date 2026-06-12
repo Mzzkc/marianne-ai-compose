@@ -2033,6 +2033,27 @@ done
 
 ---
 
+## Code Execution (opt-in)
+
+A score can let the agent's output be executed: when `code_execution.enabled`
+is set, Marianne classifies each sheet's output and runs any fenced code
+blocks (python/bash/node) through a sandbox, appending the real execution
+result to the sheet's output so validations can check it.
+
+```yaml
+code_execution:
+  enabled: true            # default false — agent code never runs unless set
+  require_sandbox: false   # default false — see the warning below
+  timeout_seconds: 30
+```
+
+> **Security:** this executes agent-generated code. It runs in a `bwrap`
+> sandbox **when bwrap is installed**. If bwrap is absent, code runs
+> **UNSANDBOXED** with full access to your environment — `mzt validate`
+> warns loudly (V304) in that case. Set `require_sandbox: true` to fail
+> closed (a hard error) instead of running unsandboxed. Default off; enable
+> only for scores you trust to run in your environment.
+
 ## Best Practices
 
 ### Execution

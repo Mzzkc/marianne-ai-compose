@@ -20,6 +20,7 @@ from marianne.core.config.a2a import AgentCard
 from marianne.core.config.backend import BridgeConfig
 from marianne.core.config.execution import (
     CircuitBreakerConfig,
+    CodeExecutionConfig,
     CostLimitConfig,
     ParallelConfig,
     RateLimitConfig,
@@ -758,6 +759,11 @@ class JobConfig(BaseModel):
         default_factory=IsolationConfig,
         description="Execution isolation configuration. "
         "Enables parallel-safe job execution via git worktrees.",
+    )
+    code_execution: CodeExecutionConfig = Field(
+        default_factory=CodeExecutionConfig,
+        description="Opt-in execution of agent-generated code blocks "
+        "(#209). Default off — agent code never runs unless enabled.",
     )
     conductor: ConductorConfig = Field(
         default_factory=ConductorConfig,

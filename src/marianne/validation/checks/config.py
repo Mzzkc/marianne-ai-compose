@@ -889,3 +889,75 @@ class FoldedCommandScalarCheck:
                     )
                 )
         return issues
+
+
+class CodeExecutionSandboxCheck:
+    """V304: warn (loudly) when code execution is enabled but bwrap is
+    unavailable, so agent-generated code would run UNSANDBOXED (#209).
+
+    Composer decision (2026-06-12): activate code mode opt-in and warn
+    rather than require bwrap. If a score sets
+    ``code_execution.require_sandbox: true``, a missing sandbox is an
+    ERROR instead (the score asked for isolation it cannot get).
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V304"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Warns when code execution would run unsandboxed (no bwrap)"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        import shutil
+
+        code_exec = getattr(config, "code_execution", None)
+        if code_exec is None or not code_exec.enabled:
+            return []
+        if shutil.which("bwrap") is not None:
+            return []
+
+        require = getattr(code_exec, "require_sandbox", False)
+        line = find_line_in_yaml(raw_yaml, "code_execution") or None
+        if require:
+            return [
+                ValidationIssue(
+                    check_id=self.check_id,
+                    severity=ValidationSeverity.ERROR,
+                    message=(
+                        "code_execution.enabled with require_sandbox=true, but "
+                        "bwrap is not installed — the sandbox this score "
+                        "requires is unavailable. Install bwrap or set "
+                        "require_sandbox: false to run unsandboxed."
+                    ),
+                    line=line,
+                    context="code_execution",
+                    suggestion="Install bubblewrap (bwrap) or set require_sandbox: false.",
+                )
+            ]
+        return [
+            ValidationIssue(
+                check_id=self.check_id,
+                severity=ValidationSeverity.WARNING,
+                message=(
+                    "code_execution is ENABLED but bwrap is not installed — "
+                    "agent-generated code will run UNSANDBOXED on this host, "
+                    "with full access to your environment. Install bubblewrap "
+                    "(bwrap) for isolation, or set require_sandbox: true to "
+                    "fail closed instead of running unsandboxed."
+                ),
+                line=line,
+                context="code_execution",
+                suggestion="Install bubblewrap (bwrap), or set require_sandbox: true.",
+            )
+        ]

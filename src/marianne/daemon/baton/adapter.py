@@ -45,7 +45,11 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from marianne.core.config.execution import SkipWhenCommand, StaleDetectionConfig
+from marianne.core.config.execution import (
+    CodeExecutionConfig,
+    SkipWhenCommand,
+    StaleDetectionConfig,
+)
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.core import BatonCore
@@ -534,6 +538,8 @@ class BatonAdapter:
         # manifest for prompt injection. Jobs without techniques are absent
         # from this map (backward compat — resolution skipped, manifest None).
         self._job_techniques: dict[str, dict[str, Any]] = {}
+        # #209: per-job opt-in code execution config (default None = off).
+        self._job_code_execution: dict[str, CodeExecutionConfig] = {}
 
         # #360/#119: per-job, per-sheet skip_when command predicates. Evaluated at
         # dispatch time in _musician_wrapper before any render/backend work;
@@ -626,6 +632,7 @@ class BatonAdapter:
         spec_tags: dict[int, list[str]] | None = None,
         stagger_delay_ms: int = 0,
         skip_when: dict[int, SkipWhenCommand] | None = None,
+        code_execution: CodeExecutionConfig | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -704,6 +711,14 @@ class BatonAdapter:
         if techniques:
             self._job_routers[job_id] = TechniqueRouter()
             self._job_techniques[job_id] = techniques
+
+        # #209: code execution needs a router to classify output into code
+        # blocks, even when no techniques are declared. Store the config and
+        # ensure a router exists when opted in.
+        if code_execution is not None and code_execution.enabled:
+            self._job_code_execution[job_id] = code_execution
+            if job_id not in self._job_routers:
+                self._job_routers[job_id] = TechniqueRouter()
 
         # Phase 2: use live_sheets (shared with _live_states) when provided.
         # This makes the baton write directly to the same SheetState objects
@@ -907,6 +922,7 @@ class BatonAdapter:
         self._completion_results.pop(job_id, None)
         self._job_routers.pop(job_id, None)
         self._job_techniques.pop(job_id, None)
+        self._job_code_execution.pop(job_id, None)
         self._job_skip_commands.pop(job_id, None)
         self._interactive_sheets.pop(job_id, None)
         # #352 inc-3: drop the job's output rings (memory bound).
@@ -962,6 +978,7 @@ class BatonAdapter:
         spec_tags: dict[int, list[str]] | None = None,
         stagger_delay_ms: int = 0,
         skip_when: dict[int, SkipWhenCommand] | None = None,
+        code_execution: CodeExecutionConfig | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -1036,6 +1053,14 @@ class BatonAdapter:
         if techniques:
             self._job_routers[job_id] = TechniqueRouter()
             self._job_techniques[job_id] = techniques
+
+        # #209: restore opt-in code execution across resume so a resumed
+        # job still classifies + runs code blocks (router ensured even
+        # without techniques).
+        if code_execution is not None and code_execution.enabled:
+            self._job_code_execution[job_id] = code_execution
+            if job_id not in self._job_routers:
+                self._job_routers[job_id] = TechniqueRouter()
 
         # Build SheetExecutionState with recovered statuses and attempt counts
         states: dict[int, SheetExecutionState] = {}
@@ -2234,6 +2259,27 @@ class BatonAdapter:
                     # Profile pricing is best-effort — fall back to hardcoded
                     pass
 
+            # #209: when this job opted into code execution, classify the
+            # sheet's output (Stage 2a) AND run any code blocks through the
+            # sandbox executor (Stage 3). Default-off: a job without
+            # code_execution.enabled passes neither, so output_kind stays
+            # None and no agent-generated code ever runs.
+            code_exec_cfg = self._job_code_execution.get(job_id)
+            technique_router = (
+                self._job_routers.get(job_id)
+                if code_exec_cfg is not None
+                else None
+            )
+            code_executor = None
+            if code_exec_cfg is not None:
+                from marianne.execution.code_mode import CodeModeExecutor
+
+                code_executor = CodeModeExecutor(
+                    workspace=sheet.workspace,
+                    timeout_seconds=code_exec_cfg.timeout_seconds,
+                    use_sandbox=True,  # falls back unsandboxed if no bwrap
+                )
+
             await sheet_task(
                 job_id=job_id,
                 sheet=sheet,
@@ -2247,6 +2293,8 @@ class BatonAdapter:
                 cost_per_1k_input=cost_input,
                 cost_per_1k_output=cost_output,
                 instrument_override=actual_instrument,
+                technique_router=technique_router,
+                code_executor=code_executor,
             )
         finally:
             # Phase 1 item 4: idempotent clear of the PID/PGID entry. The

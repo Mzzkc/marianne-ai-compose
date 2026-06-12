@@ -460,6 +460,41 @@ class ParallelConfig(BaseModel):
         return self
 
 
+class CodeExecutionConfig(BaseModel):
+    """Opt-in execution of agent-generated code blocks (#209, Stage 3).
+
+    When ``enabled``, the technique router classifies each sheet's output
+    and the baton runs any code blocks through ``CodeModeExecutor`` in a
+    bwrap sandbox. **Default off**: agent-generated code never executes
+    unless a score explicitly opts in.
+
+    Security: when bwrap is unavailable the executor falls back to
+    UNSANDBOXED execution (composer decision 2026-06-12: warn, don't
+    require). ``mzt validate`` warns loudly in that case; set
+    ``require_sandbox: true`` to make a missing sandbox a hard error.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(
+        default=False,
+        description="Execute agent-generated code blocks in a sandbox. "
+        "Default off — opt in per score. Runs shell/python/node, so "
+        "review the security posture before enabling.",
+    )
+    require_sandbox: bool = Field(
+        default=False,
+        description="Refuse to run code mode when bwrap is unavailable "
+        "(fail-closed). Default False: run unsandboxed with a loud "
+        "validation warning.",
+    )
+    timeout_seconds: float = Field(
+        default=30.0,
+        gt=0.0,
+        description="Maximum wall-clock time for a single code block.",
+    )
+
+
 class ValidationRule(BaseModel):
     """A single validation rule for checking sheet outputs.
 

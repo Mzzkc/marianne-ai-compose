@@ -21,6 +21,7 @@ from marianne.core.config.backend import (
 # Execution configuration
 from marianne.core.config.execution import (
     CircuitBreakerConfig,
+    CodeExecutionConfig,
     CostLimitConfig,
     ParallelConfig,
     RateLimitConfig,
@@ -125,6 +126,7 @@ __all__ = [
     "ModelCapacity",
     # Execution
     "CircuitBreakerConfig",
+    "CodeExecutionConfig",
     "CostLimitConfig",
     "ParallelConfig",
     "RateLimitConfig",

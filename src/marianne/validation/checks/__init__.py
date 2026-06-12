@@ -17,6 +17,7 @@ from marianne.validation.checks.best_practices import (
     VariableShadowingCheck,
 )
 from marianne.validation.checks.config import (
+    CodeExecutionSandboxCheck,
     EmptyPatternCheck,
     FoldedCommandScalarCheck,
     InstrumentFallbackCheck,
@@ -45,6 +46,7 @@ from marianne.validation.checks.techniques import (
 )
 
 __all__ = [
+    "CodeExecutionSandboxCheck",
     # Jinja checks
     "JinjaSyntaxCheck",
     "JinjaUndefinedVariableCheck",

@@ -3111,6 +3111,7 @@ class JobManager:
             spec_tags=config.sheet.spec_tags or None,  # #204
             stagger_delay_ms=config.parallel.stagger_delay_ms,  # #340
             skip_when=config.sheet.skip_when or None,  # #360/#119
+            code_execution=config.code_execution,  # #209
         )
 
         # #196: thread the score's retry backoff (base/exp/max + jitter) into
@@ -3379,6 +3380,7 @@ class JobManager:
             spec_tags=config.sheet.spec_tags or None,  # #204
             stagger_delay_ms=config.parallel.stagger_delay_ms,  # #340
             skip_when=config.sheet.skip_when or None,  # #360/#119
+            code_execution=config.code_execution,  # #209
         )
 
         # #196: re-thread retry backoff on resume too — BatonCore is in-memory

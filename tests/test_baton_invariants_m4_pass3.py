@@ -46,6 +46,7 @@ from marianne.core.config.backend import (
 )
 from marianne.core.config.execution import (
     CircuitBreakerConfig,
+    CodeExecutionConfig,
     CostLimitConfig,
     ParallelConfig,
     PreflightConfig,
@@ -174,6 +175,7 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     RetryConfig,
     RateLimitConfig,
     CircuitBreakerConfig,
+    CodeExecutionConfig,
     CostLimitConfig,
     StaleDetectionConfig,
     PreflightConfig,

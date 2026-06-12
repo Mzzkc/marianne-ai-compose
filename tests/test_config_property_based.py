@@ -152,3 +152,41 @@ class TestJudgmentConfigProperties:
 
         with pytest.raises(ValueError):
             JudgmentConfig(min_confidence=confidence)
+
+
+class TestCodeExecutionConfigProperties:
+    """Property-based invariants for CodeExecutionConfig (#209)."""
+
+    @given(
+        enabled=st.booleans(),
+        require_sandbox=st.booleans(),
+        timeout=st.floats(min_value=0.1, max_value=86400.0),
+    )
+    @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+    def test_round_trip_and_bounds(
+        self, enabled: bool, require_sandbox: bool, timeout: float
+    ) -> None:
+        from marianne.core.config.execution import CodeExecutionConfig
+
+        cfg = CodeExecutionConfig(
+            enabled=enabled,
+            require_sandbox=require_sandbox,
+            timeout_seconds=timeout,
+        )
+        assert cfg.enabled is enabled
+        assert cfg.require_sandbox is require_sandbox
+        assert cfg.timeout_seconds == timeout
+        # Serialization round-trips.
+        restored = CodeExecutionConfig.model_validate_json(cfg.model_dump_json())
+        assert restored == cfg
+
+    @given(timeout=st.floats(max_value=0.0))
+    @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+    def test_nonpositive_timeout_rejected(self, timeout: float) -> None:
+        import pytest as _pytest
+        from pydantic import ValidationError
+
+        from marianne.core.config.execution import CodeExecutionConfig
+
+        with _pytest.raises(ValidationError):
+            CodeExecutionConfig(timeout_seconds=timeout)
