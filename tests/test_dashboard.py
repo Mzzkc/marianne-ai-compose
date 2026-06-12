@@ -125,13 +125,17 @@ def failed_job() -> CheckpointState:
 class TestHealthCheck:
     """Tests for health check endpoint."""
 
-    def test_health_check_returns_healthy(self, app: TestClient) -> None:
-        """Health endpoint returns healthy status."""
+    def test_health_check_reports_real_status(self, app: TestClient) -> None:
+        """Health endpoint reports liveness + conductor reachability, not a
+        hardcoded 'healthy' (#322/#266)."""
         response = app.get("/health")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "healthy"
+        assert data["status"] in ("healthy", "degraded")
         assert data["service"] == "marianne-dashboard"
+        assert data["conductor"] in ("up", "down")
+        # status is derived from the conductor probe, not hardcoded
+        assert (data["status"] == "healthy") == (data["conductor"] == "up")
         assert "version" in data
 
     def test_health_check_includes_version(self, app: TestClient) -> None:

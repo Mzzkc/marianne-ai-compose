@@ -391,12 +391,14 @@ class TestCoreReadRoutes:
     """Tests for core read-only API endpoints (list, detail, status, health)."""
 
     def test_health_check(self, client):
-        """Test /health returns service status."""
+        """Test /health reports real status (conductor probe, not hardcoded)."""
         response = client.get("/health")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "healthy"
+        assert data["status"] in ("healthy", "degraded")
         assert data["service"] == "marianne-dashboard"
+        assert data["conductor"] in ("up", "down")
+        assert (data["status"] == "healthy") == (data["conductor"] == "up")
         assert "version" in data
 
     def test_list_jobs_empty(self, client):

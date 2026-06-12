@@ -16,9 +16,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from marianne.core.logging import get_logger
 from marianne.daemon.ipc.client import DaemonClient
 from marianne.daemon.registry_backend import RegistryFirstReadBackend
 from marianne.state.base import StateBackend
+
+_logger = get_logger("dashboard.app")
 
 # Module-level references set by create_app().
 _state_backend: StateBackend | None = None
@@ -226,11 +229,23 @@ def create_app(
 
     @app.get("/health", tags=["System"])
     async def health_check() -> dict[str, Any]:
-        """Health check endpoint."""
+        """Health check — reports dashboard liveness and conductor reachability.
+
+        The dashboard answering at all means it is up; the ``status`` reflects
+        whether it can reach the conductor. A failed probe reports ``degraded``
+        with the conductor marked ``down`` (and is logged) rather than a false
+        ``healthy`` (#322) or a silently swallowed error (#266).
+        """
+        conductor_up = False
+        try:
+            conductor_up = await get_daemon_client().is_daemon_running()
+        except Exception as e:  # probe failure must degrade, not lie or crash
+            _logger.warning("health_check.conductor_probe_failed", error=str(e))
         return {
-            "status": "healthy",
+            "status": "healthy" if conductor_up else "degraded",
             "version": version,
             "service": "marianne-dashboard",
+            "conductor": "up" if conductor_up else "down",
         }
 
     return app
