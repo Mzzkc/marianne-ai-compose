@@ -37,17 +37,25 @@ FERMATA survives conductor restarts.
 
 ---
 
-### No Output Streaming
+### Output Streaming Is Live-View Only
 
-Execution is batch-oriented. stdout and stderr are captured after each sheet completes, not streamed in real time.
+Live output streaming exists: instrument stdout/stderr is drained in
+real time, credential-redacted on complete lines, and held in bounded
+per-sheet ring buffers (~256 KB each, drop-oldest) that
+`mzt watch SCORE [SHEET]` tails over IPC.
 
 **What this means:**
 
-- You cannot watch AI output as it generates
-- `stdout_tail` in the state file is truncated to the last 500 characters (for log display) or ~10 KB (for self-healing diagnostic context)
-- Long-running sheets provide no progress indication until completion
-
-**Why:** The `asyncio.create_subprocess_exec` backend collects output via `communicate()`, which buffers until process exit. Streaming would require line-by-line reads with significant complexity for timeout handling.
+- You CAN watch musician output as it generates: `mzt watch my-score`
+  (all sheets, lines tagged `[s<n>]`) or `mzt watch my-score 3`.
+- The ring is a live view, not a transcript: a conductor restart clears
+  it, and once a sheet's ring exceeds its budget the oldest lines are
+  dropped with an explicit `[dropped N lines]` marker. A slow terminal
+  never slows the conductor — backpressure drops lines with a marker
+  rather than blocking.
+- Persisted evidence remains the recorded output tails: `stdout_tail`
+  is truncated to the last 500 characters for log display and ~10 KB
+  for self-healing diagnostic context.
 
 **Relevant constants** (from `src/marianne/core/constants.py`):
 
@@ -56,23 +64,24 @@ Execution is batch-oriented. stdout and stderr are captured after each sheet com
 | `TRUNCATE_STDOUT_TAIL_CHARS` | 500 | Log display truncation |
 | `HEALING_CONTEXT_TAIL_CHARS` | 10,000 | Self-healing diagnostic context |
 
-**Workaround:** For long jobs, use `mzt status <job> --watch` to poll completion state, or `tail -f workspace/marianne.log` for log-level updates.
-
-**Status:** Permanent for the current architecture.
+**Status:** Live tailing is supported. Full output transcripts are not
+persisted by design — bounded disk use beats complete archives.
 
 ---
 
 ## Daemon Internals
 
-### Legacy Runner Still Available
+### The Baton Is the Only Execution Engine
 
-The baton (`src/marianne/daemon/baton/`) is now the default execution engine (`use_baton: true`), providing event-driven per-sheet dispatch, per-instrument concurrency, timer-based retry, rate limit auto-resume, and restart recovery. The legacy monolithic runner remains available as a fallback.
+The baton (`src/marianne/daemon/baton/`) is the sole execution engine:
+event-driven per-sheet dispatch, per-instrument concurrency, timer-based
+retry, rate limit auto-resume, and restart recovery. The legacy
+monolithic runner was deleted in April 2026 and the `use_baton` toggle
+no longer exists — there is no fallback engine and no configuration to
+select one.
 
-**What this means:** Jobs run via the baton by default. Set `use_baton: false` in `~/.marianne/conductor.yaml` to fall back to the legacy runner if needed.
-
-**Impact of legacy fallback:** The legacy runner ignores per-sheet instrument assignments — it uses a single backend regardless of per-sheet configuration. Rate limit handling is also less sophisticated.
-
-**Status:** Baton is default (Phase 2 complete). Phase 3 (remove the toggle) will delete the legacy runner entirely. A three-phase transition plan is documented in the [Daemon Guide](daemon-guide.md#transition-plan).
+**Status:** Complete. Any reference to `use_baton` or a legacy runner in
+older material is historical.
 
 ---
 

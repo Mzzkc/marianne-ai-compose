@@ -214,8 +214,7 @@ See the [Configuration Reference](configuration-reference.md) for all available 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `state_db_path` | `Path` | `~/.marianne/daemon-state.db` | Job registry database path. Overridden by `--conductor-clone` for clone isolation. |
-| `max_concurrent_sheets` | `int` | `10` | Max concurrent sheets across all jobs (used by the baton when `use_baton: true`) |
-| `use_baton` | `bool` | `true` | Enable the baton execution engine. The baton is the default since Phase 2. Set to `false` to fall back to the legacy monolithic runner. |
+| `max_concurrent_sheets` | `int` | `10` | Max concurrent sheets across all jobs (enforced by the baton) |
 | `preflight.token_warning_threshold` | `int` | `50000` | Token count above which to warn during preflight checks. Set higher for large-context instruments. `0` to disable. |
 | `preflight.token_error_threshold` | `int` | `150000` | Token count above which to error during preflight checks. Set higher for large-context instruments (e.g., `800000` for 1M-context models). `0` to disable. |
 
@@ -390,9 +389,9 @@ See the [CLI Reference](cli-reference.md#conductor-clones) for full details.
 
 ## The Baton (Event-Driven Execution Engine)
 
-The baton (`daemon/baton/`) is Marianne's execution engine, using event-driven
-per-sheet dispatch instead of the legacy monolithic sequential runner. It is
-the default execution path (`use_baton: true`) with 1,900+ tests.
+The baton (`daemon/baton/`) is Marianne's sole execution engine, using
+event-driven per-sheet dispatch. The legacy monolithic runner was deleted
+in April 2026; there is no toggle and no fallback.
 
 Key capabilities:
 - **Event-driven dispatch** — sheets dispatch when their dependencies are met and their
@@ -408,39 +407,15 @@ Key capabilities:
 - **Full prompt assembly** — the baton renders prompts through the complete pipeline
   (preamble, template variables, prelude/cadenza injection, validation requirements)
 - **Cross-sheet context** — `previous_outputs` and `previous_files` are populated from
-  completed sheets' stdout and workspace files, matching the legacy runner's behavior
+  completed sheets' stdout and workspace files
 - **Checkpoint sync** — sheet status changes from all event types (escalation, cancellation,
   timeout, rate limit expiry, shutdown) are synchronized back to CheckpointState with
   deduplication to prevent redundant callbacks
 
-**The baton is active by default.** No configuration needed. To fall back to the legacy
-runner, set `use_baton: false` in `~/.marianne/conductor.yaml`.
-
-### Transition Plan
-
-The baton is the mandatory path to multi-instrument execution. Without it, the conductor
-delegates to the legacy monolithic runner, which silently ignores per-sheet instrument
-assignments and runs everything through a single backend.
-
-The transition has three phases:
-
-**Phase 1: Prove the baton works** (complete)
-- Baton tested with `--conductor-clone` alongside the production conductor
-- Per-sheet instrument assignment, rate limits, timeouts verified
-
-**Phase 2: Baton as default** (complete — D-027)
-- `use_baton` default flipped to `true` in `DaemonConfig`
-- Legacy runner remains as fallback for scores that explicitly opt out (`use_baton: false`)
-- All new features target the baton path only
-
-**Phase 3: Remove the toggle** (future)
-- Delete the legacy runner execution path
-- Remove `use_baton` from `DaemonConfig`
-- The baton is how the conductor runs — no toggle, no fallback
-
-> **Important:** If you set `use_baton: false`, per-sheet `instrument:` assignments
-> will not take effect at runtime — the legacy runner uses a single backend regardless
-> of per-sheet configuration.
+**The baton is how the conductor runs.** No configuration needed, no
+toggle, no fallback. The historical three-phase transition (prove → make
+default → remove the toggle) completed in April 2026 when the legacy
+runner and the `use_baton` setting were deleted.
 
 ### Legacy Components
 

@@ -1249,7 +1249,6 @@ Available but rarely need changing:
 | `observer` | `ObserverConfig` | *(see sub-config)* | | Observer and event bus configuration |
 | `profiler` | `ProfilerConfig` | *(see sub-config)* | | System profiler (strace off by default, GPU probing off by default) |
 | `preflight` | `PreflightConfig` | *(see sub-config)* | | Preflight prompt analysis thresholds. Controls when prompts are warned or rejected based on estimated token count. |
-| `use_baton` | `bool` | `true` | | Enable the baton execution engine. When `true`, job execution uses event-driven per-sheet dispatch instead of the monolithic runner. Set to `false` to fall back to the legacy runner. |
 | `config_file` | `Path \| None` | `None` | | Path to the YAML config file. Set automatically on startup; used by SIGHUP reload to re-read config from disk. |
 
 ### Daemon Operational Profiles

@@ -421,6 +421,43 @@ JSON output structure:
 
 ---
 
+### `mzt watch`
+
+Live-tail musician output for a running score (#352).
+
+```
+Usage: mzt watch [OPTIONS] JOB_ID [SHEET_NUM]
+```
+
+Streams each LLM's output as it generates, credential-redacted, over the
+conductor's `job.output.stream` IPC. The stream starts with the recent
+lines retained in the sheet's ring buffer (~256 KB per sheet,
+drop-oldest with an explicit `[dropped N lines]` marker), then follows
+new output until Ctrl-C. A slow terminal never slows the conductor —
+backpressure drops lines with a marker rather than blocking.
+
+The ring is a live view: a conductor restart clears it. Persisted
+evidence lives in each sheet's recorded output tails (`mzt diagnose`).
+
+#### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `JOB_ID` | Yes | Score ID to tail (see `mzt status`) |
+| `SHEET_NUM` | No | Sheet number to tail. Omit to tail ALL sheets — lines arrive tagged `[s<sheet>]` |
+
+#### Examples
+
+```bash
+# Tail every sheet of a running score
+mzt watch my-score
+
+# Tail only sheet 3
+mzt watch my-score 3
+```
+
+---
+
 ### `mzt list`
 
 List scores from the conductor.

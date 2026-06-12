@@ -220,7 +220,7 @@ mzt clear-rate-limits --instrument claude-code
 mzt resume my-score
 ```
 
-The conductor's baton execution engine (`use_baton: true` by default) automatically clears rate limits when they expire and resumes WAITING sheets. Manual clearing is only needed if the auto-resume timer failed or you want to force an early retry.
+The conductor's baton execution engine automatically clears rate limits when they expire and resumes WAITING sheets. Manual clearing is only needed if the auto-resume timer failed or you want to force an early retry.
 
 ### Runbook 5: Graceful Conductor Restart
 
