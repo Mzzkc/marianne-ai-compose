@@ -19,11 +19,20 @@ acceptance criteria; meeting them beats a stray exit code.
 from __future__ import annotations
 
 import asyncio
+import signal
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
 from marianne.backends.base import ExecutionResult
+from marianne.core.config.instruments import (
+    CliCommand,
+    CliErrorConfig,
+    CliOutputConfig,
+    CliProfile,
+    InstrumentProfile,
+    ModelCapacity,
+)
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.musician import (
@@ -31,6 +40,7 @@ from marianne.daemon.baton.musician import (
     sheet_task,
 )
 from marianne.daemon.baton.state import AttemptContext, AttemptMode
+from marianne.execution.instruments.cli_backend import PluginCliBackend
 
 
 def _result(
@@ -179,3 +189,73 @@ class TestEndToEndRescue:
         )
         result = inbox.get_nowait()
         assert result.execution_success is False
+
+
+def _python_profile() -> InstrumentProfile:
+    """Profile that runs ``python3 -c "<prompt>"`` — the prompt IS the
+    subprocess body, so a test can script the exact real exit behavior
+    (the same pattern #352's drain battery uses)."""
+    return InstrumentProfile(
+        name="rescue-344-live",
+        display_name="Rescue 344 Live",
+        kind="cli",
+        models=[
+            ModelCapacity(
+                name="test-model",
+                context_window=128000,
+                cost_per_1k_input=0.0,
+                cost_per_1k_output=0.0,
+            ),
+        ],
+        default_model="test-model",
+        cli=CliProfile(
+            command=CliCommand(executable="python3", prompt_flag="-c"),
+            output=CliOutputConfig(format="text"),
+            errors=CliErrorConfig(success_exit_codes=[0]),
+        ),
+    )
+
+
+class TestRealSubprocessRescue:
+    """The unit tests above CRAFT ExecutionResults; these prove a REAL
+    non-zero-exiting subprocess populates the very fields the rescue gates
+    on (Law: a crafted result is only armor if it matches reality). obs1
+    manifested with a real agent process, so the load-bearing claim is
+    that a process which exits non-zero *normally* gets
+    ``exit_reason == "completed"`` (not "error") and ``exit_signal is
+    None`` — exactly what makes it rescuable."""
+
+    async def test_real_nonzero_exit_is_completed_and_rescuable(self) -> None:
+        backend = PluginCliBackend(_python_profile())
+        result = await backend.execute("import sys; sys.exit(1)", timeout_seconds=30)
+
+        # The real subprocess fields the rescue predicate depends on.
+        assert result.success is False
+        assert result.exit_code == 1
+        assert result.exit_signal is None
+        assert result.exit_reason == "completed"  # the crux: NOT "error"
+        # Therefore the obs1 rescue fires for a real non-zero exit.
+        assert _is_nonzero_exit_rescuable(result, has_validations=True) is True
+
+    async def test_real_nonzero_exit_code_three_is_rescuable(self) -> None:
+        # Mirrors the crafted exit_code=3 e2e test with a real process.
+        backend = PluginCliBackend(_python_profile())
+        result = await backend.execute("import sys; sys.exit(3)", timeout_seconds=30)
+
+        assert result.success is False
+        assert result.exit_code == 3
+        assert result.exit_reason == "completed"
+        assert _is_nonzero_exit_rescuable(result, has_validations=True) is True
+
+    async def test_real_signal_kill_is_not_rescuable(self) -> None:
+        # A process killed by a signal surfaces exit_signal — the negative
+        # boundary, confirmed with a REAL signal rather than a crafted field.
+        backend = PluginCliBackend(_python_profile())
+        result = await backend.execute(
+            "import os, signal; os.kill(os.getpid(), signal.SIGKILL)",
+            timeout_seconds=30,
+        )
+
+        assert result.success is False
+        assert result.exit_signal == signal.SIGKILL
+        assert _is_nonzero_exit_rescuable(result, has_validations=True) is False
