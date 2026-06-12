@@ -1,0 +1,56 @@
+# hello-setup.yaml — the discovery prescore (run THIS first).
+#
+# Marianne doesn't know what's on your machine, so this tiny score finds out —
+# then writes a version of `hello` that fits, and chains to it. It's pure `cli`
+# (a shell command, no AI), so it can never hang.
+#
+#   1. Discover  →  resolve-hello.py picks the best AVAILABLE + REACHABLE
+#      instrument (free first: local Ollama → free OpenRouter → a paid CLI sub →
+#      a paid API) and a browser-open command for your OS/shell.
+#   2. Template  →  it reads examples/getting-started/hello.yaml, swaps in that
+#      one instrument, and adds an on_success hook to open the finished page.
+#      It writes the result to workspaces/hello/hello-resolved.yaml.
+#   3. Chain     →  on success, Marianne runs that resolved orchestration. The
+#      hello story (prose → vignettes → a Strudel soundtrack → a website) is
+#      composed on the instrument we KNOW works, then opens in your browser.
+#
+# So the chain is: discover → edit a score → run it → present the result. That
+# is Marianne introspecting and rewriting its own work to fit the machine — a
+# small taste of what scores can do.
+#
+# Run it:
+#   mzt start
+#   mzt run examples/getting-started/hello-setup.yaml
+#   # (it opens workspaces/hello/the-sky-library.html for you when it finishes)
+
+name: hello-setup
+description: "Discovery prescore — detect the machine, template a runnable hello, and chain to it. Pure cli, can't hang."
+
+workspace: ../../workspaces/hello
+
+instrument: cli                       # deterministic shell — no AI, no hangs
+
+concert:
+  enabled: true                       # allow chaining to the resolved score
+
+sheet:
+  size: 1
+  total_items: 1
+
+prompt:
+  # raw_prompt (cli): the rendered command runs verbatim in bash. It discovers
+  # the environment and writes workspaces/hello/hello-resolved.yaml.
+  template: >-
+    python3 "{{ workspace }}/../../examples/getting-started/assets/resolve-hello.py"
+    "{{ workspace }}"
+    "{{ workspace }}/../../examples/getting-started/hello.yaml"
+
+validations:
+  - type: file_exists
+    path: "{workspace}/hello-resolved.yaml"
+    description: "A machine-fit orchestration was written"
+
+on_success:
+  - type: run_job
+    job_path: "{workspace}/hello-resolved.yaml"
+    description: "Run the hello orchestration on the discovered instrument"
