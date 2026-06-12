@@ -361,6 +361,11 @@ class InteractiveCliBackend(Backend):
                 on_pane_pid=_register_pid,
             )
         finally:
+            # The pane process is already dead here (driver cleanup killed
+            # the session), so this PID is an UNTRACK TOKEN, not a live
+            # process reference — the OS may have recycled it. Consumers
+            # must only ever remove it from tracking (pgroup.untrack does
+            # exactly that); never signal it (goal-mode audit, GLM P2-LOW).
             if pane_pid is not None and self._on_process_exited is not None:
                 self._on_process_exited(pane_pid)
 

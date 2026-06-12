@@ -303,6 +303,32 @@ class TestSessionNaming:
         assert a.startswith("mzt-")
         assert "s3" in a and "a2" in a
 
+    def test_truncated_names_stay_collision_resistant(self) -> None:
+        """Goal-mode audit (GPT P1): two long inputs sharing the first 80
+        sanitized chars must NOT map to one session name — the driver's
+        pre-launch same-name cleanup would kill the OTHER live sheet."""
+        long_a = "x" * 90 + "-alpha"
+        long_b = "x" * 90 + "-beta"
+        assert sanitize_session_name(long_a) != sanitize_session_name(long_b)
+        assert len(sanitize_session_name(long_a)) <= 80
+        # Determinism survives the hash suffix.
+        assert sanitize_session_name(long_a) == sanitize_session_name(long_a)
+
+    def test_long_job_id_keeps_sheet_attempt_identity(self) -> None:
+        """The -sN-aM suffix must never be truncated into ambiguity: two
+        sheets (or attempts) of one long-named job must get distinct
+        sessions, or the second launch kills the first."""
+        long_job = "j" * 120
+        assert session_name(long_job, 1, 1) != session_name(long_job, 2, 1)
+        assert session_name(long_job, 1, 1) != session_name(long_job, 1, 2)
+
+    def test_long_job_ids_get_distinct_marker_dirs(self, tmp_path: Path) -> None:
+        long_a = "y" * 90 + "-alpha"
+        long_b = "y" * 90 + "-beta"
+        assert completion_marker_path(tmp_path, long_a, 1, 1) != (
+            completion_marker_path(tmp_path, long_b, 1, 1)
+        )
+
     def test_marker_path_per_attempt(self, tmp_path: Path) -> None:
         m1 = completion_marker_path(tmp_path, "job-1", 1, 1)
         m2 = completion_marker_path(tmp_path, "job-1", 1, 2)

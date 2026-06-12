@@ -20,6 +20,7 @@ concurrent interactive sheet.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import re
 import tempfile
@@ -69,7 +70,17 @@ def sanitize_session_name(raw: str) -> str:
     cleaned = _SESSION_NAME_SAFE.sub("-", raw).strip("-")
     if not cleaned:
         raise ValueError(f"session name {raw!r} sanitizes to empty")
-    return cleaned[:_SESSION_NAME_MAX]
+    if len(cleaned) <= _SESSION_NAME_MAX:
+        return cleaned
+    # Truncation must stay collision-resistant (goal-mode audit, GPT P1):
+    # a bare prefix cut maps two long inputs — or two sheets of one
+    # long-named job, whose -sN-aM identity falls past the cap — onto ONE
+    # session name, and the pre-launch same-name cleanup then kills the
+    # OTHER live sheet (and completion markers cross jobs). A digest of
+    # the FULL raw input keeps the name bounded, deterministic, and
+    # distinct per distinct input.
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:10]
+    return f"{cleaned[: _SESSION_NAME_MAX - 11]}-{digest}"
 
 
 class TmuxError(RuntimeError):
