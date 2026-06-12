@@ -69,21 +69,27 @@ instrument_config:
   timeout_seconds: 600
 
 instruments:
-  # ── FREE cloud — free OpenRouter models, across harnesses ──
+  # ── FREE cloud — free OpenRouter models via crush (fails fast on no key /
+  #    rate-limit, so it never stalls the chain) ──
   cr-gemma:   { profile: crush,  config: { model: "google/gemma-4-31b-it:free", timeout_seconds: 600 } }
   cr-gptoss:  { profile: crush,  config: { model: "openai/gpt-oss-120b:free", timeout_seconds: 600 } }
-  oc-free:    { profile: opencode, config: { model: "openrouter/qwen/qwen3-coder:free", timeout_seconds: 600 } }
-  goose-free: { profile: goose,  config: { model: "openrouter/google/gemma-4-31b-it:free", timeout_seconds: 600 } }
-  # ── FREE local — Ollama, no account at all ──
-  oc-local:   { profile: opencode-gemma }                                    # opencode → local Ollama
-  http-local: { profile: local-gemma4 }                                      # direct HTTP → local Ollama
+  # ── FREE local — Ollama, no account at all. opencode and goose each get a
+  #    free (local) option here, before any paid tier. ──
+  oc-local:    { profile: opencode-gemma }                                   # opencode → local Ollama
+  http-local:  { profile: local-gemma4 }                                     # direct HTTP → local Ollama
+  goose-local: { profile: goose, config: { model: "ollama/gemma4:26b" } }    # goose → local Ollama
   # ── PAID subscriptions (only if everything free is exhausted) ──
   zai:        { profile: opencode, config: { model: "zai-coding-plan/glm-5.1" } }   # Z.AI Coding Plan
   google:     { profile: gemini-cli }                                        # Google subscription
   anthropic:  { profile: claude-code }                                       # Anthropic Max subscription
 
+# NOTE: crush goes first because it fails fast (no OpenRouter key → instant
+# error; rate-limited → quick advance). The local-Ollama options follow. We do
+# NOT route OpenRouter through opencode/goose: when their backend isn't
+# configured they HANG to the timeout instead of erroring, which would stall a
+# first run — and crush already covers free OpenRouter.
 instrument_fallbacks:
-  [cr-gemma, cr-gptoss, oc-free, goose-free, oc-local, http-local, zai, google, anthropic, anthropic_api]
+  [cr-gemma, cr-gptoss, oc-local, http-local, goose-local, zai, google, anthropic, anthropic_api]
 
 movements:
   1:
