@@ -9,6 +9,7 @@ without risking the production conductor (#145, composer P0 directive).
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -111,6 +112,75 @@ class TestCloneNameState:
             assert get_clone_name() == ""
         finally:
             set_clone_name(None)
+
+
+# =============================================================================
+# Tmux socket isolation via clone
+# =============================================================================
+
+
+class TestCloneTmuxIsolation:
+    """A clone must NEVER share the production tmux socket.
+
+    The conductor's startup orphan sweep kills every ``mzt-*`` session on
+    its tmux socket on the premise that nothing else owns them. A clone
+    starting beside a production conductor would sweep — and kill — the
+    production conductor's LIVE interactive sessions unless it gets its
+    own socket. Same failure class as the 2026-06-10 test-suite incident.
+    """
+
+    def test_clone_activation_isolates_tmux_socket(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from marianne.daemon.clone import set_clone_name
+        from marianne.execution.instruments.interactive.tmux import (
+            SOCKET_ENV_VAR,
+            TmuxControl,
+        )
+
+        monkeypatch.delenv(SOCKET_ENV_VAR, raising=False)
+        set_clone_name("staging")
+        try:
+            assert os.environ.get(SOCKET_ENV_VAR) == "mzt-clone-staging"
+            assert TmuxControl().socket_name == "mzt-clone-staging"
+        finally:
+            set_clone_name(None)
+        # Deactivation restores the production default.
+        assert SOCKET_ENV_VAR not in os.environ
+
+    def test_default_clone_gets_isolated_socket(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from marianne.daemon.clone import set_clone_name
+        from marianne.execution.instruments.interactive.tmux import (
+            SOCKET_ENV_VAR,
+        )
+
+        monkeypatch.delenv(SOCKET_ENV_VAR, raising=False)
+        set_clone_name("")
+        try:
+            value = os.environ.get(SOCKET_ENV_VAR)
+            assert value is not None and value.startswith("mzt-clone-")
+        finally:
+            set_clone_name(None)
+
+    def test_explicit_env_override_is_not_clobbered(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A user/test-provided socket override outranks clone naming —
+        and must survive clone deactivation."""
+        from marianne.daemon.clone import set_clone_name
+        from marianne.execution.instruments.interactive.tmux import (
+            SOCKET_ENV_VAR,
+        )
+
+        monkeypatch.setenv(SOCKET_ENV_VAR, "user-chosen")
+        set_clone_name("staging")
+        try:
+            assert os.environ.get(SOCKET_ENV_VAR) == "user-chosen"
+        finally:
+            set_clone_name(None)
+        assert os.environ.get(SOCKET_ENV_VAR) == "user-chosen"
 
 
 # =============================================================================

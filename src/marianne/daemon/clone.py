@@ -40,11 +40,36 @@ _logger = get_logger("daemon.clone")
 # None means no clone (production mode). Empty string means default clone.
 _clone_name: str | None = None
 
+# Whether WE exported the tmux-socket override (vs a pre-existing user/test
+# value, which must never be clobbered or cleaned up by clone toggling).
+_clone_tmux_socket_exported = False
+
 
 def set_clone_name(name: str | None) -> None:
-    """Set the active clone name. Called by CLI --conductor-clone callback."""
-    global _clone_name
+    """Set the active clone name. Called by CLI --conductor-clone callback.
+
+    Also establishes tmux-socket isolation: the conductor's startup orphan
+    sweep kills every ``mzt-*`` session on its tmux socket on the premise
+    that nothing else owns them — true for a lone conductor, FALSE when a
+    clone starts beside production. A clone therefore gets its own tmux
+    socket (exported via the env var every TmuxControl honors; fork-based
+    daemonization inherits it). An explicit pre-existing override wins.
+    """
+    global _clone_name, _clone_tmux_socket_exported
     _clone_name = name
+
+    import os
+
+    from marianne.execution.instruments.interactive.tmux import SOCKET_ENV_VAR
+
+    if name is not None:
+        if SOCKET_ENV_VAR not in os.environ:
+            suffix = _sanitize_name(name) or "default"
+            os.environ[SOCKET_ENV_VAR] = f"mzt-clone-{suffix}"
+            _clone_tmux_socket_exported = True
+    elif _clone_tmux_socket_exported:
+        os.environ.pop(SOCKET_ENV_VAR, None)
+        _clone_tmux_socket_exported = False
 
 
 def get_clone_name() -> str | None:

@@ -332,6 +332,43 @@ class TestErrorClassification:
         result = backend._parse_output("output", "error msg", exit_code=1)
         assert result.success is False
 
+    def test_negative_exit_code_surfaces_signal(self) -> None:
+        """A signal-killed process (returncode = -N on Unix) must populate
+        exit_signal/exit_reason — the consumer chain (SheetState.exit_signal,
+        the sqlite column, learning error hooks) was orphaned when the
+        legacy backend (its only producer) was stripped (#347)."""
+        import signal as _signal
+
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+
+        profile = _make_profile(success_exit_codes=[0])
+        backend = PluginCliBackend(profile)
+        result = backend._parse_output("", "", exit_code=-_signal.SIGSEGV)
+        assert result.success is False
+        assert result.exit_signal == _signal.SIGSEGV
+        assert result.exit_reason == "killed"
+        assert result.error_message is not None
+        assert "SIGSEGV" in result.error_message
+
+    def test_signal_does_not_mask_parsed_error_message(self) -> None:
+        """A parsed error message from the output wins; the signal only
+        fills the gap when the output gave nothing."""
+        import signal as _signal
+
+        from marianne.execution.instruments.cli_backend import PluginCliBackend
+
+        profile = _make_profile(
+            output_format="json", error_path="error",
+        )
+        backend = PluginCliBackend(profile)
+        stdout = json.dumps({"error": "model exploded"})
+        result = backend._parse_output(
+            stdout, "", exit_code=-_signal.SIGKILL,
+        )
+        assert result.exit_signal == _signal.SIGKILL
+        assert result.exit_reason == "killed"
+        assert result.error_message == "model exploded"
+
     def test_rate_limit_pattern_detected_in_stderr(self) -> None:
         """Rate limit patterns in stderr are detected."""
         from marianne.execution.instruments.cli_backend import PluginCliBackend

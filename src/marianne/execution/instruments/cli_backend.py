@@ -27,7 +27,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from marianne.backends.base import Backend, ExecutionResult
+from marianne.backends.base import Backend, ExecutionResult, ExitReason
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.logging import get_logger
 from marianne.utils.json_path import extract_json_path
@@ -571,12 +571,31 @@ class PluginCliBackend(Backend):
         # normalize to 0 for the result (the actual code is logged above).
         normalized_exit_code = 0 if is_success and exit_code != 0 else exit_code
 
+        # Signal-killed process: Unix returncode is -signal_number. Surface
+        # the signal for diagnostics — SheetState.exit_signal, the sqlite
+        # column, and the learning error hooks consume this field, and the
+        # legacy backend was its only producer until the #347 strip.
+        exit_signal: int | None = None
+        exit_reason: ExitReason = "completed"
+        if exit_code is not None and exit_code < 0:
+            from marianne.core.errors.signals import get_signal_name
+
+            exit_signal = -exit_code
+            exit_reason = "killed"
+            is_success = False
+            if error_message is None:
+                error_message = (
+                    f"Process killed by {get_signal_name(exit_signal)}"
+                )
+
         return ExecutionResult(
             success=is_success,
             stdout=result_text,
             stderr=stderr,
             duration_seconds=0.0,  # Caller sets actual duration
             exit_code=normalized_exit_code,
+            exit_signal=exit_signal,
+            exit_reason=exit_reason,
             rate_limited=rate_limited,
             error_type=error_type,
             error_message=error_message,
