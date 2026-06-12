@@ -6,7 +6,8 @@ These scores teach you how to orchestrate AI agents to produce outcomes no singl
 
 | Score | What It Does | Sheets | Patterns Used | Time | Cost |
 |-------|-------------|--------|--------------|------|------|
-| [hello](hello.yaml) | **Free & local-capable.** Parallel agents write a short story; a deterministic tool builds it into a website; an agent polishes it — orchestration across mediums | 6 | Fan-out + Synthesis, Tool-Chain, Stigmergic Workspace | ~5-15m | free |
+| [**hello-setup**](hello-setup.yaml) | **Start here.** Discovers your machine (a free/local/paid instrument + a browser opener), templates a `hello` that fits, chains to it, and opens the result. Pure cli — can't hang. | 1 | Discovery, Score Templating, Concert (chaining) | ~5-15m | free |
+| [hello](hello.yaml) | The orchestration `hello-setup` runs: parallel agents write a story, a tool builds a website, an agent composes a Strudel soundtrack and polishes it — across mediums. Runnable standalone (deep free→paid chain). | 7 | Fan-out + Synthesis, Tool-Chain, Stigmergic Workspace | ~5-15m | free |
 | [hello-local](hello-local.yaml) | The pure-local twin of `hello` — same orchestration, run entirely on a local Ollama model (no cloud, no account) | 6 | Fan-out + Synthesis, Tool-Chain | ~5-15m | free |
 | [simple-sheet](simple-sheet.yaml) | Demonstrates basic parallel execution with minimal configuration — the fastest path from zero to running job | 2 | none | ~2m | ~$0.10 |
 | [cross-sheet-test](cross-sheet-test.yaml) | Builds a three-stage research pipeline where each stage reads and transforms previous outputs | 3 | Succession Pipeline | ~3m | ~$0.15 |
@@ -51,15 +52,18 @@ Three code reviewers (quality, correctness, security) work simultaneously on the
 # Start the conductor daemon
 mzt start
 
-# Run your first score (creates solarpunk fiction with HTML output)
-mzt run examples/getting-started/hello.yaml
+# Run your first score. hello-setup discovers what's on your machine (a free,
+# local, or paid instrument + how to open a browser), templates a hello that
+# fits, chains to it, and opens the finished page for you.
+mzt run examples/getting-started/hello-setup.yaml
 
-# Watch execution in real time
-mzt status hello --watch
-
-# When complete, open the result
-open workspaces/hello/the-sky-library.html
+# Watch the orchestration in real time
+mzt status hello-resolved --watch
 ```
+
+(Curious what it built? `hello.yaml` is the orchestration itself — runnable
+standalone with a deep free→paid fallback chain — and `workspaces/hello/hello-resolved.yaml`
+is the machine-fit copy `hello-setup` wrote for you.)
 
 ## Adapting to Your Project
 
