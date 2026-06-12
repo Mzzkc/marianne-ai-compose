@@ -12,6 +12,48 @@ from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml, resolve_path
 
 
+def _gated_producer_sheet(condition: str | None) -> int | None:
+    """The sheet a ``file_exists`` validation is gated to, parsed from its
+    condition (``sheet_num == N`` / ``sheet_num >= N``). None for other shapes.
+
+    A ``file_exists`` validation gated to a sheet is the score author
+    declaring that sheet produces the file — the producer PROXY that #137's
+    ordering check and V108's suppression both reason about.
+    """
+    if not condition:
+        return None
+    m = re.search(r"sheet_num\s*(==|>=)\s*(\d+)", condition)
+    return int(m.group(2)) if m else None
+
+
+def _infer_producers(config: JobConfig) -> dict[str, set[int]]:
+    """Map a produced file's basename to the set of sheets declared (via a
+    sheet-gated ``file_exists`` validation) to produce it."""
+    producers: dict[str, set[int]] = {}
+    for rule in config.validations:
+        if rule.type != "file_exists" or not rule.path:
+            continue
+        sheet = _gated_producer_sheet(rule.condition)
+        if sheet is None:
+            continue
+        producers.setdefault(Path(str(rule.path)).name, set()).add(sheet)
+    return producers
+
+
+def _dag_ancestors(sheet: int, deps: dict[int, list[int]]) -> set[int]:
+    """Transitive dependency ancestors of ``sheet`` — the sheets guaranteed
+    to run before it."""
+    seen: set[int] = set()
+    stack = list(deps.get(sheet, []))
+    while stack:
+        s = stack.pop()
+        if s in seen:
+            continue
+        seen.add(s)
+        stack.extend(deps.get(s, []))
+    return seen
+
+
 class WorkspaceParentExistsCheck:
     """Check that workspace parent directory exists (V002).
 
@@ -145,13 +187,26 @@ class PreludeCadenzaFileCheck:
         """Check prelude and cadenza file/directory paths."""
         issues: list[ValidationIssue] = []
 
+        # Files a stage is declared to produce at runtime (via a sheet-gated
+        # file_exists validation) are not expected on disk now — suppress the
+        # not-found warning for them on cadenzas (#137 point 5). Whether they
+        # are produced EARLY ENOUGH is V109's job, not this disk check's.
+        produced = set(_infer_producers(config))
+
         for item in config.sheet.prelude:
-            issues.extend(self._check_item(item, "prelude", config, config_path, raw_yaml))
+            # Prelude injects before any sheet runs — no producer can precede
+            # it, so no suppression applies.
+            issues.extend(self._check_item(item, "prelude", config, config_path, raw_yaml, set()))
         for sheet_num, items in config.sheet.cadenzas.items():
             for item in items:
                 issues.extend(
                     self._check_item(
-                        item, f"cadenza (sheet {sheet_num})", config, config_path, raw_yaml
+                        item,
+                        f"cadenza (sheet {sheet_num})",
+                        config,
+                        config_path,
+                        raw_yaml,
+                        produced,
                     )
                 )
 
@@ -164,6 +219,7 @@ class PreludeCadenzaFileCheck:
         config: JobConfig,
         config_path: Path,
         raw_yaml: str,
+        produced_basenames: set[str],
     ) -> list[ValidationIssue]:
         """Check a single injection item (file or directory)."""
         issues: list[ValidationIssue] = []
@@ -196,6 +252,11 @@ class PreludeCadenzaFileCheck:
             file_val = item.file
             assert file_val is not None  # guaranteed by Pydantic validator
             if "{{" in file_val:
+                return issues
+            if Path(file_val).name in produced_basenames:
+                # A prior (or later) stage is declared to produce this file at
+                # runtime, so its absence on disk now is expected, not a defect.
+                # V109 judges whether the producer runs early enough.
                 return issues
             file_path = resolve_path(Path(file_val), config_path)
             if not file_path.exists():
@@ -300,29 +361,6 @@ class CadenzaOrderingCheck:
     def description(self) -> str:
         return "Detects a cadenza reading a file produced by a later stage"
 
-    @staticmethod
-    def _producer_sheet(condition: str | None) -> int | None:
-        """The sheet a file_exists validation is gated to, parsed from its
-        condition (``sheet_num == N`` / ``>= N``). None for other shapes."""
-        if not condition:
-            return None
-        m = re.search(r"sheet_num\s*(==|>=)\s*(\d+)", condition)
-        return int(m.group(2)) if m else None
-
-    @staticmethod
-    def _ancestors(sheet: int, deps: dict[int, list[int]]) -> set[int]:
-        """Transitive dependency ancestors of ``sheet`` (sheets guaranteed
-        to run before it)."""
-        seen: set[int] = set()
-        stack = list(deps.get(sheet, []))
-        while stack:
-            s = stack.pop()
-            if s in seen:
-                continue
-            seen.add(s)
-            stack.extend(deps.get(s, []))
-        return seen
-
     def check(
         self,
         config: JobConfig,
@@ -331,16 +369,7 @@ class CadenzaOrderingCheck:
     ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
 
-        # Producer proxy: basename → set of sheets declared to produce it.
-        producers: dict[str, set[int]] = {}
-        for rule in config.validations:
-            if rule.type != "file_exists" or not rule.path:
-                continue
-            sheet = self._producer_sheet(rule.condition)
-            if sheet is None:
-                continue
-            producers.setdefault(Path(str(rule.path)).name, set()).add(sheet)
-
+        producers = _infer_producers(config)
         if not producers:
             return issues
 
@@ -354,7 +383,7 @@ class CadenzaOrderingCheck:
                 producing_sheets = producers.get(name)
                 if not producing_sheets:
                     continue  # no producer signal — V108 covers disk existence
-                ancestors = self._ancestors(reader_sheet, deps)
+                ancestors = _dag_ancestors(reader_sheet, deps)
                 # Safe iff SOME producer is guaranteed to run before the
                 # reader (a strict DAG ancestor).
                 if producing_sheets & ancestors:

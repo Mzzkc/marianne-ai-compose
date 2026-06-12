@@ -17,7 +17,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from marianne.core.config import JobConfig
-from marianne.validation.checks.paths import CadenzaOrderingCheck
+from marianne.validation.checks.paths import (
+    CadenzaOrderingCheck,
+    PreludeCadenzaFileCheck,
+)
 
 
 def _config(*, cadenzas: dict, validations: list, dependencies: dict) -> JobConfig:
@@ -121,3 +124,51 @@ class TestCadenzaOrdering:
             dependencies={3: [2]},
         )
         assert _run(cfg) == []
+
+
+def _run_v108(config: JobConfig) -> list:
+    return PreludeCadenzaFileCheck().check(config, Path("s.yaml"), "")
+
+
+class TestV108Suppression:
+    """#137 point 5: V108 must not false-warn that a cadenza file is missing
+    when a stage is declared to produce it at runtime. The ordering of that
+    producer is V109's concern, not the disk-existence check's."""
+
+    def test_suppressed_for_produced_cadenza_file(self) -> None:
+        # report.md is absent on disk but sheet 1 is declared to produce it;
+        # sheet 2 (depends on 1) reads it. V108 must stay silent — the file is
+        # generated at runtime, not a missing static asset.
+        cfg = _config(
+            cadenzas={2: [{"file": "report.md", "as": "context"}]},
+            validations=[{"type": "file_exists", "path": "report.md", "sheet": 1}],
+            dependencies={2: [1]},
+        )
+        v108 = [i for i in _run_v108(cfg) if i.check_id == "V108"]
+        assert v108 == []
+
+    def test_still_warns_for_unproduced_missing_file(self) -> None:
+        # No producer signal for missing.md: V108's disk-existence warning
+        # must still fire (suppression is producer-gated, not blanket).
+        cfg = _config(
+            cadenzas={2: [{"file": "missing.md", "as": "context"}]},
+            validations=[],
+            dependencies={2: [1]},
+        )
+        v108 = [i for i in _run_v108(cfg) if i.check_id == "V108"]
+        assert len(v108) == 1
+        assert "missing.md" in v108[0].message
+
+    def test_suppression_does_not_hide_ordering_bug(self) -> None:
+        # A produced-but-too-late file: V108 suppresses its not-found noise,
+        # but V109 still raises the ordering warning. The bug stays visible.
+        cfg = _config(
+            cadenzas={2: [{"file": "late.md", "as": "context"}]},
+            validations=[{"type": "file_exists", "path": "late.md", "sheet": 3}],
+            dependencies={3: [2]},
+        )
+        v108 = [i for i in _run_v108(cfg) if i.check_id == "V108"]
+        v109 = _run(cfg)
+        assert v108 == []  # disk-existence noise suppressed
+        assert len(v109) == 1  # ordering bug still surfaced
+        assert "late.md" in v109[0].message
