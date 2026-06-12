@@ -34,7 +34,7 @@ from marianne.core.config.instruments import (
     ModelCapacity,
 )
 from marianne.core.sheet import Sheet
-from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.musician import (
     _is_nonzero_exit_rescuable,
@@ -270,16 +270,20 @@ class TestRealSubprocessRescue:
 class TestObs1EndToEndStatusRecording:
     """obs1 was a BOUNDARY bug (two correct subsystems composing wrong): the
     backend reported success purely from exit code, and the musician skipped
-    validation on a non-zero exit, so the baton RECORDED a sheet whose work
-    was done + committed as a failure. This is the conductor-free 'live-daemon
-    rung': a REAL subprocess that commits work then exits non-zero, driven
-    through the REAL musician, with the resulting attempt fed to a REAL
-    BatonCore — asserting the recorded sheet status is COMPLETED, not FAILED.
-    The production daemon repro is gated (the running conductor predates the
-    fix and can't be restarted while a job runs); this proves the same path
-    deterministically, with no LLM and no conductor."""
+    validation on a non-zero exit, so the daemon RECORDED a job whose work was
+    done + committed as ``execution_fail``. This is the conductor-free
+    'live-daemon rung': a REAL subprocess that commits work then exits
+    non-zero, driven through the REAL musician, the result fed to a REAL
+    BatonAdapter — asserting both the sheet status (COMPLETED) AND the daemon's
+    job-level verdict (``_job_succeeded`` True, i.e. job COMPLETED not
+    execution_fail — the exact symptom). The downstream registry write is a
+    status-driven mapping (adapter/manager key off BatonSheetStatus, never
+    re-inspecting exit_code — verified by inspection), so this covers the obs1
+    decision and verdict with real components. The production-conductor repro
+    is separately gated (its process predates the fix; no restart while a
+    brand-stake job runs); this proves the same path deterministically, no LLM."""
 
-    async def test_committed_work_nonzero_exit_records_completed(
+    async def test_committed_work_nonzero_exit_job_succeeds(
         self, tmp_path: Path
     ) -> None:
         proof = tmp_path / "proof.txt"
@@ -313,18 +317,22 @@ class TestObs1EndToEndStatusRecording:
         assert result.exit_code == 1  # the truth is preserved, not laundered
         assert proof.exists()  # the work really was committed by the subprocess
 
-        # The baton records the rescued attempt as a COMPLETED sheet — the
-        # status obs1 used to get wrong (execution_fail on committed work).
-        baton = BatonCore()
-        baton.register_instrument(sheet.instrument_name, max_concurrent=1)
+        # Feed the rescued attempt to the REAL adapter's baton and confirm both
+        # the sheet status AND the daemon's job verdict.
+        adapter = BatonAdapter()
+        adapter._baton.register_instrument(sheet.instrument_name, max_concurrent=1)
         sheets = {
             1: SheetExecutionState(sheet_num=1, instrument_name=sheet.instrument_name)
         }
         sheets[1].status = BatonSheetStatus.DISPATCHED
-        baton.register_job("j1", sheets, {})
+        adapter._baton.register_job("j1", sheets, {})
 
-        await baton.handle_event(result)
+        await adapter._baton.handle_event(result)
 
-        recorded = baton.get_sheet_state("j1", 1)
+        recorded = adapter._baton.get_sheet_state("j1", 1)
         assert recorded is not None
-        assert recorded.status == BatonSheetStatus.COMPLETED
+        assert recorded.status == BatonSheetStatus.COMPLETED  # not FAILED
+
+        # The job-level verdict — obs1's symptom was execution_fail HERE.
+        job = adapter._baton._jobs["j1"]
+        assert adapter._job_succeeded(job) is True
