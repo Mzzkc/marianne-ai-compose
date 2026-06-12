@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
-"""assemble-site.py — deterministic website assembly for the `hello` score.
+"""assemble-site.py — deterministic, hand-crafted final page for `hello`.
 
-The hybrid synthesis floor: reads the markdown the AI musicians wrote (the
-shared world + the parallel character vignettes) and emits ONE self-contained,
-valid HTML page — zero AI, zero dependencies. It is the reliability guarantee
-of onboarding: even if every model in the fallback chain produced only plain
-text, a new user still opens a real, styled website.
+This is the FINAL artifact, not a draft: it reads the markdown the AI musicians
+wrote (the world + the parallel vignettes) and the composed Strudel soundtrack,
+and emits one self-contained, valid, *designed* HTML page — with zero AI at this
+stage and zero dependencies. The design is hand-built here precisely so a new
+user's first result is reliably beautiful, regardless of which (possibly small,
+possibly local) model produced the prose; and the soundtrack is embedded
+verbatim via JSON, so it is never mangled by a model re-typing it.
 
-The layout is a GALLERY: the world is the hero, and each parallel vignette is
-its own card in a responsive grid — so the fan-out (three agents working at
-once) is something you can SEE, not just read. A later AI sheet then polishes
-this base into the final the-sky-library.html, tailoring it to the story told.
+The vignettes render as cards, so the fan-out (three agents at once) is visible.
 
 Usage:
     python3 assemble-site.py <workspace-dir> [output.html]
-
-Reads (whichever exist):
-    <ws>/01-world.md, <ws>/02-character-1.md … 02-character-N.md, <ws>/03-finale.md
-Writes:
-    <ws>/site-base.html   (or the explicit output path)
+Reads: <ws>/01-world.md, <ws>/02-character-*.md, <ws>/03-finale.md, <ws>/soundtrack.strudel
+Writes: <ws>/the-sky-library.html   (or the explicit output path)
 """
 
 from __future__ import annotations
@@ -32,9 +28,8 @@ from pathlib import Path
 
 def md_to_html(md: str, *, drop_first_h1: bool = False) -> tuple[str, str]:
     """Tiny dependency-free markdown → HTML for the subset the prompts produce.
-    Returns (title, body_html); when drop_first_h1 is set, the first top-level
-    heading is pulled out as the title (used for card headers). Everything is
-    HTML-escaped first, so model output can never inject markup."""
+    Returns (title, body_html). Everything is HTML-escaped first, so model
+    output can never inject markup."""
     lines = md.replace("\r\n", "\n").split("\n")
     out: list[str] = []
     title = ""
@@ -101,90 +96,146 @@ PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Sky Library — A Marianne Composition</title>
 <style>
-  :root {{ --ink:#2b2724; --paper:#fbf7ef; --gold:#b8893b; --c1:#6c8ab0; --c2:#5c7a5a; --c3:#a86b8a; }}
+  :root {{
+    --ink:#26211b; --muted:#6f655a; --paper:#f6efe2; --panel:#fffdf8;
+    --gold:#bb8a3e; --rose:#a8617f; --sky:#5b86a8; --leaf:#5f7d57;
+    --line:#e4d9c4;
+  }}
   * {{ box-sizing:border-box; }}
-  body {{ margin:0; background:var(--paper); color:var(--ink);
-         font-family:Georgia,'Iowan Old Style',serif; font-size:18px; line-height:1.65; }}
-  .wrap {{ max-width:1040px; margin:0 auto; padding:3.5rem 1.5rem 5rem; }}
-  header.hero {{ text-align:center; max-width:680px; margin:0 auto 1rem; }}
-  header.hero h1 {{ font-size:2.7rem; margin:0 0 .3rem; letter-spacing:.5px; }}
-  header.hero .tagline {{ font-style:italic; color:var(--gold); margin:0 0 1.8rem; font-size:1.1rem; }}
-  header.hero .world {{ text-align:left; }}
-  h2,h3,h4 {{ font-family:'Helvetica Neue',Arial,sans-serif; line-height:1.3; }}
-  .gallery-label {{ text-align:center; font-family:'Helvetica Neue',Arial,sans-serif;
-                    text-transform:uppercase; letter-spacing:.25em; font-size:.8rem;
-                    color:var(--gold); margin:3rem 0 1.2rem; }}
-  .gallery {{ display:grid; gap:1.5rem;
-             grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); align-items:start; }}
-  .card {{ background:#fff; border-top:5px solid var(--accent,var(--c1));
-          border-radius:6px; padding:1.4rem 1.5rem; box-shadow:0 2px 14px rgba(60,50,35,.08); }}
-  .card:nth-child(3n+1) {{ --accent:var(--c1); }}
-  .card:nth-child(3n+2) {{ --accent:var(--c2); }}
-  .card:nth-child(3n+3) {{ --accent:var(--c3); }}
-  .card h3 {{ margin:.1rem 0 .8rem; color:var(--accent); font-size:1.35rem; }}
-  .card p {{ font-size:.97rem; }}
-  code {{ background:#efe8d8; padding:.05em .35em; border-radius:3px; font-size:.9em; }}
+  html {{ scroll-behavior:smooth; }}
+  body {{ margin:0; color:var(--ink); background:var(--paper);
+    font-family:"Iowan Old Style",Georgia,"Times New Roman",serif;
+    font-size:19px; line-height:1.75; -webkit-font-smoothing:antialiased; }}
+  .skyband {{ height:6px; background:linear-gradient(90deg,var(--gold),var(--rose),var(--sky),var(--leaf)); }}
+  .wrap {{ max-width:1080px; margin:0 auto; padding:0 1.5rem; }}
+  h1,h2,h3 {{ font-family:"Helvetica Neue",Arial,sans-serif; letter-spacing:-.01em; line-height:1.15; }}
+
+  /* hero */
+  .hero {{ text-align:center; padding:5.5rem 0 1.5rem; max-width:720px; margin:0 auto; }}
+  .hero .kicker {{ text-transform:uppercase; letter-spacing:.35em; font-size:.72rem;
+    color:var(--gold); font-family:"Helvetica Neue",Arial,sans-serif; margin-bottom:1.1rem; }}
+  .hero h1 {{ font-size:clamp(2.6rem,6vw,4rem); margin:0 0 .5rem; }}
+  .hero .sub {{ font-style:italic; color:var(--muted); font-size:1.15rem; margin:0; }}
+  .world {{ max-width:680px; margin:2.5rem auto 0; text-align:left; }}
+  .world p:first-of-type::first-letter {{ font-size:3.4rem; line-height:.8; float:left;
+    padding:.1em .12em 0 0; color:var(--gold); font-family:"Helvetica Neue",Arial,sans-serif; }}
+
+  .rule {{ display:flex; align-items:center; gap:1rem; color:var(--gold);
+    max-width:680px; margin:3.5rem auto; }}
+  .rule::before,.rule::after {{ content:""; flex:1; height:1px; background:var(--line); }}
+  .rule span {{ font-size:.8rem; letter-spacing:.3em; text-transform:uppercase;
+    font-family:"Helvetica Neue",Arial,sans-serif; }}
+
+  /* gallery */
+  .gallery {{ display:grid; gap:1.6rem; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    align-items:start; margin:1rem 0 0; }}
+  .card {{ background:var(--panel); border-radius:14px; padding:1.6rem 1.7rem;
+    border:1px solid var(--line); box-shadow:0 10px 30px -18px rgba(60,45,25,.5);
+    position:relative; overflow:hidden; }}
+  .card::before {{ content:""; position:absolute; inset:0 auto 0 0; width:5px;
+    background:var(--accent,var(--sky)); }}
+  .card:nth-child(3n+1) {{ --accent:var(--sky); }}
+  .card:nth-child(3n+2) {{ --accent:var(--leaf); }}
+  .card:nth-child(3n+3) {{ --accent:var(--rose); }}
+  .card .num {{ font-family:"Helvetica Neue",Arial,sans-serif; font-size:.7rem;
+    letter-spacing:.25em; text-transform:uppercase; color:var(--accent,var(--sky)); }}
+  .card h3 {{ margin:.2rem 0 .9rem; font-size:1.5rem; color:var(--ink); }}
+  .card p {{ font-size:1rem; line-height:1.7; }}
+  .card p + p {{ margin-top:.7rem; }}
+
   .finale {{ max-width:680px; margin:3.5rem auto 0; }}
-  .ornament {{ text-align:center; color:var(--gold); letter-spacing:.6em; margin:2.5rem 0; }}
-  footer.colophon {{ max-width:680px; margin:3.5rem auto 0; padding-top:1.5rem;
-                     border-top:1px solid #d9cfb9; font-size:.85rem; font-style:italic;
-                     color:#7a7166; text-align:center; }}
-  .soundtrack-toggle {{ position:fixed; right:1rem; bottom:1rem; z-index:50;
-    font:inherit; font-size:.85rem; color:var(--paper); background:var(--ink);
-    border:none; border-radius:999px; padding:.5rem 1rem; cursor:pointer;
-    box-shadow:0 2px 10px rgba(0,0,0,.2); opacity:.85; }}
-  .soundtrack-toggle:hover {{ opacity:1; }}
-  @media (max-width:520px) {{ body {{ font-size:17px; }} header.hero h1 {{ font-size:2.1rem; }} }}
+  code {{ background:#efe6d4; padding:.05em .35em; border-radius:4px; font-size:.88em;
+    font-family:"SF Mono",Menlo,monospace; }}
+
+  /* soundtrack toggle */
+  .soundtrack {{ position:fixed; right:1.25rem; bottom:1.25rem; z-index:50; }}
+  .soundtrack button {{ font-family:"Helvetica Neue",Arial,sans-serif; font-size:.85rem;
+    color:var(--paper); background:var(--ink); border:none; border-radius:999px;
+    padding:.6rem 1.15rem; cursor:pointer; box-shadow:0 8px 22px -8px rgba(0,0,0,.55);
+    display:inline-flex; align-items:center; gap:.5rem; transition:transform .15s ease; }}
+  .soundtrack button:hover {{ transform:translateY(-2px); }}
+  .soundtrack button[disabled] {{ opacity:.6; cursor:wait; }}
+  .soundtrack .dot {{ width:8px; height:8px; border-radius:50%; background:var(--gold); }}
+  .soundtrack.on .dot {{ animation:pulse 1.1s ease-in-out infinite; }}
+  @keyframes pulse {{ 0%,100%{{ opacity:.4; transform:scale(.8); }} 50%{{ opacity:1; transform:scale(1.25); }} }}
+
+  footer {{ max-width:680px; margin:4.5rem auto 0; padding:1.6rem 0 4rem;
+    border-top:1px solid var(--line); color:var(--muted); font-style:italic;
+    font-size:.85rem; text-align:center; }}
+  footer strong {{ color:var(--ink); font-style:normal; }}
+
+  @media (max-width:560px) {{
+    body {{ font-size:17px; }}
+    .hero {{ padding-top:3.5rem; }}
+  }}
 </style>
 </head>
 <body>
+<div class="skyband"></div>
 <div class="wrap">
+
 <header class="hero">
+  <p class="kicker">A Marianne Composition</p>
   <h1>The Sky Library</h1>
-  <p class="tagline">A composition in movements — orchestrated, not prompted.</p>
+  <p class="sub">Three voices, one world — orchestrated, not prompted.</p>
   <div class="world">{world}</div>
 </header>
 
-<p class="gallery-label">Three vignettes · written in parallel</p>
+<div class="rule"><span>Three vignettes · written in parallel</span></div>
+
 <div class="gallery">
 {cards}
 </div>
 
 {finale}
 
-<footer class="colophon">
-  This page was composed by <strong>Marianne AI Compose</strong> — an orchestration
-  system that coordinates AI agents through declarative YAML scores. The world was
-  written first; the {nchar} vignettes above were generated <em>in parallel</em>, each
-  agent reading the shared world but not the others; a tool assembled this page and an
-  agent polished it.<br>
-  Score: hello.yaml · Fan-out + Synthesis · Free &amp; local-capable.
+<footer>
+  Composed by <strong>Marianne AI Compose</strong>. The world was written first;
+  the {nchar} vignettes were generated <em>in parallel</em>, each agent reading the
+  shared world but not the others; a separate agent composed the soundtrack; and a
+  deterministic tool wove it all into this page.<br>
+  Score: hello.yaml · Fan-out + Synthesis + Tool-Chain · Free &amp; local-capable.
 </footer>
+
 </div>
-{soundtrack}
-</body>
-</html>
-"""
 
-CARD = "<article class='card'><h3>{title}</h3>\n{body}</article>"
-
-# The soundtrack player: a hidden Strudel REPL web component + a corner toggle.
-# Never autoplays. The pattern is JSON-encoded so any quotes/newlines are safe.
-SOUNDTRACK = """<button class="soundtrack-toggle" id="snd-toggle" type="button">♪ play soundtrack</button>
+<div class="soundtrack" id="snd-wrap">
+  <button id="snd-toggle" type="button"><span class="dot"></span><span id="snd-label">play soundtrack</span></button>
+</div>
 <strudel-editor id="snd-repl" style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;"></strudel-editor>
 <script type="module">
 import 'https://unpkg.com/@strudel/repl@1.3.0';
 const PATTERN = {pattern};
-const ed = document.getElementById('snd-repl');
+const wrap = document.getElementById('snd-wrap');
 const btn = document.getElementById('snd-toggle');
-let playing = false;
-btn.addEventListener('click', () => {{
-  const repl = ed && ed.editor;
-  if (!repl) {{ btn.textContent = '♪ loading…'; return; }}
-  if (playing) {{ repl.stop(); playing = false; btn.textContent = '♪ play soundtrack'; }}
-  else {{ repl.setCode(PATTERN); repl.evaluate(); playing = true; btn.textContent = '♪ mute'; }}
+const label = document.getElementById('snd-label');
+const ed = document.getElementById('snd-repl');
+let playing = false, ready = false;
+async function ensure() {{
+  if (ready) return true;
+  try {{ await customElements.whenDefined('strudel-editor'); }} catch (e) {{}}
+  for (let i = 0; i < 50 && !(ed && ed.editor); i++) {{
+    await new Promise(r => setTimeout(r, 100));
+  }}
+  ready = !!(ed && ed.editor);
+  return ready;
+}}
+btn.addEventListener('click', async () => {{
+  if (!PATTERN) {{ label.textContent = 'no soundtrack'; return; }}
+  btn.disabled = true;
+  if (!(await ensure())) {{ label.textContent = 'player unavailable'; btn.disabled = false; return; }}
+  try {{
+    if (playing) {{ ed.editor.stop(); playing = false; wrap.classList.remove('on'); label.textContent = 'play soundtrack'; }}
+    else {{ ed.editor.setCode(PATTERN); ed.editor.evaluate(); playing = true; wrap.classList.add('on'); label.textContent = 'mute'; }}
+  }} catch (e) {{ label.textContent = 'playback error'; }}
+  btn.disabled = false;
 }});
-</script>"""
+</script>
+</body>
+</html>
+"""
+
+CARD = "<article class='card'><p class='num'>Vignette {n}</p><h3>{title}</h3>\n{body}</article>"
 
 
 def main() -> int:
@@ -192,34 +243,43 @@ def main() -> int:
         print("usage: assemble-site.py <workspace-dir> [output.html]", file=sys.stderr)
         return 2
     ws = Path(sys.argv[1]).resolve()
-    out_path = Path(sys.argv[2]) if len(sys.argv) > 2 else ws / "site-base.html"
+    out_path = Path(sys.argv[2]) if len(sys.argv) > 2 else ws / "the-sky-library.html"
 
     _, world = md_to_html(read(ws, "01-world.md"))
     cards = []
     char_files = sorted(ws.glob("02-character-*.md"))
     for i, f in enumerate(char_files):
-        title, body = md_to_html(f.read_text(encoding="utf-8", errors="replace"),
-                                 drop_first_h1=True)
-        cards.append(CARD.format(title=html.escape(title or f"Vignette {i + 1}"), body=body))
+        title, body = md_to_html(
+            f.read_text(encoding="utf-8", errors="replace"), drop_first_h1=True
+        )
+        cards.append(
+            CARD.format(n=i + 1, title=html.escape(title or f"Vignette {i + 1}"), body=body)
+        )
     _, finale_body = md_to_html(read(ws, "03-finale.md"))
-    finale = (f"<div class='ornament'>· · ·</div>\n<section class='finale'>"
-              f"<h2>The Finale</h2>\n{finale_body}</section>") if finale_body else ""
+    finale = (
+        f"<div class='rule'><span>Finale</span></div>\n"
+        f"<section class='finale'>{finale_body}</section>"
+        if finale_body
+        else ""
+    )
 
-    # The composed soundtrack (movement 3), embedded as a mute-toggled player.
-    # JSON-encoding makes the pattern a safe JS string literal.
+    # Embed the composed soundtrack VERBATIM (json so quotes/newlines survive,
+    # and so no model ever re-types and corrupts it).
     strudel = read(ws, "soundtrack.strudel").strip()
-    soundtrack = SOUNDTRACK.format(pattern=json.dumps(strudel)) if strudel else ""
 
     page = PAGE.format(
         world=world or "<p>(The world was not written.)</p>",
-        cards="\n".join(cards) or "<article class='card'><p>(No vignettes were written.)</p></article>",
+        cards="\n".join(cards)
+        or "<article class='card'><p>(No vignettes were written.)</p></article>",
         finale=finale,
-        soundtrack=soundtrack,
+        pattern=json.dumps(strudel),
         nchar=len(char_files) or "parallel",
     )
     out_path.write_text(page, encoding="utf-8")
-    print(f"assembled gallery {out_path} from {len(char_files)} vignette(s)"
-          + (" + soundtrack" if strudel else " (no soundtrack)"))
+    print(
+        f"assembled {out_path} from {len(char_files)} vignette(s)"
+        + (" + soundtrack" if strudel else " (no soundtrack)")
+    )
     return 0
 
 

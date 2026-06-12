@@ -8,38 +8,33 @@
 #   Movement 1 · The World     one agent writes the shared setting (prose)
 #         │
 #         ▼   fan-out (parallel)
-#   Movement 2 · Vignettes     three agents each write one character — in
-#         │                    parallel, each reading the world but not
-#         │                    each other (stigmergic coordination)
-#         ▼
-#   Movement 3 · Assembly      a DETERMINISTIC tool (no AI) folds the prose
-#         │                    into one valid HTML page — the reliability
-#         │                    floor: you always get a real website
-#         ▼
-#   Movement 4 · Polish        an agent reads that page + the story and
-#                              tailors the design to what was actually told
+#   Movement 2 · Vignettes     three agents each write one character AND, at the
+#         │                    same time, one agent composes a Strudel soundtrack
+#         │  ┌─ Movement 3 ····· tuned to the world's mood (parallel with the
+#         │  │                   vignettes; a corpus is injected so it writes
+#         ▼  ▼                   real, valid music — not invented gibberish)
+#   Movement 4 · The Page      a DETERMINISTIC tool (no AI) builds the FINAL,
+#                              hand-designed HTML page from the prose, the cards,
+#                              and the soundtrack — always valid, always pretty,
+#                              and it embeds the music VERBATIM so nothing
+#                              corrupts it.
 #
-# Mediums crossed: prose → parallel prose → a styled, openable web page.
-# Pattern: Fan-out + Synthesis, plus a Tool-Chain seam (AI for content,
-# a deterministic tool at the join) — the hybrid that makes a first run
-# reliable even on a small local model.
+# Mediums crossed: prose → parallel prose → playable music → an openable web page.
+# Pattern: Fan-out + Synthesis, plus a Tool-Chain seam — the design lives in the
+# deterministic tool, so a new user's first result is reliably beautiful no
+# matter how small the model that wrote the words.
 #
-# FREE BY DESIGN — the instrument is a deep fallback chain:
-#   crush + free OpenRouter models  →  local Ollama (gemma4 via opencode)
-# Whatever you have — an OpenRouter key, or just a local model — it runs.
-# No paid API is required.
+# FREE BY DESIGN — a deep fallback chain: free OpenRouter (crush) → local Ollama
+# → paid subs/API. You need only ONE of them. (Tip: run hello-setup.yaml instead
+# and Marianne discovers which you have, then runs this for you.)
 #
 # Usage:
-#   mzt start                                    # start the conductor
-#   mzt run examples/getting-started/hello.yaml  # run the score
-#   mzt status hello --watch                     # watch the orchestration
-#   open workspaces/hello/the-sky-library.html   # read the result
+#   mzt start
+#   mzt run examples/getting-started/hello.yaml
+#   open workspaces/hello/the-sky-library.html   # press ♪ to play the soundtrack
 #
-# Output (workspaces/hello/):
-#   01-world.md            the setting
-#   02-character-1..3.md   three parallel vignettes
-#   site-base.html         deterministic site (the guaranteed result)
-#   the-sky-library.html   AI-polished site (open this one)
+# Output (workspaces/hello/): 01-world.md · 02-character-1..3.md ·
+#   soundtrack.strudel · the-sky-library.html (the finished page — open this)
 #
 # Time: ~5-15 min (varies with model/fallback)  |  Cost: free  |  Sheets: 6
 
@@ -99,21 +94,18 @@ movements:
   3:
     name: "Soundtrack"               # compose loopable music for the story
   4:
-    name: "Assembly"
-    instrument: cli                  # deterministic — no AI, always valid
-  5:
-    name: "Polish"
+    name: "The Page"
+    instrument: cli                  # deterministic — builds the FINAL page, no AI
 
 sheet:
   size: 1
-  total_items: 5
+  total_items: 4
   fan_out:
     2: 3                             # Movement 2 → three parallel characters
   dependencies:
     2: [1]                           # vignettes read the world
     3: [1]                           # the soundtrack reads the world's mood (parallel with vignettes)
-    4: [2, 3]                        # assembly waits for the vignettes AND the soundtrack
-    5: [4]                           # polish reads the assembled page
+    4: [2, 3]                        # the page waits for the vignettes AND the soundtrack
   cadenzas:
     # The Strudel technique corpus — injected ONLY into the soundtrack sheet, so
     # the composer writes valid patterns instead of inventing sample names (the
@@ -184,39 +176,20 @@ prompt:
     You are a Strudel composer (Strudel is live-coding music — strudel.cc).
     First read the shared world at {{ workspace }}/01-world.md and feel its mood.
 
-    Write ONE short, LOOPABLE, ambient background soundtrack for this story.
-    Rules (a static checker rejects violations):
-    - Use ONLY sounds documented in the injected Strudel reference — built-in
-      samples (bd sd hh cp ...), drum-machine banks, or synth waveforms via
-      .sound("sawtooth"/"sine"/"triangle"/"square"). Do NOT invent sample names.
-    - Background music: keep it GENTLE and low — a modest .gain (≈0.3-0.5), a
-      slow tempo (setcps around 0.35-0.5), a few layers via stack().
-    - It must LOOP cleanly forever — no arrange()/one-shot, no silence().
-    - Output ONLY valid Strudel code (no prose, no markdown fences). Start with a
-      setcps(...) line. Save it to {{ workspace }}/soundtrack.strudel and stop.
+    Write ONE short, LOOPABLE, ambient background soundtrack. Keep it SIMPLE and
+    SAFE so it actually plays — use ONLY these building blocks:
+    - setcps(0.4)                              (a slow tempo, on the first line)
+    - note("c3 eb3 g3").sound("sine")          (or "triangle"/"sawtooth"/"square")
+    - s("hh*4")  or  s("bd ~ ~ ~")             (built-in samples: bd sd hh cp oh)
+    - .gain(0.3)   .lpf(800)   .room(0.4)   .slow(4)   .delay(0.3)
+    - stack(layerA, layerB, layerC)            (layer 2-3 of the above)
+    Rules: keep every .gain low (0.2-0.4); do NOT invent sample names; do NOT use
+    .ar / .adsr / arrange / silence; no markdown fences, no prose. Output ONLY the
+    Strudel code, starting with setcps(...). Save it to
+    {{ workspace }}/soundtrack.strudel and stop.
 
     {% elif stage == 4 %}
     python3 "{{ workspace }}/../../examples/getting-started/assets/assemble-site.py" "{{ workspace }}"
-
-    {% elif stage == 5 %}
-    You are a web designer. A complete, valid website already exists at
-    {{ workspace }}/site-base.html — it presents a short story (world +
-    three vignettes in {{ workspace }}/01-world.md and 02-character-*.md) AND
-    embeds a loopable music player (a hidden &lt;strudel-editor&gt; and a
-    "play soundtrack" button — leave that block EXACTLY as-is).
-
-    Read site-base.html and the story, then write an IMPROVED, single
-    self-contained HTML file to {{ workspace }}/the-sky-library.html that:
-    - keeps ALL the story text intact,
-    - keeps the soundtrack player block and its script intact,
-    - tailors the visual design (colors, headings, small touches) to the
-      mood of THIS story,
-    - keeps inline CSS only — the only external resource allowed is the
-      Strudel module the player already imports,
-    - begins with <!DOCTYPE html> and is valid HTML5.
-
-    If you are unsure, copy site-base.html and refine it. Write ONLY the
-    file {{ workspace }}/the-sky-library.html and stop.
     {% endif %}
 
 validations:
@@ -254,24 +227,19 @@ validations:
     condition: "stage == 3"
     description: "Soundtrack uses only valid sounds (the static reality check)"
 
-  # Movement 4 — deterministic assembly produced a valid page (the floor)
-  - type: file_exists
-    path: "{workspace}/site-base.html"
-    condition: "stage == 4"
-    description: "Deterministic website assembled"
-  - type: content_contains
-    path: "{workspace}/site-base.html"
-    pattern: "<!DOCTYPE html>"
-    condition: "stage == 4"
-    description: "Assembled output is valid HTML5"
-
-  # Movement 5 — the AI-polished page exists and is valid HTML
+  # Movement 4 — the deterministic tool built the FINAL page (always valid +
+  # embeds the soundtrack verbatim, so no model can corrupt it)
   - type: file_exists
     path: "{workspace}/the-sky-library.html"
-    condition: "stage == 5"
-    description: "Final website exists"
+    condition: "stage == 4"
+    description: "Final website built"
   - type: content_contains
     path: "{workspace}/the-sky-library.html"
     pattern: "<!DOCTYPE html>"
-    condition: "stage == 5"
+    condition: "stage == 4"
     description: "Final website is valid HTML5"
+  - type: content_contains
+    path: "{workspace}/the-sky-library.html"
+    pattern: "strudel-editor"
+    condition: "stage == 4"
+    description: "The soundtrack player is embedded"
