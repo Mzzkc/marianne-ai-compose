@@ -259,6 +259,21 @@ class JudgmentClient:
         The EventBus is edge-triggered — a restart-recovered FERMATA fired
         its event in a previous process — so startup scans live state and
         enqueues every currently-FERMATA sheet whose job enables judgment.
+
+        Two-mechanism invariant (goal-mode audit, 2026-06-12): this sweep
+        is the BELT; the adapter's ``_reconcile_fermata_polling`` re-emits
+        ``escalation_needed`` for every sheet newly entering fermata
+        polling — including restart-recovered ones — and is the
+        SUSPENDERS. ``_live_states[job_id]`` is populated (manager resume
+        path) BEFORE baton registration, which precedes the re-emit, so an
+        event pre-dating this subscription implies the job is already
+        visible to this sweep, and a sweep-miss implies the event hasn't
+        fired yet and will arrive after subscription. On a typical restart
+        this sweep finds nothing (orphan recovery is async; RUNNING-at-
+        death jobs classify FAILED) — that is the event path doing the
+        work, not a defect. Double-processing is idempotent: the durable
+        ``judgment_count`` cap + the FERMATA-status check in
+        ``resolve_fermata``.
         """
         self._sub_id = event_bus.subscribe(
             callback=self._on_escalation_event,

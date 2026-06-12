@@ -28,7 +28,10 @@ workspace_lifecycle:
 instrument: claude-code
 instrument_fallbacks: [opencode]
 instrument_config:
-  timeout_seconds: 600
+  # Repo-scale audit prompts (read code + git history) need more than the
+  # old 600s — the 2026-06-12 goal-mode audit timed out two reviewers at
+  # 600 while their reviews were mid-write.
+  timeout_seconds: 1500
 
 instruments:
   reviewer-opus:

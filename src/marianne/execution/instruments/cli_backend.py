@@ -202,7 +202,6 @@ class PluginCliBackend(Backend):
         self._working_directory: Path | None = working_directory
         self._preamble: str | None = None
         self._prompt_extensions: list[str] = []
-        self._output_log_path: Path | None = None
         self._model: str | None = profile.default_model
 
         # #352 inc-3: per-dispatch live output sink. Set by the baton
@@ -292,10 +291,6 @@ class PluginCliBackend(Backend):
         event loop between pipe reads — keep it cheap and non-blocking.
         """
         self._on_output = callback
-
-    def set_output_log_path(self, path: Path | None) -> None:
-        """Set base path for real-time output logging."""
-        self._output_log_path = path
 
     def set_mcp_config(self, config_path: Path | None) -> None:
         """Set path to an MCP config file for the shared MCP pool.
