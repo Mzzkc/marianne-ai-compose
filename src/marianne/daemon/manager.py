@@ -2678,6 +2678,15 @@ class JobManager:
         if meta is None or not self._config.observer.enabled:
             return
 
+        # Ensure the conductor-managed workspace exists before the observer
+        # watches it. On a fresh #58 auto-managed workspace the leaf dir is
+        # otherwise created lazily at sheet dispatch — after the observer
+        # starts — so the filesystem watch and the JSONL recorder both raced
+        # ahead of it and logged spurious FileNotFoundError warnings (and
+        # dropped the job's earliest persisted events). The conductor owns the
+        # workspace lifecycle, so creating it here is the correct seam.
+        meta.workspace.mkdir(parents=True, exist_ok=True)
+
         observer = JobObserver(
             job_id=job_id,
             workspace=meta.workspace,

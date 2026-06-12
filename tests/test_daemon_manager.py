@@ -2711,3 +2711,30 @@ class TestListJobsShapeConsistency:
         assert d["completed_at"] is None
         assert d["current_sheet"] is None
         assert d["total_sheets"] is None
+
+
+class TestStartObserverCreatesWorkspace:
+    """#58 follow-up: the observer must not race ahead of the auto-managed
+    workspace. On a fresh derived workspace the leaf dir is otherwise created
+    lazily at sheet dispatch — after the observer starts — so the filesystem
+    watch and JSONL recorder raced ahead of it and logged spurious
+    FileNotFoundError warnings. _start_observer now ensures the conductor-managed
+    workspace exists first."""
+
+    @pytest.mark.asyncio
+    async def test_start_observer_creates_missing_workspace(
+        self, manager: JobManager, tmp_path: Path
+    ) -> None:
+        ws = tmp_path / "auto" / "repro-ws"  # parent AND leaf both absent
+        assert not ws.exists()
+        manager._job_meta["j-obs"] = JobMeta(
+            job_id="j-obs",
+            config_path=Path("/tmp/x.yaml"),
+            workspace=ws,
+            status=DaemonJobStatus.RUNNING,
+        )
+        try:
+            await manager._start_observer("j-obs")
+            assert ws.is_dir()  # created before the observer watches it
+        finally:
+            await manager._stop_observer("j-obs")
