@@ -201,6 +201,28 @@ async def sheet_task(
             total_movements=total_movements,
         )
 
+        # #344 obs1: rescue a plain non-zero exit whose work passed every
+        # validation. The acceptance criteria are met, so report success —
+        # the baton's normal success path completes the sheet, no core
+        # change. exit_code stays on the result as the recorded truth.
+        if (
+            _is_nonzero_exit_rescuable(
+                exec_result, has_validations=bool(sheet.validations)
+            )
+            and val_total > 0
+            and val_rate >= 100.0
+        ):
+            _logger.info(
+                "musician.nonzero_exit_rescued",
+                extra={
+                    "job_id": job_id,
+                    SHEET_NUM_KEY: sheet.num,
+                    "exit_code": exec_result.exit_code,
+                    "validations": val_total,
+                },
+            )
+            exec_result.success = True
+
         # Step 5: Record output with credential redaction
         stdout_tail, stderr_tail = _capture_output(exec_result)
 
@@ -897,6 +919,28 @@ async def _execute(
     return await backend.execute(prompt, timeout_seconds=timeout_seconds)
 
 
+def _is_nonzero_exit_rescuable(
+    exec_result: ExecutionResult, *, has_validations: bool
+) -> bool:
+    """#344 obs1: should a failed execution still run its validations?
+
+    True only for a PLAIN non-zero process exit — the agent finished and
+    the process exited with a non-success code (``exit_reason ==
+    "completed"``), with no signal, not rate-limited — AND the sheet
+    declares validations to prove the work by. Timeouts, signal-kills,
+    internal errors, and rate-limits are real interruptions and are
+    NEVER rescuable (partial work must not be rubber-stamped). A success
+    isn't rescuable because it already validates normally.
+    """
+    return (
+        not exec_result.success
+        and has_validations
+        and exec_result.exit_reason == "completed"
+        and exec_result.exit_signal is None
+        and not exec_result.rate_limited
+    )
+
+
 async def _validate(
     sheet: Sheet,
     exec_result: ExecutionResult,
@@ -916,11 +960,17 @@ async def _validate(
     the runner's behavior. Validations using {workspace}, {movement},
     {job_name} etc. in paths now resolve correctly under the baton path.
     """
-    # Don't run validations if execution failed
-    if not exec_result.success:
+    # Run validations when execution succeeded OR when a plain non-zero
+    # exit is rescuable (#344 obs1: work done + committed, process exited
+    # non-zero — prove it by the declared acceptance criteria). All other
+    # failures (timeout/signal/error/rate-limit) skip validation.
+    if not exec_result.success and not _is_nonzero_exit_rescuable(
+        exec_result, has_validations=bool(sheet.validations)
+    ):
         return 0, 0, 0.0, None
 
-    # No validation rules → 100% pass rate (F-018 contract)
+    # No validation rules → 100% pass rate (F-018 contract). Only reached
+    # on success here (a rescuable failure always has validations).
     if not sheet.validations:
         return 0, 0, 100.0, None
 

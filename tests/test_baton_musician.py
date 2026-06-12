@@ -351,16 +351,27 @@ class TestMusicianValidation:
         assert result.validations_passed == 0
 
     @pytest.mark.asyncio
-    async def test_validations_skipped_on_execution_failure(self) -> None:
-        """Validations are not run when execution fails."""
+    async def test_validations_skipped_on_nonrescuable_failure(self) -> None:
+        """Validations are not run on a NON-rescuable failure.
+
+        Since #344 obs1, a plain non-zero exit with declared validations
+        runs them (the rescuable path — covered in
+        test_nonzero_exit_rescue_344.py). Real interruptions
+        (rate-limit/timeout/signal/error) are NOT rescuable: validations
+        stay skipped so partial work is never rubber-stamped. This pins
+        that non-rescuable invariant using a rate-limited failure.
+        """
         from marianne.daemon.baton.musician import sheet_task
 
         inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
         backend = AsyncMock()
-        backend.execute = AsyncMock(return_value=_make_execution_result(success=False, exit_code=1))
+        backend.execute = AsyncMock(
+            return_value=_make_execution_result(
+                success=False, exit_code=1, rate_limited=True
+            )
+        )
         backend.name = "claude-code"
 
-        # Sheet has validations but execution failed — should skip them
         from marianne.core.config.execution import ValidationRule
 
         rule = ValidationRule(type="file_exists", path="output.txt")
@@ -378,7 +389,7 @@ class TestMusicianValidation:
         result = inbox.get_nowait()
         assert result.execution_success is False
         assert result.validation_pass_rate == 0.0
-        assert result.validations_total == 0  # Not run
+        assert result.validations_total == 0  # Not run — non-rescuable
 
 
 # =========================================================================
