@@ -278,46 +278,48 @@ marked with **(required)**.
 | `movements` | dict[int, MovementDef] | `{}` | Movement declarations with names, instruments, and voice counts. See [Multi-Instrument Scores](#multi-instrument-scores). |
 | `instrument_fallbacks` | list[str] | `[]` | Fallback instrument chain when the primary instrument is unavailable. See [Instrument Fallbacks](#instrument-fallbacks). |
 
-### `instrument` (recommended) or `backend`
+### `instrument`
 
-Controls which AI instrument executes sheets. You can use `instrument:` (a named
-instrument from `mzt instruments list`) or `backend:` (the original syntax).
-Both work — use `instrument:` for new scores.
+Controls which AI instrument executes sheets. Any named instrument from
+`mzt instruments list` works — built-in profiles, or your own CLI tools
+wrapped as YAML profiles. If unset, defaults to `claude-code`.
 
 ```yaml
-# New syntax — use a named instrument
 instrument: claude-code
-
-# Equivalent old syntax — both produce the same result
-backend:
-  type: claude_cli
 ```
 
-Run `mzt instruments list` to see all available instruments.
+> The legacy `backend:` block was removed — scores containing one fail at
+> parse time. See [Migrating from `backend:` to `instrument:`](#migrating-from-backend-to-instrument).
 
 ### `instrument_config`
 
-Score-level overrides for the resolved instrument's defaults. Flat key-value
-pairs — the available keys depend on the instrument. Common overrides:
+Score-level overrides for the resolved instrument's defaults. Functional
+keys:
+
+| Key | Description |
+|-----|-------------|
+| `model` | Model override (alias: `cli_model`). `null` uses the profile default. |
+| `timeout_seconds` | Per-sheet execution timeout (seconds). |
+| `interactive` | Force interactive (tmux-driven) or headless execution. Unset uses the profile default. |
+| `interactive_max_nudges` | Consecutive-idle nudge budget for interactive sheets. |
+| `interactive_nudge_message` | Custom continuation message typed into idle interactive sessions. |
+
+Unknown keys are silently ignored — don't rely on keys outside this table.
 
 ```yaml
 instrument: claude-code
 instrument_config:
-  timeout_seconds: 3600          # Override default timeout
-  timeout_overrides:
-    7: 28800                     # Per-sheet timeout overrides
-  working_directory: ./my-project
+  model: claude-sonnet-4-6
+  timeout_seconds: 3600
 ```
 
-For the Anthropic API instrument:
+Per-sheet overrides use `sheet.per_sheet_instrument_config`:
 
 ```yaml
-instrument: anthropic_api
-instrument_config:
-  model: claude-sonnet-4-5-20250929
-  api_key_env: ANTHROPIC_API_KEY
-  max_tokens: 4096
-  timeout_seconds: 120
+sheet:
+  per_sheet_instrument_config:
+    7:
+      timeout_seconds: 28800   # sheet 7 gets eight hours
 ```
 
 ### Multi-Instrument Scores
@@ -328,35 +330,6 @@ powerful instrument for complex reasoning and a fast one for routine work. The
 `sheet.instrument_map` fields work together for this. See
 [Movements and Multi-Instrument Scores](#movements-and-multi-instrument-scores)
 for full details with examples and resolution precedence.
-
-### `backend`
-
-Detailed backend configuration. The original syntax, still fully supported.
-Use `instrument:` + `instrument_config:` for new scores.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `type` | `"claude_cli"` \| `"anthropic_api"` \| `"recursive_light"` \| `"ollama"` | `"claude_cli"` | Backend type. Also accepts any named instrument. |
-| `skip_permissions` | bool | `true` | Skip permission prompts for unattended execution. Maps to `--dangerously-skip-permissions`. |
-| `disable_mcp` | bool | `true` | Disable MCP server loading for faster execution (~2x speedup). |
-| `output_format` | `"json"` \| `"text"` \| `"stream-json"` | `"text"` | Claude CLI output format. |
-| `cli_model` | str | `null` | Model override. Example: `"claude-sonnet-4-5-20250929"`. |
-| `timeout_seconds` | float | `1800.0` | Maximum time per sheet execution (30 minutes default). |
-| `timeout_overrides` | dict[int, float] | `{}` | Per-sheet timeout overrides. Example: `{7: 28800}` gives sheet 7 eight hours. |
-| `allowed_tools` | list[str] | `null` | Restrict Claude to specific tools. Example: `[Read, Grep, Glob]`. |
-| `system_prompt_file` | Path | `null` | Path to custom system prompt file. |
-| `working_directory` | Path | `null` | Working directory for execution. Defaults to config file directory. |
-| `cli_extra_args` | list[str] | `[]` | Escape hatch for CLI flags not yet exposed. Applied last. |
-| `max_output_capture_bytes` | int | `51200` | Maximum stdout/stderr to capture per sheet (50KB default). |
-
-**API-specific fields** (when `type: anthropic_api`):
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `model` | str | `"claude-sonnet-4-5-20250929"` | Anthropic API model ID. |
-| `api_key_env` | str | `"ANTHROPIC_API_KEY"` | Environment variable for API key. |
-| `max_tokens` | int | `16384` | Maximum tokens for API response. |
-| `temperature` | float | `0.7` | Sampling temperature (0-1). |
 
 ### `sheet`
 
@@ -1223,8 +1196,7 @@ sheet:
 2. `instrument_map` — batch assignment
 3. `movements.N.instrument` — per-movement default
 4. Top-level `instrument:` — score default
-5. `backend.type` — legacy syntax
-6. `claude_cli` — built-in default
+5. `claude-code` — built-in default
 
 ### When to Use Multi-Instrument
 
@@ -2045,7 +2017,7 @@ done
 | V003 | Template file not found | Check `prompt.template_file` path |
 | V007 | Invalid regex in validation pattern | Fix regex in `content_regex` or `rate_limit.detection_patterns` |
 | V101 | Undefined template variable (warning) | Add variable to `prompt.variables` or check spelling |
-| V103 | Very short timeout (warning) | Increase `backend.timeout_seconds` |
+| V103 | Very short timeout (warning) | Increase `instrument_config.timeout_seconds` |
 | V108 | Missing prelude/cadenza file (warning) | Check file path in `sheet.prelude` or `sheet.cadenzas`. Jinja-templated paths are skipped. |
 
 ---
@@ -2059,7 +2031,7 @@ done
 
 2. **Set appropriate timeouts per stage.** A 10-minute timeout for a code
    review sheet and an 8-hour timeout for a monitoring sheet are very
-   different needs. Use `backend.timeout_overrides` for per-sheet control.
+   different needs. Use `sheet.per_sheet_instrument_config` for per-sheet control.
 
 3. **Always declare dependencies when using parallel execution.** Without
    a dependency DAG, `parallel.enabled: true` makes ALL sheets immediately
@@ -2150,8 +2122,10 @@ done
 
 ## Migrating from `backend:` to `instrument:`
 
-Marianne's original `backend:` syntax still works, but `instrument:` is the
-recommended syntax for new scores. The migration is straightforward.
+Marianne's original `backend:` syntax was **removed** (#347). A score that
+still contains a `backend:` block fails at parse time with
+`Unknown field 'backend' — this is not a valid score field.` Use this
+section to convert old scores.
 
 ### Quick Reference
 
@@ -2160,11 +2134,11 @@ recommended syntax for new scores. The migration is straightforward.
 | `backend: { type: claude_cli }` | `instrument: claude-code` |
 | `backend: { type: anthropic_api }` | `instrument: anthropic_api` |
 | `backend: { type: ollama }` | `instrument: ollama` |
-| `backend: { type: recursive_light }` | `instrument: recursive_light` |
+| no `backend:` at all | nothing — `claude-code` is the default |
 
 ### Full Example
 
-**Before:**
+**Before (now rejected):**
 
 ```yaml
 name: my-score
@@ -2174,7 +2148,7 @@ backend:
   type: claude_cli
   timeout_seconds: 1800
   skip_permissions: true
-  allowed_tools: [Read, Write, Bash]
+  cli_model: claude-sonnet-4-6
   timeout_overrides:
     3: 3600
 ```
@@ -2188,42 +2162,41 @@ workspace: ../workspaces/my-score
 instrument: claude-code
 instrument_config:
   timeout_seconds: 1800
-  skip_permissions: true
-  allowed_tools: [Read, Write, Bash]
-  timeout_overrides:
-    3: 3600
+  model: claude-sonnet-4-6
+sheet:
+  per_sheet_instrument_config:
+    3:
+      timeout_seconds: 3600
 ```
 
 ### Field Mapping
 
-| `backend:` field | `instrument_config:` equivalent | Notes |
-|------------------|---------------------------------|-------|
+| `backend:` field | Where it lives now | Notes |
+|------------------|--------------------|-------|
 | `type` | `instrument:` (top-level) | Name changes: `claude_cli` → `claude-code` |
-| `timeout_seconds` | `timeout_seconds` | Same field name |
-| `skip_permissions` | `skip_permissions` | Same field name |
-| `disable_mcp` | `disable_mcp` | Same field name |
-| `output_format` | `output_format` | Same field name |
-| `cli_model` | `model` | Renamed |
-| `allowed_tools` | `allowed_tools` | Same field name |
-| `system_prompt_file` | `system_prompt_file` | Same field name |
-| `working_directory` | `working_directory` | Same field name |
-| `timeout_overrides` | `timeout_overrides` | Same field name |
-| `sheet_overrides` | `per_sheet_instrument_config` | Moved to `sheet:` section |
-| `max_output_capture_bytes` | `max_output_capture_bytes` | Same field name |
+| `timeout_seconds` | `instrument_config.timeout_seconds` | Same name |
+| `cli_model` / `model` | `instrument_config.model` | `cli_model` still accepted as an alias |
+| `timeout_overrides` / `sheet_overrides` | `sheet.per_sheet_instrument_config` | `{3: {timeout_seconds: 3600}}` |
+| `skip_permissions` | instrument profile | Built-in profiles already pass the auto-approve flag; drop the key |
+| `disable_mcp` | instrument profile | Built-in claude-code profile passes `--strict-mcp-config`; drop the key |
+| `output_format` | instrument profile (`output:` block) | Drop the key |
+| `allowed_tools`, `system_prompt_file`, `cli_extra_args` | custom instrument profile | Copy a builtin to `~/.marianne/instruments/` and add the flags to its `args` template |
+| `max_output_capture_bytes` | — | No score-level equivalent |
+| `working_directory` | — | Execution runs in the workspace |
+
+Keys without a score-level equivalent are **silently ignored** if left
+inside `instrument_config:` — remove them so the score doesn't imply
+behavior it no longer has.
 
 ### What You Gain
 
 - **Multi-instrument scores.** `instrument:` supports per-sheet and per-movement
-  assignment. `backend:` does not.
+  assignment. `backend:` did not.
 - **Plugin instruments.** Custom CLI tools can be added as YAML profiles in
   `~/.marianne/instruments/` or `.marianne/instruments/`.
 - **Validation.** `mzt validate` warns when an instrument name is not recognized
-  (V210). No equivalent exists for `backend.type` — typos fail silently at runtime.
+  (V210). `backend.type` typos failed silently at runtime.
 - **Named aliases.** The `instruments:` key lets you declare reusable instrument
   configurations referenced by name across your score.
-
-### Compatibility
-
-Both `backend:` and `instrument:` cannot be used in the same score — `mzt validate`
-rejects this as an error. The `backend:` syntax continues to work unchanged for
-all existing scores. No deprecation warnings are emitted.
+- **Interactive execution.** Instruments with verified TUI support (claude-code
+  by default) run as driven tmux sessions instead of one-shot headless calls.

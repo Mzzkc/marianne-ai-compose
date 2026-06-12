@@ -64,10 +64,7 @@ workspace: ../../workspaces/research-agent
 instrument: claude-code
 instrument_fallbacks: [anthropic_api]
 instrument_config:
-  skip_permissions: true
-  disable_mcp: true
   timeout_seconds: 900
-  allowed_tools: [Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch]
 
 # Named instruments — match capability to task difficulty.
 # Economic gradient is load-bearing (Immune Cascade):

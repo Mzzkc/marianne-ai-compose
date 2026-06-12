@@ -37,10 +37,7 @@ workspace_lifecycle:
 instrument: claude-code
 instrument_fallbacks: [opencode, gemini-cli]
 instrument_config:
-  skip_permissions: true
-  disable_mcp: true
   timeout_seconds: 1200
-  allowed_tools: [Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch]
 
 # Cost-graduated tiers: scanner (cheap inventory, deterministic emission),
 # analyst (per-frame investigation), synthesizer (triangulation + editorial).
@@ -50,21 +47,15 @@ instruments:
     profile: claude-code
     config:
       timeout_seconds: 600
-      skip_permissions: true
-      disable_mcp: true
   analyst:
     profile: claude-code
     config:
       timeout_seconds: 1200
-      skip_permissions: true
-      disable_mcp: true
   synthesizer:
     profile: claude-code
     config:
-      cli_model: claude-opus-4-7
+      model: claude-opus-4-7
       timeout_seconds: 1500
-      skip_permissions: true
-      disable_mcp: true
   cli:
     profile: cli
 

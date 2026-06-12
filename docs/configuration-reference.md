@@ -15,9 +15,6 @@ and constraints are extracted directly from the Pydantic v2 config models in
 - [movements](#movements)
   - [MovementDef Sub-Config](#movementdef-sub-config)
 - [workspace_lifecycle](#workspace_lifecycle)
-- [backend](#backend)
-  - [Ollama Sub-Config](#ollama-sub-config)
-  - [Recursive Light Sub-Config](#recursive-light-sub-config)
 - [bridge](#bridge)
   - [MCP Server Sub-Config](#mcp-server-sub-config)
 - [sheet](#sheet)
@@ -67,26 +64,24 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `name` | `str` | **required** | Unique score name |
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
-| `instrument` | `str \| None` | `None` | Named instrument to use (e.g., `claude-code`, `gemini-cli`). Alternative to `backend.type`. Run `mzt instruments list` to see available instruments. Cannot be used together with `backend`. |
-| `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults (e.g., `model`, `timeout_seconds`). Only valid when `instrument` is set. |
+| `instrument` | `str \| None` | `None` | Named instrument to use (e.g., `claude-code`, `gemini-cli`). Run `mzt instruments list` to see available instruments. If unset, defaults to `claude-code`. |
+| `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults. Functional keys: `model` (alias: `cli_model`), `timeout_seconds`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`. Unknown keys are ignored. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
 | `instrument_fallbacks` | `list[str]` | `[]` | Score-level default fallback instrument chain. Tried in order when the primary instrument is unavailable or rate-limited to exhaustion. Each entry is an instrument name (profile or score alias). See [Instrument Fallbacks](#instrument-fallbacks). |
 
 ```yaml
-# Using instrument: (recommended for new scores)
 instrument: gemini-cli
 instrument_config:
   model: gemini-2.5-flash
   timeout_seconds: 600
-
-# Using backend: (original syntax, still fully supported)
-backend:
-  type: claude_cli
-  skip_permissions: true
 ```
 
-> **Note:** `instrument:` and `backend:` are mutually exclusive. Use one or the other. If neither is specified, Marianne defaults to `claude_cli`.
+> **Note:** The legacy `backend:` block was removed. Scores that still
+> contain one fail at parse time with "Unknown field 'backend'" — see the
+> [migration table](score-writing-guide.md#migrating-from-backend-to-instrument)
+> in the Score Writing Guide for the field-by-field conversion. If no
+> `instrument:` is specified, Marianne defaults to `claude-code`.
 
 ---
 
@@ -206,8 +201,7 @@ movements:
 2. `sheet.instrument_map` (batch assignment)
 3. `movements.N.instrument` (per-movement)
 4. Top-level `instrument:` (score default)
-5. `backend.type` (legacy)
-6. `claude_cli` (built-in default)
+5. `claude-code` (built-in default)
 
 ---
 
@@ -238,82 +232,11 @@ workspace_lifecycle:
 
 ---
 
-## backend
-
-*Source: `src/marianne/core/config/backend.py` — `BackendConfig`*
-
-Uses a flat structure with cross-field validation. Fields marked with a backend prefix (e.g., `[claude_cli]`) only take effect when `type` matches that backend. Setting fields for an unselected backend emits a warning.
-
-| Field | Type | Default | Constraints | Description |
-|-------|------|---------|-------------|-------------|
-| `type` | `"claude_cli" \| "anthropic_api" \| "recursive_light" \| "ollama"` | `"claude_cli"` | | Backend type |
-| `skip_permissions` | `bool` | `true` | | **[claude_cli]** Skip permission prompts for unattended execution. Maps to `--dangerously-skip-permissions`. |
-| `disable_mcp` | `bool` | `true` | | **[claude_cli]** Disable MCP server loading for faster, isolated execution (~2x speedup). Maps to `--strict-mcp-config {}`. Set to `false` to use MCP servers. |
-| `output_format` | `"json" \| "text" \| "stream-json"` | `"text"` | | **[claude_cli]** Claude CLI output format. `text` for human-readable, `json` for structured, `stream-json` for streaming events. |
-| `cli_model` | `str \| None` | `None` | | **[claude_cli]** Model for Claude CLI. Maps to `--model` flag. If `None`, uses Claude Code's default. Example: `"claude-sonnet-4-5-20250929"` |
-| `allowed_tools` | `list[str] \| None` | `None` | | **[claude_cli]** Restrict Claude to specific tools. Maps to `--allowedTools`. Example: `["Read", "Grep", "Glob"]` for read-only execution. |
-| `system_prompt_file` | `Path \| None` | `None` | | **[claude_cli]** Path to custom system prompt file. Maps to `--system-prompt`. |
-| `working_directory` | `Path \| None` | `None` | | Working directory for execution. If `None`, uses the directory containing the config file. |
-| `timeout_seconds` | `float` | `1800.0` | `> 0` | Maximum time per prompt execution (seconds). Default: 30 minutes. |
-| `timeout_overrides` | `dict[int, float]` | `{}` | | Per-sheet timeout overrides. Map of `sheet_num -> timeout_seconds`. Unlisted sheets use `timeout_seconds`. |
-| `cli_extra_args` | `list[str]` | `[]` | | **[claude_cli]** Escape hatch for CLI flags not yet exposed as named options. Applied last, can override other settings. |
-| `max_output_capture_bytes` | `int` | `51200` | `> 0` | Maximum bytes of stdout/stderr to capture per sheet for diagnostics (50KB default). |
-| `model` | `str` | `"claude-sonnet-4-5-20250929"` | | **[anthropic_api]** Model ID for Anthropic API |
-| `api_key_env` | `str` | `"ANTHROPIC_API_KEY"` | | **[anthropic_api]** Environment variable containing API key |
-| `max_tokens` | `int` | `16384` | `>= 1` | **[anthropic_api]** Maximum tokens for API response |
-| `temperature` | `float` | `0.7` | `0.0–1.0` | **[anthropic_api]** Sampling temperature |
-| `recursive_light` | `RecursiveLightConfig` | *(see sub-config)* | | **[recursive_light]** Recursive Light backend configuration |
-| `ollama` | `OllamaConfig` | *(see sub-config)* | | **[ollama]** Ollama backend configuration |
-
-```yaml
-backend:
-  type: claude_cli
-  skip_permissions: true
-  disable_mcp: true
-  timeout_seconds: 1800
-  timeout_overrides:
-    5: 3600    # Sheet 5 gets 1 hour
-  cli_model: "claude-sonnet-4-5-20250929"
-  allowed_tools: ["Read", "Grep", "Glob", "Write", "Edit"]
-```
-
-### Ollama Sub-Config
-
-*Source: `src/marianne/core/config/backend.py` — `OllamaConfig`*
-
-Nested under `backend.ollama`. Only meaningful when `backend.type` is `"ollama"`.
-
-| Field | Type | Default | Constraints | Description |
-|-------|------|---------|-------------|-------------|
-| `base_url` | `str` | `"http://localhost:11434"` | | Ollama server base URL |
-| `model` | `str` | `"llama3.1:8b"` | | Ollama model to use. Must support tool calling. |
-| `num_ctx` | `int` | `32768` | `>= 4096` | Context window size. Minimum 32K recommended for Claude Code tools. |
-| `dynamic_tools` | `bool` | `true` | | Enable dynamic toolset loading to optimize context |
-| `compression_level` | `"minimal" \| "moderate" \| "aggressive"` | `"moderate"` | | Tool schema compression level |
-| `timeout_seconds` | `float` | `300.0` | `> 0` | Request timeout for Ollama API calls |
-| `keep_alive` | `str` | `"5m"` | | Keep model loaded in memory for this duration |
-| `max_tool_iterations` | `int` | `10` | `1–50` | Maximum tool call iterations per execution |
-| `health_check_timeout` | `float` | `10.0` | | Timeout for health check requests |
-
-### Recursive Light Sub-Config
-
-*Source: `src/marianne/core/config/backend.py` — `RecursiveLightConfig`*
-
-Nested under `backend.recursive_light`. Only meaningful when `backend.type` is `"recursive_light"`.
-
-| Field | Type | Default | Constraints | Description |
-|-------|------|---------|-------------|-------------|
-| `endpoint` | `str` | `"http://localhost:8080"` | | Base URL for the Recursive Light API server |
-| `user_id` | `str \| None` | `None` | | Unique identifier for this Marianne instance (generates UUID if not set) |
-| `timeout` | `float` | `30.0` | `> 0` | Request timeout in seconds for RL API calls |
-
----
-
 ## bridge
 
 *Source: `src/marianne/core/config/backend.py` — `BridgeConfig`*
 
-The bridge enables Ollama models to use MCP tools through a proxy service. Set at the top level (not inside `backend`). Defaults to `None` (bridge disabled).
+The bridge enables Ollama models to use MCP tools through a proxy service. Set at the top level of the score. Defaults to `None` (bridge disabled).
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
@@ -1227,7 +1150,7 @@ These are the fields most users will configure:
 | `log_level` | `"debug" \| "info" \| "warning" \| "error"` | `"info"` | | Daemon log level |
 | `job_timeout_seconds` | `float` | `86400.0` | `>= 60` | Maximum wall-clock time per job (24 hours default). |
 | `learning.enabled` | `bool` | `true` | | Semantic learning on/off |
-| `learning.backend` | `BackendConfig` | *(see sub-config)* | | Which model powers semantic analysis |
+| `learning.instrument` | `str` | `"anthropic_api"` | | Which instrument powers semantic analysis |
 | `profiler.enabled` | `bool` | `true` | | Resource monitoring on/off |
 
 ### Advanced Fields
@@ -1298,12 +1221,14 @@ Profiles are partial overrides merged on top of your config file. Resolution ord
 
 Controls the conductor's LLM-based analysis of sheet completions. The SemanticAnalyzer subscribes to EventBus sheet events, sends completion context to an LLM, and stores insights as `SEMANTIC_INSIGHT` patterns in the global learning store. These patterns are automatically picked up by the existing pattern injection pipeline.
 
-The `backend` field accepts the same `BackendConfig` used by job execution, so any backend type (`claude_cli`, `anthropic_api`, `ollama`, `recursive_light`) can power semantic analysis.
+Analysis runs through the instrument plugin system — any registered instrument profile (`claude-code`, `opencode`, `ollama`, `anthropic_api`, ...) can power semantic analysis.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `true` | | Enable semantic learning. When the conductor is running, learning is on by default. |
-| `backend` | `BackendConfig` | *(see below)* | | Backend configuration for semantic analysis LLM calls. Defaults to `anthropic_api` with analytical settings (temperature=0.3, max_tokens=4096, timeout=120s). |
+| `instrument` | `str` | `"anthropic_api"` | min_length=1 | Instrument profile name for semantic-analysis LLM calls. |
+| `model` | `str \| None` | `None` | | Model override for semantic analysis. `None` uses the instrument profile's default model. |
+| `timeout_seconds` | `float` | `120.0` | `> 0` | Per-analysis LLM call timeout (also bounds the shutdown drain wait). |
 | `analyze_on` | `list["success" \| "failure"]` | `["success", "failure"]` | Non-empty, no duplicates | Which sheet outcomes trigger analysis |
 | `max_concurrent_analyses` | `int` | `3` | `1–20` | Maximum concurrent LLM analysis tasks. Controls API cost and system load. |
 
@@ -1311,12 +1236,9 @@ The `backend` field accepts the same `BackendConfig` used by job execution, so a
 # Conductor config (conductor.yaml)
 learning:
   enabled: true
-  backend:
-    type: anthropic_api
-    model: claude-sonnet-4-5-20250929
-    temperature: 0.3
-    max_tokens: 4096
-    timeout_seconds: 120
+  instrument: claude-code
+  model: claude-sonnet-4-6
+  timeout_seconds: 120
   analyze_on: [success, failure]
   max_concurrent_analyses: 3
 ```

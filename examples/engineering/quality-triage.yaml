@@ -63,16 +63,7 @@ workspace: "../../workspaces/quality-triage-workspace"
 instrument: claude-code
 instrument_fallbacks: [opencode]
 instrument_config:
-  timeout_seconds: 1800
-  skip_permissions: true
-  disable_mcp: true
-  timeout_overrides:
-    3: 2400   # scanner install + per-issue scan
-    4: 2400   # persona review walks the codebase
-    5: 2400   # synthesis reads 4 reviewer files
-    7: 1800   # dep investigation (fan-out)
-    8: 2400   # triangulation synthesis
-    9: 2400   # DAG assembly + topo verification
+  timeout_seconds: 2400   # scanner installs, persona reviews, synthesis stages all fit
 
 # Only named instrument: the newcomer persona rides on opencode for
 # cross-instrument-family cognitive diversity (a different model family

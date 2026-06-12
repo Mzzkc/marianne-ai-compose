@@ -181,25 +181,15 @@ Controls the SemanticAnalyzer — LLM-based analysis of sheet completions that p
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `true` | Enable semantic learning. Defaults to on when the conductor is running. |
-| `backend` | `BackendConfig` | *(nested)* | Backend configuration for the analysis LLM. Supports any backend type: `claude_cli` (uses Claude Code, no API key needed), `anthropic_api`, `ollama` (free local models), or `recursive_light`. See BackendConfig fields below. |
+| `instrument` | `str` | `"anthropic_api"` | Instrument profile that powers the analysis LLM. Any registered instrument works: `claude-code` (no API key needed), `opencode`, `ollama` (free local models), `anthropic_api`, ... |
+| `model` | `str \| None` | `None` | Model override for analysis calls. `None` uses the instrument profile's default model. |
+| `timeout_seconds` | `float` | `120.0` | Per-analysis LLM call timeout. |
 | `analyze_on` | `list` | `["success", "failure"]` | Which outcomes to analyze: `success`, `failure`, or both |
 | `max_concurrent_analyses` | `int` | `3` | Max concurrent LLM analysis tasks (1–20) |
 | `entropy_threshold` | `float` | `0.1` | Entropy threshold for triggering diversity injection. When pattern diversity index drops below this value (10% of max entropy by default), the learning system automatically boosts exploration budget to escape local optima. |
 | `exploration_budget` | `float` | `0.15` | Exploration budget boost amount when entropy response triggers. Controls how aggressively the system explores alternatives when pattern diversity collapses. |
 
-**BackendConfig fields** (nested under `learning.backend.*`):
-
-The `backend` field accepts the same `BackendConfig` used by job execution. Common fields include:
-
-| Field | Example | Description |
-|-------|---------|-------------|
-| `type` | `"anthropic_api"` | Backend type: `anthropic_api`, `claude_cli`, `ollama`, etc. |
-| `model` | `"claude-sonnet-4-5-20250929"` | Model ID for analysis LLM calls |
-| `api_key_env` | `"ANTHROPIC_API_KEY"` | Environment variable containing the API key (not needed for `claude_cli`) |
-| `max_tokens` | `4096` | Max response tokens (256–32768) |
-| `temperature` | `0.3` | Sampling temperature for analytical precision (0.0–1.0) |
-
-See the [Configuration Reference](configuration-reference.md) for all available backend options.
+See the [Configuration Reference](configuration-reference.md) for the full field list.
 
 ### Resource Limits (nested under `resource_limits`)
 
@@ -243,10 +233,8 @@ resource_limits:
 
 learning:
   enabled: true
-  backend:
-    type: anthropic_api
-    model: claude-sonnet-4-5-20250929
-    temperature: 0.3
+  instrument: claude-code
+  model: claude-sonnet-4-6
   analyze_on: [success, failure]
   max_concurrent_analyses: 3
 ```

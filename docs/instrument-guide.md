@@ -86,20 +86,10 @@ prompt:
     Write a summary of {{ workspace }}/input.md
 ```
 
-### The `backend:` Field (Legacy)
-
-The older `backend:` field continues to work unchanged:
-
-```yaml
-backend:
-  type: claude_cli
-  skip_permissions: true
-  timeout_seconds: 600
-```
-
-Both `instrument:` and `backend:` specify the same thing — which tool executes
-your score. You cannot use both in the same score (validation error). New scores
-should prefer `instrument:`.
+> **Legacy `backend:` scores:** the old `backend:` block was removed (#347)
+> and now fails at parse time. See the
+> [migration guide](score-writing-guide.md#migrating-from-backend-to-instrument)
+> for the field-by-field conversion.
 
 ### Instrument Configuration
 

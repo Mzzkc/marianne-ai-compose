@@ -147,17 +147,15 @@ techniques:
     kind: mcp
     phases: [work]
 
+# Instruments that lack native tool use trigger code mode;
+# MCP-native instruments (claude-code, gemini-cli) do not
+# need code mode because they call MCP directly.
+instrument: openrouter
+
 sheet:
-  # per-sheet instrument chosen from your instrument_fallbacks
   per_sheet_instruments:
     1: openrouter
     2: claude-code
-
-backend:
-  # Instruments that lack native tool use trigger code mode;
-  # MCP-native instruments (claude-code, gemini-cli) do not
-  # need code mode because they call MCP directly.
-  name: openrouter
 ```
 
 When the job registers, the baton creates one router and one executor

@@ -171,7 +171,7 @@ Each agent produces a `{name}.yaml` score file with:
 
 - **name**: `{project}-{agent_name}`
 - **workspace**: From project config
-- **backend**: Resolved from instrument declarations
+- **instrument**: Resolved from instrument declarations (the compiler emits `instrument:` references, never raw executor config — #214)
 - **sheet**: 12-sheet cycle structure (recon, plan, work, fan-outs)
 - **prompt**: Variables, stakes, thinking method
 - **parallel**: Enabled for fan-out phases

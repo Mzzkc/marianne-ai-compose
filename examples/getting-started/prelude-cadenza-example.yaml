@@ -63,8 +63,6 @@ instrument_fallbacks:
 
 instrument_config:
   timeout_seconds: 600
-  skip_permissions: true
-  disable_mcp: true
 
 movements:
   1:

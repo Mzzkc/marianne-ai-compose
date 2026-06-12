@@ -68,12 +68,7 @@ workspace: "../../workspaces/issue-triage-workspace"
 instrument: claude-code
 instrument_fallbacks: [goose]
 instrument_config:
-  timeout_seconds: 600
-  skip_permissions: true
-  disable_mcp: true
-  timeout_overrides:
-    3: 900   # Scanner installs + per-issue scanning
-    4: 900   # Dependency investigation (fan-out)
+  timeout_seconds: 900   # covers scanner installs + dependency investigation
 
 stale_detection:
   enabled: true

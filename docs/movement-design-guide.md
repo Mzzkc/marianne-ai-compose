@@ -306,8 +306,7 @@ possible sources. **Highest precedence wins**:
 2. `sheet.instrument_map` — Batch assignment by sheet numbers
 3. `movements[N].instrument` — Per-movement default
 4. Top-level `instrument:` — Score default
-5. `backend.type` — Legacy syntax
-6. `claude_cli` — Built-in fallback
+5. `claude-code` — Built-in fallback
 
 See the [Instrument Guide](instrument-guide.md) for details on all available
 instruments and how to add your own.

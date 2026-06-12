@@ -29,31 +29,24 @@ instrument: claude-code
 instrument_fallbacks: [opencode]
 instrument_config:
   timeout_seconds: 600
-  skip_permissions: true
-  disable_mcp: true
 
 instruments:
   reviewer-opus:
     profile: claude-code
     config:
-      cli_model: claude-opus-4-7
-      skip_permissions: true
-      disable_mcp: true
+      model: claude-opus-4-7
   reviewer-gemini:
     profile: gemini-cli
     config:
-      cli_model: "gemini-3.1-pro-preview"
-      skip_permissions: true
+      model: "gemini-3.1-pro-preview"
   reviewer-glm:
     profile: opencode
     config:
-      cli_model: "zai-coding-plan/glm-5.1"
-      skip_permissions: true
+      model: "zai-coding-plan/glm-5.1"
   reviewer-codex:
     profile: codex-cli
     config:
-      cli_model: "gpt-5.5"
-      skip_permissions: true
+      model: "gpt-5.5"
 
 stale_detection:
   enabled: true

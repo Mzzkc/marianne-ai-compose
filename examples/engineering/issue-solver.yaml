@@ -99,13 +99,6 @@ instrument: claude-code
 instrument_fallbacks: [goose]
 instrument_config:
   timeout_seconds: 2400  # 40 min default
-  skip_permissions: true
-  disable_mcp: true
-  timeout_overrides:
-    4: 3600   # Phase 1 fix gets extra time
-    6: 3600   # Phase 2 fix
-    8: 3600   # Phase 3 fix
-    10: 3600  # Phase 4 fix
 
 stale_detection:
   enabled: true
@@ -159,6 +152,14 @@ movements:
 sheet:
   size: 1
   total_items: 17  # 17 stages → 19 concrete sheets after fan-out
+
+  # Fix phases get extra time (sheets before the fan-out point keep
+  # their stage numbers, so these keys are stable).
+  per_sheet_instrument_config:
+    4: {timeout_seconds: 3600}   # Phase 1 fix
+    6: {timeout_seconds: 3600}   # Phase 2 fix
+    8: {timeout_seconds: 3600}   # Phase 3 fix
+    10: {timeout_seconds: 3600}  # Phase 4 fix
 
   fan_out:
     12: 3  # Stage 12: 3 parallel reviewers (Fan-out + Synthesis pattern)

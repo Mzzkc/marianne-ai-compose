@@ -44,10 +44,7 @@ workspace_lifecycle:
 instrument: claude-code
 instrument_fallbacks: [opencode, gemini-cli]
 instrument_config:
-  skip_permissions: true
-  disable_mcp: true
   timeout_seconds: 1500
-  allowed_tools: [Read, Write, Edit, Glob, Grep, Bash]
 
 # Three reviewers from different model families. Multi-family is the
 # point — correlated families share blind spots. Gemma is intentionally
@@ -57,36 +54,28 @@ instruments:
     profile: claude-code
     config:
       timeout_seconds: 600
-      skip_permissions: true
-      disable_mcp: true
   cli:
     profile: cli
   synthesizer:
     profile: claude-code
     config:
-      cli_model: claude-opus-4-7
+      model: claude-opus-4-7
       timeout_seconds: 1800
-      skip_permissions: true
-      disable_mcp: true
   reviewer-opus:
     profile: claude-code
     config:
-      cli_model: claude-opus-4-7
+      model: claude-opus-4-7
       timeout_seconds: 1500
-      skip_permissions: true
-      disable_mcp: true
   reviewer-gemini:
     profile: gemini-cli
     config:
-      cli_model: gemini-3.1-pro-preview
+      model: gemini-3.1-pro-preview
       timeout_seconds: 1500
-      skip_permissions: true
   reviewer-glm:
     profile: opencode
     config:
-      cli_model: zai-coding-plan/glm-5.1
+      model: zai-coding-plan/glm-5.1
       timeout_seconds: 1500
-      skip_permissions: true
 
 movements:
   1:

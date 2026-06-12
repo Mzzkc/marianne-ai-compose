@@ -1789,11 +1789,10 @@ name: "full-example"
 description: "Comprehensive job example"
 workspace: "./my-workspace"
 
-# Use instrument: for new scores. Run `mzt instruments list` for options.
+# Run `mzt instruments list` for options.
 instrument: claude-code
 instrument_config:
   timeout_seconds: 1800
-  skip_permissions: true
 
 sheet:
   size: 1
@@ -1831,9 +1830,9 @@ notifications:
     on_events: [job_complete, job_failed]
 ```
 
-> **Legacy syntax:** The `backend:` block (`backend: { type: claude_cli, ... }`) is still
-> supported for backward compatibility. New scores should use `instrument:` +
-> `instrument_config:`. See the [Score Writing Guide](score-writing-guide.md) for details.
+> **Legacy syntax:** The `backend:` block was removed (#347) — scores containing
+> one fail at parse time with "Unknown field 'backend'". See
+> [Migrating from `backend:` to `instrument:`](score-writing-guide.md#migrating-from-backend-to-instrument).
 
 ### Template Variables
 
@@ -1865,8 +1864,9 @@ Run `mzt instruments list` to see all available instruments. Built-in instrument
 | `aider` | CLI | Aider pair programming |
 | `goose` | CLI | Block's Goose agent |
 
-Legacy `backend.type` values (`claude_cli`, `anthropic_api`, `ollama`, `recursive_light`)
-are still supported. New scores should use `instrument:` instead.
+The names `claude_cli`, `anthropic_api`, `ollama`, and `recursive_light` remain
+registered as instrument profiles for compatibility — `instrument: claude_cli`
+still resolves — but prefer `claude-code` for new scores.
 
 ### Validation Types
 

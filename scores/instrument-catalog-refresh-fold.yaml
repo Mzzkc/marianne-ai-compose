@@ -30,13 +30,11 @@ instrument: claude-code
 instrument_fallbacks: [anthropic_api]
 instrument_config:
   timeout_seconds: 1800
-  skip_permissions: true
-  disable_mcp: true
 
 instruments:
-  reader:    { profile: claude-code, config: { timeout_seconds: 600,  cli_model: claude-sonnet-4-6 } }
-  reconciler: { profile: claude-code, config: { timeout_seconds: 1800, cli_model: claude-opus-4-7 } }
-  scribe:    { profile: claude-code, config: { timeout_seconds: 1200, cli_model: claude-sonnet-4-6 } }
+  reader:    { profile: claude-code, config: { timeout_seconds: 600,  model: claude-sonnet-4-6 } }
+  reconciler: { profile: claude-code, config: { timeout_seconds: 1800, model: claude-opus-4-7 } }
+  scribe:    { profile: claude-code, config: { timeout_seconds: 1200, model: claude-sonnet-4-6 } }
 
 movements:
   1: { name: "Read Reviews + Changeset", instrument: reader }

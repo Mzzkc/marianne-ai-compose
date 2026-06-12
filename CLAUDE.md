@@ -166,7 +166,6 @@ All documentation lives in `docs/`. A two-tier YAML index system provides discov
 | Baton (execution engine) | `src/marianne/daemon/baton/` |
 | Daemon profiler | `src/marianne/daemon/profiler/` |
 | Conductor clone | `src/marianne/daemon/clone.py` |
-| Execution runner | `src/marianne/execution/runner/` |
 | Execution validation | `src/marianne/execution/validation/` |
 | Preflight checks | `src/marianne/execution/preflight.py` |
 | Plugin CLI backend | `src/marianne/execution/instruments/cli_backend.py` |

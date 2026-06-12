@@ -129,60 +129,32 @@ The error classifier (`src/marianne/core/errors/classifier.py`) was originally d
 
 **Status:** Improving. Each instrument profile is verified against the actual CLI tool's output.
 
-### MCP Servers Load Ambient by Default
+### MCP Servers Are Disabled by Default — No Per-Score Opt-In
 
-When `disable_mcp` is not set (or set to `false`) on a Claude CLI instrument, the backend does not pass `--strict-mcp-config`. This means Claude Code loads **all** MCP servers from the user's plugin configuration — potentially dozens of ambient servers that the score doesn't need.
+Built-in instrument profiles carry `mcp_disable_args` (for claude-code:
+`--strict-mcp-config` with an empty server config), and the command builder
+applies them on every execution unless the conductor's shared MCP pool
+provides a config file. This prevents ambient-server child-process explosion
+(F-271) — but it also means a score cannot simply turn MCP tools back on.
 
 **What this means:**
 
-- Each sheet execution may spawn MCP server processes that consume resources
-- Ambient MCP servers may have side effects the score author doesn't intend
-- Without `--strict-mcp-config`, there is no control over which tools are available to the agent
+- Sheets run without MCP tools by default, headless and interactive alike
+  (interactive sessions inherit the disable args unless the profile sets
+  `interactive.inherit_mcp_disable_args: false`)
+- There is no `instrument_config` key to re-enable MCP per score — keys like
+  `disable_mcp:` from the removed `backend:` era are silently ignored
 
-**Workaround:** Set `disable_mcp: true` in your score's `instrument_config:` unless your score specifically needs MCP tools. This passes `--strict-mcp-config` with an empty config, preventing ambient server loading.
+**Workaround:** Copy the builtin profile to `~/.marianne/instruments/`,
+remove (or edit) its `mcp_disable_args`, and point the score at the custom
+profile. For curated tool access, the conductor's shared MCP pool supplies
+a config file via the profile's `mcp_config_flag`.
 
-```yaml
-instrument: claude-code
-instrument_config:
-  disable_mcp: true    # Prevents loading ambient MCP servers
-```
-
-**Status:** The `mzt validate` command warns about this (V209). A proper technique system for per-sheet MCP/skill configuration is planned but not yet implemented.
+**Status:** A proper technique system for per-sheet MCP/skill configuration is planned but not yet implemented.
 
 ---
 
 ## Architecture Complexity
-
-### Runner Mixin Architecture
-
-The `JobRunner` class is composed of 7 mixins plus a base class (8 classes total) via multiple inheritance:
-
-```
-JobRunner(
-    SheetExecutionMixin,  # Sheet execution (~3,400 lines)
-    LifecycleMixin,       # run() orchestration
-    RecoveryMixin,        # Error classification and retry
-    PatternsMixin,        # Pattern management
-    CostMixin,            # Cost tracking
-    IsolationMixin,       # Worktree isolation
-    JobRunnerBase,        # Core initialization
-)
-```
-
-**What this means:**
-
-- Debugging requires tracing method calls across multiple files in `src/marianne/execution/runner/`
-- MRO (Method Resolution Order) determines which mixin's method wins
-- State is shared across mixins via `self`, with no encapsulation between them
-- `SheetExecutionMixin` alone (`sheet.py`) is ~3,400 lines
-
-**Why:** The runner grew organically. Each concern (cost, isolation, recovery) was added as a mixin to avoid a single 5,000+ line file.
-
-**Workaround:** When debugging, start from `base.py` (initialization) and `lifecycle.py` (`run()` entry point), then trace into specific mixins.
-
-**Status:** Working but complex. The baton execution engine (`src/marianne/daemon/baton/`) replaces this architecture with a cleaner event-driven model where musicians execute once and the conductor handles all retry/recovery decisions. The baton is built and tested but not yet the default path.
-
----
 
 ### Learning System Complexity
 

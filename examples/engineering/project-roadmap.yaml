@@ -79,21 +79,19 @@ instrument: claude-code
 instrument_fallbacks: [gemini-cli, opencode]
 instrument_config:
   timeout_seconds: 2400
-  skip_permissions: true
-  disable_mcp: true
 
 instruments:
   sweeper:
     profile: claude-code
     config:
       timeout_seconds: 1800
-      cli_model: claude-sonnet-4-6
+      model: claude-sonnet-4-6
   # Competitive landscape sweep needs web search (native tools, not MCP)
   web-sweeper:
     profile: claude-code
     config:
       timeout_seconds: 2400
-      cli_model: claude-sonnet-4-6
+      model: claude-sonnet-4-6
   assembler:
     profile: claude-code
     config:

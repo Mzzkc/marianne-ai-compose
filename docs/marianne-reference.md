@@ -589,25 +589,6 @@ Shannon entropy over pattern application distribution. Low entropy triggers auto
 
 ---
 
-## The Old Execution Runner
-
-The pre-baton execution engine (`src/marianne/execution/runner/`) still exists and is used as a fallback. It consists of 7 mixins + 1 base class via multiple inheritance (8 classes across 10 files):
-
-| Class | File | Responsibility |
-|-------|------|---------------|
-| `JobRunnerBase` | `base.py` | Base class, shared state, initialization |
-| `SheetExecutionMixin` | `sheet.py` (~3,400 lines) | Core sheet execution and validation |
-| `LifecycleMixin` | `lifecycle.py` | Job run modes (sequential, parallel) |
-| `RecoveryMixin` | `recovery.py` | Self-healing, retry, circuit breaker |
-| `CostMixin` | `cost.py` | Token/cost tracking and limits |
-| `ContextBuildingMixin` | `context.py` | Cross-sheet context assembly |
-| `IsolationMixin` | `isolation.py` | Git worktree management |
-| `PatternsMixin` | `patterns.py` | Learning pattern queries and feedback |
-
-Supporting modules: `models.py` (data models), `__init__.py` (exports).
-
----
-
 ## Score Anatomy
 
 Every score needs 3 required top-level fields plus optional configuration:
@@ -697,8 +678,7 @@ Key validation features:
 | Concert chaining | `on_success: [{type: run_job}]` | Self-chaining loops |
 | Workspace lifecycle | `workspace_lifecycle.archive_on_fresh: true` | Clean restarts |
 | Cost limits | `cost_limits.max_cost_per_job: 100` | Budget enforcement |
-| Timeout overrides | `backend.timeout_overrides: {5: 7200}` | Per-sheet timeouts |
-| Allowed tools | `backend.allowed_tools: [Read, Grep]` | Restrict agent tools |
+| Timeout overrides | `sheet.per_sheet_instrument_config: {5: {timeout_seconds: 7200}}` | Per-sheet timeouts |
 | Spec corpus tags | `spec_tags: {3: [security, constraints]}` | Per-sheet knowledge filtering |
 | Skip conditions | `skip_when: {5: {command: 'test -f done.marker'}}` | Conditional sheet skipping (exit 0 = skip) |
 
