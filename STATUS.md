@@ -9,23 +9,21 @@ ruff + mypy --strict + pytest (85% coverage) on every push. Baton is the sole ex
 
 ### M5 Baton Stabilization — autonomous work complete (2026-06-12)
 
-**M4 Sandbox Resolution is now empty** (#160, #210 closed). Every M5 item resolvable without a
-composer decision or a named escalation-gate crossing is shipped and CI-green. The remainder is a
-precise, verified **composer-decision queue** — each item is gated by the spec's own escalation rules
-(`.marianne/spec/constraints.yaml`), so completing them autonomously would violate the no-assumptions
-constraint:
+**M4 Sandbox Resolution is empty** (#160, #210 closed). After a composer interview unblocked the
+gated items, the M5 baton-stabilization surface is essentially clear. Shipped CI-green this arc:
 
-| Issue | Gate | Disposition |
-|-------|------|-------------|
-| #137 | Schema decision | Lab-ruled infeasible without a producer signal; prerequisite filed as **#384** (`produces:` primitive). Build #384 → #137 becomes a bounded WARNING-first check. |
-| #197 | Architecture decision | Lab-ruled: per-sheet worktree isolation as filed silently breaks shipped F-210 (cross-sheet context). Needs per-job re-scope. |
-| #209 | Security review | Stage 2a (regex classification) is live-capable but cosmetic without Stage 3; Stage 3 executes agent-generated shell/python with no sandbox on bwrap-less hosts — needs a security review before activation. |
-| #344 | ~~gated~~ **fixed** | obs2 (goose idle SIGKILL) resolved by the liveness gate (`d7c2b04`); obs1 (opus exit-nonzero-after-commit) structural fix shipped (`18226a9`) — a plain non-zero exit whose declared validations all pass is rescued to success. Issue kept open per the reproduce-or-mark instruction, pending a live-repro confirmation of the sporadic trigger. |
-| #171 / #332 | 0-drift sequencing | Profile hot-reload extends existing SIGHUP (no CLI gate), but the composer-directed single-instrument-system unification must land first to avoid drift. |
-| #58, #384 | Product/schema | Workspace-lifecycle vision (#58); the `produces:` schema primitive (#384). |
+| Issue | Result |
+|-------|--------|
+| #344 | **fixed** — obs2 (goose idle SIGKILL) by the liveness gate (`d7c2b04`); obs1 (opus exit-nonzero-after-commit) structural fix (`18226a9`): a plain non-zero exit whose declared validations all pass is rescued to success. Kept open for a live-repro confirmation per instruction. |
+| #197 | **shipped** (`f538850`) — per-JOB git worktree isolation (composer chose per-job; preserves F-210). |
+| #209 | **shipped** (`116c6cf`) — opt-in code execution (Stages 2a+3); default off, no bwrap requirement, loud V304 validation warning when unsandboxed. |
+| #171 / #332 | **shipped** (`155ae5f`) — SIGHUP instrument-profile hot-reload (composer corrected: the instrument system is plugin-only, not mid-unification). |
+| #359 | **shipped** (`771feb6`) — `mzt run --var k=v` runtime variables. |
 
-**Composer-domain action items** (named gates): plugins submodule push (cross-repo); `mzt doctor --clean`
-(deletes the measured ~1.2G dead nested tree + stale clone artifacts — confirmation-gated).
+**Remaining (composer's call):**
+- **#137 / #384** — `produces:` schema primitive (the design is the composer's to specify; the cadenza-ordering check at #137 falls out of it).
+- **#58** — "workspaces just work" product vision (every concrete defect resolved; the rest is a UX/architecture direction).
+- **Action items** (named gates): plugins submodule push (cross-repo); `mzt doctor --clean` (deletes the measured ~1.2G dead nested tree + stale clone artifacts — confirmation-gated).
 
 ## Known Issues
 
