@@ -43,6 +43,43 @@ _logger = get_logger("backend.plugin_cli")
 _KILL_GRACE_SECONDS = 2.0
 
 
+async def _drain_stream(
+    stream: asyncio.StreamReader | None,
+    chunks: list[bytes],
+) -> None:
+    """Read one subprocess pipe to EOF in bounded chunks (#352 inc-2).
+
+    ``read(65536)`` rather than ``readline()``: agent output lines can
+    exceed any StreamReader limit (LimitOverrunError), and fixed-size
+    chunking is binary-safe. Callers decode AFTER joining the chunks so
+    multibyte sequences split across chunk boundaries decode cleanly.
+
+    Appends into ``chunks`` in place (rather than returning) so partial
+    output is observable even when the surrounding gather is cancelled
+    by timeout.
+    """
+    if stream is None:
+        return
+    while True:
+        chunk = await stream.read(65536)
+        if not isinstance(chunk, bytes):
+            # Refuse non-bytes IMMEDIATELY. A mocked pipe whose read()
+            # returns a truthy non-bytes value (e.g. AsyncMock's default
+            # MagicMock) would otherwise loop forever WITHOUT yielding to
+            # the event loop — wait_for's timeout can never fire and the
+            # appends exhaust system memory (observed as a WSL2 VM crash).
+            # A loud TypeError turns that failure mode into an instant
+            # test failure.
+            raise TypeError(
+                f"subprocess pipe read() returned {type(chunk).__name__}, "
+                "expected bytes — is the process mocked without proper "
+                "pipe readers?"
+            )
+        if not chunk:
+            return
+        chunks.append(chunk)
+
+
 async def _kill_process_group_if_alive(
     proc: asyncio.subprocess.Process | None,
     pgid: int | None,
@@ -86,7 +123,19 @@ async def _kill_process_group_if_alive(
         except (ProcessLookupError, PermissionError):
             pass
         try:
-            await proc.wait()
+            await asyncio.wait_for(proc.wait(), timeout=_KILL_GRACE_SECONDS)
+        except TimeoutError:
+            # The group kill didn't land (e.g. killpg guard-refused an
+            # own-pgroup id, #376). Kill the direct child as the last
+            # resort rather than awaiting an unkilled process forever.
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                await proc.wait()
+            except ProcessLookupError:
+                pass
         except ProcessLookupError:
             pass
 
@@ -774,7 +823,11 @@ class PluginCliBackend(Backend):
 
             # Capture pgid at spawn — never re-derive from proc.pid later.
             # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 1).
-            if proc.pid is not None:
+            # Only when the child got its OWN group: without
+            # start_new_session, getpgid returns OUR group, and kill-on-exit
+            # would be guard-refused and hang forever awaiting a process
+            # nobody killed (#376). pgid=None routes to proc.kill() instead.
+            if _force_new_session and proc.pid is not None:
                 try:
                     pgid = os.getpgid(proc.pid)
                 except ProcessLookupError:
@@ -818,23 +871,38 @@ class PluginCliBackend(Backend):
 
             # When using stdin mode, write the assembled prompt to the
             # subprocess stdin and close it to signal EOF. This must
-            # happen before communicate() — if the subprocess waits for
-            # stdin EOF before producing output, reading stdout first
-            # would deadlock.
+            # happen before draining the output pipes — if the subprocess
+            # waits for stdin EOF before producing output, reading stdout
+            # first would deadlock.
             if use_stdin and proc.stdin is not None:
                 full_prompt = self._build_prompt(prompt)
                 proc.stdin.write(full_prompt.encode("utf-8"))
                 await proc.stdin.drain()
                 proc.stdin.close()
 
+            # #352 inc-2: both pipes drained CONCURRENTLY (the deadlock
+            # avoidance communicate() provided), with wait() gathered so
+            # buffered output after exit is still read to EOF. Decode
+            # happens after capture so a chunk boundary can never split
+            # a multibyte sequence.
+            stdout_chunks: list[bytes] = []
+            stderr_chunks: list[bytes] = []
             try:
                 try:
-                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                        proc.communicate(),
+                    await asyncio.wait_for(
+                        asyncio.gather(
+                            _drain_stream(proc.stdout, stdout_chunks),
+                            _drain_stream(proc.stderr, stderr_chunks),
+                            proc.wait(),
+                        ),
                         timeout=effective_timeout,
                     )
-                    stdout_data = stdout_bytes.decode("utf-8", errors="replace")
-                    stderr_data = stderr_bytes.decode("utf-8", errors="replace")
+                    stdout_data = b"".join(stdout_chunks).decode(
+                        "utf-8", errors="replace"
+                    )
+                    stderr_data = b"".join(stderr_chunks).decode(
+                        "utf-8", errors="replace"
+                    )
                     exit_code = proc.returncode
                 except TimeoutError:
                     _logger.warning(

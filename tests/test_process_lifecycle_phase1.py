@@ -209,23 +209,40 @@ def _mock_proc(
     returncode: int | None = 0,
     communicate_behavior: str = "normal",
 ) -> MagicMock:
-    """Build a mock asyncio subprocess.Process with configurable behavior."""
+    """Build a mock asyncio subprocess.Process with configurable behavior.
+
+    Pipes are wired with REAL-shaped readers: the #352 inc-2 drain loop
+    calls ``await proc.stdout.read(n)`` until ``b""``. A read() that
+    never returns bytes loops without yielding and exhausts memory —
+    every mocked proc on the execute() path must model EOF explicitly.
+    """
     proc = MagicMock()
     proc.pid = pid
     proc.returncode = returncode
     proc.stdin = None
 
-    async def communicate_normal():
-        return (b"ok\n", b"")
-
-    async def communicate_hangs():
-        await asyncio.sleep(100)
-        return (b"", b"")
-
     if communicate_behavior == "normal":
-        proc.communicate = communicate_normal
+        stdout_reads = [b"ok\n", b""]
+
+        async def read_stdout(_n: int = -1) -> bytes:
+            return stdout_reads.pop(0) if stdout_reads else b""
+
+        async def read_stderr(_n: int = -1) -> bytes:
+            return b""
+
+        proc.stdout = MagicMock()
+        proc.stdout.read = read_stdout
+        proc.stderr = MagicMock()
+        proc.stderr.read = read_stderr
     elif communicate_behavior == "hangs":
-        proc.communicate = communicate_hangs
+        async def read_hangs(_n: int = -1) -> bytes:
+            await asyncio.sleep(100)
+            return b""
+
+        proc.stdout = MagicMock()
+        proc.stdout.read = read_hangs
+        proc.stderr = MagicMock()
+        proc.stderr.read = read_hangs
     else:
         raise ValueError(communicate_behavior)
 

@@ -5116,3 +5116,34 @@ class TestProcessControlSafeKillGuardsIntelligence:
             "F-490: _safe_killpg source MUST check os.getpgid(0) to detect "
             "when the target pgid is our own process group."
         )
+
+    def test_no_raw_process_pattern_kill_anywhere(self) -> None:
+        """Source inspection: no pattern-matching process kills in src,
+        tests, or scripts.
+
+        The needle is built dynamically so this litmus never matches its
+        own source. Pattern-matching kills sweep across ALL processes the
+        user owns; on WSL a broad match can take out the session leader
+        and crash the entire VM. Killing must target explicit pids/pgids
+        through safe_killpg or proc.kill().
+        """
+        from pathlib import Path
+
+        needle = "pk" + "ill"  # the process-pattern-kill utility name
+        violations: list[str] = []
+
+        for root in ("src/marianne", "tests", "scripts"):
+            base = Path(root)
+            if not base.exists():
+                continue
+            for py_file in base.rglob("*.py"):
+                text = py_file.read_text(encoding="utf-8", errors="replace")
+                for lineno, line in enumerate(text.splitlines(), start=1):
+                    if needle in line:
+                        violations.append(f"{py_file}:{lineno}: {line.strip()}")
+
+        assert violations == [], (
+            f"Pattern-matching process kill found — this can nuke the "
+            f"whole WSL VM. Use safe_killpg/explicit pids instead. "
+            f"Violations: {violations}"
+        )

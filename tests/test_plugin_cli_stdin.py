@@ -63,6 +63,42 @@ def _make_profile(
     )
 
 
+def _wire_pipes(
+    proc: AsyncMock,
+    *,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    hang: bool = False,
+) -> None:
+    """Give a mocked process REAL-shaped pipe readers (#352 inc-2).
+
+    The drain loop calls ``await proc.stdout.read(n)`` until it returns
+    ``b""``. An unconfigured AsyncMock attribute returns a truthy
+    MagicMock from read() forever — an infinite non-yielding loop that
+    exhausts system memory (crashed WSL). Every mocked-proc test on the
+    execute() path MUST wire pipes through this helper.
+    """
+    if hang:
+        async def _hang(_n: int = -1) -> bytes:
+            await asyncio.sleep(3600)
+            return b""
+
+        proc.stdout = AsyncMock()
+        proc.stdout.read = _hang
+        proc.stderr = AsyncMock()
+        proc.stderr.read = _hang
+        # wait() must NOT hang: the kill-on-exit helper awaits it after
+        # kill(), and a real killed process exits promptly.
+        proc.wait = AsyncMock(return_value=None)
+        return
+
+    proc.stdout = AsyncMock()
+    proc.stdout.read = AsyncMock(side_effect=[stdout, b""] if stdout else [b""])
+    proc.stderr = AsyncMock()
+    proc.stderr.read = AsyncMock(side_effect=[stderr, b""] if stderr else [b""])
+    proc.wait = AsyncMock(return_value=proc.returncode)
+
+
 class TestCliCommandStdinFields:
     """Test that CliCommand accepts the new stdin fields."""
 
@@ -158,8 +194,8 @@ class TestExecuteStdin:
 
         mock_proc = AsyncMock()
         mock_proc.pid = 12345
-        mock_proc.communicate = AsyncMock(return_value=(result_json.encode(), b""))
         mock_proc.returncode = 0
+        _wire_pipes(mock_proc, stdout=result_json.encode())
 
         # Mock stdin as a MagicMock with write/drain/close
         mock_stdin = MagicMock()
@@ -194,8 +230,8 @@ class TestExecuteStdin:
 
         mock_proc = AsyncMock()
         mock_proc.pid = 12345
-        mock_proc.communicate = AsyncMock(return_value=(b'{"result": "ok"}', b""))
         mock_proc.returncode = 0
+        _wire_pipes(mock_proc, stdout=b'{"result": "ok"}')
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
             await backend.execute("test prompt", timeout_seconds=30)
@@ -217,8 +253,8 @@ class TestExecuteStdin:
         result_json = json.dumps({"result": "ok"})
         mock_proc = AsyncMock()
         mock_proc.pid = 12345
-        mock_proc.communicate = AsyncMock(return_value=(result_json.encode(), b""))
         mock_proc.returncode = 0
+        _wire_pipes(mock_proc, stdout=result_json.encode())
 
         mock_stdin = MagicMock()
         mock_stdin.write = MagicMock()
@@ -254,10 +290,10 @@ class TestExecuteStdin:
         mock_stdin.close = MagicMock()
         mock_proc.stdin = mock_stdin
 
-        # communicate times out
-        mock_proc.communicate = AsyncMock(side_effect=TimeoutError)
+        # Pipes hang (a real asyncio.sleep — it must YIELD so wait_for's
+        # timeout can fire; a non-yielding mock would loop or stall forever).
+        _wire_pipes(mock_proc, hang=True)
         mock_proc.kill = MagicMock()
-        mock_proc.wait = AsyncMock()
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
             result = await backend.execute("test prompt", timeout_seconds=1)
@@ -277,8 +313,8 @@ class TestStartNewSession:
 
         mock_proc = AsyncMock()
         mock_proc.pid = 12345
-        mock_proc.communicate = AsyncMock(return_value=(b'{"result": "ok"}', b""))
         mock_proc.returncode = 0
+        _wire_pipes(mock_proc, stdout=b'{"result": "ok"}')
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
             await backend.execute("test", timeout_seconds=30)
@@ -294,8 +330,8 @@ class TestStartNewSession:
 
         mock_proc = AsyncMock()
         mock_proc.pid = 12345
-        mock_proc.communicate = AsyncMock(return_value=(b'{"result": "ok"}', b""))
         mock_proc.returncode = 0
+        _wire_pipes(mock_proc, stdout=b'{"result": "ok"}')
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
             await backend.execute("test", timeout_seconds=30)
