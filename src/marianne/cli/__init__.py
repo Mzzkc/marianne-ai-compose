@@ -86,6 +86,8 @@ from .commands import (
     status,
     # validate.py
     validate,
+    # watch.py
+    watch,
 )
 from .commands.conductor import (
     conductor_status,
@@ -293,6 +295,7 @@ app.command(rich_help_panel="Jobs")(validate)
 
 # Job status commands
 app.command(rich_help_panel="Monitoring")(status)
+app.command(rich_help_panel="Monitoring")(watch)  # #352: live output tail
 app.command(name="list", rich_help_panel="Monitoring")(list_jobs)
 app.command(rich_help_panel="Monitoring")(top)
 app.command(rich_help_panel="Monitoring")(clear)

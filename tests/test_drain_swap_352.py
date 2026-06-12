@@ -95,8 +95,8 @@ class TestDrainDeadlockBattery:
             "sys.stdout.buffer.flush()\n"
             "sys.stderr.buffer.flush()\n"
         )
-        backend = PluginCliBackend(_python_profile())
-        result = await backend.execute(script, timeout_seconds=60)
+        instrument = PluginCliBackend(_python_profile())
+        result = await instrument.execute(script, timeout_seconds=60)
 
         assert result.success is True
         assert len(result.stdout) == 32 * CHUNK
@@ -112,8 +112,8 @@ class TestDrainDeadlockBattery:
             "    sys.stdout.buffer.write(chunk)\n"
             "sys.stdout.buffer.flush()\n"
         )
-        backend = PluginCliBackend(_python_profile())
-        result = await backend.execute(script, timeout_seconds=120)
+        instrument = PluginCliBackend(_python_profile())
+        result = await instrument.execute(script, timeout_seconds=120)
 
         assert result.success is True
         assert len(result.stdout) == total
@@ -126,8 +126,8 @@ class TestDrainDeadlockBattery:
             f"sys.stdout.buffer.write(b'd' * (16 * {CHUNK}))\n"
             "sys.stdout.buffer.flush()\n"
         )
-        backend = PluginCliBackend(_python_profile())
-        result = await backend.execute(script, timeout_seconds=60)
+        instrument = PluginCliBackend(_python_profile())
+        result = await instrument.execute(script, timeout_seconds=60)
 
         assert result.success is True
         assert len(result.stdout) == 16 * CHUNK
@@ -142,12 +142,12 @@ class TestDrainDeadlockBattery:
             "sys.stdout.flush()\n"
             "time.sleep(600)\n"
         )
-        backend = PluginCliBackend(_python_profile())
+        instrument = PluginCliBackend(_python_profile())
         pids: list[int] = []
-        backend._on_process_spawned = pids.append
+        instrument._on_process_spawned = pids.append
 
         start = time.monotonic()
-        result = await backend.execute(script, timeout_seconds=2)
+        result = await instrument.execute(script, timeout_seconds=2)
         elapsed = time.monotonic() - start
 
         assert result.success is False
@@ -165,11 +165,11 @@ class TestDrainDeadlockBattery:
             "sys.stdout.flush()\n"
             "time.sleep(600)\n"
         )
-        backend = PluginCliBackend(_python_profile())
+        instrument = PluginCliBackend(_python_profile())
         pids: list[int] = []
-        backend._on_process_spawned = pids.append
+        instrument._on_process_spawned = pids.append
 
-        task = asyncio.create_task(backend.execute(script, timeout_seconds=600))
+        task = asyncio.create_task(instrument.execute(script, timeout_seconds=600))
         deadline = time.monotonic() + 10
         while not pids and time.monotonic() < deadline:
             await asyncio.sleep(0.05)
@@ -220,8 +220,8 @@ class TestDrainEquivalence:
     """Byte-identical capture semantics versus the old communicate()."""
 
     async def test_small_output_exact(self) -> None:
-        backend = PluginCliBackend(_python_profile())
-        result = await backend.execute(
+        instrument = PluginCliBackend(_python_profile())
+        result = await instrument.execute(
             "print('hello drain')", timeout_seconds=30
         )
         assert result.success is True
@@ -230,8 +230,8 @@ class TestDrainEquivalence:
         assert result.exit_code == 0
 
     async def test_nonzero_exit_with_stderr(self) -> None:
-        backend = PluginCliBackend(_python_profile())
-        result = await backend.execute(
+        instrument = PluginCliBackend(_python_profile())
+        result = await instrument.execute(
             "import sys; sys.stderr.write('boom\\n'); sys.exit(3)",
             timeout_seconds=30,
         )
@@ -247,8 +247,8 @@ class TestDrainEquivalence:
             "sys.stdout.buffer.write(b'ok \\xff\\xfe bad')\n"
             "sys.stdout.buffer.flush()\n"
         )
-        backend = PluginCliBackend(_python_profile())
-        result = await backend.execute(script, timeout_seconds=30)
+        instrument = PluginCliBackend(_python_profile())
+        result = await instrument.execute(script, timeout_seconds=30)
 
         assert result.success is True
         assert "ok " in result.stdout
@@ -265,8 +265,8 @@ class TestDrainEquivalence:
             "sys.stdout.buffer.write('\\u20ac'.encode('utf-8'))\n"
             "sys.stdout.buffer.flush()\n"
         )
-        backend = PluginCliBackend(_python_profile())
-        result = await backend.execute(script, timeout_seconds=30)
+        instrument = PluginCliBackend(_python_profile())
+        result = await instrument.execute(script, timeout_seconds=30)
 
         assert result.success is True
         assert result.stdout.endswith("€")

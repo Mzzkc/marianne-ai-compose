@@ -16,6 +16,7 @@ from .resume import resume
 from .run import run
 from .status import clear, list_jobs, status
 from .validate import validate
+from .watch import watch
 
 __all__ = [
     # cancel.py
@@ -52,4 +53,6 @@ __all__ = [
     "clear",
     # validate.py
     "validate",
+    # watch.py
+    "watch",
 ]

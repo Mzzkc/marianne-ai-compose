@@ -800,10 +800,59 @@ class DaemonProcess:
             finally:
                 manager.event_bus.unsubscribe(sub_id)
 
+        async def handle_output_stream(
+            params: dict[str, Any], writer: asyncio.StreamWriter
+        ) -> None:
+            """#352 inc-3: stream a sheet's (or whole job's) live output
+            as JSON-RPC notifications — backs ``mzt watch``.
+
+            Subscribe FIRST, snapshot second: a line landing between the
+            two may arrive twice at the seam, which is harmless for a
+            live tail; the reverse order would silently LOSE lines.
+            Backpressure never blocks the daemon — slow readers get a
+            ``[dropped N lines]`` marker from the bounded queue.
+            """
+            job_id = str(params["job_id"])
+            raw_sheet = params.get("sheet_num")
+            sheet_num = int(raw_sheet) if raw_sheet is not None else None
+
+            def _notify(line: str) -> None:
+                notification = {
+                    "jsonrpc": "2.0",
+                    "method": "job.output",
+                    "params": {
+                        "job_id": job_id,
+                        "sheet_num": sheet_num,
+                        "line": line,
+                    },
+                }
+                writer.write(json.dumps(notification).encode() + b"\n")
+
+            hub = manager.output_hub
+            if hub is None:
+                _notify("[stream unavailable: conductor still starting]")
+                await writer.drain()
+                return
+
+            sub = hub.subscribe(job_id, sheet_num)
+            try:
+                for line in hub.snapshot(job_id, sheet_num):
+                    _notify(line)
+                await writer.drain()
+                while True:
+                    line = await sub.queue.get()
+                    _notify(line)
+                    await writer.drain()
+            except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
+                pass
+            finally:
+                hub.unsubscribe(job_id, sheet_num, sub)
+
         handler.register("daemon.top", handle_top)
         handler.register("daemon.top.stream", handle_top_stream)
         handler.register("daemon.events", handle_events)
         handler.register("daemon.monitor.stream", handle_monitor_stream)
+        handler.register("job.output.stream", handle_output_stream)
 
         # Observer event recorder IPC — per-job behavioral events
         async def handle_observer_events(

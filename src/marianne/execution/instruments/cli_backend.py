@@ -46,6 +46,7 @@ _KILL_GRACE_SECONDS = 2.0
 async def _drain_stream(
     stream: asyncio.StreamReader | None,
     chunks: list[bytes],
+    on_chunk: Callable[[bytes], None] | None = None,
 ) -> None:
     """Read one subprocess pipe to EOF in bounded chunks (#352 inc-2).
 
@@ -78,6 +79,8 @@ async def _drain_stream(
         if not chunk:
             return
         chunks.append(chunk)
+        if on_chunk is not None:
+            on_chunk(chunk)
 
 
 async def _kill_process_group_if_alive(
@@ -202,6 +205,12 @@ class PluginCliBackend(Backend):
         self._output_log_path: Path | None = None
         self._model: str | None = profile.default_model
 
+        # #352 inc-3: per-dispatch live output sink. Set by the baton
+        # adapter (hub writer) before execute(), cleared at release.
+        # Receives (stream_name, chunk) per drained chunk. Exceptions
+        # are swallowed — observability must never break execution.
+        self._on_output: Callable[[str, bytes], None] | None = None
+
         # PID tracking callbacks for orphan detection.
         # Set by the daemon's ProcessGroupManager (via BackendPool) when
         # running under the conductor. Standalone CLI mode leaves these
@@ -272,6 +281,17 @@ class PluginCliBackend(Backend):
     def set_prompt_extensions(self, extensions: list[str]) -> None:
         """Set prompt extensions to append to the next prompt."""
         self._prompt_extensions = list(extensions)
+
+    def set_output_callback(
+        self, callback: Callable[[str, bytes], None] | None
+    ) -> None:
+        """Set (or clear with None) the live output sink (#352 inc-3).
+
+        The callback receives ``(stream_name, chunk)`` for every chunk
+        drained from the subprocess pipes. It runs synchronously on the
+        event loop between pipe reads — keep it cheap and non-blocking.
+        """
+        self._on_output = callback
 
     def set_output_log_path(self, path: Path | None) -> None:
         """Set base path for real-time output logging."""
@@ -887,12 +907,36 @@ class PluginCliBackend(Backend):
             # a multibyte sequence.
             stdout_chunks: list[bytes] = []
             stderr_chunks: list[bytes] = []
+
+            def _safe_emit(stream_name: str) -> Callable[[bytes], None] | None:
+                callback = self._on_output
+                if callback is None:
+                    return None
+
+                def emit(chunk: bytes) -> None:
+                    try:
+                        callback(stream_name, chunk)
+                    except Exception:
+                        _logger.debug(
+                            "plugin_cli_output_callback_failed",
+                            instrument=self._profile.name,
+                            stream=stream_name,
+                        )
+
+                return emit
+
             try:
                 try:
                     await asyncio.wait_for(
                         asyncio.gather(
-                            _drain_stream(proc.stdout, stdout_chunks),
-                            _drain_stream(proc.stderr, stderr_chunks),
+                            _drain_stream(
+                                proc.stdout, stdout_chunks,
+                                on_chunk=_safe_emit("stdout"),
+                            ),
+                            _drain_stream(
+                                proc.stderr, stderr_chunks,
+                                on_chunk=_safe_emit("stderr"),
+                            ),
                             proc.wait(),
                         ),
                         timeout=effective_timeout,

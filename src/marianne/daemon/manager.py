@@ -2224,6 +2224,14 @@ class JobManager:
             "resources": {"memory_mb": mem} if mem is not None else None,
         }
 
+    @property
+    def output_hub(self) -> Any | None:
+        """Live per-sheet output streaming hub (#352 inc-3), or None
+        before the baton adapter exists. Backs ``job.output.stream``."""
+        if self._baton_adapter is None:
+            return None
+        return self._baton_adapter.output_hub
+
     async def resolve_escalation(
         self, job_id: str, sheet_num: int, decision: str
     ) -> dict[str, Any]:

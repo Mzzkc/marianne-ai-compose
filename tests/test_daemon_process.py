@@ -368,6 +368,7 @@ class TestDaemonProcess:
             "job.history",
             "job.recover",
             "job.resolve_escalation",
+            "job.output.stream",
             "daemon.status",
             "daemon.shutdown",
             "daemon.config",

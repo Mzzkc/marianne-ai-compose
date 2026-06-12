@@ -65,6 +65,7 @@ from marianne.daemon.baton.state import (
     BatonSheetStatus,
     SheetExecutionState,
 )
+from marianne.daemon.output_hub import OutputStreamHub
 from marianne.daemon.technique_router import TechniqueRouter
 from marianne.execution.validation.history import FailureHistoryStore, HistoricalFailure
 from marianne.utils.process import safe_killpg as _safe_killpg
@@ -497,6 +498,12 @@ class BatonAdapter:
         # Cleared on deregister.
         self._interactive_sheets: dict[str, set[int]] = {}
 
+        # #352 inc-3: live per-sheet output streaming. Instruments emit
+        # drain chunks into hub writers wired per dispatch; `mzt watch`
+        # consumes via the job.output.stream IPC handler. Ephemeral —
+        # rings clear on deregister, lost on restart (stdout_tail persists).
+        self._output_hub = OutputStreamHub()
+
         # BackendPool — injected via set_backend_pool()
         self._backend_pool: BackendPool | None = None
 
@@ -551,6 +558,11 @@ class BatonAdapter:
     def baton(self) -> BatonCore:
         """The underlying BatonCore instance."""
         return self._baton
+
+    @property
+    def output_hub(self) -> OutputStreamHub:
+        """Live per-sheet output rings + subscriptions (#352 inc-3)."""
+        return self._output_hub
 
     @property
     def is_running(self) -> bool:
@@ -897,6 +909,8 @@ class BatonAdapter:
         self._job_techniques.pop(job_id, None)
         self._job_skip_commands.pop(job_id, None)
         self._interactive_sheets.pop(job_id, None)
+        # #352 inc-3: drop the job's output rings (memory bound).
+        self._output_hub.clear_job(job_id)
 
         # Idle stale-detection cleanup (#349/#350): drop the job config and any
         # per-sheet idle-window / stale-marker state for this job.
@@ -2106,6 +2120,15 @@ class BatonAdapter:
 
             backend._on_process_group_spawned = _track_process
 
+        # #352 inc-3: wire the live output sink for this dispatch. The hub
+        # writer line-buffers, redacts, rings, and fans out to any
+        # `mzt watch` subscribers. CLI instruments are exclusive while in
+        # flight (pool free-list), so per-dispatch mutation is race-free.
+        if hasattr(backend, "set_output_callback"):
+            backend.set_output_callback(
+                self._output_hub.make_writer(job_id, sheet.num)
+            )
+
         try:
             # The baton inbox accepts BatonEvent (union type), but
             # sheet_task is typed to put SheetAttemptResult specifically.
@@ -2237,6 +2260,12 @@ class BatonAdapter:
             # list does not smear stale state onto its next dispatch.
             if hasattr(backend, "_on_process_group_spawned"):
                 backend._on_process_group_spawned = None
+
+            # #352 inc-3: detach the output sink (same smear hazard) and
+            # flush any unterminated partial line into the ring.
+            if hasattr(backend, "set_output_callback"):
+                backend.set_output_callback(None)
+            self._output_hub.flush(job_id, sheet.num)
 
             # Always release the backend — use the same instrument name
             # that was used for acquire (actual_instrument), not the Sheet
