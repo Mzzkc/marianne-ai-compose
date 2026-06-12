@@ -389,7 +389,18 @@ mypy src/            # Type check
 ruff check src/      # Lint
 ```
 
-Documentation site:
+## Documentation & Community
+
+- **Get started:** [`examples/getting-started/`](examples/getting-started/) — run
+  [`hello.yaml`](examples/getting-started/hello.yaml) free, end to end, in minutes.
+- **Free / local quickstart:** [`docs/sandbox-free-quickstart.md`](docs/sandbox-free-quickstart.md)
+- **Write your own scores:** [`docs/score-writing-guide.md`](docs/score-writing-guide.md)
+  and the [score-authoring skill](plugins/marianne/skills/score-authoring/SKILL.md)
+- **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Issues & roadmap:** [GitHub Issues](https://github.com/Mzzkc/marianne-ai-compose/issues)
+  · [`docs/roadmap.md`](docs/roadmap.md)
+
+Build the documentation site locally:
 
 ```bash
 pip install -e ".[docs]"
