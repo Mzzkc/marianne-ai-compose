@@ -24,10 +24,27 @@ os.environ.setdefault("MARIANNE_TMUX_SOCKET", f"mzt-test-{os.getpid()}")
 # now auto-derives one under the workspace root (default ~/workspaces). Redirect
 # that root into a per-process temp dir so the test suite never writes into the
 # real ~/workspaces. setdefault honors an operator-set override.
-os.environ.setdefault(
-    "MARIANNE_WORKSPACE_ROOT",
-    os.path.join(tempfile.gettempdir(), f"mzt-test-workspaces-{os.getpid()}"),
+_OWNED_WORKSPACE_ROOT = os.path.join(
+    tempfile.gettempdir(), f"mzt-test-workspaces-{os.getpid()}"
 )
+_WE_SET_WORKSPACE_ROOT = "MARIANNE_WORKSPACE_ROOT" not in os.environ
+os.environ.setdefault("MARIANNE_WORKSPACE_ROOT", _OWNED_WORKSPACE_ROOT)
+
+
+def pytest_sessionfinish(
+    session: pytest.Session, exitstatus: int
+) -> None:
+    """Remove the per-process workspace-root temp dir the suite created.
+
+    Only cleans the dir WE set (never an operator override), and only the
+    empty managed root — auto-derivation creates the root, individual tests
+    own (and clean) any leaf workspaces via tmp_path. Keeps the suite from
+    leaving stale /tmp artifacts across runs.
+    """
+    import shutil
+
+    if _WE_SET_WORKSPACE_ROOT:
+        shutil.rmtree(_OWNED_WORKSPACE_ROOT, ignore_errors=True)
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
