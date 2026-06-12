@@ -7,10 +7,18 @@ Do not trust this file blindly. Run `pytest tests/ -x`, `mypy src/`, and `ruff c
 v0.1.0-alpha — **P0 "Ship" complete** (2026-05-29); **P1 Launch in progress**. CI enforces
 ruff + mypy --strict + pytest (85% coverage) on every push. Baton is the sole execution model.
 
-### M5 Baton Stabilization — autonomous work complete (2026-06-12)
+### M5 Baton Stabilization — COMPLETE (2026-06-12); milestone open issues: 0
+
+Every M5 issue is closed, including #344 — its obs1 fix is now confirmed in the **live production
+daemon**: the conductor was restarted (it predated the fix) and `scores-internal/repro-344-obs1-cli.yaml`
+(deterministic `cli`-instrument repro: commit a file, then `exit 1`) recorded the job **COMPLETED**,
+with the log showing `plugin_cli_execute_complete success=false exit_code=1` →
+`musician.nonzero_exit_rescued` → `adapter.job_complete all_success=true` → `job.completed`. The live
+run also surfaced and fixed an observer-startup race on fresh #58 auto-managed workspaces
+(`_start_observer` now ensures the workspace exists before the observer watches it).
 
 **M4 Sandbox Resolution is empty** (#160, #210 closed). After a composer interview unblocked the
-gated items, the M5 baton-stabilization surface is essentially clear. Shipped CI-green this arc:
+gated items, the M5 baton-stabilization surface is clear. Shipped CI-green this arc:
 
 | Issue | Result |
 |-------|--------|
