@@ -35,6 +35,7 @@ from marianne.validation.checks.jinja import (
     JinjaUndefinedVariableCheck,
 )
 from marianne.validation.checks.paths import (
+    CadenzaOrderingCheck,
     PreludeCadenzaFileCheck,
     SkillFilesExistCheck,
     TemplateFileExistsCheck,
@@ -46,6 +47,7 @@ from marianne.validation.checks.techniques import (
 )
 
 __all__ = [
+    "CadenzaOrderingCheck",
     "CodeExecutionSandboxCheck",
     # Jinja checks
     "JinjaSyntaxCheck",

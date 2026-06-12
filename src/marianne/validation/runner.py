@@ -10,6 +10,7 @@ from marianne.core.config import JobConfig
 from marianne.validation.base import ValidationCheck, ValidationIssue, ValidationSeverity
 from marianne.validation.checks import (
     BashArrayLengthCheck,
+    CadenzaOrderingCheck,
     CodeExecutionSandboxCheck,
     EmptyPatternCheck,
     FanOutStringFilterCheck,
@@ -145,6 +146,7 @@ def create_default_checks() -> list[ValidationCheck]:
         TemplateFileExistsCheck(),
         SkillFilesExistCheck(),
         PreludeCadenzaFileCheck(),
+        CadenzaOrderingCheck(),
         # Config checks
         RegexPatternCheck(),
         ValidationTypeCheck(),

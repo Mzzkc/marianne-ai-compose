@@ -3,6 +3,7 @@
 Validates that paths referenced in the configuration exist and are accessible.
 """
 
+import re
 from pathlib import Path
 
 from marianne.core.config import JobConfig
@@ -268,5 +269,116 @@ class SkillFilesExistCheck:
                             },
                         )
                     )
+
+        return issues
+
+
+class CadenzaOrderingCheck:
+    """V109: a cadenza reads a file whose producer runs later (#137).
+
+    No new config — uses three existing signals:
+    - CONSUMER: ``cadenzas`` (which sheet injects/reads which file).
+    - PRODUCER (proxy): a ``file_exists`` validation gated to a sheet is
+      the author declaring that sheet produces the file.
+    - ORDER: the dependency DAG (which sheet is guaranteed to run first).
+
+    Warns when a cadenza on sheet M reads a file F that some sheet P is
+    declared (via file_exists) to produce, but P is NOT a DAG-ancestor of
+    M — so F is not guaranteed to exist when M's cadenza fires. WARNING
+    only: file_exists is a proxy, so we never false-ERROR a valid score.
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V109"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Detects a cadenza reading a file produced by a later stage"
+
+    @staticmethod
+    def _producer_sheet(condition: str | None) -> int | None:
+        """The sheet a file_exists validation is gated to, parsed from its
+        condition (``sheet_num == N`` / ``>= N``). None for other shapes."""
+        if not condition:
+            return None
+        m = re.search(r"sheet_num\s*(==|>=)\s*(\d+)", condition)
+        return int(m.group(2)) if m else None
+
+    @staticmethod
+    def _ancestors(sheet: int, deps: dict[int, list[int]]) -> set[int]:
+        """Transitive dependency ancestors of ``sheet`` (sheets guaranteed
+        to run before it)."""
+        seen: set[int] = set()
+        stack = list(deps.get(sheet, []))
+        while stack:
+            s = stack.pop()
+            if s in seen:
+                continue
+            seen.add(s)
+            stack.extend(deps.get(s, []))
+        return seen
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+
+        # Producer proxy: basename → set of sheets declared to produce it.
+        producers: dict[str, set[int]] = {}
+        for rule in config.validations:
+            if rule.type != "file_exists" or not rule.path:
+                continue
+            sheet = self._producer_sheet(rule.condition)
+            if sheet is None:
+                continue
+            producers.setdefault(Path(str(rule.path)).name, set()).add(sheet)
+
+        if not producers:
+            return issues
+
+        deps = config.sheet.dependencies
+
+        for reader_sheet, items in config.sheet.cadenzas.items():
+            for item in items:
+                if item.file is None:  # directory cadenzas have no single file
+                    continue
+                name = Path(item.file).name
+                producing_sheets = producers.get(name)
+                if not producing_sheets:
+                    continue  # no producer signal — V108 covers disk existence
+                ancestors = self._ancestors(reader_sheet, deps)
+                # Safe iff SOME producer is guaranteed to run before the
+                # reader (a strict DAG ancestor).
+                if producing_sheets & ancestors:
+                    continue
+                latest = max(producing_sheets)
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=self.severity,
+                        message=(
+                            f"Sheet {reader_sheet}'s cadenza reads "
+                            f"'{item.file}', but the stage that produces it "
+                            f"(sheet {latest}, per its file_exists check) is "
+                            f"not guaranteed to run first — the file may not "
+                            f"exist yet when this cadenza fires."
+                        ),
+                        line=find_line_in_yaml(raw_yaml, item.file),
+                        context=item.file,
+                        suggestion=(
+                            f"Add a dependency so the producing stage runs "
+                            f"before sheet {reader_sheet}, or move the "
+                            f"producer earlier."
+                        ),
+                    )
+                )
 
         return issues
