@@ -252,7 +252,13 @@ class CodeModeExecutor:
         Returns:
             Execution result.
         """
-        cmd = interpreter + [str(code_file)]
+        # #210: reference the file by NAME, never host-absolute path. The
+        # sandbox binds the workspace at /workspace and --chdir's there,
+        # so a host path doesn't exist inside the namespace (every
+        # sandboxed run died with SANDBOX_ERROR); the unsandboxed run
+        # uses cwd=workspace, so the basename resolves in both worlds
+        # (mkstemp places the file in the workspace root).
+        cmd = interpreter + [code_file.name]
 
         if self._use_sandbox:
             cmd = self._wrap_with_sandbox(cmd)

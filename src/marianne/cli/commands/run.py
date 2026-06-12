@@ -86,9 +86,13 @@ def run(
     fresh: bool = typer.Option(
         False,
         "--fresh",
-        help="Delete existing state before running, ensuring a fresh start. "
-        "Use this for self-chaining scores or when you want to re-run a completed score "
-        "from scratch without resuming from previous state.",
+        help="Start over from scratch: re-register the score (all sheets "
+        "re-run) and, when the score sets workspace_lifecycle."
+        "archive_on_fresh, archive non-preserved workspace files first so "
+        "stale artifacts can't satisfy this run's validations. Use for "
+        "self-chaining scores or re-running a completed score. (Editing "
+        "the score file also triggers this automatically for completed "
+        "scores.)",
     ),
 ) -> None:
     """Run a score from a YAML configuration file."""

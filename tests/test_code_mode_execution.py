@@ -358,3 +358,46 @@ class TestRenderCodeModeError:
 
         assert "stderr" not in rendered  # No stderr section
         assert "Exit code 1" in rendered
+
+
+class TestSandboxPathMapping210:
+    """#210: the sandboxed command must reference the code file by NAME.
+
+    bwrap binds the workspace at /workspace and --chdir's there; a
+    host-absolute file path does not exist inside that namespace, so
+    every sandboxed run died with SANDBOX_ERROR. mkstemp already places
+    the file in the workspace root (the bind covers it), and the
+    UNsandboxed path runs with cwd=workspace — so the basename resolves
+    identically in both worlds.
+    """
+
+    async def test_command_references_basename_not_host_path(
+        self, tmp_path: Path
+    ) -> None:
+        captured: dict[str, list[str]] = {}
+
+        executor = CodeModeExecutor(
+            workspace=tmp_path,
+            use_sandbox=True,
+        )
+
+        def fake_wrap(cmd: list[str]) -> list[str]:
+            captured["inner"] = list(cmd)
+            return ["/bin/false"]  # never actually executed meaningfully
+
+        executor._wrap_with_sandbox = fake_wrap  # type: ignore[method-assign]
+        block = CodeBlock(language="python", code="print('hi')")
+        await executor.execute(block)
+
+        inner = captured["inner"]
+        # The interpreter arg must be the bare filename (resolves at
+        # /workspace/<name> inside bwrap and at cwd=workspace outside).
+        assert inner[-1].startswith("mzt_code_")
+        assert "/" not in inner[-1]
+
+    async def test_unsandboxed_run_still_executes(self, tmp_path: Path) -> None:
+        executor = CodeModeExecutor(workspace=tmp_path, use_sandbox=False)
+        block = CodeBlock(language="python", code="print('basename works')")
+        result = await executor.execute(block)
+        assert result.status.value == "success"
+        assert "basename works" in result.stdout
