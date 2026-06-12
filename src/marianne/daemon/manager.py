@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     from marianne.core.config import JobConfig
+    from marianne.instruments.registry import InstrumentRegistry
 
 import yaml
 
@@ -364,6 +365,8 @@ class JobManager:
         from marianne.daemon.baton.adapter import BatonAdapter
 
         self._baton_adapter: BatonAdapter | None = None
+        # #171: live instrument registry, retained for SIGHUP hot-reload.
+        self._instrument_registry: InstrumentRegistry | None = None
         self._baton_loop_task: asyncio.Task[Any] | None = None
         # #111: ordered, acknowledged checkpoint writer. Created in start()
         # (needs the running loop); replaces fire-and-forget save_checkpoint
@@ -472,6 +475,8 @@ class JobManager:
         registry = InstrumentRegistry()
         for profile in profiles.values():
             registry.register(profile, override=True)
+        # #171: retain for SIGHUP hot-reload of instrument profiles.
+        self._instrument_registry = registry
 
         # Start semantic analyzer after event bus (needs bus for subscription).
         # Failure must not prevent the conductor from starting.
@@ -2254,6 +2259,31 @@ class JobManager:
         if self._baton_adapter is None:
             return None
         return self._baton_adapter.output_hub
+
+    def reload_instrument_profiles(self) -> int:
+        """Hot-reload instrument profiles from disk (#171/#332).
+
+        Re-runs the single ``load_all_profiles()`` flow (builtins +
+        ~/.marianne/instruments + .marianne/instruments — the only load
+        path, no duplicate), syncs the LIVE registry in place so the pool
+        and adapter keep valid references, and invalidates the pool so new
+        acquisitions build from the fresh profiles. In-flight executions
+        finish on their loaded profile. Synchronous and lock-light — safe
+        from the SIGHUP handler. Returns the profile count after reload.
+        """
+        from marianne.instruments.loader import load_all_profiles
+
+        if self._instrument_registry is None:
+            return 0
+        profiles = load_all_profiles()
+        self._instrument_registry.replace_all(profiles)
+        if (
+            self._baton_adapter is not None
+            and self._baton_adapter._backend_pool is not None
+        ):
+            self._baton_adapter._backend_pool.invalidate()
+        _logger.info("manager.instruments_reloaded", count=len(profiles))
+        return len(profiles)
 
     async def resolve_escalation(
         self, job_id: str, sheet_num: int, decision: str

@@ -78,6 +78,19 @@ class InstrumentRegistry:
             override=override,
         )
 
+    def replace_all(self, profiles: dict[str, InstrumentProfile]) -> None:
+        """Replace the registry's contents in place (#171 hot-reload).
+
+        Mutates ``_profiles`` rather than rebuilding the registry object,
+        so holders of this registry (the backend pool, the adapter) keep
+        a valid reference. Profiles absent from ``profiles`` are dropped;
+        present ones are added or updated. The caller supplies the result
+        of a fresh ``load_all_profiles()`` so the single load flow stays
+        the only source of truth (no duplicate path → no drift).
+        """
+        self._profiles = dict(profiles)
+        _logger.info("instrument_registry_reloaded", count=len(self._profiles))
+
     def get(self, name: str) -> InstrumentProfile | None:
         """Look up an instrument by name.
 

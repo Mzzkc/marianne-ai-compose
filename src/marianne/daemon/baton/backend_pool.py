@@ -334,6 +334,12 @@ class BackendPool:
         # All backends ever created (for close_all cleanup)
         self._all_backends: list[Backend] = []
 
+        # #171 hot-reload generation. invalidate() bumps it and clears the
+        # free lists; backends are tagged with the generation they were
+        # built in, so an in-flight backend built before a reload is
+        # dropped (not reused stale) when released.
+        self._generation: int = 0
+
         # Protect concurrent acquire/release to avoid race conditions
         # on the free lists
         self._lock = asyncio.Lock()
@@ -471,7 +477,11 @@ class BackendPool:
             self._in_flight[instrument_name] = max(0, count - 1)
 
             profile = self._registry.get(instrument_name)
-            if profile is not None and profile.kind == "cli":
+            stale = (
+                getattr(backend, "_pool_generation", self._generation)
+                != self._generation
+            )
+            if profile is not None and profile.kind == "cli" and not stale:
                 # Return CLI backend to free list for reuse. Interactive
                 # instances live under their own key — a headless acquire
                 # must never receive a session-driving backend or vice versa.
@@ -479,6 +489,8 @@ class BackendPool:
                 if free_key not in self._cli_free:
                     self._cli_free[free_key] = []
                 self._cli_free[free_key].append(backend)
+            # A stale (pre-reload) backend is dropped, not re-listed (#171);
+            # it remains in _all_backends for close_all on shutdown.
 
             # HTTP singletons are never "released" — they stay active
 
@@ -488,6 +500,24 @@ class BackendPool:
                 "instrument": instrument_name,
                 "in_flight": self._in_flight.get(instrument_name, 0),
             },
+        )
+
+    def invalidate(self) -> None:
+        """Drop cached backends so the next acquire rebuilds from the
+        current registry profiles (#171 hot-reload).
+
+        Idle backends (free lists, HTTP singletons) are dropped now;
+        in-flight backends finish on their loaded profile and are dropped
+        on release via the generation check. Synchronous + lock-free: it
+        only bumps a counter and clears dicts, so it is safe to call from
+        the SIGHUP handler.
+        """
+        self._generation += 1
+        self._cli_free.clear()
+        self._http_singletons.clear()
+        _logger.info(
+            "backend_pool.invalidated",
+            extra={"generation": self._generation},
         )
 
     def in_flight_count(self, instrument_name: str) -> int:
@@ -567,6 +597,7 @@ class BackendPool:
                     api_key=api_key,
                 )
                 self._http_singletons[name] = backend
+                backend._pool_generation = self._generation  # type: ignore[attr-defined]
                 self._all_backends.append(backend)
             backend = self._http_singletons[name]
         else:
@@ -588,6 +619,7 @@ class BackendPool:
                     model=model,
                     interactive=interactive,
                 )
+                backend._pool_generation = self._generation  # type: ignore[attr-defined]
                 self._all_backends.append(backend)
 
         # Wire PID tracking for orphan detection when running under daemon.

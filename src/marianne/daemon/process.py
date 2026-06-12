@@ -1000,6 +1000,15 @@ class DaemonProcess:
         # Hot-apply reloadable fields
         if hasattr(self, "_manager") and self._manager is not None:
             self._manager.apply_config(new_config)
+            # #171/#332: re-read instrument profiles from disk so edited or
+            # newly-dropped-in profiles take effect without a restart.
+            try:
+                count = self._manager.reload_instrument_profiles()
+                _logger.info("daemon.sighup_instruments_reloaded", count=count)
+            except Exception:
+                _logger.warning(
+                    "daemon.sighup_instrument_reload_failed", exc_info=True
+                )
 
         if hasattr(self, "_monitor") and self._monitor is not None:
             self._monitor.update_limits(new_config.resource_limits)
