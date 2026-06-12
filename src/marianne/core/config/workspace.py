@@ -6,12 +6,51 @@ logging, AI review, and feedback.
 
 from __future__ import annotations
 
+import os
 import re
 from enum import Enum
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+#: Env var overriding the root under which auto-managed workspaces are created.
+WORKSPACE_ROOT_ENV = "MARIANNE_WORKSPACE_ROOT"
+
+
+def resolve_workspace_root() -> Path:
+    """Root directory for conductor-managed workspaces (#58).
+
+    Defaults to ``~/workspaces`` — the convention that every Marianne score's
+    workspace lives under one home-rooted tree, never scattered beside the
+    score file or inside a repo. An operator may override the root via the
+    ``MARIANNE_WORKSPACE_ROOT`` env var; the test suite uses this to redirect
+    auto-derived workspaces into a temp dir instead of a real home.
+    """
+    override = os.environ.get(WORKSPACE_ROOT_ENV)
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / "workspaces"
+
+
+def sanitize_workspace_name(name: str) -> str:
+    """Reduce a score ``name`` to a single filesystem-safe path segment.
+
+    Collapses any run of characters outside ``[A-Za-z0-9._-]`` to a single
+    hyphen and trims separators from the ends, so ``"DJ GestAIt v2"`` becomes
+    ``"DJ-GestAIt-v2"`` and ``"fix/emzihypno"`` becomes ``"fix-emzihypno"``.
+    Falls back to ``"job"`` if nothing usable remains.
+    """
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-._")
+    return safe or "job"
+
+
+def default_workspace_for(name: str) -> Path:
+    """The auto-derived workspace for a score that omits ``workspace:`` (#58).
+
+    ``<workspace-root>/<sanitized-name>`` — e.g. ``~/workspaces/legion-dream``.
+    """
+    return resolve_workspace_root() / sanitize_workspace_name(name)
 
 
 class IsolationMode(str, Enum):

@@ -50,6 +50,7 @@ from marianne.core.config.workspace import (
     IsolationConfig,
     LogConfig,
     WorkspaceLifecycleConfig,
+    default_workspace_for,
 )
 from marianne.core.constants import DEFAULT_INSTRUMENT_NAME, STATE_DB_FILENAME
 
@@ -683,6 +684,28 @@ def _prepare_for_yaml(obj: Any) -> Any:
     return obj
 
 
+def _apply_default_workspace(data: dict[str, Any]) -> None:
+    """Fill an auto-managed workspace into a loaded score that omits one (#58).
+
+    Mutates ``data`` in place. A no-op when ``workspace`` is already set (any
+    truthy value), so an explicit path always wins. Requires a ``name`` to
+    derive from; if absent, the model's own default applies instead.
+    """
+    if data.get("workspace"):
+        return
+    name = data.get("name")
+    if isinstance(name, str) and name.strip():
+        ws = default_workspace_for(name)
+        # An auto-derived workspace is conductor-managed: deriving it commits us
+        # to managing it, so ensure its root exists now. Without this the
+        # workspace's parent (the managed root, e.g. ~/workspaces) is missing
+        # and preflight's V002 parent-exists check would reject the job — the
+        # exact "creation failure caught too late" #58 set out to remove. The
+        # leaf dir itself is created at job start, as with any workspace.
+        ws.parent.mkdir(parents=True, exist_ok=True)
+        data["workspace"] = str(ws)
+
+
 class JobConfig(BaseModel):
     """Complete configuration for an orchestration job."""
 
@@ -942,10 +965,15 @@ class JobConfig(BaseModel):
         # Pre-resolve relative workspace relative to the score file's parent
         # directory, not the current process CWD (#109).  This is critical when
         # the daemon loads a score whose path differs from the daemon's CWD.
-        if "workspace" in data:
-            ws = Path(str(data["workspace"]))
+        ws_val = data.get("workspace")
+        if ws_val:
+            ws = Path(str(ws_val))
             if not ws.is_absolute():
                 data["workspace"] = str((path.resolve().parent / ws).resolve())
+        else:
+            # A loaded score that omits workspace gets a conductor-managed one
+            # under ~/workspaces/<name> (#58) — workspaces "just work".
+            _apply_default_workspace(data)
         return cls.model_validate(data)
 
     @classmethod
@@ -957,6 +985,10 @@ class JobConfig(BaseModel):
                 "The score content is empty or invalid. "
                 "A Marianne score requires at minimum: name, sheet, and prompt sections."
             )
+        # A loaded score that omits workspace gets a conductor-managed one
+        # under ~/workspaces/<name> (#58). Explicit relative paths are left to
+        # the model's _resolve_workspace (resolved against CWD), as before.
+        _apply_default_workspace(data)
         return cls.model_validate(data)
 
     def get_state_path(self) -> Path:

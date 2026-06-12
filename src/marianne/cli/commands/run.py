@@ -73,8 +73,11 @@ def run(
         None,
         "--workspace",
         "-w",
-        help="Override workspace directory. Creates the directory if it doesn't exist. "
-        "Takes precedence over the workspace defined in the YAML config.",
+        hidden=True,
+        help="Expert override of the workspace directory. By default the "
+        "conductor auto-manages workspaces under ~/workspaces/<score-name> "
+        "(or the score's explicit workspace:), so this is rarely needed. "
+        "Takes precedence over both. Creates the directory if absent.",
     ),
     json_output: bool = typer.Option(
         False,

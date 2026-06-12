@@ -2,6 +2,7 @@
 
 import logging
 import os
+import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import patch
@@ -18,6 +19,15 @@ from marianne.state.base import StateBackend
 # socket — a live conductor's interactive sheets would be killed mid-flight.
 # Per-process socket so xdist workers stay isolated from each other too.
 os.environ.setdefault("MARIANNE_TMUX_SOCKET", f"mzt-test-{os.getpid()}")
+
+# Auto-managed workspace isolation (#58): a loaded score that omits `workspace:`
+# now auto-derives one under the workspace root (default ~/workspaces). Redirect
+# that root into a per-process temp dir so the test suite never writes into the
+# real ~/workspaces. setdefault honors an operator-set override.
+os.environ.setdefault(
+    "MARIANNE_WORKSPACE_ROOT",
+    os.path.join(tempfile.gettempdir(), f"mzt-test-workspaces-{os.getpid()}"),
+)
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
