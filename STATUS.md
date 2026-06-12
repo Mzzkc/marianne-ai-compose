@@ -24,7 +24,7 @@ gated items, the M5 baton-stabilization surface is essentially clear. Shipped CI
 
 **M5 open surface: only #344.** The cumulative HEAD (`499a814`) is CI-green across all five jobs.
 
-- **#344** — kept open for a *live*-repro confirmation (obs1 + obs2 both structurally fixed and unit-tested). Deferred: the conductor is running a brand-stake lab, so it cannot be restarted to guarantee the fix is installed, and a competing repro job would contend for the lab's instrument/rate-limit resources. The budget-free deterministic repro (scripted instrument: commit output → exit 1, through the real baton) is ready to build when the conductor frees.
+- **#344** — kept open per instruction for the *production* live-daemon run. obs1 + obs2 are structurally fixed and now tested **in every manner possible without the production conductor**: unit (rescue predicate), integration (a real `python3 -c` subprocess through the real `PluginCliBackend` yields `exit_reason="completed"` → rescuable; a real SIGKILL → not), and **end-to-end status recording** (real subprocess commits a file then exits non-zero → real `sheet_task` musician rescues → real `BatonCore` records `COMPLETED`, the exact status obs1 corrupted). The remaining production live run is environmentally gated, verified not assumed: the running conductor PID predates the `18226a9` fix (started ~06:13, fix landed 07:59; Python doesn't hot-reload) and cannot be restarted while a brand-stake lab runs. The deterministic scripted-instrument daemon job is ready to submit the moment the conductor frees.
 
 **Adjacent (not M5-blocking):**
 - **#384** — `produces:` schema primitive: now an *optional strengthening* of #137's proxy approach, no longer a blocker (the composer's design to specify).
