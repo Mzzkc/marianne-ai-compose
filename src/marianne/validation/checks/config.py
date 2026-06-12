@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
 from pathlib import Path
 
 from marianne.core.config import JobConfig
@@ -959,5 +960,107 @@ class CodeExecutionSandboxCheck:
                 line=line,
                 context="code_execution",
                 suggestion="Install bubblewrap (bwrap), or set require_sandbox: true.",
+            )
+        ]
+
+
+class NoUsableInstrumentCheck:
+    """Warn when a score's whole instrument chain looks unrunnable here (V212).
+
+    Targets the unknown-system onboarding case: a fresh install has no AI CLI,
+    so even a deep fallback chain can resolve to nothing the system can actually
+    run. The chain skips uninstalled instruments at dispatch, so a chain with
+    *zero* installed CLI binaries would advance straight to its HTTP fallbacks
+    (which need a running local server or an API key) — or exhaust entirely.
+
+    This surfaces that BEFORE the run: it resolves the score-level instrument
+    chain (primary + fallbacks, through score aliases) and, when no CLI binary
+    in it is on PATH, emits an actionable warning pointing at the free paths.
+    HTTP instruments can't be path-checked, so they are noted, not counted as
+    definitely usable. WARNING only — a remote conductor may have more.
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V212"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.WARNING
+
+    @property
+    def description(self) -> str:
+        return "Warns when no instrument in the score's chain appears installed"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        try:
+            from marianne.instruments.loader import load_all_profiles
+
+            profiles = load_all_profiles()
+        except Exception:
+            _logger.debug("V212: could not load instrument profiles, skipping check")
+            return []
+        if not profiles:
+            return []
+
+        # The score-level AI chain: primary + ordered fallbacks. (Per-movement
+        # overrides like the deterministic `cli` assembly stage are not part of
+        # the chain that needs a model, so they are intentionally excluded.)
+        chain: list[str] = []
+        if config.instrument:
+            chain.append(config.instrument)
+        chain.extend(config.instrument_fallbacks)
+        if not chain:
+            return []
+
+        cli_installed = 0
+        http_count = 0
+        unresolved = 0
+        for name in chain:
+            alias = config.instruments.get(name)
+            profile_name = alias.profile if alias is not None else name
+            prof = profiles.get(profile_name)
+            if prof is None:
+                unresolved += 1
+                continue
+            if prof.kind == "cli" and prof.cli is not None and prof.cli.command is not None:
+                if shutil.which(prof.cli.command.executable) is not None:
+                    cli_installed += 1
+            elif prof.kind == "http":
+                http_count += 1
+
+        if cli_installed > 0:
+            return []  # at least one installed CLI instrument — the chain can run
+
+        # Nothing installed that we can verify. Guide toward the free paths.
+        if http_count > 0:
+            message = (
+                "No AI CLI from this score's instrument chain is installed on this "
+                "system; the only verifiable options left are HTTP endpoints, which "
+                "need a running local server or an API key."
+            )
+        else:
+            message = (
+                "None of the instruments in this score's chain appear to be installed "
+                "on this system."
+            )
+        suggestion = (
+            "Set up ONE free path: install Ollama and `ollama pull gemma2` (local, no "
+            "account), or set OPENROUTER_API_KEY and install a supported CLI (e.g. "
+            "crush). See docs/sandbox-free-quickstart.md."
+        )
+        return [
+            ValidationIssue(
+                check_id=self.check_id,
+                severity=self.severity,
+                message=message,
+                line=find_line_in_yaml(raw_yaml, "instrument"),
+                context=config.instrument or "instrument",
+                suggestion=suggestion,
             )
         ]

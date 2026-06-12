@@ -24,6 +24,7 @@ Writes:
 from __future__ import annotations
 
 import html
+import json
 import re
 import sys
 from pathlib import Path
@@ -128,6 +129,11 @@ PAGE = """<!DOCTYPE html>
   footer.colophon {{ max-width:680px; margin:3.5rem auto 0; padding-top:1.5rem;
                      border-top:1px solid #d9cfb9; font-size:.85rem; font-style:italic;
                      color:#7a7166; text-align:center; }}
+  .soundtrack-toggle {{ position:fixed; right:1rem; bottom:1rem; z-index:50;
+    font:inherit; font-size:.85rem; color:var(--paper); background:var(--ink);
+    border:none; border-radius:999px; padding:.5rem 1rem; cursor:pointer;
+    box-shadow:0 2px 10px rgba(0,0,0,.2); opacity:.85; }}
+  .soundtrack-toggle:hover {{ opacity:1; }}
   @media (max-width:520px) {{ body {{ font-size:17px; }} header.hero h1 {{ font-size:2.1rem; }} }}
 </style>
 </head>
@@ -155,11 +161,30 @@ PAGE = """<!DOCTYPE html>
   Score: hello.yaml · Fan-out + Synthesis · Free &amp; local-capable.
 </footer>
 </div>
+{soundtrack}
 </body>
 </html>
 """
 
 CARD = "<article class='card'><h3>{title}</h3>\n{body}</article>"
+
+# The soundtrack player: a hidden Strudel REPL web component + a corner toggle.
+# Never autoplays. The pattern is JSON-encoded so any quotes/newlines are safe.
+SOUNDTRACK = """<button class="soundtrack-toggle" id="snd-toggle" type="button">♪ play soundtrack</button>
+<strudel-editor id="snd-repl" style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;"></strudel-editor>
+<script type="module">
+import 'https://unpkg.com/@strudel/repl@1.3.0';
+const PATTERN = {pattern};
+const ed = document.getElementById('snd-repl');
+const btn = document.getElementById('snd-toggle');
+let playing = false;
+btn.addEventListener('click', () => {{
+  const repl = ed && ed.editor;
+  if (!repl) {{ btn.textContent = '♪ loading…'; return; }}
+  if (playing) {{ repl.stop(); playing = false; btn.textContent = '♪ play soundtrack'; }}
+  else {{ repl.setCode(PATTERN); repl.evaluate(); playing = true; btn.textContent = '♪ mute'; }}
+}});
+</script>"""
 
 
 def main() -> int:
@@ -180,14 +205,21 @@ def main() -> int:
     finale = (f"<div class='ornament'>· · ·</div>\n<section class='finale'>"
               f"<h2>The Finale</h2>\n{finale_body}</section>") if finale_body else ""
 
+    # The composed soundtrack (movement 3), embedded as a mute-toggled player.
+    # JSON-encoding makes the pattern a safe JS string literal.
+    strudel = read(ws, "soundtrack.strudel").strip()
+    soundtrack = SOUNDTRACK.format(pattern=json.dumps(strudel)) if strudel else ""
+
     page = PAGE.format(
         world=world or "<p>(The world was not written.)</p>",
         cards="\n".join(cards) or "<article class='card'><p>(No vignettes were written.)</p></article>",
         finale=finale,
+        soundtrack=soundtrack,
         nchar=len(char_files) or "parallel",
     )
     out_path.write_text(page, encoding="utf-8")
-    print(f"assembled gallery {out_path} from {len(char_files)} vignette(s)")
+    print(f"assembled gallery {out_path} from {len(char_files)} vignette(s)"
+          + (" + soundtrack" if strudel else " (no soundtrack)"))
     return 0
 
 

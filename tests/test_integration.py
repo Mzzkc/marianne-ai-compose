@@ -571,12 +571,13 @@ class TestDashboardAPIIntegration:
         assert "not found" in response.json()["detail"].lower()
 
     def test_dashboard_health_check(self, dashboard_client: TestClient) -> None:
-        """Dashboard health endpoint works."""
+        """Dashboard health endpoint works (real status, not hardcoded — #322)."""
         response = dashboard_client.get("/health")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "healthy"
+        assert data["status"] in ("healthy", "degraded")
         assert data["service"] == "marianne-dashboard"
+        assert data["conductor"] in ("up", "down")
 
 
 # ============================================================================

@@ -23,6 +23,7 @@ from marianne.validation.checks.config import (
     InstrumentFallbackCheck,
     InstrumentNameCheck,
     InteractiveSupportCheck,
+    NoUsableInstrumentCheck,
     RegexPatternCheck,
     TimeoutRangeCheck,
     ValidationTypeCheck,
@@ -67,6 +68,7 @@ __all__ = [
     "EmptyPatternCheck",
     "VersionReferenceCheck",
     "InstrumentFallbackCheck",
+    "NoUsableInstrumentCheck",
     "InstrumentNameCheck",
     "InteractiveSupportCheck",
     # Best-practice checks

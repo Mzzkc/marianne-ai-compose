@@ -25,6 +25,7 @@ from marianne.validation.checks import (
     JinjaInValidationPathCheck,
     JinjaSyntaxCheck,
     JinjaUndefinedVariableCheck,
+    NoUsableInstrumentCheck,
     NoValidationsCheck,
     PreludeCadenzaFileCheck,
     RegexPatternCheck,
@@ -158,6 +159,7 @@ def create_default_checks() -> list[ValidationCheck]:
         # Instrument checks
         InstrumentNameCheck(),
         InstrumentFallbackCheck(),
+        NoUsableInstrumentCheck(),
         InteractiveSupportCheck(),
         # Best-practice checks
         JinjaInValidationPathCheck(),

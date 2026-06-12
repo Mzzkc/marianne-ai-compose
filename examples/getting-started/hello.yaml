@@ -48,30 +48,42 @@ description: "Orchestration across mediums — parallel agents write a story; to
 
 workspace: ../../workspaces/hello
 
-# ── Instrument: a deep, free fallback chain ───────────────────────────────
-# Primary is a free OpenRouter model via crush; if it's unavailable or
-# rate-limited, Marianne advances down the chain, ending at a local Ollama
-# model so the score completes with no account at all.
+# ── Instrument: a DEEP fallback chain — runs for anyone, with anything ────
+# Targeting UNKNOWN systems: we don't know what you've installed or configured,
+# so the chain spans every tier across several harnesses. Marianne skips any
+# instrument that isn't installed (its binary isn't on PATH) and advances when
+# one is unavailable / rate-limited / exhausted. You need ONLY ONE of these set
+# up — the chain finds it. Free and local come first; paid is the last resort.
+#
+#   FREE cloud   crush / opencode / goose  +  free OpenRouter models
+#   FREE local   opencode & a direct HTTP profile  →  local Ollama (no account)
+#   PAID subs    Z.AI Coding Plan (opencode/glm) → Google (gemini-cli)
+#                → Anthropic Max (claude-code)
+#   PAID API     anthropic_api — the very last resort
+#
+# A new user with NOTHING set up: install Ollama and `ollama pull gemma2` (free,
+# local, no account), OR set OPENROUTER_API_KEY (free). See the quickstart.
 instrument: crush
 instrument_config:
   model: "qwen/qwen3-coder:free"
   timeout_seconds: 600
 
 instruments:
-  or-gemma:
-    profile: crush
-    config:
-      model: "google/gemma-4-31b-it:free"
-      timeout_seconds: 600
-  or-gptoss:
-    profile: crush
-    config:
-      model: "openai/gpt-oss-120b:free"
-      timeout_seconds: 600
-  local-gemma:
-    profile: opencode-gemma          # local Ollama floor — always available
+  # ── FREE cloud — free OpenRouter models, across harnesses ──
+  cr-gemma:   { profile: crush,  config: { model: "google/gemma-4-31b-it:free", timeout_seconds: 600 } }
+  cr-gptoss:  { profile: crush,  config: { model: "openai/gpt-oss-120b:free", timeout_seconds: 600 } }
+  oc-free:    { profile: opencode, config: { model: "openrouter/qwen/qwen3-coder:free", timeout_seconds: 600 } }
+  goose-free: { profile: goose,  config: { model: "openrouter/google/gemma-4-31b-it:free", timeout_seconds: 600 } }
+  # ── FREE local — Ollama, no account at all ──
+  oc-local:   { profile: opencode-gemma }                                    # opencode → local Ollama
+  http-local: { profile: local-gemma4 }                                      # direct HTTP → local Ollama
+  # ── PAID subscriptions (only if everything free is exhausted) ──
+  zai:        { profile: opencode, config: { model: "zai-coding-plan/glm-5.1" } }   # Z.AI Coding Plan
+  google:     { profile: gemini-cli }                                        # Google subscription
+  anthropic:  { profile: claude-code }                                       # Anthropic Max subscription
 
-instrument_fallbacks: [or-gemma, or-gptoss, local-gemma]
+instrument_fallbacks:
+  [cr-gemma, cr-gptoss, oc-free, goose-free, oc-local, http-local, zai, google, anthropic, anthropic_api]
 
 movements:
   1:
@@ -79,20 +91,31 @@ movements:
   2:
     name: "Three Vignettes"
   3:
+    name: "Soundtrack"               # compose loopable music for the story
+  4:
     name: "Assembly"
     instrument: cli                  # deterministic — no AI, always valid
-  4:
+  5:
     name: "Polish"
 
 sheet:
   size: 1
-  total_items: 4
+  total_items: 5
   fan_out:
     2: 3                             # Movement 2 → three parallel characters
   dependencies:
     2: [1]                           # vignettes read the world
-    3: [2]                           # assembly waits for all vignettes
-    4: [3]                           # polish reads the assembled page
+    3: [1]                           # the soundtrack reads the world's mood (parallel with vignettes)
+    4: [2, 3]                        # assembly waits for the vignettes AND the soundtrack
+    5: [4]                           # polish reads the assembled page
+  cadenzas:
+    # The Strudel technique corpus — injected ONLY into the soundtrack sheet, so
+    # the composer writes valid patterns instead of inventing sample names (the
+    # lesson of prior AI-music failures). Sheet 5 = movement 3, after movement 2's
+    # fan-out expands to sheets 2-4.
+    5:
+      - file: "{{ workspace }}/../../examples/getting-started/assets/strudel-patterns.md"
+        as: skill
 
 parallel:
   enabled: true
@@ -152,20 +175,38 @@ prompt:
     {{ workspace }}/02-character-{{ instance }}.md and stop.
 
     {% elif stage == 3 %}
-    python3 "{{ workspace }}/../../examples/getting-started/assets/assemble-site.py" "{{ workspace }}"
+    You are a Strudel composer (Strudel is live-coding music — strudel.cc).
+    First read the shared world at {{ workspace }}/01-world.md and feel its mood.
+
+    Write ONE short, LOOPABLE, ambient background soundtrack for this story.
+    Rules (a static checker rejects violations):
+    - Use ONLY sounds documented in the injected Strudel reference — built-in
+      samples (bd sd hh cp ...), drum-machine banks, or synth waveforms via
+      .sound("sawtooth"/"sine"/"triangle"/"square"). Do NOT invent sample names.
+    - Background music: keep it GENTLE and low — a modest .gain (≈0.3-0.5), a
+      slow tempo (setcps around 0.35-0.5), a few layers via stack().
+    - It must LOOP cleanly forever — no arrange()/one-shot, no silence().
+    - Output ONLY valid Strudel code (no prose, no markdown fences). Start with a
+      setcps(...) line. Save it to {{ workspace }}/soundtrack.strudel and stop.
 
     {% elif stage == 4 %}
+    python3 "{{ workspace }}/../../examples/getting-started/assets/assemble-site.py" "{{ workspace }}"
+
+    {% elif stage == 5 %}
     You are a web designer. A complete, valid website already exists at
-    {{ workspace }}/site-base.html — it presents a short story (a world and
-    three character vignettes found in {{ workspace }}/01-world.md and
-    {{ workspace }}/02-character-*.md).
+    {{ workspace }}/site-base.html — it presents a short story (world +
+    three vignettes in {{ workspace }}/01-world.md and 02-character-*.md) AND
+    embeds a loopable music player (a hidden &lt;strudel-editor&gt; and a
+    "play soundtrack" button — leave that block EXACTLY as-is).
 
     Read site-base.html and the story, then write an IMPROVED, single
     self-contained HTML file to {{ workspace }}/the-sky-library.html that:
     - keeps ALL the story text intact,
+    - keeps the soundtrack player block and its script intact,
     - tailors the visual design (colors, headings, small touches) to the
       mood of THIS story,
-    - stays one file with inline CSS only — no external resources,
+    - keeps inline CSS only — the only external resource allowed is the
+      Strudel module the player already imports,
     - begins with <!DOCTYPE html> and is valid HTML5.
 
     If you are unsure, copy site-base.html and refine it. Write ONLY the
@@ -193,24 +234,38 @@ validations:
     condition: "stage == 2"
     description: "Vignette has substantive prose (80+ words)"
 
-  # Movement 3 — deterministic assembly produced a valid page (the floor)
+  # Movement 3 — a loopable soundtrack, validated for REAL sounds (not invented)
+  - type: file_exists
+    path: "{workspace}/soundtrack.strudel"
+    condition: "stage == 3"
+    description: "The Strudel soundtrack exists"
+  - type: command_succeeds
+    command: 'grep -q "setcps" "{workspace}/soundtrack.strudel"'
+    condition: "stage == 3"
+    description: "Soundtrack has a tempo (setcps) — a runnable pattern"
+  - type: command_succeeds
+    command: 'python3 "{workspace}/../../examples/getting-started/assets/check-strudel-errors.py" "{workspace}/soundtrack.strudel"'
+    condition: "stage == 3"
+    description: "Soundtrack uses only valid sounds (the static reality check)"
+
+  # Movement 4 — deterministic assembly produced a valid page (the floor)
   - type: file_exists
     path: "{workspace}/site-base.html"
-    condition: "stage == 3"
+    condition: "stage == 4"
     description: "Deterministic website assembled"
   - type: content_contains
     path: "{workspace}/site-base.html"
     pattern: "<!DOCTYPE html>"
-    condition: "stage == 3"
+    condition: "stage == 4"
     description: "Assembled output is valid HTML5"
 
-  # Movement 4 — the AI-polished page exists and is valid HTML
+  # Movement 5 — the AI-polished page exists and is valid HTML
   - type: file_exists
     path: "{workspace}/the-sky-library.html"
-    condition: "stage == 4"
+    condition: "stage == 5"
     description: "Final website exists"
   - type: content_contains
     path: "{workspace}/the-sky-library.html"
     pattern: "<!DOCTYPE html>"
-    condition: "stage == 4"
+    condition: "stage == 5"
     description: "Final website is valid HTML5"
