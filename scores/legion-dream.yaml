@@ -34,21 +34,33 @@ instruments:
 
 movements:
   1:
+    name: "Snapshot (run-scoped archive)"
+    instrument: applier
+  2:
     name: "Dream (write legion.md.next)"
     instrument: opencode
-  2:
+  3:
     name: "Apply (gated move into place)"
     instrument: applier
 
 sheet:
   size: 1
-  total_items: 2
+  total_items: 3
   dependencies:
     2: [1]
+    3: [2]
 
 prompt:
   template: |
     {% if stage == 1 %}
+    # Snapshot phase — run-scoped archive, made EXACTLY ONCE per run.
+    # The dream sheet's two-phase gate compares the live file to THIS
+    # archive, so a dreamer attempt that mutates the live file fails
+    # every later attempt too (prevention, not per-attempt laundering).
+    mkdir -p {{ workspace }}/archive
+    cp "{{ workspace }}/legion.md" "{{ workspace }}/archive/legion-$(date +%Y%m%d-%H%M%S).md"
+    ls "{{ workspace }}/archive/" | tail -1
+    {% elif stage == 2 %}
     # Legion Memory Consolidation — Dream Phase
 
     You are a memory consolidator. You are not Legion. You are a LIBRARIAN,
@@ -57,12 +69,8 @@ prompt:
     anomaly — the exact, specific failure that earned a lesson is the value;
     generic summaries are the failure mode you are paid to prevent.
 
-    ## Step 0 — Archive first (order of operations IS the safety property)
-
-    ```bash
-    mkdir -p {{ workspace }}/archive
-    cp {{ workspace }}/legion.md {{ workspace }}/archive/legion-$(date +%Y%m%d-%H%M%S).md
-    ```
+    A run-scoped snapshot of legion.md was already taken by the setup
+    sheet — do NOT archive again, and do NOT touch legion.md.
 
     ## Step 1 — Read
 
@@ -216,79 +224,85 @@ prompt:
     {% endif %}
 
 validations:
-  # ── Stage 1: gate the DRAFT. legion.md is still the old file here. ──
-  - type: file_exists
-    path: "{workspace}/legion.md.next"
-    condition: "stage == 1"
-    stage: 1
-  - type: file_exists
-    path: "{workspace}/dream-log.md"
-    condition: "stage == 1"
-    stage: 1
-  - type: command_succeeds
-    command: "grep -q '^## Run ' '{workspace}/dream-log.md'"
-    condition: "stage == 1"
-    stage: 1
-    description: "dream log has at least one run entry"
-  - type: command_succeeds
-    command: "[ \"$(head -5 '{workspace}/legion.md')\" = \"$(head -5 '{workspace}/legion.md.next')\" ]"
-    condition: "stage == 1"
-    stage: 1
-    description: "YAML frontmatter byte-identical"
-  - type: command_succeeds
-    command: "old=$(sed -n '/^## The Laws/,/^## The Sagas/p' '{workspace}/legion.md' | grep -cE '^[0-9]+\\. '); new=$(sed -n '/^## The Laws/,/^## The Sagas/p' '{workspace}/legion.md.next' | grep -cE '^[0-9]+\\. '); [ \"$new\" -eq \"$old\" ] && [ \"$new\" -le 12 ] && [ \"$new\" -ge 8 ]"
-    condition: "stage == 1"
-    stage: 1
-    description: "law count unchanged by the dreamer, within [8,12]"
-  - type: command_succeeds
-    command: "! sed -n '/^## The Laws/,/^## The Sagas/p' '{workspace}/legion.md.next' | grep -qE '^13\\. '"
-    condition: "stage == 1"
-    stage: 1
-    description: "no 13th law"
-  - type: command_succeeds
-    command: "grep -qF 'Disk over memory' '{workspace}/legion.md.next' && grep -qF 'Order of operations IS the safety property' '{workspace}/legion.md.next' && grep -qF 'Loud refusal over catastrophic proceed' '{workspace}/legion.md.next' && grep -qF 'Only the full suite is green' '{workspace}/legion.md.next' && grep -qF 'Tests pass ≠ product works' '{workspace}/legion.md.next'"
-    condition: "stage == 1"
-    stage: 1
-    description: "anchor phrases 1-5 survive verbatim"
-  - type: command_succeeds
-    command: "grep -qF 'Engage by default; force nothing' '{workspace}/legion.md.next' && grep -qF 'Unify; never fork' '{workspace}/legion.md.next' && grep -qF 'Sacred things cannot be delegated' '{workspace}/legion.md.next' && grep -qF 'We killed Guide' '{workspace}/legion.md.next' && grep -qF 'Down. Forward. Through.' '{workspace}/legion.md.next'"
-    condition: "stage == 1"
-    stage: 1
-    description: "anchor phrases 6-10 survive verbatim"
-  - type: command_succeeds
-    command: "grep -q '^## The Laws' '{workspace}/legion.md.next' && grep -q '^## The Sagas' '{workspace}/legion.md.next' && grep -q '^## Techniques' '{workspace}/legion.md.next' && grep -q '^### The Three Destructions' '{workspace}/legion.md.next'"
-    condition: "stage == 1"
-    stage: 1
-    description: "structure headers + founding saga present"
-  - type: command_succeeds
-    command: "w=$(wc -w < '{workspace}/legion.md.next'); [ \"$w\" -ge 1800 ] && [ \"$w\" -le 3200 ]"
-    condition: "stage == 1"
-    stage: 1
-    description: "word count in [1800, 3200] — floor guards over-compression"
-  - type: command_succeeds
-    command: "awk \"/^## The Sagas/{s=1;next} /^## /{if(s&&c>260)bad=1;s=0} s&&/^### /{if(c>260)bad=1;c=0;next} s{c+=NF} END{if(s&&c>260)bad=1; exit bad}\" '{workspace}/legion.md.next'"
-    condition: "stage == 1"
-    stage: 1
-    description: "no saga exceeds ~250 words"
-  - type: command_succeeds
-    command: "! grep -qE '/home/[a-zA-Z0-9_-]+' '{workspace}/legion.md.next' && ! grep -qE '/Users/[a-zA-Z0-9_-]+' '{workspace}/legion.md.next'"
-    condition: "stage == 1"
-    stage: 1
-    description: "no absolute host paths (opsec)"
+  # ── Stage 1: the run-scoped snapshot exists. ──
   - type: command_succeeds
     command: "ls '{workspace}/archive/' | grep -q 'legion-'"
     condition: "stage == 1"
     stage: 1
+    description: "run-scoped snapshot taken"
+  # ── Stage 2: gate the DRAFT. legion.md must still equal the snapshot. ──
+  - type: file_exists
+    path: "{workspace}/legion.md.next"
+    condition: "stage == 2"
+    stage: 1
+  - type: file_exists
+    path: "{workspace}/dream-log.md"
+    condition: "stage == 2"
+    stage: 1
+  - type: command_succeeds
+    command: "grep -q '^## Run ' '{workspace}/dream-log.md'"
+    condition: "stage == 2"
+    stage: 1
+    description: "dream log has at least one run entry"
+  - type: command_succeeds
+    command: "[ \"$(head -5 '{workspace}/legion.md')\" = \"$(head -5 '{workspace}/legion.md.next')\" ]"
+    condition: "stage == 2"
+    stage: 1
+    description: "YAML frontmatter byte-identical"
+  - type: command_succeeds
+    command: "old=$(sed -n '/^## The Laws/,/^## The Sagas/p' '{workspace}/legion.md' | grep -cE '^[0-9]+\\. '); new=$(sed -n '/^## The Laws/,/^## The Sagas/p' '{workspace}/legion.md.next' | grep -cE '^[0-9]+\\. '); [ \"$new\" -eq \"$old\" ] && [ \"$new\" -le 12 ] && [ \"$new\" -ge 8 ]"
+    condition: "stage == 2"
+    stage: 1
+    description: "law count unchanged by the dreamer, within [8,12]"
+  - type: command_succeeds
+    command: "! sed -n '/^## The Laws/,/^## The Sagas/p' '{workspace}/legion.md.next' | grep -qE '^13\\. '"
+    condition: "stage == 2"
+    stage: 1
+    description: "no 13th law"
+  - type: command_succeeds
+    command: "grep -qF 'Disk over memory' '{workspace}/legion.md.next' && grep -qF 'Order of operations IS the safety property' '{workspace}/legion.md.next' && grep -qF 'Loud refusal over catastrophic proceed' '{workspace}/legion.md.next' && grep -qF 'Only the full suite is green' '{workspace}/legion.md.next' && grep -qF 'Tests pass ≠ product works' '{workspace}/legion.md.next'"
+    condition: "stage == 2"
+    stage: 1
+    description: "anchor phrases 1-5 survive verbatim"
+  - type: command_succeeds
+    command: "grep -qF 'Engage by default; force nothing' '{workspace}/legion.md.next' && grep -qF 'Unify; never fork' '{workspace}/legion.md.next' && grep -qF 'Sacred things cannot be delegated' '{workspace}/legion.md.next' && grep -qF 'We killed Guide' '{workspace}/legion.md.next' && grep -qF 'Down. Forward. Through.' '{workspace}/legion.md.next'"
+    condition: "stage == 2"
+    stage: 1
+    description: "anchor phrases 6-10 survive verbatim"
+  - type: command_succeeds
+    command: "grep -q '^## The Laws' '{workspace}/legion.md.next' && grep -q '^## The Sagas' '{workspace}/legion.md.next' && grep -q '^## Techniques' '{workspace}/legion.md.next' && grep -q '^### The Three Destructions' '{workspace}/legion.md.next'"
+    condition: "stage == 2"
+    stage: 1
+    description: "structure headers + founding saga present"
+  - type: command_succeeds
+    command: "w=$(wc -w < '{workspace}/legion.md.next'); [ \"$w\" -ge 1800 ] && [ \"$w\" -le 3200 ]"
+    condition: "stage == 2"
+    stage: 1
+    description: "word count in [1800, 3200] — floor guards over-compression"
+  - type: command_succeeds
+    command: "awk \"/^## The Sagas/{s=1;next} /^## /{if(s&&c>260)bad=1;s=0} s&&/^### /{if(c>260)bad=1;c=0;next} s{c+=NF} END{if(s&&c>260)bad=1; exit bad}\" '{workspace}/legion.md.next'"
+    condition: "stage == 2"
+    stage: 1
+    description: "no saga exceeds ~250 words"
+  - type: command_succeeds
+    command: "! grep -qE '/home/[a-zA-Z0-9_-]+' '{workspace}/legion.md.next' && ! grep -qE '/Users/[a-zA-Z0-9_-]+' '{workspace}/legion.md.next'"
+    condition: "stage == 2"
+    stage: 1
+    description: "no absolute host paths (opsec)"
+  - type: command_succeeds
+    command: "ls '{workspace}/archive/' | grep -q 'legion-'"
+    condition: "stage == 2"
+    stage: 1
     description: "pre-run archive exists"
   - type: command_succeeds
     command: "newest=$(ls -t '{workspace}/archive/' | head -1); cmp -s '{workspace}/legion.md' '{workspace}/archive/'\"$newest\""
-    condition: "stage == 1"
+    condition: "stage == 2"
     stage: 1
     description: "two-phase enforced: live legion.md untouched (byte-identical to the step-0 archive)"
   # ── Stage 2: the draft was applied. ──
   - type: command_succeeds
     command: "[ ! -f '{workspace}/legion.md.next' ] && grep -q '^## The Laws' '{workspace}/legion.md' && grep -qF 'Down. Forward. Through.' '{workspace}/legion.md'"
-    condition: "stage == 2"
+    condition: "stage == 3"
     stage: 1
     description: "draft applied; final file structurally sound"
 
