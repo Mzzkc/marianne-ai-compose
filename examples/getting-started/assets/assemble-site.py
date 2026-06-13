@@ -486,13 +486,23 @@ def main() -> int:
         pattern=json.dumps(strudel),
         nchar=len(char_files) or "parallel",
     )
+    # Only open the browser when the page is NEW or CHANGED. If a sheet is
+    # retried (or self-healing re-runs it), the rebuilt page is identical — and
+    # opening is a side effect that must NOT repeat, or the user gets a tab per
+    # attempt. Compare against what's already on disk before opening.
+    previous = (
+        out_path.read_text(encoding="utf-8", errors="replace") if out_path.exists() else None
+    )
     out_path.write_text(page, encoding="utf-8")
     print(
         f"assembled {out_path} from {len(char_files)} vignette(s)"
         + (" + finale" if finale_body else "")
         + (" + soundtrack" if strudel else " (no soundtrack)")
     )
-    open_in_browser(out_path)
+    if page != previous:
+        open_in_browser(out_path)
+    else:
+        print("page unchanged — not re-opening the browser")
     return 0
 
 
