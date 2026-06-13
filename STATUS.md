@@ -7,22 +7,34 @@ Do not trust this file blindly. Run `pytest tests/ -x`, `mypy src/`, and `ruff c
 v0.1.0-alpha — **P0 "Ship" complete** (2026-05-29); **P1 Launch in progress**. CI enforces
 ruff + mypy --strict + pytest (85% coverage) on every push. Baton is the sole execution model.
 
-### M6 Onboarding & Pre-Launch — in progress (2026-06-12)
+### M6 Onboarding & Pre-Launch — onboarding COMPLETE; resting point (2026-06-13)
 
-Closed this arc: **#165** (the P0 onboarding blocker) — the flagship `hello` score was rebuilt
-**free, local-capable, and orchestration-across-mediums**: a deep instrument fallback chain
-(free OpenRouter → local Ollama), four movements (world → 3 parallel vignettes → a *deterministic*
-tool assembles a website → an agent polishes it), with the vignettes rendered as gallery cards so
-the fan-out is *visible*. Verified end-to-end FREE on local gemma4:26b (~5 min, $0). `hello-local.yaml`
-is the pure-offline twin; docs + website quickstart updated. Also closed: **#292** (dashboard security
-review — no critical findings, localhost-only posture), **#338** (`mzt recover` discoverable),
-**#322/#266** (real `/health` status, no swallowed errors), **#289** (CONTRIBUTING.md). #290 half-done
-(README links; mzt.dev cross-link waits on M7 #294). Filed #387 (dashboard hardening), #388 (examples
-don't ship with the wheel — the literal `pip install → run` path needs git clone).
+**The flagship `hello` is finished and proven.** A new user's first command —
+`mzt run examples/getting-started/hello-setup.yaml` — discovers the machine (free OpenRouter via crush
+→ local Ollama → paid subs/API), templates a `hello` that fits, chains to it, runs the orchestration,
+and opens the finished page itself (the **Windows** browser on WSL). The orchestration is **five
+movements / seven sheets** across mediums: a shared world → **three parallel** character vignettes → an
+ambient soundtrack the agent **composes** from an injected craft guide (genuine composition, not a clone)
+→ a **synthesis finale** that braids the three secrets into one revelation → a deterministic, art-directed
+page that embeds the soundtrack (played via **@strudel/web** — no editor, no code ever shown) and opens
+in the browser. There is now **ONE canonical hello** (the duplicate `hello-marianne.yaml` was removed);
+docs and the website point to it. `hello-local.yaml` is the pure-offline twin.
 
-**Remaining M6 boundary:** #251 (broad-except cleanup — agent-doable); #115 (`mzt stop` non-blocking —
-daemon-lifecycle **escalation gate**, composer's call); #291 (recruit 3-5 beta users — **human-gated**);
-#64/#56 (P3 dashboard features, not launch-blocking).
+**Proven end-to-end, cold, free, on a local model (gemma4:26b, 2026-06-13):** a clean `hello-setup` run
+produced every artifact — a world, three *distinct* vignettes, a genuinely composed soundtrack
+(`// Wondrous, Lydian, F major`), a synthesis finale ("The Unison Beneath"), and the page — and **all 16
+acceptance checks pass** against that output. The cold run surfaced and fixed three real onboarding bugs
+(`ccbbb13`): parallel-GPU deadlock → the prescore serializes local runs (`max_concurrent: 1`); dropped
+timeout → hung local sheets now fail-and-retry; a stale soundtrack-player validation → no more browser
+re-open spam. Also closed this arc: **#292** (dashboard security review), **#338** (`mzt recover`),
+**#322/#266** (real `/health`), **#289** (CONTRIBUTING.md). Filed #387 (dashboard hardening), #388
+(examples don't ship with the wheel).
+
+**Remaining — none of it is "finish the system":** #291 (recruit beta users — **human**), #115 (`mzt stop`
+non-blocking — daemon-lifecycle, **composer's call**), #251 (broad-except cleanup), a couple P3 dashboard
+niceties; then M7 (launch/market), M8 (sustainability), M9 (quality-remediation long tail). **Marianne
+runs FREE on local Ollama or free OpenRouter — it does not need the creator's paid subscriptions to exist
+or to run.** It was built to survive its creator, and at this resting point it does.
 
 ### M5 Baton Stabilization — COMPLETE (2026-06-12); milestone open issues: 0
 
