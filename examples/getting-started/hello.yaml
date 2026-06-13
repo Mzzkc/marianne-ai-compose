@@ -115,14 +115,16 @@ sheet:
     4: [2]                           # the finale reads the world AND all three vignettes
     5: [3, 4]                        # the page waits for the soundtrack AND the finale
   cadenzas:
-    # Complete, tested soundtrack RECIPES — injected ONLY into the soundtrack
-    # sheet. The model PICKS one that fits the mood and lightly adapts it, instead
-    # of composing from primitives (which a small model does badly). This is the
-    # technique-injection lesson of prior AI-music failures, taken further: give
-    # known-good examples, not just syntax. Sheet 5 = movement 3, after movement
-    # 2's fan-out expands to sheets 2-4.
+    # A soundtrack-composition CRAFT guide — injected ONLY into the soundtrack
+    # sheet. It teaches the grammar of good ambient (three voices, a safe palette,
+    # mood→harmony) so the agent COMPOSES its own piece that actually sounds good,
+    # rather than composing blindly from primitives (bad on small models) OR
+    # cloning a finished track (not composition). This is technique-injection done
+    # honestly: teach the craft, the musician does the work — inspect the score
+    # and you see a lesson, not a copy. Sheet 5 = movement 3, after movement 2's
+    # fan-out expands to sheets 2-4.
     5:
-      - file: "{{ workspace }}/../../examples/getting-started/assets/soundtrack-recipes.md"
+      - file: "{{ workspace }}/../../examples/getting-started/assets/soundtrack-craft.md"
         as: skill
 
 parallel:
@@ -187,16 +189,17 @@ prompt:
     First read the shared world at {{ workspace }}/01-world.md and feel its
     DOMINANT mood (serene? mysterious? hopeful? wistful? wondrous?).
 
-    You have been given a set of complete, tested soundtrack RECIPES (in your
-    skill material) — each a full, good-sounding ambient track tagged by mood.
-    Do NOT compose from scratch: good ambient music is hard to invent and easy to
-    get wrong. Instead:
-      1. Pick the ONE recipe whose mood best fits the world.
-      2. Copy it EXACTLY. You may change only the note letters inside note("...")
-         to shift the key — keep every effect, number, and the structure.
-      3. Do not raise any .gain — keep it quiet.
-    Output ONLY the Strudel code, starting at setcps(. No prose, no code fences.
-    Save it to {{ workspace }}/soundtrack.strudel and stop.
+    COMPOSE your own short, looping, ambient soundtrack for THIS world. Your skill
+    material teaches the craft — the three-voice grammar (pad / motif / drone),
+    the safe palette, and how mood maps to harmony. Use it to MAKE something:
+      1. Choose a key and a chord progression that say this world's mood.
+      2. Build the three voices in one stack(...) over a slow setcps(0.4-0.5).
+      3. Keep every .gain low (0.05-0.18) — it's quiet background music.
+    Study the two examples for structure, but write your OWN piece — your own
+    progression and motif, not a copy. Stay in the safe palette so it plays.
+    Output ONLY the Strudel code, starting at setcps( (optionally one leading
+    `// mood, key` comment). No prose, no fences. Save it to
+    {{ workspace }}/soundtrack.strudel and stop.
 
     {% elif stage == 4 %}
     {% set c1 = characters[1] %}{% set c2 = characters[2] %}{% set c3 = characters[3] %}
