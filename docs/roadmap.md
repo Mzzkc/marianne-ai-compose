@@ -54,7 +54,7 @@ A new external user can clone the repo, find accurate README content, and naviga
 | [#272](https://github.com/Mzzkc/marianne-ai-compose/issues/272) | Update README metrics | S | Closed |
 | [#273](https://github.com/Mzzkc/marianne-ai-compose/issues/273) | Update pyproject.toml description and keywords | S | Closed |
 
-**Follow-on work shipped under M1:** removed dead "native backends" architecture references, reframed instrument system as a plugin/any-CLI system, dropped hardcoded `claude-code` from the hello-marianne quickstart so the conductor's default applies.
+**Follow-on work shipped under M1:** removed dead "native backends" architecture references, reframed instrument system as a plugin/any-CLI system, dropped hardcoded `claude-code` from the hello quickstart so the conductor's default applies.
 
 ---
 

@@ -47,7 +47,7 @@ Marianne uses Claude CLI as its default instrument. Ensure you have:
 
 After installation, run `mzt doctor` to verify your environment is ready.
 
-## Quick Start: Run hello-marianne.yaml
+## Quick Start: Run hello
 
 The fastest way to see Marianne in action:
 
@@ -55,18 +55,19 @@ The fastest way to see Marianne in action:
 # 1. Start the conductor (required for execution)
 mzt start
 
-# 2. Run the hello score
-mzt run examples/hello-marianne.yaml
+# 2. Run the hello score. hello-setup discovers what's on your machine
+#    (a free, local, or paid instrument), templates a `hello` that fits,
+#    chains to it, and opens the finished page for you.
+mzt run examples/getting-started/hello-setup.yaml
 
 # 3. Watch progress
-mzt status hello-marianne
+mzt status hello
 
-# 4. Open the result in your browser
-open workspaces/hello-marianne/the-sky-library.html   # macOS
-# xdg-open workspaces/hello-marianne/the-sky-library.html  # Linux
+# (The page opens itself when it's done — on WSL it opens your Windows browser.
+#  If you'd rather open it by hand: workspaces/hello/the-sky-library.html)
 ```
 
-`hello-marianne.yaml` creates an interconnected fiction experience in three movements: a world setting, three parallel character vignettes, and a finale that weaves them together — all presented as a beautifully designed HTML page you can open in any browser. Five sheets, ~5 minutes, real creative output.
+`hello.yaml` (the orchestration `hello-setup` runs) creates an interconnected fiction experience across five movements: a world setting, three parallel character vignettes, an ambient soundtrack composed for the mood, a finale that weaves the vignettes' secrets into one revelation, and a deterministic tool that builds it all into a beautifully designed HTML page — with a soundtrack you can play. Seven sheets, ~5–15 minutes, free and local-capable.
 
 ## How Sheets Work
 

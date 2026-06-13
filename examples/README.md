@@ -18,8 +18,8 @@ mzt run examples/getting-started/hello.yaml
 
 | Category | What It Covers | Examples | Start Here |
 |----------|---------------|----------|------------|
-| [getting-started](getting-started/README.md) | Score structure, parallel execution, context passing, API backends, observability, worktree isolation | 7 | `hello.yaml` |
-| [creative](creative/README.md) | Philosophical argumentation, worldbuilding, fiction, dinner planning, skill teaching, literary translation, interactive fiction | 7 | `hello-marianne.yaml` |
+| [getting-started](getting-started/README.md) | Score structure, parallel execution, context passing, API backends, observability, worktree isolation | 7 | `hello-setup.yaml` |
+| [creative](creative/README.md) | Philosophical argumentation, worldbuilding, fiction, dinner planning, skill teaching, literary translation | 6 | `dinner-party.yaml` |
 | [research](research/README.md) | Literature reviews, strategic planning, research synthesis, training data curation, nonfiction authoring, context architecture, multi-source deep research | 7 | `parallel-research-fanout.yaml` |
 | [engineering](engineering/README.md) | Issue resolution, quality improvement, score generation, codebase rewrites, SaaS app building, web app generation | 6 | `score-composer.yaml` |
 | [patterns](patterns/README.md) | Named Rosetta orchestration patterns: Immune Cascade, Echelon Repair, Source Triangulation, Dead Letter Quarantine, Prefabrication, Shipyard Sequence, Rashomon Gate | 7 | `shipyard-sequence.yaml` |

@@ -7,10 +7,10 @@ Marianne is a universal asynchronous orchestrator. You write a declarative YAML 
 ```bash
 pip install -e ".[daemon]"
 mzt start
-mzt run examples/hello-marianne.yaml
+mzt run examples/getting-started/hello-setup.yaml
 ```
 
-Three commands. The conductor starts, five sheets execute across three movements, three character vignettes generate in parallel, and a self-contained HTML reading experience appears in your browser. That's Marianne working.
+Three commands. `hello-setup` discovers what's on your machine, then chains to the `hello` orchestration: parallel agents write a story, one composes a soundtrack, one writes the synthesis finale, and a deterministic tool builds a self-contained website that opens in your browser. That's Marianne working.
 
 ---
 
@@ -167,7 +167,7 @@ See the [Score Writing Guide](docs/score-writing-guide.md) for complete document
 
 | Score | What It Does |
 |-------|-------------|
-| [hello-marianne.yaml](examples/hello-marianne.yaml) | Your first score — interconnected fiction in 3 movements with parallel voices. Produces a self-contained HTML reading experience. |
+| [hello-setup.yaml](examples/getting-started/hello-setup.yaml) | **Start here.** Your first score — discovers your machine, then orchestrates a story into a self-contained website with a playable soundtrack. Free, local-capable. |
 | [simple-sheet.yaml](examples/simple-sheet.yaml) | Minimal configuration showing core sheet/validation mechanics |
 
 ### Software Development

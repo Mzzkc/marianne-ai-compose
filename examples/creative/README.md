@@ -12,7 +12,6 @@ These scores demonstrate marianne's capacity for intellectual and creative work 
 | [skill-builder](skill-builder.yaml) | Progressive curriculum generator: assessment, core concepts, parallel practice exercises at three difficulty levels, integration, mastery check | 7 | Fan-out + Synthesis | ~15m | ~$0.75 |
 | [thinking-lab](thinking-lab.yaml) | Multi-perspective analysis of hard questions using five cognitive lenses: computational, scientific, cultural, experiential, meta-cognitive | 7 | Fan-out + Synthesis | ~30m | ~$1.50 |
 | [worldbuilder](worldbuilder.yaml) | Generate fictional worlds through parallel creative lenses (geography, culture, ecology, technology, history) that synthesize into coherent world bibles | 8 | Fan-out + Synthesis | 3-6h | $15-30 |
-| [hello-marianne](hello-marianne.yaml) | Your first Marianne score: interactive fiction in three movements, output as a beautiful HTML page | 5 | Fan-out + Synthesis | ~5m | varies |
 
 **dialectic.yaml** produces a 4-stage argument: steel-manned thesis, three parallel critiques (pragmatist, phenomenologist, analytic), synthesis of what survives examination, and a final 500-800 word position. What emerges is sharper than any single pass because ideas that survive three hostile readings from different traditions are worth taking seriously.
 
@@ -25,8 +24,6 @@ These scores demonstrate marianne's capacity for intellectual and creative work 
 **thinking-lab.yaml** applies five distinct cognitive lenses to hard questions. The Tetrahedral Decision Framework perspectives (computational, scientific, cultural, experiential, meta-cognitive) run in parallel, then synthesis finds where they disagree — because that's where interesting thinking lives.
 
 **worldbuilder.yaml** tests whether independent creative visions can interlock into coherent worlds. Five creators get the same seed but different domains (geography, culture, ecology, technology, history). The synthesis looks for emergent rhymes — the constraints they independently invented that converge because good worldbuilding is internally consistent even without coordination.
-
-**hello-marianne.yaml** is your first Marianne score. It creates a short interactive fiction experience: Movement 1 generates the world, Movement 2 writes three parallel character vignettes, Movement 3 weaves them into a finale and presents it as a beautifully designed HTML page you can open in your browser. The result is a visual, immersive reading experience — not a folder of text files. The perfect starting point for new users who want to see what orchestrated AI can produce in five minutes.
 
 ## Quick Start
 
@@ -51,8 +48,6 @@ For philosophical argumentation or structured thinking, try `dialectic.yaml` or 
 **thinking-lab.yaml**: Replace the `question` variable with any hard question. The five TDF lenses apply to philosophy, ethics, design, strategy, or any domain where multiple valid perspectives exist.
 
 **worldbuilder.yaml**: Change `world_seed` to generate different worlds. The seed should be evocative but incomplete — direction without dictating answers. The five lenses (geography, culture, ecology, technology, history) can be customized, but keep them genuinely distinct.
-
-**hello-marianne.yaml**: No customization needed — run it as-is for your first experience. To adapt it, change `world_concept` and `character_count` in the variables. The HTML template in the final movement can be modified for different visual styles.
 
 ## Patterns Demonstrated
 

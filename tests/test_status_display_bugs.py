@@ -276,20 +276,20 @@ prompt:
         assert "totally_undefined" in flagged_vars, "Truly undefined vars should be flagged"
 
     def test_hello_yaml_no_false_positives(self) -> None:
-        """The flagship hello-marianne.yaml example should produce zero V101 warnings."""
+        """The canonical hello.yaml example should produce zero V101 warnings."""
         from marianne.core.config.job import JobConfig
         from marianne.validation.checks.jinja import JinjaUndefinedVariableCheck
 
-        config_path = Path("examples/creative/hello-marianne.yaml")
+        config_path = Path("examples/getting-started/hello.yaml")
         if not config_path.exists():
-            pytest.skip("hello-marianne.yaml not found")
+            pytest.skip("hello.yaml not found")
 
         raw_yaml = config_path.read_text()
         config = JobConfig.from_yaml(config_path)
         checker = JinjaUndefinedVariableCheck()
         issues = checker.check(config, config_path, raw_yaml)
         assert len(issues) == 0, (
-            f"hello-marianne.yaml should produce zero V101 warnings. "
+            f"hello.yaml should produce zero V101 warnings. "
             f"Got: {[i.message for i in issues]}"
         )
 

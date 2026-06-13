@@ -6,7 +6,7 @@ This directory contains example Mzt configurations for various use cases. Marian
 
 | Example | Purpose | Complexity |
 |---------|---------|------------|
-| [hello-marianne.yaml](hello-marianne.yaml) | Your first Marianne score — interconnected fiction in 3 movements with parallel voices | Simple |
+| [getting-started/hello-setup.yaml](getting-started/hello-setup.yaml) | Your first Marianne score — discovers your machine, then orchestrates a story into a website with a soundtrack | Simple |
 | [simple-sheet.yaml](simple-sheet.yaml) | Minimal Mzt configuration to get started | Simple |
 | [api-backend.yaml](api-backend.yaml) | Using Anthropic API directly instead of CLI | Simple |
 | [prelude-cadenza-example.yaml](prelude-cadenza-example.yaml) | Demonstrates prelude and cadenza context injection | Simple |
@@ -295,7 +295,7 @@ All examples pass `mzt validate`:
 
 | Example | Status | Description |
 |---------|--------|-------------|
-| hello-marianne.yaml | ✓ | First Marianne score — interconnected fiction |
+| getting-started/hello-setup.yaml | ✓ | First Marianne score — discovers your machine, then orchestrates a story into a website |
 | simple-sheet.yaml | ✓ | Minimal configuration |
 | api-backend.yaml | ✓ | Anthropic API instrument |
 | cross-sheet-test.yaml | ✓ | Cross-sheet context sharing |
