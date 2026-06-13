@@ -192,8 +192,13 @@ PAGE = """<!DOCTYPE html>
   .voices-head {{ text-align:center; max-width:38rem; margin:0 auto clamp(3rem,6vw,4.5rem); }}
   .voices-head h2 {{ font-size:clamp(2.1rem,4.6vw,3.1rem); margin:0; }}
   .voices-head .note {{ color:var(--soft); font-style:italic; margin:1.1rem 0 0; font-size:1.05rem; }}
-  .gallery {{ display:grid; gap:clamp(2rem,3.6vw,3.4rem);
-    grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); align-items:stretch; }}
+  /* Always 3-across (one tier) when there's room, or a single stacked column
+     when there isn't — never a lopsided 2-on-top-1-below. */
+  .gallery {{ display:grid; gap:clamp(1.5rem,2.6vw,3rem);
+    grid-template-columns:repeat(3,1fr); align-items:stretch; }}
+  @media (max-width:1000px) {{
+    .gallery {{ grid-template-columns:1fr; max-width:560px; margin-left:auto; margin-right:auto; }}
+  }}
   .card {{ background:var(--panel); border:1px solid var(--line); border-radius:22px;
     padding:clamp(2.1rem,3vw,3rem); display:flex; flex-direction:column; position:relative;
     box-shadow:0 34px 64px -44px rgba(45,30,65,.5);
