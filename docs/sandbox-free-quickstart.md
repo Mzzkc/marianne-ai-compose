@@ -86,9 +86,9 @@ Coding Plan, the `claude-code`, `gemini-cli`, or `opencode` (with the
 
 [`examples/getting-started/hello-local.yaml`](https://github.com/Mzzkc/marianne-ai-compose/blob/main/examples/getting-started/hello-local.yaml)
 runs entirely on a local Ollama model — no cloud, no account. Same orchestration
-as the flagship `hello`: parallel agents write a short solarpunk story, a
-deterministic tool builds it into a website, and an agent polishes it to fit
-the story.
+as the flagship `hello`: parallel agents write a short story, one composes an
+ambient soundtrack, one writes the synthesis finale that braids the threads
+together, and a deterministic tool builds the finished website and opens it.
 
 ```bash
 mzt start                                          # start the conductor
