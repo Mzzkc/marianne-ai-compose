@@ -58,8 +58,28 @@ def pick_instrument() -> tuple[str | None, str | None, str]:
     return None, None, ""
 
 
+def _is_wsl() -> bool:
+    """True when running under WSL (Windows Subsystem for Linux)."""
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        with open("/proc/version", encoding="utf-8", errors="replace") as f:
+            return "microsoft" in f.read().lower()
+    except OSError:
+        return False
+
+
 def pick_opener() -> str:
-    for cmd in ("wslview", "xdg-open", "open", "explorer.exe"):
+    """Report how the finished page will be opened. On WSL we target the user's
+    WINDOWS browser (wslview, else explorer.exe via a translated path), never a
+    Linux browser inside WSL. The assembler performs the actual open."""
+    if _is_wsl():
+        if _have("wslview"):
+            return "wslview → Windows browser (WSL)"
+        if _have("explorer.exe"):
+            return "explorer.exe → Windows browser (WSL)"
+        return "WSL detected — install wslu's `wslview` to auto-open"
+    for cmd in ("xdg-open", "open"):
         if _have(cmd):
             return cmd
     return ""

@@ -31,24 +31,73 @@ import sys
 from pathlib import Path
 
 
+def _is_wsl() -> bool:
+    """True when running under WSL (Windows Subsystem for Linux)."""
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        with open("/proc/version", encoding="utf-8", errors="replace") as f:
+            return "microsoft" in f.read().lower()
+    except OSError:
+        return False
+
+
+def _spawn(cmd: list[str]) -> bool:
+    """Fire-and-forget launch; True if the process started (not that it
+    succeeded — Windows openers like explorer.exe exit 1 even on success)."""
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except Exception:  # noqa: BLE001 — opening is best-effort
+        return False
+
+
 def open_in_browser(path: Path) -> None:
-    """Best-effort: open the finished page in the user's browser. Tries the
-    common openers across WSL / Linux / macOS. Never raises — a failure here
-    must not fail the sheet (the page is already written). Set HELLO_NO_OPEN=1
-    to suppress (useful during testing)."""
+    """Best-effort: open the finished page in the user's browser. On WSL, open
+    the user's WINDOWS browser (not a Linux browser inside WSL): wslview if the
+    wslu package is installed, otherwise explorer.exe with a translated Windows
+    path. Never raises — a failure here must not fail the sheet. Set
+    HELLO_NO_OPEN=1 to suppress (useful during testing)."""
     if os.environ.get("HELLO_NO_OPEN"):
         return
-    for opener in ("wslview", "xdg-open", "open", "explorer.exe"):
-        if shutil.which(opener):
-            try:
-                subprocess.Popen(
-                    [opener, str(path)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                print(f"opened {path} with {opener}")
-            except Exception as exc:  # noqa: BLE001 — opening is best-effort
-                print(f"(could not open browser via {opener}: {exc})", file=sys.stderr)
+
+    if _is_wsl():
+        # 1) wslview (from wslu) handles the path translation and picks the
+        #    Windows default browser. Best when present.
+        if shutil.which("wslview") and _spawn(["wslview", str(path)]):
+            print(f"opened {path} in the Windows browser (wslview)")
+            return
+        # 2) Fall back to Windows tools with a translated Windows path so the
+        #    real (Windows) browser launches — never a headless Linux one.
+        win_path = None
+        try:
+            res = subprocess.run(
+                ["wslpath", "-w", str(path)], capture_output=True, text=True, timeout=5
+            )
+            if res.returncode == 0:
+                win_path = res.stdout.strip()
+        except Exception:  # noqa: BLE001 — best-effort
+            win_path = None
+        if win_path:
+            # explorer.exe opens the file with its default Windows app (the
+            # browser for .html); powershell Start-Process is the backup.
+            if _spawn(["explorer.exe", win_path]):
+                print(f"opened {path} in the Windows browser (explorer.exe)")
+                return
+            if _spawn(["powershell.exe", "-NoProfile", "-Command", f"Start-Process '{win_path}'"]):
+                print(f"opened {path} in the Windows browser (powershell)")
+                return
+        print(
+            "(WSL detected but couldn't reach the Windows browser — install wslu's "
+            "`wslview`, or open the page from Windows yourself)",
+            file=sys.stderr,
+        )
+        return
+
+    # Native (non-WSL) openers.
+    for opener in ("xdg-open", "open"):
+        if shutil.which(opener) and _spawn([opener, str(path)]):
+            print(f"opened {path} with {opener}")
             return
     print("(no browser opener found — open the page yourself)", file=sys.stderr)
 
