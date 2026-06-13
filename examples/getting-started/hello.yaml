@@ -115,12 +115,14 @@ sheet:
     4: [2]                           # the finale reads the world AND all three vignettes
     5: [3, 4]                        # the page waits for the soundtrack AND the finale
   cadenzas:
-    # The Strudel technique corpus — injected ONLY into the soundtrack sheet, so
-    # the composer writes valid patterns instead of inventing sample names (the
-    # lesson of prior AI-music failures). Sheet 5 = movement 3, after movement 2's
-    # fan-out expands to sheets 2-4.
+    # Complete, tested soundtrack RECIPES — injected ONLY into the soundtrack
+    # sheet. The model PICKS one that fits the mood and lightly adapts it, instead
+    # of composing from primitives (which a small model does badly). This is the
+    # technique-injection lesson of prior AI-music failures, taken further: give
+    # known-good examples, not just syntax. Sheet 5 = movement 3, after movement
+    # 2's fan-out expands to sheets 2-4.
     5:
-      - file: "{{ workspace }}/../../examples/getting-started/assets/strudel-patterns.md"
+      - file: "{{ workspace }}/../../examples/getting-started/assets/soundtrack-recipes.md"
         as: skill
 
 parallel:
@@ -181,20 +183,20 @@ prompt:
     {{ workspace }}/02-character-{{ instance }}.md and stop.
 
     {% elif stage == 3 %}
-    You are a Strudel composer (Strudel is live-coding music — strudel.cc).
-    First read the shared world at {{ workspace }}/01-world.md and feel its mood.
+    You are scoring this story with music (Strudel — live-coding music, strudel.cc).
+    First read the shared world at {{ workspace }}/01-world.md and feel its
+    DOMINANT mood (serene? mysterious? hopeful? wistful? wondrous?).
 
-    Write ONE short, LOOPABLE, ambient background soundtrack. Keep it SIMPLE and
-    SAFE so it actually plays — use ONLY these building blocks:
-    - setcps(0.4)                              (a slow tempo, on the first line)
-    - note("c3 eb3 g3").sound("sine")          (or "triangle"/"sawtooth"/"square")
-    - s("hh*4")  or  s("bd ~ ~ ~")             (built-in samples: bd sd hh cp oh)
-    - .gain(0.3)   .lpf(800)   .room(0.4)   .slow(4)   .delay(0.3)
-    - stack(layerA, layerB, layerC)            (layer 2-3 of the above)
-    Rules: keep every .gain low (0.2-0.4); do NOT invent sample names; do NOT use
-    .ar / .adsr / arrange / silence; no markdown fences, no prose. Output ONLY the
-    Strudel code, starting with setcps(...). Save it to
-    {{ workspace }}/soundtrack.strudel and stop.
+    You have been given a set of complete, tested soundtrack RECIPES (in your
+    skill material) — each a full, good-sounding ambient track tagged by mood.
+    Do NOT compose from scratch: good ambient music is hard to invent and easy to
+    get wrong. Instead:
+      1. Pick the ONE recipe whose mood best fits the world.
+      2. Copy it EXACTLY. You may change only the note letters inside note("...")
+         to shift the key — keep every effect, number, and the structure.
+      3. Do not raise any .gain — keep it quiet.
+    Output ONLY the Strudel code, starting at setcps(. No prose, no code fences.
+    Save it to {{ workspace }}/soundtrack.strudel and stop.
 
     {% elif stage == 4 %}
     {% set c1 = characters[1] %}{% set c2 = characters[2] %}{% set c3 = characters[3] %}

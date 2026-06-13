@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""assemble-site.py — deterministic, hand-crafted final page for `hello`.
+"""assemble-site.py — deterministic, art-directed final page for `hello`.
 
 This is the FINAL artifact, not a draft: it reads the markdown the AI musicians
-wrote (the world + the parallel vignettes) and the composed Strudel soundtrack,
-and emits one self-contained, valid, *designed* HTML page — with zero AI at this
-stage and zero dependencies. The design is hand-built here precisely so a new
-user's first result is reliably beautiful, regardless of which (possibly small,
-possibly local) model produced the prose; and the soundtrack is embedded
-verbatim via JSON, so it is never mangled by a model re-typing it.
+wrote (the world, the three parallel vignettes, the synthesis finale) and the
+composed Strudel soundtrack, and emits one self-contained, valid, *designed* HTML
+page — zero AI at this stage, zero build step. The design is hand-built here
+precisely so a new user's first result is genuinely beautiful, regardless of which
+(possibly small, possibly local) model produced the prose; and the soundtrack is
+embedded verbatim via JSON, so it is never mangled by a model re-typing it.
 
-The vignettes render as cards, so the fan-out (three agents at once) is visible.
+The vignettes render as spacious cards, so the fan-out (three agents at once) is
+visible; the finale lands as a dramatic, full-bleed closing movement.
 
 Usage:
     python3 assemble-site.py <workspace-dir> [output.html]
@@ -121,167 +122,256 @@ PAGE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Sky Library — A Marianne Composition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {{
-    --ink:#26211b; --muted:#6f655a; --paper:#f6efe2; --panel:#fffdf8;
-    --gold:#bb8a3e; --rose:#a8617f; --sky:#5b86a8; --leaf:#5f7d57;
-    --line:#e4d9c4;
+    --ink:#1b1a26; --soft:#56536a; --faint:#8b87a0;
+    --paper:#faf6f0; --panel:#ffffff; --line:#eee7db;
+    --sky1:#1d1c3a; --sky2:#4a3563; --sky3:#9d5072; --sky4:#d98a6a; --sky5:#f4d9a3;
+    --c-sky:#4b7fbf; --c-sage:#5d9079; --c-rose:#bd5f7c;
+    --maxw:1140px; --read:680px;
   }}
   * {{ box-sizing:border-box; }}
   html {{ scroll-behavior:smooth; }}
   body {{ margin:0; color:var(--ink); background:var(--paper);
-    font-family:"Iowan Old Style",Georgia,"Times New Roman",serif;
-    font-size:19px; line-height:1.75; -webkit-font-smoothing:antialiased; }}
-  .skyband {{ height:6px; background:linear-gradient(90deg,var(--gold),var(--rose),var(--sky),var(--leaf)); }}
-  .wrap {{ max-width:1080px; margin:0 auto; padding:0 1.5rem; }}
-  h1,h2,h3 {{ font-family:"Helvetica Neue",Arial,sans-serif; letter-spacing:-.01em; line-height:1.15; }}
+    font-family:"Newsreader","Iowan Old Style",Georgia,serif;
+    font-size:20px; line-height:1.8; -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility; }}
+  .wrap {{ max-width:var(--maxw); margin:0 auto; padding:0 2rem; }}
+  .reading {{ max-width:var(--read); margin:0 auto; }}
+  h1,h2,h3,.title {{ font-family:"Fraunces","Newsreader",Georgia,serif;
+    font-weight:560; line-height:1.08; letter-spacing:-.015em; }}
+  em {{ font-style:italic; }}
+  code {{ background:rgba(120,110,140,.12); padding:.05em .35em; border-radius:5px;
+    font-size:.86em; font-family:"SF Mono",Menlo,monospace; }}
+  /* Defensive: @strudel/web drives audio with NO editor UI, but if any Strudel
+     build ever injects a CodeMirror, never show it (the page uses no other one). */
+  .cm-editor {{ display:none !important; }}
 
-  /* hero */
-  .hero {{ text-align:center; padding:5.5rem 0 1.5rem; max-width:720px; margin:0 auto; }}
-  .hero .kicker {{ text-transform:uppercase; letter-spacing:.35em; font-size:.72rem;
-    color:var(--gold); font-family:"Helvetica Neue",Arial,sans-serif; margin-bottom:1.1rem; }}
-  .hero h1 {{ font-size:clamp(2.6rem,6vw,4rem); margin:0 0 .5rem; }}
-  .hero .sub {{ font-style:italic; color:var(--muted); font-size:1.15rem; margin:0; }}
-  .world {{ max-width:680px; margin:2.5rem auto 0; text-align:left; }}
-  .world p:first-of-type::first-letter {{ font-size:3.4rem; line-height:.8; float:left;
-    padding:.1em .12em 0 0; color:var(--gold); font-family:"Helvetica Neue",Arial,sans-serif; }}
+  /* ── hero ───────────────────────────────────────────────────────────── */
+  .hero {{ position:relative; min-height:94vh; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; overflow:hidden;
+    color:#fff; padding:6rem 1.5rem 5rem; }}
+  .hero-sky {{ position:absolute; inset:0; z-index:0;
+    background:linear-gradient(178deg,var(--sky1) 0%,var(--sky2) 36%,
+      var(--sky3) 62%,var(--sky4) 83%,var(--sky5) 100%);
+    background-size:100% 200%; animation:drift 22s ease-in-out infinite alternate; }}
+  @keyframes drift {{ from {{ background-position:50% 0%; }} to {{ background-position:50% 22%; }} }}
+  .hero-sky::after {{ content:""; position:absolute; left:50%; top:66%; width:92vw; height:92vw;
+    transform:translate(-50%,-50%); border-radius:50%;
+    background:radial-gradient(circle,rgba(255,238,205,.6),rgba(255,238,205,0) 58%); }}
+  .hero-inner {{ position:relative; z-index:1; max-width:780px; }}
+  .eyebrow {{ font-family:"Space Grotesk",system-ui,sans-serif; text-transform:uppercase;
+    letter-spacing:.44em; font-size:.7rem; font-weight:500; opacity:.82; margin:0 0 1.8rem; }}
+  .title {{ font-size:clamp(3.4rem,9.5vw,6.6rem); font-weight:600; margin:0;
+    text-shadow:0 2px 60px rgba(0,0,0,.28); }}
+  .dek {{ font-size:clamp(1.05rem,2.4vw,1.42rem); font-style:italic; opacity:.94;
+    margin:1.6rem auto 0; max-width:34ch; line-height:1.5; }}
+  .scroll-cue {{ position:absolute; bottom:2.2rem; left:50%; transform:translateX(-50%);
+    z-index:1; opacity:.7; font-size:1.4rem; animation:bob 2.6s ease-in-out infinite; }}
+  @keyframes bob {{ 0%,100% {{ transform:translate(-50%,0); }} 50% {{ transform:translate(-50%,9px); }} }}
 
-  .rule {{ display:flex; align-items:center; gap:1rem; color:var(--gold);
-    max-width:680px; margin:3.5rem auto; }}
-  .rule::before,.rule::after {{ content:""; flex:1; height:1px; background:var(--line); }}
-  .rule span {{ font-size:.8rem; letter-spacing:.3em; text-transform:uppercase;
-    font-family:"Helvetica Neue",Arial,sans-serif; }}
+  /* ── section rhythm ─────────────────────────────────────────────────── */
+  section {{ padding:clamp(4.5rem,10vw,9rem) 0; position:relative; }}
+  .tag {{ font-family:"Space Grotesk",system-ui,sans-serif; text-transform:uppercase;
+    letter-spacing:.34em; font-size:.72rem; font-weight:500; color:var(--c-rose);
+    margin:0 0 1.6rem; }}
+  .tag.light {{ color:rgba(255,255,255,.72); }}
 
-  /* gallery */
-  .gallery {{ display:grid; gap:1.6rem; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-    align-items:start; margin:1rem 0 0; }}
-  .card {{ background:var(--panel); border-radius:14px; padding:1.6rem 1.7rem;
-    border:1px solid var(--line); box-shadow:0 10px 30px -18px rgba(60,45,25,.5);
-    position:relative; overflow:hidden; }}
-  .card::before {{ content:""; position:absolute; inset:0 auto 0 0; width:5px;
-    background:var(--accent,var(--sky)); }}
-  .card:nth-child(3n+1) {{ --accent:var(--sky); }}
-  .card:nth-child(3n+2) {{ --accent:var(--leaf); }}
-  .card:nth-child(3n+3) {{ --accent:var(--rose); }}
-  .card .num {{ font-family:"Helvetica Neue",Arial,sans-serif; font-size:.7rem;
-    letter-spacing:.25em; text-transform:uppercase; color:var(--accent,var(--sky)); }}
-  .card h3 {{ margin:.2rem 0 .9rem; font-size:1.5rem; color:var(--ink); }}
-  .card p {{ font-size:1rem; line-height:1.7; }}
-  .card p + p {{ margin-top:.7rem; }}
+  /* the world */
+  .world .prose p {{ margin:0 0 1.55rem; }}
+  .world .prose p:first-of-type {{ font-size:1.3em; line-height:1.62; color:#2a2838; }}
+  .world .prose p:first-of-type::first-letter {{ font-family:"Fraunces",serif; font-weight:600;
+    font-size:4.4rem; line-height:.72; float:left; padding:.04em .12em 0 0; color:var(--sky3); }}
 
-  .finale {{ max-width:680px; margin:3.5rem auto 0; }}
-  code {{ background:#efe6d4; padding:.05em .35em; border-radius:4px; font-size:.88em;
-    font-family:"SF Mono",Menlo,monospace; }}
+  /* three voices */
+  .voices {{ background:linear-gradient(180deg,#fffdfa,#f5efe6);
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line); }}
+  .voices-head {{ text-align:center; max-width:38rem; margin:0 auto clamp(3rem,6vw,4.5rem); }}
+  .voices-head h2 {{ font-size:clamp(2.1rem,4.6vw,3.1rem); margin:0; }}
+  .voices-head .note {{ color:var(--soft); font-style:italic; margin:1.1rem 0 0; font-size:1.05rem; }}
+  .gallery {{ display:grid; gap:clamp(2rem,3.6vw,3.4rem);
+    grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); align-items:stretch; }}
+  .card {{ background:var(--panel); border:1px solid var(--line); border-radius:22px;
+    padding:clamp(2.1rem,3vw,3rem); display:flex; flex-direction:column; position:relative;
+    box-shadow:0 34px 64px -44px rgba(45,30,65,.5);
+    transition:transform .4s cubic-bezier(.2,.7,.2,1), box-shadow .4s; }}
+  .card:hover {{ transform:translateY(-7px); box-shadow:0 46px 78px -42px rgba(45,30,65,.55); }}
+  .card::before {{ content:""; position:absolute; top:0; left:clamp(2.1rem,3vw,3rem);
+    width:46px; height:3px; background:var(--accent); border-radius:0 0 4px 4px; }}
+  .card .vnum {{ font-family:"Space Grotesk",sans-serif; font-size:.7rem; letter-spacing:.3em;
+    text-transform:uppercase; color:var(--accent); margin:.4rem 0 1rem; }}
+  .card h3 {{ font-size:1.78rem; margin:0 0 1.3rem; }}
+  .card .body {{ font-size:1.02rem; line-height:1.82; color:#36333f; }}
+  .card .body p {{ margin:0 0 1rem; }}
+  .card .body p:last-child {{ margin-bottom:0; }}
+  .card:nth-child(3n+1) {{ --accent:var(--c-sky); }}
+  .card:nth-child(3n+2) {{ --accent:var(--c-sage); }}
+  .card:nth-child(3n+3) {{ --accent:var(--c-rose); }}
 
-  /* soundtrack toggle */
-  .soundtrack {{ position:fixed; right:1.25rem; bottom:1.25rem; z-index:50; }}
-  .soundtrack button {{ font-family:"Helvetica Neue",Arial,sans-serif; font-size:.85rem;
-    color:var(--paper); background:var(--ink); border:none; border-radius:999px;
-    padding:.6rem 1.15rem; cursor:pointer; box-shadow:0 8px 22px -8px rgba(0,0,0,.55);
-    display:inline-flex; align-items:center; gap:.5rem; transition:transform .15s ease; }}
-  .soundtrack button:hover {{ transform:translateY(-2px); }}
-  .soundtrack button[disabled] {{ opacity:.6; cursor:wait; }}
-  .soundtrack .dot {{ width:8px; height:8px; border-radius:50%; background:var(--gold); }}
-  .soundtrack.on .dot {{ animation:pulse 1.1s ease-in-out infinite; }}
-  @keyframes pulse {{ 0%,100%{{ opacity:.4; transform:scale(.8); }} 50%{{ opacity:1; transform:scale(1.25); }} }}
+  /* the finale — the payoff, full-bleed and weighty */
+  .finale {{ color:#f3ede4; overflow:hidden;
+    background:linear-gradient(176deg,#201d3a 0%,#3a2b49 55%,#5c3b50 100%); }}
+  .finale::before {{ content:""; position:absolute; left:50%; top:-25%; width:95vw; height:95vw;
+    transform:translateX(-50%); pointer-events:none;
+    background:radial-gradient(circle,rgba(231,164,118,.2),transparent 60%); }}
+  .finale-inner {{ position:relative; }}
+  .finale .prose h2 {{ font-size:clamp(2.3rem,5.2vw,3.6rem); color:#fff; margin:0 0 1.7rem; }}
+  .finale .prose p {{ margin:0 0 1.45rem; font-size:1.1em; line-height:1.82; color:rgba(243,237,228,.92); }}
+  .finale .prose p:first-of-type {{ font-size:1.28em; line-height:1.66; color:#fbf6ee; }}
 
-  footer {{ max-width:680px; margin:4.5rem auto 0; padding:1.6rem 0 4rem;
-    border-top:1px solid var(--line); color:var(--muted); font-style:italic;
-    font-size:.85rem; text-align:center; }}
-  footer strong {{ color:var(--ink); font-style:normal; }}
+  /* footer */
+  footer {{ background:#15131d; color:#9a93a8; text-align:center;
+    padding:3.6rem 2rem 4rem; font-size:.92rem; font-style:italic; line-height:1.75; }}
+  footer .reading {{ margin:0 auto; }}
+  footer strong {{ color:#e9e3d6; font-style:normal; }}
+  footer .meta {{ font-family:"Space Grotesk",sans-serif; font-style:normal; font-size:.68rem;
+    letter-spacing:.22em; text-transform:uppercase; color:#6b6479; margin-top:1.2rem; }}
 
-  @media (max-width:560px) {{
-    body {{ font-size:17px; }}
-    .hero {{ padding-top:3.5rem; }}
+  /* scroll reveal */
+  .reveal {{ opacity:0; transform:translateY(26px);
+    transition:opacity 1s ease, transform 1s cubic-bezier(.2,.7,.2,1); }}
+  .reveal.in {{ opacity:1; transform:none; }}
+
+  /* soundtrack pill */
+  .snd {{ position:fixed; right:1.5rem; bottom:1.5rem; z-index:60; }}
+  .snd button {{ font-family:"Space Grotesk",sans-serif; font-size:.8rem; letter-spacing:.03em;
+    color:#1b1a26; background:rgba(255,255,255,.8); -webkit-backdrop-filter:blur(14px);
+    backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.55); border-radius:999px;
+    padding:.68rem 1.25rem; cursor:pointer; box-shadow:0 18px 44px -16px rgba(0,0,0,.5);
+    display:inline-flex; align-items:center; gap:.6rem; transition:transform .2s; }}
+  .snd button:hover {{ transform:translateY(-2px); }}
+  .eq {{ display:inline-flex; gap:2px; align-items:flex-end; height:14px; }}
+  .eq i {{ width:3px; height:4px; background:var(--c-rose); border-radius:2px; }}
+  .snd.on .eq i {{ animation:eq .9s ease-in-out infinite; }}
+  .snd.on .eq i:nth-child(2) {{ animation-delay:.18s; }}
+  .snd.on .eq i:nth-child(3) {{ animation-delay:.36s; }}
+  .snd.on .eq i:nth-child(4) {{ animation-delay:.12s; }}
+  @keyframes eq {{ 0%,100% {{ height:4px; }} 50% {{ height:14px; }} }}
+
+  @media (max-width:640px) {{
+    body {{ font-size:18px; }}
+    .wrap {{ padding:0 1.4rem; }}
+  }}
+  @media (prefers-reduced-motion:reduce) {{
+    .reveal {{ opacity:1; transform:none; }}
+    .hero-sky, .scroll-cue, .snd.on .eq i {{ animation:none; }}
   }}
 </style>
 </head>
 <body>
-<div class="skyband"></div>
-<div class="wrap">
 
 <header class="hero">
-  <p class="kicker">A Marianne Composition</p>
-  <h1>The Sky Library</h1>
-  <p class="sub">Three voices, one world — orchestrated, not prompted.</p>
-  <div class="world">{world}</div>
+  <div class="hero-sky"></div>
+  <div class="hero-inner">
+    <p class="eyebrow">A Marianne Composition</p>
+    <h1 class="title">The Sky Library</h1>
+    <p class="dek">{subtitle}</p>
+  </div>
+  <div class="scroll-cue" aria-hidden="true">↓</div>
 </header>
 
-<div class="rule"><span>Three vignettes · written in parallel</span></div>
+<main>
+  <section class="world reveal">
+    <div class="wrap reading">
+      <p class="tag">The World</p>
+      <div class="prose">{world}</div>
+    </div>
+  </section>
 
-<div class="gallery">
+  <section class="voices reveal">
+    <div class="wrap">
+      <div class="voices-head">
+        <p class="tag">Three Voices</p>
+        <h2>Written in parallel</h2>
+        <p class="note">Three agents, each given the same world and none shown the
+          others' pages — composed at the same moment, then woven together.</p>
+      </div>
+      <div class="gallery">
 {cards}
-</div>
+      </div>
+    </div>
+  </section>
 
 {finale}
+</main>
 
 <footer>
-  Composed by <strong>Marianne AI Compose</strong>. The world was written first;
-  the {nchar} vignettes were generated <em>in parallel</em>, each agent reading the
-  shared world but not the others; a separate agent composed the soundtrack; a
-  final agent read all of them and wrote the closing synthesis; and a deterministic
-  tool wove it all into this page.<br>
-  Score: hello.yaml · Fan-out + Synthesis + Tool-Chain · Free &amp; local-capable.
+  <div class="reading">
+    Composed by <strong>Marianne AI Compose</strong>. The world was written first;
+    the {nchar} vignettes were generated <em>in parallel</em>, each agent reading the
+    shared world but not the others; a separate agent composed the soundtrack; a
+    final agent read all of them and wrote the closing synthesis; and a deterministic
+    tool wove it into this page.
+    <div class="meta">Score: hello.yaml · Fan-out + Synthesis + Tool-Chain · Free &amp; local-capable</div>
+  </div>
 </footer>
 
+<div class="snd" id="snd-wrap">
+  <button id="snd-toggle" type="button">
+    <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    <span id="snd-label">play soundtrack</span>
+  </button>
 </div>
-
-<div class="soundtrack" id="snd-wrap">
-  <button id="snd-toggle" type="button"><span class="dot"></span><span id="snd-label">play soundtrack</span></button>
-</div>
-<strudel-editor id="snd-repl" style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;"></strudel-editor>
 <script type="module">
-import 'https://unpkg.com/@strudel/repl@1.3.0';
+import 'https://unpkg.com/@strudel/web@1.3.0';   // audio engine only — no editor UI
+
+// ── scroll reveal (reduced-motion safe — sections start hidden, fade up) ──
+const reduce = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+const reveals = document.querySelectorAll('.reveal');
+if (reduce || !('IntersectionObserver' in window)) {{
+  reveals.forEach(el => el.classList.add('in'));
+}} else {{
+  const io = new IntersectionObserver((entries) => {{
+    entries.forEach(en => {{ if (en.isIntersecting) {{ en.target.classList.add('in'); io.unobserve(en.target); }} }});
+  }}, {{ rootMargin:'0px 0px -12% 0px', threshold:0.08 }});
+  reveals.forEach(el => io.observe(el));
+}}
+
+// ── soundtrack (audio-only via @strudel/web — no editor is ever rendered) ──
 const PATTERN = {pattern};
 const wrap = document.getElementById('snd-wrap');
 const btn = document.getElementById('snd-toggle');
 const label = document.getElementById('snd-label');
-const ed = document.getElementById('snd-repl');
-let playing = false, ready = false, armed = true;
-async function ensure() {{
-  if (ready) return true;
-  try {{ await customElements.whenDefined('strudel-editor'); }} catch (e) {{}}
-  for (let i = 0; i < 50 && !(ed && ed.editor); i++) {{
-    await new Promise(r => setTimeout(r, 100));
-  }}
-  ready = !!(ed && ed.editor);
-  return ready;
-}}
-async function play(restart) {{
-  if (!PATTERN) {{ label.textContent = 'no soundtrack'; return; }}
-  if (!(await ensure())) {{ label.textContent = 'player unavailable'; return; }}
+let repl = null, playing = false, armed = true;
+
+// Boot the audio engine up-front (async) so the first user gesture can start
+// playback SYNCHRONOUSLY. Browsers — Chrome especially — only let Web Audio
+// begin inside a real user gesture, and any await before evaluate() forfeits it.
+(async () => {{ if (PATTERN) {{ try {{ repl = await window.initStrudel(); }} catch (e) {{ repl = null; }} }} }})();
+
+function play() {{
+  if (!PATTERN || !repl) return false;           // still booting → caller stays armed
   try {{
-    if (restart || !playing) {{ ed.editor.setCode(PATTERN); ed.editor.evaluate(); }}
-    playing = true; wrap.classList.add('on'); label.textContent = 'mute';
-  }} catch (e) {{ label.textContent = 'playback error'; }}
+    repl.evaluate(PATTERN);
+    playing = true; wrap.classList.add('on'); label.textContent = 'mute'; return true;
+  }} catch (e) {{ label.textContent = 'playback error'; return false; }}
 }}
 function stop() {{
-  try {{ ed.editor.stop(); }} catch (e) {{}}
+  try {{ repl.stop(); }} catch (e) {{}}
   playing = false; wrap.classList.remove('on'); label.textContent = 'play soundtrack';
 }}
-// Browsers block Web Audio until the first user gesture, so we can't truly play
-// on load. We start optimistically AND re-evaluate inside the first interaction
-// anywhere on the page — so the soundtrack comes alive the instant you touch it.
 function disarm() {{
   armed = false;
   window.removeEventListener('pointerdown', kick);
   window.removeEventListener('keydown', kick);
 }}
+// Autoplay within the browser's rules: start on the FIRST interaction anywhere
+// on the page (a real gesture), re-evaluating synchronously so Chrome lets the
+// audio begin. Only disarm once it actually started (repl may still be booting).
 function kick(e) {{
   if (!armed) return;
-  // ignore clicks on the toggle itself — the button handles those
-  if (e && e.target && e.target.closest && e.target.closest('#snd-wrap')) return;
-  disarm();
-  play(true);
+  if (e && e.target && e.target.closest && e.target.closest('#snd-wrap')) return; // button handles itself
+  if (play()) disarm();
 }}
 btn.addEventListener('click', (e) => {{
   e.stopPropagation();
-  disarm();                       // user took manual control
-  if (playing) stop(); else play(true);
+  if (playing) {{ disarm(); stop(); }}
+  else if (play()) {{ disarm(); }}               // retry-safe if still booting
 }});
 if (PATTERN) {{
-  label.textContent = 'mute';     // optimistic; the toggle still mutes
-  play(false);                    // attempt now (usually suspended until a gesture)
   window.addEventListener('pointerdown', kick);
   window.addEventListener('keydown', kick);
 }}
@@ -290,7 +380,13 @@ if (PATTERN) {{
 </html>
 """
 
-CARD = "<article class='card'><p class='num'>Vignette {n}</p><h3>{title}</h3>\n{body}</article>"
+CARD = (
+    "<article class='card'>"
+    "<p class='vnum'>Vignette {n}</p>"
+    "<h3>{title}</h3>"
+    "<div class='body'>{body}</div>"
+    "</article>"
+)
 
 
 def main() -> int:
@@ -310,10 +406,15 @@ def main() -> int:
         cards.append(
             CARD.format(n=i + 1, title=html.escape(title or f"Vignette {i + 1}"), body=body)
         )
+
     _, finale_body = md_to_html(read(ws, "finale.md"))
     finale = (
-        f"<div class='rule'><span>Finale</span></div>\n"
-        f"<section class='finale'>{finale_body}</section>"
+        "  <section class='finale reveal'>\n"
+        "    <div class='wrap reading finale-inner'>\n"
+        "      <p class='tag light'>Finale</p>\n"
+        f"      <div class='prose'>{finale_body}</div>\n"
+        "    </div>\n"
+        "  </section>\n"
         if finale_body
         else ""
     )
@@ -323,9 +424,10 @@ def main() -> int:
     strudel = read(ws, "soundtrack.strudel").strip()
 
     page = PAGE.format(
+        subtitle="Three voices, one world — orchestrated across mediums, not prompted.",
         world=world or "<p>(The world was not written.)</p>",
         cards="\n".join(cards)
-        or "<article class='card'><p>(No vignettes were written.)</p></article>",
+        or "<article class='card'><div class='body'><p>(No vignettes were written.)</p></div></article>",
         finale=finale,
         pattern=json.dumps(strudel),
         nchar=len(char_files) or "parallel",
