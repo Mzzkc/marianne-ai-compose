@@ -114,11 +114,31 @@ def main() -> int:
     cfg = yaml.safe_load(template.read_text(encoding="utf-8"))
 
     # ── the score edit: pin the one instrument we confirmed works ──
+    template_ic = cfg.get("instrument_config") or {}
+    new_ic: dict[str, Any] = {}
+    if model:
+        new_ic["model"] = model
+    # Keep the template's timeout so a hung local sheet FAILS (and retries, via the
+    # score's max_retries) instead of hanging forever — local model harnesses can
+    # stall, and without a timeout the run never recovers.
+    if "timeout_seconds" in template_ic:
+        new_ic["timeout_seconds"] = template_ic["timeout_seconds"]
     cfg["instrument"] = instrument
-    cfg["instrument_config"] = {"model": model} if model else {}
+    cfg["instrument_config"] = new_ic
     cfg.pop("instruments", None)
     cfg.pop("instrument_fallbacks", None)
     cfg["workspace"] = str(ws)
+
+    # ── serialize on local single-GPU instruments ──
+    # The template's max_concurrent (3) is tuned for cloud. A local model on one
+    # GPU cannot safely serve parallel sessions — the parallel vignettes deadlock
+    # the card and the run hangs. When we resolved to a local instrument, force
+    # one sheet at a time so the run actually completes.
+    if "local" in label.lower():
+        parallel = cfg.setdefault("parallel", {})
+        parallel["enabled"] = True
+        parallel["max_concurrent"] = 1
+        print("[discover] local model on one GPU → serializing sheets (max_concurrent=1)")
 
     # NOTE: the finished page is opened by the assembler (assemble-site.py) on
     # BOTH the direct and resolved runs, so we don't add a redundant on_success

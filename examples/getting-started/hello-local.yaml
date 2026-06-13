@@ -231,6 +231,6 @@ validations:
     description: "Final website is valid HTML5"
   - type: content_contains
     path: "{workspace}/the-sky-library.html"
-    pattern: "strudel-editor"
+    pattern: "@strudel/web"
     condition: "stage == 5"
     description: "The soundtrack player is embedded"
