@@ -13,17 +13,43 @@ The vignettes render as cards, so the fan-out (three agents at once) is visible.
 
 Usage:
     python3 assemble-site.py <workspace-dir> [output.html]
-Reads: <ws>/01-world.md, <ws>/02-character-*.md, <ws>/03-finale.md, <ws>/soundtrack.strudel
+Reads: <ws>/01-world.md, <ws>/02-character-*.md, <ws>/finale.md, <ws>/soundtrack.strudel
 Writes: <ws>/the-sky-library.html   (or the explicit output path)
+Then opens the page in a browser (best-effort; set HELLO_NO_OPEN=1 to suppress).
 """
 
 from __future__ import annotations
 
 import html
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
+
+
+def open_in_browser(path: Path) -> None:
+    """Best-effort: open the finished page in the user's browser. Tries the
+    common openers across WSL / Linux / macOS. Never raises — a failure here
+    must not fail the sheet (the page is already written). Set HELLO_NO_OPEN=1
+    to suppress (useful during testing)."""
+    if os.environ.get("HELLO_NO_OPEN"):
+        return
+    for opener in ("wslview", "xdg-open", "open", "explorer.exe"):
+        if shutil.which(opener):
+            try:
+                subprocess.Popen(
+                    [opener, str(path)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                print(f"opened {path} with {opener}")
+            except Exception as exc:  # noqa: BLE001 — opening is best-effort
+                print(f"(could not open browser via {opener}: {exc})", file=sys.stderr)
+            return
+    print("(no browser opener found — open the page yourself)", file=sys.stderr)
 
 
 def md_to_html(md: str, *, drop_first_h1: bool = False) -> tuple[str, str]:
@@ -192,8 +218,9 @@ PAGE = """<!DOCTYPE html>
 <footer>
   Composed by <strong>Marianne AI Compose</strong>. The world was written first;
   the {nchar} vignettes were generated <em>in parallel</em>, each agent reading the
-  shared world but not the others; a separate agent composed the soundtrack; and a
-  deterministic tool wove it all into this page.<br>
+  shared world but not the others; a separate agent composed the soundtrack; a
+  final agent read all of them and wrote the closing synthesis; and a deterministic
+  tool wove it all into this page.<br>
   Score: hello.yaml · Fan-out + Synthesis + Tool-Chain · Free &amp; local-capable.
 </footer>
 
@@ -210,7 +237,7 @@ const wrap = document.getElementById('snd-wrap');
 const btn = document.getElementById('snd-toggle');
 const label = document.getElementById('snd-label');
 const ed = document.getElementById('snd-repl');
-let playing = false, ready = false;
+let playing = false, ready = false, armed = true;
 async function ensure() {{
   if (ready) return true;
   try {{ await customElements.whenDefined('strudel-editor'); }} catch (e) {{}}
@@ -220,16 +247,44 @@ async function ensure() {{
   ready = !!(ed && ed.editor);
   return ready;
 }}
-btn.addEventListener('click', async () => {{
+async function play(restart) {{
   if (!PATTERN) {{ label.textContent = 'no soundtrack'; return; }}
-  btn.disabled = true;
-  if (!(await ensure())) {{ label.textContent = 'player unavailable'; btn.disabled = false; return; }}
+  if (!(await ensure())) {{ label.textContent = 'player unavailable'; return; }}
   try {{
-    if (playing) {{ ed.editor.stop(); playing = false; wrap.classList.remove('on'); label.textContent = 'play soundtrack'; }}
-    else {{ ed.editor.setCode(PATTERN); ed.editor.evaluate(); playing = true; wrap.classList.add('on'); label.textContent = 'mute'; }}
+    if (restart || !playing) {{ ed.editor.setCode(PATTERN); ed.editor.evaluate(); }}
+    playing = true; wrap.classList.add('on'); label.textContent = 'mute';
   }} catch (e) {{ label.textContent = 'playback error'; }}
-  btn.disabled = false;
+}}
+function stop() {{
+  try {{ ed.editor.stop(); }} catch (e) {{}}
+  playing = false; wrap.classList.remove('on'); label.textContent = 'play soundtrack';
+}}
+// Browsers block Web Audio until the first user gesture, so we can't truly play
+// on load. We start optimistically AND re-evaluate inside the first interaction
+// anywhere on the page — so the soundtrack comes alive the instant you touch it.
+function disarm() {{
+  armed = false;
+  window.removeEventListener('pointerdown', kick);
+  window.removeEventListener('keydown', kick);
+}}
+function kick(e) {{
+  if (!armed) return;
+  // ignore clicks on the toggle itself — the button handles those
+  if (e && e.target && e.target.closest && e.target.closest('#snd-wrap')) return;
+  disarm();
+  play(true);
+}}
+btn.addEventListener('click', (e) => {{
+  e.stopPropagation();
+  disarm();                       // user took manual control
+  if (playing) stop(); else play(true);
 }});
+if (PATTERN) {{
+  label.textContent = 'mute';     // optimistic; the toggle still mutes
+  play(false);                    // attempt now (usually suspended until a gesture)
+  window.addEventListener('pointerdown', kick);
+  window.addEventListener('keydown', kick);
+}}
 </script>
 </body>
 </html>
@@ -255,7 +310,7 @@ def main() -> int:
         cards.append(
             CARD.format(n=i + 1, title=html.escape(title or f"Vignette {i + 1}"), body=body)
         )
-    _, finale_body = md_to_html(read(ws, "03-finale.md"))
+    _, finale_body = md_to_html(read(ws, "finale.md"))
     finale = (
         f"<div class='rule'><span>Finale</span></div>\n"
         f"<section class='finale'>{finale_body}</section>"
@@ -278,8 +333,10 @@ def main() -> int:
     out_path.write_text(page, encoding="utf-8")
     print(
         f"assembled {out_path} from {len(char_files)} vignette(s)"
+        + (" + finale" if finale_body else "")
         + (" + soundtrack" if strudel else " (no soundtrack)")
     )
+    open_in_browser(out_path)
     return 0
 
 

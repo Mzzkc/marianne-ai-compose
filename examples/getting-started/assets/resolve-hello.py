@@ -6,11 +6,11 @@ it can never hang. It:
 
   1. picks the best AVAILABLE + REACHABLE instrument, free first (Ollama →
      free OpenRouter via crush → a paid CLI sub → a paid API);
-  2. picks a browser-open command for this OS/shell (wslview / xdg-open / open
-     / explorer.exe);
+  2. detects the browser-open command for this OS/shell (wslview / xdg-open /
+     open / explorer.exe) and reports it (the assembler does the actual opening);
   3. reads the hello orchestration template and writes a RESOLVED copy with the
-     chosen instrument baked in and an on_success hook that opens the finished
-     page — so the run adapts to the machine and ends with the result on screen.
+     chosen instrument baked in — so the run adapts to the machine and, via the
+     assembler, ends with the finished page on screen.
 
 This is the "score editing / templating" the onboarding demonstrates, kept
 deliberately simple: load a score, change one field, add one hook, write it out.
@@ -100,16 +100,10 @@ def main() -> int:
     cfg.pop("instrument_fallbacks", None)
     cfg["workspace"] = str(ws)
 
-    # ── the auto-open finish ──
-    if opener:
-        page = f"{ws}/the-sky-library.html"
-        cfg["on_success"] = [
-            {
-                "type": "run_command",
-                "command": f'{opener} "{page}"',
-                "description": "Open the finished page in a browser",
-            }
-        ]
+    # NOTE: the finished page is opened by the assembler (assemble-site.py) on
+    # BOTH the direct and resolved runs, so we don't add a redundant on_success
+    # opener here — one opener, no double-open. We still surface the detected
+    # opener above so the user sees how their machine was read.
 
     # ── make the asset paths absolute so the resolved score runs from any
     #    workspace (the template uses a repo-relative path that only works

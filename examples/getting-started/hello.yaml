@@ -13,16 +13,21 @@
 #         │  ┌─ Movement 3 ····· tuned to the world's mood (parallel with the
 #         │  │                   vignettes; a corpus is injected so it writes
 #         ▼  ▼                   real, valid music — not invented gibberish)
-#   Movement 4 · The Page      a DETERMINISTIC tool (no AI) builds the FINAL,
-#                              hand-designed HTML page from the prose, the cards,
-#                              and the soundtrack — always valid, always pretty,
-#                              and it embeds the music VERBATIM so nothing
-#                              corrupts it.
+#   Movement 4 · The Finale    one agent reads the world AND all three vignettes
+#         │                    and writes the CLOSING chapter — braiding the three
+#         │                    separately-written secrets into one revelation. This
+#         ▼                    is the synthesis: the payoff no single vignette could
+#                              reach, because each author never saw the others.
+#   Movement 5 · The Page      a DETERMINISTIC tool (no AI) builds the FINAL,
+#                              hand-designed HTML page from the world, the cards,
+#                              the finale, and the soundtrack — always valid, always
+#                              pretty, embedding the music VERBATIM so nothing
+#                              corrupts it, then opens it in your browser.
 #
-# Mediums crossed: prose → parallel prose → playable music → an openable web page.
-# Pattern: Fan-out + Synthesis, plus a Tool-Chain seam — the design lives in the
-# deterministic tool, so a new user's first result is reliably beautiful no
-# matter how small the model that wrote the words.
+# Mediums crossed: prose → parallel prose → playable music → synthesis → an openable
+# web page. Pattern: Fan-out + Synthesis, plus a Tool-Chain seam — the convergence
+# lives in the finale agent, the design lives in the deterministic tool, so a new
+# user's first result is reliably beautiful no matter how small the model.
 #
 # FREE BY DESIGN — a deep fallback chain: free OpenRouter (crush) → local Ollama
 # → paid subs/API. You need only ONE of them. (Tip: run hello-setup.yaml instead
@@ -31,12 +36,12 @@
 # Usage:
 #   mzt start
 #   mzt run examples/getting-started/hello.yaml
-#   open workspaces/hello/the-sky-library.html   # press ♪ to play the soundtrack
+#   # it opens the-sky-library.html for you; the soundtrack autoplays on first click
 #
 # Output (workspaces/hello/): 01-world.md · 02-character-1..3.md ·
-#   soundtrack.strudel · the-sky-library.html (the finished page — open this)
+#   soundtrack.strudel · finale.md · the-sky-library.html (the finished page)
 #
-# Time: ~5-15 min (varies with model/fallback)  |  Cost: free  |  Sheets: 6
+# Time: ~5-15 min (varies with model/fallback)  |  Cost: free  |  Sheets: 7
 
 name: hello
 description: "Orchestration across mediums — parallel agents write a story; tools and an agent build it into a website. Free, local-capable."
@@ -94,18 +99,21 @@ movements:
   3:
     name: "Soundtrack"               # compose loopable music for the story
   4:
+    name: "The Finale"               # synthesis — braid the three secrets into one ending
+  5:
     name: "The Page"
     instrument: cli                  # deterministic — builds the FINAL page, no AI
 
 sheet:
   size: 1
-  total_items: 4
+  total_items: 5
   fan_out:
     2: 3                             # Movement 2 → three parallel characters
   dependencies:
     2: [1]                           # vignettes read the world
     3: [1]                           # the soundtrack reads the world's mood (parallel with vignettes)
-    4: [2, 3]                        # the page waits for the vignettes AND the soundtrack
+    4: [2]                           # the finale reads the world AND all three vignettes
+    5: [3, 4]                        # the page waits for the soundtrack AND the finale
   cadenzas:
     # The Strudel technique corpus — injected ONLY into the soundtrack sheet, so
     # the composer writes valid patterns instead of inventing sample names (the
@@ -189,6 +197,30 @@ prompt:
     {{ workspace }}/soundtrack.strudel and stop.
 
     {% elif stage == 4 %}
+    {% set c1 = characters[1] %}{% set c2 = characters[2] %}{% set c3 = characters[3] %}
+    You are the fiction writer composing the CLOSING chapter — the synthesis.
+
+    Read ALL of these first, and hold them together:
+    - the shared world:  {{ workspace }}/01-world.md
+    - vignette one:      {{ workspace }}/02-character-1.md   ({{ c1.name }})
+    - vignette two:      {{ workspace }}/02-character-2.md   ({{ c2.name }})
+    - vignette three:    {{ workspace }}/02-character-3.md   ({{ c3.name }})
+
+    Each character was written by a different author who never saw the others, so
+    none of them knows yet how their quiet secrets connect. But the three secrets
+    point the SAME way — downward, below the clouds:
+    - {{ c1.name }}: {{ c1.secret }}
+    - {{ c2.name }}: {{ c2.secret }}
+    - {{ c3.name }}: {{ c3.secret }}
+
+    Write a 250-400 word FINALE that braids the three threads into ONE quiet
+    revelation — the moment the city sees that the bridge, the garden, and the
+    song are the same discovery from three sides — and lands a resonant, hopeful
+    conclusion. Don't summarize the vignettes; carry them forward and let them
+    meet. Match the world's tone. Use a `#` title and short paragraphs. Write ONLY
+    the finale. Save it to {{ workspace }}/finale.md and stop.
+
+    {% elif stage == 5 %}
     python3 "{{ workspace }}/../../examples/getting-started/assets/assemble-site.py" "{{ workspace }}"
     {% endif %}
 
@@ -227,19 +259,29 @@ validations:
     condition: "stage == 3"
     description: "Soundtrack uses only valid sounds (the static reality check)"
 
-  # Movement 4 — the deterministic tool built the FINAL page (always valid +
+  # Movement 4 — the synthesis chapter that braids the three secrets together
+  - type: file_exists
+    path: "{workspace}/finale.md"
+    condition: "stage == 4"
+    description: "The finale (synthesis) exists"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/finale.md") -ge 120'
+    condition: "stage == 4"
+    description: "The finale has substantive prose (120+ words)"
+
+  # Movement 5 — the deterministic tool built the FINAL page (always valid +
   # embeds the soundtrack verbatim, so no model can corrupt it)
   - type: file_exists
     path: "{workspace}/the-sky-library.html"
-    condition: "stage == 4"
+    condition: "stage == 5"
     description: "Final website built"
   - type: content_contains
     path: "{workspace}/the-sky-library.html"
     pattern: "<!DOCTYPE html>"
-    condition: "stage == 4"
+    condition: "stage == 5"
     description: "Final website is valid HTML5"
   - type: content_contains
     path: "{workspace}/the-sky-library.html"
     pattern: "strudel-editor"
-    condition: "stage == 4"
+    condition: "stage == 5"
     description: "The soundtrack player is embedded"

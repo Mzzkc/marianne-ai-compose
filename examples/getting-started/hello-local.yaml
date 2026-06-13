@@ -1,21 +1,23 @@
 # hello-local.yaml — Your First Marianne Score (PURE-LOCAL, fully offline)
 #
 # The local-only twin of hello.yaml. Identical orchestration — parallel agents
-# write a story, a deterministic tool builds a website, an agent polishes it —
-# but it runs ENTIRELY on a local Ollama model (no OpenRouter, no cloud, no
-# account). Use this when you want zero network calls; use hello.yaml if you'd
-# like it to try fast free OpenRouter models first and fall back to local.
+# write a story, one composes a soundtrack, one writes the synthesis finale, and a
+# deterministic tool builds the website — but it runs ENTIRELY on a local Ollama
+# model (no OpenRouter, no cloud, no account). Use this when you want zero network
+# calls; use hello.yaml to try fast free OpenRouter models first, then fall back.
 #
 #   Movement 1 · The World     one agent writes the shared setting (prose)
 #         │  ▼ fan-out (parallel)
 #   Movement 2 · Vignettes     three agents each write one character at once
+#         │  ▼                 (one agent composes a Strudel soundtrack alongside)
+#   Movement 3 · Soundtrack    loopable ambient music tuned to the world
 #         │  ▼
-#   Movement 3 · Assembly      a DETERMINISTIC tool folds them into one valid
-#         │                    HTML page — you always get a real website
-#         │  ▼
-#   Movement 4 · Polish        an agent tailors that page to the story told
+#   Movement 4 · The Finale    one agent reads the world AND all three vignettes
+#         │  ▼                 and writes the closing chapter — the synthesis
+#   Movement 5 · The Page      a DETERMINISTIC tool builds the final HTML page and
+#                              opens it in your browser; the soundtrack autoplays
 #
-# Mediums crossed: prose → parallel prose → a styled, openable web page.
+# Mediums crossed: prose → parallel prose → music → synthesis → an openable page.
 # Pattern: Fan-out + Synthesis + a Tool-Chain seam.
 #
 # Prerequisites (one-time):
@@ -30,9 +32,9 @@
 #   open workspaces/hello-local/the-sky-library.html   # read the result
 #
 # Output (workspaces/hello-local/):
-#   01-world.md  02-character-1..3.md  site-base.html  the-sky-library.html
+#   01-world.md  02-character-1..3.md  soundtrack.strudel  finale.md  the-sky-library.html
 #
-# Time: ~5-15 min (local inference)  |  Cost: $0 (fully local)  |  Sheets: 6
+# Time: ~5-15 min (local inference)  |  Cost: $0 (fully local)  |  Sheets: 7
 
 name: hello-local
 description: "Pure-local first score — the same orchestration as hello.yaml, run entirely on a local Ollama model (no cloud, no account)."
@@ -53,18 +55,21 @@ movements:
   3:
     name: "Soundtrack"               # compose loopable music for the story
   4:
+    name: "The Finale"               # synthesis — braid the three secrets into one ending
+  5:
     name: "The Page"
     instrument: cli                  # deterministic — builds the FINAL page, no AI
 
 sheet:
   size: 1
-  total_items: 4
+  total_items: 5
   fan_out:
     2: 3                             # Movement 2 → three parallel characters
   dependencies:
     2: [1]
     3: [1]                           # soundtrack reads the world's mood (parallel with vignettes)
-    4: [2, 3]                        # the page waits for the vignettes AND the soundtrack
+    4: [2]                           # the finale reads the world AND all three vignettes
+    5: [3, 4]                        # the page waits for the soundtrack AND the finale
   cadenzas:
     5:                               # corpus → the soundtrack sheet only (sheet 5 = movement 3)
       - file: "{{ workspace }}/../../examples/getting-started/assets/strudel-patterns.md"
@@ -144,6 +149,30 @@ prompt:
     {{ workspace }}/soundtrack.strudel and stop.
 
     {% elif stage == 4 %}
+    {% set c1 = characters[1] %}{% set c2 = characters[2] %}{% set c3 = characters[3] %}
+    You are the fiction writer composing the CLOSING chapter — the synthesis.
+
+    Read ALL of these first, and hold them together:
+    - the shared world:  {{ workspace }}/01-world.md
+    - vignette one:      {{ workspace }}/02-character-1.md   ({{ c1.name }})
+    - vignette two:      {{ workspace }}/02-character-2.md   ({{ c2.name }})
+    - vignette three:    {{ workspace }}/02-character-3.md   ({{ c3.name }})
+
+    Each character was written by a different author who never saw the others, so
+    none of them knows yet how their quiet secrets connect. But the three secrets
+    point the SAME way — downward, below the clouds:
+    - {{ c1.name }}: {{ c1.secret }}
+    - {{ c2.name }}: {{ c2.secret }}
+    - {{ c3.name }}: {{ c3.secret }}
+
+    Write a 250-400 word FINALE that braids the three threads into ONE quiet
+    revelation — the moment the city sees that the bridge, the garden, and the
+    song are the same discovery from three sides — and lands a resonant, hopeful
+    conclusion. Don't summarize the vignettes; carry them forward and let them
+    meet. Match the world's tone. Use a `#` title and short paragraphs. Write ONLY
+    the finale. Save it to {{ workspace }}/finale.md and stop.
+
+    {% elif stage == 5 %}
     python3 "{{ workspace }}/../../examples/getting-started/assets/assemble-site.py" "{{ workspace }}"
     {% endif %}
 
@@ -180,16 +209,25 @@ validations:
     description: "Soundtrack uses only valid sounds (the static reality check)"
 
   - type: file_exists
-    path: "{workspace}/the-sky-library.html"
+    path: "{workspace}/finale.md"
     condition: "stage == 4"
+    description: "The finale (synthesis) exists"
+  - type: command_succeeds
+    command: 'test $(wc -w < "{workspace}/finale.md") -ge 120'
+    condition: "stage == 4"
+    description: "The finale has substantive prose (120+ words)"
+
+  - type: file_exists
+    path: "{workspace}/the-sky-library.html"
+    condition: "stage == 5"
     description: "Final website built"
   - type: content_contains
     path: "{workspace}/the-sky-library.html"
     pattern: "<!DOCTYPE html>"
-    condition: "stage == 4"
+    condition: "stage == 5"
     description: "Final website is valid HTML5"
   - type: content_contains
     path: "{workspace}/the-sky-library.html"
     pattern: "strudel-editor"
-    condition: "stage == 4"
+    condition: "stage == 5"
     description: "The soundtrack player is embedded"
