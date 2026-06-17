@@ -3805,7 +3805,22 @@ class JobManager:
         if concert and concert.get("enabled"):
             max_depth = concert.get("max_chain_depth", 5)
             if current_depth >= max_depth:
-                result["error_message"] = f"Concert chain depth limit reached ({max_depth})"
+                # Reaching the configured chain-depth limit is a CLEAN STOP, not a hook
+                # failure. Returning success=False here would downgrade the parent job
+                # COMPLETED -> FAILED (via _execute_hooks_task's any_failed check),
+                # misclassifying a legitimate chain-budget exhaustion as an error and
+                # making self-chaining jobs look broken. Mark success so the parent
+                # stays COMPLETED; the chained job simply isn't submitted.
+                result["success"] = True
+                result["output"] = (
+                    f"Concert chain depth limit reached ({max_depth}) — clean stop, "
+                    "parent remains COMPLETED"
+                )
+                _logger.info(
+                    "hooks.chain_depth_limit_reached",
+                    job_id=parent_job_id,
+                    max_depth=max_depth,
+                )
                 return result
 
         # Cooldown before submission

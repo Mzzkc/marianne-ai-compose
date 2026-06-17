@@ -2050,7 +2050,7 @@ class TestDaemonHookExecution:
 
     @pytest.mark.asyncio
     async def test_concert_depth_enforcement(self, tmp_path: Path):
-        """Chained job is rejected when concert depth limit is reached."""
+        """Depth limit is a clean stop: chain NOT submitted, hook succeeds, parent stays COMPLETED."""
         config = DaemonConfig(
             max_concurrent_jobs=2,
             state_db_path=tmp_path / "reg.db",
@@ -2092,11 +2092,15 @@ class TestDaemonHookExecution:
 
             await mgr._execute_hooks_task("depth-job")
 
-            # Hook should have failed, job downgraded to FAILED
-            assert meta.status == DaemonJobStatus.FAILED
-            assert meta.error_message == "Post-success hook failed"
+            # Depth limit is a CLEAN STOP, not a hook failure: the chain is correctly
+            # NOT submitted, but the parent stays COMPLETED (previously this downgraded
+            # COMPLETED→FAILED, breaking self-chaining persons — see manager.py fix).
+            assert meta.status == DaemonJobStatus.COMPLETED
 
-            # Verify the specific depth limit error is in the stored hook results
+            # The chained job was NOT submitted (depth limit blocks the chain)
+            mgr._service.submit_job.assert_not_called()
+
+            # The hook result records success=True + the clean-stop output
             import json
 
             cursor = await mgr._registry._db.execute(
@@ -2106,7 +2110,8 @@ class TestDaemonHookExecution:
             row = await cursor.fetchone()
             assert row is not None
             hook_results = json.loads(row["hook_results_json"])
-            assert "depth limit" in hook_results[0]["error_message"].lower()
+            assert hook_results[0]["success"] is True
+            assert "depth limit" in hook_results[0]["output"].lower()
         finally:
             await mgr._registry.close()
 
