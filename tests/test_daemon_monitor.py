@@ -466,7 +466,10 @@ class TestLoadShedding:
         await monitor._shed_oldest_job("memory")
 
         mock_manager.pause_job.assert_awaited_once_with("stuck-job")
-        mock_manager.cancel_job.assert_awaited_once_with("stuck-job")
+        mock_manager.cancel_job.assert_awaited_once_with(
+            "stuck-job",
+            source="resource_monitor:memory",
+        )
 
     @pytest.mark.asyncio
     async def test_shed_noop_when_no_running_jobs(

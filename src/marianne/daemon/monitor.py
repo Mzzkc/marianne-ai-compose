@@ -381,7 +381,10 @@ class ResourceMonitor:
                         reason=reason,
                         exc_info=True,
                     )
-                    await self._manager.cancel_job(job_id)
+                    await self._manager.cancel_job(
+                        job_id,
+                        source=f"resource_monitor:{reason}",
+                    )
 
     # ─── System Probes (delegated to SystemProbe) ──────────────────────
 

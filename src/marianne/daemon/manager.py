@@ -2049,7 +2049,7 @@ class JobManager:
         except Exception:
             _logger.error("modify.deferred_resume_failed", job_id=job_id, exc_info=True)
 
-    async def cancel_job(self, job_id: str) -> bool:
+    async def cancel_job(self, job_id: str, *, source: str = "unknown") -> bool:
         """Cancel a running or pending job.
 
         For running jobs: sends the cancel signal and updates in-memory
@@ -2058,6 +2058,8 @@ class JobManager:
         For pending jobs (queued during rate limit backpressure): removes
         from the pending queue and updates the registry.
         """
+        _logger.info("job.cancel_requested", job_id=job_id, source=source)
+
         # Check pending jobs first (not yet started)
         if job_id in self._pending_jobs:
             del self._pending_jobs[job_id]
@@ -2070,7 +2072,7 @@ class JobManager:
             cleanup.add_done_callback(
                 lambda t: log_task_exception(t, _logger, "cancel_cleanup.failed"),
             )
-            _logger.info("job.pending_cancelled", job_id=job_id)
+            _logger.info("job.pending_cancelled", job_id=job_id, source=source)
             return True
 
         task = self._jobs.get(job_id)
@@ -2094,11 +2096,15 @@ class JobManager:
                 cleanup.add_done_callback(
                     lambda t: log_task_exception(t, _logger, "cancel_cleanup.failed"),
                 )
-                _logger.info("job.baton_cancelled_recovered", job_id=job_id)
+                _logger.info(
+                    "job.baton_cancelled_recovered",
+                    job_id=job_id,
+                    source=source,
+                )
                 return True
             return False
 
-        task.cancel(msg=f"explicit cancel_job({job_id}) via IPC")
+        task.cancel(msg=f"cancel_job({job_id}) requested by {source}")
         await self._set_job_status(job_id, DaemonJobStatus.CANCELLED)
 
         # Defer scheduler cleanup so the IPC handler can
@@ -2111,7 +2117,7 @@ class JobManager:
             lambda t: log_task_exception(t, _logger, "cancel_cleanup.failed"),
         )
 
-        _logger.info("job.cancelled", job_id=job_id)
+        _logger.info("job.cancelled", job_id=job_id, source=source)
         return True
 
     async def _cancel_cleanup(self, job_id: str) -> None:

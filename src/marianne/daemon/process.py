@@ -15,6 +15,8 @@ import fcntl
 import json
 import os
 import signal
+import socket
+import struct
 import sys
 import time
 from pathlib import Path
@@ -40,6 +42,57 @@ _logger = get_logger("conductor")
 # Advisory lock file descriptor — held for daemon lifetime to prevent
 # concurrent starts.  Set by _write_pid(), released on process exit.
 _pid_lock_fd: int | None = None
+
+
+def _read_proc_text(pid: int, name: str) -> str | None:
+    """Read a small procfs field for IPC provenance."""
+    try:
+        return Path(f"/proc/{pid}/{name}").read_text(errors="replace").strip()
+    except (FileNotFoundError, OSError, PermissionError):
+        return None
+
+
+def _ipc_peer_metadata(writer: asyncio.StreamWriter) -> dict[str, Any]:
+    """Best-effort Unix socket peer metadata for control-plane audit logs."""
+    metadata: dict[str, Any] = {}
+    sock = writer.get_extra_info("socket")
+    peercred = getattr(socket, "SO_PEERCRED", None)
+    if sock is None or peercred is None:
+        return metadata
+
+    try:
+        raw = sock.getsockopt(socket.SOL_SOCKET, peercred, struct.calcsize("3i"))
+        pid, uid, gid = struct.unpack("3i", raw)
+    except (OSError, TypeError, AttributeError, struct.error):
+        return metadata
+
+    metadata.update(client_pid=pid, client_uid=uid, client_gid=gid)
+
+    comm = _read_proc_text(pid, "comm")
+    if comm:
+        metadata["client_comm"] = comm
+
+    try:
+        metadata["client_exe"] = os.readlink(f"/proc/{pid}/exe")
+    except (FileNotFoundError, OSError, PermissionError):
+        pass
+
+    return metadata
+
+
+def _cancel_source_from_peer(metadata: dict[str, Any]) -> str:
+    """Compact cancel source string for task cancellation reasons."""
+    pid = metadata.get("client_pid")
+    if pid is None:
+        return "ipc"
+    parts = [f"ipc:pid={pid}"]
+    uid = metadata.get("client_uid")
+    if uid is not None:
+        parts.append(f"uid={uid}")
+    comm = metadata.get("client_comm")
+    if comm:
+        parts.append(f"comm={comm}")
+    return ",".join(parts)
 
 
 # ─── Core Functions (used by cli/commands/conductor.py) ───────────────
@@ -636,8 +689,21 @@ class DaemonProcess:
             except JobSubmissionError as e:
                 return {"job_id": params.get("job_id", ""), "status": "rejected", "message": str(e)}
 
-        async def handle_cancel(params: dict[str, Any], _w: Any) -> dict[str, Any]:
-            ok = await manager.cancel_job(params["job_id"])
+        async def handle_cancel(params: dict[str, Any], writer: Any) -> dict[str, Any]:
+            job_id = params["job_id"]
+            peer_metadata = (
+                _ipc_peer_metadata(writer)
+                if isinstance(writer, asyncio.StreamWriter)
+                else {}
+            )
+            source = _cancel_source_from_peer(peer_metadata)
+            _logger.info(
+                "job.cancel_rpc_received",
+                job_id=job_id,
+                source=source,
+                **peer_metadata,
+            )
+            ok = await manager.cancel_job(job_id, source=source)
             return {"cancelled": ok}
 
         async def handle_resolve_escalation(

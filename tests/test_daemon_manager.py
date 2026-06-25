@@ -230,17 +230,16 @@ class TestCancelJob:
             status=DaemonJobStatus.RUNNING,
         )
 
-        result = await manager.cancel_job("test-job-1")
+        result = await manager.cancel_job("test-job-1", source="unit-test")
         assert result is True
         # Meta is updated synchronously before cancel_job returns
         assert manager._job_meta["test-job-1"].status == "cancelled"
 
         # Give event loop a chance to process the cancellation
         # and the deferred cleanup background task
-        try:
+        with pytest.raises(asyncio.CancelledError) as exc_info:
             await task
-        except asyncio.CancelledError:
-            pass
+        assert str(exc_info.value) == "cancel_job(test-job-1) requested by unit-test"
         assert task.cancelled()
         # Let the background cleanup task complete
         await asyncio.sleep(0)

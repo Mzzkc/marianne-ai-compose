@@ -459,7 +459,7 @@ async def cancel_fleet(manager: JobManager, fleet_id: str) -> dict[str, Any]:
     results: dict[str, bool] = {}
     for job_id in record.all_job_ids:
         try:
-            ok = await manager.cancel_job(job_id)
+            ok = await manager.cancel_job(job_id, source=f"fleet:{fleet_id}")
             results[job_id] = ok
         except Exception as exc:
             _logger.warning("fleet.cancel_member_failed", job_id=job_id, error=str(exc))

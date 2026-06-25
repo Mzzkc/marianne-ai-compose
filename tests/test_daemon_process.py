@@ -353,7 +353,11 @@ class TestDaemonProcess:
         dp._register_methods(handler, manager, health)
 
         # Check all expected methods were registered
-        registered_methods = {call.args[0] for call in handler.register.call_args_list}
+        registered_handlers = {
+            call.args[0]: call.args[1]
+            for call in handler.register.call_args_list
+        }
+        registered_methods = set(registered_handlers)
         expected = {
             "job.submit",
             "job.status",
@@ -384,6 +388,15 @@ class TestDaemonProcess:
             "daemon.learning.patterns",
         }
         assert registered_methods == expected
+
+        manager.cancel_job = AsyncMock(return_value=True)
+        cancel_result = await registered_handlers["job.cancel"](
+            {"job_id": "job-123"},
+            object(),
+        )
+
+        assert cancel_result == {"cancelled": True}
+        manager.cancel_job.assert_awaited_once_with("job-123", source="ipc")
 
     @pytest.mark.asyncio
     async def test_handle_sighup_reloads_config(self, tmp_path: Path):
