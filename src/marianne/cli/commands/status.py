@@ -118,6 +118,40 @@ def format_instrument_with_fallback(sheet: SheetState) -> str:
     return f"{name} [dim](was {original}: {reason})[/dim]"
 
 
+def format_dispatch_wait(sheet: SheetState) -> str | None:
+    """Return a concise human label for a scheduler dispatch wait."""
+    reason = getattr(sheet, "dispatch_blocked_reason", None)
+    if not reason:
+        return None
+    details = getattr(sheet, "dispatch_blocked_details", {}) or {}
+    if reason == "model_concurrency":
+        model_key = details.get("model_key") or details.get("instrument") or "model"
+        count = details.get("model_count")
+        limit = details.get("model_limit")
+        if count is not None and limit is not None:
+            return f"waiting for model capacity: {model_key} ({count}/{limit})"
+        return f"waiting for model capacity: {model_key}"
+    if reason == "global_concurrency":
+        running = details.get("global_running")
+        limit = details.get("limit")
+        if running is not None and limit is not None:
+            return f"waiting for global capacity ({running}/{limit})"
+        return "waiting for global capacity"
+    if reason == "rate_limited":
+        instrument = details.get("instrument") or sheet.instrument_name or "instrument"
+        return f"waiting for rate limit: {instrument}"
+    if reason == "circuit_breaker":
+        instrument = details.get("instrument") or sheet.instrument_name or "instrument"
+        return f"waiting for circuit breaker: {instrument}"
+    if reason == "stagger":
+        instrument = details.get("instrument") or sheet.instrument_name or "instrument"
+        remaining = details.get("remaining_ms")
+        if remaining is not None:
+            return f"waiting for dispatch stagger: {instrument} ({remaining}ms)"
+        return f"waiting for dispatch stagger: {instrument}"
+    return f"waiting for dispatch: {reason}"
+
+
 # =============================================================================
 # CLI Commands
 # =============================================================================
@@ -826,6 +860,15 @@ def _output_status_json(job: CheckpointState) -> None:
             sheet_data["progress_snapshots"] = sheet.progress_snapshots
         if sheet.last_activity_at:
             sheet_data["last_activity_at"] = sheet.last_activity_at.isoformat()
+        if sheet.dispatch_blocked_reason:
+            sheet_data["dispatch_blocked_reason"] = sheet.dispatch_blocked_reason
+            sheet_data["dispatch_blocked_at"] = (
+                sheet.dispatch_blocked_at.isoformat()
+                if sheet.dispatch_blocked_at
+                else None
+            )
+            sheet_data["dispatch_blocked_details"] = sheet.dispatch_blocked_details
+            sheet_data["dispatch_wait"] = format_dispatch_wait(sheet)
         sheets_json[str(num)] = sheet_data
 
     output = {
@@ -1199,6 +1242,9 @@ def _render_sheet_details(job: CheckpointState) -> None:
             status_str += f" [dim]({format_duration(elapsed.total_seconds())})[/dim]"
         elif sheet.execution_duration_seconds is not None:
             status_str += f" [dim]({format_duration(sheet.execution_duration_seconds)})[/dim]"
+        dispatch_wait = format_dispatch_wait(sheet)
+        if dispatch_wait:
+            status_str += f" [dim]({dispatch_wait})[/dim]"
 
         error_str = ""
         if sheet.error_message:
@@ -1220,24 +1266,34 @@ def _render_sheet_details(job: CheckpointState) -> None:
 
     # Show validation failure details for failed sheets
     failures: list[tuple[int, list[ValidationDetailDict]]] = []
+    summarized_failures: list[tuple[int, list[str]]] = []
     for sheet_num in sorted(job.sheets.keys()):
         sheet = job.sheets[sheet_num]
-        if sheet.validation_passed is not False or not sheet.validation_details:
+        failed_validations = getattr(sheet, "failed_validations", []) or []
+        if sheet.validation_passed is not False and not failed_validations:
             continue
-        failed = [v for v in sheet.validation_details if not v.get("passed")]
+        validation_details = getattr(sheet, "validation_details", []) or []
+        if not validation_details and failed_validations:
+            summarized_failures.append((sheet_num, list(failed_validations)))
+            continue
+        failed = [v for v in validation_details if not v.get("passed")]
         if failed:
             failures.append((sheet_num, failed))
 
-    if failures:
+    if failures or summarized_failures:
         console.print("\n[bold]Validation Failures[/bold]")
-        for sheet_num, failed_validations in failures:
-            for v in failed_validations:
+        for sheet_num, detailed_failures in failures:
+            for v in detailed_failures:
                 desc = v.get("description") or v.get("rule_type", "unknown")
                 detail = v.get("error_message") or ""
                 if detail:
                     console.print(f"  Sheet {sheet_num}: [red]{desc}[/red] — {detail}")
                 else:
                     console.print(f"  Sheet {sheet_num}: [red]{desc}[/red]")
+        for sheet_num, summary_failures in summarized_failures:
+            console.print(
+                f"  Sheet {sheet_num}: [red]{', '.join(summary_failures)}[/red]"
+            )
 
 
 def fermata_resolve_hint(job_id: str, sheet_num: int, reason: str | None) -> list[str]:
@@ -1310,6 +1366,28 @@ def _render_preflight_warnings(job: CheckpointState) -> None:
             console.print(f"  Sheet {sheet_num}: [yellow]{warning}[/yellow]")
 
 
+def _render_dispatch_waits(job: CheckpointState) -> None:
+    """Show ready sheets held by scheduler capacity or provider state."""
+    waits = [
+        (n, job.sheets[n])
+        for n in sorted(job.sheets)
+        if getattr(job.sheets[n], "dispatch_blocked_reason", None)
+    ]
+    if not waits:
+        return
+    console.print("\n[bold yellow]Dispatch Waits[/bold yellow]")
+    for sheet_num, sheet in waits[:20]:
+        wait = format_dispatch_wait(sheet) or sheet.dispatch_blocked_reason or "waiting"
+        at = (
+            f" since {format_relative_time(sheet.dispatch_blocked_at)}"
+            if sheet.dispatch_blocked_at
+            else ""
+        )
+        console.print(f"  Sheet {sheet_num}: [yellow]{wait}[/yellow][dim]{at}[/dim]")
+    if len(waits) > 20:
+        console.print(f"  [dim]... and {len(waits) - 20} more dispatch waits[/dim]")
+
+
 def _render_sheet_summary(job: CheckpointState) -> None:
     """Render a compact summary for large scores (50+ sheets).
 
@@ -1327,6 +1405,7 @@ def _render_sheet_summary(job: CheckpointState) -> None:
         status_counts[label] = status_counts.get(label, 0) + 1
 
         # Collect "interesting" sheets: playing, retrying, waiting, failed
+        dispatch_blocked_reason = getattr(sheet, "dispatch_blocked_reason", None)
         if sheet.status in (
             SheetStatus.DISPATCHED,
             SheetStatus.IN_PROGRESS,
@@ -1334,7 +1413,7 @@ def _render_sheet_summary(job: CheckpointState) -> None:
             SheetStatus.WAITING,
             SheetStatus.FERMATA,
             SheetStatus.FAILED,
-        ) or (
+        ) or dispatch_blocked_reason or (
             sheet.status == SheetStatus.COMPLETED and sheet.validation_passed is False
         ):
             interesting_sheets.append((sheet_num, sheet))
@@ -1420,6 +1499,10 @@ def _render_sheet_summary(job: CheckpointState) -> None:
             elif sheet.execution_duration_seconds is not None:
                 sheet_parts.append(f"[dim]{format_duration(sheet.execution_duration_seconds)}[/dim]")
 
+            dispatch_wait = format_dispatch_wait(sheet)
+            if dispatch_wait:
+                sheet_parts.append(f"[yellow]{dispatch_wait}[/yellow]")
+
             # Error message for failed sheets
             if sheet.error_message:
                 sheet_parts.append(f"— {sheet.error_message[:45]}...")
@@ -1433,28 +1516,44 @@ def _render_sheet_summary(job: CheckpointState) -> None:
 
     # Validation failures for completed-but-failed-validation sheets
     failures: list[tuple[int, list[ValidationDetailDict]]] = []
+    summarized_failures: list[tuple[int, list[str]]] = []
     for sheet_num in sorted(job.sheets.keys()):
         sheet = job.sheets[sheet_num]
-        if sheet.validation_passed is not False or not sheet.validation_details:
+        failed_validations = getattr(sheet, "failed_validations", []) or []
+        if sheet.validation_passed is not False and not failed_validations:
             continue
-        failed = [v for v in sheet.validation_details if not v.get("passed")]
+        validation_details = getattr(sheet, "validation_details", []) or []
+        if not validation_details and failed_validations:
+            summarized_failures.append((sheet_num, list(failed_validations)))
+            continue
+        failed = [v for v in validation_details if not v.get("passed")]
         if failed:
             failures.append((sheet_num, failed))
 
-    if failures:
+    if failures or summarized_failures:
         shown = failures[:10]  # Cap validation details too
         console.print("\n[bold]Validation Failures[/bold]")
-        for sheet_num, failed_validations in shown:
-            for v in failed_validations:
+        for sheet_num, detailed_failures in shown:
+            for v in detailed_failures:
                 desc = v.get("description") or v.get("rule_type", "unknown")
                 detail = v.get("error_message") or ""
                 if detail:
                     console.print(f"  Sheet {sheet_num}: [red]{desc}[/red] — {detail}")
                 else:
                     console.print(f"  Sheet {sheet_num}: [red]{desc}[/red]")
-        if len(failures) > 10:
+        remaining_slots = max(0, 10 - len(shown))
+        for sheet_num, summary_failures in summarized_failures[:remaining_slots]:
             console.print(
-                f"\n  [dim]... and {len(failures) - 10} more validation failures. "
+                f"  Sheet {sheet_num}: [red]{', '.join(summary_failures)}[/red]"
+            )
+        hidden_count = max(0, len(failures) - 10)
+        if remaining_slots == 0:
+            hidden_count += len(summarized_failures)
+        else:
+            hidden_count += max(0, len(summarized_failures) - remaining_slots)
+        if hidden_count > 0:
+            console.print(
+                f"\n  [dim]... and {hidden_count} more validation failures. "
                 f"Run 'mzt errors {job.job_id} --verbose' for details.[/dim]"
             )
 
@@ -1915,6 +2014,9 @@ def _output_status_rich(job: CheckpointState) -> None:
 
     # #361: how to resolve any FERMATA'd (composer-decision) sheet.
     _render_fermata_hints(job)
+
+    # Scheduler waits are not execution failures, but they must be visible.
+    _render_dispatch_waits(job)
 
     # #202: warn-only preflight notes (prompt sizing vs context window).
     _render_preflight_warnings(job)

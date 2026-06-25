@@ -125,6 +125,7 @@ def _aggregate_validations(jobs: list[CheckpointState]) -> dict[str, Any]:
         "by_rule_type": by_rule_rates,
         "overall_pass_rate": overall_rate,
         "total_checks": total_checks,
+        "total_validations": total_checks,
         "total_passed": total_passed,
     }
 
@@ -176,11 +177,20 @@ def _aggregate_durations(jobs: list[CheckpointState]) -> dict[str, Any]:
             job_durations[job.job_id] = round(job_total, 2)
 
     avg_duration = round(sum(all_durations) / len(all_durations), 2) if all_durations else 0.0
+    median_duration = 0.0
+    if all_durations:
+        ordered = sorted(all_durations)
+        mid = len(ordered) // 2
+        if len(ordered) % 2:
+            median_duration = ordered[mid]
+        else:
+            median_duration = (ordered[mid - 1] + ordered[mid]) / 2.0
 
     slowest.sort(key=lambda s: s["duration_seconds"], reverse=True)
 
     return {
         "avg_sheet_duration_seconds": avg_duration,
+        "median_sheet_duration_seconds": round(median_duration, 2),
         "job_durations": job_durations,
         "slowest_sheets": slowest[:10],
         "total_sheets_with_duration": len(all_durations),

@@ -5,6 +5,14 @@
 **Scope:** Score generator, agent identity architecture, pattern composition, directory cadenza integration
 **Depends on:** Directory cadenza feature (2026-04-08-directory-cadenza-spec.md)
 
+**Implementation note (2026-06-21):** This file is the historical generic-agent
+design source. The live composition compiler now emits a 12-sheet generated
+lifecycle described in `2026-04-13-composition-compiler-design.md` and
+`compiler/src/marianne_compiler/sheets.py`: 3 sequential sheets, a temperature
+CLI gate, two dependency-parallel phases, a maturity CLI check, and resurrect.
+The live schema key is `skip_when`, not `skip_when_command`, and the default
+portable identity root is `~/.marianne/agents`.
+
 ---
 
 ## The Thesis
@@ -42,10 +50,10 @@ Each agent is an **entity** — a person with components attached. Components ar
 
 ### Storage Location
 
-Agent identity lives in `~/.mzt/agents/`, separate from any project:
+Agent identity lives in `~/.marianne/agents/`, separate from any project:
 
 ```
-~/.mzt/agents/
+~/.marianne/agents/
   {agent-name}/
     identity.md          # L1: persona core + resurrection protocol
     profile.yaml         # L2: relationships, developmental stage, domain knowledge
@@ -61,7 +69,7 @@ This directory is git-tracked. Checking out a past commit resurrects the agent a
 
 Canyon building flowspec is the same Canyon who built marianne's baton system. The identity transcends the project. When Canyon works on flowspec, they read flowspec's specs via directory cadenza. When Canyon works on marianne, they read marianne's specs. The person persists. The work changes.
 
-Project-specific coordination artifacts (TASKS.md, FINDINGS.md, composer notes, collective memory, reports/) live in the *project workspace*. Agent identity lives in `~/.mzt/agents/`.
+Project-specific coordination artifacts (TASKS.md, FINDINGS.md, composer notes, collective memory, reports/) live in the *project workspace*. Agent identity lives in `~/.marianne/agents/`.
 
 ### Developmental Stages (from RLF)
 
@@ -124,13 +132,13 @@ Sheets 10-13 (Consolidate, Reflect, Maturity Check, Resurrect) are the identity 
 
 **If retries are exhausted:** The self-chain still fires (the score completed, just with failed sheets). The next cycle's Recon sheet will see the failed state — the agent's L3 wasn't updated, their AAR output exists but wasn't consolidated. The gather pattern naturally surfaces this: "my recent.md is stale, my last cycle's beliefs weren't consolidated." The agent can attempt recovery in the next cycle's consolidate phase.
 
-**Atomic identity writes:** The Resurrect sheet (13) writes all identity files in one pass. If it fails mid-write, partial state is possible. Mitigation: write to temp files first, then rename (atomic on POSIX). The generator should include this in the resurrect template. The git tracking in `~/.mzt/agents/` provides rollback — if identity files are corrupted, `git checkout HEAD~1` restores the previous state.
+**Atomic identity writes:** The Resurrect sheet (13) writes all identity files in one pass. If it fails mid-write, partial state is possible. Mitigation: write to temp files first, then rename (atomic on POSIX). The generator should include this in the resurrect template. The git tracking in `~/.marianne/agents/` provides rollback — if identity files are corrupted, `git checkout HEAD~1` restores the previous state.
 
 **Last resort:** The conductor's self-healing mode (`--self-healing`) can diagnose write path failures and suggest remediation. If an agent's identity store is genuinely corrupted, the composer can manually restore from git history or re-bootstrap the agent.
 
 ### Cross-Project Identity and Context Separation
 
-Agent identity (`~/.mzt/agents/`) persists across projects by design. This is not context contamination — it's growth. Canyon carrying forward the lesson "I learned that boundary bugs hide between two correct subsystems" from marianne into flowspec makes Canyon a better developer on flowspec. That's the point.
+Agent identity (`~/.marianne/agents/`) persists across projects by design. This is not context contamination — it's growth. Canyon carrying forward the lesson "I learned that boundary bugs hide between two correct subsystems" from marianne into flowspec makes Canyon a better developer on flowspec. That's the point.
 
 What MUST be separated is project-specific *state* from identity-level *growth*:
 
@@ -436,7 +444,7 @@ SHEET 13: RESURRECT (L1 identity update + pruning)
      - Verify L1 is within ~1200 token budget
      - Verify L2 is within ~2000 token budget
      - Verify L3 is within ~2000 token budget
-  5. Commit identity changes to ~/.mzt/agents/{name}/
+  5. Commit identity changes to ~/.marianne/agents/{name}/
 
   Produce: updated identity.md, final profile.yaml
   Validations:
@@ -531,7 +539,7 @@ Sheets 5, 6, and 7 (play, cooling check, integration) have skip conditions tied 
 - **Temperature check exit 1** (no phase transition needed): sheets 5-7 skip. The agent proceeds from work (sheet 3) directly to inspect (sheet 8). This is the normal work cycle.
 - **Temperature check exit 0** (phase transition): sheets 5-7 run. The agent plays, play output is measured, and insights are integrated back into work context.
 
-This means a **work cycle** is 10 sheets (1-4, 8-13) and a **play cycle** is 13 sheets (1-13). The conductor handles the skip conditions via `skip_when_command`.
+This means a **work cycle** is 10 sheets (1-4, 8-13) and a **play cycle** is 13 sheets (1-13). The conductor handles the skip conditions via `skip_when`.
 
 ### Roles as Prompt Shaping
 
@@ -641,7 +649,16 @@ concert:
 
 The four CLI instruments are load-bearing — the system doesn't function without them. The generator ships working defaults that cover the common case. Projects can override with custom scripts if they have project-specific metrics.
 
-**`temperature-check.sh` (default):** Checks four conditions in order. Exit 0 (play) if ANY condition is true:
+**Live compiler note (2026-06-21):** the packaged `generic-fleet` preset uses a
+12-sheet cycle in `compiler/src/marianne_compiler/sheets.py`. Integration and
+inspect always run; only play is gated. Because the `cli` instrument treats a
+non-zero process exit as sheet failure, the generated temperature-check sheet
+does not use exit code as the play/work signal. It writes either
+`cycle-state/temperature-{agent}-play` or
+`cycle-state/temperature-{agent}-work` and exits 0. The play sheet's
+`skip_when` consumes the agent-specific work marker.
+
+**`temperature-check.sh` (legacy script default):** Checks four conditions in order. Exit 0 (play) if ANY condition is true:
 1. L3 recent.md word count exceeds `play_routing.memory_bloat_threshold`
 2. growth.md not modified in the last `play_routing.stagnation_cycles` cycles (tracked via cycle counter file)
 3. No P0 or P1 tasks in TASKS.md (grep-based — counts unclaimed `P0`/`P1` lines)
@@ -671,7 +688,7 @@ Always exits 0 — this is a measurement, not a gate.
 The generator produces:
 ```
 scores/flowspec-build/
-  foundry.yaml              # self-chaining 13-sheet score
+  foundry.yaml              # self-chaining generated score
   sentinel.yaml
   interface.yaml
   watcher.yaml
@@ -740,13 +757,13 @@ For agent identity injection:
 ```yaml
 sheet:
   prelude:
-    - file: "~/.mzt/agents/{{ agent_name }}/identity.md"
+    - file: "~/.marianne/agents/{{ agent_name }}/identity.md"
       as: context   # L1: always loaded
   cadenzas:
     1:  # all sheets get L2+L3
-      - file: "~/.mzt/agents/{{ agent_name }}/profile.yaml"
+      - file: "~/.marianne/agents/{{ agent_name }}/profile.yaml"
         as: context
-      - file: "~/.mzt/agents/{{ agent_name }}/recent.md"
+      - file: "~/.marianne/agents/{{ agent_name }}/recent.md"
         as: context
 ```
 
@@ -808,18 +825,18 @@ Next cycle, when Canyon reads their profile, they know who to coordinate with. M
 | Cooling check script | CLI: play output verification — file modification, growth.md update, artifact count | ~60 lines |
 | Maturity check script | CLI: developmental stage assessment — standing patterns, coherence slope, relationship density | ~80 lines |
 | Token budget check script | CLI: verifies L1/L2/L3 are within token budgets after pruning | ~40 lines |
-| Agent identity bootstrapper | Creates initial L1-L4 store for new agents in `~/.mzt/agents/` with template identity docs | ~150 lines |
-| Agent identity git init | Initializes git tracking for `~/.mzt/agents/` | ~20 lines |
+| Agent identity bootstrapper | Creates initial L1-L4 store for new agents in `~/.marianne/agents/` with template identity docs | ~150 lines |
+| Agent identity git init | Initializes git tracking for `~/.marianne/agents/` | ~20 lines |
 | Documentation | Score-writing guide for the generic system | ~200 lines |
 
-**Total: ~2250 lines.** The 13-sheet cycle has more template surface area than the compressed versions, and the 4 CLI instruments are real scripts with interface contracts. Still smaller than the iterative-dev-loop generator (3400 lines) because the architecture is fundamentally simpler — no fan-out, no dependency graphs, no hierarchy, no skip-when-command verdict chains. The complexity is in the pattern composition, not the generation machinery.
+**Total: ~2250 lines.** The historical 13-sheet cycle has more template surface area than the compressed versions, and the CLI instruments are real scripts with interface contracts. The current compiler implementation is a 12-sheet dependency-parallel variant. It remains smaller than the iterative-dev-loop generator (3400 lines) because the architecture is fundamentally simpler — no score-level `fan_out`, no hierarchy, no stale skip verdict chains. The complexity is in the pattern composition, not the generation machinery.
 
 ## Dependencies
 
 - **Directory cadenza feature** (2026-04-08 spec) — required for spec injection. Can be built in parallel.
 - **Conductor** — must be running. Already works.
 - **Self-chaining concerts** — already implemented.
-- **Agent identity store** — new. `~/.mzt/agents/` directory structure and git tracking.
+- **Agent identity store** — new. `~/.marianne/agents/` directory structure and git tracking.
 
 ## Not In Scope (v1)
 
@@ -831,9 +848,9 @@ Next cycle, when Canyon reads their profile, they know who to coordinate with. M
 
 ## Open Questions
 
-**OQ-1: Template variable for agent identity path.** The prelude `file:` field needs to resolve `~/.mzt/agents/{agent_name}/identity.md`. Currently, prelude paths support Jinja templating with `{{ workspace }}`. We need `{{ agent_name }}` or a way to pass the agent name as a prompt variable that's available in prelude path resolution. Alternatively, the generator can hardcode absolute paths per agent (simpler, less elegant).
+**OQ-1: Template variable for agent identity path.** The prelude `file:` field needs to resolve `~/.marianne/agents/{agent_name}/identity.md`. Currently, prelude paths support Jinja templating with `{{ workspace }}`. We need `{{ agent_name }}` or a way to pass the agent name as a prompt variable that's available in prelude path resolution. Alternatively, the generator can hardcode absolute paths per agent (simpler, less elegant).
 
-**OQ-2: Agent identity git tracking.** Should `~/.mzt/agents/` be a single git repo? Or should each agent have their own repo? Single repo is simpler for backup/restore. Per-agent repos allow independent versioning. Recommendation: single repo, one commit per dream cycle with agent name in the commit message.
+**OQ-2: Agent identity git tracking.** Should `~/.marianne/agents/` be a single git repo? Or should each agent have their own repo? Single repo is simpler for backup/restore. Per-agent repos allow independent versioning. Recommendation: single repo, one commit per dream cycle with agent name in the commit message.
 
 **OQ-3: Play workspace isolation.** When an agent plays in claude-compositions, do they write to the main workspace or a separate play directory? Recommendation: separate directory within the playspace, namespaced by agent (`claude-compositions/agents/{name}/`). Play artifacts don't pollute project workspace.
 

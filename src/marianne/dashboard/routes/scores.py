@@ -314,7 +314,22 @@ class SubmitScoreRequest(BaseModel):
 
     content: str = Field(..., max_length=1_000_000, description="YAML score content")
     workspace: str | None = Field(None, description="Override workspace directory")
+    start_sheet: int = Field(1, ge=1, description="Starting sheet number")
+    fresh: bool = Field(False, description="Start with clean state")
     self_healing: bool = Field(False, description="Enable self-healing mode")
+    self_healing_auto_confirm: bool = Field(
+        False, description="Auto-confirm self-healing fixes"
+    )
+    escalation: bool = Field(False, description="Pause for composer decision on exhaustion")
+    dry_run: bool = Field(False, description="Validate without executing when supported")
+    chain_depth: int | None = Field(None, ge=0, description="Concert chain depth")
+    client_cwd: str | None = Field(
+        None, description="Client working directory for relative path resolution"
+    )
+    runtime_variables: dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-invocation template variables",
+    )
 
 
 class SubmitScoreResponse(BaseModel):
@@ -361,11 +376,33 @@ async def submit_score(
                 detail="Workspace path must be under the current directory or user home",
             )
         workspace = ws
+
+    client_cwd: Path | None = None
+    if request.client_cwd:
+        cwd_path = Path(request.client_cwd).resolve()
+        cwd = Path.cwd().resolve()
+        home = Path.home().resolve()
+        if not (cwd_path.is_relative_to(cwd) or cwd_path.is_relative_to(home)):
+            _logger.warning("Rejected client_cwd outside allowed roots: %s", request.client_cwd)
+            raise HTTPException(
+                status_code=400,
+                detail="Client working directory must be under the current directory or user home",
+            )
+        client_cwd = cwd_path
+
     try:
         result = await job_service.start_job(
             config_content=content,
             workspace=workspace,
+            start_sheet=request.start_sheet,
+            fresh=request.fresh,
             self_healing=request.self_healing,
+            self_healing_auto_confirm=request.self_healing_auto_confirm,
+            escalation=request.escalation,
+            dry_run=request.dry_run,
+            chain_depth=request.chain_depth,
+            client_cwd=client_cwd,
+            runtime_variables=request.runtime_variables,
         )
     except Exception as e:
         _logger.error("Score submission failed: %s", e)

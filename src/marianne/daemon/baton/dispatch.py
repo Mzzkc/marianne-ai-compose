@@ -83,6 +83,7 @@ class DispatchResult:
 
     dispatched_count: int = 0
     dispatched_sheets: list[tuple[str, int]] = field(default_factory=list)
+    blocked_sheets: list[tuple[str, int]] = field(default_factory=list)
     skipped_reasons: dict[str, int] = field(default_factory=dict)
 
     def record_dispatch(self, job_id: str, sheet_num: int) -> None:
@@ -90,9 +91,37 @@ class DispatchResult:
         self.dispatched_count += 1
         self.dispatched_sheets.append((job_id, sheet_num))
 
-    def record_skip(self, reason: str) -> None:
+    def record_skip(
+        self,
+        reason: str,
+        *,
+        job_id: str | None = None,
+        sheet_num: int | None = None,
+        blocked_changed: bool = False,
+    ) -> None:
         """Record a skipped sheet with reason."""
         self.skipped_reasons[reason] = self.skipped_reasons.get(reason, 0) + 1
+        if blocked_changed and job_id is not None and sheet_num is not None:
+            self.blocked_sheets.append((job_id, sheet_num))
+
+
+def _record_dispatch_block(
+    result: DispatchResult,
+    *,
+    job_id: str,
+    sheet: SheetExecutionState,
+    reason: str,
+    skip_key: str,
+    details: dict[str, object] | None = None,
+) -> None:
+    """Record a scheduler skip and persistable per-sheet wait reason."""
+    changed = sheet.mark_dispatch_blocked(reason, details)
+    result.record_skip(
+        skip_key,
+        job_id=job_id,
+        sheet_num=sheet.sheet_num,
+        blocked_changed=changed,
+    )
 
 
 async def dispatch_ready(
@@ -161,7 +190,17 @@ async def dispatch_ready(
                         "limit": config.max_concurrent_sheets,
                     },
                 )
-                result.record_skip("global_concurrency")
+                _record_dispatch_block(
+                    result,
+                    job_id=job_id,
+                    sheet=sheet,
+                    reason="global_concurrency",
+                    skip_key="global_concurrency",
+                    details={
+                        "global_running": global_running,
+                        "limit": config.max_concurrent_sheets,
+                    },
+                )
                 return result  # Hard stop — can't dispatch more
 
             # Check per-model concurrency (falls back to per-instrument)
@@ -182,7 +221,19 @@ async def dispatch_ready(
                         "model_limit": model_limit,
                     },
                 )
-                result.record_skip(f"model_concurrency:{model_key}")
+                _record_dispatch_block(
+                    result,
+                    job_id=job_id,
+                    sheet=sheet,
+                    reason="model_concurrency",
+                    skip_key=f"model_concurrency:{model_key}",
+                    details={
+                        "instrument": instrument,
+                        "model_key": model_key,
+                        "model_count": model_count,
+                        "model_limit": model_limit,
+                    },
+                )
                 continue
 
             # Check instrument rate limit (transient — don't fallback)
@@ -195,7 +246,14 @@ async def dispatch_ready(
                         "instrument": instrument,
                     },
                 )
-                result.record_skip(f"rate_limited:{instrument}")
+                _record_dispatch_block(
+                    result,
+                    job_id=job_id,
+                    sheet=sheet,
+                    reason="rate_limited",
+                    skip_key=f"rate_limited:{instrument}",
+                    details={"instrument": instrument},
+                )
                 continue
 
             # Check instrument availability — try fallback chain when
@@ -204,6 +262,7 @@ async def dispatch_ready(
             # unavailable (e.g., claude-code→gemini-cli→ollama when
             # both claude-code and gemini-cli are OPEN).
             _skipped = False
+            capacity_checked_instrument = instrument
             while (
                 instrument in config.open_circuit_breakers
                 or instrument not in baton._instruments
@@ -212,12 +271,26 @@ async def dispatch_ready(
                     instrument = sheet.instrument_name or ""
                     # Check if the new instrument is rate-limited
                     if instrument in config.rate_limited_instruments:
-                        result.record_skip(f"rate_limited:{instrument}")
+                        _record_dispatch_block(
+                            result,
+                            job_id=job_id,
+                            sheet=sheet,
+                            reason="rate_limited",
+                            skip_key=f"rate_limited:{instrument}",
+                            details={"instrument": instrument},
+                        )
                         _skipped = True
                         break
                     # Loop continues to check the new instrument
                 else:
-                    result.record_skip(f"circuit_breaker:{instrument}")
+                    _record_dispatch_block(
+                        result,
+                        job_id=job_id,
+                        sheet=sheet,
+                        reason="circuit_breaker",
+                        skip_key=f"circuit_breaker:{instrument}",
+                        details={"instrument": instrument},
+                    )
                     _skipped = True
                     _logger.warning(
                         "baton.dispatch.all_instruments_circuit_broken",
@@ -230,6 +303,37 @@ async def dispatch_ready(
                     break
             if _skipped:
                 continue
+            if instrument != capacity_checked_instrument:
+                model_key = f"{instrument}:{sheet.model}" if sheet.model else instrument
+                model_limit = config.model_concurrency.get(model_key)
+                if model_limit is None:
+                    model_limit = config.instrument_concurrency.get(instrument)
+                model_count = model_running.get(model_key, 0)
+                if model_limit is not None and model_count >= model_limit:
+                    _logger.info(
+                        "dispatch.skip.model_concurrency",
+                        extra={
+                            "job_id": job_id,
+                            "sheet_num": sheet.sheet_num,
+                            "model_key": model_key,
+                            "model_count": model_count,
+                            "model_limit": model_limit,
+                        },
+                    )
+                    _record_dispatch_block(
+                        result,
+                        job_id=job_id,
+                        sheet=sheet,
+                        reason="model_concurrency",
+                        skip_key=f"model_concurrency:{model_key}",
+                        details={
+                            "instrument": instrument,
+                            "model_key": model_key,
+                            "model_count": model_count,
+                            "model_limit": model_limit,
+                        },
+                    )
+                    continue
 
             # #340: stagger gate — skip if a sheet on this instrument was
             # dispatched within the stagger window. Spreads a burst of
@@ -243,13 +347,32 @@ async def dispatch_ready(
                     and now - inst_state.last_dispatch_at
                     < config.stagger_delay_ms / 1000.0
                 ):
-                    result.record_skip(f"stagger:{instrument}")
+                    remaining_ms = max(
+                        0,
+                        int(
+                            config.stagger_delay_ms
+                            - (now - inst_state.last_dispatch_at) * 1000.0
+                        ),
+                    )
+                    _record_dispatch_block(
+                        result,
+                        job_id=job_id,
+                        sheet=sheet,
+                        reason="stagger",
+                        skip_key=f"stagger:{instrument}",
+                        details={
+                            "instrument": instrument,
+                            "stagger_delay_ms": config.stagger_delay_ms,
+                            "remaining_ms": remaining_ms,
+                        },
+                    )
                     stagger_skipped = True
                     continue
 
             # Dispatch!
             try:
                 await callback(job_id, sheet.sheet_num, sheet)
+                sheet.clear_dispatch_block()
                 # Status set through event handler for traceability.
                 # Called synchronously so concurrency counting works
                 # within this dispatch cycle.

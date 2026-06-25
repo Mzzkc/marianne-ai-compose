@@ -36,7 +36,7 @@
             <template x-if="durations">
                 <div class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
                     <p>Avg sheet: <span class="font-mono" x-text="formatDur(durations.avg_sheet_duration_seconds)"></span></p>
-                    <p>Median sheet: <span class="font-mono" x-text="formatDur(durations.median_sheet_duration_s)"></span></p>
+                    <p>Median sheet: <span class="font-mono" x-text="formatDur(durations.median_sheet_duration_seconds)"></span></p>
                     <template x-for="s in durations.slowest_sheets || []" :key="s.job_id + '-' + s.sheet_num">
                         <p class="text-xs text-gray-500 dark:text-gray-400">
                             <span x-text="s.job_id"></span> / Sheet <span x-text="s.sheet_num"></span>:
@@ -54,8 +54,8 @@
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Validations</h2>
             <template x-if="validations">
                 <div class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
-                    <p>Pass rate: <span class="font-mono" x-text="(validations.overall_pass_rate * 100).toFixed(1) + '%'"></span></p>
-                    <p>Total checks: <span class="font-mono" x-text="validations.total_validations ?? 0"></span></p>
+                    <p>Pass rate: <span class="font-mono" x-text="validations.overall_pass_rate != null ? validations.overall_pass_rate.toFixed(1) + '%' : '—'"></span></p>
+                    <p>Total checks: <span class="font-mono" x-text="validations.total_checks ?? validations.total_validations ?? 0"></span></p>
                 </div>
             </template>
             <template x-if="!validations">

@@ -22,6 +22,21 @@
          lineCount: 0,
          filterLevel: 'all',
          searchQuery: '',
+         streamError: '',
+         streamComplete: false,
+         logInfo: null,
+         logInfoError: '',
+
+         get downloadTooLarge() {
+             return this.logInfo && this.logInfo.download_available === false;
+         },
+
+         formatBytes(bytes) {
+             if (!Number.isFinite(bytes)) return '';
+             if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+             if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+             return bytes + ' B';
+         },
 
          get filteredLines() {
              return this.lines.filter(l => {
@@ -39,6 +54,7 @@
          },
 
          addLine(data) {
+             this.streamError = '';
              const level = this.classifyLevel(data.line);
              this.lines.push({
                  num: data.line_number,
@@ -75,9 +91,21 @@
          clearLines() {
              this.lines = [];
              this.lineCount = 0;
+             this.streamError = '';
+         },
+
+         async loadLogInfo() {
+             try {
+                 const resp = await fetch('/api/jobs/{{ job_id }}/logs/info');
+                 if (!resp.ok) return;
+                 this.logInfo = await resp.json();
+             } catch (e) {
+                 this.logInfoError = e.message || 'Unable to load log metadata';
+             }
          },
 
          init() {
+             this.loadLogInfo();
              const source = new EventSource('/api/jobs/{{ job_id }}/logs');
              source.addEventListener('log', (e) => {
                  try {
@@ -87,9 +115,15 @@
              });
              source.addEventListener('log_complete', () => {
                  this.connected = false;
+                 this.streamComplete = true;
+                 source.close();
              });
              source.addEventListener('error', () => {
                  this.connected = false;
+                 if (!this.streamComplete && this.lines.length === 0) {
+                     this.streamError = 'Log stream unavailable for this job.';
+                     source.close();
+                 }
              });
              source.onopen = () => { this.connected = true; };
              this._source = source;
@@ -152,14 +186,25 @@
             </button>
 
             <!-- Download -->
-            <a href="/api/jobs/{{ job_id }}/logs/static"
-               class="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors"
-               title="Download full log">
+            <template x-if="!downloadTooLarge">
+                <a href="/api/jobs/{{ job_id }}/logs/static"
+                   class="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors"
+                   :title="logInfo ? 'Download ' + formatBytes(logInfo.size_bytes) + ' log' : 'Download full log'">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Download
+                </a>
+            </template>
+            <template x-if="downloadTooLarge">
+                <span class="text-xs text-yellow-400 flex items-center gap-1"
+                      :title="'Full download disabled: ' + formatBytes(logInfo.size_bytes) + ' exceeds ' + formatBytes(logInfo.download_limit_bytes) + '. Use the stream below.'">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z"/>
                 </svg>
-                Download
-            </a>
+                    Stream only
+                </span>
+            </template>
 
             <!-- Clear -->
             <button @click="clearLines()"
@@ -179,7 +224,27 @@
          style="max-height: calc(100vh - 280px);">
 
         <!-- Empty state -->
-        <template x-if="filteredLines.length === 0 && lineCount === 0">
+        <template x-if="streamError && lineCount === 0">
+            <div class="flex items-center justify-center h-full min-h-[200px] text-gray-500">
+                <div class="text-center">
+                    <svg class="w-8 h-8 mx-auto mb-2 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                    </svg>
+                    <p class="text-xs" x-text="streamError"></p>
+                </div>
+            </div>
+        </template>
+        <template x-if="!streamError && filteredLines.length === 0 && lineCount === 0 && streamComplete">
+            <div class="flex items-center justify-center h-full min-h-[200px] text-gray-600">
+                <div class="text-center">
+                    <svg class="w-8 h-8 mx-auto mb-2 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <p class="text-xs">No log lines available for this job.</p>
+                </div>
+            </div>
+        </template>
+        <template x-if="!streamError && filteredLines.length === 0 && lineCount === 0 && !streamComplete">
             <div class="flex items-center justify-center h-full min-h-[200px] text-gray-600">
                 <div class="text-center">
                     <svg class="w-8 h-8 mx-auto mb-2 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -238,6 +303,8 @@
          lines: [],
          connected: false,
          maxLines: 50,
+         streamError: '',
+         streamComplete: false,
 
          classifyLevel(text) {
              if (/\bERROR\b/i.test(text) || /\bCRITICAL\b/i.test(text)) return 'error';
@@ -246,6 +313,7 @@
          },
 
          addLine(data) {
+             this.streamError = '';
              const level = this.classifyLevel(data.line);
              this.lines.push({ num: data.line_number, text: data.line, level: level });
              if (this.lines.length > this.maxLines) this.lines.shift();
@@ -265,6 +333,15 @@
              });
              source.addEventListener('error', () => {
                  this.connected = false;
+                 if (!this.streamComplete && this.lines.length === 0) {
+                     this.streamError = 'Log stream unavailable.';
+                     source.close();
+                 }
+             });
+             source.addEventListener('log_complete', () => {
+                 this.connected = false;
+                 this.streamComplete = true;
+                 source.close();
              });
              source.onopen = () => { this.connected = true; };
              this._source = source;
@@ -295,7 +372,8 @@
     <div x-ref="compactOutput"
          class="overflow-y-auto bg-gray-950 font-mono text-xs leading-relaxed {{ max_height }}">
         <template x-if="lines.length === 0">
-            <div class="p-3 text-gray-600 text-center text-[10px]">No log data yet</div>
+            <div class="p-3 text-gray-600 text-center text-[10px]"
+                 x-text="streamError || (streamComplete ? 'No log lines available' : 'No log data yet')"></div>
         </template>
         <template x-for="line in lines" :key="line.num">
             <div class="px-2 py-px"

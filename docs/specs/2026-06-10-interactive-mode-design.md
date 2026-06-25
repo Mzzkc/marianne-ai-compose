@@ -89,6 +89,10 @@ cli:
         keys: ["Enter"]                     # has matched (misfire guard)
     ready_pattern: '(?m)^\s*❯'
     busy_patterns: ['esc to interrupt', '…\s*\(\d+m?\s?\d*s']
+    rate_limit_screen_patterns: []  # verified provider/account quota screens
+    auth_error_screen_patterns: []  # verified sign-in/permission screens
+    capacity_screen_patterns: []    # verified provider overload screens
+    crash_screen_patterns: []       # verified fatal TUI/runtime screens
     quiet_seconds: 15.0
     poll_interval_seconds: 2.0
     startup_timeout_seconds: 90.0
@@ -97,11 +101,12 @@ cli:
     volatile_tail_lines: 2          # status lines excluded from change hash
 ```
 
-**Interactive is the DEFAULT execution mode for claude-code only**
-(composer decision, 2026-06-11). Resolution is tri-state, owned by the
+**Interactive is the DEFAULT execution mode for profiles that have proven
+headless daemon-dispatch risk and set `enabled_by_default: true`**
+(composer decisions, 2026-06-11 through 2026-06-22). Resolution is tri-state, owned by the
 BackendPool: score silence → the profile's default (interactive when the
 profile carries a `cli.interactive` block with `enabled_by_default: true` —
-currently claude-code alone; headless otherwise); explicit
+currently claude-code and Antigravity; headless otherwise); explicit
 `interactive: true`/`false` in instrument_config always wins.
 `interactive: true` on a profile with no `cli.interactive` block remains a
 structured config error at backend creation (and a V211 validation
@@ -110,7 +115,11 @@ failure).
 Builtins gain the block only with spike-verified patterns — no speculative
 gates. Verified 2026-06-10/11: **claude-code (default-on), gemini-cli,
 codex-cli, opencode, goose (verified, opt-in via
-`instrument_config: {interactive: true}`)**. Unverified (no block, headless
+`instrument_config: {interactive: true}`)**. Verified 2026-06-21:
+**antigravity** (default-on as of 2026-06-22; Antigravity CLI 1.0.10 prompt
+pattern, Marianne interactive marker completion, and exact interactive quota
+screen classification after non-TTY print mode emitted Bubble Tea `/dev/tty`
+errors while exiting 0). Unverified (no block, headless
 only): crush (no auth on this machine), aider (browser onboarding),
 cline-cli (not installed), cli (raw runner — interactive is meaningless).
 The interactive launch is independently configurable where TUI flags
@@ -244,4 +253,9 @@ result reported; concurrent sheets on the shared server (session + buffer
 isolation); unicode prompt delivery.
 
 Live smoke (operator-run, not CI): one real claude-code interactive sheet
-via a dev score.
+via a dev score; one real Antigravity CLI 1.0.10 interactive sheet via
+`/tmp/marianne-antigravity-interactive.yaml` on 2026-06-21. A 2026-06-22
+Antigravity default-interactive smoke proved launch and cancellation cleanup
+while blocked by the provider's `Individual quota reached` screen; a
+non-quota Antigravity sheet must pass before claiming it operational for
+fleet-critical work.

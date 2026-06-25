@@ -48,7 +48,18 @@ class _OutcomeDict(TypedDict, total=False):
     retry_count: int
     completion_mode_used: bool
     first_attempt_success: bool  # Deprecated: renamed to success_without_retry in DB
+    success_without_retry: bool
+    patterns_applied: list[str]
+    applied_pattern_ids: list[str]
     timestamp: str
+
+
+def _string_list(value: Any) -> list[str]:
+    """Return ``value`` when it is a list of strings, otherwise empty list."""
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
 
 if TYPE_CHECKING:
     from marianne.learning.aggregator import PatternAggregator
@@ -378,6 +389,8 @@ class OutcomeMigrator:
                 success_without_retry=bool(
                     data.get("success_without_retry", data.get("first_attempt_success", False))
                 ),
+                patterns_applied=_string_list(data.get("patterns_applied")),
+                applied_pattern_ids=_string_list(data.get("applied_pattern_ids")),
                 timestamp=parsed_timestamp,
             )
         except Exception as e:

@@ -82,7 +82,7 @@ defaults:
     recon:
       primary: { instrument: openrouter, model: minimax/minimax-2.5 }
       fallbacks:
-        - { instrument: openrouter, model: meta-llama/llama-4-maverick }
+        - { instrument: openrouter, model: zhipu/glm-4.5-air }
         - { instrument: openrouter, model: google/gemma-4 }
         - { instrument: openrouter, model: nvidia/nemotron-3 }
         - { instrument: openrouter, model: zhipu/glm-4.5-air }
@@ -95,7 +95,7 @@ defaults:
       fallbacks:
         - { instrument: claude-code, model: claude-opus-4-6 }
         - { instrument: openrouter, model: minimax/minimax-2.5 }
-        - { instrument: openrouter, model: meta-llama/llama-4-maverick }
+        - { instrument: openrouter, model: zhipu/glm-4.5-air }
         - { instrument: openrouter, model: google/gemma-4 }
         - { instrument: gemini-cli }
         - { instrument: openrouter, model: nvidia/nemotron-3 }
@@ -170,6 +170,7 @@ defaults:
   chain:
     max_depth: 1000
     pause_before_chain: false  # true = wait for resume between cycles
+  job_name_prefix: ""  # optional score filename / conductor job ID prefix
 
 # Agent roster
 agents:
@@ -186,11 +187,8 @@ agents:
     instruments:
       work:
         primary: { instrument: claude-code, model: claude-opus-4-6 }
-        # inherits full fallback chain from defaults
+        # inherits explicit work-tier fallbacks from defaults
     techniques:
-      symbols-python:
-        kind: mcp
-        phases: [work, inspect]
       flowspec:
         kind: skill
         phases: [inspect]
@@ -255,10 +253,14 @@ Play routing: the temperature check CLI instrument (Phase 1.5) runs after Work. 
 Maturity check: the CLI instrument (Phase 3.5) runs after the Phase 3 fan-out converges. It measures developmental stage progression and writes a maturity report consumed by Resurrect.
 
 **Technique Wirer** — Reads the agent's technique declarations and:
-- Injects technique manifests as cadenzas for relevant phases
+- Embeds technique manifests in the generated phase template
+- Emits runtime `techniques:` declarations with skill document paths
 - Configures MCP server access per phase (references the shared pool)
-- Wires A2A agent card and inbox cadenzas
-- Injects memory protocol and mateship skills as cadenzas on their declared phases
+- Wires A2A agent card metadata
+
+The runtime baton resolves active techniques for each sheet and injects skill
+documents once at dispatch. Compiler-generated scores should not also add the
+same technique markdown files as static cadenzas.
 
 The technique manifest tells the agent what they can do:
 ```
@@ -269,12 +271,12 @@ The technique manifest tells the agent what they can do:
 - **Mateship Protocol**: File findings to shared/findings/. Pick up unowned findings.
 ```
 
-**Instrument Resolver** — Produces the per-sheet instrument assignment with deep fallback chains:
+**Instrument Resolver** — Produces the per-sheet instrument assignment with explicit fallback chains:
 1. Start with defaults for each phase type (recon, plan, work, etc.)
 2. Apply per-agent overrides (Canyon's work uses Opus)
-3. For each sheet, resolve the primary + full fallback chain
+3. For each sheet, resolve the primary + the fallback chain declared for that phase tier
 4. Emit `per_sheet_instruments` and `per_sheet_instrument_config` in the score YAML
-5. Every sheet gets the full instrument catalog as its tail — no dead ends
+5. Do not append unrelated catalog instruments; if a sheet may use an instrument, declare it in that tier
 
 **Validation Generator** — Produces per-sheet validations:
 - TDD checks (test commands from config, applied to work sheets)
@@ -290,7 +292,7 @@ The technique manifest tells the agent what they can do:
 Per agent, the compiler produces a score with:
 
 ```yaml
-name: "{project}-{agent_name}"
+name: "{job_name_prefix}{agent_name}"
 workspace: {workspace}
 
 backend: {resolved primary instrument backend config}
@@ -368,6 +370,11 @@ validations:
   - { ... per-sheet validation specs }
 ```
 
+`job_name_prefix` namespaces generated score filenames, top-level score names,
+self-chain targets, and conductor job IDs. It must not change the agent identity
+used in prompt variables, agent cards, or identity storage; `bc9k-north.yaml`
+still runs agent `north` with identity dir `~/.marianne/agents/north`.
+
 ### 3.4 The Compiler as a Module
 
 The compiler is a Python package, importable and callable:
@@ -431,16 +438,23 @@ This is a one-time migration. After seeding, the agent's own consolidate/reflect
 
 ## 5. Instrument Architecture
 
-### 5.1 Free-First, Deep Fallbacks
+### 5.1 Explicit Per-Phase Fallbacks
 
-Default primary instruments use free-tier OpenRouter models. Every stage type has a full fallback chain that ends with the entire instrument catalog. If even one instrument is available, the agent runs.
+Default primary instruments use the configured model tiers. Each stage type has
+only the fallback chain declared for that tier. Broad catalog tails are avoided
+because they can route a sheet onto an instrument whose tool/technique surface
+was not chosen for that phase.
+
+For shipped generic presets, `mzt compile` filters those declared preferences
+through the same instrument availability checks used by `mzt doctor`: registered
+HTTP instruments are usable, CLI instruments require their executable on `PATH`.
+The first available entry becomes primary and unavailable fallbacks are removed.
 
 Primary free models:
 - **MiniMax 2.5** — 1M context, strong general reasoning
 - **Gemma 4** — 128k context, good at structured tasks
 - **Nemotron 3** — 128k context, code-capable
 - **GLM 4.5 Air** — 128k context, multilingual
-- **Llama 4 Maverick** — 1M context, strong creative/analytical
 
 Paid fallbacks:
 - **Claude Opus** — deepest reasoning, architecture, play
@@ -563,10 +577,10 @@ mcp_pool:
     command: "fs-mcp-server"
     transport: stdio
     socket: /tmp/mzt/mcp/filesystem.sock
-  symbols-python:
-    command: "symbols-python-server"
+  code-symbols:
+    command: "code-symbols-server"
     transport: stdio
-    socket: /tmp/mzt/mcp/symbols-python.sock
+    socket: /tmp/mzt/mcp/code-symbols.sock
 ```
 
 - One process per MCP server type, shared across all agents
@@ -822,6 +836,12 @@ on_success:
 **New feature: `pause_before_chain`** — When true, the conductor completes the current job but holds the chain trigger. The job enters a `PAUSED_AT_CHAIN` state. The next cycle doesn't start until `mzt resume <job>`. This gives the composer a natural intervention point between cycles.
 
 Implementation: In the baton's job completion handler, when `pause_before_chain` is set, transition to the new state instead of firing `on_success`. `mzt resume` triggers the held chain.
+
+`mzt compile --pause-before-chain` is the operator-facing override for
+bounded first-cycle proof runs of shipped presets. `mzt compile --job-prefix
+<prefix>` is the companion repeatability control: use it when the same generic
+fleet may be compiled for multiple target projects so conductor job IDs do not
+collide.
 
 ### 9.3 Self-Organization
 

@@ -45,6 +45,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from marianne.core.config.a2a import AgentCard
 from marianne.core.config.execution import (
     CodeExecutionConfig,
     SkipWhenCommand,
@@ -52,14 +53,19 @@ from marianne.core.config.execution import (
 )
 from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.core.sheet import Sheet
+from marianne.daemon.a2a.inbox import A2AInbox
+from marianne.daemon.a2a.registry import AgentCardRegistry
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.events import (
+    A2ATaskRouted,
+    A2ATaskSubmitted,
     EscalationResolved,
     FermataCheck,
     RateLimitHit,
     SheetAttemptResult,
     SheetSkipped,
     StaleCheck,
+    to_observer_event,
 )
 from marianne.daemon.baton.musician import sheet_task
 from marianne.daemon.baton.skip import evaluate_skip_command
@@ -75,13 +81,15 @@ from marianne.execution.validation.history import FailureHistoryStore, Historica
 from marianne.utils.process import safe_killpg as _safe_killpg
 
 if TYPE_CHECKING:
-    from marianne.core.checkpoint import CheckpointState
+    from marianne.core.checkpoint import AppliedPatternDict, CheckpointState
     from marianne.core.config.job import PromptConfig
+    from marianne.core.config.learning import LearningConfig
     from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
     from marianne.core.config.workspace import CrossSheetConfig
     from marianne.daemon.baton.backend_pool import BackendPool
     from marianne.daemon.baton.prompt import PromptRenderer
     from marianne.daemon.event_bus import EventBus
+    from marianne.daemon.mcp_pool import McpPoolManager
     from marianne.daemon.types import ObserverEvent
     from marianne.learning.store import GlobalLearningStore
     from marianne.learning.store.models import PatternRecord
@@ -154,6 +162,39 @@ def checkpoint_to_baton_status(status: str) -> BatonSheetStatus:
     Kept for backward compatibility with tests that import this function.
     """
     return BatonSheetStatus(status)
+
+
+def _mcp_runtime_socket_paths(
+    pool: Any,
+    mcp_servers: dict[str, str],
+) -> dict[str, Path]:
+    """Resolve active MCP technique names to pool Unix socket paths."""
+
+    socket_paths: dict[str, Path] = {}
+    get_socket_path = getattr(pool, "get_socket_path", None)
+    is_running = getattr(pool, "is_running", None)
+    if not callable(get_socket_path):
+        return socket_paths
+
+    for technique_name, server_name in mcp_servers.items():
+        if callable(is_running) and not is_running(str(server_name)):
+            continue
+        raw_path = get_socket_path(str(server_name))
+        if raw_path is None:
+            continue
+        socket_paths[str(technique_name)] = Path(raw_path)
+    return socket_paths
+
+
+def _mcp_socket_bind_mounts(socket_paths: dict[str, Path]) -> list[Path]:
+    """Return host directories that must be visible to sandboxed code mode."""
+
+    mounts = {
+        path.parent
+        for path in socket_paths.values()
+        if path.is_absolute()
+    }
+    return sorted(mounts)
 
 
 # =============================================================================
@@ -510,12 +551,17 @@ class BatonAdapter:
 
         # BackendPool — injected via set_backend_pool()
         self._backend_pool: BackendPool | None = None
+        self._mcp_pool: McpPoolManager | None = None
 
         # Per-job PromptRenderer — created when prompt_config is provided
         self._job_renderers: dict[str, PromptRenderer] = {}
 
         # Per-job CrossSheetConfig — enables cross-sheet context (F-210)
         self._job_cross_sheet: dict[str, CrossSheetConfig] = {}
+        # Per-job LearningConfig — gates global learned-pattern prompt
+        # injection. Outcome recording is owned elsewhere; this map only
+        # controls whether prior patterns are fed back into the next prompt.
+        self._job_learning_configs: dict[str, LearningConfig] = {}
 
         # Per-job spec corpus (#204). The manager loads + populates the frozen
         # SpecCorpusConfig off-loop and passes it here; per-sheet tag filtering
@@ -538,6 +584,14 @@ class BatonAdapter:
         # manifest for prompt injection. Jobs without techniques are absent
         # from this map (backward compat — resolution skipped, manifest None).
         self._job_techniques: dict[str, dict[str, Any]] = {}
+
+        # Internal A2A runtime state. Agent cards are registered per running
+        # job; inboxes hold delegated tasks until the target's next A2A-enabled
+        # sheet renders its prompt. These structures are in-memory only today;
+        # restart persistence requires a checkpoint schema extension.
+        self._a2a_registry = AgentCardRegistry()
+        self._a2a_inboxes: dict[str, A2AInbox] = {}
+        self._a2a_job_agents: dict[str, str] = {}
         # #209: per-job opt-in code execution config (default None = off).
         self._job_code_execution: dict[str, CodeExecutionConfig] = {}
 
@@ -585,6 +639,10 @@ class BatonAdapter:
         """
         self._backend_pool = pool
 
+    def set_mcp_pool(self, pool: McpPoolManager | None) -> None:
+        """Inject the shared MCP pool used for dispatch-time config files."""
+        self._mcp_pool = pool
+
     def configure_retry(
         self,
         *,
@@ -622,6 +680,7 @@ class BatonAdapter:
         escalation_enabled: bool = False,
         self_healing_enabled: bool = False,
         prompt_config: PromptConfig | None = None,
+        learning_config: LearningConfig | None = None,
         parallel_enabled: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
         pacing_seconds: float = 0.0,
@@ -633,6 +692,7 @@ class BatonAdapter:
         stagger_delay_ms: int = 0,
         skip_when: dict[int, SkipWhenCommand] | None = None,
         code_execution: CodeExecutionConfig | None = None,
+        agent_card: AgentCard | None = None,
     ) -> None:
         """Register a job with the baton for event-driven execution.
 
@@ -662,6 +722,8 @@ class BatonAdapter:
                 (F-210). When provided, the adapter collects previous sheet
                 outputs and workspace files at dispatch time.
         """
+        self._ensure_job_state_collections()
+
         # Store sheets for prompt rendering at dispatch time
         self._job_sheets[job_id] = {s.num: s for s in sheets}
 
@@ -671,6 +733,10 @@ class BatonAdapter:
         # Store cross-sheet config (F-210)
         if cross_sheet is not None:
             self._job_cross_sheet[job_id] = cross_sheet
+        if learning_config is not None:
+            self._job_learning_configs[job_id] = learning_config
+        else:
+            self._job_learning_configs.pop(job_id, None)
 
         # #340: per-instrument dispatch stagger (adapter-level; last register
         # wins for concurrent jobs — acceptable v1, most scores share a value).
@@ -719,6 +785,8 @@ class BatonAdapter:
             self._job_code_execution[job_id] = code_execution
             if job_id not in self._job_routers:
                 self._job_routers[job_id] = TechniqueRouter()
+
+        self._register_a2a_job(job_id, agent_card)
 
         # Phase 2: use live_sheets (shared with _live_states) when provided.
         # This makes the baton write directly to the same SheetState objects
@@ -790,6 +858,153 @@ class BatonAdapter:
             The job's TechniqueRouter if one was activated, else None.
         """
         return self._job_routers.get(job_id)
+
+    def get_a2a_inbox(self, job_id: str) -> A2AInbox | None:
+        """Return the per-job A2A inbox, or None when no card is registered."""
+        self._ensure_a2a_state()
+        return self._a2a_inboxes.get(job_id)
+
+    def _ensure_a2a_state(self) -> None:
+        """Initialize A2A attributes for normal and __new__ test instances."""
+        if not hasattr(self, "_a2a_registry"):
+            self._a2a_registry = AgentCardRegistry()
+        if not hasattr(self, "_a2a_inboxes"):
+            self._a2a_inboxes = {}
+        if not hasattr(self, "_a2a_job_agents"):
+            self._a2a_job_agents = {}
+
+    def _ensure_job_state_collections(self) -> None:
+        """Initialize late-added per-job maps for __new__ test instances."""
+        if not hasattr(self, "_job_learning_configs"):
+            self._job_learning_configs = {}
+
+    def _register_a2a_job(
+        self,
+        job_id: str,
+        agent_card: AgentCard | None,
+    ) -> None:
+        """Register or clear the adapter's A2A state for a baton job."""
+        self._ensure_a2a_state()
+        if agent_card is None:
+            self._a2a_registry.deregister(job_id)
+            self._a2a_inboxes.pop(job_id, None)
+            self._a2a_job_agents.pop(job_id, None)
+            return
+
+        self._a2a_registry.register(job_id, agent_card)
+        self._a2a_job_agents[job_id] = agent_card.name
+
+        inbox = self._a2a_inboxes.get(job_id)
+        if inbox is None or inbox.agent_name != agent_card.name:
+            self._a2a_inboxes[job_id] = A2AInbox(
+                job_id=job_id,
+                agent_name=agent_card.name,
+            )
+
+    def _render_a2a_context_for_dispatch(self, job_id: str) -> str | None:
+        """Render and accept pending A2A inbox tasks for prompt injection."""
+        self._ensure_a2a_state()
+        inbox = self._a2a_inboxes.get(job_id)
+        if inbox is None:
+            return None
+
+        pending = inbox.get_pending_tasks()
+        if not pending:
+            return None
+
+        context = inbox.render_pending_context()
+        if not context:
+            return None
+
+        for task in pending:
+            inbox.mark_accepted(task.task_id)
+        return context
+
+    async def _publish_baton_observer_event(self, event: Any) -> None:
+        """Publish a baton event to the observer bus without baton handling."""
+        if self._event_bus is None:
+            return
+
+        try:
+            await self._event_bus.publish(to_observer_event(event))
+        except Exception:
+            _logger.warning(
+                "adapter.a2a_event_publish_failed",
+                extra={"event_type": type(event).__name__},
+                exc_info=True,
+            )
+
+    async def _route_a2a_requests(self, event: SheetAttemptResult) -> None:
+        """Route structured A2A requests from a completed sheet to inboxes."""
+        if not event.execution_success or not event.a2a_requests:
+            return
+
+        self._ensure_a2a_state()
+        source_agent = self._a2a_job_agents.get(event.job_id, event.job_id)
+        for request in event.a2a_requests:
+            target_agent = str(request.get("target_agent", "")).strip()
+            description = str(request.get("task_description", "")).strip()
+            if not target_agent or not description:
+                _logger.warning(
+                    "adapter.a2a.request_ignored",
+                    extra={
+                        "job_id": event.job_id,
+                        "sheet_num": event.sheet_num,
+                        "reason": "missing target_agent or task_description",
+                    },
+                )
+                continue
+
+            context = request.get("context")
+            if not isinstance(context, dict):
+                context = {}
+            context = dict(context)
+            context.setdefault("source_job_id", event.job_id)
+            context.setdefault("source_sheet_num", event.sheet_num)
+
+            submitted = A2ATaskSubmitted(
+                job_id=event.job_id,
+                sheet_num=event.sheet_num,
+                target_agent=target_agent,
+                task_description=description,
+                context=context,
+            )
+            await self._publish_baton_observer_event(submitted)
+
+            target_job_id = self._a2a_registry.get_job_id_for_agent(target_agent)
+            inbox = (
+                self._a2a_inboxes.get(target_job_id)
+                if target_job_id is not None
+                else None
+            )
+            if target_job_id is None or inbox is None:
+                _logger.warning(
+                    "adapter.a2a.target_not_registered",
+                    extra={
+                        "job_id": event.job_id,
+                        "sheet_num": event.sheet_num,
+                        "target_agent": target_agent,
+                    },
+                )
+                continue
+
+            task = inbox.submit_task(
+                source_job_id=event.job_id,
+                source_agent=source_agent,
+                description=description,
+                context=context,
+            )
+            if self._persist_callback:
+                self._persist_callback(target_job_id)
+
+            routed = A2ATaskRouted(
+                job_id=event.job_id,
+                sheet_num=event.sheet_num,
+                source_agent=source_agent,
+                target_agent=target_agent,
+                task_id=task.task_id,
+            )
+            await self._publish_baton_observer_event(routed)
 
     def _kill_active_pgroups(self, job_id: str) -> None:
         """Preempt-kill process groups for all active sheets of a job.
@@ -875,6 +1090,36 @@ class BatonAdapter:
 
         loop.call_later(_KILL_GRACE_SECONDS, _sigkill_pgroups)
 
+    def _kill_interactive_sessions(self, job_id: str) -> None:
+        """Best-effort tmux cleanup for all interactive sessions of a job.
+
+        PID tracking only covers the currently-active musician task. A prior
+        interactive attempt can fail validation, clear its PID entry, and still
+        leave its tmux session alive if cleanup was interrupted or tmux did not
+        remove the session. On job cancellation/deregistration, kill every
+        deterministic ``mzt-{job}-s*`` session so stale attempts cannot keep
+        writing to the workspace after the job is gone from the roster.
+        """
+        try:
+            from marianne.execution.instruments.interactive.tmux import (
+                job_session_prefix,
+                kill_sessions_with_prefix_sync,
+            )
+
+            killed = kill_sessions_with_prefix_sync(job_session_prefix(job_id))
+        except Exception:
+            _logger.warning(
+                "adapter.interactive_session_sweep_failed",
+                extra={"job_id": job_id},
+                exc_info=True,
+            )
+            return
+        if killed:
+            _logger.warning(
+                "adapter.interactive_sessions_killed",
+                extra={"job_id": job_id, "sessions": killed, "count": len(killed)},
+            )
+
     def deregister_job(self, job_id: str) -> None:
         """Remove a job from the adapter and baton.
 
@@ -883,6 +1128,8 @@ class BatonAdapter:
         Args:
             job_id: The job to remove.
         """
+        self._ensure_job_state_collections()
+
         # Phase 1 item 5: preempt-kill subprocess groups BEFORE cancelling
         # asyncio tasks. Task.cancel() delivers CancelledError through the
         # `await proc.communicate()` in the backend, whose finally block
@@ -892,6 +1139,7 @@ class BatonAdapter:
         # exit, which unblocks communicate, which runs finally. Belt and
         # suspenders.
         self._kill_active_pgroups(job_id)
+        self._kill_interactive_sessions(job_id)
 
         # Cancel active musician tasks for this job
         keys_to_cancel = [
@@ -916,12 +1164,17 @@ class BatonAdapter:
         self._job_sheets.pop(job_id, None)
         self._job_renderers.pop(job_id, None)
         self._job_cross_sheet.pop(job_id, None)
+        self._job_learning_configs.pop(job_id, None)
         self._job_spec_config.pop(job_id, None)
         self._job_spec_tags.pop(job_id, None)
         self._completion_events.pop(job_id, None)
         self._completion_results.pop(job_id, None)
         self._job_routers.pop(job_id, None)
         self._job_techniques.pop(job_id, None)
+        self._ensure_a2a_state()
+        self._a2a_registry.deregister(job_id)
+        self._a2a_inboxes.pop(job_id, None)
+        self._a2a_job_agents.pop(job_id, None)
         self._job_code_execution.pop(job_id, None)
         self._job_skip_commands.pop(job_id, None)
         self._interactive_sheets.pop(job_id, None)
@@ -968,6 +1221,7 @@ class BatonAdapter:
         escalation_enabled: bool = False,
         self_healing_enabled: bool = False,
         prompt_config: PromptConfig | None = None,
+        learning_config: LearningConfig | None = None,
         parallel_enabled: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
         pacing_seconds: float = 0.0,
@@ -979,6 +1233,7 @@ class BatonAdapter:
         stagger_delay_ms: int = 0,
         skip_when: dict[int, SkipWhenCommand] | None = None,
         code_execution: CodeExecutionConfig | None = None,
+        agent_card: AgentCard | None = None,
     ) -> None:
         """Recover a job from a checkpoint after conductor restart.
 
@@ -1006,6 +1261,8 @@ class BatonAdapter:
             parallel_enabled: Whether parallel execution is enabled.
             cross_sheet: Optional CrossSheetConfig for cross-sheet context (F-210).
         """
+        self._ensure_job_state_collections()
+
         # Store sheets for prompt rendering
         self._job_sheets[job_id] = {s.num: s for s in sheets}
 
@@ -1016,6 +1273,10 @@ class BatonAdapter:
         # Store cross-sheet config (F-210)
         if cross_sheet is not None:
             self._job_cross_sheet[job_id] = cross_sheet
+        if learning_config is not None:
+            self._job_learning_configs[job_id] = learning_config
+        else:
+            self._job_learning_configs.pop(job_id, None)
 
         # #340: per-instrument dispatch stagger (adapter-level; last register
         # wins for concurrent jobs — acceptable v1, most scores share a value).
@@ -1061,6 +1322,8 @@ class BatonAdapter:
             self._job_code_execution[job_id] = code_execution
             if job_id not in self._job_routers:
                 self._job_routers[job_id] = TechniqueRouter()
+
+        self._register_a2a_job(job_id, agent_card)
 
         # Build SheetExecutionState with recovered statuses and attempt counts
         states: dict[int, SheetExecutionState] = {}
@@ -1236,21 +1499,24 @@ class BatonAdapter:
         return failures or None
 
     async def _build_learned_patterns(
-        self, instrument_name: str
-    ) -> list[str] | None:
+        self, instrument_name: str, *, job_id: str | None = None
+    ) -> list[tuple[str, str]] | None:
         """Learned patterns for the executing instrument, for injection (#200).
 
         Queries the GlobalLearningStore for instrument-specific + universal
         patterns, excluding quarantined (untrusted) ones, and converts each to
-        a compact prompt string. ``get_patterns`` is a SYNCHRONOUS sqlite query
-        and this runs on the conductor event loop, so it is dispatched off-loop
-        via ``asyncio.to_thread`` — the #243 contract. Returns None when there's
-        no store handle or nothing relevant, so the renderer cleanly skips the
-        layer (matching #207's failure-history shape). ``limit`` is set a little
-        above the renderer's display cap (``_format_patterns_section`` shows the
-        top 5) to leave headroom for empty-description records dropped below.
+        a compact prompt string paired with its PatternRecord ID.
+        ``get_patterns`` is a SYNCHRONOUS sqlite query and this runs on the
+        conductor event loop, so it is dispatched off-loop via
+        ``asyncio.to_thread`` — the #243 contract. Returns None when there's no
+        store handle or nothing relevant, so the renderer cleanly skips the layer
+        (matching #207's failure-history shape). ``limit`` is set a little above
+        the renderer's display cap (``_format_patterns_section`` shows the top 5)
+        to leave headroom for empty-description records dropped below.
         """
         if self._learning_store is None:
+            return None
+        if not self._learning_patterns_enabled(job_id):
             return None
         records = await asyncio.to_thread(
             self._learning_store.get_patterns,
@@ -1260,10 +1526,50 @@ class BatonAdapter:
             limit=10,
             min_priority=0.1,
         )
-        strings = [
-            s for r in records if (s := self._pattern_to_str(r)) is not None
+        entries = [
+            (r.id, s) for r in records if (s := self._pattern_to_str(r)) is not None
         ]
-        return strings or None
+        return entries or None
+
+    def _learning_patterns_enabled(self, job_id: str | None) -> bool:
+        """Return whether global learned-pattern prompt injection is enabled."""
+        if job_id is None:
+            return True
+        self._ensure_job_state_collections()
+        config = self._job_learning_configs.get(job_id)
+        if config is None:
+            return True
+        return bool(config.enabled and config.use_global_patterns)
+
+    def _record_applied_patterns(
+        self,
+        job_id: str,
+        sheet_num: int,
+        patterns: list[tuple[str, str]] | None,
+    ) -> None:
+        """Persist pattern IDs/descriptions injected into the current attempt.
+
+        The prompt only needs strings, but the learning feedback loop needs to
+        know which PatternRecords were actually applied when the sheet outcome
+        is later aggregated.
+        """
+        job_record = self._baton._jobs.get(job_id)
+        if job_record is None:
+            return
+        sheet_state = job_record.sheets.get(sheet_num)
+        if sheet_state is None:
+            return
+
+        entries = patterns or []
+        sheet_state.applied_patterns = cast(
+            "list[AppliedPatternDict]",
+            [
+                {"id": pattern_id, "description": description}
+                for pattern_id, description in entries
+            ],
+        )
+        if self._persist_callback:
+            self._persist_callback(job_id)
 
     def _build_spec_fragments(
         self, job_id: str, sheet_num: int
@@ -2056,17 +2362,77 @@ class BatonAdapter:
         # technique, content gets wired automatically.
         technique_manifest: str | None = None
         technique_skill_docs: list[str] = []
+        mcp_config_path: Path | None = None
+        mcp_code_bridge_active = False
+        mcp_bind_mounts: list[Path] = []
+        output_router_active = False
         job_techniques = self._job_techniques.get(job_id)
         if job_techniques:
             from marianne.daemon.baton.techniques import resolve_techniques_for_sheet
 
             phase = str(sheet.movement) if sheet.movement else str(sheet_num)
             resolved = resolve_techniques_for_sheet(job_techniques, phase)
+            output_router_active = bool(resolved.mcp_servers or resolved.protocols)
             if resolved.manifest:
                 technique_manifest = resolved.manifest
             # Collect discovered skill documents for injection
             for _tech_name, doc_content in resolved.skill_docs.items():
                 technique_skill_docs.append(doc_content)
+            if "a2a" in resolved.protocols:
+                a2a_context = self._render_a2a_context_for_dispatch(job_id)
+                if a2a_context:
+                    technique_skill_docs.append(a2a_context)
+            if self._mcp_pool is not None and resolved.mcp_servers:
+                from marianne.execution.interface_gen import (
+                    InterfaceGenerator,
+                    declarations_from_mcp_servers,
+                )
+
+                mcp_config_path = self._mcp_pool.generate_mcp_config_file(
+                    sheet.workspace,
+                    server_names=[
+                        str(server_name)
+                        for server_name in resolved.mcp_servers.values()
+                    ],
+                )
+                runtime_paths = _mcp_runtime_socket_paths(
+                    self._mcp_pool,
+                    {
+                        str(technique_name): str(server_name)
+                        for technique_name, server_name in resolved.mcp_servers.items()
+                    },
+                )
+                if runtime_paths:
+                    declarations = declarations_from_mcp_servers(
+                        {
+                            str(technique_name): str(server_name)
+                            for technique_name, server_name in resolved.mcp_servers.items()
+                            if str(technique_name) in runtime_paths
+                        }
+                    )
+                    generator = InterfaceGenerator()
+                    socket_path_strings: dict[str, str] = {}
+                    for technique_name, socket_path in runtime_paths.items():
+                        socket_path_strings[technique_name] = str(socket_path)
+                        server_name = str(resolved.mcp_servers.get(technique_name, ""))
+                        if server_name:
+                            socket_path_strings[server_name] = str(socket_path)
+                    runtime_source = generator.generate_implementation(
+                        declarations,
+                        socket_paths=socket_path_strings,
+                    )
+                    if runtime_source:
+                        technique_skill_docs.append(generator.generate_stubs(declarations))
+                        sheet.workspace.mkdir(parents=True, exist_ok=True)
+                        (sheet.workspace / "techniques_rt.py").write_text(
+                            runtime_source,
+                            encoding="utf-8",
+                        )
+                        mcp_code_bridge_active = True
+                        mcp_bind_mounts = _mcp_socket_bind_mounts(runtime_paths)
+
+        if mcp_config_path is not None and hasattr(backend, "set_mcp_config"):
+            backend.set_mcp_config(mcp_config_path)
 
         # Spawn musician task
         task = asyncio.create_task(
@@ -2078,6 +2444,9 @@ class BatonAdapter:
                 effective_instrument=effective_instrument,
                 technique_manifest=technique_manifest,
                 technique_skill_docs=technique_skill_docs,
+                output_router_active=output_router_active,
+                mcp_code_bridge_active=mcp_code_bridge_active,
+                mcp_bind_mounts=mcp_bind_mounts,
             ),
             name=f"musician-{job_id}-s{sheet_num}",
         )
@@ -2091,7 +2460,8 @@ class BatonAdapter:
             extra={
                 "job_id": job_id,
                 "sheet_num": sheet_num,
-                "instrument": sheet.instrument_name,
+                "instrument": effective_instrument,
+                "primary_instrument": sheet.instrument_name,
                 "attempt": attempt_number,
                 "mode": mode.value,
             },
@@ -2107,6 +2477,9 @@ class BatonAdapter:
         effective_instrument: str | None = None,
         technique_manifest: str | None = None,
         technique_skill_docs: list[str] | None = None,
+        output_router_active: bool = False,
+        mcp_code_bridge_active: bool = False,
+        mcp_bind_mounts: list[Path] | None = None,
     ) -> None:
         """Wrapper around sheet_task that handles backend release.
 
@@ -2124,6 +2497,14 @@ class BatonAdapter:
             technique_manifest: Optional technique manifest text resolved
                 by the dispatch loop for this sheet's phase. Passed through
                 to PromptRenderer.render() for Stage 1 prompt injection.
+            output_router_active: Whether this sheet's resolved techniques
+                need post-execution output classification. A2A delegation and
+                parsed MCP tool calls are phase-scoped; code execution remains
+                controlled separately by the job's code execution config.
+            mcp_code_bridge_active: Whether this dispatch materialized a
+                workspace ``techniques_rt.py`` module for MCP-backed code mode.
+            mcp_bind_mounts: Host socket directories to expose if bwrap
+                sandboxing is available for code mode.
         """
         # Resolve the instrument name for this execution before try/finally.
         # After fallback, effective_instrument differs from sheet.instrument_name.
@@ -2215,12 +2596,21 @@ class BatonAdapter:
             if renderer is not None:
                 # #200: learned-pattern lookup is a sync sqlite query — resolve
                 # it off the event loop (await) BEFORE the synchronous render().
-                learned_patterns = await self._build_learned_patterns(
-                    actual_instrument
+                learned_pattern_entries = await self._build_learned_patterns(
+                    actual_instrument, job_id=job_id,
+                )
+                self._record_applied_patterns(
+                    job_id,
+                    sheet.num,
+                    learned_pattern_entries,
                 )
                 rendered = renderer.render(
                     sheet, context,
-                    patterns=learned_patterns,
+                    patterns=(
+                        [text for _, text in learned_pattern_entries]
+                        if learned_pattern_entries
+                        else None
+                    ),
                     technique_manifest=technique_manifest,
                     technique_skill_docs=technique_skill_docs,
                     failure_history=self._build_failure_history(job_id, sheet.num),
@@ -2267,17 +2657,26 @@ class BatonAdapter:
             code_exec_cfg = self._job_code_execution.get(job_id)
             technique_router = (
                 self._job_routers.get(job_id)
-                if code_exec_cfg is not None
+                if (
+                    output_router_active
+                    or code_exec_cfg is not None
+                    or mcp_code_bridge_active
+                )
                 else None
             )
             code_executor = None
-            if code_exec_cfg is not None:
+            if code_exec_cfg is not None or mcp_code_bridge_active:
                 from marianne.execution.code_mode import CodeModeExecutor
 
                 code_executor = CodeModeExecutor(
                     workspace=sheet.workspace,
-                    timeout_seconds=code_exec_cfg.timeout_seconds,
+                    timeout_seconds=(
+                        code_exec_cfg.timeout_seconds
+                        if code_exec_cfg is not None
+                        else 30.0
+                    ),
                     use_sandbox=True,  # falls back unsandboxed if no bwrap
+                    bind_mounts=mcp_bind_mounts or [],
                 )
 
             await sheet_task(
@@ -2314,6 +2713,9 @@ class BatonAdapter:
             if hasattr(backend, "set_output_callback"):
                 backend.set_output_callback(None)
             self._output_hub.flush(job_id, sheet.num)
+
+            if hasattr(backend, "set_mcp_config"):
+                backend.set_mcp_config(None)
 
             # Always release the backend — use the same instrument name
             # that was used for acquire (actual_instrument), not the Sheet
@@ -3046,6 +3448,9 @@ class BatonAdapter:
                 for d_job_id, _d_sheet_num in initial_result.dispatched_sheets:
                     if self._persist_callback:
                         self._persist_callback(d_job_id)
+            for b_job_id, _b_sheet_num in initial_result.blocked_sheets:
+                if self._persist_callback:
+                    self._persist_callback(b_job_id)
 
             while not self._baton._shutting_down:
                 event = await self._baton.inbox.get()
@@ -3069,6 +3474,8 @@ class BatonAdapter:
                     # (FERMATA) sheet — its own handler, not the baton's.
                     await self._handle_fermata_check(event)
                 else:
+                    if isinstance(event, SheetAttemptResult):
+                        await self._route_a2a_requests(event)
                     await self._baton.handle_event(event)
 
                 # #206: mirror instrument rate limits to the daemon-level
@@ -3118,6 +3525,9 @@ class BatonAdapter:
                     # Schedule the timeout safety net and (when enabled) the
                     # idle-detection cadence for this freshly-dispatched sheet.
                     self._schedule_stale_detection(d_job_id, d_sheet_num)
+                for b_job_id, _b_sheet_num in dispatch_result.blocked_sheets:
+                    if self._persist_callback:
+                        self._persist_callback(b_job_id)
 
                 # Publish any fallback events to EventBus
                 await self._publish_fallback_events()

@@ -20,6 +20,7 @@ See docs/specs/2026-06-10-interactive-mode-design.md.
 
 from __future__ import annotations
 
+import asyncio
 import re
 import shutil
 import time
@@ -29,6 +30,7 @@ from pathlib import Path
 
 from marianne.backends.base import Backend, ExecutionResult
 from marianne.core.config.instruments import InstrumentProfile, InteractiveCliConfig
+from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
 from marianne.execution.instruments.interactive.driver import (
     DriverResult,
@@ -39,10 +41,12 @@ from marianne.execution.instruments.interactive.tmux import (
     MIN_TMUX_VERSION,
     SESSION_PREFIX,
     TmuxControl,
+    TmuxError,
     sanitize_session_name,
 )
 
 _logger = get_logger("execution.interactive.backend")
+_ERROR_CLASSIFIER = ErrorClassifier()
 
 # Default consecutive-idle nudge budget (overridable per sheet via
 # instrument_config.interactive_max_nudges).
@@ -361,11 +365,12 @@ class InteractiveCliBackend(Backend):
                 on_pane_pid=_register_pid,
             )
         finally:
-            # The pane process is already dead here (driver cleanup killed
-            # the session), so this PID is an UNTRACK TOKEN, not a live
-            # process reference — the OS may have recycled it. Consumers
-            # must only ever remove it from tracking (pgroup.untrack does
-            # exactly that); never signal it (goal-mode audit, GLM P2-LOW).
+            await self._ensure_session_gone(session)
+            # The pane process should be dead here. This PID is an UNTRACK
+            # TOKEN, not a live process reference — the OS may have recycled
+            # it. Consumers must only ever remove it from tracking
+            # (pgroup.untrack does exactly that); never signal it directly
+            # (goal-mode audit, GLM P2-LOW).
             if pane_pid is not None and self._on_process_exited is not None:
                 self._on_process_exited(pane_pid)
 
@@ -383,6 +388,54 @@ class InteractiveCliBackend(Backend):
             transcript=str(transcript),
         )
         return result
+
+    async def _ensure_session_gone(self, session: str) -> None:
+        """Backend-level final tmux teardown guard.
+
+        The driver owns normal cleanup, but live Antigravity quota proof showed
+        a rate-limited interactive attempt can return to the baton while the
+        tmux session still exists. Do not untrack the pane PID until this
+        second guard has checked the actual tmux server.
+        """
+        for attempt in range(3):
+            try:
+                if not await self._tmux.has_session(session):
+                    return
+            except TmuxError as e:
+                _logger.warning(
+                    "interactive_backend_teardown_check_failed",
+                    session=session,
+                    step="has_session",
+                    error=str(e),
+                )
+                return
+
+            if attempt == 0:
+                _logger.warning(
+                    "interactive_backend_session_survived_driver_cleanup",
+                    session=session,
+                )
+            try:
+                await self._tmux.kill_session(session)
+            except TmuxError as e:
+                _logger.warning(
+                    "interactive_backend_teardown_check_failed",
+                    session=session,
+                    step="kill_session",
+                    error=str(e),
+                )
+            if attempt < 2:
+                await asyncio.sleep(0.15 * (attempt + 1))
+
+        try:
+            alive = await self._tmux.has_session(session)
+        except TmuxError:
+            alive = False
+        if alive:
+            _logger.error(
+                "interactive_backend_session_survived_final_teardown",
+                session=session,
+            )
 
     def _map_result(
         self, driver_result: DriverResult, duration: float,
@@ -402,17 +455,40 @@ class InteractiveCliBackend(Backend):
                 model=self._model,
             )
 
-        rate_limited = False
+        rate_limited = self._scan_final_screen(
+            screen, self._interactive.rate_limit_screen_patterns,
+        )
+        rate_limit_wait_seconds = (
+            _ERROR_CLASSIFIER.extract_rate_limit_wait(screen)
+            if rate_limited else None
+        )
         error_type: str | None = None
-        if outcome in ("session_lost", "startup_failed"):
+        if not rate_limited and self._scan_final_screen(
+            screen, self._interactive.auth_error_screen_patterns,
+        ):
+            error_type = "auth"
+        elif self._scan_final_screen(
+            screen, self._interactive.crash_screen_patterns,
+        ):
+            error_type = "crash"
+        elif self._scan_final_screen(
+            screen, self._interactive.capacity_screen_patterns,
+        ):
+            error_type = "capacity"
+
+        if outcome in ("session_lost", "startup_failed") and error_type is None:
             rate_limited = self._scan_final_screen(
                 screen, self._cli.errors.rate_limit_patterns,
             )
+            if rate_limited and rate_limit_wait_seconds is None:
+                rate_limit_wait_seconds = (
+                    _ERROR_CLASSIFIER.extract_rate_limit_wait(screen)
+                )
             if not rate_limited and self._scan_final_screen(
                 screen, self._cli.errors.auth_error_patterns,
             ):
                 error_type = "auth"
-            elif not rate_limited and outcome == "session_lost":
+            elif outcome == "session_lost":
                 error_type = "crash"
 
         return ExecutionResult(
@@ -424,6 +500,7 @@ class InteractiveCliBackend(Backend):
             exit_reason="timeout" if outcome == "timeout" else "completed"
             if outcome == "nudges_exhausted" else "error",
             rate_limited=rate_limited,
+            rate_limit_wait_seconds=rate_limit_wait_seconds,
             error_type=error_type,
             error_message=driver_result.detail,
             model=self._model,

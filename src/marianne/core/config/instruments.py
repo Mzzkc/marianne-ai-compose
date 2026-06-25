@@ -20,6 +20,7 @@ v1.1+: HTTP backends, code-mode techniques.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -177,6 +178,32 @@ class CliCommand(BaseModel):
         default=None,
         description="Flag for MCP server configuration",
     )
+    mcp_config_workspace_path: str | None = Field(
+        default=None,
+        description=(
+            "Workspace-relative MCP config path for CLIs that discover MCP "
+            "servers from a file instead of a command flag, e.g. "
+            "'.agents/mcp_config.json'. The backend copies the conductor "
+            "generated config there for the duration of one execution."
+        ),
+    )
+    mcp_config_workspace_merge_key: str | None = Field(
+        default=None,
+        description=(
+            "Optional JSON object key to merge into the workspace MCP config "
+            "file instead of replacing the whole file. Use for CLIs whose MCP "
+            "servers live inside a broader project settings file, e.g. "
+            "Gemini CLI's '.gemini/settings.json' with 'mcpServers'."
+        ),
+    )
+    mcp_config_prefix_args: list[str] = Field(
+        default_factory=list,
+        description=(
+            "CLI args to add immediately before an active MCP config flag/path. "
+            "Use for least-privilege switches such as Claude Code's "
+            "--strict-mcp-config."
+        ),
+    )
     mcp_disable_args: list[str] = Field(
         default_factory=list,
         description="CLI args to inject for disabling MCP servers when no MCP "
@@ -243,6 +270,33 @@ class CliCommand(BaseModel):
         "environment is inherited (backward compatible). Use this to prevent "
         "credentials for other services from leaking to instrument subprocesses.",
     )
+
+    @field_validator("mcp_config_workspace_path")
+    @classmethod
+    def _validate_mcp_config_workspace_path(cls, v: str | None) -> str | None:
+        """Keep workspace-discovered MCP config files inside the workspace."""
+        if v is None:
+            return None
+        path = Path(v)
+        if not v.strip():
+            raise ValueError("mcp_config_workspace_path must not be empty")
+        if path.is_absolute():
+            raise ValueError("mcp_config_workspace_path must be relative")
+        if any(part == ".." for part in path.parts):
+            raise ValueError("mcp_config_workspace_path must not contain '..'")
+        return v
+
+    @field_validator("mcp_config_workspace_merge_key")
+    @classmethod
+    def _validate_mcp_config_workspace_merge_key(cls, v: str | None) -> str | None:
+        """Keep workspace MCP merge keys simple JSON object keys."""
+        if v is None:
+            return None
+        if not v.strip():
+            raise ValueError("mcp_config_workspace_merge_key must not be empty")
+        if "." in v or "/" in v or "\\" in v:
+            raise ValueError("mcp_config_workspace_merge_key must be a simple key")
+        return v
 
 
 class CliOutputConfig(BaseModel):
@@ -450,6 +504,28 @@ class InteractiveCliConfig(BaseModel):
         "the agent is actively working (spinners, 'esc to interrupt'). "
         "Primary busy signal — screen change alone never means busy.",
     )
+    rate_limit_screen_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regexes for verified interactive UI screens that mean "
+        "the provider/account is rate-limited or quota-blocked. These are "
+        "separate from CLI stderr patterns so agent prose on an idle screen "
+        "does not become a false provider failure.",
+    )
+    auth_error_screen_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regexes for verified interactive UI screens that mean "
+        "the provider/account is not authenticated or lacks permission.",
+    )
+    capacity_screen_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regexes for verified interactive UI screens that mean "
+        "the provider is temporarily unavailable or overloaded.",
+    )
+    crash_screen_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regexes for verified interactive UI screens that mean "
+        "the TUI hit a fatal process/runtime error.",
+    )
     quiet_seconds: float = Field(
         default=15.0,
         gt=0,
@@ -485,7 +561,14 @@ class InteractiveCliConfig(BaseModel):
         "defeat idle detection).",
     )
 
-    @field_validator("ready_pattern", "busy_patterns")
+    @field_validator(
+        "ready_pattern",
+        "busy_patterns",
+        "rate_limit_screen_patterns",
+        "auth_error_screen_patterns",
+        "capacity_screen_patterns",
+        "crash_screen_patterns",
+    )
     @classmethod
     def _validate_regexes(cls, v: str | list[str]) -> str | list[str]:
         """Reject invalid regex at config-load time, not mid-session."""
@@ -628,6 +711,22 @@ class InstrumentProfile(BaseModel):
         default=1800.0,
         gt=0,
         description="Default per-sheet execution timeout in seconds",
+    )
+
+    execution_status: Literal["ready", "warning", "unsupported"] = Field(
+        default="ready",
+        description=(
+            "Profile-level prompt execution readiness. Use 'unsupported' "
+            "when the binary may exist but this shipped profile should not "
+            "be selected automatically because live prompt execution is "
+            "known to fail for the default auth/tier path. Local profile "
+            "overrides can set this back to 'ready' after proving their "
+            "environment works."
+        ),
+    )
+    execution_status_detail: str | None = Field(
+        default=None,
+        description="Human-readable reason for non-ready execution_status.",
     )
 
     # Prompt-assembly bypass for instruments that consume raw input

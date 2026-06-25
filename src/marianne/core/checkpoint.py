@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal, Required
+from typing import Any, Literal, Required, cast
 
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import TypedDict
@@ -500,6 +500,23 @@ class SheetState(BaseModel):
         description="Monotonic time when the sheet was last dispatched. "
         "Transient — used by StaleCheck for hung sheet detection.",
     )
+    dispatch_blocked_reason: str | None = Field(
+        default=None,
+        description="Stable reason the ready sheet was most recently held by "
+        "the dispatch scheduler instead of being started. Examples: "
+        "model_concurrency, global_concurrency, rate_limited, circuit_breaker, "
+        "stagger. Cleared when the sheet dispatches or is reset.",
+    )
+    dispatch_blocked_at: datetime | None = Field(
+        default=None,
+        description="When dispatch_blocked_reason was first recorded for the "
+        "current wait.",
+    )
+    dispatch_blocked_details: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Structured scheduler details for dispatch_blocked_reason "
+        "(for example model_key/model_count/model_limit).",
+    )
     model: str | None = Field(
         default=None,
         description="Model used by this sheet's instrument. For per-model "
@@ -724,6 +741,82 @@ class SheetState(BaseModel):
             if warning not in self.preflight_warnings:
                 self.preflight_warnings.append(warning)
         self.total_duration_seconds += result.duration_seconds
+        self.execution_duration_seconds = result.duration_seconds
+        self.exit_code = getattr(result, "exit_code", None)
+        self.error_message = getattr(result, "error_message", None)
+        self.error_code = getattr(result, "error_code", None)
+        self.stdout_tail = getattr(result, "stdout_tail", None) or None
+        self.stderr_tail = getattr(result, "stderr_tail", None) or None
+
+        validation_details = getattr(result, "validation_details", None)
+        validation_results: list[ValidationDetailDict] = []
+        if isinstance(validation_details, dict):
+            raw_results = validation_details.get("results")
+            if isinstance(raw_results, list):
+                validation_results = [
+                    cast(ValidationDetailDict, item)
+                    for item in raw_results
+                    if isinstance(item, dict)
+                ]
+            elif validation_details.get("error"):
+                validation_results = [
+                    {
+                        "rule_type": "validation_engine",
+                        "description": "Validation engine error",
+                        "path": None,
+                        "pattern": None,
+                        "passed": False,
+                        "actual_value": None,
+                        "expected_value": None,
+                        "error_message": str(validation_details["error"]),
+                        "checked_at": utc_now().isoformat(),
+                        "check_duration_ms": 0.0,
+                        "confidence": 0.0,
+                        "confidence_factors": {},
+                        "failure_reason": str(validation_details["error"]),
+                        "failure_category": "error",
+                        "suggested_fix": None,
+                        "error_type": "internal_error",
+                    }
+                ]
+
+            pass_percentage = validation_details.get("pass_percentage")
+            if isinstance(pass_percentage, (int, float)):
+                self.last_pass_percentage = float(pass_percentage)
+            else:
+                self.last_pass_percentage = getattr(
+                    result, "validation_pass_rate", None
+                )
+        elif getattr(result, "validations_total", 0):
+            self.last_pass_percentage = getattr(result, "validation_pass_rate", None)
+
+        if validation_results:
+            self.validation_details = validation_results
+            self.validation_passed = all(
+                detail.get("passed", False) for detail in validation_results
+            )
+            self.passed_validations = [
+                str(detail.get("description") or detail.get("rule_type") or "validation")
+                for detail in validation_results
+                if detail.get("passed", False)
+            ]
+            self.failed_validations = [
+                str(detail.get("description") or detail.get("rule_type") or "validation")
+                for detail in validation_results
+                if not detail.get("passed", False)
+            ]
+        elif getattr(result, "validations_total", 0):
+            self.validation_details = []
+            self.validation_passed = (
+                getattr(result, "validation_pass_rate", 0.0) >= 100.0
+            )
+            self.passed_validations = []
+            self.failed_validations = []
+        elif getattr(result, "execution_success", False):
+            self.validation_passed = None
+            self.validation_details = None
+            self.passed_validations = []
+            self.failed_validations = []
 
         if not result.rate_limited and not result.execution_success:
             self.normal_attempts += 1
@@ -831,6 +924,43 @@ class SheetState(BaseModel):
         # phantom "(was X: rate_limit)" tag.
         self.instrument_fallback_history = []
         self.fallback_attempts = {}
+        self.clear_dispatch_block()
+
+    def mark_dispatch_blocked(
+        self,
+        reason: str,
+        details: dict[str, Any] | None = None,
+    ) -> bool:
+        """Record that the ready sheet is waiting on dispatch capacity.
+
+        Returns True when persisted state changed. Repeated dispatch cycles
+        with the same reason/details keep the original timestamp so the state
+        backend is not rewritten every scheduler wake.
+        """
+        normalized_details = dict(details or {})
+        if (
+            self.dispatch_blocked_reason == reason
+            and self.dispatch_blocked_details == normalized_details
+            and self.dispatch_blocked_at is not None
+        ):
+            return False
+        self.dispatch_blocked_reason = reason
+        self.dispatch_blocked_details = normalized_details
+        self.dispatch_blocked_at = utc_now()
+        return True
+
+    def clear_dispatch_block(self) -> bool:
+        """Clear any previously recorded dispatch wait reason."""
+        if (
+            self.dispatch_blocked_reason is None
+            and self.dispatch_blocked_at is None
+            and not self.dispatch_blocked_details
+        ):
+            return False
+        self.dispatch_blocked_reason = None
+        self.dispatch_blocked_at = None
+        self.dispatch_blocked_details = {}
+        return True
 
     # --- Compatibility methods for Phase 2 transition ---
     # These match the SheetExecutionState dataclass API so the type alias

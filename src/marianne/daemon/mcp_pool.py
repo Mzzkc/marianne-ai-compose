@@ -1,9 +1,9 @@
 """Shared MCP server pool manager for the conductor.
 
-The conductor manages a pool of MCP server processes as shared infrastructure.
-One process per MCP server type, shared across all agents. Each server is
-started as a subprocess and tracked for health. Agents access servers via
-Unix sockets (bind-mounted into sandboxes).
+The conductor-side MCP pool starts one process per configured MCP server and,
+for stdio servers, exposes that process through a multiplexed Unix socket
+bridge. Multiple MCP clients can connect through the proxy shim; request IDs
+are rewritten upstream and restored on the way back to the originating client.
 
 Lifecycle:
 - ``start_all()`` — starts all configured servers on daemon startup
@@ -11,21 +11,23 @@ Lifecycle:
 - ``health_check(name)`` — verifies a server process is alive
 - ``get_socket_path(name)`` — returns the socket path for agent access
 
-The manager does NOT handle stdio-to-socket proxying — that is a future
-enhancement. Currently it manages process lifecycle only, and the socket
-path is stored for reference by the technique router.
+The manager owns the stdio-to-socket bridge for ``transport: stdio`` entries.
+Native socket/http transports can still use their configured socket/path as a
+future extension.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import shlex
 import sys
 from enum import Enum
 from pathlib import Path
 
 from marianne.core.logging import get_logger
 from marianne.daemon.config import McpPoolConfig
+from marianne.daemon.mcp_socket_bridge import McpFraming, McpSocketBridge
 
 _logger = get_logger("daemon.mcp_pool")
 
@@ -50,11 +52,12 @@ class _ServerHandle:
         state: Current server state.
     """
 
-    __slots__ = ("name", "process", "state")
+    __slots__ = ("bridge", "name", "process", "state")
 
     def __init__(self, name: str) -> None:
         self.name = name
         self.process: asyncio.subprocess.Process | None = None
+        self.bridge: McpSocketBridge | None = None
         self.state = McpServerState.STOPPED
 
 
@@ -135,31 +138,55 @@ class McpPoolManager:
                     extra={"server": name, "command": entry.command},
                 )
 
-                # Ensure socket parent directory exists
-                socket_path = Path(entry.socket)
-                socket_path.parent.mkdir(parents=True, exist_ok=True)
-
-                # Start the server process.
-                # Uses create_subprocess_exec (not shell) for safety —
-                # command is split into args, no shell injection risk.
-                cmd_parts = entry.command.split()
-                process = await asyncio.create_subprocess_exec(
-                    cmd_parts[0],
-                    *cmd_parts[1:],
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-
-                handle.process = process
+                if entry.transport == "stdio":
+                    framing: McpFraming = (
+                        "content-length"
+                        if entry.framing == "content-length"
+                        else "newline"
+                    )
+                    bridge = McpSocketBridge(
+                        name=name,
+                        command=entry.command,
+                        socket_path=Path(entry.socket),
+                        upstream_framing=framing,
+                    )
+                    await bridge.start()
+                    handle.bridge = bridge
+                    handle.process = bridge.process
+                else:
+                    # Non-stdio transports are still lifecycle-managed only.
+                    socket_path = Path(entry.socket)
+                    socket_path.parent.mkdir(parents=True, exist_ok=True)
+                    cmd_parts = shlex.split(entry.command)
+                    if not cmd_parts:
+                        raise ValueError("MCP server command must not be empty")
+                    process = await asyncio.create_subprocess_exec(
+                        cmd_parts[0],
+                        *cmd_parts[1:],
+                        stdin=asyncio.subprocess.PIPE,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    handle.process = process
                 handle.state = McpServerState.RUNNING
 
                 _logger.info(
                     "mcp_pool.server_started",
-                    extra={"server": name, "pid": process.pid},
+                    extra={
+                        "server": name,
+                        "pid": handle.process.pid if handle.process else None,
+                        "transport": entry.transport,
+                    },
                 )
 
-            except (FileNotFoundError, PermissionError, OSError) as e:
+            except (
+                FileNotFoundError,
+                PermissionError,
+                OSError,
+                RuntimeError,
+                TimeoutError,
+                ValueError,
+            ) as e:
                 handle.state = McpServerState.FAILED
                 _logger.error(
                     "mcp_pool.server_start_failed",
@@ -173,6 +200,21 @@ class McpPoolManager:
         process. Already-exited processes are handled gracefully.
         """
         for name, handle in self._handles.items():
+            if handle.bridge is not None:
+                try:
+                    await handle.bridge.stop()
+                except Exception:
+                    _logger.warning(
+                        "mcp_pool.bridge_stop_error",
+                        extra={"server": name},
+                        exc_info=True,
+                    )
+                finally:
+                    handle.bridge = None
+                    handle.process = None
+                    handle.state = McpServerState.STOPPED
+                continue
+
             if handle.process is None:
                 handle.state = McpServerState.STOPPED
                 continue
@@ -229,6 +271,8 @@ class McpPoolManager:
         handle = self._handles.get(name)
         if handle is None:
             return False
+        if handle.bridge is not None:
+            return handle.bridge.is_running
         if handle.process is None:
             return False
         # returncode is None while the process is running

@@ -102,6 +102,24 @@ class ValidationEngine:
             ) from exc
         return Path(expanded).resolve()
 
+    def expand_scoped_path(self, path_template: str) -> Path:
+        """Expand a path for scope checks, resolving relatives under workspace."""
+        context = dict(self.sheet_context)
+        context["workspace"] = str(self.workspace)
+
+        try:
+            expanded = path_template.format(**context)
+        except IndexError as exc:
+            raise ValueError(
+                f"Invalid path template '{path_template}': {exc}. "
+                "Use named placeholders like {{workspace}}, not bare {{}}."
+            ) from exc
+
+        path = Path(expanded).expanduser()
+        if not path.is_absolute():
+            path = self.workspace / path
+        return path.resolve()
+
     def snapshot_mtime_files(self, rules: list[ValidationRule]) -> None:
         """Snapshot mtimes for all file_modified rules before sheet execution."""
         paths = [
@@ -142,13 +160,17 @@ class ValidationEngine:
         var_name, op_str, value_str = match.groups()
         value = int(value_str)
 
-        if var_name == SHEET_NUM_KEY:
-            var_value = self.sheet_context.get(SHEET_NUM_KEY, 0)
-        else:
-            ctx_value = self.sheet_context.get(var_name)
-            if ctx_value is None or not isinstance(ctx_value, int):
-                return True
+        ctx_value = self.sheet_context.get(
+            SHEET_NUM_KEY if var_name == SHEET_NUM_KEY else var_name
+        )
+        if ctx_value is None:
+            return False
+        if isinstance(ctx_value, str) and ctx_value.strip().lstrip("-").isdigit():
+            var_value = int(ctx_value.strip())
+        elif type(ctx_value) is int:
             var_value = ctx_value
+        else:
+            return False
 
         op_fn = self._CONDITION_OPS.get(op_str)
         if op_fn is None:
@@ -246,6 +268,7 @@ class ValidationEngine:
         "content_contains",
         "content_regex",
         "command_succeeds",
+        "path_in_scope",
     })
 
     _HIGH_RISK_COMMAND_PATTERNS = (
@@ -260,6 +283,7 @@ class ValidationEngine:
         "content_contains": "_check_content_contains",
         "content_regex": "_check_content_regex",
         "command_succeeds": "_check_command_succeeds",
+        "path_in_scope": "_check_path_in_scope",
     }
 
     _ERROR_TYPE_MAP: dict[type, tuple[str, str]] = {
@@ -492,6 +516,48 @@ class ValidationEngine:
             ),
             failure_category="malformed",
             suggested_fix="Check the file format matches expectations",
+        )
+
+    def _check_path_in_scope(self, rule: ValidationRule) -> ValidationResult:
+        """Check that a path resolves inside an allowed root."""
+        if not rule.path:
+            return self._missing_field_result(rule, "path")
+
+        path = self.expand_scoped_path(rule.path)
+        scope = self.expand_scoped_path(rule.path_scope or "{workspace}")
+
+        try:
+            in_scope = path.is_relative_to(scope)
+        except ValueError:
+            in_scope = False
+
+        if in_scope:
+            return ValidationResult(
+                rule=rule,
+                passed=True,
+                actual_value=str(path),
+                expected_value=f"inside {scope}",
+                confidence=1.0,
+                confidence_factors={"canonical_path_scope": 1.0},
+            )
+
+        return ValidationResult(
+            rule=rule,
+            passed=False,
+            actual_value=str(path),
+            expected_value=f"inside {scope}",
+            error_message=f"Path resolves outside allowed scope: {path}",
+            failure_reason=(
+                f"Path '{self._display_path(path)}' is outside "
+                f"allowed scope '{self._display_path(scope)}'"
+            ),
+            failure_category="security",
+            suggested_fix=(
+                "Use a path under the workspace or narrow path_scope, "
+                "and avoid symlinks or '..' segments that resolve outside it"
+            ),
+            confidence=1.0,
+            confidence_factors={"canonical_path_scope": 1.0},
         )
 
     async def _check_command_succeeds(self, rule: ValidationRule) -> ValidationResult:

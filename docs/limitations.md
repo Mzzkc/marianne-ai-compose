@@ -148,7 +148,10 @@ provides a config file. This prevents ambient-server child-process explosion
 **Workaround:** Copy the builtin profile to `~/.marianne/instruments/`,
 remove (or edit) its `mcp_disable_args`, and point the score at the custom
 profile. For curated tool access, the conductor's shared MCP pool supplies
-a config file via the profile's `mcp_config_flag`.
+a config file via the profile's `mcp_config_flag` or
+`mcp_config_workspace_path`; profiles such as Gemini CLI can merge generated
+servers into a broader JSON settings file with
+`mcp_config_workspace_merge_key`.
 
 **Status:** A proper technique system for per-sheet MCP/skill configuration is planned but not yet implemented.
 

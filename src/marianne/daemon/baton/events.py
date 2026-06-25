@@ -126,6 +126,11 @@ class SheetAttemptResult:
     # compat) or when execution failed (classification skipped). Downstream
     # stages (Stage 3 code-mode executor, Stage 5 A2A routing) act on this.
     output_kind: str | None = None
+    # Structured router payloads. These are intentionally plain dicts so the
+    # immutable baton event remains decoupled from router implementation types.
+    # They are empty unless a router classified successful output.
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    a2a_requests: list[dict[str, Any]] = field(default_factory=list)
 
     # Timestamp of when the attempt completed
     timestamp: float = field(default_factory=time.time)

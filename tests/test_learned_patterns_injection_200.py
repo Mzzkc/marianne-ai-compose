@@ -24,9 +24,11 @@ Per the 4-model lab (unanimous design):
 from __future__ import annotations
 
 from datetime import datetime
+from unittest.mock import MagicMock
 
 import pytest
 
+from marianne.core.config.learning import LearningConfig
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.learning.store import GlobalLearningStore
 from marianne.learning.store.models import PatternRecord, QuarantineStatus
@@ -120,6 +122,32 @@ class TestBuildLearnedPatterns:
         store.close()
 
     @pytest.mark.asyncio
+    async def test_learning_disabled_skips_store_query(self) -> None:
+        store = MagicMock()
+        adapter = BatonAdapter(learning_store=store)
+        adapter._job_learning_configs["job-1"] = LearningConfig(enabled=False)
+
+        assert (
+            await adapter._build_learned_patterns("claude-code", job_id="job-1")
+            is None
+        )
+        store.get_patterns.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_global_patterns_disabled_skips_store_query(self) -> None:
+        store = MagicMock()
+        adapter = BatonAdapter(learning_store=store)
+        adapter._job_learning_configs["job-1"] = LearningConfig(
+            use_global_patterns=False,
+        )
+
+        assert (
+            await adapter._build_learned_patterns("claude-code", job_id="job-1")
+            is None
+        )
+        store.get_patterns.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_returns_strings_for_matching_instrument(
         self, tmp_path
     ) -> None:
@@ -135,8 +163,10 @@ class TestBuildLearnedPatterns:
         result = await adapter._build_learned_patterns("claude-code")
         assert result is not None
         assert len(result) == 1
-        assert "prefer-explicit-paths" in result[0]
-        assert "use absolute paths in commands" in result[0]
+        pattern_id, text = result[0]
+        assert pattern_id
+        assert "prefer-explicit-paths" in text
+        assert "use absolute paths in commands" in text
         store.close()
 
     @pytest.mark.asyncio
@@ -170,7 +200,7 @@ class TestBuildLearnedPatterns:
         adapter = BatonAdapter(learning_store=store)
         result = await adapter._build_learned_patterns("claude-code")
         assert result is not None
-        assert any("universal-tip" in s for s in result)
+        assert any("universal-tip" in text for _, text in result)
         store.close()
 
     @pytest.mark.asyncio

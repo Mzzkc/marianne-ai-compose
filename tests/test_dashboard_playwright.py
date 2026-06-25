@@ -36,6 +36,7 @@ from marianne.core.checkpoint import (  # noqa: E402
     SheetStatus,
 )
 from marianne.dashboard.app import create_app  # noqa: E402
+from marianne.dashboard.auth.rate_limit import RateLimitConfig  # noqa: E402
 from marianne.state.json_backend import JsonStateBackend
 
 
@@ -73,7 +74,11 @@ def base_url(port: int) -> str:
 
 @pytest.fixture(scope="module")
 def _server(backend: JsonStateBackend, port: int) -> Generator[None, None, None]:
-    app = create_app(state_backend=backend, cors_origins=["*"])
+    app = create_app(
+        state_backend=backend,
+        cors_origins=["*"],
+        rate_limit_config=RateLimitConfig(enabled=False),
+    )
     stop_event = threading.Event()
 
     def _run() -> None:
@@ -159,6 +164,27 @@ def _seed_jobs(backend: JsonStateBackend) -> None:
         raise result[0]
 
 
+def _save_state(backend: JsonStateBackend, state: CheckpointState) -> None:
+    import asyncio
+
+    result: list[Exception | None] = [None]
+
+    async def _save() -> None:
+        await backend.save(state)
+
+    def _run() -> None:
+        try:
+            asyncio.run(_save())
+        except Exception as exc:
+            result[0] = exc
+
+    t = threading.Thread(target=_run)
+    t.start()
+    t.join(timeout=5)
+    if result[0] is not None:
+        raise result[0]
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -169,8 +195,10 @@ def test_health_endpoint(page: Page, base_url: str) -> None:
     resp = page.goto(f"{base_url}/health")
     assert resp is not None
     body = resp.json()
-    assert body["status"] == "healthy"
+    assert body["status"] in ("healthy", "degraded")
     assert body["service"] == "marianne-dashboard"
+    assert body["conductor"] in ("up", "down")
+    assert (body["status"] == "healthy") == (body["conductor"] == "up")
 
 
 @pytest.mark.playwright
@@ -178,6 +206,28 @@ def test_dashboard_home_loads(page: Page, base_url: str) -> None:
     page.goto(base_url)
     title = page.title()
     assert title != ""
+
+
+@pytest.mark.playwright
+def test_score_editor_dark_mode_themes_editing_surface(page: Page, base_url: str) -> None:
+    page.add_init_script("localStorage.setItem('darkMode', 'true')")
+    page.goto(f"{base_url}/editor", wait_until="networkidle")
+    page.wait_for_selector(".cm-content", timeout=10_000)
+    expect_dark_toggle = page.get_by_role("button", name="Switch to light mode")
+    assert expect_dark_toggle.count() == 1
+
+    colors = page.eval_on_selector(
+        ".cm-content",
+        """
+        el => {
+            const s = getComputedStyle(el);
+            return {background: s.backgroundColor, color: s.color};
+        }
+        """,
+    )
+
+    assert colors["background"] != "rgb(255, 255, 255)"
+    assert colors["color"] != "rgb(255, 255, 255)"
 
 
 @pytest.mark.playwright
@@ -218,6 +268,44 @@ def test_job_status_api(page: Page, base_url: str, backend: JsonStateBackend) ->
     body = resp.json()
     assert body["job_id"] == "pw-running-1"
     assert body["progress_percent"] == 25.0
+
+
+@pytest.mark.playwright
+def test_job_detail_action_updates_visible_controls(
+    page: Page, base_url: str, backend: JsonStateBackend
+) -> None:
+    _seed_jobs(backend)
+    page.route(
+        "**/api/jobs/pw-running-1/stream",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="text/event-stream",
+            body="event: heartbeat\ndata: {}\n\n",
+        ),
+    )
+    page.route(
+        "**/api/jobs/pw-running-1/pause",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "success": True,
+                    "job_id": "pw-running-1",
+                    "status": "paused",
+                    "message": "paused",
+                    "via_daemon": True,
+                }
+            ),
+        ),
+    )
+
+    page.goto(f"{base_url}/jobs/pw-running-1/details", wait_until="domcontentloaded")
+    page.get_by_role("button", name="Pause").click()
+
+    page.get_by_role("button", name="Resume").wait_for(state="visible")
+    assert page.get_by_role("button", name="Pause").is_hidden()
+    assert page.locator("span", has_text="paused").first.is_visible()
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +354,72 @@ def test_sse_stream_produces_events(page: Page, base_url: str, backend: JsonStat
     assert first["event"] in ("job_status", "job_finished")
     data = json.loads(first["data"])
     assert data["job_id"] == "pw-completed-1"
+
+
+@pytest.mark.playwright
+def test_log_viewer_shows_error_when_stream_has_no_sources(
+    page: Page,
+    base_url: str,
+    backend: JsonStateBackend,
+    temp_state_dir: Path,
+) -> None:
+    workspace = temp_state_dir / "pw-empty-log-workspace"
+    workspace.mkdir(exist_ok=True)
+    now = datetime(2026, 4, 14, 12, 0, 0, tzinfo=UTC)
+    _save_state(
+        backend,
+        CheckpointState(
+            job_id="pw-no-logs",
+            job_name="Playwright No Logs Job",
+            status=JobStatus.COMPLETED,
+            total_sheets=1,
+            worktree_path=str(workspace),
+            created_at=now,
+            updated_at=now,
+            completed_at=now,
+        ),
+    )
+
+    page.goto(f"{base_url}/jobs/pw-no-logs/logs", wait_until="domcontentloaded")
+    page.wait_for_selector("text=Log stream unavailable for this job.", timeout=10_000)
+
+
+@pytest.mark.playwright
+def test_log_viewer_marks_oversized_download_as_stream_only(
+    page: Page, base_url: str, backend: JsonStateBackend
+) -> None:
+    _seed_jobs(backend)
+    page.route(
+        "**/api/jobs/pw-completed-1/logs/info",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "job_id": "pw-completed-1",
+                    "log_file": "combined log sources",
+                    "size_bytes": 53 * 1024 * 1024,
+                    "lines": 1000,
+                    "last_modified": "2026-04-14T12:00:00Z",
+                    "sources": ["observer events: /tmp/observer.jsonl"],
+                    "download_available": False,
+                    "download_limit_bytes": 50 * 1024 * 1024,
+                }
+            ),
+        ),
+    )
+    page.route(
+        "**/api/jobs/pw-completed-1/logs",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="text/event-stream",
+            body="event: log_complete\ndata: {}\n\n",
+        ),
+    )
+
+    page.goto(f"{base_url}/jobs/pw-completed-1/logs", wait_until="domcontentloaded")
+    page.get_by_text("Stream only").wait_for(state="visible")
+    assert page.get_by_role("link", name="Download").count() == 0
 
 
 # ---------------------------------------------------------------------------

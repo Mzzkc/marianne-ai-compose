@@ -73,6 +73,40 @@ _DAEMON_TO_CHECKPOINT_STATUS: dict[DaemonJobStatus, JobStatus] = {
     DaemonJobStatus.CANCELLED: JobStatus.CANCELLED,
 }
 
+_CANCELLED_JOB_STALE_SHEET_STATUSES = {
+    SheetStatus.READY.value,
+    SheetStatus.DISPATCHED.value,
+    SheetStatus.IN_PROGRESS.value,
+    SheetStatus.WAITING.value,
+    SheetStatus.RETRY_SCHEDULED.value,
+    SheetStatus.FERMATA.value,
+}
+
+
+def _normalize_cancelled_checkpoint_status(data: dict[str, Any]) -> dict[str, Any]:
+    """Make terminal cancelled checkpoints truthful for status consumers.
+
+    A cancel can be recorded in the registry after the last checkpoint write.
+    In that case the job status is authoritative but individual sheets may
+    still say "dispatched"/"waiting". Normalize only non-terminal active-ish
+    sheet states; preserve completed/failed/skipped evidence and untouched
+    pending sheets.
+    """
+    if data.get("status") != JobStatus.CANCELLED.value:
+        return data
+
+    sheets = data.get("sheets")
+    if not isinstance(sheets, dict):
+        return data
+
+    for raw_sheet in sheets.values():
+        if not isinstance(raw_sheet, dict):
+            continue
+        if raw_sheet.get("status") in _CANCELLED_JOB_STALE_SHEET_STATUSES:
+            raw_sheet["status"] = SheetStatus.CANCELLED.value
+            raw_sheet.setdefault("error_message", "Job cancelled")
+    return data
+
 
 def _should_auto_fresh(config_path: Path, completed_at: float | None) -> bool:
     """Check if a score file was modified after a completed run.
@@ -447,6 +481,7 @@ class JobManager:
         from marianne.daemon.baton.adapter import BatonAdapter
 
         self._baton_adapter: BatonAdapter | None = None
+        self._mcp_pool: Any | None = None
         # #171: live instrument registry, retained for SIGHUP hot-reload.
         self._instrument_registry: InstrumentRegistry | None = None
         # #197: per-job git worktree paths for isolation cleanup.
@@ -614,6 +649,21 @@ class JobManager:
             diagnostic_snapshot_fn=self._diagnostic_snapshot,
         )
         self._baton_adapter.set_backend_pool(BackendPool(registry, pgroup=self._pgroup))
+
+        if self._config.mcp_pool.servers:
+            from marianne.daemon.mcp_pool import McpPoolManager
+
+            self._mcp_pool = McpPoolManager(self._config.mcp_pool)
+            try:
+                await self._mcp_pool.start_all()
+                self._baton_adapter.set_mcp_pool(self._mcp_pool)
+            except Exception:
+                _logger.warning("manager.mcp_pool_start_failed", exc_info=True)
+                try:
+                    await self._mcp_pool.stop_all()
+                except Exception:
+                    _logger.warning("manager.mcp_pool_stop_after_start_failed", exc_info=True)
+                self._mcp_pool = None
 
         # Populate per-model concurrency from instrument profiles
         for profile in profiles.values():
@@ -1581,7 +1631,13 @@ class JobManager:
         # 1. Live in-memory state (running jobs)
         live = self._live_states.get(job_id)
         if live is not None:
-            return live.model_dump(mode="json")
+            live_data = _normalize_cancelled_checkpoint_status(
+                live.model_dump(mode="json"),
+            )
+            return await self._merge_registry_hook_metadata(
+                job_id,
+                live_data,
+            )
 
         # 2. Registry checkpoint (historical/terminal jobs)
         #    Skip if meta shows an active status — the checkpoint is stale
@@ -1593,7 +1649,7 @@ class JobManager:
                 if checkpoint_json is not None:
                     import json
 
-                    data: dict[str, Any] = json.loads(checkpoint_json)
+                    checkpoint_data: dict[str, Any] = json.loads(checkpoint_json)
                     # Override checkpoint status with the registry's
                     # authoritative status. The checkpoint may have been
                     # persisted before a cancel/fail was recorded in the
@@ -1603,9 +1659,18 @@ class JobManager:
                         if meta is not None
                         else (record.status.value if record is not None else None)
                     )
-                    if authoritative_status and data.get("status") != authoritative_status:
-                        data["status"] = authoritative_status
-                    return data
+                    if (
+                        authoritative_status
+                        and checkpoint_data.get("status") != authoritative_status
+                    ):
+                        checkpoint_data["status"] = authoritative_status
+                    checkpoint_data = _normalize_cancelled_checkpoint_status(
+                        checkpoint_data,
+                    )
+                    return await self._merge_registry_hook_metadata(
+                        job_id,
+                        checkpoint_data,
+                    )
             except Exception:
                 _logger.debug(
                     "get_job_status.registry_checkpoint_failed",
@@ -1636,10 +1701,14 @@ class JobManager:
                     if checkpoint_json is not None:
                         import json as _json
 
-                        data = _json.loads(checkpoint_json)
+                        failed_data = _json.loads(checkpoint_json)
                         # Override the checkpoint's stale status
-                        data["status"] = "failed"
-                        return data
+                        failed_data["status"] = "failed"
+                        failed_data = _normalize_cancelled_checkpoint_status(failed_data)
+                        return await self._merge_registry_hook_metadata(
+                            job_id,
+                            failed_data,
+                        )
                 except Exception:
                     _logger.debug(
                         "get_job_status.checkpoint_load_after_fail",
@@ -1650,9 +1719,68 @@ class JobManager:
         # 3. Basic metadata (job never produced a checkpoint, or active job
         #    whose registry checkpoint is stale)
         if meta is not None:
-            return meta.to_dict()
+            return await self._merge_registry_hook_metadata(job_id, meta.to_dict())
         assert record is not None  # guaranteed by the check above
-        return record.to_dict()
+        return await self._merge_registry_hook_metadata(job_id, record.to_dict())
+
+    async def _merge_registry_hook_metadata(
+        self,
+        job_id: str,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Merge hook config/results columns into status checkpoint data.
+
+        Hook execution results are stored in dedicated registry columns after
+        the terminal checkpoint has usually already been persisted. Merging them
+        here keeps status, diagnose, dashboard, and API clients aligned with the
+        registry's complete job record.
+        """
+        try:
+            hook_results_json = await self._registry.get_hook_results(job_id)
+            if hook_results_json and not data.get("hook_results"):
+                import json
+
+                parsed_results = json.loads(hook_results_json)
+                if isinstance(parsed_results, list):
+                    data["hook_results"] = parsed_results
+        except (OSError, ValueError, TypeError):
+            _logger.debug(
+                "get_job_status.hook_results_merge_failed",
+                job_id=job_id,
+                exc_info=True,
+            )
+
+        parsed_config: list[dict[str, Any]] | None = None
+        try:
+            hook_config_json = await self._registry.get_hook_config(job_id)
+            if hook_config_json:
+                import json
+
+                raw_config = json.loads(hook_config_json)
+                if isinstance(raw_config, list):
+                    parsed_config = raw_config
+        except (OSError, ValueError, TypeError):
+            _logger.debug(
+                "get_job_status.hook_config_merge_failed",
+                job_id=job_id,
+                exc_info=True,
+            )
+
+        if parsed_config is None:
+            meta = self._job_meta.get(job_id)
+            if meta is not None and meta.hook_config:
+                parsed_config = meta.hook_config
+
+        if parsed_config:
+            snapshot = data.get("config_snapshot")
+            if not isinstance(snapshot, dict):
+                snapshot = {}
+            if not snapshot.get("on_success"):
+                snapshot = dict(snapshot)
+                snapshot["on_success"] = parsed_config
+                data["config_snapshot"] = snapshot
+
+        return data
 
     async def pause_job(self, job_id: str) -> bool:
         """Send pause signal to a running job via in-process event.
@@ -2496,6 +2624,14 @@ class JobManager:
                     exc_info=True,
                 )
 
+        if self._mcp_pool is not None:
+            try:
+                await self._mcp_pool.stop_all()
+            except Exception:
+                _logger.warning("manager.mcp_pool_stop_failed", exc_info=True)
+            finally:
+                self._mcp_pool = None
+
         # Stop all observers for any remaining jobs
         for jid in list(self._job_meta.keys()):
             await self._stop_observer(jid)
@@ -3206,6 +3342,7 @@ class JobManager:
             escalation_enabled=escalation_enabled,  # #361: decoupled from healing
             self_healing_enabled=request.self_healing,
             prompt_config=config.prompt,
+            learning_config=config.learning,
             parallel_enabled=config.parallel.enabled,
             cross_sheet=config.cross_sheet,  # F-210
             pacing_seconds=float(config.pause_between_sheets_seconds),
@@ -3217,6 +3354,7 @@ class JobManager:
             stagger_delay_ms=config.parallel.stagger_delay_ms,  # #340
             skip_when=config.sheet.skip_when or None,  # #360/#119
             code_execution=config.code_execution,  # #209
+            agent_card=config.agent_card,
         )
 
         # #196: thread the score's retry backoff (base/exp/max + jitter) into
@@ -3487,6 +3625,7 @@ class JobManager:
             escalation_enabled=effective_escalation,  # #361: inherited+flags
             self_healing_enabled=effective_self_healing,
             prompt_config=config.prompt,
+            learning_config=config.learning,
             parallel_enabled=config.parallel.enabled,
             cross_sheet=config.cross_sheet,  # F-210
             pacing_seconds=float(config.pause_between_sheets_seconds),
@@ -3498,6 +3637,7 @@ class JobManager:
             stagger_delay_ms=config.parallel.stagger_delay_ms,  # #340
             skip_when=config.sheet.skip_when or None,  # #360/#119
             code_execution=config.code_execution,  # #209
+            agent_card=config.agent_card,
         )
 
         # #196: re-thread retry backoff on resume too — BatonCore is in-memory
@@ -3794,6 +3934,11 @@ class JobManager:
             meta.workspace,
             parent_job_id,
         )
+        if "{" in job_path_str or "}" in job_path_str:
+            result["error_message"] = (
+                f"Unresolved template syntax in job_path: {hook.get('job_path')}"
+            )
+            return result
         job_path = Path(job_path_str)
 
         if not job_path.exists():

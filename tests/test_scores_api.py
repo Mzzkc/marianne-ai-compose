@@ -1,9 +1,14 @@
 """Tests for score validation API endpoints."""
 
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 
+from marianne.daemon.ipc.client import DaemonClient
 from marianne.dashboard.app import create_app
+from marianne.dashboard.services.job_control import JobStartResult
 from marianne.state.json_backend import JsonStateBackend
 
 
@@ -341,6 +346,67 @@ isolation:
         # Allow for missing file errors in test environment
         assert data["yaml_syntax_valid"] is True
         assert data["schema_valid"] is True
+
+
+class TestScoreSubmissionAPI:
+    """Test editor score submission API."""
+
+    def test_submit_score_forwards_daemon_options(self, client):
+        content = """
+name: submit-options
+workspace: ./workspace
+sheet:
+  size: 1
+  total_items: 1
+prompt:
+  template: "Process {{item}}"
+"""
+        with (
+            patch(
+                "marianne.dashboard.app._daemon_client",
+                AsyncMock(spec=DaemonClient),
+            ),
+            patch(
+                "marianne.dashboard.services.job_control.JobControlService.start_job",
+            ) as mock_start,
+        ):
+            mock_start.return_value = JobStartResult(
+                job_id="submit-options",
+                job_name="submit-options",
+                status="accepted",
+                workspace=Path.cwd() / "workspace",
+                total_sheets=1,
+            )
+            response = client.post(
+                "/api/scores/submit",
+                json={
+                    "content": content,
+                    "workspace": ".",
+                    "start_sheet": 2,
+                    "fresh": True,
+                    "self_healing": True,
+                    "self_healing_auto_confirm": True,
+                    "escalation": True,
+                    "dry_run": True,
+                    "chain_depth": 1,
+                    "client_cwd": ".",
+                    "runtime_variables": {"clip_id": "42"},
+                },
+            )
+
+        assert response.status_code == 200
+        mock_start.assert_called_once()
+        kwargs = mock_start.call_args.kwargs
+        assert kwargs["workspace"] == Path.cwd().resolve()
+        assert kwargs["start_sheet"] == 2
+        assert kwargs["fresh"] is True
+        assert kwargs["self_healing"] is True
+        assert kwargs["self_healing_auto_confirm"] is True
+        assert kwargs["escalation"] is True
+        assert kwargs["dry_run"] is True
+        assert kwargs["chain_depth"] == 1
+        assert kwargs["client_cwd"] == Path.cwd().resolve()
+        assert kwargs["runtime_variables"] == {"clip_id": "42"}
 
 
 class TestTemplateAPI:

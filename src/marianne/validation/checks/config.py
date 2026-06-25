@@ -165,6 +165,7 @@ class ValidationTypeCheck:
             "content_contains": ["path", "pattern"],
             "content_regex": ["path", "pattern"],
             "command_succeeds": ["command"],
+            "path_in_scope": ["path"],
         }
 
         for i, validation in enumerate(config.validations):

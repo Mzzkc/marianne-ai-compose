@@ -11,6 +11,7 @@ Tests cover:
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -401,3 +402,31 @@ class TestSandboxPathMapping210:
         result = await executor.execute(block)
         assert result.status.value == "success"
         assert "basename works" in result.stdout
+
+    async def test_sandbox_enabled_falls_back_when_bwrap_missing(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        executor = CodeModeExecutor(workspace=tmp_path, use_sandbox=True)
+        block = CodeBlock(language="python", code="print('fallback works')")
+
+        with patch("marianne.execution.code_mode.shutil.which", return_value=None):
+            result = await executor.execute(block)
+
+        assert result.status == CodeExecutionStatus.SUCCESS
+        assert "fallback works" in result.stdout
+
+    def test_extra_bind_mounts_are_passed_to_bwrap(self, tmp_path: Path) -> None:
+        socket_dir = tmp_path / "mcp"
+        socket_dir.mkdir()
+        executor = CodeModeExecutor(
+            workspace=tmp_path,
+            use_sandbox=True,
+            bind_mounts=[socket_dir],
+        )
+
+        with patch("marianne.execution.code_mode.shutil.which", return_value="/usr/bin/bwrap"):
+            cmd = executor._wrap_with_sandbox(["python3", "x.py"])
+
+        assert "--bind" in cmd
+        assert str(socket_dir) in cmd

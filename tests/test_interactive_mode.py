@@ -37,6 +37,8 @@ from marianne.execution.instruments.interactive.driver import (
 )
 from marianne.execution.instruments.interactive.tmux import (
     TmuxError,
+    job_session_prefix,
+    kill_sessions_with_prefix_sync,
     sanitize_session_name,
 )
 
@@ -123,19 +125,28 @@ class FakeTmux:
         self.piped_to: list[Path] = []
         self.pipe_off_count = 0
         self.fake_pane_pid: int | None = 4242
+        self.alive_sessions: set[str] = set()
+        self.kill_session_removes = True
+        self.remove_on_kill_count: int | None = None
         self.pending_input: str | None = None
         self.swallow_pastes = False
 
     async def kill_session(self, session: str) -> None:
         self.killed_sessions.append(session)
+        if self.kill_session_removes or (
+            self.remove_on_kill_count is not None
+            and len(self.killed_sessions) >= self.remove_on_kill_count
+        ):
+            self.alive_sessions.discard(session)
 
     async def new_session(
         self, session: str, command: list[str], *, cwd: Path, width: int, height: int,
     ) -> None:
         self.created.append((session, command))
+        self.alive_sessions.add(session)
 
     async def has_session(self, session: str) -> bool:
-        return True
+        return session in self.alive_sessions
 
     async def pipe_pane_to_file(self, session: str, log_path: Path) -> None:
         self.piped_to.append(log_path)
@@ -225,6 +236,13 @@ class TestInteractiveConfigModels:
         with pytest.raises(ValueError, match="Invalid pattern regex"):
             InteractiveCliConfig(ready_pattern="ok", busy_patterns=["[bad"])
 
+    def test_invalid_interactive_error_screen_regex_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Invalid pattern regex"):
+            InteractiveCliConfig(
+                ready_pattern="ok",
+                rate_limit_screen_patterns=["[bad"],
+            )
+
     def test_invalid_gate_regex_rejected(self) -> None:
         with pytest.raises(ValueError, match="Invalid gate pattern"):
             InteractiveGate(pattern="(unclosed", keys=["Enter"])
@@ -252,6 +270,7 @@ class TestInteractiveConfigModels:
         assert profile.cli.interactive is not None
         assert profile.cli.interactive.startup_gates
         assert profile.cli.interactive.busy_patterns
+        assert profile.cli.interactive.rate_limit_screen_patterns
 
     def test_builtin_claude_code_ready_rejects_trust_dialog(self) -> None:
         """The ready pattern must NOT match the trust dialog's selection
@@ -280,6 +299,30 @@ class TestInteractiveConfigModels:
         assert any(
             re.search(g.pattern, TRUST_DIALOG_SCREEN)
             for g in profile.cli.interactive.startup_gates
+        )
+
+    def test_builtin_claude_code_rate_patterns_match_live_429(self) -> None:
+        """The live GLM gateway quota screen must be an explicit TUI error."""
+        import re
+
+        import yaml
+
+        builtin = (
+            Path(__file__).parent.parent
+            / "src" / "marianne" / "instruments" / "builtins" / "claude-code.yaml"
+        )
+        data = yaml.safe_load(builtin.read_text())
+        profile = InstrumentProfile.model_validate(data)
+        assert profile.cli is not None and profile.cli.interactive is not None
+
+        screen = (
+            "API Error: Request rejected (429) · [1308][Usage limit reached "
+            "for 5 hour. Your limit will reset at 2026-06-22 17:06:12]\n"
+            "❯ \nstatus line"
+        )
+        assert any(
+            re.search(pattern, screen, re.IGNORECASE)
+            for pattern in profile.cli.interactive.rate_limit_screen_patterns
         )
 
 
@@ -336,6 +379,40 @@ class TestSessionNaming:
         m4 = completion_marker_path(tmp_path, "job-2", 1, 1)
         assert len({m1, m2, m3, m4}) == 4, "markers must be attempt-unique"
         assert all(str(m).startswith(str(tmp_path)) for m in (m1, m2, m3, m4))
+
+    def test_job_session_prefix_is_sheet_scoped(self) -> None:
+        prefix = job_session_prefix("job-1")
+        assert session_name("job-1", 2, 3).startswith(prefix)
+        assert not session_name("job-10", 2, 3).startswith(prefix)
+
+    def test_sync_prefix_kill_targets_only_matching_sessions(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[list[str]] = []
+
+        def fake_run(cmd: list[str], **_kwargs: Any) -> Any:
+            calls.append(cmd)
+            if "list-sessions" in cmd:
+                return MagicMock(
+                    returncode=0,
+                    stdout=(
+                        "mzt-job-1-s1-a1\n"
+                        "mzt-job-1-s2-a1\n"
+                        "mzt-job-10-s1-a1\n"
+                    ),
+                    stderr="",
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(
+            "marianne.execution.instruments.interactive.tmux.subprocess.run",
+            fake_run,
+        )
+
+        killed = kill_sessions_with_prefix_sync(job_session_prefix("job-1"))
+
+        assert killed == ["mzt-job-1-s1-a1", "mzt-job-1-s2-a1"]
+        assert ["tmux", "-L", "marianne", "kill-session", "-t", "=mzt-job-10-s1-a1"] not in calls
 
 
 # =============================================================================
@@ -610,6 +687,36 @@ class TestDriverFailureModes:
         result = await run_driver(fake, tmp_path)
         assert result.outcome == "session_lost"
 
+    async def test_provider_error_screen_stops_before_nudge(
+        self, tmp_path: Path,
+    ) -> None:
+        quota_screen = (
+            "API Error: Request rejected (429) · [1308][Usage limit reached "
+            "for 5 hour. Your limit will reset at 2026-06-22 17:06:12]\n"
+            "❯ \nstatus line\n0 tokens"
+        )
+        cfg = make_interactive_config(
+            rate_limit_screen_patterns=[
+                r"API Error: Request rejected\s+\(429\)",
+                r"Usage limit reached",
+            ],
+        )
+
+        def screen() -> str:
+            if any("Enter" in keys for keys in fake.sent_keys):
+                return quota_screen
+            return READY_SCREEN
+
+        fake = FakeTmux([screen])
+        result = await run_driver(
+            fake, tmp_path, config=cfg, max_nudges=2,
+        )
+
+        assert result.outcome == "provider_error"
+        assert result.nudges_sent == 0
+        assert [p for p in fake.pasted if p == "please continue"] == []
+        assert "Usage limit reached" in result.final_screen
+
     async def test_marker_wins_over_dead_session(self, tmp_path: Path) -> None:
         """Agent wrote the marker then exited — that is completion."""
         marker = tmp_path / "m.complete"
@@ -660,6 +767,16 @@ class TestDriverFailureModes:
         with pytest.raises(asyncio.CancelledError):
             await task
         assert "mzt-cancel-s1-a1" in fake.killed_sessions
+
+    async def test_cleanup_retries_when_session_survives_kill(
+        self, tmp_path: Path,
+    ) -> None:
+        fake = FakeTmux([READY_SCREEN])
+        fake.kill_session_removes = False
+        result = await run_driver(fake, tmp_path, max_nudges=1)
+        assert result.outcome == "nudges_exhausted"
+        # One pre-launch kill, then three verified cleanup kill attempts.
+        assert fake.killed_sessions.count("mzt-test-s1-a1") >= 4
 
     async def test_invalid_args_rejected(self, tmp_path: Path) -> None:
         fake = FakeTmux()
@@ -787,6 +904,29 @@ class TestInteractiveBackendExecute:
         assert result.rate_limited is False
         assert result.error_message is not None and "nudge" in result.error_message
 
+    async def test_backend_final_teardown_runs_before_pid_untrack(
+        self, tmp_path: Path,
+    ) -> None:
+        profile = make_profile(interactive=make_interactive_config())
+        fake = FakeTmux([READY_SCREEN])
+        fake.kill_session_removes = False
+        # Kill calls: 1 prelaunch + 3 driver cleanup attempts do not remove.
+        # The backend's final teardown guard starts at call 5 and must remove.
+        fake.remove_on_kill_count = 5
+        backend = InteractiveCliBackend(
+            profile, working_directory=tmp_path, tmux=fake,  # type: ignore[arg-type]
+        )
+        backend.configure_interactive(max_nudges=1)
+        exited: list[int] = []
+        backend._on_process_exited = exited.append
+
+        result = await backend.execute("do it", timeout_seconds=5.0)
+
+        assert result.success is False
+        assert not fake.alive_sessions
+        assert exited == [4242]
+        assert len(fake.killed_sessions) >= 5
+
     async def test_timeout_maps_to_timeout(self, tmp_path: Path) -> None:
         profile = make_profile(interactive=make_interactive_config())
         fake = FakeTmux([READY_SCREEN, BUSY_SCREEN])
@@ -842,6 +982,32 @@ class TestInteractiveBackendExecute:
         result = await backend.execute("do it", timeout_seconds=5.0)
         assert result.success is False
         assert result.rate_limited is False
+
+    async def test_provider_error_scans_explicit_interactive_rate_screen(
+        self, tmp_path: Path,
+    ) -> None:
+        """Verified TUI quota screens are provider failures, not agent prose."""
+        profile = make_profile(
+            interactive=make_interactive_config(
+                rate_limit_screen_patterns=["Individual quota reached"],
+            ),
+        )
+        quota_screen = (
+            READY_SCREEN
+            + "\n⚠ Individual quota reached. Resets in 3h19m33s."
+        )
+        fake = FakeTmux([quota_screen])
+        backend = InteractiveCliBackend(
+            profile, working_directory=tmp_path, tmux=fake,  # type: ignore[arg-type]
+        )
+        backend.configure_interactive(max_nudges=1)
+        result = await backend.execute("do it", timeout_seconds=5.0)
+        assert result.success is False
+        assert result.rate_limited is True
+        assert result.rate_limit_wait_seconds == pytest.approx(3 * 3600 + 19 * 60 + 33)
+        assert result.error_type is None
+        assert result.error_message == "interactive provider error screen detected"
+        assert [p for p in fake.pasted if p == "please continue"] == []
 
     async def test_startup_failed_auth_classification(self, tmp_path: Path) -> None:
         profile = make_profile(interactive=make_interactive_config(
@@ -987,11 +1153,12 @@ class TestInteractiveLaunchInheritance:
         assert "--no-mcp" not in backend._build_command()
 
     def test_all_verified_builtins_have_interactive_blocks(self) -> None:
-        """Five builtins ship verified interactive blocks.
+        """Six builtins ship verified interactive blocks.
 
-        Default-on is claude-code ONLY (composer decision 2026-06-11);
-        the other verified instruments are opt-in via
-        instrument_config: {interactive: true}.
+        Default-on is reserved for instruments whose daemon-safe mode needs a
+        TTY-backed session. Claude Code is default-on for production TUI
+        reliability; Antigravity is default-on because its print mode can emit
+        a Bubble Tea TTY error under daemon dispatch while exiting 0.
         """
         import yaml
 
@@ -999,12 +1166,19 @@ class TestInteractiveLaunchInheritance:
             Path(__file__).parent.parent
             / "src" / "marianne" / "instruments" / "builtins"
         )
-        for name in ("claude-code", "gemini-cli", "codex-cli", "opencode", "goose"):
+        for name in (
+            "claude-code",
+            "gemini-cli",
+            "codex-cli",
+            "opencode",
+            "goose",
+            "antigravity",
+        ):
             data = yaml.safe_load((builtins_dir / f"{name}.yaml").read_text())
             profile = InstrumentProfile.model_validate(data)
             assert profile.cli is not None
             assert profile.cli.interactive is not None, f"{name} lost its block"
-            expected_default = name == "claude-code"
+            expected_default = name in {"claude-code", "antigravity"}
             assert profile.cli.interactive.enabled_by_default is expected_default, (
                 f"{name}: enabled_by_default should be {expected_default}"
             )

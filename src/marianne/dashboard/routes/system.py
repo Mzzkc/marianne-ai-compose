@@ -33,7 +33,7 @@ def get_system_view() -> DaemonSystemView:
     return _system_view
 
 
-def set_system_view(view: DaemonSystemView) -> None:
+def set_system_view(view: DaemonSystemView | None) -> None:
     """Configure the module-level system view (called from app.py)."""
     global _system_view
     _system_view = view

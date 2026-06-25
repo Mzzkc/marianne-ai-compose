@@ -1,0 +1,132 @@
+# Antigravity CLI - Google's successor terminal agent for Gemini CLI.
+#
+# Local help, model flag, and interactive tmux mode verified 2026-06-22
+# against agy 1.0.10:
+#   agy -p/--print <prompt>            one-shot print command, but non-TTY
+#                                      daemon dispatch can fail with a
+#                                      Bubble Tea TTY error while exiting 0
+#   agy --model <model>                model override
+#   agy --dangerously-skip-permissions auto-approve tools
+#   agy --sandbox <bool>               terminal sandbox toggle
+#   agy --print-timeout <duration>     print-mode wait timeout
+#   agy models                         lists configured models
+#   workspace .agents/mcp_config.json  initializes configured MCP servers
+#
+# This profile defaults to interactive tmux mode. Print mode is kept for
+# explicit callers, but daemon-run print mode is not treated as reliable until
+# Antigravity stops requiring a controlling TTY for print-mode failures.
+#
+# MCP note: Antigravity has no CLI flag analogous to Claude Code's
+# --mcp-config. A live 2026-06-21 smoke proved agy 1.0.10 reads
+# workspace-local .agents/mcp_config.json and initializes a configured MCP
+# server. Marianne materializes the conductor-generated shared-pool config at
+# that path for the duration of a sheet, then restores/deletes it.
+#
+# Error classifiers are conservative until real Antigravity failure samples are
+# captured. Do not broaden these from another instrument without samples.
+#
+# Official transition note: Google announced Antigravity CLI as the Gemini CLI
+# successor on 2026-05-19, with consumer Gemini CLI serving ending 2026-06-18.
+
+name: antigravity
+display_name: "Antigravity CLI"
+description: "Google Antigravity CLI via tmux-backed interactive mode"
+kind: cli
+
+capabilities:
+  - tool_use
+  - file_editing
+  - shell_access
+  - mcp
+  - session_resume
+
+default_model: gemini-3.5-flash
+default_timeout_seconds: 1800
+
+models:
+  - name: gemini-3.5-flash
+    context_window: 1000000
+    cost_per_1k_input: 0.00015
+    cost_per_1k_output: 0.0006
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-3.5-flash-lite
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 8
+  - name: gemini-3.5-pro
+    context_window: 1000000
+    cost_per_1k_input: 0.00125
+    cost_per_1k_output: 0.005
+    max_output_tokens: 65536
+    max_concurrent: 4
+
+cli:
+  command:
+    executable: agy
+    prompt_flag: "-p"
+    prompt_via_stdin: false
+    model_flag: "--model"
+    auto_approve_flag: "--dangerously-skip-permissions"
+    mcp_config_workspace_path: ".agents/mcp_config.json"
+    required_env:
+      - GOOGLE_API_KEY
+      - GOOGLE_APPLICATION_CREDENTIALS
+      - GOOGLE_CLOUD_PROJECT
+      - CLOUDSDK_CONFIG
+    extra_flags:
+      - "--sandbox"
+      - "false"
+      - "--print-timeout"
+      - "30m"
+  interactive:
+    # Verified 2026-06-21/22 against Antigravity CLI 1.0.10. Default-on
+    # because daemon print mode can emit a Bubble Tea TTY error on stdout
+    # while exiting 0, which looks like success to generic CLI dispatch.
+    enabled_by_default: true
+    inherit_auto_approve: true
+    inherit_mcp_disable_args: false
+    extra_args:
+      - "--sandbox"
+      - "false"
+    ready_pattern: '(?m)^>\s*$'
+    busy_patterns:
+      - 'esc to (?:cancel|interrupt)'
+      - '[⣷⣯⣟⡿⢿⣻⣽⣾]'
+    rate_limit_screen_patterns:
+      - "\\bIndividual quota reached\\b"
+    quiet_seconds: 15.0
+    poll_interval_seconds: 2.0
+    startup_timeout_seconds: 120.0
+    terminal_width: 200
+    terminal_height: 50
+    volatile_tail_lines: 2
+  output:
+    format: text
+  errors:
+    success_exit_codes: [0]
+    rate_limit_patterns:
+      - "\\bIndividual quota reached\\b"
+      - "\\bRESOURCE_EXHAUSTED\\b"
+      - "\\bToo Many Requests\\b"
+      - "\\bquota (?:exceeded|exhausted)\\b"
+      - "(?:\\bstatus\\b|\\bcode\\b)[^\\w]*429\\b"
+    auth_error_patterns:
+      - "\\bnot authenticated\\b"
+      - "\\bunauthorized\\b"
+      - "\\bPERMISSION_DENIED\\b"
+      - "\\bAPI key\\b"
+      - "\\bsign in\\b"
+    capacity_patterns:
+      - "(?:\\bstatus\\b|\\bcode\\b)[^\\w]*503\\b"
+      - "\\bUNAVAILABLE\\b"
+      - "\\bserver overloaded\\b"
+    timeout_patterns:
+      - "\\bDEADLINE_EXCEEDED\\b"
+      - "\\btimed out\\b"
+      - "\\btimeout\\b"
+    crash_patterns:
+      - "\\bbubbletea:\\s*error opening TTY\\b"
+      - "\\bcould not open TTY\\b"

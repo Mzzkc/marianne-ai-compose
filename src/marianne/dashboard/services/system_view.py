@@ -5,12 +5,15 @@ backpressure levels, and learning patterns.
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any, cast
 
 from marianne.core.logging import get_logger
 from marianne.daemon.ipc.client import DaemonClient
 
 _logger = get_logger("dashboard.system_view")
+
+DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS = 2.0
 
 
 class DaemonSystemView:
@@ -31,7 +34,13 @@ class DaemonSystemView:
         Returns ``None`` if the daemon is down or the call fails.
         """
         try:
-            return cast("dict[str, Any] | None", await self._client.call("daemon.top"))
+            return cast(
+                "dict[str, Any] | None",
+                await asyncio.wait_for(
+                    self._client.call("daemon.top"),
+                    timeout=DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS,
+                ),
+            )
         except Exception:
             _logger.debug("get_snapshot_failed", exc_info=True)
             return None
@@ -42,7 +51,10 @@ class DaemonSystemView:
         Returns ``None`` if the daemon is unreachable.
         """
         try:
-            result = await self._client.status()
+            result = await asyncio.wait_for(
+                self._client.status(),
+                timeout=DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS,
+            )
             return result.model_dump()
         except Exception:
             _logger.debug("get_daemon_status_failed", exc_info=True)
@@ -51,7 +63,10 @@ class DaemonSystemView:
     async def rate_limit_state(self) -> dict[str, Any]:
         """Current rate limit state per backend."""
         try:
-            return await self._client.rate_limits()
+            return await asyncio.wait_for(
+                self._client.rate_limits(),
+                timeout=DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS,
+            )
         except Exception:
             _logger.debug("rate_limit_state_failed", exc_info=True)
             return {"backends": {}, "active_limits": 0}
@@ -74,7 +89,10 @@ class DaemonSystemView:
     async def learning_patterns(self, limit: int = 20) -> list[dict[str, Any]]:
         """Recent learning insights from the daemon."""
         try:
-            result = await self._client.learning_patterns(limit)
+            result = await asyncio.wait_for(
+                self._client.learning_patterns(limit),
+                timeout=DASHBOARD_SYSTEM_VIEW_TIMEOUT_SECONDS,
+            )
             return cast("list[dict[str, Any]]", result.get("patterns", []))
         except Exception:
             _logger.debug("learning_patterns_failed", exc_info=True)

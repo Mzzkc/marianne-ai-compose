@@ -192,6 +192,61 @@ class TestBuildDiagnosticReport:
         assert "attempt_count" in entry
         assert "duration_seconds" in entry
 
+    def test_execution_timeline_includes_dispatch_wait_state(self) -> None:
+        blocked_at = datetime.now(UTC)
+        sheets = {
+            1: SheetState(
+                sheet_num=1,
+                status=SheetStatus.PENDING,
+                instrument_name="claude-code",
+                dispatch_blocked_reason="model_concurrency",
+                dispatch_blocked_at=blocked_at,
+                dispatch_blocked_details={
+                    "model_key": "claude-code:glm-5-Turbo",
+                    "model_count": 4,
+                    "model_limit": 4,
+                },
+            ),
+        }
+        job = _make_job(total_sheets=1, status=JobStatus.RUNNING, sheets=sheets)
+        report = _build_diagnostic_report(job)
+
+        entry = report["execution_timeline"][0]
+        assert entry["dispatch_blocked_reason"] == "model_concurrency"
+        assert entry["dispatch_blocked_at"] == blocked_at.isoformat()
+        assert entry["dispatch_blocked_details"]["model_limit"] == 4
+
+    def test_execution_timeline_includes_validation_retry_evidence(self) -> None:
+        sheets = {
+            1: SheetState(
+                sheet_num=1,
+                status=SheetStatus.DISPATCHED,
+                attempt_count=2,
+                validation_passed=False,
+                last_pass_percentage=0.0,
+                failed_validations=["Recon report exists"],
+                validation_details=[
+                    {
+                        "rule_type": "file_exists",
+                        "description": "Recon report exists",
+                        "path": "{workspace}/cycle-state/agent-recon.md",
+                        "passed": False,
+                        "error_message": "File does not exist",
+                    }
+                ],
+            ),
+        }
+        job = _make_job(total_sheets=1, status=JobStatus.RUNNING, sheets=sheets)
+        report = _build_diagnostic_report(job)
+
+        entry = report["execution_timeline"][0]
+        assert entry["status"] == "playing"
+        assert entry["last_pass_percentage"] == 0.0
+        assert entry["failed_validations"] == ["Recon report exists"]
+        assert report["validation_failure_count"] == 1
+        failure = report["validation_failures"][0]
+        assert failure["details"][0]["error_message"] == "File does not exist"
+
     def test_error_collection_from_history(self) -> None:
         now = datetime.now(UTC)
         error = ErrorRecord(
@@ -428,6 +483,78 @@ class TestDiagnoseCommand:
         data = json.loads(result.stdout)
         assert data["error_count"] == 1
         assert data["errors"][0]["error_type"] == "rate_limit"
+
+    def test_diagnose_json_includes_hook_results(self, tmp_path: Path) -> None:
+        job = _make_job(status=JobStatus.FAILED, error_message="Post-success hook failed")
+        job.hook_results = [
+            {
+                "hook_type": "run_job",
+                "success": False,
+                "error_message": "Job config not found: {workspace}/next.yaml",
+            }
+        ]
+        _write_state(tmp_path, job)
+
+        result = runner.invoke(
+            app, ["diagnose", "diag-test", "--json", "--workspace", str(tmp_path)]
+        )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["hook_summary"] == {"total": 1, "passed": 0, "failed": 1}
+        assert data["hook_results"][0]["hook_type"] == "run_job"
+        assert "Job config not found" in data["hook_results"][0]["error_message"]
+
+    def test_diagnose_rich_output_includes_hook_results(self, tmp_path: Path) -> None:
+        job = _make_job(status=JobStatus.FAILED, error_message="Post-success hook failed")
+        job.hook_results = [
+            {
+                "hook_type": "run_job",
+                "success": False,
+                "error_message": "Job config not found: {workspace}/next.yaml",
+            }
+        ]
+        _write_state(tmp_path, job)
+
+        result = runner.invoke(app, ["diagnose", "diag-test", "--workspace", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Hook Results" in result.stdout
+        assert "Job config not found" in result.stdout
+
+    def test_diagnose_rich_output_includes_validation_failures(
+        self, tmp_path: Path
+    ) -> None:
+        sheets = {
+            1: SheetState(
+                sheet_num=1,
+                status=SheetStatus.DISPATCHED,
+                attempt_count=2,
+                validation_passed=False,
+                last_pass_percentage=0.0,
+                failed_validations=["Recon report exists"],
+                validation_details=[
+                    {
+                        "rule_type": "file_exists",
+                        "description": "Recon report exists",
+                        "path": "{workspace}/cycle-state/agent-recon.md",
+                        "passed": False,
+                        "error_message": "File does not exist",
+                    }
+                ],
+            ),
+        }
+        job = _make_job(total_sheets=1, status=JobStatus.RUNNING, sheets=sheets)
+        _write_state(tmp_path, job)
+
+        result = runner.invoke(
+            app, ["diagnose", "diag-test", "--workspace", str(tmp_path)]
+        )
+
+        assert result.exit_code == 0
+        assert "Validation Failures" in result.stdout
+        assert "Recon report exists" in result.stdout
+        assert "File does not exist" in result.stdout
 
 
 class TestErrorsCommand:

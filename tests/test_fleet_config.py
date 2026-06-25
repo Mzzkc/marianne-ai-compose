@@ -9,7 +9,9 @@ Verifies:
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -243,6 +245,64 @@ class TestFleetSubmission:
 
         # The fleet should still complete (with partial failure)
         assert response.status in ("accepted", "rejected")
+
+    async def test_submit_fleet_waits_for_dependency_group(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        from marianne.daemon.fleet import submit_fleet
+        from marianne.daemon.types import JobResponse
+
+        (tmp_path / "a.yaml").write_text("name: agent-a\nworkspace: ./ws\n")
+        (tmp_path / "b.yaml").write_text("name: agent-b\nworkspace: ./ws\n")
+
+        fleet_config = FleetConfig(
+            name="test-fleet",
+            scores=[
+                FleetScoreEntry(path="a.yaml", group="root"),
+                FleetScoreEntry(path="b.yaml", group="workers"),
+            ],
+            groups={
+                "root": FleetGroupConfig(depends_on=[]),
+                "workers": FleetGroupConfig(depends_on=["root"]),
+            },
+        )
+
+        manager = MagicMock()
+        manager._fleet_records = {}
+        manager._job_meta = {}
+        submitted: list[str] = []
+
+        async def submit_job(request) -> JobResponse:
+            job_id = request.config_path.stem
+            submitted.append(job_id)
+            manager._job_meta[job_id] = SimpleNamespace(
+                status=DaemonJobStatus.RUNNING
+            )
+            if job_id == "a":
+                async def complete_a() -> None:
+                    await asyncio.sleep(0.05)
+                    manager._job_meta[job_id].status = DaemonJobStatus.COMPLETED
+
+                asyncio.create_task(complete_a())
+            else:
+                assert manager._job_meta["a"].status == DaemonJobStatus.COMPLETED
+                manager._job_meta[job_id].status = DaemonJobStatus.COMPLETED
+            return JobResponse(job_id=job_id, status="accepted", message="ok")
+
+        manager.submit_job = AsyncMock(side_effect=submit_job)
+
+        response = await submit_fleet(manager, tmp_path / "fleet.yaml", fleet_config)
+
+        assert response.status == "accepted"
+        assert submitted == ["a"]
+
+        for _ in range(20):
+            if submitted == ["a", "b"]:
+                break
+            await asyncio.sleep(0.1)
+
+        assert submitted == ["a", "b"]
 
 
 # ─── Fleet Operations Tests ──────────────────────────────────────────

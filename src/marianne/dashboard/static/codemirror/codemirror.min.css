@@ -2,11 +2,34 @@
  * CodeMirror 6 Styles for Marianne Score Editor
  */
 
+:root {
+  --cm-editor-bg: #ffffff;
+  --cm-editor-fg: #1f2937;
+  --cm-editor-border: #e5e7eb;
+  --cm-editor-focus: #3b82f6;
+  --cm-editor-focus-shadow: rgba(59, 130, 246, 0.1);
+  --cm-selection-bg: #b3d4fc;
+  --cm-selection-focused-bg: #3b82f6;
+  --cm-selection-focused-opacity: 0.2;
+}
+
+html.dark {
+  --cm-editor-bg: #1f2937;
+  --cm-editor-fg: #f9fafb;
+  --cm-editor-border: #374151;
+  --cm-editor-focus: #60a5fa;
+  --cm-editor-focus-shadow: rgba(96, 165, 250, 0.1);
+  --cm-selection-bg: #374151;
+  --cm-selection-focused-bg: #60a5fa;
+  --cm-selection-focused-opacity: 0.3;
+}
+
 .cm-editor {
   position: relative;
   border-radius: 0.375rem;
-  border: 1px solid #e5e7eb;
-  background-color: #ffffff;
+  border: 1px solid var(--cm-editor-border);
+  background-color: var(--cm-editor-bg) !important;
+  color: var(--cm-editor-fg);
   font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   font-size: 14px;
   line-height: 1.5;
@@ -14,8 +37,8 @@
 }
 
 .cm-editor.cm-focused {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--cm-editor-focus);
+  box-shadow: 0 0 0 3px var(--cm-editor-focus-shadow);
   outline: none;
 }
 
@@ -25,8 +48,9 @@
   white-space: pre;
   overflow: auto;
   min-height: 276px;
-  color: #1f2937;
-  background: transparent;
+  color: var(--cm-editor-fg) !important;
+  background: var(--cm-editor-bg) !important;
+  caret-color: var(--cm-editor-fg);
 }
 
 .cm-content:focus-visible {
@@ -39,7 +63,7 @@
 }
 
 .cm-cursor, .cm-dropCursor {
-  border-left: 2px solid #1f2937;
+  border-left: 2px solid var(--cm-editor-fg);
   margin-left: -1px;
   position: absolute;
   pointer-events: none;
@@ -55,12 +79,12 @@
 }
 
 .cm-selectionBackground {
-  background-color: #b3d4fc;
+  background-color: var(--cm-selection-bg);
 }
 
 .cm-focused .cm-selectionBackground {
-  background-color: #3b82f6;
-  opacity: 0.2;
+  background-color: var(--cm-selection-focused-bg);
+  opacity: var(--cm-selection-focused-opacity);
 }
 
 /* YAML Syntax Highlighting */

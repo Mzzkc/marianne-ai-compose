@@ -95,9 +95,10 @@ _DEFAULT_CAPACITY_PATTERNS: list[str] = [
 _DEFAULT_QUOTA_EXHAUSTION_PATTERNS: list[str] = [
     r"token.{0,10}exhausted",
     r"token.{0,10}budget.{0,10}(used|exhausted|depleted)",
-    r"usage.{0,10}(will\s+)?reset.{0,10}(at|in)",
+    r"usage.{0,120}(will\s+)?reset.{0,20}(at|in)",
     r"resets?.{0,10}\d+\s*[ap]m",
     r"resets?.{0,10}in\s+\d+\s*(hour|minute|min|hr)",
+    r"resets?.{0,10}in\s+\d+\s*h(?:\s*\d+\s*m)?(?:\s*\d+\s*s)?",
     r"daily.{0,10}(token|usage).{0,10}limit",
     r"hourly.{0,10}(token|usage).{0,10}limit",
     r"(used|consumed).{0,10}all.{0,10}(token|credit)",
@@ -237,6 +238,7 @@ class ErrorClassifier:
         Supports patterns like:
         - "resets at 9pm" -> seconds until 9pm (or next day if past)
         - "resets at 21:00" -> seconds until 21:00
+        - "will reset at 2026-06-22 17:06:12" -> seconds until that local time
         - "resets in 3 hours" -> 3 * 3600 seconds
         - "resets in 30 minutes" -> 30 * 60 seconds
 
@@ -247,6 +249,46 @@ class ErrorClassifier:
             Seconds until reset, or None if no reset time found.
             Returns minimum of RESET_TIME_MINIMUM_WAIT_SECONDS to avoid immediate retries.
         """
+
+        absolute_datetime = re.search(
+            r"\breset(?:s|ting)?\s+(?:at|on)\s+"
+            r"(\d{4})-(\d{2})-(\d{2})[ T]"
+            r"(\d{1,2}):(\d{2})(?::(\d{2}))?",
+            text,
+            re.IGNORECASE,
+        )
+        if absolute_datetime:
+            try:
+                reset_time = datetime(
+                    year=int(absolute_datetime.group(1)),
+                    month=int(absolute_datetime.group(2)),
+                    day=int(absolute_datetime.group(3)),
+                    hour=int(absolute_datetime.group(4)),
+                    minute=int(absolute_datetime.group(5)),
+                    second=int(absolute_datetime.group(6) or 0),
+                )
+            except ValueError:
+                reset_time = None
+            if reset_time is not None:
+                return self._clamp_wait(
+                    (reset_time - datetime.now()).total_seconds()
+                )
+
+        compact = re.search(
+            r"resets?\s+in\s+"
+            r"(?:(\d+)\s*h)?\s*"
+            r"(?:(\d+)\s*m)?\s*"
+            r"(?:(\d+)\s*s)?",
+            text,
+            re.IGNORECASE,
+        )
+        if compact and any(compact.groups()):
+            hours = int(compact.group(1) or 0)
+            minutes = int(compact.group(2) or 0)
+            compact_seconds = int(compact.group(3) or 0)
+            return self._clamp_wait(
+                float(hours * 3600 + minutes * 60 + compact_seconds)
+            )
 
         for pattern in self.reset_time_patterns:
             match = pattern.search(text)

@@ -23,6 +23,7 @@ import asyncio
 import hashlib
 import os
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -33,6 +34,7 @@ _logger = get_logger("execution.interactive.tmux")
 # Per-command timeout for every tmux subprocess call. tmux control commands
 # complete in milliseconds; 10s means "the server is wedged", not "slow".
 _COMMAND_TIMEOUT_SECONDS = 10.0
+_SYNC_COMMAND_TIMEOUT_SECONDS = 10.0
 
 # Minimum supported tmux version. capture-pane/paste-buffer semantics are
 # verified against 3.x; bracketed paste (-p) behavior differs in 2.x.
@@ -81,6 +83,90 @@ def sanitize_session_name(raw: str) -> str:
     # distinct per distinct input.
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:10]
     return f"{cleaned[: _SESSION_NAME_MAX - 11]}-{digest}"
+
+
+def job_session_prefix(job_id: str) -> str:
+    """Prefix shared by ordinary per-attempt sessions for one job.
+
+    Session names are generated as ``mzt-{job_id}-s{sheet}-a{attempt}`` after
+    sanitization. The ``-s`` suffix keeps ``job`` from matching ``job2`` while
+    still matching every sheet/attempt for the job.
+    """
+    return f"{SESSION_SWEEP_PREFIX}{sanitize_session_name(job_id)}-s"
+
+
+def kill_sessions_with_prefix_sync(
+    prefix: str,
+    *,
+    socket_name: str | None = None,
+) -> list[str]:
+    """Best-effort synchronous tmux sweep for sessions with ``prefix``.
+
+    ``BatonAdapter.deregister_job`` is deliberately synchronous, but cancelled
+    interactive attempts live outside the daemon process tree in tmux. This
+    helper gives the sync cancellation path a tmux-session teardown backstop.
+    Missing tmux or missing server is a no-op; individual kill failures are
+    logged and do not abort the sweep.
+    """
+    if not prefix:
+        raise ValueError("prefix must be non-empty")
+    control = TmuxControl(socket_name)
+    base_cmd = ["tmux", "-L", control.socket_name]
+    try:
+        listed = subprocess.run(
+            [*base_cmd, "list-sessions", "-F", "#{session_name}"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=_SYNC_COMMAND_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError:
+        return []
+    except subprocess.TimeoutExpired:
+        _logger.warning(
+            "tmux_sync_list_timeout",
+            socket=control.socket_name,
+            prefix=prefix,
+        )
+        return []
+
+    if listed.returncode != 0:
+        return []
+
+    sessions = [
+        line.strip()
+        for line in listed.stdout.splitlines()
+        if line.strip().startswith(prefix)
+    ]
+    killed: list[str] = []
+    for session in sessions:
+        try:
+            result = subprocess.run(
+                [*base_cmd, "kill-session", "-t", f"={session}"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=_SYNC_COMMAND_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            _logger.warning(
+                "tmux_sync_kill_timeout",
+                socket=control.socket_name,
+                session=session,
+            )
+            continue
+        except FileNotFoundError:
+            return killed
+        if result.returncode == 0:
+            killed.append(session)
+        else:
+            _logger.warning(
+                "tmux_sync_kill_failed",
+                socket=control.socket_name,
+                session=session,
+                stderr=result.stderr.strip(),
+            )
+    return killed
 
 
 class TmuxError(RuntimeError):

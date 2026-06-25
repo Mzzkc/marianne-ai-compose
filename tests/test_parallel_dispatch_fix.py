@@ -16,8 +16,12 @@ import pytest
 
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.dispatch import DispatchConfig, dispatch_ready
-from marianne.daemon.baton.events import SheetAttemptResult
-from marianne.daemon.baton.state import SheetExecutionState
+from marianne.daemon.baton.events import SheetAttemptResult, SheetSkipped
+from marianne.daemon.baton.state import (
+    BatonSheetStatus,
+    CircuitBreakerState,
+    SheetExecutionState,
+)
 
 # =============================================================================
 # Issue 1: extract_dependencies must respect config.sheet.dependencies
@@ -329,3 +333,120 @@ class TestDispatchLogging:
         assert "model_concurrency" in captured.out, (
             "Dispatch should log why sheets were skipped (model concurrency)"
         )
+
+    @pytest.mark.asyncio
+    async def test_model_concurrency_skip_records_dispatch_wait_state(self) -> None:
+        """A ready sheet held by model capacity is visible in checkpoint state."""
+        baton = BatonCore()
+        baton.register_instrument("claude-code", max_concurrent=2)
+        baton.set_model_concurrency("claude-code", "glm-5-Turbo", 1)
+
+        sheets = {
+            1: SheetExecutionState(
+                sheet_num=1,
+                instrument_name="claude-code",
+                model="glm-5-Turbo",
+            ),
+            2: SheetExecutionState(
+                sheet_num=2,
+                instrument_name="claude-code",
+                model="glm-5-Turbo",
+            ),
+        }
+        baton.register_job("j1", sheets, {1: [], 2: []})
+
+        callback = AsyncMock()
+        config = baton.build_dispatch_config(max_concurrent_sheets=10)
+        result = await dispatch_ready(baton, config, callback)
+
+        assert result.dispatched_sheets == [("j1", 1)]
+        assert result.blocked_sheets == [("j1", 2)]
+        assert sheets[2].dispatch_blocked_reason == "model_concurrency"
+        assert sheets[2].dispatch_blocked_details == {
+            "instrument": "claude-code",
+            "model_key": "claude-code:glm-5-Turbo",
+            "model_count": 1,
+            "model_limit": 1,
+        }
+        assert sheets[2].dispatch_blocked_at is not None
+
+        await baton.handle_event(
+            SheetAttemptResult(
+                job_id="j1",
+                sheet_num=1,
+                instrument_name="claude-code",
+                attempt=1,
+                execution_success=True,
+                validations_passed=1,
+                validations_total=1,
+                validation_pass_rate=100.0,
+            )
+        )
+        result = await dispatch_ready(baton, config, callback)
+
+        assert result.dispatched_sheets == [("j1", 2)]
+        assert sheets[2].dispatch_blocked_reason is None
+        assert sheets[2].dispatch_blocked_details == {}
+        assert sheets[2].dispatch_blocked_at is None
+
+    @pytest.mark.asyncio
+    async def test_fallback_instrument_model_capacity_is_checked(self) -> None:
+        """Fallback dispatch must honor the fallback model's concurrency limit."""
+        baton = BatonCore()
+        baton.register_instrument("primary", max_concurrent=4)
+        baton.register_instrument("claude-code", max_concurrent=4)
+        baton.set_model_concurrency("claude-code", "glm-5-Turbo", 0)
+
+        sheet = SheetExecutionState(
+            sheet_num=1,
+            instrument_name="primary",
+            fallback_chain=["claude-code"],
+            fallback_configs=[{"model": "glm-5-Turbo"}],
+        )
+        baton.register_job("j1", {1: sheet}, {1: []})
+        baton._instruments["primary"].circuit_breaker = CircuitBreakerState.OPEN
+
+        callback = AsyncMock()
+        config = baton.build_dispatch_config(max_concurrent_sheets=10)
+        result = await dispatch_ready(baton, config, callback)
+
+        assert result.dispatched_sheets == []
+        assert result.blocked_sheets == [("j1", 1)]
+        assert sheet.instrument_name == "claude-code"
+        assert sheet.model == "glm-5-Turbo"
+        assert sheet.dispatch_blocked_reason == "model_concurrency"
+        assert sheet.dispatch_blocked_details["model_key"] == (
+            "claude-code:glm-5-Turbo"
+        )
+        callback.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_skip_clears_dispatch_wait_state(self) -> None:
+        """Terminal skipped sheets must not keep stale dispatch-wait labels."""
+        baton = BatonCore()
+        baton.register_instrument("claude-code", max_concurrent=1)
+        baton.set_model_concurrency("claude-code", "glm-5-Turbo", 0)
+
+        sheet = SheetExecutionState(
+            sheet_num=1,
+            instrument_name="claude-code",
+            model="glm-5-Turbo",
+        )
+        baton.register_job("j1", {1: sheet}, {1: []})
+
+        result = await dispatch_ready(
+            baton,
+            baton.build_dispatch_config(max_concurrent_sheets=10),
+            AsyncMock(),
+        )
+        assert result.blocked_sheets == [("j1", 1)]
+        assert sheet.dispatch_blocked_reason == "model_concurrency"
+
+        await baton.handle_event(
+            SheetSkipped(job_id="j1", sheet_num=1, reason="upstream_failed")
+        )
+
+        assert sheet.status == BatonSheetStatus.SKIPPED
+        assert sheet.dispatch_blocked_reason is None
+        assert sheet.dispatch_blocked_details == {}
+        assert sheet.dispatch_blocked_at is None

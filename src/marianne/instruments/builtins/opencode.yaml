@@ -74,12 +74,6 @@ models:
     cost_per_1k_output: 0.0
     max_output_tokens: 65536
     max_concurrent: 8
-  - name: "moonshotai/kimi-k2:free"
-    context_window: 131072
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    max_output_tokens: 65536
-    max_concurrent: 8
 
   # ═══════════════════════════════════════════════════════════════════
   # General-purpose — balanced capability for building, research, writing

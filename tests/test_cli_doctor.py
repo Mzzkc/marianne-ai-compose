@@ -176,6 +176,161 @@ class TestDoctorJsonOutput:
             assert "conductor" in data
             assert "instruments" in data
 
+    def test_json_marks_runtime_rate_limited_instrument(self) -> None:
+        """Doctor reports conductor-known runtime rate limits per instrument."""
+        import json
+
+        from marianne.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+
+        profile = InstrumentProfile(
+            name="antigravity",
+            display_name="Antigravity CLI",
+            kind="cli",
+            cli=CliProfile(
+                command=CliCommand(executable="agy"),
+                output=CliOutputConfig(format="text"),
+            ),
+        )
+
+        with (
+            patch(
+                "marianne.cli.commands.doctor._check_conductor_status",
+                return_value=("running", 12345),
+            ),
+            patch(
+                "marianne.cli.commands.doctor._active_rate_limited_instruments",
+                return_value={"antigravity": 3600.0},
+            ),
+            patch(
+                "marianne.cli.commands.doctor._get_all_profiles",
+                return_value={"antigravity": profile},
+            ),
+            patch(
+                "marianne.cli.commands.doctor._check_instrument_binary",
+                return_value=(True, "/usr/bin/agy"),
+            ),
+        ):
+            result = runner.invoke(app, ["doctor", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        instrument = data["instruments"][0]
+        assert instrument["name"] == "antigravity"
+        assert instrument["status"] == "warning"
+        assert instrument["rate_limited"] is True
+        assert instrument["rate_limit_seconds_remaining"] == 3600.0
+        assert instrument["execution_ready"] is True
+
+    def test_json_marks_profile_execution_unsupported(self) -> None:
+        """Doctor distinguishes binary availability from prompt readiness."""
+        import json
+
+        from marianne.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+
+        profile = InstrumentProfile(
+            name="gemini-cli",
+            display_name="Gemini CLI",
+            kind="cli",
+            execution_status="unsupported",
+            execution_status_detail="UNSUPPORTED_CLIENT",
+            cli=CliProfile(
+                command=CliCommand(executable="gemini"),
+                output=CliOutputConfig(format="text"),
+            ),
+        )
+
+        with (
+            patch(
+                "marianne.cli.commands.doctor._check_conductor_status",
+                return_value=("not running", None),
+            ),
+            patch(
+                "marianne.cli.commands.doctor._get_all_profiles",
+                return_value={"gemini-cli": profile},
+            ),
+            patch(
+                "marianne.cli.commands.doctor._check_instrument_binary",
+                return_value=(True, "/usr/bin/gemini"),
+            ),
+        ):
+            result = runner.invoke(app, ["doctor", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        instrument = data["instruments"][0]
+        assert instrument["name"] == "gemini-cli"
+        assert instrument["status"] == "warning"
+        assert instrument["execution_status"] == "unsupported"
+        assert instrument["execution_status_detail"] == "UNSUPPORTED_CLIENT"
+        assert instrument["execution_ready"] is False
+        assert instrument["rate_limited"] is False
+
+    def test_json_infers_gemini_executable_unsupported_without_google_auth(
+        self,
+    ) -> None:
+        """Gemini wrapper profiles inherit the local OAuth-tier block."""
+        import json
+
+        from marianne.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+
+        profile = InstrumentProfile(
+            name="custom-gemini-wrapper",
+            display_name="Custom Gemini",
+            kind="cli",
+            cli=CliProfile(
+                command=CliCommand(executable="gemini"),
+                output=CliOutputConfig(format="text"),
+            ),
+        )
+
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "GOOGLE_API_KEY": "",
+                    "GOOGLE_APPLICATION_CREDENTIALS": "",
+                    "GOOGLE_CLOUD_PROJECT": "",
+                    "CLOUDSDK_CONFIG": "",
+                },
+                clear=False,
+            ),
+            patch(
+                "marianne.cli.commands.doctor._check_conductor_status",
+                return_value=("not running", None),
+            ),
+            patch(
+                "marianne.cli.commands.doctor._get_all_profiles",
+                return_value={"custom-gemini-wrapper": profile},
+            ),
+            patch(
+                "marianne.cli.commands.doctor._check_instrument_binary",
+                return_value=(True, "/usr/bin/gemini"),
+            ),
+        ):
+            result = runner.invoke(app, ["doctor", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        instrument = data["instruments"][0]
+        assert instrument["name"] == "custom-gemini-wrapper"
+        assert instrument["execution_status"] == "unsupported"
+        assert instrument["execution_ready"] is False
+
 
 # ---------------------------------------------------------------------------
 # Summary line

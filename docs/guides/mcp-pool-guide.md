@@ -1,25 +1,44 @@
 # MCP Pool Integration Guide
 
+Status: conductor-integrated for stdio MCP servers across built-in CLI
+instruments. `McpPoolManager` starts configured stdio MCP servers, exposes each
+through a multiplexed Unix socket bridge, rewrites colliding client request IDs,
+and generates MCP config files for sheet dispatch. `JobManager` owns pool
+lifecycle. `BatonAdapter` now exposes active MCP techniques through two paths:
+native `--mcp-config` injection when an instrument supports it, and generated
+`techniques_rt.py` code-mode bindings for every CLI instrument.
+
 ## Overview
 
-The shared MCP server pool is conductor-managed infrastructure that provides
-MCP tool access to all musicians (agents) executing sheets. Instead of each
-agent spawning its own MCP servers (which causes process explosion — see
-F-271), the conductor runs one instance per MCP server type and shares them.
+The shared MCP server pool is conductor-managed infrastructure for MCP tool
+access across musicians. Instead of each agent spawning its own MCP servers
+(which causes process growth, see F-271), the conductor runs one instance per
+MCP server type and shares it through a local socket bridge.
+
+Stdio MCP servers speak a single JSON-RPC session over stdin/stdout. Marianne's
+bridge accepts multiple Unix socket clients, answers each client's initialize
+handshake from the upstream server's cached initialize result, rewrites request
+IDs to unique upstream IDs, and restores each client's original ID on response.
 
 ## Architecture
 
 ```
 Conductor (DaemonManager)
   └── McpPoolManager
-        ├── github-mcp-server (process) → /tmp/mzt/mcp/github.sock
-        ├── filesystem-mcp-server (process) → /tmp/mzt/mcp/filesystem.sock
-        └── symbols-python-server (process) → /tmp/mzt/mcp/symbols.sock
+        ├── github-mcp-server (stdio process)
+        │     └── McpSocketBridge → /tmp/mzt/mcp/github.sock
+        ├── filesystem-mcp-server (stdio process)
+        │     └── McpSocketBridge → /tmp/mzt/mcp/filesystem.sock
+        └── symbols-python-server (stdio process)
+              └── McpSocketBridge → /tmp/mzt/mcp/symbols.sock
 ```
 
 The pool manager handles:
 - **Process lifecycle**: start, health check, restart on failure
-- **Socket path tracking**: each server has a Unix socket endpoint
+- **Socket bridge lifecycle**: bind/unbind per-server Unix sockets
+- **Client multiplexing**: request-id rewrite/restore for concurrent clients
+- **Config generation**: per-workspace MCP config files for MCP-native CLIs
+- **Code bindings**: per-workspace `techniques_rt.py` runtime for code mode
 - **Graceful shutdown**: SIGTERM with 10s timeout, then SIGKILL
 
 ## Configuration
@@ -47,8 +66,9 @@ mcp_pool:
 |-------|------|---------|-------------|
 | `command` | string | required | Command to start the MCP server |
 | `transport` | string | "stdio" | Transport protocol (stdio, sse, http) |
-| `socket` | string | required | Unix socket path for agent access |
+| `socket` | string | required | Unix socket path exposed by the bridge for stdio servers |
 | `restart_policy` | string | "on-failure" | When to restart: on-failure, always, never |
+| `framing` | string | "newline" | Upstream stdio framing: `newline` or `content-length` |
 
 ## Score YAML Integration
 
@@ -72,24 +92,60 @@ At dispatch time, the baton's technique resolver:
 1. Filters techniques to those active in the current sheet's phase
 2. Generates a technique manifest (text describing available tools)
 3. Injects the manifest into the musician's prompt as a skill-category item
-4. For MCP-native instruments (claude-code), generates a config file pointing
-   to the pool's socket paths
+4. Generates a workspace-local MCP config file for active running pool servers
+5. Calls `backend.set_mcp_config(path)` for MCP-native CLI backends
+6. Generates prompt stubs and `<workspace>/techniques_rt.py` for code-mode
+   access to the same active servers
+7. Clears the backend MCP config after the sheet releases the backend
 
 ## Instrument Support
 
 ### MCP-Native Instruments
 
-**Claude Code** is the only instrument with direct MCP config support:
-- Uses `--mcp-config` flag with a JSON config file
-- The conductor generates a temporary config file mapping pool server names
-  to their Unix socket endpoints
+Native support means the profile has either `mcp_config_flag` or
+`mcp_config_workspace_path`:
+- `mcp_config_flag`: use the profile's MCP config flag with a JSON config file
+- `mcp_config_prefix_args`: add least-privilege flags before the active config
+  flag, e.g. Claude Code's `--strict-mcp-config`
+- `mcp_config_workspace_path`: temporarily copy the conductor-generated config
+  to a workspace-relative file discovered by the CLI, then restore/delete it
+  after execution
+- `mcp_config_workspace_merge_key`: for broader JSON settings files, merge only
+  the generated MCP server object under that key and restore the previous file
+  after execution
+- `PluginCliBackend.set_mcp_config(path)` causes the supported path to be used
+- The baton adapter calls `set_mcp_config()` when active MCP techniques resolve
+
+Built-in direct support as of 2026-06-21:
+- `claude-code`: `--strict-mcp-config --mcp-config <file>`
+- `antigravity`: workspace `.agents/mcp_config.json`; live smoke proved
+  Antigravity CLI 1.0.10 initializes servers from that file. Keep actual tool
+  invocation claims tied to live smokes for the target server because the CLI
+  does not expose a deterministic MCP-list command.
+- `gemini-cli`: workspace `.gemini/settings.json`, merged under `mcpServers`.
+  Local Gemini CLI 0.46.0 proved the project config shape with `gemini mcp add`;
+  live dispatch on this machine is currently blocked before MCP startup by
+  Google's `UNSUPPORTED_CLIENT` / `IneligibleTierError` for the individual tier.
+  Prefer `antigravity` for current Google CLI live runs unless Gemini API/gcloud
+  auth is configured.
 
 ### Non-MCP-Native Instruments
 
-All other instruments (opencode, gemini-cli, goose, etc.) receive MCP
-technique information as prompt text only. The technique manifest describes
-available tools so the agent can reference them in its output. Tool execution
-goes through the code mode / proxy bridge path (future implementation).
+All CLI instruments also receive a generated programmatic interface:
+
+```python
+from techniques_rt import filesystem
+
+tools = filesystem.list_tools()
+result = filesystem.call("read_file", {"path": "README.md"})
+```
+
+At dispatch, Marianne writes the implementation to
+`<workspace>/techniques_rt.py`. When the musician returns a Python code block,
+code mode runs it with the workspace as CWD, imports that runtime, and proxies
+JSON-RPC calls through the shared MCP pool socket. This is the spec-aligned
+fallback for instruments without direct MCP configuration and is covered for all
+built-in profiles by `tests/test_mcp_conductor_dispatch.py`.
 
 ## API Reference
 
@@ -132,12 +188,17 @@ async with MCPProxyService(servers=[config]) as proxy:
 
 ## Lifecycle Integration
 
-The MCP pool integrates with the conductor's lifecycle:
+The MCP pool integrates with the conductor lifecycle:
 
-1. **Daemon start**: After baton initialization, start the pool if configured
-2. **Sheet dispatch**: Technique resolver checks pool status, generates config
-3. **Health monitoring**: Periodic health checks, restart failed servers
-4. **Daemon shutdown**: Stop all pool servers before shutting down the baton
+1. **Daemon start**: `JobManager.start()` creates and starts `McpPoolManager`
+   when daemon config declares servers.
+2. **Pool start**: each stdio server is initialized once and exposed through
+   `McpSocketBridge`.
+3. **Sheet dispatch**: resolved MCP techniques select running pool servers,
+   generate native MCP config when possible, and write code-mode bindings for
+   every CLI instrument.
+4. **Daemon shutdown**: `JobManager.shutdown()` stops the pool after baton
+   shutdown.
 
 ## Troubleshooting
 
@@ -152,7 +213,16 @@ The MCP pool integrates with the conductor's lifecycle:
 - Agent sheets will see technique unavailability in their next dispatch
 
 ### MCP config not applied to instrument
-- Only instruments with `mcp_config_flag` in their profile support direct MCP
-  config (currently only claude-code)
-- Check instrument profile: `mcp_config_flag` must be set
+- Only instruments with `mcp_config_flag` or `mcp_config_workspace_path` in
+  their profile support direct MCP config
+- Check instrument profile: one of those fields must be set
 - Verify `set_mcp_config()` was called with the correct path
+- Instruments without a direct MCP config path should still get
+  `<workspace>/techniques_rt.py`; check that the MCP technique resolved for the
+  current sheet phase and that the pool server is running
+
+### Shared pool socket unavailable
+- Check that daemon config declares the server under `mcp_pool.servers`.
+- Check the MCP server completed initialize; bridge startup fails if the stdio
+  server never answers the initialize request.
+- Check daemon logs for `mcp_pool.server_start_failed` or `mcp_bridge.*`.

@@ -20,9 +20,9 @@ from marianne.daemon.profiler.models import ProfilerConfig
 class McpServerEntry(BaseModel):
     """A single MCP server in the shared pool.
 
-    The conductor manages the lifecycle of these servers: start, health check,
-    restart on failure. Each server is proxied behind a Unix socket so agents
-    can access it via bind-mount into their sandbox.
+    For ``transport: stdio``, the conductor starts the command and exposes it
+    through a multiplexed Unix socket bridge at ``socket``. For other transport
+    values, the manager only owns process lifecycle.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -41,14 +41,17 @@ class McpServerEntry(BaseModel):
         default="on-failure",
         description="When to restart: 'on-failure', 'always', 'never'",
     )
+    framing: str = Field(
+        default="newline",
+        description="Upstream stdio JSON-RPC framing: newline or content-length",
+    )
 
 
 class McpPoolConfig(BaseModel):
     """Shared MCP server pool managed by the conductor.
 
-    One process per MCP server type, shared across all agents. The conductor
-    proxies each stdio MCP server behind a Unix socket. Sockets are forwarded
-    into agent sandboxes via bind-mount.
+    One process per MCP server type, shared across agents. Stdio servers are
+    proxied behind multiplexed Unix sockets with JSON-RPC request-id rewriting.
 
     Example YAML::
 

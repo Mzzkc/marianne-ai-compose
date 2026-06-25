@@ -24,6 +24,7 @@ import shutil
 import signal
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,11 @@ _logger = get_logger("backend.plugin_cli")
 # to exit cleanly after SIGTERM; short enough not to stall cancel paths.
 # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 2).
 _KILL_GRACE_SECONDS = 2.0
+
+# Some CLIs, notably Antigravity, discover MCP servers from a fixed
+# workspace-local config file rather than accepting a per-run config flag.
+# Keep those temporary materializations serialized per target path.
+_MCP_WORKSPACE_CONFIG_LOCKS: dict[Path, asyncio.Lock] = {}
 
 
 async def _drain_stream(
@@ -231,9 +237,9 @@ class PluginCliBackend(Backend):
         self._saved_model: str | None = None
         self._has_overrides: bool = False
 
-        # MCP config path — set by conductor when shared MCP pool is active.
-        # When set AND the instrument profile has mcp_config_flag, the command
-        # builder uses --mcp-config <path> instead of mcp_disable_args.
+        # MCP config path — set by callers when an MCP config is available.
+        # The profile may consume it through a command flag or a temporary
+        # workspace-local config file.
         self._mcp_config_path: Path | None = None
 
         _logger.debug(
@@ -293,16 +299,118 @@ class PluginCliBackend(Backend):
         self._on_output = callback
 
     def set_mcp_config(self, config_path: Path | None) -> None:
-        """Set path to an MCP config file for the shared MCP pool.
+        """Set path to an MCP config file.
 
         When set, ``_build_command()`` uses the instrument's ``mcp_config_flag``
-        to point the CLI instrument at the shared pool's config file instead of
-        injecting ``mcp_disable_args``.
+        to point the CLI instrument at this config file instead of injecting
+        ``mcp_disable_args``. For instruments that discover MCP config through
+        a workspace file, ``execute()`` temporarily materializes this file at
+        ``mcp_config_workspace_path``.
 
         Args:
             config_path: Path to the MCP config JSON file, or None to clear.
         """
         self._mcp_config_path = config_path
+
+    def _workspace_mcp_config_target(self) -> Path | None:
+        """Return the workspace-local MCP config target, if this profile needs one."""
+        rel_path = self._cli.command.mcp_config_workspace_path
+        if self._mcp_config_path is None or not rel_path:
+            return None
+        workspace = self._working_directory or Path.cwd()
+        return workspace / rel_path
+
+    def _workspace_mcp_config_bytes(self, target: Path) -> bytes:
+        """Return bytes to write to a CLI-discovered workspace config path."""
+        if self._mcp_config_path is None:
+            return b""
+
+        merge_key = self._cli.command.mcp_config_workspace_merge_key
+        if not merge_key:
+            return self._mcp_config_path.read_bytes()
+
+        try:
+            source_data = json.loads(self._mcp_config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(
+                f"Generated MCP config is not valid JSON: {self._mcp_config_path}"
+            ) from exc
+
+        if not isinstance(source_data, dict):
+            raise RuntimeError(
+                f"Generated MCP config must be a JSON object: {self._mcp_config_path}"
+            )
+
+        try:
+            target_data = json.loads(target.read_text(encoding="utf-8")) if target.exists() else {}
+        except json.JSONDecodeError:
+            target_data = {}
+        if not isinstance(target_data, dict):
+            target_data = {}
+
+        target_data[merge_key] = source_data.get(merge_key, {})
+        return (json.dumps(target_data, indent=2) + "\n").encode("utf-8")
+
+    def _materialize_workspace_mcp_config(
+        self,
+        target: Path,
+    ) -> tuple[Path, bytes | None, bool] | None:
+        """Materialize generated MCP config to a CLI-discovered workspace path.
+
+        Returns a restore tuple of ``(target, previous_bytes, parent_existed)``.
+        ``previous_bytes`` is ``None`` when no file existed and the file should
+        be deleted after execution.
+        """
+        if self._mcp_config_path is None:
+            return None
+
+        source = self._mcp_config_path
+        if source.resolve() == target.resolve():
+            return None
+
+        parent_existed = target.parent.exists()
+        previous = target.read_bytes() if target.exists() else None
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(self._workspace_mcp_config_bytes(target))
+
+        _logger.debug(
+            "plugin_cli_workspace_mcp_config_materialized",
+            instrument=self._profile.name,
+            source=str(source),
+            target=str(target),
+            merge_key=self._cli.command.mcp_config_workspace_merge_key,
+            restored_existing=previous is not None,
+        )
+        return target, previous, parent_existed
+
+    def _restore_workspace_mcp_config(
+        self,
+        restore: tuple[Path, bytes | None, bool],
+    ) -> None:
+        """Restore or remove a temporary workspace MCP config file."""
+        target, previous, parent_existed = restore
+        try:
+            if previous is None:
+                target.unlink(missing_ok=True)
+                if not parent_existed:
+                    with suppress(OSError):
+                        target.parent.rmdir()
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(previous)
+            _logger.debug(
+                "plugin_cli_workspace_mcp_config_restored",
+                instrument=self._profile.name,
+                target=str(target),
+                restored_existing=previous is not None,
+            )
+        except OSError:
+            _logger.warning(
+                "plugin_cli_workspace_mcp_config_restore_failed",
+                instrument=self._profile.name,
+                target=str(target),
+                exc_info=True,
+            )
 
     def _build_prompt(self, prompt: str) -> str:
         """Assemble the full prompt with preamble and extensions.
@@ -395,13 +503,19 @@ class PluginCliBackend(Backend):
             else:
                 args.append(full_prompt)
 
-        # MCP configuration: connect to shared pool or disable.
-        # When a shared MCP pool config path is set AND the instrument
-        # has a config flag, point the instrument at the pool config.
+        # MCP configuration: connect through a provided config or disable.
+        # Direct config is either a command flag or a workspace-discovered file.
         # Otherwise fall back to disabling MCP (F-271).
-        if self._mcp_config_path and cmd.mcp_config_flag:
-            args.append(cmd.mcp_config_flag)
-            args.append(str(self._mcp_config_path))
+        if self._mcp_config_path:
+            if cmd.mcp_config_flag:
+                args.extend(cmd.mcp_config_prefix_args)
+                args.append(cmd.mcp_config_flag)
+                args.append(str(self._mcp_config_path))
+            elif cmd.mcp_config_workspace_path:
+                # ``execute()`` materializes the config into the workspace.
+                pass
+            elif cmd.mcp_disable_args:
+                args.extend(cmd.mcp_disable_args)
         elif cmd.mcp_disable_args:
             args.extend(cmd.mcp_disable_args)
 
@@ -788,14 +902,27 @@ class PluginCliBackend(Backend):
         # cadenza/prelude injection. 32KB is a conservative threshold.
         full_prompt_for_size = self._build_prompt(prompt)
         use_stdin = self._cli.command.prompt_via_stdin
-        if not use_stdin and len(full_prompt_for_size.encode("utf-8")) > 32_768:
-            _logger.info(
-                "plugin_cli_stdin_forced",
-                instrument=self._profile.name,
-                prompt_bytes=len(full_prompt_for_size.encode("utf-8")),
-                reason="prompt exceeds 32KB safe limit for CLI arguments",
-            )
-            use_stdin = True
+        prompt_bytes = len(full_prompt_for_size.encode("utf-8"))
+        if not use_stdin and prompt_bytes > 32_768:
+            can_force_stdin = self._cli.command.stdin_sentinel is not None
+            if can_force_stdin:
+                _logger.info(
+                    "plugin_cli_stdin_forced",
+                    instrument=self._profile.name,
+                    prompt_bytes=prompt_bytes,
+                    reason="prompt exceeds 32KB safe limit for CLI arguments",
+                )
+                use_stdin = True
+            else:
+                _logger.warning(
+                    "plugin_cli_stdin_not_supported_for_large_prompt",
+                    instrument=self._profile.name,
+                    prompt_bytes=prompt_bytes,
+                    reason=(
+                        "profile has no stdin sentinel; keeping prompt in "
+                        "argv to avoid launching the CLI with no prompt"
+                    ),
+                )
 
         cmd = self._build_command(
             prompt, timeout_seconds=effective_timeout,
@@ -819,6 +946,10 @@ class PluginCliBackend(Backend):
         exit_reason = "completed"
         proc: asyncio.subprocess.Process | None = None
         pgid: int | None = None
+        workspace_mcp_target = self._workspace_mcp_config_target()
+        workspace_mcp_lock: asyncio.Lock | None = None
+        workspace_mcp_lock_acquired = False
+        workspace_mcp_restore: tuple[Path, bytes | None, bool] | None = None
 
         # Process Lifecycle Phase 1: presence of the group-aware callback is
         # our signal that we are on the baton path. When set, force
@@ -830,6 +961,15 @@ class PluginCliBackend(Backend):
         )
 
         try:
+            if workspace_mcp_target is not None:
+                lock_key = workspace_mcp_target.resolve()
+                workspace_mcp_lock = _MCP_WORKSPACE_CONFIG_LOCKS.setdefault(
+                    lock_key,
+                    asyncio.Lock(),
+                )
+                await workspace_mcp_lock.acquire()
+                workspace_mcp_lock_acquired = True
+
             # Resolve executable to full path to avoid FileNotFoundError
             # in daemon contexts where asyncio's posix_spawn may fail to
             # resolve executables even though they exist on PATH.
@@ -844,6 +984,11 @@ class PluginCliBackend(Backend):
             # must ensure cwd exists to disambiguate errors.
             if self._working_directory and not self._working_directory.exists():
                 self._working_directory.mkdir(parents=True, exist_ok=True)
+
+            if workspace_mcp_target is not None:
+                workspace_mcp_restore = self._materialize_workspace_mcp_config(
+                    workspace_mcp_target,
+                )
 
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -1001,6 +1146,11 @@ class PluginCliBackend(Backend):
                 instrument=self._profile.name,
                 error=str(e),
             )
+        finally:
+            if workspace_mcp_restore is not None:
+                self._restore_workspace_mcp_config(workspace_mcp_restore)
+            if workspace_mcp_lock is not None and workspace_mcp_lock_acquired:
+                workspace_mcp_lock.release()
 
         # Untrack PID — process and children are cleaned up
         if self._on_process_exited and proc is not None and proc.pid is not None:

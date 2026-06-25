@@ -145,7 +145,14 @@ class TestJobRoutes:
                     "config_content": sample_config_yaml,
                     "workspace": "./custom-workspace",
                     "start_sheet": 1,
+                    "fresh": True,
                     "self_healing": True,
+                    "self_healing_auto_confirm": True,
+                    "escalation": True,
+                    "dry_run": True,
+                    "chain_depth": 2,
+                    "client_cwd": "/tmp",
+                    "runtime_variables": {"target": "dashboard"},
                 },
             )
 
@@ -164,7 +171,14 @@ class TestJobRoutes:
         assert kwargs["config_content"] == sample_config_yaml
         assert kwargs["workspace"] == Path("./custom-workspace")
         assert kwargs["start_sheet"] == 1
+        assert kwargs["fresh"] is True
         assert kwargs["self_healing"] is True
+        assert kwargs["self_healing_auto_confirm"] is True
+        assert kwargs["escalation"] is True
+        assert kwargs["dry_run"] is True
+        assert kwargs["chain_depth"] == 2
+        assert kwargs["client_cwd"] == Path("/tmp")
+        assert kwargs["runtime_variables"] == {"target": "dashboard"}
 
     def test_start_job_with_config_path(self, client, temp_state_dir, sample_config_yaml):
         """Test starting job with config file path."""
@@ -203,7 +217,7 @@ class TestJobRoutes:
         response = client.post("/api/jobs", json={"workspace": "./test"})
 
         assert response.status_code == 400
-        assert response.json()["detail"] == "Invalid job configuration"
+        assert "Must provide either" in response.json()["detail"]
 
     def test_start_job_both_configs_error(self, client, sample_config_yaml):
         """Test validation error when both configs provided."""
@@ -213,7 +227,7 @@ class TestJobRoutes:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"] == "Invalid job configuration"
+        assert "Cannot provide both" in response.json()["detail"]
 
     def test_start_job_file_not_found(self, client):
         """Test file not found error."""
@@ -229,7 +243,7 @@ class TestJobRoutes:
             response = client.post("/api/jobs", json={"config_path": "/nonexistent.yaml"})
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Configuration file not found"
+        assert "Config file not found" in response.json()["detail"]
 
     def test_start_job_runtime_error(self, client, sample_config_yaml):
         """Test runtime error during job start."""
@@ -245,7 +259,7 @@ class TestJobRoutes:
             response = client.post("/api/jobs", json={"config_content": sample_config_yaml})
 
         assert response.status_code == 503
-        assert response.json()["detail"] == "Conductor unavailable"
+        assert "Permission denied" in response.json()["detail"]
 
     def test_pause_job_success(self, client):
         """Test successful job pause."""

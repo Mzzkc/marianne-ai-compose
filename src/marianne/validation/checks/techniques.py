@@ -5,7 +5,7 @@ the available instrument profiles and skill documents.
 
 Check IDs:
 - V301: Skill technique references a document path that doesn't exist
-- V302: MCP technique targets an instrument without mcp_config_flag
+- V302: MCP technique targets an instrument with no MCP access path
 """
 
 from __future__ import annotations
@@ -81,9 +81,9 @@ class TechniqueSkillPathCheck:
 class TechniqueMcpInstrumentCheck:
     """Check MCP techniques target MCP-capable instruments (V302).
 
-    When a score declares MCP techniques, the primary instrument should
-    support MCP configuration (have ``mcp_config_flag`` in its profile).
-    Instruments without this flag cannot connect to the shared MCP pool.
+    When a score declares MCP techniques, the primary instrument needs an MCP
+    access path. Native MCP configuration is one path; the generated code-mode
+    ``techniques_rt.py`` bridge is the portable fallback for CLI instruments.
     """
 
     @property
@@ -119,7 +119,7 @@ class TechniqueMcpInstrumentCheck:
         if not instrument_name:
             return []
 
-        # Try loading the instrument profile to check for mcp_config_flag
+        # Try loading the instrument profile to check for direct MCP config.
         try:
             loader = InstrumentProfileLoader()
             builtins_dir = (
@@ -137,13 +137,17 @@ class TechniqueMcpInstrumentCheck:
             # Unknown instrument — don't emit V302 since we can't verify
             return []
 
-        has_mcp_flag = bool(
+        has_native_mcp_config = bool(
             profile.cli
             and profile.cli.command
-            and profile.cli.command.mcp_config_flag
+            and (
+                profile.cli.command.mcp_config_flag
+                or profile.cli.command.mcp_config_workspace_path
+            )
         )
+        has_code_bridge = bool(profile.kind == "cli" and profile.cli)
 
-        if not has_mcp_flag:
+        if not (has_native_mcp_config or has_code_bridge):
             names_str = ", ".join(mcp_techniques)
             return [
                 ValidationIssue(
@@ -151,13 +155,13 @@ class TechniqueMcpInstrumentCheck:
                     severity=self.severity,
                     message=(
                         f"MCP techniques ({names_str}) declared but "
-                        f"instrument '{instrument_name}' has no "
-                        "mcp_config_flag — cannot connect to shared MCP pool"
+                        f"instrument '{instrument_name}' has no native MCP "
+                        "config path or generated code-mode bridge support"
                     ),
                     line=find_line_in_yaml(raw_yaml, "techniques"),
                     suggestion=(
-                        "Use an MCP-capable instrument (e.g., claude-code) "
-                        "or remove the MCP techniques"
+                        "Use a CLI instrument supported by Marianne's shared "
+                        "MCP bridge or remove the MCP techniques"
                     ),
                 ),
             ]

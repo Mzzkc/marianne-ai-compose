@@ -25,6 +25,8 @@ from marianne.cli.output import console as default_console
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.instruments.loader import load_all_profiles
 
+_DOCTOR_RUNTIME_TIMEOUT_SECONDS = 1.0
+
 
 def _check_conductor_status() -> tuple[str, int | None]:
     """Check if the Marianne conductor is running.
@@ -119,6 +121,57 @@ def _check_instrument_binary(profile: InstrumentProfile) -> tuple[bool, str | No
     return (path is not None, path)
 
 
+async def _fetch_active_rate_limited_instruments() -> dict[str, float | None]:
+    """Return conductor-known active rate limits by instrument name.
+
+    This is the runtime-health complement to binary availability. It is
+    intentionally best-effort: ``mzt doctor`` must still work when the
+    conductor is down, stale, or mid-restart.
+    """
+    from marianne.daemon.detect import _resolve_socket_path
+    from marianne.daemon.ipc.client import DaemonClient
+
+    socket_path = _resolve_socket_path(None)
+    if not socket_path.exists():
+        return {}
+
+    async with DaemonClient(
+        socket_path,
+        timeout=_DOCTOR_RUNTIME_TIMEOUT_SECONDS,
+        pool_size=1,
+    ) as client:
+        result = await client.rate_limits()
+
+    raw_backends = result.get("backends", {})
+    if not isinstance(raw_backends, dict):
+        return {}
+
+    active: dict[str, float | None] = {}
+    for name, raw in raw_backends.items():
+        seconds: float | None = None
+        is_active = True
+        if isinstance(raw, dict):
+            is_active = bool(raw.get("active", True))
+            value = raw.get("seconds_remaining", raw.get("remaining_seconds"))
+            if isinstance(value, int | float):
+                seconds = float(value)
+        elif isinstance(raw, int | float):
+            seconds = float(raw)
+        if is_active and (seconds is None or seconds > 0):
+            active[str(name)] = seconds
+    return active
+
+
+def _active_rate_limited_instruments() -> dict[str, float | None]:
+    """Synchronous wrapper used by ``mzt doctor`` and preset compilation."""
+    import asyncio
+
+    try:
+        return asyncio.run(_fetch_active_rate_limited_instruments())
+    except Exception:
+        return {}
+
+
 def _get_all_profiles() -> dict[str, InstrumentProfile]:
     """Get all instrument profiles from all sources.
 
@@ -149,6 +202,53 @@ def _human_size(num_bytes: int) -> str:
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{value:.1f} GB"
+
+
+def _format_seconds(seconds: float | None) -> str:
+    if seconds is None:
+        return "(active)"
+    remaining = max(int(seconds), 0)
+    mins, secs = divmod(remaining, 60)
+    hours, mins = divmod(mins, 60)
+    if hours:
+        return f"(clears in {hours}h {mins}m)"
+    if mins:
+        return f"(clears in {mins}m {secs}s)"
+    return f"(clears in {secs}s)"
+
+
+_GOOGLE_AUTH_ENV_VARS = (
+    "GOOGLE_API_KEY",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_CLOUD_PROJECT",
+    "CLOUDSDK_CONFIG",
+)
+
+
+def _profile_execution_state(profile: InstrumentProfile) -> tuple[str, str | None]:
+    """Return computed prompt execution readiness for an instrument profile."""
+    if profile.execution_status != "ready":
+        return profile.execution_status, profile.execution_status_detail
+    if (
+        profile.kind == "cli"
+        and profile.cli is not None
+        and profile.cli.command.executable == "gemini"
+        and not any(os.environ.get(name) for name in _GOOGLE_AUTH_ENV_VARS)
+    ):
+        env_list = ", ".join(_GOOGLE_AUTH_ENV_VARS)
+        return (
+            "unsupported",
+            "Gemini CLI prompt execution is unsupported for the default "
+            "individual-tier OAuth path here; set one of "
+            f"{env_list} and live-smoke before using this profile in fleets.",
+        )
+    return profile.execution_status, profile.execution_status_detail
+
+
+def _profile_execution_ready(profile: InstrumentProfile) -> bool:
+    """Whether this profile should be auto-selected for prompt execution."""
+    status, _detail = _profile_execution_state(profile)
+    return status != "unsupported"
 
 
 # Stale one-off backup patterns under ~/.marianne (#352): created by
@@ -301,23 +401,62 @@ def doctor(
 
     # --- Instruments ---
     all_profiles = _get_all_profiles()
+    active_rate_limits = (
+        _active_rate_limited_instruments() if conductor_ok else {}
+    )
     instrument_results: list[dict[str, Any]] = []
     ready_count = 0
 
     for profile in all_profiles.values():
         available, binary_path = _check_instrument_binary(profile)
+        is_rate_limited = profile.name in active_rate_limits
+        limit_seconds = active_rate_limits.get(profile.name)
+        execution_status, execution_note = _profile_execution_state(profile)
+        execution_ready = execution_status != "unsupported"
 
         if profile.kind == "http":
             # HTTP instruments: report as available (we don't probe endpoints)
-            status = "ok"
+            status = (
+                "warning"
+                if is_rate_limited or not execution_ready
+                else "ok"
+            )
             detail_str = f"{profile.display_name}"
             if profile.http and profile.http.base_url:
                 detail_str += f" ({profile.http.base_url})"
-            ready_count += 1
+            if not execution_ready:
+                detail_str += (
+                    f" — {execution_status}"
+                    f"{(': ' + execution_note) if execution_note else ''}"
+                )
+                warnings.append(
+                    f"Instrument {profile.name} is {execution_status}"
+                )
+            if is_rate_limited:
+                detail_str += f" — rate-limited {_format_seconds(limit_seconds)}"
+                warnings.append(f"Instrument {profile.name} is rate-limited")
+            if not is_rate_limited and execution_ready:
+                ready_count += 1
         elif available:
-            status = "ok"
+            status = (
+                "warning"
+                if is_rate_limited or not execution_ready
+                else "ok"
+            )
             detail_str = f"{binary_path}" if binary_path else profile.display_name
-            ready_count += 1
+            if not execution_ready:
+                detail_str += (
+                    f" — {execution_status}"
+                    f"{(': ' + execution_note) if execution_note else ''}"
+                )
+                warnings.append(
+                    f"Instrument {profile.name} is {execution_status}"
+                )
+            if is_rate_limited:
+                detail_str += f" — rate-limited {_format_seconds(limit_seconds)}"
+                warnings.append(f"Instrument {profile.name} is rate-limited")
+            if not is_rate_limited and execution_ready:
+                ready_count += 1
         else:
             status = "optional"
             executable = profile.cli.command.executable if profile.cli else "unknown"
@@ -329,6 +468,11 @@ def doctor(
             "kind": profile.kind,
             "status": status,
             "detail": detail_str,
+            "execution_status": execution_status,
+            "execution_status_detail": execution_note,
+            "execution_ready": execution_ready,
+            "rate_limited": is_rate_limited,
+            "rate_limit_seconds_remaining": limit_seconds,
         })
 
     # --- Safety checks ---

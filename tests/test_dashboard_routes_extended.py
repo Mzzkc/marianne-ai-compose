@@ -57,6 +57,21 @@ backend:
 class TestJobRoutesExtended:
     """Extended tests for job routes."""
 
+    def test_daemon_status_timeout_returns_degraded(self, client):
+        """Header daemon probe should degrade quickly when IPC stalls."""
+        def _timeout(coro, *_args, **_kwargs):
+            coro.close()
+            raise TimeoutError
+
+        with patch("marianne.dashboard.routes.jobs.asyncio.wait_for") as mock_wait_for:
+            mock_wait_for.side_effect = _timeout
+            response = client.get("/api/jobs/daemon/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["connected"] is False
+        assert "timed out" in data["message"]
+
     def test_start_job_request_validation_both_configs(self, client, sample_config_yaml):
         """Test validation when both config_content and config_path are provided."""
         response = client.post(
@@ -65,7 +80,7 @@ class TestJobRoutesExtended:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"] == "Invalid job configuration"
+        assert "Cannot provide both" in response.json()["detail"]
 
     def test_start_job_yaml_parsing_error(self, client):
         """Test start job with malformed YAML."""
@@ -89,7 +104,7 @@ name: Test Job
             response = client.post("/api/jobs", json={"config_content": malformed_yaml})
 
         assert response.status_code == 503
-        assert "Conductor unavailable" in response.json()["detail"]
+        assert "Invalid YAML" in response.json()["detail"]
 
     def test_start_job_with_all_optional_parameters(self, client, sample_config_yaml):
         """Test starting job with all optional parameters."""
@@ -117,7 +132,14 @@ name: Test Job
                     "config_content": sample_config_yaml,
                     "workspace": "./custom-workspace",
                     "start_sheet": 2,
+                    "fresh": True,
                     "self_healing": True,
+                    "self_healing_auto_confirm": True,
+                    "escalation": True,
+                    "dry_run": True,
+                    "chain_depth": 4,
+                    "client_cwd": "/tmp",
+                    "runtime_variables": {"platform": "shorts"},
                 },
             )
 
@@ -130,7 +152,14 @@ name: Test Job
         mock_start.assert_called_once()
         args, kwargs = mock_start.call_args
         assert kwargs["start_sheet"] == 2
+        assert kwargs["fresh"] is True
         assert kwargs["self_healing"] is True
+        assert kwargs["self_healing_auto_confirm"] is True
+        assert kwargs["escalation"] is True
+        assert kwargs["dry_run"] is True
+        assert kwargs["chain_depth"] == 4
+        assert kwargs["client_cwd"] == Path("/tmp")
+        assert kwargs["runtime_variables"] == {"platform": "shorts"}
 
     def test_pause_job_already_paused(self, client):
         """Test pausing job that's already paused."""

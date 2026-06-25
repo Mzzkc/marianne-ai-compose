@@ -6,13 +6,13 @@ routes it to the appropriate handler:
 
 - **prose** — standard text output, no special routing needed
 - **code_block** — executable code that should run in a sandbox
-- **tool_call** — MCP tool invocation, route to shared MCP pool
+- **tool_call** — MCP tool invocation request, preserved for downstream routing
 - **a2a_request** — inter-agent task delegation, route through event bus
 
-For MCP-native instruments (claude-code, gemini-cli), tool calls go
-through the instrument's native MCP support. The technique router
-handles bridging for non-MCP-native instruments (OpenRouter free models)
-that produce code or structured output.
+For MCP-native instruments (claude-code, gemini-cli), MCP access can happen
+through the instrument's native MCP support when the conductor supplies a valid
+MCP config. The router itself only classifies and extracts requests; it does
+not execute MCP calls.
 
 Classification uses pattern matching on the output text — no LLM calls.
 The patterns are conservative: when in doubt, classify as prose (the safe
@@ -172,7 +172,7 @@ class TechniqueRouter:
                     sandbox.execute(block.code)
             case OutputKind.TOOL_CALL:
                 for call in result.tool_calls:
-                    mcp_pool.invoke(call.server, call.method, call.arguments)
+                    downstream_route(call.server, call.method, call.arguments)
             case OutputKind.A2A_REQUEST:
                 for req in result.a2a_requests:
                     event_bus.submit_a2a_task(req)

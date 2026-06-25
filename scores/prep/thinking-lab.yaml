@@ -8,7 +8,7 @@
 # ║  Reviewers, in order:                                                        ║
 # ║    1. Claude Opus 4.7    (Anthropic, claude-code)        → review-1.md      ║
 # ║    2. Gemini 3.1 Pro     (Google, gemini-cli)            → review-2.md      ║
-# ║    3. GLM 5.1            (Z.AI Coding Plan via opencode) → review-3.md      ║
+# ║    3. GLM 5.2            (Z.AI Coding Plan via opencode) → review-3.md      ║
 # ║    4. GPT-5.5            (OpenAI, codex-cli)             → review-4.md      ║
 # ║                                                                              ║
 # ║  Gemma 4 (Google free via openrouter) was removed 2026-05-07 — chronic       ║
@@ -45,7 +45,7 @@ instruments:
   reviewer-glm:
     profile: opencode
     config:
-      model: "zai-coding-plan/glm-5.1"
+      model: "zai-coding-plan/glm-5.2"
   reviewer-codex:
     profile: codex-cli
     config:
@@ -107,7 +107,7 @@ prompt:
     echo "ready" > {{ workspace }}/setup-complete.txt
     ```
     {% else %}
-    {% set reviewer = {2: "Opus 4.7 (Anthropic)", 3: "Gemini 3.1 Pro (Google)", 4: "GLM 5.1 (Z.AI)", 5: "GPT-5.5 (OpenAI)"}[stage] %}
+    {% set reviewer = {2: "Opus 4.7 (Anthropic)", 3: "Gemini 3.1 Pro (Google)", 4: "GLM 5.2 (Z.AI)", 5: "GPT-5.5 (OpenAI)"}[stage] %}
     {% set review_num = stage - 1 %}
     You are {{ reviewer }}. Independent review. Others can't see your response.
     Context files injected above contain the full problem and code.

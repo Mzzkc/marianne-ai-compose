@@ -208,6 +208,9 @@ and used by the conductor for instrument selection in future versions.
 | `system_prompt_flag` | No | | Flag for system prompt |
 | `allowed_tools_flag` | No | | Flag for restricting tools |
 | `mcp_config_flag` | No | | Flag for MCP server configuration |
+| `mcp_config_prefix_args` | No | `[]` | Args to add immediately before an active MCP config flag/path, such as `--strict-mcp-config` |
+| `mcp_config_workspace_path` | No | | Workspace-relative MCP config file path for CLIs that discover MCP servers from disk |
+| `mcp_config_workspace_merge_key` | No | | JSON key to merge generated MCP servers into when the workspace path is a broader settings file |
 | `timeout_flag` | No | | Flag for per-execution timeout |
 | `working_dir_flag` | No | | Flag for working directory. `null` = subprocess cwd |
 | `extra_flags` | No | `[]` | Fixed flags always appended |

@@ -63,6 +63,14 @@ class SheetOutcome:
     Example: ['⚠️ Common issue: file_exists validation tends to fail (seen 3x)']
     """
 
+    applied_pattern_ids: list[str] = field(default_factory=list)
+    """Stable PatternRecord IDs that were applied/injected for this execution.
+
+    ``patterns_applied`` remains the prompt-facing text for older detectors and
+    reports. This field is the durable key used by GlobalLearningStore to
+    update pattern application/effectiveness records without text matching.
+    """
+
     # Output capture fields (Evolution: Learning Data Collection)
     stdout_tail: str = ""
     """Captured tail of stdout from execution.
@@ -320,6 +328,7 @@ class JsonOutcomeStore:
                     "fix_suggestions": outcome.fix_suggestions,
                     # Effectiveness tracking field (Evolution: Pattern Effectiveness)
                     "patterns_applied": outcome.patterns_applied,
+                    "applied_pattern_ids": outcome.applied_pattern_ids,
                     # Output capture fields (Evolution: Learning Data Collection)
                     "stdout_tail": outcome.stdout_tail,
                     "stderr_tail": outcome.stderr_tail,
@@ -391,6 +400,7 @@ class JsonOutcomeStore:
                 fix_suggestions=raw.get("fix_suggestions", []),
                 # Effectiveness tracking field (Evolution: Pattern Effectiveness)
                 patterns_applied=raw.get("patterns_applied", []),
+                applied_pattern_ids=raw.get("applied_pattern_ids", []),
                 # Output capture fields (Evolution: Learning Data Collection)
                 stdout_tail=raw.get("stdout_tail", ""),
                 stderr_tail=raw.get("stderr_tail", ""),

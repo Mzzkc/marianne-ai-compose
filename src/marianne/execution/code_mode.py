@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import tempfile
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -119,6 +121,7 @@ class CodeModeExecutor:
         workspace: Path,
         timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
         use_sandbox: bool = True,
+        bind_mounts: Sequence[Path | str] | None = None,
     ) -> None:
         """Initialize the code mode executor.
 
@@ -129,6 +132,9 @@ class CodeModeExecutor:
             use_sandbox: Whether to use bwrap sandbox. When False,
                 code runs directly (useful for testing or when bwrap
                 is unavailable).
+            bind_mounts: Extra host paths to bind at the same absolute path
+                inside bwrap. MCP socket parent directories are passed here so
+                generated technique runtimes can reach the shared MCP pool.
         """
         if not workspace.is_dir():
             raise ValueError(f"workspace must be an existing directory: {workspace}")
@@ -136,6 +142,7 @@ class CodeModeExecutor:
         self._workspace = workspace
         self._timeout = timeout_seconds
         self._use_sandbox = use_sandbox
+        self._bind_mounts = [str(path) for path in bind_mounts or []]
 
     @property
     def workspace(self) -> Path:
@@ -381,9 +388,17 @@ class CodeModeExecutor:
         """
         from marianne.execution.sandbox import SandboxConfig, SandboxWrapper
 
+        if shutil.which("bwrap") is None:
+            _logger.warning(
+                "code_mode.bwrap_unavailable",
+                extra={"workspace": str(self._workspace)},
+            )
+            return cmd
+
         config = SandboxConfig(
             workspace=str(self._workspace),
             network_isolated=True,
+            bind_mounts=self._bind_mounts,
         )
         wrapper = SandboxWrapper(config)
         return wrapper.build_command(cmd)

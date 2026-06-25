@@ -52,7 +52,7 @@ def pick_instrument() -> tuple[str | None, str | None, str]:
     if _have("gemini"):
         return "gemini-cli", None, "paid · Google"
     if _have("opencode") and os.environ.get("ZAI_API_KEY"):
-        return "opencode", "zai-coding-plan/glm-5.1", "paid · Z.AI Coding Plan"
+        return "opencode", "zai-coding-plan/glm-5.2", "paid · Z.AI Coding Plan"
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "anthropic_api", None, "paid · Anthropic API"
     return None, None, ""

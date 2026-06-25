@@ -42,6 +42,7 @@ import math
 import time
 from dataclasses import dataclass
 
+from marianne.core.constants import RESET_TIME_MAXIMUM_WAIT_SECONDS
 from marianne.core.logging import get_logger
 
 _logger = get_logger("daemon.rate_coordinator")
@@ -49,7 +50,7 @@ _logger = get_logger("daemon.rate_coordinator")
 # Maximum wait that report_rate_limit() will accept.  Anything above
 # this is clamped — prevents misparsed backend responses from blocking
 # all jobs on a backend for unreasonable durations.
-MAX_WAIT_SECONDS: float = 3600.0  # 1 hour
+MAX_WAIT_SECONDS: float = RESET_TIME_MAXIMUM_WAIT_SECONDS
 
 
 @dataclass

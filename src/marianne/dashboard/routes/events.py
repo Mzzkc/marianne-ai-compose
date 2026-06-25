@@ -57,7 +57,7 @@ def get_event_bridge() -> DaemonEventBridge:
     return _event_bridge
 
 
-def set_event_bridge(bridge: DaemonEventBridge) -> None:
+def set_event_bridge(bridge: DaemonEventBridge | None) -> None:
     """Configure the module-level event bridge (called from app.py)."""
     global _event_bridge
     _event_bridge = bridge

@@ -212,6 +212,53 @@ class TestSheetExecutionState:
         assert state.total_cost_usd == pytest.approx(0.05)
         assert state.total_duration_seconds == pytest.approx(12.5)
 
+    def test_record_attempt_persists_validation_failure_details(self) -> None:
+        """Validation failures remain visible while the baton schedules a retry."""
+        state = SheetExecutionState(sheet_num=1, instrument_name="antigravity")
+        result = SheetAttemptResult(
+            job_id="j1",
+            sheet_num=1,
+            instrument_name="antigravity",
+            attempt=1,
+            execution_success=True,
+            validations_passed=0,
+            validations_total=2,
+            validation_pass_rate=0.0,
+            validation_details={
+                "passed": 0,
+                "failed": 2,
+                "skipped": 0,
+                "pass_percentage": 0.0,
+                "results": [
+                    {
+                        "rule_type": "file_exists",
+                        "description": "Recon report exists",
+                        "path": "{workspace}/cycle-state/agent-recon.md",
+                        "passed": False,
+                        "error_message": "File does not exist",
+                    },
+                    {
+                        "rule_type": "content_contains",
+                        "description": "Recon report contains OBSERVED",
+                        "pattern": "OBSERVED:",
+                        "passed": False,
+                        "error_message": "Pattern not found",
+                    },
+                ],
+            },
+        )
+
+        state.record_attempt(result)
+
+        assert state.validation_passed is False
+        assert state.last_pass_percentage == 0.0
+        assert state.failed_validations == [
+            "Recon report exists",
+            "Recon report contains OBSERVED",
+        ]
+        assert state.validation_details is not None
+        assert state.validation_details[0]["error_message"] == "File does not exist"
+
     def test_record_attempt_failure_increments_retry_count(self) -> None:
         """Failed attempts consume retry budget."""
         state = SheetExecutionState(sheet_num=1, instrument_name="claude-code")

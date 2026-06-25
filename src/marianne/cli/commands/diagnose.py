@@ -1105,11 +1105,45 @@ def _build_diagnostic_report(
             "duration_seconds": sheet.execution_duration_seconds,
             "attempt_count": sheet.attempt_count,
             "completion_attempts": sheet.completion_attempts,
+            "validation_passed": sheet.validation_passed,
+            "last_pass_percentage": sheet.last_pass_percentage,
+            "passed_validations": sheet.passed_validations,
+            "failed_validations": sheet.failed_validations,
             "execution_mode": sheet.execution_mode,
             "outcome_category": sheet.outcome_category,
+            "dispatch_blocked_reason": sheet.dispatch_blocked_reason,
+            "dispatch_blocked_at": (
+                sheet.dispatch_blocked_at.isoformat()
+                if sheet.dispatch_blocked_at
+                else None
+            ),
+            "dispatch_blocked_details": sheet.dispatch_blocked_details,
         }
         timeline.append(entry)
     report["execution_timeline"] = timeline
+
+    validation_failures: list[dict[str, Any]] = []
+    for sheet_num in sorted(job.sheets.keys()):
+        sheet = job.sheets[sheet_num]
+        details = [
+            detail
+            for detail in (sheet.validation_details or [])
+            if not detail.get("passed", False)
+        ]
+        if details or sheet.failed_validations:
+            validation_failures.append({
+                SHEET_NUM_KEY: sheet_num,
+                "status": sheet.status.value,
+                "attempt_count": sheet.attempt_count,
+                "last_pass_percentage": sheet.last_pass_percentage,
+                "failed_validations": list(sheet.failed_validations),
+                "details": details,
+            })
+    report["validation_failures"] = validation_failures
+    report["validation_failure_count"] = sum(
+        len(item["details"]) or len(item["failed_validations"])
+        for item in validation_failures
+    )
 
     # Execution statistics
     report["execution_stats"] = {
@@ -1163,6 +1197,17 @@ def _build_diagnostic_report(
     if job.error_message:
         report["job_error"] = job.error_message
 
+    hook_results = list(job.hook_results)
+    report["hook_results"] = hook_results
+    if hook_results:
+        hook_passed = sum(1 for hook in hook_results if hook.get("success", False))
+        hook_failed = len(hook_results) - hook_passed
+        report["hook_summary"] = {
+            "total": len(hook_results),
+            "passed": hook_passed,
+            "failed": hook_failed,
+        }
+
     # Log file discovery
     log_files = _discover_log_files(workspace)
     report["log_files"] = log_files
@@ -1175,6 +1220,36 @@ def _build_diagnostic_report(
         )
 
     return report
+
+
+def _format_dispatch_wait_entry(entry: dict[str, Any]) -> str:
+    """Format a diagnostic timeline dispatch wait entry."""
+    reason = entry.get("dispatch_blocked_reason") or "unknown"
+    details = entry.get("dispatch_blocked_details") or {}
+    if reason == "model_concurrency":
+        model_key = details.get("model_key") or details.get("instrument") or "model"
+        count = details.get("model_count")
+        limit = details.get("model_limit")
+        if count is not None and limit is not None:
+            return f"waiting for model capacity: {model_key} ({count}/{limit})"
+        return f"waiting for model capacity: {model_key}"
+    if reason == "global_concurrency":
+        running = details.get("global_running")
+        limit = details.get("limit")
+        if running is not None and limit is not None:
+            return f"waiting for global capacity ({running}/{limit})"
+        return "waiting for global capacity"
+    if reason == "rate_limited":
+        return f"waiting for rate limit: {details.get('instrument', 'instrument')}"
+    if reason == "circuit_breaker":
+        return f"waiting for circuit breaker: {details.get('instrument', 'instrument')}"
+    if reason == "stagger":
+        instrument = details.get("instrument", "instrument")
+        remaining = details.get("remaining_ms")
+        if remaining is not None:
+            return f"waiting for dispatch stagger: {instrument} ({remaining}ms)"
+        return f"waiting for dispatch stagger: {instrument}"
+    return f"waiting for dispatch: {reason}"
 
 
 def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> None:
@@ -1228,6 +1303,22 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
 
     # Execution timeline summary
     timeline = report.get("execution_timeline", [])
+    dispatch_waits = [
+        entry for entry in timeline if entry.get("dispatch_blocked_reason")
+    ]
+    if dispatch_waits:
+        console.print("\n[bold yellow]Dispatch Waits[/bold yellow]")
+        for entry in dispatch_waits[:20]:
+            sheet_num = entry.get(SHEET_NUM_KEY, "")
+            wait = _format_dispatch_wait_entry(entry)
+            at = entry.get("dispatch_blocked_at")
+            suffix = f" since {at[:19]}" if isinstance(at, str) else ""
+            console.print(f"  Sheet {sheet_num}: [yellow]{wait}[/yellow][dim]{suffix}[/dim]")
+        if len(dispatch_waits) > 20:
+            console.print(
+                f"  [dim]... and {len(dispatch_waits) - 20} more dispatch waits[/dim]"
+            )
+
     if timeline:
         console.print("\n[bold cyan]Execution Timeline[/bold cyan]")
         timeline_table = create_timeline_table()
@@ -1257,6 +1348,35 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
         console.print(timeline_table)
         if len(timeline) > 20:
             console.print(f"[dim]... and {len(timeline) - 20} more sheets[/dim]")
+
+    validation_failures = report.get("validation_failures", [])
+    if validation_failures:
+        console.print("\n[bold red]Validation Failures[/bold red]")
+        for item in validation_failures[:20]:
+            sheet_num = item.get(SHEET_NUM_KEY, "")
+            pct = item.get("last_pass_percentage")
+            pct_suffix = f" ({pct:.0f}% pass rate)" if isinstance(pct, (int, float)) else ""
+            details = item.get("details") or []
+            if details:
+                for detail in details[:10]:
+                    desc = detail.get("description") or detail.get("rule_type", "validation")
+                    msg = detail.get("error_message") or detail.get("failure_reason") or ""
+                    if msg:
+                        console.print(
+                            f"  Sheet {sheet_num}: [red]{desc}[/red]{pct_suffix} — {msg}"
+                        )
+                    else:
+                        console.print(f"  Sheet {sheet_num}: [red]{desc}[/red]{pct_suffix}")
+            else:
+                failed = item.get("failed_validations") or ["validation"]
+                console.print(
+                    f"  Sheet {sheet_num}: [red]{', '.join(failed)}[/red]{pct_suffix}"
+                )
+        if len(validation_failures) > 20:
+            console.print(
+                f"  [dim]... and {len(validation_failures) - 20} more sheets "
+                "with validation failures[/dim]"
+            )
 
     # Execution stats
     stats = report.get("execution_stats", {})
@@ -1308,6 +1428,26 @@ def _display_diagnostic_report(job: CheckpointState, report: dict[str, Any]) -> 
     # Job-level error
     if report.get("job_error"):
         console.print(f"\n[bold red]Score Error:[/bold red] {report['job_error']}")
+
+    # Hook results section
+    hook_results = report.get("hook_results", [])
+    if hook_results:
+        summary = report.get("hook_summary", {})
+        console.print("\n[bold cyan]Hook Results[/bold cyan]")
+        console.print(
+            f"  Total: {summary.get('total', len(hook_results))} | "
+            f"[green]Passed: {summary.get('passed', 0)}[/green] | "
+            f"[red]Failed: {summary.get('failed', 0)}[/red]"
+        )
+        failed_hooks = [hook for hook in hook_results if not hook.get("success", False)]
+        for hook in failed_hooks[:5]:
+            hook_type = hook.get("hook_type", hook.get("hook_name", "unknown"))
+            desc = hook.get("description")
+            label = f"{hook_type}: {desc}" if desc else hook_type
+            error = hook.get("error_message") or hook.get("error") or "unknown failure"
+            console.print(f"  [red]•[/red] {label} — {error}")
+        if len(failed_hooks) > 5:
+            console.print(f"  [dim]... and {len(failed_hooks) - 5} more failed hooks[/dim]")
 
     # Log files section
     log_files = report.get("log_files", [])

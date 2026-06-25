@@ -727,6 +727,26 @@ class TestDeregisterJobKillsProcessGroups:
     """deregister_job SIGTERMs active pgroups for the job before cancelling."""
 
     @pytest.mark.asyncio
+    async def test_kills_interactive_sessions_even_without_active_pid(self) -> None:
+        adapter = _make_adapter()
+        killed_prefixes: list[str] = []
+
+        def fake_kill_sessions(prefix: str) -> list[str]:
+            killed_prefixes.append(prefix)
+            return ["mzt-J-s1-a1"]
+
+        with patch(
+            "marianne.execution.instruments.interactive.tmux.kill_sessions_with_prefix_sync",
+            side_effect=fake_kill_sessions,
+        ), patch(
+            "marianne.execution.instruments.interactive.tmux.job_session_prefix",
+            return_value="mzt-J-s",
+        ):
+            adapter.deregister_job("J")
+
+        assert killed_prefixes == ["mzt-J-s"]
+
+    @pytest.mark.asyncio
     async def test_sigterm_fires_for_each_active_sheet(self) -> None:
         adapter = _make_adapter()
         adapter._active_pids[("J", 1)] = (100, 200)

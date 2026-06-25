@@ -113,3 +113,10 @@ flowspec*
 # OS
 .DS_Store
 Thumbs.db
+.aider*
+
+# Local/private thinking-lab input captures
+scores/prep/thinking-lab-input/current-*.html
+scores/prep/thinking-lab-input/*-guide.md
+scores/prep/thinking-lab-input/*-dossier.md
+scores/prep/thinking-lab-input/*-voice-context.md

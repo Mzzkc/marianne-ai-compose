@@ -30,6 +30,7 @@ from marianne.validation.checks.jinja import (
 )
 from marianne.validation.checks.paths import (
     TemplateFileExistsCheck,
+    ValidationPathScopeCheck,
     WorkspaceParentExistsCheck,
 )
 from marianne.validation.reporter import ValidationReporter
@@ -345,6 +346,125 @@ class TestTemplateFileExistsCheck:
         assert len(issues) == 1
         assert issues[0].check_id == "V003"
         assert issues[0].severity == ValidationSeverity.ERROR
+
+
+class TestValidationPathScopeCheck:
+    """Tests for path_in_scope static validation (V306)."""
+
+    def test_allows_static_workspace_path(self, tmp_path: Path) -> None:
+        """No issue when path_in_scope resolves under the workspace."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        yaml_content = dedent(f"""
+            name: test-job
+            workspace: {workspace}
+            sheet:
+              size: 10
+              total_items: 100
+            prompt:
+              template: "Test"
+            validations:
+              - type: path_in_scope
+                path: "{{workspace}}/out.txt"
+        """).strip()
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+
+        issues = ValidationPathScopeCheck().check(config, config_path, yaml_content)
+
+        assert issues == []
+
+    def test_denies_static_traversal_outside_workspace(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Traversal outside the workspace is a preflight error."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        yaml_content = dedent(f"""
+            name: test-job
+            workspace: {workspace}
+            sheet:
+              size: 10
+              total_items: 100
+            prompt:
+              template: "Test"
+            validations:
+              - type: path_in_scope
+                path: "{{workspace}}/../escape.txt"
+        """).strip()
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+
+        issues = ValidationPathScopeCheck().check(config, config_path, yaml_content)
+
+        assert len(issues) == 1
+        assert issues[0].check_id == "V306"
+        assert issues[0].severity == ValidationSeverity.ERROR
+        assert issues[0].metadata["scope"] == str(workspace.resolve())
+
+    def test_denies_static_symlink_escape(self, tmp_path: Path) -> None:
+        """Symlinks that resolve outside the workspace are denied."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        outside_file = outside / "secret.txt"
+        outside_file.write_text("secret")
+        (workspace / "secret-link.txt").symlink_to(outside_file)
+        yaml_content = dedent(f"""
+            name: test-job
+            workspace: {workspace}
+            sheet:
+              size: 10
+              total_items: 100
+            prompt:
+              template: "Test"
+            validations:
+              - type: path_in_scope
+                path: "{{workspace}}/secret-link.txt"
+        """).strip()
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+
+        issues = ValidationPathScopeCheck().check(config, config_path, yaml_content)
+
+        assert len(issues) == 1
+        assert issues[0].metadata["path"] == str(outside_file.resolve())
+
+    def test_default_runner_includes_path_scope_check(self) -> None:
+        """Default validation runs V306."""
+        check_ids = {check.check_id for check in create_default_checks()}
+
+        assert "V306" in check_ids
+
+    def test_repo_corpus_has_no_v306_false_positives(self) -> None:
+        """V306 stays quiet across currently parseable shipped scores."""
+        repo_root = Path(__file__).resolve().parents[1]
+        paths: list[Path] = []
+        for dirname in ("scores", "scores-internal", "examples"):
+            root = repo_root / dirname
+            if root.exists():
+                paths.extend(sorted(root.rglob("*.yaml")))
+
+        hits: list[str] = []
+        parsed = 0
+        check = ValidationPathScopeCheck()
+        for path in paths:
+            raw_yaml = path.read_text(encoding="utf-8", errors="replace")
+            try:
+                config = JobConfig.from_yaml(path)
+            except Exception:
+                continue
+            parsed += 1
+            issues = check.check(config, path, raw_yaml)
+            hits.extend(f"{path.relative_to(repo_root)}: {issue.message}" for issue in issues)
+
+        assert parsed > 0
+        assert hits == []
 
 
 class TestRegexPatternCheck:

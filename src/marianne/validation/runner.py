@@ -33,6 +33,7 @@ from marianne.validation.checks import (
     SkipWhenSheetRangeCheck,
     TemplateFileExistsCheck,
     TimeoutRangeCheck,
+    ValidationPathScopeCheck,
     ValidationTypeCheck,
     VariableShadowingCheck,
     VersionReferenceCheck,
@@ -148,6 +149,7 @@ def create_default_checks() -> list[ValidationCheck]:
         SkillFilesExistCheck(),
         PreludeCadenzaFileCheck(),
         CadenzaOrderingCheck(),
+        ValidationPathScopeCheck(),
         # Config checks
         RegexPatternCheck(),
         ValidationTypeCheck(),

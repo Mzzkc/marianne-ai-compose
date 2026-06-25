@@ -29,6 +29,7 @@ _logger = get_logger("cli.run")
 
 if TYPE_CHECKING:
     from marianne.core.config import JobConfig
+    from marianne.core.config.fleet import FleetConfig
 
 
 def _parse_runtime_vars(pairs: list[str] | None) -> dict[str, str]:
@@ -128,6 +129,7 @@ def run(
 ) -> None:
     """Run a score from a YAML configuration file."""
     from marianne.core.config import JobConfig
+    from marianne.daemon.fleet import is_fleet_config
 
     try:
         runtime_vars = _parse_runtime_vars(var)
@@ -140,6 +142,24 @@ def run(
                 hints=["Use --var key=value (the value may contain '=')."],
             )
         raise typer.Exit(1) from None
+
+    # Fleet configs are submitted through the same command, but they are
+    # not JobConfig files. Route them before score parsing so the documented
+    # `mzt run fleet.yaml` path actually reaches the conductor fleet manager.
+    if is_fleet_config(config_file):
+        _run_fleet(
+            config_file=config_file,
+            dry_run=dry_run,
+            start_sheet=start_sheet,
+            workspace=workspace,
+            json_output=json_output,
+            fresh=fresh,
+            self_healing=self_healing,
+            yes=yes,
+            escalation=escalation,
+            runtime_vars=runtime_vars,
+        )
+        return
 
     try:
         config = JobConfig.from_yaml(config_file)
@@ -447,6 +467,154 @@ def _handle_pending_response(
         console.print(
             "[dim]Cancel with:[/dim]  mzt cancel " + job_id
         )
+
+
+def _run_fleet(
+    *,
+    config_file: Path,
+    dry_run: bool,
+    start_sheet: int | None,
+    workspace: Path | None,
+    json_output: bool,
+    fresh: bool,
+    self_healing: bool,
+    yes: bool,
+    escalation: bool,
+    runtime_vars: dict[str, str],
+) -> None:
+    """Run or preview a fleet config through the documented run command."""
+    unsupported: list[str] = []
+    if start_sheet is not None:
+        unsupported.append("--start-sheet")
+    if workspace is not None:
+        unsupported.append("--workspace")
+    if runtime_vars:
+        unsupported.append("--var")
+    if fresh:
+        unsupported.append("--fresh")
+    if self_healing:
+        unsupported.append("--self-healing")
+    if yes:
+        unsupported.append("--yes")
+    if escalation:
+        unsupported.append("--escalation")
+
+    if unsupported:
+        message = (
+            "Fleet runs do not yet support score-specific options: "
+            + ", ".join(unsupported)
+        )
+        if json_output:
+            output_json({"error": message})
+        else:
+            output_error(
+                message,
+                hints=[
+                    "Run the fleet without score-specific options, or run "
+                    "individual score files when those controls are needed.",
+                ],
+            )
+        raise typer.Exit(1)
+
+    try:
+        fleet_config = _load_fleet_config(config_file)
+    except yaml.YAMLError as e:
+        if json_output:
+            output_json({"error": f"YAML syntax error: {e}"})
+        else:
+            output_error(
+                f"YAML syntax error: {e}",
+                hints=[
+                    "Check for indentation issues or invalid YAML characters.",
+                    f"Validate with: mzt validate {config_file}",
+                ],
+            )
+        raise typer.Exit(1) from None
+    except Exception as e:
+        if json_output:
+            output_json({"error": str(e)})
+        else:
+            output_error(
+                str(e),
+                hints=[f"Validate with: mzt validate {config_file}"],
+            )
+        raise typer.Exit(1) from None
+
+    if dry_run:
+        if json_output:
+            output_json({
+                "dry_run": True,
+                "type": "fleet",
+                "fleet_name": fleet_config.name,
+                "scores": len(fleet_config.scores),
+                "groups": {
+                    name: cfg.depends_on
+                    for name, cfg in fleet_config.groups.items()
+                },
+            })
+        else:
+            console.print("\n[yellow]Dry run - not executing[/yellow]")
+            _show_fleet_dry_run(fleet_config, config_file)
+        return
+
+    routed = asyncio.run(
+        _try_daemon_submit(
+            config_file,
+            None,
+            False,
+            False,
+            False,
+            json_output,
+            start_sheet=None,
+            escalation=False,
+            runtime_vars=None,
+        ),
+    )
+    if routed:
+        return
+
+    if json_output:
+        output_json({
+            "error": "Marianne conductor is not running. Start with: mzt start",
+        })
+    else:
+        output_error(
+            "Marianne conductor is not running.",
+            hints=["Start it with: mzt start"],
+        )
+    raise typer.Exit(1)
+
+
+def _load_fleet_config(config_file: Path) -> FleetConfig:
+    """Load and validate a fleet configuration file."""
+    from marianne.core.config.fleet import FleetConfig
+
+    with open(config_file) as f:
+        raw = yaml.safe_load(f)
+    return FleetConfig.model_validate(raw)
+
+
+def _show_fleet_dry_run(fleet_config: FleetConfig, config_path: Path) -> None:
+    """Show what would be submitted for a fleet config."""
+    console.print(Panel(
+        f"[bold]{fleet_config.name}[/bold]\n"
+        f"Scores: {len(fleet_config.scores)}\n"
+        f"Config: {config_path}",
+        title="Fleet Configuration",
+    ))
+
+    table = Table(title="Fleet Plan")
+    table.add_column("Score", style="cyan")
+    table.add_column("Group", style="green")
+    table.add_column("Depends On", style="yellow")
+
+    for entry in fleet_config.scores:
+        depends_on = ""
+        if entry.group and entry.group in fleet_config.groups:
+            depends_on = ", ".join(fleet_config.groups[entry.group].depends_on)
+        table.add_row(entry.path, entry.group or "", depends_on)
+
+    console.print(table)
 
 
 async def _show_rate_limits_on_rejection(msg: str) -> None:

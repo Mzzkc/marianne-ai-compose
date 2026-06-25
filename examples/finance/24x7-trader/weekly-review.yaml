@@ -74,7 +74,7 @@ instruments:
   reviewer-glm:
     profile: opencode
     config:
-      model: zai-coding-plan/glm-5.1
+      model: zai-coding-plan/glm-5.2
       timeout_seconds: 1500
 
 movements:
@@ -163,7 +163,7 @@ prompt:
         focus: "Market regime alignment: was this week's strategy appropriate for the actual macro/sector regime that obtained? What regime shift, if any, did the agent miss?"
       3:
         name: "glm"
-        model: "GLM 5.1 (Z.AI)"
+        model: "GLM 5.2 (Z.AI)"
         focus: "Risk discipline: were stops respected? Was sizing within tier rules? Did the envelope hold? Are there discipline patterns repeating across weeks?"
 
   template: |

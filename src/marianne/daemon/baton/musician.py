@@ -162,6 +162,25 @@ async def sheet_task(
             technique_router, exec_result, job_id=job_id, sheet_num=sheet.num,
         )
         output_kind_value = classified.kind.value if classified is not None else None
+        tool_call_payloads: list[dict[str, Any]] = []
+        a2a_request_payloads: list[dict[str, Any]] = []
+        if classified is not None:
+            tool_call_payloads = [
+                {
+                    "server": call.server,
+                    "method": call.method,
+                    "arguments": dict(call.arguments),
+                }
+                for call in classified.tool_calls
+            ]
+            a2a_request_payloads = [
+                {
+                    "target_agent": request.target_agent,
+                    "task_description": request.task_description,
+                    "context": dict(request.context),
+                }
+                for request in classified.a2a_requests
+            ]
 
         # Step 3b: Code mode execution (Stage 3).
         # When the classified output contains code blocks AND a code
@@ -266,6 +285,8 @@ async def sheet_task(
             stdout_tail=stdout_tail,
             stderr_tail=stderr_tail,
             output_kind=output_kind_value,
+            tool_calls=tool_call_payloads,
+            a2a_requests=a2a_request_payloads,
             preflight_warnings=preflight_warnings,
         )
 
@@ -1002,6 +1023,7 @@ async def _validate(
             "failed": result.failed_count,
             "skipped": result.skipped_count,
             "pass_percentage": rate,
+            "results": result.to_dict_list(),
         }
         return passed, total, rate, details
 

@@ -17,12 +17,26 @@ from typing import TYPE_CHECKING, Any
 
 from marianne.core.config.fleet import FleetConfig, FleetGroupConfig
 from marianne.core.logging import get_logger
+from marianne.daemon.registry import DaemonJobStatus
+from marianne.daemon.task_utils import log_task_exception
 from marianne.daemon.types import JobRequest, JobResponse
 
 if TYPE_CHECKING:
     from marianne.daemon.manager import JobManager
 
 _logger = get_logger("daemon.fleet")
+
+_FLEET_DEPENDENCY_SUCCESS_STATUSES = {
+    DaemonJobStatus.COMPLETED,
+    DaemonJobStatus.PAUSED_AT_CHAIN,
+}
+_FLEET_DEPENDENCY_TERMINAL_STATUSES = {
+    DaemonJobStatus.COMPLETED,
+    DaemonJobStatus.FAILED,
+    DaemonJobStatus.CANCELLED,
+    DaemonJobStatus.PAUSED,
+    DaemonJobStatus.PAUSED_AT_CHAIN,
+}
 
 
 class FleetRecord:
@@ -174,6 +188,15 @@ async def submit_fleet(
         layers=len(group_order),
     )
 
+    record = FleetRecord(
+        fleet_id=fleet_id,
+        config=fleet_config,
+        config_path=config_path,
+        member_jobs=member_jobs,
+        group_order=group_order,
+    )
+    manager._fleet_records[fleet_id] = record
+
     # Submit ungrouped scores first (no dependencies)
     if ungrouped:
         results = await _submit_score_batch(
@@ -186,38 +209,36 @@ async def submit_fleet(
                 message="One or more ungrouped scores failed to submit",
             )
 
-    # Submit grouped scores layer by layer
-    for layer in group_order:
-        layer_scores: list[str] = []
-        for group_name in layer:
-            layer_scores.extend(scores_by_group.get(group_name, []))
-
-        if not layer_scores:
-            continue
-
-        results = await _submit_score_batch(
-            manager, config_dir, layer_scores, member_jobs,
-        )
-        if not all(r.status == "accepted" for r in results):
-            _logger.warning(
-                "fleet.layer_partial_failure",
-                fleet_id=fleet_id,
-                layer=sorted(layer),
-                failed=[
-                    s for s, r in zip(layer_scores, results, strict=False)
-                    if r.status != "accepted"
-                ],
-            )
-
-    # Store fleet record in manager for fleet-level operations
-    record = FleetRecord(
+    initial_layer = group_order[0] if group_order else set()
+    await _submit_group_layer(
+        manager,
+        config_dir,
+        initial_layer,
+        scores_by_group,
+        member_jobs,
         fleet_id=fleet_id,
-        config=fleet_config,
-        config_path=config_path,
-        member_jobs=member_jobs,
-        group_order=group_order,
     )
-    manager._fleet_records[fleet_id] = record
+
+    remaining_layers = group_order[1:]
+    if remaining_layers:
+        task = asyncio.create_task(
+            _submit_dependent_group_layers(
+                manager,
+                config_dir,
+                remaining_layers,
+                fleet_config.groups,
+                scores_by_group,
+                record,
+            ),
+            name=f"fleet-dependencies-{fleet_id}",
+        )
+        task.add_done_callback(
+            lambda t: log_task_exception(
+                t,
+                _logger,
+                "fleet.dependency_coordinator_failed",
+            )
+        )
 
     _logger.info(
         "fleet.submitted",
@@ -229,8 +250,116 @@ async def submit_fleet(
     return JobResponse(
         job_id=fleet_id,
         status="accepted",
-        message=f"Fleet '{fleet_id}' launched with {len(member_jobs)} scores",
+        message=(
+            f"Fleet '{fleet_id}' launched with {len(member_jobs)} initial scores"
+        ),
     )
+
+
+async def _submit_group_layer(
+    manager: JobManager,
+    config_dir: Path,
+    layer: set[str],
+    scores_by_group: dict[str, list[str]],
+    member_jobs: dict[str, str],
+    *,
+    fleet_id: str,
+) -> list[JobResponse]:
+    """Submit all scores for a dependency-satisfied group layer."""
+    layer_scores: list[str] = []
+    for group_name in layer:
+        layer_scores.extend(scores_by_group.get(group_name, []))
+
+    if not layer_scores:
+        return []
+
+    results = await _submit_score_batch(
+        manager, config_dir, layer_scores, member_jobs,
+    )
+    if not all(r.status == "accepted" for r in results):
+        _logger.warning(
+            "fleet.layer_partial_failure",
+            fleet_id=fleet_id,
+            layer=sorted(layer),
+            failed=[
+                s for s, r in zip(layer_scores, results, strict=False)
+                if r.status != "accepted"
+            ],
+        )
+    return results
+
+
+async def _submit_dependent_group_layers(
+    manager: JobManager,
+    config_dir: Path,
+    remaining_layers: list[set[str]],
+    groups: dict[str, FleetGroupConfig],
+    scores_by_group: dict[str, list[str]],
+    record: FleetRecord,
+) -> None:
+    """Submit dependent fleet groups after their dependencies complete."""
+    for layer in remaining_layers:
+        ready_groups: set[str] = set()
+        for group_name in layer:
+            dependency_groups = set(groups[group_name].depends_on)
+            dependencies_ok = await _wait_for_dependency_groups(
+                manager,
+                record,
+                scores_by_group,
+                dependency_groups,
+            )
+            if dependencies_ok:
+                ready_groups.add(group_name)
+            else:
+                _logger.warning(
+                    "fleet.group_dependencies_failed",
+                    fleet_id=record.fleet_id,
+                    group=group_name,
+                    dependencies=sorted(dependency_groups),
+                )
+
+        await _submit_group_layer(
+            manager,
+            config_dir,
+            ready_groups,
+            scores_by_group,
+            record.member_jobs,
+            fleet_id=record.fleet_id,
+        )
+
+
+async def _wait_for_dependency_groups(
+    manager: JobManager,
+    record: FleetRecord,
+    scores_by_group: dict[str, list[str]],
+    dependency_groups: set[str],
+) -> bool:
+    """Wait until all scores in dependency groups finish successfully."""
+    dependency_score_paths = [
+        score_path
+        for group_name in dependency_groups
+        for score_path in scores_by_group.get(group_name, [])
+    ]
+    if not dependency_score_paths:
+        return True
+
+    while True:
+        statuses: list[DaemonJobStatus | None] = []
+        for score_path in dependency_score_paths:
+            job_id = record.member_jobs.get(score_path)
+            meta = manager._job_meta.get(job_id) if job_id else None
+            statuses.append(meta.status if meta is not None else None)
+
+        if all(status in _FLEET_DEPENDENCY_SUCCESS_STATUSES for status in statuses):
+            return True
+        if any(
+            status in _FLEET_DEPENDENCY_TERMINAL_STATUSES
+            and status not in _FLEET_DEPENDENCY_SUCCESS_STATUSES
+            for status in statuses
+        ):
+            return False
+
+        await asyncio.sleep(0.5)
 
 
 async def _submit_score_batch(

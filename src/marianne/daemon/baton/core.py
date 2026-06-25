@@ -615,6 +615,7 @@ class BatonCore:
 
         if sheet.total_cost_usd > limit:
             sheet.status = BatonSheetStatus.FAILED
+            sheet.clear_dispatch_block()
             if not sheet.error_message:
                 sheet.error_message = (
                     f"Sheet cost ${sheet.total_cost_usd:.2f} exceeded limit ${limit:.2f}"
@@ -779,6 +780,7 @@ class BatonCore:
         job = self._jobs.get(job_id)
         if job is None:
             sheet.status = BatonSheetStatus.FAILED
+            sheet.clear_dispatch_block()
             sheet.error_message = f"Job '{job_id}' not found during exhaustion handling"
             sheet.error_code = "E999"
             self._state_dirty = True
@@ -906,6 +908,7 @@ class BatonCore:
         # failure (validation details, execution error, etc.). Only set a
         # generic message if no attempt has left one.
         sheet.status = BatonSheetStatus.FAILED
+        sheet.clear_dispatch_block()
         if not sheet.error_message:
             last = sheet.attempt_results[-1] if sheet.attempt_results else None
             if last and last.error_message:
@@ -1464,6 +1467,7 @@ class BatonCore:
         if event.execution_success and effective_pass_rate >= 100.0:
             # Perfect execution — mark complete
             sheet.status = BatonSheetStatus.COMPLETED
+            sheet.clear_dispatch_block()
             self._update_instrument_on_success(event.instrument_name)
             self._state_dirty = True
             _logger.info(
@@ -1555,6 +1559,7 @@ class BatonCore:
 
                 # No fallback available — fail permanently
                 sheet.status = BatonSheetStatus.FAILED
+                sheet.clear_dispatch_block()
                 sheet.error_message = event.error_message or "Authentication failure"
                 sheet.error_code = "E502"
                 self._state_dirty = True
@@ -1614,6 +1619,7 @@ class BatonCore:
             )
             return
         sheet.status = BatonSheetStatus.SKIPPED
+        sheet.clear_dispatch_block()
         self._state_dirty = True
         _logger.info(
             "baton.sheet.skipped",
@@ -1635,6 +1641,7 @@ class BatonCore:
         if sheet.status in _TERMINAL_BATON_STATUSES:
             return
         sheet.status = BatonSheetStatus.DISPATCHED
+        sheet.clear_dispatch_block()
         sheet.dispatched_at = event.timestamp
         self._state_dirty = True
 
@@ -1767,6 +1774,7 @@ class BatonCore:
         for sheet in job.sheets.values():
             if sheet.status not in _TERMINAL_BATON_STATUSES:
                 sheet.status = BatonSheetStatus.CANCELLED
+                sheet.clear_dispatch_block()
         self._state_dirty = True
         _logger.warning(
             "baton.job.timeout",
@@ -1815,10 +1823,13 @@ class BatonCore:
                 sheet.status = BatonSheetStatus.PENDING
             elif event.decision == "skip":
                 sheet.status = BatonSheetStatus.SKIPPED
+                sheet.clear_dispatch_block()
             elif event.decision == "accept":
                 sheet.status = BatonSheetStatus.COMPLETED
+                sheet.clear_dispatch_block()
             else:
                 sheet.status = BatonSheetStatus.FAILED
+                sheet.clear_dispatch_block()
                 sheet.error_message = f"Escalation resolved with decision: {event.decision}"
                 sheet.error_code = "E999"
                 self._propagate_failure_to_dependents(event.job_id, event.sheet_num)
@@ -1921,6 +1932,7 @@ class BatonCore:
             for sheet in job.sheets.values():
                 if sheet.status not in _TERMINAL_BATON_STATUSES:
                     sheet.status = BatonSheetStatus.CANCELLED
+                    sheet.clear_dispatch_block()
             self.deregister_job(event.job_id)
             _logger.info(
                 "baton.job.cancelled",
@@ -1936,6 +1948,7 @@ class BatonCore:
                 for sheet in job.sheets.values():
                     if sheet.status not in _TERMINAL_BATON_STATUSES:
                         sheet.status = BatonSheetStatus.CANCELLED
+                        sheet.clear_dispatch_block()
         _logger.info(
             "baton.shutdown",
             extra={"graceful": event.graceful},
@@ -2202,6 +2215,7 @@ class BatonCore:
             # At least one dep is terminal and unsatisfied → SKIPPED
             # (not FAILED — the sheet was never attempted, just blocked)
             sheet.status = BatonSheetStatus.SKIPPED
+            sheet.clear_dispatch_block()
             sheet.error_message = f"Blocked by failed dependency: sheet {blocking_dep}"
             sheet.error_code = "E999"
             _logger.info(

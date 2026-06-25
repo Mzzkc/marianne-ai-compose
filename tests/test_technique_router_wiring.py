@@ -214,6 +214,13 @@ class TestSheetTaskRouterParam:
 
         result = inbox.get_nowait()
         assert result.output_kind == OutputKind.TOOL_CALL.value
+        assert result.tool_calls == [
+            {
+                "server": "github",
+                "method": "list_issues",
+                "arguments": {"state": "open"},
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_a2a_delegate_classified_as_a2a_request(self) -> None:
@@ -240,6 +247,13 @@ class TestSheetTaskRouterParam:
 
         result = inbox.get_nowait()
         assert result.output_kind == OutputKind.A2A_REQUEST.value
+        assert result.a2a_requests == [
+            {
+                "target_agent": "sentinel",
+                "task_description": "review security posture of module X",
+                "context": {},
+            }
+        ]
 
 
 # =========================================================================

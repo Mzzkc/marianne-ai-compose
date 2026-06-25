@@ -25,7 +25,7 @@ workspace: /home/emzi/Projects/legion
 
 instrument: opencode
 instrument_config:
-  model: zai-coding-plan/glm-5.1
+  model: zai-coding-plan/glm-5.2
   timeout_seconds: 1800
 
 instruments:

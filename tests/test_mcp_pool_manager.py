@@ -1,14 +1,16 @@
-"""Tests for the shared MCP pool manager — process lifecycle, socket bridging.
+"""Tests for the shared MCP pool manager process lifecycle.
 
 The MCP pool manages long-running MCP server processes for the conductor.
-Each server is started as a subprocess and proxied behind a Unix socket.
-Agents access the servers via bind-mounted sockets.
+For stdio MCP servers, it exposes a multiplexed Unix socket bridge.
 
 TDD: tests written before implementation.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,6 +18,23 @@ import pytest
 
 from marianne.daemon.config import McpPoolConfig, McpServerEntry
 from marianne.daemon.mcp_pool import McpPoolManager, McpServerState
+
+
+def _write_framed(
+    writer: asyncio.StreamWriter,
+    payload: dict[str, object],
+) -> None:
+    body = json.dumps(payload).encode()
+    writer.write(f"Content-Length: {len(body)}\r\n\r\n".encode() + body)
+
+
+async def _read_framed(reader: asyncio.StreamReader) -> dict[str, object]:
+    header = await reader.readline()
+    assert header.lower().startswith(b"content-length:")
+    length = int(header.split(b":", 1)[1].strip())
+    blank = await reader.readline()
+    assert blank in (b"\r\n", b"\n")
+    return json.loads((await reader.readexactly(length)).decode())
 
 # =============================================================================
 # Fixtures
@@ -29,13 +48,13 @@ def pool_config(tmp_path: Path) -> McpPoolConfig:
         servers={
             "github": McpServerEntry(
                 command="github-mcp-server",
-                transport="stdio",
+                transport="http",
                 socket=str(tmp_path / "github.sock"),
                 restart_policy="on-failure",
             ),
             "filesystem": McpServerEntry(
                 command="fs-mcp-server",
-                transport="stdio",
+                transport="http",
                 socket=str(tmp_path / "filesystem.sock"),
                 restart_policy="never",
             ),
@@ -135,6 +154,123 @@ class TestLifecycle:
         await manager.start_all()  # should not raise
         await manager.stop_all()
 
+    async def test_stdio_pool_creates_socket_bridge_and_multiplexes_clients(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Two clients can share one stdio MCP server with colliding IDs."""
+        server_script = tmp_path / "mcp_server.py"
+        request_log = tmp_path / "request_ids.jsonl"
+        server_script.write_text(
+            "\n".join(
+                [
+                    "import json",
+                    "import sys",
+                    f"LOG = {str(request_log)!r}",
+                    "def respond(payload):",
+                    "    sys.stdout.write(json.dumps(payload) + '\\n')",
+                    "    sys.stdout.flush()",
+                    "for line in sys.stdin:",
+                    "    if not line.strip():",
+                    "        continue",
+                    "    req = json.loads(line)",
+                    "    if 'id' not in req:",
+                    "        continue",
+                    "    with open(LOG, 'a', encoding='utf-8') as fh:",
+                    "        entry = {'method': req.get('method'), 'id': req.get('id')}",
+                    "        fh.write(json.dumps(entry) + '\\n')",
+                    "    method = req.get('method')",
+                    "    if method == 'initialize':",
+                    "        result = {'protocolVersion': '2025-11-25'}",
+                    "        result['capabilities'] = {'tools': {}}",
+                    "        result['serverInfo'] = {'name': 'test', 'version': '1'}",
+                    "        respond({'jsonrpc': '2.0', 'id': req['id'], 'result': result})",
+                    "    elif method == 'tools/call':",
+                    "        args = req.get('params', {}).get('arguments', {})",
+                    "        content = [{'type': 'text', 'text': args.get('message', '')}]",
+                    "        result = {'content': content}",
+                    "        respond({'jsonrpc': '2.0', 'id': req['id'], 'result': result})",
+                    "    elif method == 'tools/list':",
+                    "        respond({'jsonrpc': '2.0', 'id': req['id'], 'result': {'tools': []}})",
+                    "    else:",
+                    "        respond({'jsonrpc': '2.0', 'id': req['id'], 'result': {}})",
+                ]
+            )
+        )
+        socket_path = tmp_path / "server.sock"
+        manager = McpPoolManager(
+            McpPoolConfig(
+                servers={
+                    "test": McpServerEntry(
+                        command=f"{sys.executable} {server_script}",
+                        transport="stdio",
+                        socket=str(socket_path),
+                    )
+                }
+            )
+        )
+
+        try:
+            await manager.start_all()
+            assert manager.is_running("test")
+            assert socket_path.exists()
+
+            async def call_client(message: str) -> dict[str, object]:
+                reader, writer = await asyncio.open_unix_connection(str(socket_path))
+                try:
+                    _write_framed(
+                        writer,
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "initialize",
+                            "params": {},
+                        },
+                    )
+                    init_response = await _read_framed(reader)
+                    assert init_response["id"] == 1
+
+                    _write_framed(
+                        writer,
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "tools/call",
+                            "params": {
+                                "name": "echo",
+                                "arguments": {"message": message},
+                            },
+                        },
+                    )
+                    return await _read_framed(reader)
+                finally:
+                    writer.close()
+                    await writer.wait_closed()
+
+            first, second = await asyncio.gather(
+                call_client("first"),
+                call_client("second"),
+            )
+            assert first["id"] == 1
+            assert second["id"] == 1
+            assert first["result"]["content"][0]["text"] == "first"  # type: ignore[index]
+            assert second["result"]["content"][0]["text"] == "second"  # type: ignore[index]
+
+            logged = [
+                json.loads(line)
+                for line in request_log.read_text().splitlines()
+            ]
+            tool_ids = [
+                entry["id"]
+                for entry in logged
+                if entry["method"] == "tools/call"
+            ]
+            assert len(tool_ids) == 2
+            assert len(set(tool_ids)) == 2
+            assert 1 not in tool_ids
+        finally:
+            await manager.stop_all()
+
     async def test_stop_all_is_idempotent(
         self,
         pool_config: McpPoolConfig,
@@ -224,6 +360,55 @@ class TestFailureHandling:
         status = manager.get_status()
         assert status["github"] == McpServerState.FAILED
         assert status["filesystem"] == McpServerState.FAILED
+
+    async def test_stdio_bridge_start_failure_does_not_stop_other_servers(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        manager = McpPoolManager(
+            McpPoolConfig(
+                servers={
+                    "broken": McpServerEntry(
+                        command=f"{sys.executable} missing.py",
+                        transport="stdio",
+                        socket=str(tmp_path / "broken.sock"),
+                    ),
+                    "healthy": McpServerEntry(
+                        command="healthy-server",
+                        transport="http",
+                        socket=str(tmp_path / "healthy.sock"),
+                    ),
+                }
+            )
+        )
+        mock_proc = AsyncMock()
+        mock_proc.pid = 45678
+        mock_proc.returncode = None
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdout = MagicMock()
+        mock_proc.stderr = MagicMock()
+
+        with (
+            patch(
+                "marianne.daemon.mcp_pool.McpSocketBridge.start",
+                side_effect=RuntimeError("initialize failed"),
+            ),
+            patch(
+                "marianne.daemon.mcp_pool.asyncio.create_subprocess_exec",
+                return_value=mock_proc,
+            ) as create_subprocess,
+        ):
+            await manager.start_all()
+
+        status = manager.get_status()
+        assert status["broken"] == McpServerState.FAILED
+        assert status["healthy"] == McpServerState.RUNNING
+        create_subprocess.assert_awaited_once_with(
+            "healthy-server",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
 
     async def test_stop_handles_already_dead_process(
         self,

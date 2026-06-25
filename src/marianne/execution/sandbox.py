@@ -17,6 +17,7 @@ A bwrap subprocess starts in ~4ms.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -118,6 +119,8 @@ class SandboxWrapper:
 
         # Additional bind mounts (MCP sockets, shared dirs)
         for mount_path in self.config.bind_mounts:
+            for parent in _bind_mount_parent_dirs(mount_path):
+                cmd.extend(["--dir", parent])
             cmd.extend(["--bind", mount_path, mount_path])
 
         # Read-only mounts
@@ -171,3 +174,31 @@ class SandboxWrapper:
             return proc.returncode == 0
         except FileNotFoundError:
             return False
+
+
+def _bind_mount_parent_dirs(mount_path: str) -> list[str]:
+    """Return sandbox parent directories needed before a same-path bind mount."""
+
+    path = Path(mount_path)
+    if not path.is_absolute():
+        return []
+
+    existing_roots = {
+        "/",
+        "/bin",
+        "/dev",
+        "/etc",
+        "/lib",
+        "/lib64",
+        "/proc",
+        "/sbin",
+        "/tmp",
+        "/usr",
+        "/workspace",
+    }
+    parents = [
+        str(parent)
+        for parent in reversed(path.parents)
+        if str(parent) not in existing_roots
+    ]
+    return parents

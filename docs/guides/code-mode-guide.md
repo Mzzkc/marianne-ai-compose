@@ -2,13 +2,12 @@
 
 ## Overview
 
-**Code mode** is the execution path that lets non-MCP-native instruments
-(OpenRouter free-tier models, Ollama, etc.) use techniques. The agent
-produces Python/bash code blocks instead of tool calls; the musician
-classifies the output, extracts the blocks, and runs them through a
-sandboxed executor. The sandbox's stdout is appended to the sheet's
-output so validations and downstream sheets see both the agent's
-reasoning and the real execution result.
+**Code mode** is the execution path that lets CLI instruments use
+programmatic technique bindings. The agent produces Python/bash code blocks
+instead of direct tool calls; the musician classifies the output, extracts the
+blocks, and runs them through a sandboxed executor. The sandbox's stdout is
+appended to the sheet's output so validations and downstream sheets see both
+the agent's reasoning and the real execution result.
 
 This document covers the runtime side: how code mode activates, what
 it does with agent output, how failures feed back into retries, and
@@ -18,22 +17,26 @@ agent writes code against is documented separately in
 
 ## When Code Mode Activates
 
-Code mode runs when **three conditions** all hold:
+Code mode runs when **four conditions** all hold:
 
-1. **The job declares techniques.** `JobConfig.techniques` is non-empty,
-   so the baton creates a `TechniqueRouter` and a `CodeModeExecutor`
-   for the job.
+1. **The dispatch has a code-mode reason.** Either the score explicitly sets
+   `code_execution.enabled: true`, or the current sheet resolves an active MCP
+   technique with a running shared-pool server. In the MCP case, the baton
+   writes `<workspace>/techniques_rt.py` and injects compact stubs into the
+   prompt.
 2. **The backend execution succeeded.** A failed backend run is not
    classified — running the agent's "code" from a failed call would
    compound the original failure with garbage input.
-3. **The classifier returns `CODE_BLOCK`.** The router's priority
+3. **A `TechniqueRouter` is available.** Jobs with techniques get a router;
+   explicit code execution creates one even without other techniques.
+4. **The classifier returns `CODE_BLOCK`.** The router's priority
    order is A2A → tool calls → code blocks → prose. Mixed outputs
    that contain A2A or tool calls route elsewhere; pure code blocks
    route to the executor.
 
 If any condition fails, code mode stays dormant. Prose output, missing
-techniques, or a failed backend all skip code mode with byte-identical
-behavior to pre-technique sheets.
+techniques/code-execution configuration, or a failed backend all skip code mode
+with byte-identical behavior to pre-technique sheets.
 
 ## Execution Flow
 
@@ -147,9 +150,8 @@ techniques:
     kind: mcp
     phases: [work]
 
-# Instruments that lack native tool use trigger code mode;
-# MCP-native instruments (claude-code, gemini-cli) do not
-# need code mode because they call MCP directly.
+# Instruments with native MCP config can call MCP directly.
+# All CLI instruments can also use the generated techniques_rt.py bridge.
 instrument: openrouter
 
 sheet:
@@ -158,9 +160,10 @@ sheet:
     2: claude-code
 ```
 
-When the job registers, the baton creates one router and one executor
-per job (not per sheet) and threads them into `_musician_wrapper` →
-`sheet_task` for every dispatched sheet.
+When the job registers, the baton creates a router when techniques or explicit
+code execution require one. At sheet dispatch, it resolves phase-active
+techniques; if MCP servers are active, it writes `techniques_rt.py` and creates
+a `CodeModeExecutor` for that sheet.
 
 ### Executor Defaults
 
@@ -171,11 +174,11 @@ per job (not per sheet) and threads them into `_musician_wrapper` →
 - `timeout_seconds: float = 30.0` — wall-clock cap per block. 30s is
   generous for API-free code; I/O-heavy blocks can override.
 - `use_sandbox: bool = True` — wrap each subprocess in `bwrap`. Set
-  `False` only for tests where bwrap isn't available; production
-  runs should always sandbox.
-- `sandbox_config: SandboxConfig | None = None` — explicit bwrap
-  configuration (bind mounts, env, resource limits). Defaults to a
-  minimal profile that bind-mounts the workspace read-write.
+  `False` only for tests where bwrap isn't available. If `bwrap` is missing at
+  runtime, Marianne logs a warning and falls back to direct execution.
+- `bind_mounts: Sequence[Path | str] | None = None` — extra host paths to bind
+  into bwrap at the same absolute path. The baton passes MCP socket parent
+  directories here for generated technique runtimes.
 
 ### Language Support
 
@@ -267,7 +270,12 @@ The wiring contract has three test surfaces:
 2. **Router wiring** (`tests/test_technique_router_wiring.py`, 13
    tests): router is threaded through adapter → musician, classifies
    output, records `output_kind`.
-3. **Code mode wiring** (`tests/test_code_mode_wiring.py`, 12
+3. **Interface generation** (`tests/test_interface_gen.py`): generated stubs
+   and `techniques_rt.py` JSON-RPC behavior.
+4. **MCP dispatch bridge** (`tests/test_mcp_conductor_dispatch.py`): native
+   config injection, non-native code bridge, and every built-in profile through
+   the shared bridge.
+5. **Code mode wiring** (`tests/test_code_mode_wiring.py`, 12
    tests): executor is invoked when and only when both a router and
    executor are present; its output is merged into the sheet result;
    failures don't crash the musician; MCP sockets inside the

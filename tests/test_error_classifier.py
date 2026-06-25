@@ -14,6 +14,7 @@ Tests cover:
 import json
 import re
 import signal
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -49,6 +50,8 @@ class TestParseResetTime:
             ("Resets in 30 minutes", 30 * 60),
             ("resets in 10 min", 10 * 60),
             ("resets in 45 minutes", 45 * 60),
+            ("Resets in 3h19m33s", 3 * 3600 + 19 * 60 + 33),
+            ("resets in 12m4s", 12 * 60 + 4),
         ],
         ids=[
             "3-hours",
@@ -57,6 +60,8 @@ class TestParseResetTime:
             "30-minutes",
             "10-min",
             "45-minutes",
+            "compact-hms",
+            "compact-ms",
         ],
     )
     def test_relative_time_formats(
@@ -97,6 +102,17 @@ class TestParseResetTime:
         result = classifier.parse_reset_time("Usage resets at 21:00")
         assert result is not None
         assert result >= 300.0
+
+    def test_absolute_datetime_format(self, classifier: ErrorClassifier) -> None:
+        """Test provider reset timestamps with a full local date/time."""
+        reset_at = datetime.now() + timedelta(minutes=17, seconds=5)
+        text = (
+            "Usage limit reached for 5 hour. "
+            f"Your limit will reset at {reset_at:%Y-%m-%d %H:%M:%S}"
+        )
+        result = classifier.parse_reset_time(text)
+        assert result is not None
+        assert result == pytest.approx(17 * 60 + 5, abs=10)
 
     def test_reset_time_from_loose_pattern(self, classifier: ErrorClassifier) -> None:
         """Test 'reset ... 9pm' loose pattern matching."""
@@ -213,6 +229,12 @@ class TestClassifyByPattern:
             ("tokens exhausted", ErrorCode.QUOTA_EXHAUSTED, ErrorCategory.RATE_LIMIT),
             ("token budget used up", ErrorCode.QUOTA_EXHAUSTED, ErrorCategory.RATE_LIMIT),
             ("usage will reset at 9pm", ErrorCode.QUOTA_EXHAUSTED, ErrorCategory.RATE_LIMIT),
+            (
+                "API Error: Request rejected (429) · [1308][Usage limit reached "
+                "for 5 hour. Your limit will reset at 2099-06-22 17:06:12]",
+                ErrorCode.QUOTA_EXHAUSTED,
+                ErrorCategory.RATE_LIMIT,
+            ),
             ("resets 9pm", ErrorCode.QUOTA_EXHAUSTED, ErrorCategory.RATE_LIMIT),
             ("resets in 3 hours", ErrorCode.QUOTA_EXHAUSTED, ErrorCategory.RATE_LIMIT),
             ("daily token limit reached", ErrorCode.QUOTA_EXHAUSTED, ErrorCategory.RATE_LIMIT),
@@ -269,6 +291,7 @@ class TestClassifyByPattern:
             "quota-tokens-exhausted",
             "quota-token-budget",
             "quota-usage-reset-at",
+            "quota-gateway-usage-reset-at",
             "quota-resets-9pm",
             "quota-resets-in-hours",
             "quota-daily-token-limit",

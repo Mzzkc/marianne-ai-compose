@@ -12,6 +12,92 @@ from marianne.validation.base import ValidationIssue, ValidationSeverity
 from marianne.validation.checks._helpers import find_line_in_yaml, resolve_path
 
 
+def _workspace_path(config: JobConfig, config_path: Path) -> Path:
+    """Return the score workspace resolved as validation sees it."""
+    return resolve_path(Path(config.workspace), config_path).expanduser().resolve()
+
+
+def _expand_scope_template(raw: str, workspace: Path) -> Path | None:
+    """Expand validation path templates for static scope checks.
+
+    Unknown placeholders and Jinja expressions are runtime-only, so static
+    validation skips them instead of guessing.
+    """
+    if "{{" in raw or "}}" in raw:
+        return None
+    try:
+        expanded = raw.format(
+            workspace=str(workspace),
+            sheet_num=1,
+            start_item=1,
+            end_item=1,
+        )
+    except (KeyError, IndexError, ValueError):
+        return None
+    path = Path(expanded).expanduser()
+    if not path.is_absolute():
+        path = workspace / path
+    return path.resolve()
+
+
+class ValidationPathScopeCheck:
+    """Check static path_in_scope rules resolve inside their allowed root (V306)."""
+
+    @property
+    def check_id(self) -> str:
+        return "V306"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.ERROR
+
+    @property
+    def description(self) -> str:
+        return "Checks path_in_scope validations deny traversal outside their scope"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        """Check path_in_scope rule paths when they are statically resolvable."""
+        issues: list[ValidationIssue] = []
+        workspace = _workspace_path(config, config_path)
+
+        for rule in config.validations:
+            if rule.type != "path_in_scope" or not rule.path:
+                continue
+            scope_raw = rule.path_scope or "{workspace}"
+            path = _expand_scope_template(rule.path, workspace)
+            scope = _expand_scope_template(scope_raw, workspace)
+            if path is None or scope is None:
+                continue
+
+            if not path.is_relative_to(scope):
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=self.severity,
+                        message=(
+                            "path_in_scope validation resolves outside its "
+                            f"allowed scope: {path}"
+                        ),
+                        line=find_line_in_yaml(raw_yaml, rule.path),
+                        suggestion=(
+                            "Use a path under the workspace/scope, or fix "
+                            "symlinks and '..' segments that resolve outside it"
+                        ),
+                        metadata={
+                            "path": str(path),
+                            "scope": str(scope),
+                        },
+                    )
+                )
+
+        return issues
+
+
 def _gated_producer_sheet(condition: str | None) -> int | None:
     """The sheet a ``file_exists`` validation is gated to, parsed from its
     condition (``sheet_num == N`` / ``sheet_num >= N``). None for other shapes.

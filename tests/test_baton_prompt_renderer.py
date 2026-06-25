@@ -384,6 +384,60 @@ class TestInjectionResolution:
 
 
 # =========================================================================
+# Technique Injection
+# =========================================================================
+
+
+class TestTechniqueInjection:
+    """Technique manifests and skill docs should not fight each other."""
+
+    def test_runtime_manifest_injected_for_plain_template(self) -> None:
+        sheet = _make_sheet(prompt_template="Do work.")
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        result = renderer.render(
+            sheet,
+            _make_context(),
+            technique_manifest="## Techniques Available This Phase\n- **mateship**",
+            technique_skill_docs=["# Mateship\n\nRecord findings."],
+        )
+
+        assert result.prompt.count("Techniques Available") == 1
+        assert "Record findings." in result.prompt
+
+    def test_embedded_manifest_suppresses_duplicate_runtime_manifest(self) -> None:
+        sheet = _make_sheet(
+            prompt_template=(
+                "## Techniques Available - work phase\n"
+                "- **mateship**\n\n"
+                "Do work."
+            )
+        )
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        result = renderer.render(
+            sheet,
+            _make_context(),
+            technique_manifest="## Techniques Available This Phase\n- **mateship**",
+            technique_skill_docs=["# Mateship\n\nRecord findings."],
+        )
+
+        assert result.prompt.count("Techniques Available") == 1
+        assert "Techniques Available This Phase" not in result.prompt
+        assert "Record findings." in result.prompt
+
+
+# =========================================================================
 # Validation Requirements
 # =========================================================================
 

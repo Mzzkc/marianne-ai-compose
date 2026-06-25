@@ -33,7 +33,7 @@ def get_analytics() -> DaemonAnalytics:
     return _analytics
 
 
-def set_analytics(analytics: DaemonAnalytics) -> None:
+def set_analytics(analytics: DaemonAnalytics | None) -> None:
     """Configure the module-level analytics instance (called from app.py)."""
     global _analytics
     _analytics = analytics

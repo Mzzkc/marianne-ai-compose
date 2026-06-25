@@ -1,11 +1,19 @@
 # A2A (Agent-to-Agent) Protocol Guide
 
+Status: internal live delegation support. Marianne can register agent cards,
+route `@delegate target: task` output into a target job's in-memory inbox, and
+inject pending inbox tasks into A2A-enabled sheets. A2A complements shared
+cadenza coordination; it is not the authoritative fleet memory or coordination
+record.
+
 ## Overview
 
 The A2A protocol enables structured task delegation between running agents
 in real time. It complements file-based coordination (shared cadenza
 directories) with active engagement — "I need this reviewed now" vs.
-"I left a note, someone will see it."
+"I left a note, someone will see it." Results that must survive retries,
+process boundaries, or future cycles must still be written to the shared
+workspace.
 
 ## Architecture
 
@@ -21,10 +29,7 @@ Agent A (Canyon)                    Conductor                   Agent B (Sentine
   │                                    │                              │
   │                                    │    (B's next A2A sheet)      │
   │                                    │                              │
-  │                                    │ ◄────────────────────────    │
-  │                                    │     A2ATaskCompleted         │
-  │ ◄──────────────────────────────    │                              │
-  │       results in A's inbox         │                              │
+  │                                    │ inject pending task context  │
 ```
 
 ## Components
@@ -52,7 +57,7 @@ Agents query the registry to discover who's running:
 
 ### A2A Inbox
 
-Each job has a persistent inbox for incoming tasks:
+Each agent-card job has an in-memory inbox for incoming tasks:
 
 ```python
 inbox = A2AInbox(job_id="j1", agent_name="canyon")
@@ -88,28 +93,40 @@ PENDING → ACCEPTED → COMPLETED
 
 ### Baton Events
 
-Four A2A event types flow through the baton's event bus:
+Four A2A event types are defined and can be mapped to observer events:
 
 | Event | Source | Handler |
 |-------|--------|---------|
-| `A2ATaskSubmitted` | Agent output classification | Conductor routes to inbox |
+| `A2ATaskSubmitted` | Agent output classification | Conductor publishes observer event and routes to inbox |
 | `A2ATaskRouted` | Conductor | Confirmation for observability |
-| `A2ATaskCompleted` | Agent output | Results routed back |
-| `A2ATaskFailed` | Agent output | Failure notification |
+| `A2ATaskCompleted` | Agent output | Model exists; output parsing/result routing not wired |
+| `A2ATaskFailed` | Agent output | Model exists; output parsing/result routing not wired |
 
 ## Task Persistence
 
-Tasks persist across sheet boundaries. Between sheets, the agent doesn't
-exist — the inbox holds tasks in the conductor's state:
+Tasks persist across sheet boundaries while the conductor process remains
+alive. The adapter inbox is in-memory today; restart-safe checkpoint persistence
+requires a future schema extension. Durable results still belong in shared
+cadenza files.
+
+A2A is phase-scoped in both directions. A sheet can only trigger delegation
+when the `a2a` protocol technique is active for that sheet's movement/phase.
+A target job only consumes pending inbox tasks when one of its own
+A2A-enabled sheets is dispatched. Scores should therefore make A2A check
+sheets explicit, or use `phases: ["all"]` when every sheet is meant to
+check the inbox.
 
 1. Canyon sends Sentinel a task during Canyon's work sheet
-2. Conductor persists the task in Sentinel's inbox
-3. Sentinel's next A2A-enabled sheet starts — inbox contents injected as context
+2. Conductor stores the task in Sentinel's in-memory inbox
+3. Sentinel's next A2A-enabled check sheet starts — inbox contents injected as context
 4. Sentinel processes the task, produces artifacts
-5. Artifacts persisted in Canyon's inbox
-6. Canyon picks up results on their next relevant sheet
+5. Sentinel writes durable artifacts/findings to the shared workspace
+6. Optional completion/result-routing syntax remains future work
 
 ### Serialization
+
+`A2AInbox` can serialize itself, but the baton adapter does not yet persist
+that data through `CheckpointState`.
 
 ```python
 # Save with checkpoint state
@@ -196,13 +213,19 @@ To decline, explain why.
 ### Implemented
 - Agent card registry with name uniqueness and skill queries
 - Per-job inbox with full task lifecycle (PENDING → ACCEPTED → COMPLETED/FAILED)
-- Serialization for checkpoint persistence
+- Serialization helpers on `A2AInbox`
 - Baton event types for all A2A operations
 - EventBus integration via `to_observer_event()` mapper
 - Technique router A2A request detection (`@delegate` pattern)
+- Agent card registration/deregistration on baton job register/deregister
+- Structured A2A request payloads carried on `SheetAttemptResult`
+- Adapter routing from completed sheet output into target inboxes
+- Pending inbox injection into A2A-enabled sheet prompt context
+- Phase-scoped A2A trigger and check behavior
+- Focused conductor-loop smoke coverage in `tests/test_a2a_wiring.py`
 
 ### Not Yet Wired
-- Agent card registration/deregistration on job start/end
-- Inbox context injection in prompt rendering pipeline
 - Inbox persistence with checkpoint save/load cycle
-- A2A event routing through conductor (task submission → inbox deposit)
+- Agent discovery list injection in prompts
+- Completion/failure output syntax parsing and result return to the requester
+- External A2A protocol compatibility; this is Marianne-internal delegation

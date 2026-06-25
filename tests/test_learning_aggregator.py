@@ -65,6 +65,7 @@ def _make_outcome(
     semantic_patterns: list | None = None,
     fix_suggestions: list | None = None,
     patterns_applied: list | None = None,
+    applied_pattern_ids: list | None = None,
 ) -> SheetOutcome:
     """Create a SheetOutcome with defaults for testing."""
     return SheetOutcome(
@@ -84,6 +85,7 @@ def _make_outcome(
         semantic_patterns=semantic_patterns or [],
         fix_suggestions=fix_suggestions or [],
         patterns_applied=patterns_applied or [],
+        applied_pattern_ids=applied_pattern_ids or [],
     )
 
 
@@ -956,10 +958,59 @@ class TestAggregationIntegration:
         assert isinstance(deprecated_count, int)
         assert deprecated_count >= 0
 
-    def test_record_pattern_applications_is_noop(self, store: GlobalLearningStore) -> None:
-        """_record_pattern_applications should be a no-op (stub)."""
+    def test_record_pattern_applications_skips_outcomes_without_ids(
+        self,
+        store: GlobalLearningStore,
+    ) -> None:
+        """Descriptions alone are not reverse-matched to pattern IDs."""
         aggregator = PatternAggregator(store)
-        outcome = _make_outcome(sheet_id="sheet-1")
+        outcome = _make_outcome(
+            sheet_id="sheet-1",
+            patterns_applied=["[✓] Existing pattern: do the thing"],
+        )
 
-        # Should not raise
-        aggregator._record_pattern_applications(outcome, ["exec-1", "exec-2"])
+        recorded = aggregator._record_pattern_applications(outcome, "exec-1")
+
+        assert recorded == 0
+
+    def test_record_pattern_applications_updates_store(
+        self,
+        store: GlobalLearningStore,
+        workspace: Path,
+    ) -> None:
+        """Applied pattern IDs create application rows and effectiveness counts."""
+        aggregator = PatternAggregator(store)
+        pattern_id = store.record_pattern(
+            pattern_type="validation_failure",
+            pattern_name="known_path_guard",
+            description="Keep generated writes under the workspace.",
+        )
+        outcome = _make_outcome(
+            sheet_id="sheet-1",
+            applied_pattern_ids=[pattern_id],
+            retry_count=0,
+            validation_pass_rate=1.0,
+            success_without_retry=True,
+        )
+        execution_id = store.record_outcome(outcome, workspace)
+
+        recorded = aggregator._record_pattern_applications(outcome, execution_id)
+
+        assert recorded == 1
+        pattern = store.get_pattern_by_id(pattern_id)
+        assert pattern is not None
+        assert pattern.led_to_success_count == 1
+        assert pattern.led_to_failure_count == 0
+
+        with store._get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT pattern_led_to_success, retry_count_after
+                FROM pattern_applications
+                WHERE pattern_id = ?
+                """,
+                (pattern_id,),
+            ).fetchone()
+        assert row is not None
+        assert row["pattern_led_to_success"] == 1
+        assert row["retry_count_after"] == 0

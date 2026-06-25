@@ -149,7 +149,9 @@ class PromptRenderer:
             if technique_skill_docs:
                 for doc in technique_skill_docs:
                     context.injected_skills.append(doc)
-            if technique_manifest:
+            if technique_manifest and not self._template_contains_technique_manifest(
+                sheet
+            ):
                 context.injected_skills.append(technique_manifest)
 
         # Layer 4-8: Build prompt through PromptBuilder (raw_prompt short-circuits inside)
@@ -232,6 +234,25 @@ class PromptRenderer:
             context.previous_files = dict(attempt_context.previous_files)
 
         return context
+
+    @staticmethod
+    def _template_contains_technique_manifest(sheet: Sheet) -> bool:
+        """Return true when the sheet template already lists active techniques.
+
+        Compiler-generated scores embed a phase-specific manifest in the
+        prompt template, while the runtime still resolves skill documents and
+        MCP/A2A support at dispatch. Suppress only the redundant runtime
+        manifest so live prompts do not list the same technique surface twice.
+        """
+        template_text = sheet.prompt_template
+        if not template_text and sheet.template_file and sheet.template_file.exists():
+            try:
+                template_text = sheet.template_file.read_text(encoding="utf-8")
+            except OSError:
+                template_text = None
+        if not template_text:
+            return False
+        return "Techniques Available" in template_text
 
     # Binary file extensions and their human-readable descriptions
     _BINARY_EXTENSIONS: ClassVar[dict[str, str]] = {

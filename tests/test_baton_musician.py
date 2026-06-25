@@ -391,6 +391,47 @@ class TestMusicianValidation:
         assert result.validation_pass_rate == 0.0
         assert result.validations_total == 0  # Not run — non-rescuable
 
+    @pytest.mark.asyncio
+    async def test_validation_details_include_per_rule_results(
+        self, tmp_path: Path
+    ) -> None:
+        """Validation summaries retain the rule-level failures needed for retries."""
+        from marianne.core.config.execution import ValidationRule
+        from marianne.daemon.baton.musician import sheet_task
+
+        inbox: asyncio.Queue[SheetAttemptResult] = asyncio.Queue()
+        backend = AsyncMock()
+        backend.execute = AsyncMock(return_value=_make_execution_result())
+        backend.name = "antigravity"
+
+        rule = ValidationRule(
+            type="file_exists",
+            path="{workspace}/missing-recon.md",
+            description="Recon report exists",
+        )
+        sheet = _make_sheet(
+            instrument="antigravity",
+            validations=[rule],
+            workspace=str(tmp_path),
+        )
+
+        await sheet_task(
+            job_id="test-job",
+            sheet=sheet,
+            backend=backend,
+            attempt_context=_make_context(),
+            inbox=inbox,
+        )
+
+        result = inbox.get_nowait()
+        assert result.execution_success is True
+        assert result.validation_pass_rate == 0.0
+        assert result.validation_details is not None
+        details = result.validation_details["results"]
+        assert details[0]["description"] == "Recon report exists"
+        assert details[0]["passed"] is False
+        assert details[0]["path"] == "{workspace}/missing-recon.md"
+
 
 # =========================================================================
 # Test: Attempt context propagation

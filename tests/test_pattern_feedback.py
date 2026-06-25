@@ -4,11 +4,42 @@ Tests for pattern ID tracking, feedback recording, and SheetState integration.
 Evolution v9: Pattern Feedback Loop Closure.
 """
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
 
 from marianne.core.checkpoint import SheetState, SheetStatus
+from marianne.daemon.baton.adapter import BatonAdapter
+from marianne.daemon.baton.state import SheetExecutionState
+from marianne.learning.store.models import PatternRecord
+
+
+def _pattern_record(
+    *,
+    pattern_id: str = "pattern-1",
+    name: str = "path guard",
+    description: str | None = "Keep generated files inside the workspace.",
+    effectiveness: float = 0.8,
+) -> PatternRecord:
+    now = datetime.now(tz=UTC)
+    return PatternRecord(
+        id=pattern_id,
+        pattern_type="validation_failure",
+        pattern_name=name,
+        description=description,
+        occurrence_count=3,
+        first_seen=now,
+        last_seen=now,
+        last_confirmed=now,
+        led_to_success_count=2,
+        led_to_failure_count=1,
+        effectiveness_score=effectiveness,
+        variance=0.0,
+        suggested_action=None,
+        context_tags=[],
+        priority_score=0.9,
+    )
 
 
 class TestSheetStatePatternFields:
@@ -137,6 +168,74 @@ class TestPatternFeedbackRecording:
         pattern_led_to_success = validation_passed and success_without_retry
 
         assert pattern_led_to_success is False
+
+    async def test_build_learned_patterns_preserves_ids(self):
+        """Baton prompt injection keeps PatternRecord IDs paired with text."""
+        store = MagicMock()
+        store.get_patterns.return_value = [
+            _pattern_record(pattern_id="p-high", effectiveness=0.9),
+            _pattern_record(
+                pattern_id="p-empty",
+                description=None,
+                effectiveness=0.9,
+            ),
+            _pattern_record(
+                pattern_id="p-low",
+                name="retry clock",
+                description="Respect rate-limit wait windows.",
+                effectiveness=0.2,
+            ),
+        ]
+        adapter = BatonAdapter(learning_store=store)
+
+        entries = await adapter._build_learned_patterns("claude-code")
+
+        assert entries == [
+            ("p-high", "[✓] path guard: Keep generated files inside the workspace."),
+            ("p-low", "[⚠] retry clock: Respect rate-limit wait windows."),
+        ]
+        store.get_patterns.assert_called_once_with(
+            instrument_name="claude-code",
+            include_universal=True,
+            exclude_quarantined=True,
+            limit=10,
+            min_priority=0.1,
+        )
+
+    def test_record_applied_patterns_updates_sheet_state(self):
+        """Baton records structured pattern IDs/descriptions on the sheet."""
+        persist = MagicMock()
+        adapter = BatonAdapter(persist_callback=persist)
+        sheet = SheetExecutionState(sheet_num=1, instrument_name="claude-code")
+        adapter._baton.register_job("job-1", {1: sheet}, {1: []})
+
+        adapter._record_applied_patterns(
+            "job-1",
+            1,
+            [("p1", "Pattern one"), ("p2", "Pattern two")],
+        )
+
+        assert sheet.applied_patterns == [
+            {"id": "p1", "description": "Pattern one"},
+            {"id": "p2", "description": "Pattern two"},
+        ]
+        persist.assert_called_once_with("job-1")
+
+    def test_record_applied_patterns_clears_stale_state(self):
+        """A no-pattern attempt must not carry prior attempt feedback."""
+        persist = MagicMock()
+        adapter = BatonAdapter(persist_callback=persist)
+        sheet = SheetExecutionState(
+            sheet_num=1,
+            instrument_name="claude-code",
+            applied_patterns=[{"id": "old", "description": "old pattern"}],
+        )
+        adapter._baton.register_job("job-1", {1: sheet}, {1: []})
+
+        adapter._record_applied_patterns("job-1", 1, None)
+
+        assert sheet.applied_patterns == []
+        persist.assert_called_once_with("job-1")
 
 
 class TestPatternFeedbackIntegration:

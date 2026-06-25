@@ -96,7 +96,10 @@ class TestStartJob:
         job_control_service: JobControlService,
         mock_daemon_client: MagicMock,
         sample_yaml_config: str,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setenv("MARIANNE_DASHBOARD_SUBMISSIONS_DIR", str(tmp_path))
         mock_daemon_client.submit_job.return_value = JobResponse(
             job_id="job-xyz",
             status="accepted",
@@ -110,6 +113,53 @@ class TestStartJob:
         assert isinstance(result, JobStartResult)
         assert result.job_id == "job-xyz"
         assert result.job_name == "test-job"
+        request = mock_daemon_client.submit_job.call_args.args[0]
+        assert request.config_path.parent == tmp_path
+        assert request.config_path.exists()
+        assert request.config_path.read_text(encoding="utf-8") == sample_yaml_config
+
+    @pytest.mark.asyncio
+    async def test_start_job_forwards_daemon_request_options(
+        self,
+        job_control_service: JobControlService,
+        mock_daemon_client: MagicMock,
+        sample_config_file: Path,
+        tmp_path: Path,
+    ) -> None:
+        mock_daemon_client.submit_job.return_value = JobResponse(
+            job_id="job-options",
+            status="pending",
+        )
+        workspace = tmp_path / "workspace"
+        client_cwd = tmp_path / "caller"
+        client_cwd.mkdir()
+
+        result = await job_control_service.start_job(
+            config_path=sample_config_file,
+            workspace=workspace,
+            start_sheet=2,
+            fresh=True,
+            self_healing=True,
+            self_healing_auto_confirm=True,
+            escalation=True,
+            dry_run=True,
+            chain_depth=3,
+            client_cwd=client_cwd,
+            runtime_variables={"clip_id": "abc123"},
+        )
+
+        assert result.status == "pending"
+        request = mock_daemon_client.submit_job.call_args.args[0]
+        assert request.workspace == workspace.resolve()
+        assert request.start_sheet == 2
+        assert request.fresh is True
+        assert request.self_healing is True
+        assert request.self_healing_auto_confirm is True
+        assert request.escalation is True
+        assert request.dry_run is True
+        assert request.chain_depth == 3
+        assert request.client_cwd == client_cwd.resolve()
+        assert request.runtime_variables == {"clip_id": "abc123"}
 
     @pytest.mark.asyncio
     async def test_start_job_no_config_raises_error(
@@ -145,6 +195,25 @@ class TestStartJob:
         mock_daemon_client.submit_job.side_effect = DaemonNotRunningError("not running")
 
         with pytest.raises(RuntimeError, match="Conductor not running"):
+            await job_control_service.start_job(config_path=sample_config_file)
+
+    @pytest.mark.asyncio
+    async def test_start_job_timeout(
+        self,
+        job_control_service: JobControlService,
+        sample_config_file: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _timed_out(coro, *_args, **_kwargs):
+            coro.close()
+            raise TimeoutError
+
+        monkeypatch.setattr(
+            "marianne.dashboard.services.job_control.asyncio.wait_for",
+            _timed_out,
+        )
+
+        with pytest.raises(RuntimeError, match="timed out"):
             await job_control_service.start_job(config_path=sample_config_file)
 
 
@@ -227,6 +296,24 @@ class TestCancelJob:
         mock_daemon_client.cancel_job.side_effect = DaemonNotRunningError("down")
 
         with pytest.raises(RuntimeError, match="Conductor not running"):
+            await job_control_service.cancel_job("job-123")
+
+    @pytest.mark.asyncio
+    async def test_cancel_job_timeout(
+        self,
+        job_control_service: JobControlService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _timed_out(coro, *_args, **_kwargs):
+            coro.close()
+            raise TimeoutError
+
+        monkeypatch.setattr(
+            "marianne.dashboard.services.job_control.asyncio.wait_for",
+            _timed_out,
+        )
+
+        with pytest.raises(RuntimeError, match="cancel request timed out"):
             await job_control_service.cancel_job("job-123")
 
 
@@ -320,6 +407,27 @@ class TestVerifyProcessHealth:
         mock_daemon_client: MagicMock,
     ) -> None:
         mock_daemon_client.get_job_status.side_effect = DaemonNotRunningError("down")
+
+        health = await job_control_service.verify_process_health("job-123")
+
+        assert health.pid is None
+        assert health.is_alive is False
+        assert health.process_exists is False
+
+    @pytest.mark.asyncio
+    async def test_health_timeout(
+        self,
+        job_control_service: JobControlService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _timed_out(coro, *_args, **_kwargs):
+            coro.close()
+            raise TimeoutError
+
+        monkeypatch.setattr(
+            "marianne.dashboard.services.job_control.asyncio.wait_for",
+            _timed_out,
+        )
 
         health = await job_control_service.verify_process_health("job-123")
 

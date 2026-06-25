@@ -60,7 +60,7 @@ cli:
     startup_timeout_seconds: 90.0
   output:
     format: json
-    result_path: "response"
+    result_path: "messages[1].content[0].text"
   errors:
     rate_limit_patterns:
       - "rate.?limit"

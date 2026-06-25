@@ -79,7 +79,7 @@ instruments:
   http-local:  { profile: local-gemma4 }                                     # direct HTTP → local Ollama
   goose-local: { profile: goose, config: { model: "ollama/gemma4:26b" } }    # goose → local Ollama
   # ── PAID subscriptions (only if everything free is exhausted) ──
-  zai:        { profile: opencode, config: { model: "zai-coding-plan/glm-5.1" } }   # Z.AI Coding Plan
+  zai:        { profile: opencode, config: { model: "zai-coding-plan/glm-5.2" } }   # Z.AI Coding Plan
   google:     { profile: gemini-cli }                                        # Google subscription
   anthropic:  { profile: claude-code }                                       # Anthropic Max subscription
 

@@ -20,7 +20,7 @@ class TestMcpPoolLifecycleWiring:
         config = McpPoolConfig(
             servers={
                 "test": McpServerEntry(
-                    command="echo test", transport="stdio", socket=str(tmp_path / "test.sock")
+                    command="echo test", transport="http", socket=str(tmp_path / "test.sock")
                 )
             }
         )
@@ -35,7 +35,7 @@ class TestMcpPoolLifecycleWiring:
         config = McpPoolConfig(
             servers={
                 "test": McpServerEntry(
-                    command="echo test", transport="stdio", socket=str(tmp_path / "test.sock")
+                    command="echo test", transport="http", socket=str(tmp_path / "test.sock")
                 )
             }
         )

@@ -7,6 +7,7 @@ stream endpoint parameter validation, and artifact security paths.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -157,6 +158,16 @@ class TestMakeLogEvent:
         assert data["initial"] is False
         assert data["line_number"] == 42
 
+    def test_make_log_event_strips_terminal_escape_codes(self) -> None:
+        """Displayed logs should not include raw terminal control codes."""
+        from marianne.dashboard.routes.stream import _make_log_event
+
+        event_str = _make_log_event("\x1b[31mERROR\x1b[0m\x07\n", 7, True, "log-7")
+        data_line = [x for x in event_str.split("\n") if x.startswith("data:")][0]
+        data = json.loads(data_line.replace("data: ", ""))
+
+        assert data["line"] == "ERROR"
+
 
 class TestLogStreamNoFollow:
     """Tests for _log_stream in non-follow mode."""
@@ -244,6 +255,99 @@ class TestStreamEndpoints:
 
         assert response.status_code == 404
 
+    def test_download_logs_for_non_worktree_registry_workspace(
+        self, client, temp_state_dir
+    ) -> None:
+        """Non-isolated jobs should read logs from registry workspace metadata."""
+        workspace = temp_state_dir / "plain-workspace"
+        workspace.mkdir()
+        observer_log = workspace / ".marianne-observer.jsonl"
+        observer_log.write_text('{"event":"observer.started","job_id":"plain-job"}\n')
+        os.utime(observer_log, (_FIXED_TIME.timestamp(), _FIXED_TIME.timestamp()))
+
+        job_state = CheckpointState(
+            job_id="plain-job",
+            job_name="Plain Job",
+            status=JobStatus.COMPLETED,
+            total_sheets=1,
+            started_at=_FIXED_TIME,
+            completed_at=_FIXED_TIME,
+            created_at=_FIXED_TIME,
+            updated_at=_FIXED_TIME,
+        )
+
+        registry_metadata = {
+            "workspace": str(workspace),
+            "log_path": None,
+            "snapshot_path": None,
+            "config_path": None,
+        }
+        with (
+            patch("marianne.dashboard.app._state_backend") as mock_backend,
+            patch(
+                "marianne.dashboard.routes.stream._read_registry_job_metadata",
+                return_value=registry_metadata,
+            ),
+            patch("marianne.dashboard.routes.stream._append_conductor_log_source"),
+        ):
+            mock_backend.load = AsyncMock(return_value=job_state)
+            response = client.get("/api/jobs/plain-job/logs/static")
+
+        assert response.status_code == 200
+        assert "observer.started" in response.text
+
+    def test_download_logs_ignores_stale_workspace_logs(
+        self, client, temp_state_dir
+    ) -> None:
+        """Shared workspace logs outside the job window should not be shown."""
+        workspace = temp_state_dir / "shared-workspace"
+        logs_dir = workspace / "logs"
+        logs_dir.mkdir(parents=True)
+        stale_log = logs_dir / "sheet-01.stdout.log"
+        stale_log.write_text("old unrelated sheet output\n")
+        old_time = _FIXED_TIME.timestamp() - (90 * 24 * 60 * 60)
+        os.utime(stale_log, (old_time, old_time))
+
+        observer_log = workspace / ".marianne-observer.jsonl"
+        observer_log.write_text(
+            '{"event":"observer.started","job_id":"other-job"}\n'
+            '{"event":"observer.stopped","job_id":"fresh-job"}\n'
+        )
+        os.utime(observer_log, (_FIXED_TIME.timestamp(), _FIXED_TIME.timestamp()))
+
+        job_state = CheckpointState(
+            job_id="fresh-job",
+            job_name="Fresh Job",
+            status=JobStatus.COMPLETED,
+            total_sheets=1,
+            started_at=_FIXED_TIME,
+            completed_at=_FIXED_TIME,
+            created_at=_FIXED_TIME,
+            updated_at=_FIXED_TIME,
+        )
+
+        registry_metadata = {
+            "workspace": str(workspace),
+            "log_path": None,
+            "snapshot_path": None,
+            "config_path": None,
+        }
+        with (
+            patch("marianne.dashboard.app._state_backend") as mock_backend,
+            patch(
+                "marianne.dashboard.routes.stream._read_registry_job_metadata",
+                return_value=registry_metadata,
+            ),
+            patch("marianne.dashboard.routes.stream._append_conductor_log_source"),
+        ):
+            mock_backend.load = AsyncMock(return_value=job_state)
+            response = client.get("/api/jobs/fresh-job/logs/static")
+
+        assert response.status_code == 200
+        assert "observer.stopped" in response.text
+        assert "other-job" not in response.text
+        assert "old unrelated sheet output" not in response.text
+
     def test_download_logs_content(self, client, job_state_with_worktree) -> None:
         """Static log download should include header and content."""
         with patch("marianne.dashboard.app._state_backend") as mock_backend:
@@ -267,6 +371,8 @@ class TestStreamEndpoints:
         assert data["log_file"] == "marianne.log"
         assert data["lines"] == 3
         assert data["size_bytes"] > 0
+        assert data["download_available"] is True
+        assert data["download_limit_bytes"] == 50 * 1024 * 1024
 
     def test_log_info_job_not_found(self, client) -> None:
         """Log info for nonexistent job should return 404."""

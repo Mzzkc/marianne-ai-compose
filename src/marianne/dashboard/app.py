@@ -5,11 +5,12 @@ The dashboard is a conductor-only proxy — every operation routes through
 the conductor's Unix domain socket via ``DaemonClient``.
 """
 
+import asyncio
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +22,12 @@ from marianne.daemon.ipc.client import DaemonClient
 from marianne.daemon.registry_backend import RegistryFirstReadBackend
 from marianne.state.base import StateBackend
 
+if TYPE_CHECKING:
+    from marianne.dashboard.auth.rate_limit import RateLimitConfig
+
 _logger = get_logger("dashboard.app")
+
+DASHBOARD_DAEMON_PROBE_TIMEOUT_SECONDS = 2.0
 
 # Module-level references set by create_app().
 _state_backend: StateBackend | None = None
@@ -88,6 +94,8 @@ def create_app(
     title: str = "Marianne Dashboard",
     version: str = "0.1.0",
     cors_origins: list[str] | None = None,
+    rate_limit_config: "RateLimitConfig | None" = None,
+    connect_daemon: bool | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -97,6 +105,9 @@ def create_app(
         title: API title for OpenAPI docs
         version: API version
         cors_origins: Allowed CORS origins (defaults to all for development)
+        rate_limit_config: Optional override for API rate limiting
+        connect_daemon: Whether to connect to the live conductor. Defaults to
+            false for explicit state_backend apps and true otherwise.
 
     Returns:
         Configured FastAPI application
@@ -104,8 +115,10 @@ def create_app(
     global _state_backend, _templates, _daemon_client
 
     # Resolve DaemonClient — used by JobControlService, DaemonStateAdapter,
-    # analytics, event bridge, and system view.
-    daemon_client = _create_daemon_client()
+    # event bridge, and system view. Tests and embedded apps that pass an
+    # explicit backend are isolated unless they opt in.
+    should_connect_daemon = state_backend is None if connect_daemon is None else connect_daemon
+    daemon_client = _create_daemon_client() if should_connect_daemon else None
     _daemon_client = daemon_client
 
     # Configure state backend
@@ -168,7 +181,7 @@ def create_app(
     # Rate limiting middleware
     from marianne.dashboard.auth.rate_limit import RateLimitConfig, RateLimitMiddleware
 
-    rate_config = RateLimitConfig()
+    rate_config = rate_limit_config or RateLimitConfig()
     app.add_middleware(RateLimitMiddleware, config=rate_config)
 
     # Configure template and static file paths
@@ -181,26 +194,32 @@ def create_app(
     _templates = Jinja2Templates(directory=str(templates_dir))
     app.state.templates = _templates
 
-    # Wire daemon service layers when a DaemonClient is available.
-    if daemon_client is not None:
-        from marianne.dashboard.routes.analytics import set_analytics
-        from marianne.dashboard.routes.events import set_event_bridge
-        from marianne.dashboard.routes.system import set_system_view
-        from marianne.dashboard.services.analytics import DaemonAnalytics
-        from marianne.dashboard.services.event_bridge import DaemonEventBridge
-        from marianne.dashboard.services.system_view import DaemonSystemView
+    # Wire service layers. Analytics is state-derived and remains available for
+    # isolated/embedded apps; event/system views require a conductor.
+    from marianne.dashboard.routes.analytics import set_analytics
+    from marianne.dashboard.routes.events import set_event_bridge
+    from marianne.dashboard.routes.system import set_system_view
+    from marianne.dashboard.services.analytics import DaemonAnalytics
+    from marianne.dashboard.services.event_bridge import DaemonEventBridge
+    from marianne.dashboard.services.system_view import DaemonSystemView
 
+    assert _state_backend is not None
+    analytics = DaemonAnalytics(_state_backend)
+    app.state.analytics = analytics
+    set_analytics(analytics)
+
+    if daemon_client is not None:
         event_bridge = DaemonEventBridge(daemon_client)
-        analytics = DaemonAnalytics(_state_backend)
         system_view = DaemonSystemView(daemon_client)
 
         app.state.event_bridge = event_bridge
-        app.state.analytics = analytics
         app.state.system_view = system_view
 
         set_event_bridge(event_bridge)
-        set_analytics(analytics)
         set_system_view(system_view)
+    else:
+        set_event_bridge(None)
+        set_system_view(None)
 
     # Register routes
     from marianne.dashboard.routes import router as base_router
@@ -238,7 +257,10 @@ def create_app(
         """
         conductor_up = False
         try:
-            conductor_up = await get_daemon_client().is_daemon_running()
+            conductor_up = await asyncio.wait_for(
+                get_daemon_client().is_daemon_running(),
+                timeout=DASHBOARD_DAEMON_PROBE_TIMEOUT_SECONDS,
+            )
         except Exception as e:  # probe failure must degrade, not lie or crash
             _logger.warning("health_check.conductor_probe_failed", error=str(e))
         return {

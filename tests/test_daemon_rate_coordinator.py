@@ -451,6 +451,23 @@ class TestInputValidation:
         # Should be capped at MAX_WAIT_SECONDS
         assert remaining <= MAX_WAIT_SECONDS
 
+    @pytest.mark.asyncio
+    async def test_provider_reset_over_one_hour_preserved(
+        self,
+        coordinator: RateLimitCoordinator,
+    ):
+        """Valid provider reset windows above one hour stay visible."""
+        await coordinator.report_rate_limit(
+            instrument="antigravity",
+            wait_seconds=3 * 3600 + 8 * 60 + 9,
+            job_id="job-a",
+            sheet_num=1,
+        )
+
+        is_limited, remaining = await coordinator.is_rate_limited("antigravity")
+        assert is_limited is True
+        assert remaining > 3 * 3600
+
 
 # ─── P009: NaN/Inf wait_seconds Handling ─────────────────────────────
 

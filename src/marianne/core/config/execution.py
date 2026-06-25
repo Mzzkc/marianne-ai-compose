@@ -517,6 +517,7 @@ class ValidationRule(BaseModel):
         "content_contains",
         "content_regex",
         "command_succeeds",
+        "path_in_scope",
     ]
     path: str | None = Field(
         default=None, description="File path (supports {sheet_num}, {workspace})"
@@ -530,6 +531,14 @@ class ValidationRule(BaseModel):
     working_directory: str | None = Field(
         default=None,
         description="Working directory for command (defaults to workspace)",
+    )
+    path_scope: str | None = Field(
+        default=None,
+        description=(
+            "Allowed root for path_in_scope validations. Supports "
+            "{workspace} and other validation context placeholders; "
+            "defaults to {workspace}."
+        ),
     )
     stage: int = Field(
         default=1,
@@ -584,7 +593,13 @@ class ValidationRule(BaseModel):
     @model_validator(mode="after")
     def _check_type_specific_fields(self) -> ValidationRule:
         """Validate that type-specific required fields are present."""
-        if self.type in ("file_exists", "file_modified", "content_contains", "content_regex"):
+        if self.type in (
+            "file_exists",
+            "file_modified",
+            "content_contains",
+            "content_regex",
+            "path_in_scope",
+        ):
             if self.path is None:
                 raise ValueError(
                     f"Validation type '{self.type}' requires 'path' field"

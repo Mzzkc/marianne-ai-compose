@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import marianne.dashboard.app as dashboard_app_module
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.dashboard import create_app
 from marianne.state.json_backend import JsonStateBackend
@@ -143,6 +144,33 @@ class TestHealthCheck:
         response = app.get("/health")
         data = response.json()
         assert data["version"] == "0.1.0"
+
+    def test_health_check_timeout_degrades(
+        self, app: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Slow conductor health probes should not stall the dashboard."""
+
+        class _FakeDaemonClient:
+            async def is_daemon_running(self) -> bool:
+                return True
+
+        async def _timed_out(coro, *_args, **_kwargs):
+            coro.close()
+            raise TimeoutError
+
+        monkeypatch.setattr(
+            dashboard_app_module,
+            "get_daemon_client",
+            lambda: _FakeDaemonClient(),
+        )
+        monkeypatch.setattr(dashboard_app_module.asyncio, "wait_for", _timed_out)
+
+        response = app.get("/health")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "degraded"
+        assert data["conductor"] == "down"
 
 
 # ============================================================================
@@ -417,6 +445,29 @@ class TestAppFactory:
         app = create_app(state_backend=state_backend)
         assert app is not None
         assert app.title == "Marianne Dashboard"
+
+    def test_create_app_with_backend_does_not_auto_connect_daemon(
+        self,
+        state_backend: JsonStateBackend,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Explicit test backends stay isolated unless daemon connection is requested."""
+        calls = 0
+
+        def _fake_daemon_client() -> object:
+            nonlocal calls
+            calls += 1
+            return object()
+
+        monkeypatch.setattr(dashboard_app_module, "_create_daemon_client", _fake_daemon_client)
+
+        isolated = create_app(state_backend=state_backend)
+        assert calls == 0
+        assert not hasattr(isolated.state, "daemon_client")
+
+        connected = create_app(state_backend=state_backend, connect_daemon=True)
+        assert calls == 1
+        assert hasattr(connected.state, "daemon_client")
 
     def test_create_app_with_state_dir(self, temp_state_dir: Path) -> None:
         """App can be created with state directory."""

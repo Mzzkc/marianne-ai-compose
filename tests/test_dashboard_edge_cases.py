@@ -68,7 +68,7 @@ workspace: ./test
     sheet:
 size: 10
 """
-        with pytest.raises(RuntimeError, match="Failed to submit job to conductor"):
+        with pytest.raises(ValueError, match="Invalid job configuration"):
             await service.start_job(config_content=invalid_yaml)
 
     async def test_start_job_config_missing_required_fields(self):
@@ -197,8 +197,8 @@ class TestJobControlAdversarial:
             status="rejected",
             message="Config validation failed on server",
         )
-        result = await service.start_job(config_content=_VALID_YAML)
-        assert result.status == "rejected"
+        with pytest.raises(RuntimeError, match="Conductor rejected job"):
+            await service.start_job(config_content=_VALID_YAML)
 
     async def test_start_job_conductor_returns_error_status(self):
         service, mock_client = _make_service()
@@ -207,8 +207,8 @@ class TestJobControlAdversarial:
             status="error",
             message="Internal daemon fault",
         )
-        result = await service.start_job(config_content=_VALID_YAML)
-        assert result.status == "error"
+        with pytest.raises(RuntimeError, match="Conductor rejected job"):
+            await service.start_job(config_content=_VALID_YAML)
 
     async def test_pause_job_generic_exception(self):
         service, mock_client = _make_service()

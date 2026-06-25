@@ -281,6 +281,7 @@ class TestValidationStats:
         result = await analytics.validation_stats()
         # 3 sheets × 3 details each = 9 total checks
         assert result["total_checks"] == 9
+        assert result["total_validations"] == 9
         # Each sheet has 2 file_exists (1 pass, 1 fail) → 3 sheets → 3 pass / 6 total = 50.0
         assert result["by_rule_type"]["file_exists"] == 50.0
         # Each sheet has 1 content_match pass → 3/3 = 100.0
@@ -334,7 +335,21 @@ class TestDurationStats:
 
         result = await analytics.duration_stats()
         assert result["avg_sheet_duration_seconds"] == 200.0
+        assert result["median_sheet_duration_seconds"] == 200.0
         assert result["total_sheets_with_duration"] == 3
+
+    @pytest.mark.asyncio
+    async def test_median_duration_even_count(self) -> None:
+        job = _make_completed_job(
+            "job-dur-even",
+            total_cost=1.0,
+            sheet_durations=[10.0, 20.0, 30.0, 40.0],
+        )
+        backend = MockStateBackend([job])
+        analytics = DaemonAnalytics(backend, cache_ttl=0.0)
+
+        result = await analytics.duration_stats()
+        assert result["median_sheet_duration_seconds"] == 25.0
 
     @pytest.mark.asyncio
     async def test_slowest_sheets(self) -> None:
@@ -443,6 +458,7 @@ class TestAnalyticsRoutes:
         assert resp.status_code == 200
         data = resp.json()
         assert "avg_sheet_duration_seconds" in data
+        assert "median_sheet_duration_seconds" in data
         assert "job_durations" in data
         assert "slowest_sheets" in data
         assert "total_sheets_with_duration" in data

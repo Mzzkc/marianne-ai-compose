@@ -51,6 +51,27 @@ def sample_yaml_config(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def sample_fleet_config(tmp_path: Path) -> Path:
+    """Create a minimal valid fleet config for run command tests."""
+    fleet_path = tmp_path / "fleet.yaml"
+    fleet_path.write_text(
+        "name: test-fleet\n"
+        "type: fleet\n"
+        "scores:\n"
+        "  - path: a.yaml\n"
+        "    group: root\n"
+        "  - path: b.yaml\n"
+        "    group: workers\n"
+        "groups:\n"
+        "  root:\n"
+        "    depends_on: []\n"
+        "  workers:\n"
+        "    depends_on: [root]\n"
+    )
+    return fleet_path
+
+
+@pytest.fixture
 def paused_state(tmp_path: Path) -> tuple[Path, CheckpointState]:
     """Create a paused job state file on disk and return (workspace, state)."""
     now = datetime.now(UTC)
@@ -94,6 +115,83 @@ class TestRunCommandExecution:
         assert data["dry_run"] is True
         assert data["job_name"] == "test-job"
         assert data["total_sheets"] == 3
+
+    def test_run_fleet_dry_run_shows_fleet_plan(
+        self,
+        sample_fleet_config: Path,
+    ) -> None:
+        """Fleet dry-run should not parse the fleet as a score."""
+        result = runner.invoke(app, ["run", str(sample_fleet_config), "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "Fleet Configuration" in result.stdout
+        assert "Fleet Plan" in result.stdout
+        assert "test-fleet" in result.stdout
+
+    def test_run_fleet_dry_run_json_output(
+        self,
+        sample_fleet_config: Path,
+    ) -> None:
+        """Fleet dry-run JSON should output fleet metadata."""
+        result = runner.invoke(
+            app,
+            ["run", str(sample_fleet_config), "--dry-run", "--json"],
+        )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["dry_run"] is True
+        assert data["type"] == "fleet"
+        assert data["fleet_name"] == "test-fleet"
+        assert data["scores"] == 2
+
+    def test_run_fleet_submits_to_daemon(
+        self,
+        sample_fleet_config: Path,
+    ) -> None:
+        """Fleet run should route the fleet config to job.submit."""
+        submitted: dict = {}
+
+        async def fake_route(method: str, params: dict) -> tuple[bool, dict]:
+            submitted["method"] = method
+            submitted["params"] = params
+            return True, {
+                "status": "accepted",
+                "job_id": "test-fleet",
+                "message": "fleet queued",
+            }
+
+        with (
+            patch(
+                "marianne.daemon.detect.is_daemon_available",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "marianne.daemon.detect.try_daemon_route",
+                side_effect=fake_route,
+            ),
+        ):
+            result = runner.invoke(
+                app,
+                ["run", str(sample_fleet_config), "--json"],
+            )
+
+        assert result.exit_code == 0
+        assert submitted["method"] == "job.submit"
+        assert submitted["params"]["config_path"].endswith("fleet.yaml")
+
+    def test_run_fleet_rejects_score_specific_options(
+        self,
+        sample_fleet_config: Path,
+    ) -> None:
+        """Fleet run should be honest about unsupported score options."""
+        result = runner.invoke(
+            app,
+            ["run", str(sample_fleet_config), "--fresh"],
+        )
+
+        assert result.exit_code == 1
+        assert "do not yet support score-specific options" in result.stdout
 
     def test_run_invalid_config_shows_error(self, tmp_path: Path) -> None:
         """Invalid YAML config should produce user-friendly error."""

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -469,6 +470,77 @@ class TestDispatchCallback:
         )
 
         # Clean up any spawned tasks so pytest's loop closes cleanly.
+        if adapter._active_tasks:
+            await asyncio.gather(
+                *adapter._active_tasks.values(), return_exceptions=True
+            )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_log_uses_effective_fallback_instrument(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Dispatch observability must report the fallback that actually runs."""
+        import marianne.daemon.baton.adapter as adapter_module
+        from marianne.daemon.baton.adapter import BatonAdapter
+
+        records: list[dict[str, Any]] = []
+
+        class CaptureLogger:
+            def info(self, event: str, *, extra: dict[str, Any] | None = None) -> None:
+                records.append({"event": event, "extra": extra or {}})
+
+            def warning(
+                self, event: str, *, extra: dict[str, Any] | None = None, **_: Any
+            ) -> None:
+                records.append({"event": event, "extra": extra or {}})
+
+            def error(
+                self, event: str, *, extra: dict[str, Any] | None = None, **_: Any
+            ) -> None:
+                records.append({"event": event, "extra": extra or {}})
+
+            def debug(self, *_: Any, **__: Any) -> None:
+                pass
+
+        monkeypatch.setattr(adapter_module, "_logger", CaptureLogger())
+
+        adapter = BatonAdapter()
+        sheets = [_make_sheet(num=1, instrument="antigravity")]
+        adapter.register_job("test-job", sheets, dependencies={})
+
+        mock_backend = AsyncMock()
+        mock_backend.execute = AsyncMock(
+            return_value=MagicMock(
+                success=True,
+                exit_code=0,
+                stdout="ok",
+                stderr="",
+                rate_limited=False,
+                duration_seconds=0.1,
+                input_tokens=1,
+                output_tokens=1,
+                model="glm-5-turbo",
+                error_message=None,
+            )
+        )
+        adapter._backend_pool = MagicMock()
+        adapter._backend_pool.acquire = AsyncMock(return_value=mock_backend)
+        adapter._backend_pool.release = AsyncMock()
+
+        state = _make_execution_state(sheet_num=1, instrument="claude-code")
+
+        await adapter._dispatch_callback("test-job", 1, state)
+
+        adapter._backend_pool.acquire.assert_awaited_once()
+        assert adapter._backend_pool.acquire.await_args.args[0] == "claude-code"
+        spawned = [
+            record for record in records
+            if record["event"] == "adapter.dispatch.spawned"
+        ]
+        assert spawned
+        assert spawned[-1]["extra"]["instrument"] == "claude-code"
+        assert spawned[-1]["extra"]["primary_instrument"] == "antigravity"
+
         if adapter._active_tasks:
             await asyncio.gather(
                 *adapter._active_tasks.values(), return_exceptions=True

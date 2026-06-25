@@ -40,6 +40,7 @@ from marianne.validation.checks.paths import (
     PreludeCadenzaFileCheck,
     SkillFilesExistCheck,
     TemplateFileExistsCheck,
+    ValidationPathScopeCheck,
     WorkspaceParentExistsCheck,
 )
 from marianne.validation.checks.techniques import (
@@ -60,6 +61,7 @@ __all__ = [
     "TemplateFileExistsCheck",
     "PreludeCadenzaFileCheck",
     "SkillFilesExistCheck",
+    "ValidationPathScopeCheck",
     # Config checks
     "FoldedCommandScalarCheck",
     "RegexPatternCheck",

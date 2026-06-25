@@ -96,7 +96,7 @@ prompt:
     - `{{ lab_workspace }}/review-1.md` — Anthropic / Claude Opus 4.7
     - `{{ lab_workspace }}/review-2.md` — Google / Gemini 3.1 Pro
     - `{{ lab_workspace }}/review-3.md` — Google / Gemma 4 (free OpenRouter)
-    - `{{ lab_workspace }}/review-4.md` — Z.AI / GLM 5.1
+    - `{{ lab_workspace }}/review-4.md` — Z.AI / GLM 5.2
     - `{{ lab_workspace }}/review-5.md` — OpenAI / GPT-5.5
 
     Each review begins with a YAML front-matter block identifying the
@@ -125,7 +125,7 @@ prompt:
         ...
       - id: google-gemma-4
         ...
-      - id: zai-glm-5.1
+      - id: zai-glm-5.2
         ...
       - id: openai-gpt-5.5
         ...
@@ -211,7 +211,7 @@ prompt:
 
     **Drove by:** instrument-catalog-build concert (catalog-build → thinking-lab → fold)
 
-    **Reviewers:** Claude Opus 4.7, Gemini 3.1 Pro, Gemma 4, GLM 5.1, GPT-5.5
+    **Reviewers:** Claude Opus 4.7, Gemini 3.1 Pro, Gemma 4, GLM 5.2, GPT-5.5
 
     **Changes adopted:**
     - <list of musician.field changes with rationale>

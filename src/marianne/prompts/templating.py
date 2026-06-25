@@ -7,7 +7,7 @@ auto-completion prompts for partial sheet recovery.
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import jinja2
 import jinja2.meta
@@ -522,17 +522,26 @@ class PromptBuilder:
         if not rules:
             return ""
 
-        sheet_num = template_context.get(SHEET_NUM_KEY, 1)
+        applicable_rules = [
+            rule for rule in rules
+            if self._condition_applies(rule.condition, template_context)
+        ]
+        if not applicable_rules:
+            return ""
+
+        previous_context = self._previous_sheet_context(template_context)
 
         # Separate new vs inherited rules: a rule is "new" if the previous
         # sheet would NOT have matched its condition
         new_rules: list[ValidationRule] = []
         inherited_rules: list[ValidationRule] = []
-        for rule in rules:
-            if self._is_new_rule_for_sheet(rule.condition, sheet_num):
-                new_rules.append(rule)
-            else:
+        for rule in applicable_rules:
+            if previous_context and self._condition_applies(
+                rule.condition, previous_context
+            ):
                 inherited_rules.append(rule)
+            else:
+                new_rules.append(rule)
 
         lines = ["---", "## Success Requirements (Validated Automatically)", ""]
         lines.append(
@@ -560,32 +569,124 @@ class PromptBuilder:
 
         return "\n".join(lines)
 
-    @staticmethod
-    def _is_new_rule_for_sheet(condition: str | None, sheet_num: int) -> bool:
-        """Check if a rule is newly applicable for the given sheet number.
+    @classmethod
+    def _condition_applies(
+        cls,
+        condition: str | None,
+        template_context: dict[str, Any],
+    ) -> bool:
+        """Return whether a validation condition applies to this prompt context.
 
-        A rule is "new" if the previous sheet (sheet_num - 1) would NOT
-        have satisfied its condition. Rules with no condition are new
-        only on sheet 1.
+        This mirrors the execution validation engine's small condition
+        language so prompt requirements do not ask the musician to satisfy
+        rules that the runtime will not check for this sheet.
+        """
+        if condition is None:
+            return True
+
+        condition = condition.strip()
+        if " and " in condition:
+            return all(
+                cls._single_condition_applies(part.strip(), template_context)
+                for part in condition.split(" and ")
+            )
+
+        return cls._single_condition_applies(condition, template_context)
+
+    _CONDITION_OPS: ClassVar[dict[str, Any]] = {
+        ">=": lambda actual, expected: actual >= expected,
+        "<=": lambda actual, expected: actual <= expected,
+        "==": lambda actual, expected: actual == expected,
+        "!=": lambda actual, expected: actual != expected,
+        ">": lambda actual, expected: actual > expected,
+        "<": lambda actual, expected: actual < expected,
+    }
+
+    @classmethod
+    def _single_condition_applies(
+        cls,
+        condition: str,
+        template_context: dict[str, Any],
+    ) -> bool:
+        match = re.match(r"(\w+)\s*(>=|<=|==|!=|>|<)\s*(-?\d+)", condition)
+        if not match:
+            return True
+
+        var_name, op_str, expected_str = match.groups()
+        actual = cls._coerce_condition_int(template_context.get(var_name))
+        if actual is None:
+            return False
+
+        op = cls._CONDITION_OPS.get(op_str)
+        if op is None:
+            return True
+        return bool(op(actual, int(expected_str)))
+
+    @staticmethod
+    def _coerce_condition_int(value: Any) -> int | None:
+        if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+            return int(value.strip())
+        if type(value) is int:
+            return value
+        return None
+
+    @classmethod
+    def _is_new_rule_for_sheet(
+        cls,
+        condition: str | None,
+        sheet_num: int,
+    ) -> bool:
+        """Backward-compatible helper for Q012 new-rule detection tests.
+
+        Prompt formatting now classifies newness by comparing current and
+        previous full template contexts. This wrapper preserves the older
+        sheet-only helper semantics for callers/tests that still exercise it
+        directly.
         """
         if condition is None:
             return sheet_num == 1
 
-        # Parse simple "sheet_num >= N" or "sheet_num == N" conditions
-        match = re.match(r"sheet_num\s*(>=|==|>)\s*(\d+)", condition.strip())
+        condition = condition.strip()
+        match = re.match(r"sheet_num\s*(>=|<=|==|!=|>|<)\s*(-?\d+)", condition)
         if not match:
-            return sheet_num == 1  # Unknown condition — treat as new on sheet 1
+            return sheet_num == 1
 
-        operator, value_str = match.groups()
-        threshold = int(value_str)
+        op_str, expected_str = match.groups()
+        expected = int(expected_str)
+        if op_str == "==":
+            return True
+        if op_str == ">=":
+            return sheet_num == expected
+        if op_str == ">":
+            return sheet_num == expected + 1
+        if op_str == "<=":
+            return sheet_num == 1
+        if op_str == "<":
+            return sheet_num == 1
+        if op_str == "!=":
+            return sheet_num == 1 if expected != 1 else sheet_num == 2
+        return sheet_num == 1
 
-        if operator == ">=":
-            return sheet_num == threshold
-        if operator == "==":
-            return True  # Exact match rules are always "new" for their sheet
-        if operator == ">":
-            return sheet_num == threshold + 1
-        return sheet_num == 1  # Fallback for unrecognized operator
+    @classmethod
+    def _previous_sheet_context(
+        cls,
+        template_context: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        sheet_num = cls._coerce_condition_int(template_context.get(SHEET_NUM_KEY))
+        if sheet_num is None or sheet_num <= 1:
+            return None
+
+        previous = dict(template_context)
+        previous[SHEET_NUM_KEY] = sheet_num - 1
+
+        stage = cls._coerce_condition_int(template_context.get("stage"))
+        instance = cls._coerce_condition_int(template_context.get("instance")) or 1
+        if stage is not None:
+            previous_stage = stage if instance > 1 else max(0, stage - 1)
+            previous["stage"] = previous_stage
+            previous["movement"] = previous_stage
+
+        return previous
 
     def _format_single_rule(
         self,
@@ -623,7 +724,7 @@ class PromptBuilder:
             lines.append(f"   - Must match pattern: `{expanded_pattern}`")
 
         elif rule.type == "command_succeeds":
-            command = rule.command or ""
+            command = self._expand_template(rule.command or "", template_context)
             display_cmd = command[:60] + "..." if len(command) > 60 else command
             lines.append(f"   - Command must succeed: `{display_cmd}`")
 

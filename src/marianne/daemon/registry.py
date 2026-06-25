@@ -377,6 +377,18 @@ class JobRegistry:
         )
         await self._db.commit()
 
+    async def get_hook_results(self, job_id: str) -> str | None:
+        """Load stored hook execution results JSON for a job."""
+        cursor = await self._db.execute(
+            "SELECT hook_results_json FROM jobs WHERE job_id = ?",
+            (job_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        result: str | None = row["hook_results_json"]
+        return result
+
     async def get_job(self, job_id: str) -> JobRecord | None:
         """Get a single job by ID."""
         cursor = await self._db.execute(

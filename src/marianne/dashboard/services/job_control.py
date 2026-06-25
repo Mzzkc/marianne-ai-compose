@@ -7,6 +7,10 @@ There is no subprocess fallback.
 
 from __future__ import annotations
 
+import asyncio
+import os
+import re
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +21,8 @@ from marianne.daemon.ipc.client import DaemonClient
 from marianne.daemon.types import JobRequest
 
 logger = get_logger("job_control")
+
+DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS = 5.0
 
 
 @dataclass
@@ -83,19 +89,34 @@ class JobControlService:
         workspace: Path | None = None,
         start_sheet: int = 1,
         self_healing: bool = False,
+        fresh: bool = False,
+        self_healing_auto_confirm: bool = False,
+        escalation: bool = False,
+        dry_run: bool = False,
+        chain_depth: int | None = None,
+        client_cwd: Path | None = None,
+        runtime_variables: dict[str, str] | None = None,
     ) -> JobStartResult:
         """Submit a new job to the conductor.
 
-        Only file-based configs are supported (the conductor requires a
-        path it can resolve).  Inline ``config_content`` is written to a
-        temporary file and the path is forwarded.
+        The conductor contract is path-based and asynchronous: accepted
+        jobs keep the submitted path in the registry and may read it after
+        this request returns. Inline ``config_content`` is therefore written
+        to a durable dashboard submissions directory, not a throwaway temp file.
 
         Args:
             config_path: Path to YAML config file.
-            config_content: Inline YAML config content (written to temp file).
+            config_content: Inline YAML config content (written to durable file).
             workspace: Override workspace directory.
             start_sheet: Starting sheet number.
             self_healing: Enable self-healing mode.
+            fresh: Start with clean state, ignoring existing checkpoints.
+            self_healing_auto_confirm: Auto-confirm self-healing fixes.
+            escalation: Pause for composer decision on retry exhaustion.
+            dry_run: Forward dry-run intent to daemon clients that honor it.
+            chain_depth: Concert chain depth for chained submissions.
+            client_cwd: Client working directory for relative path resolution.
+            runtime_variables: Per-invocation template variables.
 
         Returns:
             JobStartResult with job details.
@@ -109,21 +130,14 @@ class JobControlService:
             raise ValueError("Must provide either config_path or config_content")
 
         resolved_path = config_path
-        temp_path: str | None = None
+        config: JobConfig
 
         if config_content:
-            import os
-            import tempfile
-
-            fd, temp_path = tempfile.mkstemp(suffix=".yaml", text=True)
-            os.fchmod(fd, 0o600)
             try:
-                with open(fd, "w") as f:
-                    f.write(config_content)
-            except Exception:
-                os.close(fd)
-                raise
-            resolved_path = Path(temp_path)
+                config = JobConfig.from_yaml_string(config_content)
+            except Exception as exc:
+                raise ValueError(f"Invalid job configuration: {exc}") from exc
+            resolved_path = _write_dashboard_submission(config_content, config.name)
 
         assert resolved_path is not None
 
@@ -135,23 +149,41 @@ class JobControlService:
                 raise ValueError(f"Config path must not contain '..' traversal: {config_path}")
             if not resolved.exists():
                 raise FileNotFoundError(f"Config file not found: {config_path}")
+            resolved_path = resolved
+            try:
+                config = JobConfig.from_yaml(resolved_path)
+            except Exception as exc:
+                raise ValueError(f"Invalid job configuration: {exc}") from exc
+
+        client_cwd_path = client_cwd.resolve() if client_cwd else Path.cwd().resolve()
+        runtime_vars = runtime_variables or {}
 
         try:
             request = JobRequest(
                 config_path=resolved_path.resolve(),
                 workspace=workspace.resolve() if workspace else None,
+                fresh=fresh,
                 self_healing=self_healing,
+                self_healing_auto_confirm=self_healing_auto_confirm,
+                escalation=escalation,
                 start_sheet=start_sheet if start_sheet > 1 else None,
+                dry_run=dry_run,
+                chain_depth=chain_depth,
+                client_cwd=client_cwd_path,
+                runtime_variables=runtime_vars,
             )
-            response = await self._client.submit_job(request)
-
-            config = (
-                JobConfig.from_yaml_string(config_content)
-                if config_content
-                else JobConfig.from_yaml(resolved_path)
+            response = await asyncio.wait_for(
+                self._client.submit_job(request),
+                timeout=DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS,
             )
 
-            ws = workspace or (Path(config.workspace) if config.workspace else Path.cwd())
+            if response.status not in ("accepted", "pending"):
+                detail = response.message or f"status={response.status}"
+                raise RuntimeError(f"Conductor rejected job: {detail}")
+
+            ws = workspace or (Path(config.workspace) if config.workspace else client_cwd_path)
+            if client_cwd_path and not ws.is_absolute():
+                ws = (client_cwd_path / ws).resolve()
 
             logger.info(
                 "job_submitted_to_conductor",
@@ -170,23 +202,20 @@ class JobControlService:
 
         except DaemonNotRunningError:
             raise RuntimeError("Conductor not running. Start it with: mzt start") from None
+        except TimeoutError:
+            raise RuntimeError("Conductor request timed out.") from None
         except Exception as e:
-            if isinstance(e, (ValueError, FileNotFoundError)):
+            if isinstance(e, (ValueError, FileNotFoundError, RuntimeError)):
                 raise
             raise RuntimeError(f"Failed to submit job to conductor: {e}") from e
-        finally:
-            if temp_path is not None:
-                import os
-
-                try:
-                    os.unlink(temp_path)
-                except OSError:
-                    pass
 
     async def pause_job(self, job_id: str) -> JobActionResult:
         """Pause a running job via the conductor."""
         try:
-            await self._client.pause_job(job_id, "")
+            await asyncio.wait_for(
+                self._client.pause_job(job_id, ""),
+                timeout=DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS,
+            )
             return JobActionResult(
                 success=True,
                 job_id=job_id,
@@ -195,11 +224,16 @@ class JobControlService:
             )
         except DaemonNotRunningError:
             raise RuntimeError("Conductor not running.") from None
+        except TimeoutError:
+            raise RuntimeError("Conductor pause request timed out.") from None
 
     async def resume_job(self, job_id: str) -> JobActionResult:
         """Resume a paused job via the conductor."""
         try:
-            await self._client.resume_job(job_id, "")
+            await asyncio.wait_for(
+                self._client.resume_job(job_id, ""),
+                timeout=DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS,
+            )
             return JobActionResult(
                 success=True,
                 job_id=job_id,
@@ -208,11 +242,16 @@ class JobControlService:
             )
         except DaemonNotRunningError:
             raise RuntimeError("Conductor not running.") from None
+        except TimeoutError:
+            raise RuntimeError("Conductor resume request timed out.") from None
 
     async def cancel_job(self, job_id: str) -> JobActionResult:
         """Cancel a running or paused job via the conductor."""
         try:
-            await self._client.cancel_job(job_id, "")
+            await asyncio.wait_for(
+                self._client.cancel_job(job_id, ""),
+                timeout=DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS,
+            )
             return JobActionResult(
                 success=True,
                 job_id=job_id,
@@ -221,17 +260,24 @@ class JobControlService:
             )
         except DaemonNotRunningError:
             raise RuntimeError("Conductor not running.") from None
+        except TimeoutError:
+            raise RuntimeError("Conductor cancel request timed out.") from None
 
     async def delete_job(self, job_id: str) -> bool:
         """Delete a terminal job from the conductor registry."""
         try:
-            result = await self._client.clear_jobs(job_ids=[job_id])
+            result = await asyncio.wait_for(
+                self._client.clear_jobs(job_ids=[job_id]),
+                timeout=DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS,
+            )
             deleted: bool = bool(result.get("deleted", 0))
             if deleted:
                 logger.info("job_deleted", job_id=job_id)
             return deleted
         except DaemonNotRunningError:
             raise RuntimeError("Conductor not running.") from None
+        except TimeoutError:
+            raise RuntimeError("Conductor delete request timed out.") from None
 
     # ------------------------------------------------------------------
     # Process health (for MCP compatibility)
@@ -244,7 +290,10 @@ class JobControlService:
         as reported by the conductor.
         """
         try:
-            status_data = await self._client.get_job_status(job_id, "")
+            status_data = await asyncio.wait_for(
+                self._client.get_job_status(job_id, ""),
+                timeout=DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS,
+            )
             from marianne.core.checkpoint import CheckpointState, JobStatus
 
             state = CheckpointState(**status_data)
@@ -271,3 +320,36 @@ class JobControlService:
                 is_zombie_state=False,
                 process_exists=False,
             )
+        except TimeoutError:
+            return ProcessHealth(
+                pid=None,
+                is_alive=False,
+                is_zombie_state=False,
+                process_exists=False,
+            )
+
+
+def _dashboard_submission_dir() -> Path:
+    """Directory for durable inline dashboard submissions."""
+    override = os.environ.get("MARIANNE_DASHBOARD_SUBMISSIONS_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".marianne" / "dashboard-submissions"
+
+
+def _slugify_score_name(name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", name.strip()).strip("-._")
+    return slug or "score"
+
+
+def _write_dashboard_submission(content: str, config_name: str) -> Path:
+    """Persist inline score content long enough for conductor execution."""
+    directory = _dashboard_submission_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{_slugify_score_name(config_name)}-{uuid.uuid4().hex[:10]}.yaml"
+    path.write_text(content, encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        logger.debug("dashboard_submission_chmod_failed", path=str(path), exc_info=True)
+    return path

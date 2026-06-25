@@ -12,6 +12,7 @@ merge them with existing patterns in the global store.
 from datetime import datetime
 from pathlib import Path
 
+from marianne.core.checkpoint import SheetStatus
 from marianne.core.logging import get_logger
 from marianne.learning.global_store import GlobalLearningStore, PatternRecord
 from marianne.learning.outcomes import SheetOutcome
@@ -128,8 +129,8 @@ class PatternAggregator:
         result.priorities_updated = True
 
         # Step 5: Record pattern applications for effectiveness tracking
-        for outcome in outcomes:
-            self._record_pattern_applications(outcome, execution_ids)
+        for outcome, execution_id in zip(outcomes, execution_ids, strict=True):
+            self._record_pattern_applications(outcome, execution_id)
 
         _logger.info(
             "aggregation_complete",
@@ -238,20 +239,55 @@ class PatternAggregator:
 
     def _record_pattern_applications(
         self,
-        outcome: SheetOutcome,  # noqa: ARG002 - reserved for future use
-        execution_ids: list[str],  # noqa: ARG002 - reserved for future use
-    ) -> None:
-        """Stub: pattern application recording not yet implemented.
+        outcome: SheetOutcome,
+        execution_id: str,
+    ) -> int:
+        """Record applied PatternRecord IDs against this execution outcome.
 
-        Will correlate applied patterns with outcomes to create an
-        effectiveness feedback loop. Currently a no-op.
+        ``patterns_applied`` is display/prompt text and is intentionally not
+        reverse-matched to global records. New baton checkpoints carry stable
+        ``applied_pattern_ids``; older outcomes without IDs are skipped rather
+        than guessed.
 
         Args:
-            outcome: The sheet outcome with patterns_applied field.
-            execution_ids: List of execution IDs for this batch.
+            outcome: The sheet outcome with applied_pattern_ids populated.
+            execution_id: The execution row created for this outcome.
+
+        Returns:
+            Number of pattern application rows requested.
         """
-        # NOT YET IMPLEMENTED: correlate applied patterns with outcomes
-        pass
+        if not outcome.applied_pattern_ids:
+            return 0
+
+        validation_passed = (
+            outcome.final_status == SheetStatus.COMPLETED
+            and outcome.validation_pass_rate >= 1.0
+        )
+        pattern_led_to_success = validation_passed and outcome.success_without_retry
+        recorded = 0
+
+        for pattern_id in outcome.applied_pattern_ids:
+            try:
+                self.global_store.record_pattern_application(
+                    pattern_id=pattern_id,
+                    execution_id=execution_id,
+                    pattern_led_to_success=pattern_led_to_success,
+                    retry_count_before=0,
+                    retry_count_after=outcome.retry_count,
+                    validation_passed=validation_passed,
+                    grounding_confidence=outcome.grounding_confidence,
+                )
+                recorded += 1
+            except Exception as exc:
+                _logger.warning(
+                    "pattern_application_record_failed",
+                    pattern_id=pattern_id,
+                    execution_id=execution_id,
+                    error=str(exc),
+                    exc_info=True,
+                )
+
+        return recorded
 
     def merge_with_conflict_resolution(
         self,
@@ -476,8 +512,8 @@ class EnhancedPatternAggregator(PatternAggregator):
         result.priorities_updated = True
 
         # Step 7: Record pattern applications for effectiveness tracking
-        for outcome in outcomes:
-            self._record_pattern_applications(outcome, execution_ids)
+        for outcome, execution_id in zip(outcomes, execution_ids, strict=True):
+            self._record_pattern_applications(outcome, execution_id)
 
         _logger.info(
             "enhanced_aggregation_complete",

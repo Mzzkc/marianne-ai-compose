@@ -244,6 +244,54 @@ class TestExecuteStdin:
         )
 
     @pytest.mark.asyncio
+    async def test_large_prompt_without_stdin_contract_stays_in_argv(self) -> None:
+        """Do not force stdin for CLIs that have no declared stdin contract."""
+        profile = _make_profile(prompt_via_stdin=False, stdin_sentinel=None)
+        backend = PluginCliBackend(profile)
+        large_prompt = "x" * 40_000
+
+        mock_proc = AsyncMock()
+        mock_proc.pid = 12345
+        mock_proc.returncode = 0
+        _wire_pipes(mock_proc, stdout=b'{"result": "ok"}')
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+            await backend.execute(large_prompt, timeout_seconds=30)
+
+        call_args = list(mock_exec.call_args.args)
+        assert "-p" in call_args
+        assert large_prompt in call_args
+        assert mock_exec.call_args.kwargs.get("stdin") is None
+
+    @pytest.mark.asyncio
+    async def test_large_prompt_with_sentinel_forces_stdin(self) -> None:
+        """A declared stdin sentinel makes forced large-prompt stdin safe."""
+        profile = _make_profile(prompt_via_stdin=False, stdin_sentinel="-")
+        backend = PluginCliBackend(profile)
+        large_prompt = "x" * 40_000
+
+        mock_proc = AsyncMock()
+        mock_proc.pid = 12345
+        mock_proc.returncode = 0
+        _wire_pipes(mock_proc, stdout=b'{"result": "ok"}')
+
+        mock_stdin = MagicMock()
+        mock_stdin.write = MagicMock()
+        mock_stdin.drain = AsyncMock()
+        mock_stdin.close = MagicMock()
+        mock_proc.stdin = mock_stdin
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+            await backend.execute(large_prompt, timeout_seconds=30)
+
+        call_args = list(mock_exec.call_args.args)
+        assert "-p" in call_args
+        assert call_args[call_args.index("-p") + 1] == "-"
+        assert large_prompt not in call_args
+        assert mock_exec.call_args.kwargs.get("stdin") == asyncio.subprocess.PIPE
+        assert large_prompt.encode("utf-8") in mock_stdin.write.call_args[0][0]
+
+    @pytest.mark.asyncio
     async def test_stdin_mode_with_preamble(self) -> None:
         """Preamble + prompt should be assembled and written to stdin."""
         profile = _make_profile(prompt_via_stdin=True, stdin_sentinel="-")

@@ -67,6 +67,16 @@ class TestCompileCommandRegistration:
         result = runner.invoke(app, ["compile", "--help"])
         assert "seed-only" in result.stdout.lower()
 
+    def test_compile_help_shows_pause_before_chain_option(self) -> None:
+        """Help text mentions --pause-before-chain option."""
+        result = runner.invoke(app, ["compile", "--help"])
+        assert "pause-before-chain" in result.stdout.lower()
+
+    def test_compile_help_shows_job_prefix_option(self) -> None:
+        """Help text mentions --job-prefix option."""
+        result = runner.invoke(app, ["compile", "--help"])
+        assert "job-prefix" in result.stdout.lower()
+
 
 # ---------------------------------------------------------------------------
 # Import structure
@@ -214,6 +224,280 @@ class TestCompileDelegation:
 
         assert result.exit_code == 0
         mock_pipeline.compile_config.assert_called_once()
+
+    def test_generic_fleet_preset_filters_to_doctor_available_instruments(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Generic preset compilation uses doctor-available instruments."""
+        output_dir = tmp_path / "scores"
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.compile_config.return_value = [output_dir / "north.yaml"]
+
+        with (
+            patch(
+                "marianne.cli.commands.compile._doctor_available_instruments",
+                return_value={"cli", "claude-code"},
+            ),
+            patch(
+                "marianne_compiler.pipeline.CompilationPipeline",
+                return_value=mock_pipeline,
+            ),
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "compile",
+                    "--preset",
+                    "generic-fleet",
+                    "--output",
+                    str(output_dir),
+                ],
+            )
+
+        assert result.exit_code == 0
+        config_data = mock_pipeline.compile_config.call_args.args[0]
+        for tier_config in config_data["defaults"]["instruments"].values():
+            entries = [tier_config["primary"], *tier_config.get("fallbacks", [])]
+            assert entries
+            for entry in entries:
+                assert entry["instrument"] in {"cli", "claude-code"}
+
+    def test_doctor_available_instruments_excludes_runtime_rate_limited(
+        self,
+    ) -> None:
+        """Generic fleet compilation treats live rate limits as unavailable."""
+        from marianne.cli.commands.compile import _doctor_available_instruments
+        from marianne.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+
+        def profile(name: str, executable: str) -> InstrumentProfile:
+            return InstrumentProfile(
+                name=name,
+                display_name=name,
+                kind="cli",
+                cli=CliProfile(
+                    command=CliCommand(executable=executable),
+                    output=CliOutputConfig(format="text"),
+                ),
+            )
+
+        with (
+            patch(
+                "marianne.cli.commands.doctor._active_rate_limited_instruments",
+                return_value={"antigravity": 3600.0},
+            ),
+            patch(
+                "marianne.instruments.loader.load_all_profiles",
+                return_value={
+                    "antigravity": profile("antigravity", "agy"),
+                    "claude-code": profile("claude-code", "claude"),
+                },
+            ),
+            patch(
+                "marianne.cli.commands.doctor._check_instrument_binary",
+                return_value=(True, "/usr/bin/fake"),
+            ),
+        ):
+            available = _doctor_available_instruments()
+
+        assert "claude-code" in available
+        assert "antigravity" not in available
+
+    def test_doctor_available_instruments_excludes_execution_unsupported(
+        self,
+    ) -> None:
+        """Generic fleet compilation skips binary-ready unsupported profiles."""
+        from marianne.cli.commands.compile import _doctor_available_instruments
+        from marianne.core.config.instruments import (
+            CliCommand,
+            CliOutputConfig,
+            CliProfile,
+            InstrumentProfile,
+        )
+
+        supported = InstrumentProfile(
+            name="claude-code",
+            display_name="Claude Code",
+            kind="cli",
+            cli=CliProfile(
+                command=CliCommand(executable="claude"),
+                output=CliOutputConfig(format="text"),
+            ),
+        )
+        unsupported = InstrumentProfile(
+            name="gemini-cli",
+            display_name="Gemini CLI",
+            kind="cli",
+            execution_status="unsupported",
+            execution_status_detail="UNSUPPORTED_CLIENT",
+            cli=CliProfile(
+                command=CliCommand(executable="gemini"),
+                output=CliOutputConfig(format="text"),
+            ),
+        )
+
+        with (
+            patch(
+                "marianne.cli.commands.doctor._active_rate_limited_instruments",
+                return_value={},
+            ),
+            patch(
+                "marianne.instruments.loader.load_all_profiles",
+                return_value={
+                    "claude-code": supported,
+                    "gemini-cli": unsupported,
+                },
+            ),
+            patch(
+                "marianne.cli.commands.doctor._check_instrument_binary",
+                return_value=(True, "/usr/bin/fake"),
+            ),
+        ):
+            available = _doctor_available_instruments()
+
+        assert "claude-code" in available
+        assert "gemini-cli" not in available
+
+    def test_pause_before_chain_sets_compiler_default(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """--pause-before-chain is lowered into compiler config defaults."""
+        output_dir = tmp_path / "scores"
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.compile_config.return_value = [output_dir / "north.yaml"]
+
+        with (
+            patch(
+                "marianne.cli.commands.compile._doctor_available_instruments",
+                return_value={"cli", "gemini-cli", "claude-code"},
+            ),
+            patch(
+                "marianne_compiler.pipeline.CompilationPipeline",
+                return_value=mock_pipeline,
+            ),
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "compile",
+                    "--preset",
+                    "generic-fleet",
+                    "--output",
+                    str(output_dir),
+                    "--pause-before-chain",
+                ],
+            )
+
+        assert result.exit_code == 0
+        config_data = mock_pipeline.compile_config.call_args.args[0]
+        assert config_data["defaults"]["pause_before_chain"] is True
+
+    def test_job_prefix_sets_compiler_default(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """--job-prefix is lowered into compiler config defaults."""
+        output_dir = tmp_path / "scores"
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.compile_config.return_value = [output_dir / "bc9k-north.yaml"]
+
+        with (
+            patch(
+                "marianne.cli.commands.compile._doctor_available_instruments",
+                return_value={"cli", "gemini-cli", "claude-code"},
+            ),
+            patch(
+                "marianne_compiler.pipeline.CompilationPipeline",
+                return_value=mock_pipeline,
+            ),
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "compile",
+                    "--preset",
+                    "generic-fleet",
+                    "--output",
+                    str(output_dir),
+                    "--job-prefix",
+                    "bc9k-",
+                ],
+            )
+
+        assert result.exit_code == 0
+        config_data = mock_pipeline.compile_config.call_args.args[0]
+        assert config_data["defaults"]["job_name_prefix"] == "bc9k-"
+
+    def test_default_output_uses_project_workspace_scores_dir(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Configured project.workspace controls the default score output dir."""
+        workspace = tmp_path / "workspace"
+        config = tmp_path / "agents.yaml"
+        config.write_text(
+            yaml.dump(
+                {
+                    "project": {"name": "test", "workspace": str(workspace)},
+                    "agents": [{"name": "agent1", "focus": "testing"}],
+                }
+            )
+        )
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.compile_config.return_value = [
+            workspace / "scores" / "agent1.yaml"
+        ]
+
+        with patch(
+            "marianne_compiler.pipeline.CompilationPipeline",
+            return_value=mock_pipeline,
+        ):
+            result = runner.invoke(app, ["compile", str(config)])
+
+        assert result.exit_code == 0
+        _, output_dir = mock_pipeline.compile_config.call_args.args
+        assert output_dir == workspace / "scores"
+
+    def test_default_output_uses_top_level_workspace_scores_dir(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """The legacy top-level workspace key is still honored."""
+        workspace = tmp_path / "workspace"
+        config = tmp_path / "agents.yaml"
+        config.write_text(
+            yaml.dump(
+                {
+                    "workspace": str(workspace),
+                    "agents": [{"name": "agent1", "focus": "testing"}],
+                }
+            )
+        )
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.compile_config.return_value = [
+            workspace / "scores" / "agent1.yaml"
+        ]
+
+        with patch(
+            "marianne_compiler.pipeline.CompilationPipeline",
+            return_value=mock_pipeline,
+        ):
+            result = runner.invoke(app, ["compile", str(config)])
+
+        assert result.exit_code == 0
+        _, output_dir = mock_pipeline.compile_config.call_args.args
+        assert output_dir == workspace / "scores"
 
     def test_seed_only_calls_seed_identity(self, tmp_path: Path) -> None:
         """--seed-only delegates to pipeline.seed_identity per agent."""

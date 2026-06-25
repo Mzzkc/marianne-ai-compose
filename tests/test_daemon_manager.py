@@ -1983,6 +1983,114 @@ class TestDaemonHookExecution:
             await mgr._registry.close()
 
     @pytest.mark.asyncio
+    async def test_run_job_hook_expands_workspace_template(self, tmp_path: Path):
+        """run_job hooks support the daemon's documented {workspace} template."""
+        config = DaemonConfig(
+            max_concurrent_jobs=2,
+            state_db_path=tmp_path / "reg.db",
+        )
+        mgr = JobManager(config)
+        await mgr._registry.open()
+        mgr._service = MagicMock()
+
+        try:
+            workspace = tmp_path / "ws"
+            workspace.mkdir()
+            next_config = workspace / "next.yaml"
+            next_config.write_text(
+                "name: next-job\nsheet:\n  size: 1\n  total_items: 1\nprompt:\n  template: test\n"
+            )
+
+            await mgr._registry.register_job(
+                "parent-job",
+                Path("/tmp/parent.yaml"),
+                workspace,
+            )
+            meta = JobMeta(
+                job_id="parent-job",
+                config_path=Path("/tmp/parent.yaml"),
+                workspace=workspace,
+                status=DaemonJobStatus.COMPLETED,
+                hook_config=[
+                    {
+                        "type": "run_job",
+                        "job_path": "{workspace}/next.yaml",
+                        "fresh": True,
+                    }
+                ],
+                concert_config={"enabled": True, "max_chain_depth": 5},
+            )
+            mgr._job_meta["parent-job"] = meta
+
+            await mgr._execute_hooks_task("parent-job")
+
+            assert "next" in mgr._job_meta
+        finally:
+            await mgr._registry.close()
+
+    @pytest.mark.asyncio
+    async def test_run_job_hook_rejects_unresolved_template_syntax(
+        self,
+        tmp_path: Path,
+    ):
+        """Jinja-style hook syntax fails with a direct template error."""
+        config = DaemonConfig(
+            max_concurrent_jobs=2,
+            state_db_path=tmp_path / "reg.db",
+        )
+        mgr = JobManager(config)
+        await mgr._registry.open()
+        mgr._service = MagicMock()
+
+        try:
+            workspace = tmp_path / "ws"
+            workspace.mkdir()
+            await mgr._registry.register_job(
+                "bad-hook",
+                Path("/tmp/parent.yaml"),
+                workspace,
+            )
+            meta = JobMeta(
+                job_id="bad-hook",
+                config_path=Path("/tmp/parent.yaml"),
+                workspace=workspace,
+                status=DaemonJobStatus.COMPLETED,
+                hook_config=[
+                    {
+                        "type": "run_job",
+                        "job_path": "{{workspace}}/../next.yaml",
+                        "fresh": True,
+                    }
+                ],
+            )
+            mgr._job_meta["bad-hook"] = meta
+
+            await mgr._execute_hooks_task("bad-hook")
+
+            assert meta.status == DaemonJobStatus.FAILED
+
+            import json
+
+            cursor = await mgr._registry._db.execute(
+                "SELECT hook_results_json FROM jobs WHERE job_id = ?",
+                ("bad-hook",),
+            )
+            row = await cursor.fetchone()
+            assert row is not None
+            hook_results = json.loads(row["hook_results_json"])
+            assert hook_results[0]["success"] is False
+            assert "Unresolved template syntax" in hook_results[0]["error_message"]
+
+            status = await mgr.get_job_status("bad-hook")
+            assert status["hook_results"][0]["success"] is False
+            assert "Unresolved template syntax" in status["hook_results"][0]["error_message"]
+            assert status["config_snapshot"]["on_success"][0]["job_path"] == (
+                "{{workspace}}/../next.yaml"
+            )
+        finally:
+            await mgr._registry.close()
+
+    @pytest.mark.asyncio
     async def test_hooks_do_not_fire_on_failed_job(self, tmp_path: Path):
         """_execute_hooks_task does nothing for non-COMPLETED jobs."""
         config = DaemonConfig(
@@ -2050,7 +2158,7 @@ class TestDaemonHookExecution:
 
     @pytest.mark.asyncio
     async def test_concert_depth_enforcement(self, tmp_path: Path):
-        """Depth limit is a clean stop: chain NOT submitted, hook succeeds, parent stays COMPLETED."""
+        """Depth limit cleanly stops chain submission."""
         config = DaemonConfig(
             max_concurrent_jobs=2,
             state_db_path=tmp_path / "reg.db",
@@ -2663,6 +2771,57 @@ class TestSetJobStatusAtomicity:
         job = await manager._registry.get_job("j")
         assert job is not None
         assert job.status.value == "completed"
+
+
+class TestCancelledCheckpointStatusNormalization:
+    """Cancelled jobs must not expose stale active sheet states via status."""
+
+    @pytest.mark.asyncio
+    async def test_cancelled_registry_status_normalizes_stale_active_sheets(
+        self,
+        manager: JobManager,
+        tmp_path: Path,
+    ) -> None:
+        from marianne.core.checkpoint import (
+            CheckpointState,
+            JobStatus,
+            SheetState,
+            SheetStatus,
+        )
+
+        job_id = "cancelled-stale-sheet"
+        config_path = tmp_path / "score.yaml"
+        workspace = tmp_path / "workspace"
+        await manager._registry.register_job(job_id, config_path, workspace)
+
+        checkpoint = CheckpointState(
+            job_id=job_id,
+            job_name=job_id,
+            total_sheets=5,
+            status=JobStatus.RUNNING,
+            sheets={
+                1: SheetState(
+                    sheet_num=1,
+                    status=SheetStatus.DISPATCHED,
+                    attempt_count=1,
+                ),
+                2: SheetState(sheet_num=2, status=SheetStatus.READY),
+                3: SheetState(sheet_num=3, status=SheetStatus.PENDING),
+                4: SheetState(sheet_num=4, status=SheetStatus.COMPLETED),
+                5: SheetState(sheet_num=5, status=SheetStatus.FAILED),
+            },
+        )
+        await manager._registry.save_checkpoint(job_id, checkpoint.model_dump_json())
+        await manager._registry.update_status(job_id, "cancelled")
+
+        status = await manager.get_job_status(job_id)
+
+        assert status["status"] == "cancelled"
+        assert status["sheets"]["1"]["status"] == "cancelled"
+        assert status["sheets"]["2"]["status"] == "cancelled"
+        assert status["sheets"]["3"]["status"] == "pending"
+        assert status["sheets"]["4"]["status"] == "completed"
+        assert status["sheets"]["5"]["status"] == "failed"
 
 
 # ─── list_jobs dict-shape consistency (#253) ──────────────────────────

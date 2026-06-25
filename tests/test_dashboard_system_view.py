@@ -92,6 +92,13 @@ class TestGetSnapshot:
         snap = await view.get_snapshot()
         assert snap is None
 
+    @pytest.mark.asyncio
+    async def test_returns_none_on_timeout(self, mock_client: DaemonClient) -> None:
+        mock_client.call = AsyncMock(side_effect=TimeoutError)
+        view = DaemonSystemView(mock_client)
+        snap = await view.get_snapshot()
+        assert snap is None
+
 
 class TestGetDaemonStatus:
     @pytest.mark.asyncio
@@ -121,6 +128,13 @@ class TestRateLimitState:
     @pytest.mark.asyncio
     async def test_returns_empty_on_error(self, mock_client: DaemonClient) -> None:
         mock_client.rate_limits = AsyncMock(side_effect=ConnectionError("down"))
+        view = DaemonSystemView(mock_client)
+        result = await view.rate_limit_state()
+        assert result == {"backends": {}, "active_limits": 0}
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_timeout(self, mock_client: DaemonClient) -> None:
+        mock_client.rate_limits = AsyncMock(side_effect=TimeoutError)
         view = DaemonSystemView(mock_client)
         result = await view.rate_limit_state()
         assert result == {"backends": {}, "active_limits": 0}

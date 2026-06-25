@@ -427,6 +427,74 @@ class TestValidationFormatting:
         assert "Late file" in prompt
         assert "inherited" in prompt.lower()
 
+    def test_stage_scoped_rules_only_show_current_stage(self) -> None:
+        """Generated fleet stage-scoped validations stay sheet-local in prompts."""
+        config = PromptConfig(template="Task")
+        builder = PromptBuilder(config)
+        ctx = SheetContext(
+            sheet_num=1,
+            total_sheets=12,
+            start_item=1,
+            end_item=1,
+            workspace=Path("/ws"),
+        )
+        rules = [
+            ValidationRule(
+                type="file_exists",
+                path="{workspace}/recon.md",
+                description="Recon report",
+                condition="stage == 1",
+            ),
+            ValidationRule(
+                type="file_exists",
+                path="{workspace}/plan.md",
+                description="Plan report",
+                condition="stage == 2",
+            ),
+        ]
+
+        prompt = builder.build_sheet_prompt(ctx, validation_rules=rules)
+
+        assert "Recon report" in prompt
+        assert "Plan report" not in prompt
+
+        ctx2 = SheetContext(
+            sheet_num=2,
+            total_sheets=12,
+            start_item=2,
+            end_item=2,
+            workspace=Path("/ws"),
+        )
+        prompt2 = builder.build_sheet_prompt(ctx2, validation_rules=rules)
+
+        assert "Plan report" in prompt2
+        assert "Recon report" not in prompt2
+
+    def test_unknown_comparison_variable_is_not_prompted(self) -> None:
+        """Prompt text must not include rules the runtime cannot scope."""
+        config = PromptConfig(template="Task")
+        builder = PromptBuilder(config)
+        ctx = SheetContext(
+            sheet_num=1,
+            total_sheets=1,
+            start_item=1,
+            end_item=1,
+            workspace=Path("/ws"),
+        )
+        rules = [
+            ValidationRule(
+                type="file_exists",
+                path="{workspace}/unknown.md",
+                description="Unknown-gated file",
+                condition="unknown_stage == 1",
+            ),
+        ]
+
+        prompt = builder.build_sheet_prompt(ctx, validation_rules=rules)
+
+        assert "Success Requirements" not in prompt
+        assert "Unknown-gated file" not in prompt
+
     def test_file_exists_formatting(self) -> None:
         """file_exists rules show the expanded path."""
         config = PromptConfig(template="Task")
@@ -468,6 +536,30 @@ class TestValidationFormatting:
         ]
         prompt = builder.build_sheet_prompt(ctx, validation_rules=rules)
         assert "pytest tests/ -x" in prompt
+
+    def test_command_succeeds_expands_workspace(self) -> None:
+        """command_succeeds rules expand template variables in prompt text."""
+        config = PromptConfig(template="Task")
+        builder = PromptBuilder(config)
+        ctx = SheetContext(
+            sheet_num=1,
+            total_sheets=1,
+            start_item=1,
+            end_item=1,
+            workspace=Path("/my/ws"),
+        )
+        rules = [
+            ValidationRule(
+                type="command_succeeds",
+                command='test -f "{workspace}/output.md"',
+                description="Output exists",
+            ),
+        ]
+
+        prompt = builder.build_sheet_prompt(ctx, validation_rules=rules)
+
+        assert "/my/ws/output.md" in prompt
+        assert "{workspace}" not in prompt.split("Success Requirements")[1]
 
 
 # ---------------------------------------------------------------------------

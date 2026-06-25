@@ -12,17 +12,38 @@
          expandedSheet: null,
          sheetDetails: {},
          actionLoading: null,
+         actionError: '',
+
+         statusLabel() {
+             return (this.status || 'pending').replace(/_/g, ' ');
+         },
+
+         statusBadgeClass() {
+             const colors = {
+                 running: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+                 completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+                 failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+                 paused: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+                 cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+                 pending: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+             };
+             return colors[this.status] || colors.pending;
+         },
 
          async performAction(action) {
              this.actionLoading = action;
+             this.actionError = '';
              try {
                  const resp = await fetch('/api/jobs/{{ job.job_id }}/' + action, { method: 'POST' });
                  const data = await resp.json();
                  if (resp.ok && data.success) {
                      this.status = data.status;
+                 } else {
+                     this.actionError = data.detail || data.message || (action + ' failed');
                  }
              } catch (e) {
                  console.error('Action failed:', e);
+                 this.actionError = e.message || (action + ' failed');
              } finally {
                  this.actionLoading = null;
              }
@@ -48,13 +69,13 @@
          init() {
              {% if job.status.value in ('running', 'paused', 'pending') %}
              const source = new EventSource('/api/jobs/{{ job.job_id }}/stream');
-             source.addEventListener('job_status', (e) => {
-                 try {
-                     const data = JSON.parse(e.data);
-                     if (data.status) this.status = data.status;
-                     if (data.progress_percent !== undefined) this.progress = data.progress_percent;
-                     if (data.completed_sheets !== undefined) this.completedSheets = data.completed_sheets;
-                     if (data.total_sheets !== undefined) this.totalSheets = data.total_sheets;
+         source.addEventListener('job_status', (e) => {
+             try {
+                 const data = JSON.parse(e.data);
+                 if (data.status) this.status = data.status;
+                 if (data.progress_percent !== undefined) this.progress = data.progress_percent;
+                 if (data.completed_sheets !== undefined) this.completedSheets = data.completed_sheets;
+                 if (data.total_sheets !== undefined) this.totalSheets = data.total_sheets;
                  } catch(err) { console.debug('SSE status parse error:', err); }
              });
              source.addEventListener('job_finished', () => { location.reload(); });
@@ -82,13 +103,20 @@
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white truncate">{{ job.job_name }}</h1>
             <div class="text-xs text-gray-400 font-mono mt-0.5">{{ job.job_id }}</div>
         </div>
-        {{ status_badge(job.status.value, "md") }}
+        <span class="px-2.5 py-1 text-sm font-medium rounded-full inline-flex items-center gap-1"
+              :class="statusBadgeClass()">
+            <span x-show="status === 'running'"
+                  x-cloak
+                  class="w-1.5 h-1.5 rounded-full bg-current animate-pulse-dot"></span>
+            <span x-text="statusLabel()">{{ job.status.value }}</span>
+        </span>
     </div>
 
     <!-- Action buttons -->
     <div class="flex items-center gap-2 flex-wrap">
-        {% if job.status.value == 'running' %}
         <button @click="performAction('pause')"
+                x-show="status === 'running'"
+                x-cloak
                 :disabled="actionLoading"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors disabled:opacity-50">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,6 +125,8 @@
             <span x-text="actionLoading === 'pause' ? 'Pausing...' : 'Pause'">Pause</span>
         </button>
         <button @click="performAction('cancel')"
+                x-show="status === 'running'"
+                x-cloak
                 :disabled="actionLoading"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,8 +134,9 @@
             </svg>
             <span x-text="actionLoading === 'cancel' ? 'Cancelling...' : 'Cancel'">Cancel</span>
         </button>
-        {% elif job.status.value == 'paused' %}
         <button @click="performAction('resume')"
+                x-show="status === 'paused'"
+                x-cloak
                 :disabled="actionLoading"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-marianne-500 text-white hover:bg-marianne-600 transition-colors disabled:opacity-50">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,14 +146,15 @@
             <span x-text="actionLoading === 'resume' ? 'Resuming...' : 'Resume'">Resume</span>
         </button>
         <button @click="performAction('cancel')"
+                x-show="status === 'paused'"
+                x-cloak
                 :disabled="actionLoading"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
-            Cancel
+            <span x-text="actionLoading === 'cancel' ? 'Cancelling...' : 'Cancel'">Cancel</span>
         </button>
-        {% endif %}
 
         <div class="ml-auto flex items-center gap-2">
             <a href="/jobs/{{ job.job_id }}/logs"
@@ -133,6 +165,10 @@
                 View Logs
             </a>
         </div>
+
+        <template x-if="actionError">
+            <div class="basis-full text-xs text-red-600 dark:text-red-400" x-text="actionError"></div>
+        </template>
     </div>
 
     <!-- Info cards -->

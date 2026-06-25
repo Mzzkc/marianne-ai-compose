@@ -127,6 +127,86 @@ class TestExpandPath:
 
 
 # ===========================================================================
+# 2b. path_in_scope validation
+# ===========================================================================
+
+
+class TestPathInScopeValidation:
+    """Tests for path_in_scope canonical workspace checks."""
+
+    async def test_allows_path_inside_workspace(self, temp_workspace: Path) -> None:
+        """Paths resolving under the workspace pass."""
+        rule = _rule_no_retry(
+            type="path_in_scope",
+            path="{workspace}/outputs/result.txt",
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is True
+        assert result.results[0].actual_value == str(
+            (temp_workspace / "outputs" / "result.txt").resolve()
+        )
+
+    async def test_denies_traversal_outside_workspace(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        """Traversal that resolves outside the workspace fails."""
+        rule = _rule_no_retry(
+            type="path_in_scope",
+            path="{workspace}/../escape.txt",
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        assert result.results[0].failure_category == "security"
+        assert "outside allowed scope" in (result.results[0].error_message or "")
+
+    async def test_denies_symlink_escape(
+        self,
+        temp_workspace: Path,
+        tmp_path: Path,
+    ) -> None:
+        """A symlink inside the workspace pointing outside is denied."""
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        outside_file = outside / "secret.txt"
+        outside_file.write_text("secret")
+        link = temp_workspace / "link.txt"
+        link.symlink_to(outside_file)
+        rule = _rule_no_retry(type="path_in_scope", path="{workspace}/link.txt")
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        assert result.results[0].actual_value == str(outside_file.resolve())
+
+    async def test_custom_scope_must_contain_path(
+        self,
+        temp_workspace: Path,
+    ) -> None:
+        """A path under workspace but outside a narrower path_scope fails."""
+        allowed = temp_workspace / "allowed"
+        allowed.mkdir()
+        rule = _rule_no_retry(
+            type="path_in_scope",
+            path="{workspace}/other/result.txt",
+            path_scope="{workspace}/allowed",
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        assert result.results[0].expected_value == f"inside {allowed.resolve()}"
+
+
+# ===========================================================================
 # 3. _display_path()
 # ===========================================================================
 
@@ -1072,6 +1152,19 @@ class TestConditionChecking:
         """Unparseable conditions default to True (rule applies)."""
         engine = _make_engine(temp_workspace, {"sheet_num": 1})
         assert engine._check_condition("not_a_valid_condition") is True
+
+    def test_missing_comparison_variable_returns_false(
+        self, temp_workspace: Path
+    ) -> None:
+        """Missing comparison variables must not activate gated rules."""
+        engine = _make_engine(temp_workspace, {"sheet_num": 1})
+        assert engine._check_condition("stage == 1") is False
+
+    def test_numeric_string_condition_variable(self, temp_workspace: Path) -> None:
+        """Numeric strings from callers are compared as integers."""
+        engine = _make_engine(temp_workspace, {"sheet_num": 1, "stage": "2"})
+        assert engine._check_condition("stage == 2") is True
+        assert engine._check_condition("stage == 3") is False
 
     def test_ne_condition(self, temp_workspace: Path) -> None:
         """Not-equal condition works."""

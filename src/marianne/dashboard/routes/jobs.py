@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +35,21 @@ class StartJobRequest(BaseModel):
     config_path: str | None = Field(None, description="Path to YAML config file")
     workspace: str | None = Field(None, description="Override workspace directory")
     start_sheet: int = Field(1, ge=1, description="Starting sheet number")
+    fresh: bool = Field(False, description="Start with clean state")
     self_healing: bool = Field(False, description="Enable self-healing mode")
+    self_healing_auto_confirm: bool = Field(
+        False, description="Auto-confirm self-healing fixes"
+    )
+    escalation: bool = Field(False, description="Pause for composer decision on exhaustion")
+    dry_run: bool = Field(False, description="Validate without executing when supported")
+    chain_depth: int | None = Field(None, ge=0, description="Concert chain depth")
+    client_cwd: str | None = Field(
+        None, description="Client working directory for relative path resolution"
+    )
+    runtime_variables: dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-invocation template variables",
+    )
 
     def validate_config_source(self) -> None:
         """Validate that exactly one config source is provided."""
@@ -122,6 +137,7 @@ async def start_job(
 
         config_path = Path(request.config_path) if request.config_path else None
         workspace = Path(request.workspace) if request.workspace else None
+        client_cwd = Path(request.client_cwd) if request.client_cwd else None
 
         service = _get_job_control_service()
         result = await service.start_job(
@@ -129,17 +145,30 @@ async def start_job(
             config_content=request.config_content,
             workspace=workspace,
             start_sheet=request.start_sheet,
+            fresh=request.fresh,
             self_healing=request.self_healing,
+            self_healing_auto_confirm=request.self_healing_auto_confirm,
+            escalation=request.escalation,
+            dry_run=request.dry_run,
+            chain_depth=request.chain_depth,
+            client_cwd=client_cwd,
+            runtime_variables=request.runtime_variables,
         )
 
         return StartJobResponse.from_start_result(result)
 
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job configuration") from None
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Configuration file not found") from None
-    except RuntimeError:
-        raise HTTPException(status_code=503, detail="Conductor unavailable") from None
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc) or "Invalid job configuration",
+        ) from None
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc) or "Configuration file not found",
+        ) from None
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc) or "Conductor unavailable") from None
 
 
 @router.post("/{job_id}/pause", response_model=JobActionResponse)
@@ -278,7 +307,7 @@ async def daemon_status() -> dict[str, Any]:
     """Check if the Marianne conductor is running and get its status."""
     client = DaemonClient(_resolve_socket_path(None))
     try:
-        status = await client.status()
+        status = await asyncio.wait_for(client.status(), timeout=2.0)
         return {
             "connected": True,
             "pid": status.pid,
@@ -292,4 +321,14 @@ async def daemon_status() -> dict[str, Any]:
         return {
             "connected": False,
             "message": "Daemon not running",
+        }
+    except TimeoutError:
+        return {
+            "connected": False,
+            "message": "Daemon status probe timed out",
+        }
+    except Exception as exc:
+        return {
+            "connected": False,
+            "message": f"Daemon status unavailable: {exc}",
         }

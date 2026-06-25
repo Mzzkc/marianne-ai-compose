@@ -88,6 +88,31 @@ class TestGooseProfileConfig:
         assert goose_profile.cli is not None
         assert goose_profile.cli.command.prompt_flag == "-i"
 
+    def test_result_path_matches_current_goose_json(
+        self, goose_profile: InstrumentProfile,
+    ) -> None:
+        """Goose run JSON currently stores assistant text in messages[1]."""
+        from marianne.utils.json_path import extract_json_path
+
+        assert goose_profile.cli is not None
+        sample = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Say exactly OK"}],
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "OK"}],
+                },
+            ],
+            "metadata": {"status": "completed"},
+        }
+        path = goose_profile.cli.output.result_path
+
+        assert path == "messages[1].content[0].text"
+        assert extract_json_path(sample, path) == "OK"
+
 
 class TestPluginCliBackendBuildsGooseCommand:
     """PluginCliBackend must produce a usable argv for the goose profile."""

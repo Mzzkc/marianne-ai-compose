@@ -20,17 +20,28 @@
 #     Token counts span multiple models under stats.models.*
 #     Token paths use aggregate: true to sum across all models
 #   - Rate limit patterns: untested (need live rate limit hit to verify)
+#
+# MCP note: Gemini CLI 0.46.0 supports project-scoped MCP servers in
+# workspace `.gemini/settings.json` under top-level `mcpServers`. Marianne
+# merges generated shared-pool config into that key for one sheet execution,
+# then restores the previous settings file. A 2026-06-21 live dispatch smoke
+# was blocked before MCP startup by Google's UNSUPPORTED_CLIENT /
+# IneligibleTierError for the current individual tier; prefer Antigravity for
+# current Google CLI live runs unless Gemini API/gcloud auth is configured.
 
 name: gemini-cli
 display_name: "Gemini CLI"
 description: "Google's Gemini CLI with tool use and vision"
 kind: cli
+execution_status: unsupported
+execution_status_detail: "Default individual-tier OAuth prompt execution returns UNSUPPORTED_CLIENT / IneligibleTierError; configure API/gcloud auth and override this profile locally before using it in fleets."
 
 capabilities:
   - tool_use
   - file_editing
   - shell_access
   - vision
+  - mcp
   - structured_output
 
 default_model: gemini-3.1-pro-preview
@@ -38,6 +49,18 @@ default_timeout_seconds: 1800
 
 models:
   # ── Current generation ──
+  - name: gemini-3.5-flash
+    context_window: 1000000
+    cost_per_1k_input: 0.00015
+    cost_per_1k_output: 0.0006
+    max_output_tokens: 65536
+    max_concurrent: 8
+  - name: gemini-3.5-flash-lite
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 8
   - name: gemini-3.1-pro-preview
     context_window: 1000000
     cost_per_1k_input: 0.00125
@@ -91,6 +114,8 @@ cli:
     auto_approve_flag: "--yolo"
     output_format_flag: "-o"
     output_format_value: "json"
+    mcp_config_workspace_path: ".gemini/settings.json"
+    mcp_config_workspace_merge_key: "mcpServers"
     # Vendor sandboxing disabled: Marianne manages workspace isolation and
     # instrument security (credential filtering, workspace boundaries) at the
     # orchestration layer. Gemini's built-in sandbox restricts file access to
@@ -98,6 +123,7 @@ cli:
     # workspace subdirectory. Scores requiring locked-down environments should
     # override extra_flags per-sheet to re-enable sandboxing.
     extra_flags:
+      - "--skip-trust"
       - "--sandbox"
       - "false"
   # Interactive mode — drive the gemini TUI in a tmux session.

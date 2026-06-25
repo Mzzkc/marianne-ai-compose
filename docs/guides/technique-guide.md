@@ -39,14 +39,17 @@ techniques:
 
 ### MCP (Model Context Protocol)
 
-MCP server tools accessible via a shared pool managed by the conductor.
-MCP techniques give musicians access to external capabilities — GitHub
-operations, filesystem access, code symbol analysis — through standardized
-tool interfaces.
+MCP techniques declare tool access that can be exposed to musicians through
+technique manifests, native MCP config files where supported, and generated
+code-mode bindings for other CLI instruments. They represent external
+capabilities such as GitHub operations, filesystem access, and code symbol
+analysis.
 
-For MCP-native instruments (claude-code, gemini-cli), MCP servers are
-connected directly via the instrument's native MCP support. For non-native
-instruments, the technique router bridges access through code mode.
+Stdio MCP servers declared in daemon config are shared through
+`McpPoolManager` and `McpSocketBridge`. The bridge supports multiple socket
+clients through request-id rewriting. Baton dispatch passes generated MCP config
+files to compatible CLI backends and writes `<workspace>/techniques_rt.py` for
+code-mode access through the same shared sockets.
 
 ```yaml
 techniques:
@@ -61,18 +64,27 @@ techniques:
     phases: [all]
     config:
       server: filesystem
-  symbols-python:
+  code-symbols:
     kind: mcp
     phases: [work, inspect]
     config:
-      server: symbols-python
+      server: code-symbols
 ```
 
 ### Protocol
 
 Communication protocols enabling inter-agent interaction. Currently,
-A2A (Agent-to-Agent) is the primary protocol technique. It enables
-structured task delegation between running agents in real time.
+A2A (Agent-to-Agent) is an optional live delegation protocol. Marianne can
+register agent cards, route `@delegate target: task` output into a target
+job's in-memory inbox, and inject pending inbox tasks into A2A-enabled sheets.
+Durable coordination for shipped fleets is still handled by cadenza-backed
+shared workspace artifacts; A2A does not replace that record.
+
+A2A obeys technique phase resolution on both sides. A source sheet only has its
+`@delegate` output parsed when the `a2a` protocol is active for that sheet.
+A target job only checks and consumes its inbox when an A2A-enabled sheet is
+dispatched. Use explicit A2A check sheets when review cadence matters; use
+`phases: ["all"]` only when every sheet should check.
 
 ```yaml
 techniques:
@@ -161,7 +173,7 @@ techniques:
     kind: skill
     phases: [consolidate]
     config:
-      path: "~/.mzt/techniques/memory-protocol.md"  # Skill document path
+      path: "~/.marianne/techniques/memory-protocol.md"  # Skill document path
 ```
 
 ### Protocol Config
@@ -204,12 +216,17 @@ section, after the task description and before context injections.
 ## Compiler Integration
 
 The composition compiler (`mzt compile`) reads technique declarations from
-the agent config and produces per-sheet cadenza injections. The
-TechniqueWirer module generates:
+the agent config and emits runtime `techniques:` declarations plus per-phase
+manifest text. The baton runtime then resolves the active techniques for the
+sheet, injects skill documents once, and materializes MCP/A2A support for that
+dispatch. The TechniqueWirer module generates:
 
 1. **Technique manifests** per phase
 2. **A2A agent cards** for protocol techniques
-3. **Cadenza items** that reference skill documents and technique manifests
+3. **Runtime technique declarations** with skill document paths for dispatch-time injection
+
+Compiler-generated scores should not also add the same skill documents as
+static sheet cadenzas; that duplicates the runtime technique injection path.
 
 See the [Compile Reference](compile-reference.md) for compiler usage.
 
@@ -223,11 +240,12 @@ See the [Compile Reference](compile-reference.md) for compiler usage.
 | Phase filtering | Complete |
 | Manifest generation | Complete |
 | Compiler TechniqueWirer | Complete |
-| BatonAdapter technique resolution | Planned (Phase 2) |
-| PromptRenderer technique injection | Planned (Phase 2) |
-| Shared MCP pool | Planned (Phase 3) |
-| Code mode execution | Planned (Phase 4) |
-| A2A protocol | Planned (Phase 5) |
+| BatonAdapter technique resolution | Complete |
+| PromptRenderer technique injection | Complete |
+| Shared MCP pool | Complete for stdio native config and code-mode bridge |
+| Programmatic MCP interface | Complete |
+| Code mode execution | Complete; auto-wired for active MCP bridge sheets |
+| A2A protocol | Internal live delegation support; not durable coordination |
 
 ## Testing
 
@@ -235,11 +253,29 @@ Technique functionality is covered by:
 
 - `tests/test_technique_config.py` — TechniqueConfig model and JobConfig integration
 - `tests/test_technique_resolution.py` — Phase filtering and manifest generation
+- `tests/test_a2a_protocol.py` and `tests/test_a2a_wiring.py` — current A2A model and wiring behavior
+- `tests/test_mcp_proxy_subprocess.py` — live MCPProxyService subprocess JSON-RPC behavior
+- `tests/test_interface_gen.py` — generated MCP stubs/runtime JSON-RPC behavior
+- `tests/test_mcp_conductor_dispatch.py` — baton dispatch MCP config injection
+  and all built-in profile code-mode bridge coverage
+- `tests/test_mcp_config_injection.py`, `tests/test_mcp_pool_wiring.py`, and
+  `tests/test_mcp_pool_manager.py` — MCP config, lifecycle, and live socket multiplexing
 - `tests/test_technique_router.py` — Output classification (prose, code, tool calls, A2A)
 - `compiler/tests/test_compose_techniques.py` — Compiler TechniqueWirer
 
 Run technique tests:
 
 ```bash
-python -m pytest tests/test_technique_config.py tests/test_technique_resolution.py -v
+python -m pytest \
+  tests/test_technique_config.py \
+  tests/test_technique_resolution.py \
+  tests/test_a2a_protocol.py \
+  tests/test_a2a_wiring.py \
+  tests/test_mcp_conductor_dispatch.py \
+  tests/test_mcp_proxy_subprocess.py \
+  tests/test_mcp_config_injection.py \
+  tests/test_mcp_pool_wiring.py \
+  tests/test_mcp_pool_manager.py \
+  compiler/tests/test_compose_techniques.py \
+  -v
 ```

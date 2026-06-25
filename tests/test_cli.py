@@ -382,6 +382,55 @@ class TestStatusCommand:
         assert output_data["progress"]["percent"] == 50.0
         assert "1" in output_data["sheets"]
 
+    def test_status_json_includes_dispatch_wait_state(self, tmp_path: Path) -> None:
+        """status --json exposes scheduler waits that are not execution failures."""
+        state = CheckpointState(
+            job_id="json-dispatch-wait",
+            job_name="JSON Dispatch Wait",
+            total_sheets=2,
+            last_completed_sheet=1,
+            status=JobStatus.RUNNING,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            sheets={
+                1: SheetState(
+                    sheet_num=1,
+                    status=SheetStatus.COMPLETED,
+                    attempt_count=1,
+                    validation_passed=True,
+                ),
+                2: SheetState(
+                    sheet_num=2,
+                    status=SheetStatus.PENDING,
+                    instrument_name="claude-code",
+                    dispatch_blocked_reason="model_concurrency",
+                    dispatch_blocked_at=datetime.now(UTC),
+                    dispatch_blocked_details={
+                        "model_key": "claude-code:glm-5-Turbo",
+                        "model_count": 4,
+                        "model_limit": 4,
+                    },
+                ),
+            },
+        )
+
+        _seed_registry(tmp_path, state)
+
+        result = runner.invoke(
+            app, ["status", "json-dispatch-wait", "--json", "--workspace", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+
+        output_data = json.loads(result.stdout)
+        sheet = output_data["sheets"]["2"]
+        assert sheet["dispatch_blocked_reason"] == "model_concurrency"
+        assert sheet["dispatch_blocked_details"]["model_key"] == (
+            "claude-code:glm-5-Turbo"
+        )
+        assert sheet["dispatch_wait"] == (
+            "waiting for model capacity: claude-code:glm-5-Turbo (4/4)"
+        )
+
     def test_status_json_output_for_missing_job(self, tmp_path: Path) -> None:
         """Test status --json outputs JSON error for missing job."""
         workspace = tmp_path / "empty_ws2"

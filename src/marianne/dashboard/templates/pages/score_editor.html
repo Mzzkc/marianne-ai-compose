@@ -2,35 +2,42 @@
 {% block title %}Score Editor — Marianne{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/codemirror/codemirror.min.css">
+<link rel="stylesheet" href="/static/codemirror/codemirror.min.css?v=theme-20260621">
 <style>
-    .CodeMirror {
+    #editor-container {
         height: 100%;
-        font-size: 13px;
+    }
+    #editor-container .cm-editor {
+        min-height: 500px;
+        height: 100%;
+        border: 0;
         border-radius: 0 0 0.5rem 0.5rem;
+        background: #ffffff !important;
+        color: #1f2937 !important;
     }
-    .dark .CodeMirror {
-        background: #1f2937;
-        color: #e5e7eb;
+    #editor-container .cm-content {
+        min-height: 476px;
+        background: #ffffff !important;
+        color: #1f2937 !important;
+        caret-color: #1f2937 !important;
     }
-    .dark .CodeMirror-gutters {
-        background: #1f2937;
-        border-right-color: #374151;
+    html.dark #editor-container .cm-editor,
+    html.dark #editor-container .cm-content {
+        background: #1f2937 !important;
+        color: #f9fafb !important;
     }
-    .dark .CodeMirror-linenumber {
-        color: #6b7280;
+    html.dark #editor-container .cm-content {
+        caret-color: #f9fafb !important;
     }
-    .dark .CodeMirror-cursor {
-        border-left-color: #e5e7eb;
-    }
-    .dark .CodeMirror-selected {
-        background: #374151;
+    html.dark #editor-container .cm-cursor,
+    html.dark #editor-container .cm-dropCursor {
+        border-left-color: #f9fafb !important;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div x-data="scoreEditor()" x-init="init()" class="space-y-4">
+<div x-data="scoreEditor()" class="space-y-4">
     <!-- Page header -->
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Score Editor</h1>
@@ -343,7 +350,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/codemirror/codemirror.min.js"></script>
+<script src="/static/codemirror/codemirror.min.js?v=theme-20260621"></script>
 <script>
 function scoreEditor() {
     return {
@@ -377,7 +384,9 @@ function scoreEditor() {
         ].join('\n'),
 
         init() {
+            if (this.editor) return;
             this.$nextTick(() => {
+                if (this.editor) return;
                 const container = document.getElementById('editor-container');
                 if (!container || typeof CodeMirror6 === 'undefined') return;
 

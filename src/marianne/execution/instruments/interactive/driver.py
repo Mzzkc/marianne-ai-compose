@@ -67,6 +67,7 @@ DriverOutcome = Literal[
     "timeout",          # sheet deadline reached
     "session_lost",     # pane/session died or tmux control failed mid-drive
     "startup_failed",   # never reached the ready prompt
+    "provider_error",   # verified provider/account/runtime error screen
 ]
 
 
@@ -260,7 +261,11 @@ class InteractiveSessionDriver:
             )
 
             # ── HARVEST (exactly once — the single return below) ──────
-            final_screen = await self._final_screen(session, last_screen)
+            final_screen = (
+                last_screen
+                if outcome == "provider_error"
+                else await self._final_screen(session, last_screen)
+            )
             detail: str | None = None
             if outcome == "nudges_exhausted":
                 detail = (
@@ -271,6 +276,8 @@ class InteractiveSessionDriver:
                 detail = f"attempt deadline ({timeout_seconds}s) reached"
             elif outcome == "session_lost":
                 detail = "agent session died before signalling completion"
+            elif outcome == "provider_error":
+                detail = "interactive provider error screen detected"
             return DriverResult(
                 outcome=outcome,
                 final_screen=final_screen,
@@ -408,6 +415,15 @@ class InteractiveSessionDriver:
                 transcript_live = await self._enforce_transcript_cap(
                     session, transcript_path,
                 )
+
+            provider_error_kind = self._provider_error_screen_kind(screen)
+            if provider_error_kind is not None:
+                _logger.warning(
+                    "interactive_provider_error_screen",
+                    session=session,
+                    kind=provider_error_kind,
+                )
+                return "provider_error", last_screen, total_nudges
 
             busy = any(r.search(screen) for r in busy_res)
             work_area = self._work_area(screen)
@@ -554,6 +570,25 @@ class InteractiveSessionDriver:
         lines = screen.splitlines()
         return "\n".join(lines[:-tail]) if len(lines) > tail else ""
 
+    def _provider_error_screen_kind(self, screen: str) -> str | None:
+        """Return the verified provider error kind currently on screen.
+
+        These patterns are profile-owned and deliberately separate from the
+        broad CLI stdout/stderr classifiers. The driver checks them before
+        idle handling so a prompt-returning quota/auth screen cannot be
+        nudged as if the agent merely stopped working.
+        """
+        checks = (
+            ("rate_limit", self._config.rate_limit_screen_patterns),
+            ("auth", self._config.auth_error_screen_patterns),
+            ("crash", self._config.crash_screen_patterns),
+            ("capacity", self._config.capacity_screen_patterns),
+        )
+        for kind, patterns in checks:
+            if any(re.search(pattern, screen, re.IGNORECASE) for pattern in patterns):
+                return kind
+        return None
+
     @staticmethod
     def _remove_marker(marker_path: Path) -> None:
         """Delete exactly this attempt's marker if present (pre-submit)."""
@@ -614,26 +649,65 @@ class InteractiveSessionDriver:
         real outcome (or cancellation) is preserved. Uses shield-free
         sequential awaits; each tmux call has its own short timeout.
         """
-        for op_name, op in (
-            ("pipe_pane_off", self._tmux.pipe_pane_off),
-            ("kill_session", self._tmux.kill_session),
-        ):
+        try:
+            await self._tmux.pipe_pane_off(session)
+        except TmuxError as e:
+            _logger.warning(
+                "interactive_cleanup_step_failed",
+                session=session,
+                step="pipe_pane_off",
+                error=str(e),
+            )
+        except asyncio.CancelledError:
             try:
-                await op(session)
+                await asyncio.shield(self._force_teardown(session))
+            finally:
+                raise
+
+        try:
+            await self._verified_kill_session(session)
+        except asyncio.CancelledError:
+            try:
+                await asyncio.shield(self._force_teardown(session))
+            finally:
+                raise
+
+    async def _verified_kill_session(self, session: str) -> None:
+        """Kill a tmux session and verify it disappeared.
+
+        A single tmux ``kill-session`` call can fail silently when invoked with
+        ``allow_failure=True`` at the tmux-control layer. Verification keeps a
+        completed/failed attempt from leaving an agent alive to keep mutating
+        the workspace after the conductor advances.
+        """
+        for attempt in range(3):
+            try:
+                await self._tmux.kill_session(session)
             except TmuxError as e:
                 _logger.warning(
                     "interactive_cleanup_step_failed",
                     session=session,
-                    step=op_name,
+                    step="kill_session",
                     error=str(e),
                 )
-            except asyncio.CancelledError:
-                # Cancelled mid-cleanup: finish the remaining teardown
-                # steps in a shielded scope, then re-raise.
-                try:
-                    await asyncio.shield(self._force_teardown(session))
-                finally:
-                    raise
+            try:
+                if not await self._tmux.has_session(session):
+                    return
+            except TmuxError as e:
+                _logger.warning(
+                    "interactive_cleanup_step_failed",
+                    session=session,
+                    step="has_session",
+                    error=str(e),
+                )
+                return
+            if attempt < 2:
+                await asyncio.sleep(0.15 * (attempt + 1))
+
+        _logger.error(
+            "interactive_cleanup_session_survived",
+            session=session,
+        )
 
     async def _force_teardown(self, session: str) -> None:
         """Last-resort teardown used when cleanup itself is cancelled."""

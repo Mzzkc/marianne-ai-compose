@@ -40,6 +40,26 @@ default_timeout_seconds: 1800
 # a version has a much larger context window that changes cost profile).
 # Tier rationale: Haiku (cheap, fast) → 8, Sonnet (mid) → 6, Opus (expensive) → 4.
 models:
+  # ── Gateway-routed models (Anthropic-compatible Claude Code gateway) ──
+  - name: "glm-5.2[1m]"
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 4
+  - name: glm-5-Turbo
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: glm-4.7
+    context_window: 200000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 8
+
   # ── Sonnet tier (mid-range: fast, capable, cost-effective) ──
   - name: claude-sonnet-4-20250514
     context_window: 200000
@@ -110,6 +130,12 @@ cli:
     # Prevents OPENAI_API_KEY, GOOGLE_API_KEY, etc. from leaking to Anthropic's CLI.
     required_env:
       - ANTHROPIC_API_KEY
+      - ANTHROPIC_BASE_URL
+      - ANTHROPIC_AUTH_TOKEN
+      - ANTHROPIC_DEFAULT_OPUS_MODEL
+      - ANTHROPIC_DEFAULT_SONNET_MODEL
+      - ANTHROPIC_DEFAULT_HAIKU_MODEL
+      - ANTHROPIC_SMALL_FAST_MODEL
       - CLAUDE_CODE_USE_BEDROCK
       - CLAUDE_CODE_USE_VERTEX
       - AWS_ACCESS_KEY_ID
@@ -127,6 +153,8 @@ cli:
     system_prompt_flag: "--system-prompt"
     allowed_tools_flag: "--allowedTools"
     mcp_config_flag: "--mcp-config"
+    mcp_config_prefix_args:
+      - "--strict-mcp-config"
     # Disable MCP servers by default to prevent child process explosion (F-271).
     # --strict-mcp-config means "only use servers from --mcp-config";
     # passing empty config disables all MCP servers.
@@ -158,6 +186,15 @@ cli:
       - "esc to interrupt"
       - '[·✻✽✶]\s+\w+…?\s*\(\d+'
       - '…\s*\(\d+m?\s?\d*s'
+    # Verified provider/account quota screens. These are checked by the
+    # interactive driver before idle nudges so a prompt-returning 429 does
+    # not get treated as an agent that merely stopped working.
+    rate_limit_screen_patterns:
+      - 'API Error: Request rejected\s+\(429\)'
+      - "You've hit your limit"
+      - "API Error: Rate limit"
+      - "Usage limit reached"
+      - 'Your limit will reset at\s+\d{4}-\d{2}-\d{2}'
     quiet_seconds: 15.0
     poll_interval_seconds: 2.0
     startup_timeout_seconds: 90.0

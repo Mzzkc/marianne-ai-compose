@@ -58,26 +58,15 @@ code can `import techniques_rt` and call into it.
 
 ```python
 # techniques_rt.py — emitted by the generator
-import asyncio
 import json
 import socket
 
-async def _mcp_call(socket_path, method, params):
-    reader, writer = await asyncio.open_unix_connection(socket_path)
-    request = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-               "params": {"name": method, "arguments": params}}
-    writer.write((json.dumps(request) + "\n").encode())
-    await writer.drain()
-    response = await reader.readline()
-    writer.close()
-    await writer.wait_closed()
-    return json.loads(response)
+class _MCPServer:
+    def raw(self, method: str, params: dict | None = None) -> object: ...
+    def list_tools(self) -> object: ...
+    def call(self, tool: str, arguments: dict | None = None) -> object: ...
 
-class workspace:
-    @staticmethod
-    async def read(path: str) -> str:
-        return await _mcp_call("/tmp/mzt/mcp/workspace.sock", "read", {"path": path})
-    # ... other methods
+filesystem = _MCPServer("filesystem", "/tmp/mzt/mcp/filesystem.sock")
 ```
 
 Stub signatures and runtime signatures match exactly so agent code
@@ -113,15 +102,17 @@ class MCPToolSpec:
 
 ### `TechniqueDeclaration`
 
-Describes one class the agent sees. `name` doubles as the MCP
-server identifier for socket lookup.
+Describes one generated interface. `name` is the score-level technique name;
+`server_name` is optional and points at the concrete shared-pool server when it
+differs from the technique alias.
 
 ```python
 @dataclass(frozen=True)
 class TechniqueDeclaration:
-    name: str                     # class name + MCP server key
+    name: str                     # technique alias / generated object name
     description: str              # class-level docstring
     tools: list[MCPToolSpec]      # methods
+    server_name: str | None       # concrete MCP pool server key
 ```
 
 ### `InterfaceGenerator`
@@ -145,8 +136,8 @@ class InterfaceGenerator:
 - `generate_stubs` returns a prompt-safe Python module source string.
   Every method is `def name(...) -> T: ...` — type hints plus ellipsis.
 - `generate_implementation` returns a runtime module source string
-  suitable for `<workspace>/techniques_rt.py`. Requires `socket_paths`
-  mapping each technique name to its Unix socket path in the sandbox.
+  suitable for `<workspace>/techniques_rt.py`. `socket_paths` may be keyed by
+  technique name, generated Python name, or concrete MCP server name.
 
 ### `estimate_tokens`
 
@@ -184,13 +175,15 @@ it.
 
 ## MCP-Native vs. Non-Native Instruments
 
-The generator produces the same stubs for every instrument, but the
-runtime module is only **used** by non-MCP-native instruments:
+The generator produces the same stubs for every instrument. Native MCP config
+and code-mode bindings are both available when an MCP technique resolves:
 
-- **MCP-native** (claude-code, gemini-cli): read the stubs from the
-  prompt as documentation of what they can call, then call MCP
-  directly via their native tool-use support. They never import
-  `techniques_rt`.
+- **MCP-native** instruments: receive native MCP config when their profile has
+  `mcp_config_flag` or `mcp_config_workspace_path`. Profiles whose MCP servers
+  live inside a broader JSON settings file can also set
+  `mcp_config_workspace_merge_key` so only that key is replaced during the run.
+  They may call MCP directly, and can still return code that imports
+  `techniques_rt` when that is the better fit.
 - **Non-native** (OpenRouter free-tier models, Ollama): write code
   against the stubs. Code mode imports `techniques_rt` and proxies
   through the shared MCP pool.
@@ -201,8 +194,10 @@ instrument will actually run it.
 
 ## JSON-RPC Round-Trip Contract
 
-The runtime module's `_mcp_call` helper speaks minimal JSON-RPC 2.0
-over a Unix socket. One line in, one line out, newline-delimited:
+The runtime module speaks minimal JSON-RPC 2.0 over a Unix socket. It opens a
+connection, sends `initialize`, sends `notifications/initialized`, and then
+sends the requested MCP method. Newline framing is used with the pool bridge,
+and content-length responses are accepted.
 
 ```
 → {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read","arguments":{"path":"x.md"}}}\n
@@ -215,9 +210,8 @@ standard JSON-RPC `error` field — the runtime module raises
 `RuntimeError` on error responses so agent code can `try/except` it
 naturally.
 
-Only stdlib `asyncio` + `json` + `socket` are required. The sandbox
-does **not** need Marianne installed; the emitted runtime is
-self-contained.
+Only stdlib `json` + `socket` are required. The sandbox does **not** need
+Marianne installed; the emitted runtime is self-contained.
 
 ## Token Budget
 
@@ -232,18 +226,22 @@ definitions would consume ~3000 tokens for the same capability
 surface — a 6× cost multiplier. The generator's terseness is what
 makes free-tier code mode viable.
 
-## Error Handling at Generation Time
+## Generation-Time Degradation
 
-Two error classes surface at generation time rather than runtime:
+The generator is intentionally tolerant of partially resolved technique sets:
 
-1. **Missing socket paths.** If `generate_implementation` is called
-   with a `socket_paths` dict missing an entry for a declared
-   technique, it raises `ValueError` immediately. The composer sees
-   a clean error at compile time; the sandbox never sees broken
-   imports.
-2. **Name collisions.** Two declarations with the same `name` raise
-   `ValueError`. This protects against copy-paste bugs in technique
-   YAML.
+- **Missing socket paths.** `generate_implementation` only emits runtime
+  objects for declarations that resolve to a socket path keyed by technique
+  name, generated Python name, or concrete server name. If none resolve, it
+  returns an empty string and the dispatcher does not write
+  `techniques_rt.py`. This lets non-code or non-MCP sheets continue without
+  broken imports while validation/dispatch logs can still report the missing
+  runtime surface.
+- **Name collisions.** Python object names are sanitized and disambiguated
+  with numeric suffixes (`filesystem`, `filesystem_2`, ...). Score-level
+  technique names remain distinct in the declaration map, so copy-paste
+  mistakes should be caught by score review/validation rather than by the
+  code generator silently rejecting a whole phase.
 
 Runtime errors — network failures, MCP server crashes, tool-level
 exceptions — propagate through the JSON-RPC error path into the
@@ -251,13 +249,13 @@ agent's code, where they become ordinary Python exceptions.
 
 ## Testing
 
-The generator has 22 tests in `tests/test_interface_gen.py`:
+The generator is covered by `tests/test_interface_gen.py`:
 
 - Stub generation from simple and complex declarations
 - Implementation generation with JSON-RPC round-trip against a mock
   MCP server
-- Missing-socket-path validation
-- Duplicate-name validation
+- Missing-socket-path degradation
+- Sanitized-name disambiguation
 - Token budget for a realistic four-technique config
 - Stub-vs-implementation signature parity (method names, parameter
   names, type hints all match)

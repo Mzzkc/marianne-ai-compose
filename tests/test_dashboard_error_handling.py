@@ -65,14 +65,14 @@ class TestHTTPErrorCodes:
         assert response.status_code == 400
         error = response.json()
         assert "detail" in error
-        assert error["detail"] == "Invalid job configuration"
+        assert "Must provide either" in error["detail"]
 
         # Both config sources provided
         response = client.post(
             "/api/jobs", json={"config_content": "test: config", "config_path": "/some/path.yaml"}
         )
         assert response.status_code == 400
-        assert response.json()["detail"] == "Invalid job configuration"
+        assert "Cannot provide both" in response.json()["detail"]
 
         # Invalid start_sheet (negative)
         response = client.post(

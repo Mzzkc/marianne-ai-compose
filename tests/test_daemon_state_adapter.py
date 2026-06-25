@@ -8,9 +8,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from marianne.core.checkpoint import CheckpointState, JobStatus
-from marianne.daemon.exceptions import DaemonError
+from marianne.daemon.exceptions import DaemonError, DaemonNotRunningError
 from marianne.daemon.ipc.client import DaemonClient
-from marianne.dashboard.state.daemon_adapter import DaemonStateAdapter
+from marianne.dashboard.state.daemon_adapter import (
+    DAEMON_STATE_MAX_ENRICHED_JOBS,
+    DaemonStateAdapter,
+)
 
 
 @pytest.fixture
@@ -65,6 +68,15 @@ async def test_load_returns_none_for_unknown_job(
     assert result is None
 
 
+@pytest.mark.asyncio
+async def test_load_returns_none_on_timeout(
+    adapter: DaemonStateAdapter, mock_client: AsyncMock
+) -> None:
+    mock_client.get_job_status.side_effect = TimeoutError
+    result = await adapter.load("slow-job")
+    assert result is None
+
+
 # ------------------------------------------------------------------
 # list_jobs()
 # ------------------------------------------------------------------
@@ -111,6 +123,62 @@ async def test_list_jobs_handles_individual_failure(
     assert results[1].job_id == "bad-job"
     assert results[1].status == JobStatus.FAILED
     assert results[1].total_sheets == 1  # minimal fallback
+
+
+@pytest.mark.asyncio
+async def test_list_jobs_handles_individual_timeout(
+    adapter: DaemonStateAdapter, mock_client: AsyncMock
+) -> None:
+    """Slow enrichment falls back to roster metadata instead of blocking."""
+    mock_client.list_jobs.return_value = [
+        {
+            "job_id": "slow-job",
+            "status": "completed",
+            "submitted_at": None,
+            "total_sheets": 4,
+        },
+    ]
+    mock_client.get_job_status.side_effect = TimeoutError
+
+    results = await adapter.list_jobs()
+
+    assert len(results) == 1
+    assert results[0].job_id == "slow-job"
+    assert results[0].status == JobStatus.COMPLETED
+    assert results[0].total_sheets == 4
+    assert results[0].last_completed_sheet == 4
+
+
+@pytest.mark.asyncio
+async def test_list_jobs_caps_enrichment(
+    adapter: DaemonStateAdapter, mock_client: AsyncMock
+) -> None:
+    roster = [
+        {"job_id": f"job-{i}", "status": "running", "submitted_at": None}
+        for i in range(DAEMON_STATE_MAX_ENRICHED_JOBS + 2)
+    ]
+    mock_client.list_jobs.return_value = roster
+    mock_client.get_job_status.side_effect = [
+        _make_checkpoint_data(f"job-{i}", "running")
+        for i in range(DAEMON_STATE_MAX_ENRICHED_JOBS)
+    ]
+
+    results = await adapter.list_jobs()
+
+    assert len(results) == DAEMON_STATE_MAX_ENRICHED_JOBS + 2
+    assert mock_client.get_job_status.await_count == DAEMON_STATE_MAX_ENRICHED_JOBS
+    assert results[-1].job_id == f"job-{DAEMON_STATE_MAX_ENRICHED_JOBS + 1}"
+
+
+@pytest.mark.asyncio
+async def test_list_jobs_returns_empty_when_daemon_unavailable(
+    adapter: DaemonStateAdapter, mock_client: AsyncMock
+) -> None:
+    mock_client.list_jobs.side_effect = DaemonNotRunningError("socket unavailable")
+
+    results = await adapter.list_jobs()
+
+    assert results == []
 
 
 # ------------------------------------------------------------------
