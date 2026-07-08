@@ -12,11 +12,11 @@ cd marianne-ai-compose
 pip install -e ".[daemon]"     # Marianne + the conductor daemon
 ```
 
-Try it end-to-end (free — runs on a local model, no account needed):
+Try it end-to-end through the same first-run path the README uses:
 
 ```bash
 mzt start                                     # start the conductor
-mzt run examples/getting-started/hello.yaml   # orchestrate a tiny website
+mzt run examples/getting-started/hello-setup.yaml  # discover an instrument and run hello
 open workspaces/hello/the-sky-library.html    # see the result
 ```
 
@@ -73,7 +73,11 @@ debuggability, and a precise report is itself a contribution.
 
 ## Vocabulary
 
-The orchestral metaphor is load-bearing: a **score** is a job config, a **sheet**
-is one execution stage, a **concert** chains scores, the **conductor** is the
-daemon, **musicians** are AI agents, **instruments** are backends/CLIs, and
-**techniques** are tools/skills. Use these terms in user-facing output.
+The orchestral metaphor is load-bearing: a **composer** can be human, an AI
+person, or an agent system; a **score** is declarative YAML for orchestrated
+work; a **sheet** is one concrete execution unit; a **concert** chains scores;
+the **conductor** is the daemon; **musicians** are AI agents; **instruments**
+are configured execution profiles or wrapped CLIs/APIs; and **techniques** are
+tools, MCP servers, or skills. Use these terms in user-facing output. Keep
+machine names such as `job_id` where they are real schema/API identifiers, but
+bridge them as runtime handles for submitted scores.

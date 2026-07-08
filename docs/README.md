@@ -2,7 +2,7 @@
 
 **If it runs in a CLI, Marianne can orchestrate it.**
 
-Marianne is a universal asynchronous orchestrator. You write a declarative YAML score describing what you want built, analyzed, or created. Marianne decomposes it into sheets, executes them through any combination of AI instruments, validates every output against acceptance criteria, and feeds learned patterns forward. The system doesn't wait. The human conducts.
+Marianne is a universal asynchronous orchestrator. A composer writes a declarative YAML score describing what should be built, analyzed, or created. Marianne decomposes it into sheets, executes them through any combination of AI instruments, validates every output against acceptance criteria, and feeds learned patterns forward. The conductor owns execution state; the composer directs the work.
 
 ```bash
 pip install -e ".[daemon]"
@@ -30,13 +30,17 @@ Full-stack SaaS applications from YAML. Parallel backend and frontend tracks val
 
 PRISMA-compliant academic literature reviews. Strategic planning with multi-framework analysis. Training data curation with inter-annotator agreement. Nonfiction book manuscripts. Contract generation with cross-reference validation. Recruitment screening with weighted criteria. Dinner party logistics. World-building.
 
-43 example scores ship with the project. Not demos — production patterns.
+The examples directory contains runnable patterns across engineering, research,
+creative work, product work, and operations. Its README carries the current
+validation status for the checked-in examples.
 
 ---
 
 ## The Instrument System
 
-Marianne ships with 10+ instruments and an open plugin architecture for adding more.
+Marianne ships with built-in instrument profiles and an open plugin architecture
+for adding more. Run `mzt instruments list` for the current catalog and
+readiness state.
 
 **Built-in instruments:**
 
@@ -49,7 +53,8 @@ Marianne ships with 10+ instruments and an open plugin architecture for adding m
 | `goose` | Goose — autonomous coding agent |
 | `cline-cli` | Cline CLI |
 
-**Plus 4 native backends:** Claude CLI, Anthropic API, Ollama (local models), and Recursive Light.
+Some instruments use native Python implementations and others wrap CLIs. Treat
+instrument readiness as current command evidence, not a static count.
 
 **Wrap any CLI tool as an instrument.** Write a short YAML profile defining the command, arguments, environment variables, and model mapping. Drop it in `~/.marianne/instruments/` or `.marianne/instruments/`. Marianne discovers it automatically.
 
@@ -84,7 +89,7 @@ The conductor handles:
 - **Learning** — records outcomes, detects patterns, improves future executions
 - **Conductor clones** — isolated test conductors via `--conductor-clone` for safe experimentation
 
-The human conducts. Pause a running score, modify its config, resume. Cancel one score while others keep running. Monitor everything from the terminal or the web dashboard. The conductor is the single execution authority — no split-brain, no orphaned agents, no corrupted state.
+A composer conducts. Pause a running score, modify its config, resume. Cancel one score while others keep running. Monitor everything from the terminal or the web dashboard. The conductor is the single execution authority — no split-brain, no orphaned agents, no corrupted state.
 
 ```bash
 mzt pause my-score         # Pause gracefully
@@ -99,7 +104,10 @@ mzt stop                   # Stop conductor (only when no scores are running)
 
 Marianne developed itself. 24 autonomous self-evolution cycles completed — each one a score that analyzed the codebase, identified improvements, implemented changes, ran tests, and validated results. The system that runs your scores is the system that built itself.
 
-The project includes 258 source files, 362 test files, and 3,384+ individual tests. The learning system has accumulated patterns across every execution. When Marianne encounters a problem it's seen before, it knows what worked.
+For current source and test counts, inspect the repository and CI output rather
+than a static documentation number. The learning system records execution
+outcomes and can feed useful patterns forward when the conductor has evidence
+for them.
 
 This isn't a prototype. It's an R&D factory that happens to also be the product.
 
@@ -354,7 +362,7 @@ mzt instruments list        # See available instruments
 |---------|---------|
 | `mzt diagnose <id>` | Comprehensive diagnostic report |
 | `mzt errors <id>` | Color-coded error history |
-| `mzt logs <id>` | View or tail log files |
+| `mzt logs <id>` | View or tail log sources |
 | `mzt history <id>` | Execution history from SQLite |
 | `mzt recover <id>` | Re-validate without re-execution |
 

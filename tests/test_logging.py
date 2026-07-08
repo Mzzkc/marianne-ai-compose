@@ -1492,6 +1492,22 @@ class TestConfigureLoggingWithCompression:
 class TestLogsCLI:
     """Tests for the mzt logs CLI command."""
 
+    def test_log_follower_formats_numeric_timestamps(self, tmp_path: Path):
+        """Observer JSONL numeric timestamps render without crashing."""
+        from marianne.cli.commands.diagnose import LogFollower
+
+        follower = LogFollower(log_path=tmp_path / "observer.jsonl")
+        formatted = follower.format_entry(
+            {
+                "timestamp": 1783497732.0187452,
+                "event": "observer.process_spawned",
+                "job_id": "alpha",
+            }
+        )
+
+        assert "observer.process_spawned" in formatted
+        assert "alpha" in formatted
+
     def test_logs_command_exists(self):
         """Test that the logs command is registered."""
         from typer.testing import CliRunner
@@ -1626,6 +1642,68 @@ class TestLogsCLI:
         assert "event_1" in result.output
         assert "event_3" in result.output
         assert "event_2" not in result.output
+
+    def test_logs_uses_daemon_registry_sources_for_score_id(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Score-id logs resolve daemon sources before the current workspace."""
+        import asyncio
+        import importlib
+        import json
+        from datetime import UTC, datetime
+
+        from typer.testing import CliRunner
+
+        from marianne.cli import app
+        from marianne.core.checkpoint import CheckpointState, JobStatus
+        from marianne.daemon.registry import JobRegistry
+
+        diagnose_cmd = importlib.import_module("marianne.cli.commands.diagnose")
+        db_path = tmp_path / "daemon-state.db"
+        workspace = tmp_path / "score-workspace"
+        workspace.mkdir()
+        empty_cwd = tmp_path / "empty-cwd"
+        empty_cwd.mkdir()
+        log_file = tmp_path / "conductor" / "conductor.log"
+        log_file.parent.mkdir()
+        log_file.write_text(
+            json.dumps(
+                {"event": "alpha-event", "level": "INFO", "job_id": "alpha"}
+            )
+            + "\n"
+        )
+
+        async def seed_registry() -> None:
+            async with JobRegistry(db_path) as registry:
+                await registry.register_job(
+                    "alpha",
+                    tmp_path / "score.yaml",
+                    workspace,
+                    log_path=log_file,
+                )
+                state = CheckpointState(
+                    job_id="alpha",
+                    job_name="alpha",
+                    status=JobStatus.COMPLETED,
+                    total_sheets=1,
+                    started_at=datetime.now(UTC),
+                    completed_at=datetime.now(UTC),
+                    config_snapshot={"workspace": str(workspace)},
+                )
+                await registry.save_checkpoint("alpha", state.model_dump_json())
+
+        asyncio.run(seed_registry())
+        monkeypatch.setattr(diagnose_cmd, "DAEMON_STATE_DB_PATH", db_path)
+        monkeypatch.chdir(empty_cwd)
+
+        runner = CliRunner()
+        result = runner.invoke(app, ["logs", "alpha"])
+
+        assert result.exit_code == 0
+        assert "alpha-event" in result.output
+        assert "registry log_path" in result.output
 
     def test_logs_json_output(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Test logs command with JSON output."""

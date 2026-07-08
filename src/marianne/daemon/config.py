@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from marianne.core.config.execution import PreflightConfig
 from marianne.core.constants import DAEMON_STATE_DB_PATH
+from marianne.core.logging import resolve_daemon_log_path, resolve_daemon_log_root
 from marianne.daemon.keyring_config import KeyringConfig
 from marianne.daemon.profiler.models import ProfilerConfig
 
@@ -204,6 +205,68 @@ class ObserverConfig(BaseModel):
     )
 
 
+class DaemonLoggingConfig(BaseModel):
+    """Conductor-owned logging root and rotation policy.
+
+    The conductor writes its durable event log under ``root``. Legacy
+    ``DaemonConfig.log_file`` is accepted as compatibility input, but is
+    normalized into this model so the path contract has one authority.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    root: Path = Field(
+        default_factory=resolve_daemon_log_root,
+        description="Directory where the conductor stores Marianne logs. "
+        "Tilde is expanded at validation time.",
+    )
+    event_log_name: str = Field(
+        default="conductor.log",
+        min_length=1,
+        description="File name for the primary conductor event log under root.",
+    )
+    max_file_size_mb: int = Field(
+        default=50,
+        gt=0,
+        le=1000,
+        description="Maximum event log size in MB before rotation.",
+    )
+    backup_count: int = Field(
+        default=5,
+        ge=0,
+        le=100,
+        description="Number of rotated conductor event logs to keep.",
+    )
+    compress: bool = Field(
+        default=True,
+        description="Compress rotated conductor event logs with gzip.",
+    )
+    retention_days: int = Field(
+        default=14,
+        ge=1,
+        le=3650,
+        description="Retention window for managed log cleanup. "
+        "A later cleanup pass consumes this policy.",
+    )
+
+    @field_validator("root", mode="before")
+    @classmethod
+    def _expand_root(cls, value: Path | str) -> Path:
+        return resolve_daemon_log_root(value)
+
+    @field_validator("event_log_name")
+    @classmethod
+    def _single_file_name(cls, value: str) -> str:
+        if Path(value).name != value:
+            raise ValueError("event_log_name must be a single file name")
+        return value
+
+    @property
+    def event_log_path(self) -> Path:
+        """Resolved primary conductor event log path."""
+        return resolve_daemon_log_path(self.root, self.event_log_name)
+
+
 # Instrument name used for semantic analysis when the user does not set
 # ``learning.backend`` explicitly. Resolved via the instrument registry's
 # native-bridge (``register_native_instruments``). Held as a module-level
@@ -356,9 +419,14 @@ class DaemonConfig(BaseModel):
         default="info",
         description="Minimum log level for daemon structlog output.",
     )
+    logging: DaemonLoggingConfig = Field(
+        default_factory=DaemonLoggingConfig,
+        description="Conductor-owned logging root, event log, and rotation policy.",
+    )
     log_file: Path | None = Field(
         default=None,
-        description="Log file path. None means log to stderr only.",
+        description="Compatibility alias for logging.root + logging.event_log_name. "
+        "If supplied, it is normalized into logging and then derived from it.",
     )
     job_timeout_seconds: float = Field(
         default=86400.0,
@@ -433,6 +501,15 @@ class DaemonConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _warn_reserved_fields(self) -> DaemonConfig:
-        """Warn when reserved/unimplemented fields are set to non-default values."""
+    def _normalize_logging_alias(self) -> DaemonConfig:
+        """Normalize legacy log_file into the daemon-owned logging model."""
+        if self.log_file is not None:
+            legacy_path = Path(self.log_file).expanduser()
+            self.logging = self.logging.model_copy(
+                update={
+                    "root": legacy_path.parent,
+                    "event_log_name": legacy_path.name,
+                }
+            )
+        self.log_file = self.logging.event_log_path
         return self

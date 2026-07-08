@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import typer
 from typer.testing import CliRunner
 
 from marianne.cli import app
@@ -164,6 +165,7 @@ class TestRestartCommand:
         result = runner.invoke(app, ["restart", "--help"])
         assert result.exit_code == 0
         assert "Restart the Marianne conductor" in result.output
+        assert "active-score safety check" in result.output
 
     def test_restart_calls_stop_then_start(self, tmp_path: Path):
         """restart calls stop_conductor, waits, then start_conductor."""
@@ -178,13 +180,14 @@ class TestRestartCommand:
         mock_stop.assert_called_once()
         mock_start.assert_called_once()
 
-    def test_restart_continues_if_stop_fails(self, tmp_path: Path):
-        """restart continues with start even if stop raises SystemExit."""
+    def test_restart_continues_when_stop_reports_not_running(self, tmp_path: Path):
+        """restart starts a conductor when stop reports none was running."""
         with (
             patch(
                 "marianne.daemon.process.stop_conductor",
-                side_effect=SystemExit(1),
+                side_effect=typer.Exit(1),
             ),
+            patch("marianne.daemon.process._pid_alive", return_value=False),
             patch("marianne.daemon.process.wait_for_conductor_exit", return_value=True),
             patch("marianne.daemon.process.start_conductor") as mock_start,
         ):
@@ -192,6 +195,32 @@ class TestRestartCommand:
 
         assert result.exit_code == 0
         mock_start.assert_called_once()
+
+    def test_restart_aborts_when_stop_refuses_active_scores(self, tmp_path: Path):
+        """restart does not start after the stop safety check refuses."""
+        pid_file = tmp_path / "marianne.pid"
+        pid_file.write_text("12345")
+
+        with (
+            patch(
+                "marianne.daemon.process.stop_conductor",
+                side_effect=typer.Exit(1),
+            ) as mock_stop,
+            patch("marianne.daemon.process._pid_alive", return_value=True),
+            patch("marianne.daemon.process.wait_for_conductor_exit") as mock_wait,
+            patch("marianne.daemon.process.start_conductor") as mock_start,
+        ):
+            result = runner.invoke(
+                app,
+                ["restart", "--pid-file", str(pid_file), "--foreground"],
+            )
+
+        assert result.exit_code == 1
+        assert "restart aborted" in result.output.lower()
+        assert "active scores" in result.output
+        mock_stop.assert_called_once()
+        mock_wait.assert_not_called()
+        mock_start.assert_not_called()
 
     def test_restart_aborts_if_old_conductor_wont_exit(self, tmp_path: Path):
         """restart exits 1 if old conductor doesn't exit within timeout."""

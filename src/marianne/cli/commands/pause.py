@@ -199,7 +199,7 @@ async def _pause_via_conductor(
                 error_code="E503",
                 hints=[
                     "Check conductor status: mzt conductor-status",
-                    "Restart if needed: mzt restart",
+                    "Pause or finish active scores before restarting: mzt restart",
                 ],
                 json_output=json_output,
                 job_id=job_id,

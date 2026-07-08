@@ -554,13 +554,13 @@ and are also automatically appended when no template is provided:
 ```yaml
 prompt:
   template: |
-    Do the work.
+    Produce the implementation report for {{ project_name }}.
     {{ stakes }}
     {{ thinking_method }}
   stakes: |
-    STAKES: Excellent work = $1T tip. Incomplete work = devoured by wolves.
+    STAKES: This report determines whether the release can proceed.
   thinking_method: |
-    Think step by step. Consider multiple approaches before committing.
+    Review the acceptance criteria, implementation evidence, and residual risks before writing.
 ```
 
 ---
@@ -2051,12 +2051,12 @@ Dry run works **without** a running daemon and shows:
 For long-running scores, use `setsid` to create an independent session:
 
 ```bash
-# CORRECT: setsid creates independent session group
-setsid mzt run my-score.yaml > workspace/marianne.log 2>&1 &
+# Submit the score to the conductor, then detach your shell if needed
+setsid mzt run my-score.yaml &
 
 # Monitor progress
 mzt status my-score --watch
-tail -f workspace/marianne.log
+mzt logs my-score --follow
 ```
 
 **Never** wrap Marianne with `timeout` — Marianne handles its own internal
@@ -2064,10 +2064,12 @@ timeouts. External `timeout` causes `SIGKILL`, which corrupts state files.
 
 ### Validate All Examples
 
-Verify all bundled examples are valid:
+Verify all bundled examples recursively. Some checked-in YAML files are
+archival, templates, or provider-specific, so inspect failures instead of
+treating this loop as a release gate by itself:
 
 ```bash
-for f in examples/*.yaml; do
+find examples -name '*.yaml' -print0 | sort -z | while IFS= read -r -d '' f; do
   echo -n "$f: "
   mzt validate "$f" 2>&1 | tail -1
 done
@@ -2078,12 +2080,13 @@ done
 | Error Code | Description | Fix |
 |------------|-------------|-----|
 | V001 | Jinja syntax error in template | Check `{% %}` and `{{ }}` syntax |
-| V002 | Workspace parent directory missing | Create parent directory or use auto-fixable `--self-healing` |
+| V002 | Workspace parent directory missing | Create the parent directory or choose a workspace path whose parent exists |
 | V003 | Template file not found | Check `prompt.template_file` path |
 | V007 | Invalid regex in validation pattern | Fix regex in `content_regex` or `rate_limit.detection_patterns` |
 | V101 | Undefined template variable (warning) | Add variable to `prompt.variables` or check spelling |
 | V103 | Very short timeout (warning) | Increase `instrument_config.timeout_seconds` |
 | V108 | Missing prelude/cadenza file (warning) | Check file path in `sheet.prelude` or `sheet.cadenzas`. Jinja-templated paths are skipped. |
+| V305/V307/V308/V309 | Static launch-safety warning | Review the rendered prompt, raw CLI command, fan-out instrument map, or validation prompt labels before running |
 
 ---
 

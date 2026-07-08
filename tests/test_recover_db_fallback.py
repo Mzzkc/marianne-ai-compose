@@ -98,6 +98,36 @@ def _create_db(db_path: Path, checkpoints: list[CheckpointState]) -> None:
     conn.close()
 
 
+def _create_db_with_config_paths(
+    db_path: Path,
+    checkpoints: list[CheckpointState],
+    config_paths: dict[str, Path],
+) -> None:
+    """Create a SQLite DB with registry-level config_path values."""
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS jobs ("
+        "  job_id TEXT PRIMARY KEY,"
+        "  status TEXT,"
+        "  checkpoint_json TEXT,"
+        "  config_path TEXT"
+        ")"
+    )
+    for cp in checkpoints:
+        conn.execute(
+            "INSERT INTO jobs (job_id, status, checkpoint_json, config_path) "
+            "VALUES (?, ?, ?, ?)",
+            (
+                cp.job_id,
+                cp.status.value,
+                cp.model_dump_json(),
+                str(config_paths[cp.job_id]),
+            ),
+        )
+    conn.commit()
+    conn.close()
+
+
 @pytest.fixture()
 def _mock_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Provide a temp DB path and prevent conductor routing."""
@@ -226,6 +256,105 @@ class TestRecoverFromDB:
         assert updated["sheets"]["2"]["status"] == "completed"
         assert row[1] == "completed"
 
+    def test_recover_clears_stale_validation_failure_metadata(
+        self,
+        tmp_path: Path,
+        _mock_db: Path,
+    ) -> None:
+        """Validated recovery must not leave completed sheets rendering as failed (#391)."""
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "output-1.txt").write_text("done")
+
+        cp = _make_checkpoint(
+            "stale-validation",
+            workspace,
+            total_sheets=2,
+            failed_sheets=[1],
+            completed_sheets=[2],
+        )
+        sheet = cp.sheets[1]
+        sheet.validation_passed = False
+        sheet.last_pass_percentage = 0.0
+        sheet.failed_validations = ["Output file exists"]
+        sheet.validation_details = [
+            {
+                "rule_type": "file_exists",
+                "description": "Output file exists",
+                "passed": False,
+                "actual_value": "exists=False",
+                "expected_value": "exists=True",
+                "error_message": "old failure",
+            },
+        ]
+        _create_db(_mock_db, [cp])
+
+        result = runner.invoke(app, ["recover", "stale-validation"])
+        assert result.exit_code == 0
+        assert "validated: 1" in result.stdout.lower()
+
+        conn = sqlite3.connect(str(_mock_db))
+        row = conn.execute(
+            "SELECT checkpoint_json, status FROM jobs WHERE job_id=?",
+            ("stale-validation",),
+        ).fetchone()
+        conn.close()
+
+        updated = json.loads(row[0])
+        recovered = updated["sheets"]["1"]
+        assert row[1] == "completed"
+        assert updated["last_completed_sheet"] == 2
+        assert recovered["status"] == "completed"
+        assert recovered["validation_passed"] is True
+        assert recovered["last_pass_percentage"] == 100.0
+        assert recovered["failed_validations"] == []
+        assert recovered["passed_validations"] == ["Output file exists"]
+        assert all(detail["passed"] for detail in recovered["validation_details"])
+        assert recovered.get("error_message") is None
+        assert recovered.get("error_code") is None
+
+    def test_recover_repairs_completed_sheet_with_stale_validation_metadata(
+        self,
+        tmp_path: Path,
+        _mock_db: Path,
+    ) -> None:
+        """Recovery revalidates already-completed sheets with stale failures (#391)."""
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "output-1.txt").write_text("done")
+
+        cp = _make_checkpoint(
+            "completed-stale-validation",
+            workspace,
+            total_sheets=1,
+            completed_sheets=[1],
+        )
+        sheet = cp.sheets[1]
+        sheet.validation_passed = False
+        sheet.last_pass_percentage = 0.0
+        sheet.failed_validations = ["Output file exists"]
+        _create_db(_mock_db, [cp])
+
+        result = runner.invoke(app, ["recover", "completed-stale-validation"])
+        assert result.exit_code == 0
+        assert "validated: 1" in result.stdout.lower()
+
+        conn = sqlite3.connect(str(_mock_db))
+        row = conn.execute(
+            "SELECT checkpoint_json, status FROM jobs WHERE job_id=?",
+            ("completed-stale-validation",),
+        ).fetchone()
+        conn.close()
+
+        updated = json.loads(row[0])
+        repaired = updated["sheets"]["1"]
+        assert row[1] == "completed"
+        assert updated["last_completed_sheet"] == 1
+        assert repaired["status"] == "completed"
+        assert repaired["validation_passed"] is True
+        assert repaired["failed_validations"] == []
+        assert repaired["last_pass_percentage"] == 100.0
+
     def test_recover_no_config_snapshot_resets_to_pending(
         self,
         tmp_path: Path,
@@ -252,6 +381,59 @@ class TestRecoverFromDB:
         conn.close()
         updated = json.loads(row[0])
         assert updated["sheets"]["1"]["status"] == "pending"
+
+    def test_recover_uses_registry_config_path_when_checkpoint_lacks_config(
+        self,
+        tmp_path: Path,
+        _mock_db: Path,
+    ) -> None:
+        """Recover validates with jobs.config_path when checkpoint config is absent."""
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "output-1.txt").write_text("done")
+
+        config_path = tmp_path / "score.yaml"
+        config_path.write_text(
+            f"""
+name: row-config
+workspace: {workspace}
+sheet:
+  size: 10
+  total_items: 10
+prompt:
+  template: "Sheet {{{{ sheet_num }}}}"
+validations:
+  - type: file_exists
+    path: "{workspace}/output-{{sheet_num}}.txt"
+    description: Output file exists
+""".lstrip()
+        )
+
+        cp = _make_checkpoint(
+            "row-config",
+            workspace,
+            total_sheets=1,
+            failed_sheets=[1],
+            include_config=False,
+        )
+        _create_db_with_config_paths(_mock_db, [cp], {"row-config": config_path})
+
+        result = runner.invoke(app, ["recover", "row-config"])
+        assert result.exit_code == 0
+        assert "validated: 1" in result.stdout.lower()
+        assert "reset to pending: 0" in result.stdout.lower()
+
+        conn = sqlite3.connect(str(_mock_db))
+        row = conn.execute(
+            "SELECT checkpoint_json, status FROM jobs WHERE job_id=?",
+            ("row-config",),
+        ).fetchone()
+        conn.close()
+
+        updated = json.loads(row[0])
+        assert updated["sheets"]["1"]["status"] == "completed"
+        assert updated["config_path"] == str(config_path)
+        assert row[1] == "completed"
 
     def test_recover_cascade_from_sheet(
         self,

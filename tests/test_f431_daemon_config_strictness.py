@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from marianne.daemon.config import (
     DaemonConfig,
+    DaemonLoggingConfig,
     ObserverConfig,
     ResourceLimitConfig,
     SemanticLearningConfig,
@@ -30,6 +31,7 @@ _DAEMON_MODELS = [
     SocketConfig,
     ObserverConfig,
     SemanticLearningConfig,
+    DaemonLoggingConfig,
     DaemonConfig,
 ]
 

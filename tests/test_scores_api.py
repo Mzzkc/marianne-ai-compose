@@ -22,7 +22,7 @@ def client(tmp_path):
 
 @pytest.fixture
 def valid_yaml_config():
-    """Valid Mzt configuration for testing."""
+    """Valid score YAML for testing."""
     return """
 name: test-job
 sheet:
@@ -113,6 +113,7 @@ class TestValidationAPI:
         summary = data["config_summary"]
         assert summary["name"] == "test-job"
         assert summary["total_sheets"] == 3  # Computed: ceil(30/10) = 3
+        assert summary["instrument"] == "claude-code"
         assert summary["backend_type"] == "claude-code"
 
         # Error message should be None for valid config
@@ -271,6 +272,7 @@ prompt:
         summary = data["config_summary"]
         assert summary["name"] == "minimal-job"
         assert summary["total_sheets"] == 1  # Computed from size/total_items
+        assert summary["instrument"] == "claude-code"
         assert summary["backend_type"] == "claude-code"
         assert summary["validation_count"] == 0
         assert summary["notification_count"] == 0
@@ -384,6 +386,7 @@ prompt:
                     "workspace": ".",
                     "start_sheet": 2,
                     "fresh": True,
+                    "confirm_fresh": True,
                     "self_healing": True,
                     "self_healing_auto_confirm": True,
                     "escalation": True,
@@ -407,6 +410,50 @@ prompt:
         assert kwargs["chain_depth"] == 1
         assert kwargs["client_cwd"] == Path.cwd().resolve()
         assert kwargs["runtime_variables"] == {"clip_id": "42"}
+
+    def test_submit_score_rejects_unconfirmed_fresh(self, client):
+        """fresh submit clears state, so the score API requires confirmation."""
+        content = """
+name: submit-options
+sheet:
+  size: 1
+  total_items: 1
+prompt:
+  template: "Process {{item}}"
+"""
+        response = client.post(
+            "/api/scores/submit",
+            json={"content": content, "fresh": True},
+        )
+
+        assert response.status_code == 400
+        assert "confirm_fresh=true" in response.json()["detail"]
+
+    def test_submit_score_invalid_yaml_does_not_touch_conductor(self, client):
+        """Editor submit validates YAML before asking for a daemon client."""
+        with patch("marianne.dashboard.routes.scores.get_daemon_client") as get_client:
+            response = client.post("/api/scores/submit", json={"content": "name: ["})
+
+        assert response.status_code == 400
+        assert "Invalid YAML" in response.json()["detail"]
+        get_client.assert_not_called()
+
+    def test_submit_score_invalid_schema_does_not_touch_conductor(self, client):
+        """Editor submit returns schema errors before conductor availability."""
+        content = """
+name: submit-invalid
+sheet:
+  size: bad
+  total_items: 1
+prompt:
+  template: "Task"
+"""
+        with patch("marianne.dashboard.routes.scores.get_daemon_client") as get_client:
+            response = client.post("/api/scores/submit", json={"content": content})
+
+        assert response.status_code == 400
+        assert "Invalid score YAML" in response.json()["detail"]
+        get_client.assert_not_called()
 
 
 class TestTemplateAPI:

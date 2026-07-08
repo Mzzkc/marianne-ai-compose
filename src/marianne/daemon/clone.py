@@ -120,6 +120,16 @@ class ClonePaths:
     state_db: Path
     log_file: Path
 
+    @property
+    def log_root(self) -> Path:
+        """Directory that owns this clone's logs."""
+        return self.log_file.parent
+
+    @property
+    def log_name(self) -> str:
+        """Primary event log file name for this clone."""
+        return self.log_file.name
+
 
 def resolve_clone_paths(name: str | None) -> ClonePaths:
     """Compute isolated paths for a clone instance.
@@ -166,7 +176,7 @@ def build_clone_config(
         A DaemonConfig with isolated clone paths.
     """
     # Deferred import to avoid circular dependency
-    from marianne.daemon.config import DaemonConfig, SocketConfig
+    from marianne.daemon.config import DaemonConfig, DaemonLoggingConfig, SocketConfig
 
     paths = resolve_clone_paths(name)
 
@@ -176,6 +186,12 @@ def build_clone_config(
         config_dict["socket"] = {"path": str(paths.socket)}
         config_dict["pid_file"] = str(paths.pid_file)
         config_dict["state_db_path"] = str(paths.state_db)
+        config_dict["logging"] = {
+            **config_dict.get("logging", {}),
+            "root": str(paths.log_root),
+            "event_log_name": paths.log_name,
+        }
+        config_dict["log_file"] = str(paths.log_file)
         return DaemonConfig.model_validate(config_dict)
 
     # Build from defaults with clone paths — all isolation fields must be set.
@@ -184,5 +200,5 @@ def build_clone_config(
         socket=SocketConfig(path=paths.socket),
         pid_file=paths.pid_file,
         state_db_path=paths.state_db,
-        log_file=paths.log_file,
+        logging=DaemonLoggingConfig(root=paths.log_root, event_log_name=paths.log_name),
     )

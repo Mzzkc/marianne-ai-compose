@@ -1,11 +1,11 @@
-"""Marianne MCP Resources - Resource implementations for Mzt configuration access.
+"""Marianne MCP resources for score and conductor-facing configuration access.
 
-This module implements MCP resources that expose Mzt configuration and
-documentation as readable content. Resources provide context and reference
+This module implements MCP resources that expose score schemas, examples, and
+conductor records as readable content. Resources provide context and reference
 material for AI agents working with Marianne.
 
 Resources are organized by category:
-- ConfigResources: Access to Mzt configuration schemas and examples
+- ConfigResources: Access to score schemas and examples
 """
 
 import json
@@ -25,11 +25,11 @@ _CONTENT_TYPE_JSON = "application/json"
 
 
 class ConfigResources:
-    """Mzt configuration resources.
+    """Marianne score configuration resources.
 
-    Provides access to Mzt configuration schemas, examples, and documentation
-    as MCP resources. These resources help AI agents understand Marianne's
-    configuration format and available options.
+    Provides access to score configuration schemas, examples, and documentation
+    as MCP resources. These resources help AI agents understand Marianne's score
+    format and available instrument options.
     """
 
     def __init__(
@@ -45,20 +45,29 @@ class ConfigResources:
         resources = [
             {
                 "uri": "config://schema",
-                "name": "Mzt configuration Schema",
-                "description": "Complete JSON schema for Marianne job configuration files",
+                "name": "Marianne Score Schema",
+                "description": "Complete JSON schema for Marianne score YAML files",
                 "mimeType": _CONTENT_TYPE_JSON
             },
             {
                 "uri": "config://example",
-                "name": "Mzt configuration Example",
-                "description": "Example Marianne job configuration with common patterns",
+                "name": "Marianne Score Example",
+                "description": "Example Marianne score YAML with current syntax",
                 "mimeType": "text/yaml"
             },
             {
+                "uri": "config://instrument-options",
+                "name": "Instrument Options",
+                "description": "Available instrument profiles and their configuration options",
+                "mimeType": _CONTENT_TYPE_JSON
+            },
+            {
                 "uri": "config://backend-options",
-                "name": "Backend Configuration Options",
-                "description": "Available backend types and their configuration options",
+                "name": "Instrument Options (compatibility URI)",
+                "description": (
+                    "Compatibility alias for config://instrument-options; "
+                    "Marianne score YAML uses instrument profiles, not backend blocks"
+                ),
                 "mimeType": _CONTENT_TYPE_JSON
             },
             {
@@ -76,14 +85,16 @@ class ConfigResources:
             # Job management resources
             {
                 "uri": "marianne://jobs",
-                "name": "Marianne Jobs Overview",
-                "description": "List of all Marianne jobs with status and metadata",
+                "name": "Submitted Scores Overview",
+                "description": (
+                    "List of conductor records for submitted scores with status and metadata"
+                ),
                 "mimeType": _CONTENT_TYPE_JSON
             },
             {
                 "uri": "marianne://templates",
-                "name": "Marianne Job Templates",
-                "description": "Collection of Marianne job configuration templates",
+                "name": "Marianne Score Templates",
+                "description": "Collection of Marianne score YAML templates",
                 "mimeType": _CONTENT_TYPE_JSON
             }
         ]
@@ -92,8 +103,11 @@ class ConfigResources:
         if self.state_backend:
             resources.append({
                 "uri": "marianne://jobs/{job_id}",
-                "name": "Marianne Job Details (Template)",
-                "description": "Detailed information about a specific Marianne job",
+                "name": "Submitted Score Details (Template)",
+                "description": (
+                    "Detailed conductor record for a submitted score; "
+                    "job_id is the runtime identifier"
+                ),
                 "mimeType": _CONTENT_TYPE_JSON
             })
 
@@ -103,7 +117,8 @@ class ConfigResources:
     _URI_HANDLERS: dict[str, str] = {
         "config://schema": "_get_config_schema",
         "config://example": "_get_config_example",
-        "config://backend-options": "_get_backend_options",
+        "config://instrument-options": "_get_instrument_options",
+        "config://backend-options": "_get_instrument_options",
         "config://validation-types": "_get_validation_types",
         "config://learning-options": "_get_learning_options",
         "marianne://jobs": "_get_jobs_overview",
@@ -137,7 +152,7 @@ class ConfigResources:
             }
 
     async def _get_config_schema(self) -> dict[str, Any]:
-        """Generate JSON schema for Mzt configuration from Pydantic models.
+        """Generate JSON schema for Marianne score configuration from Pydantic models.
 
         Uses JobConfig.model_json_schema() to generate a schema that stays
         in sync with the actual Pydantic models, avoiding manual drift.
@@ -145,11 +160,11 @@ class ConfigResources:
         return self._mcp_json_content("config://schema", JobConfig.model_json_schema())
 
     async def _get_config_example(self) -> dict[str, Any]:
-        """Get example Mzt configuration."""
-        example_content = """# Marianne Job Configuration Example
+        """Get example Marianne score configuration."""
+        example_content = """# Marianne Score Example
 
-job_id: example-review
-description: Example Marianne job configuration
+name: example-review
+description: Example Marianne score configuration
 
 # The top-level ``instrument:`` key resolves through the instrument
 # registry and works for any registered instrument profile
@@ -158,57 +173,29 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 300
 
-sheets:
-  - name: analyze-code
-    prompt: |
-      Analyze the code in the current directory and provide a summary of:
-      1. Main functionality
-      2. Key patterns and architecture
-      3. Potential improvements
+sheet:
+  size: 1
+  total_items: 2
 
-    timeout_seconds: 180
-    max_retries: 3
+prompt:
+  template: |
+    Sheet {{ sheet_num }}:
+    Analyze the current directory and write a short report to
+    analysis-summary.md.
 
-    validation:
-      - type: regex_match
-        description: "Output contains analysis sections"
-        pattern: "Main functionality|Key patterns|Potential improvements"
+validations:
+  - type: file_exists
+    description: "Analysis output written to file"
+    path: "analysis-summary.md"
 
-      - type: file_exists
-        description: "Analysis output written to file"
-        path: "analysis-summary.md"
-
-  - name: create-documentation
-    prompt: |
-      Based on the analysis from the previous sheet, create comprehensive
-      documentation for this codebase including:
-      1. Setup instructions
-      2. Usage examples
-      3. API reference
-
-      Previous analysis: {{ sheets.0.output }}
-
-    dependencies: ["analyze-code"]
-    timeout_seconds: 240
-
-    validation:
-      - type: file_exists
-        description: "Documentation created"
-        path: "README.md"
-
-      - type: regex_match
-        description: "Documentation contains required sections"
-        pattern: "Setup|Usage|API"
-
-# Global configuration
 workspace: "./workspace"
 learning:
   enabled: true
-  pattern_detection: true
+  use_global_patterns: true
 
 notifications:
   - type: desktop
-    title: "Marianne Job Complete"
+    title: "Marianne Score Complete"
 """
 
         return {
@@ -221,8 +208,8 @@ notifications:
             ]
         }
 
-    async def _get_backend_options(self) -> dict[str, Any]:
-        """Get backend/instrument configuration options.
+    async def _get_instrument_options(self) -> dict[str, Any]:
+        """Get instrument configuration options.
 
         Phase 5: registry-driven. Reads the live ``InstrumentRegistry``
         (populated by ``register_native_instruments()`` plus any
@@ -230,7 +217,7 @@ notifications:
         backend options. Each registered profile is surfaced with its
         kind, capabilities, default model, timeout, and model capacity
         list so MCP clients see an accurate, extensible picture rather
-        than a stale 2-backend snapshot.
+        than a stale backend snapshot.
         """
         from marianne.instruments.registry import (
             InstrumentRegistry,
@@ -264,8 +251,14 @@ notifications:
                 ],
             }
 
-        backend_options = {"available_backends": available}
-        return self._mcp_json_content("config://backend-options", backend_options)
+        instrument_options = {
+            "available_instruments": available,
+            "compatibility_note": (
+                "Legacy backend blocks were removed from score YAML. "
+                "Use the top-level instrument field and instrument_config instead."
+            ),
+        }
+        return self._mcp_json_content("config://instrument-options", instrument_options)
 
     async def _get_validation_types(self) -> dict[str, Any]:
         """Get validation types reference."""
@@ -282,62 +275,107 @@ notifications:
                         "path": "results.txt"
                     }
                 },
-                "regex_match": {
-                    "description": "Check if output matches a regular expression",
+                "file_modified": {
+                    "description": "Check if a file was modified during the run",
                     "parameters": {
-                        "pattern": "Required. Regular expression pattern to match",
-                        "flags": "Optional. Regex flags (i for case-insensitive, etc.)"
+                        "path": "Required. File path to check (relative to workspace)"
                     },
                     "example": {
-                        "type": "regex_match",
-                        "description": "Output contains success message",
-                        "pattern": "Success|Complete|Done"
+                        "type": "file_modified",
+                        "description": "Report was refreshed",
+                        "path": "report.md"
                     }
                 },
-                "json_schema": {
-                    "description": "Validate output against a JSON schema",
+                "content_contains": {
+                    "description": "Check that a file contains expected text",
                     "parameters": {
-                        "schema": "Required. JSON schema to validate against"
+                        "path": "Required. File path to read",
+                        "pattern": "Required. Text to find"
                     },
                     "example": {
-                        "type": "json_schema",
-                        "description": "Output is valid JSON with required fields",
-                        "schema": {
-                            "type": "object",
-                            "required": ["status", "result"],
-                            "properties": {
-                                "status": {"type": "string"},
-                                "result": {"type": "string"}
-                            }
-                        }
+                        "type": "content_contains",
+                        "description": "Report names the verdict",
+                        "path": "report.md",
+                        "pattern": "Verdict"
                     }
                 },
-                "custom": {
-                    "description": "Run custom validation command",
+                "content_regex": {
+                    "description": "Check that a file matches a regular expression",
                     "parameters": {
-                        "command": "Required. Command to execute for validation",
-                        "expected_exit_code": "Optional. Expected exit code (default: 0)"
+                        "path": "Required. File path to read",
+                        "pattern": "Required. Regular expression pattern"
                     },
                     "example": {
-                        "type": "custom",
-                        "description": "Custom script validates results",
-                        "command": "python validate_results.py"
+                        "type": "content_regex",
+                        "description": "Report includes a status",
+                        "path": "report.md",
+                        "pattern": "Status: (pass|fail)"
                     }
                 },
-                "llm_judge": {
-                    "description": "Use LLM to judge output quality",
+                "command_succeeds": {
+                    "description": "Run a command and require exit code 0",
                     "parameters": {
-                        "criteria": "Required. Criteria for the LLM to evaluate",
-                        "model": "Optional. Model to use for judging"
+                        "command": "Required. Shell command to execute",
+                        "working_directory": "Optional. Directory to run from"
                     },
                     "example": {
-                        "type": "llm_judge",
-                        "description": "Output provides clear, helpful analysis",
-                        "criteria": (
-                            "The output should be well-structured,"
-                            " informative, and directly address"
-                            " the prompt requirements"
-                        )
+                        "type": "command_succeeds",
+                        "description": "Tests pass",
+                        "command": "pytest -q"
+                    }
+                },
+                "path_in_scope": {
+                    "description": "Check that a path remains inside an allowed root",
+                    "parameters": {
+                        "path": "Required. Path to check",
+                        "path_scope": "Optional. Allowed root, defaults to workspace"
+                    },
+                    "example": {
+                        "type": "path_in_scope",
+                        "description": "Output stays in the workspace",
+                        "path": "report.md",
+                        "path_scope": "{workspace}"
+                    }
+                },
+                "field_match": {
+                    "description": "Check a JSON/YAML field value",
+                    "parameters": {
+                        "path": "Required. JSON or YAML file path",
+                        "field_path": "Required. Dot/bracket field path",
+                        "expected_value": "Optional. Literal value to compare"
+                    },
+                    "example": {
+                        "type": "field_match",
+                        "description": "Summary status is pass",
+                        "path": "summary.json",
+                        "field_path": "status",
+                        "expected_value": "pass"
+                    }
+                },
+                "file_sha256": {
+                    "description": "Check a file's SHA-256 digest",
+                    "parameters": {
+                        "path": "Required. File path",
+                        "sha256": "Required. Expected digest"
+                    },
+                    "example": {
+                        "type": "file_sha256",
+                        "description": "Pinned artifact digest matches",
+                        "path": "artifact.bin",
+                        "sha256": "<expected-sha256>"
+                    }
+                },
+                "csv_unique_key": {
+                    "description": "Check that a CSV column has unique values",
+                    "parameters": {
+                        "path": "Required. CSV file path",
+                        "key_field": "Required. Column that must be unique"
+                    },
+                    "example": {
+                        "type": "csv_unique_key",
+                        "description": "No duplicate ids",
+                        "path": "rows.csv",
+                        "key_field": "id"
                     }
                 }
             }
@@ -356,10 +394,10 @@ notifications:
                         "default": True,
                         "description": "Enable pattern learning and adaptation"
                     },
-                    "pattern_detection": {
+                    "use_global_patterns": {
                         "type": "boolean",
                         "default": True,
-                        "description": "Enable automatic pattern detection"
+                        "description": "Query and apply patterns from the global learning store"
                     },
                     "escalation": {
                         "type": "boolean",
@@ -369,7 +407,7 @@ notifications:
                     "global_learning": {
                         "type": "boolean",
                         "default": True,
-                        "description": "Participate in global learning across jobs"
+                        "description": "Participate in global learning across submitted scores"
                     },
                     "pattern_trust_threshold": {
                         "type": "number",
@@ -401,11 +439,11 @@ notifications:
     }
 
     async def _get_jobs_overview(self) -> dict[str, Any]:
-        """Get overview of all Marianne jobs."""
+        """Get overview of submitted Marianne score runs."""
         if not self.state_backend:
             return self._mcp_json_content("marianne://jobs", {
-                "error": "Jobs overview requires state backend initialization",
-                "note": "Configure MCP server with workspace_root to enable job listing",
+                "error": "Submitted score overview requires state backend initialization",
+                "note": "Configure MCP server with workspace_root to enable score-run listing",
             })
 
         jobs_overview: dict[str, Any] = {
@@ -515,7 +553,7 @@ notifications:
                 "sheets": {},
                 "configuration": {
                     "workspace": str(state.workspace) if hasattr(state, 'workspace') else None,
-                    "backend_type": getattr(state, 'backend_type', 'unknown'),
+                    "instruments_used": list(getattr(state, 'instruments_used', []) or []),
                 },
                 "progress": {
                     "completed_sheets": status_counts.get("completed", 0),
@@ -546,7 +584,7 @@ notifications:
             })
 
     async def _get_job_templates(self) -> dict[str, Any]:
-        """Get collection of Marianne job configuration templates."""
+        """Get collection of Marianne score templates."""
         templates = {
             "templates": {
                 "code-analysis": _build_code_analysis_template(),
@@ -561,57 +599,30 @@ notifications:
 
 
 def _build_code_analysis_template() -> dict[str, Any]:
-    """Build code analysis job template."""
+    """Build code analysis score template."""
     return {
         "name": "Code Analysis Template",
         "description": "Template for analyzing codebases and generating documentation",
         "use_cases": ["code review", "documentation generation", "architecture analysis"],
         "config": {
-            "job_id": "code-analysis-{timestamp}",
+            "name": "code-analysis-{timestamp}",
             "description": "Analyze codebase structure and patterns",
-            "instrument": "claude_cli",
-            "backend": {
-                "disable_mcp": True,
-                "timeout_seconds": 300,
+            "instrument": "claude-code",
+            "instrument_config": {"timeout_seconds": 300},
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {
+                "template": (
+                    "Scan the current directory and write analysis-summary.md with:\n"
+                    "1. Project structure and key files\n"
+                    "2. Programming languages and frameworks used\n"
+                    "3. Main functionality and purpose\n"
+                )
             },
-            "sheets": [
+            "validations": [
                 {
-                    "name": "scan-codebase",
-                    "prompt": (
-                        "Scan the current directory and provide an overview of:\n"
-                        "1. Project structure and key files\n"
-                        "2. Programming languages and frameworks used\n"
-                        "3. Main functionality and purpose\n\n"
-                        "Focus on understanding the codebase architecture."
-                    ),
-                    "timeout_seconds": 180,
-                    "max_retries": 2,
-                    "validation": [
-                        {
-                            "type": "regex_match",
-                            "description": "Output contains project structure analysis",
-                            "pattern": "structure|files|directories",
-                        }
-                    ],
-                },
-                {
-                    "name": "analyze-patterns",
-                    "prompt": (
-                        "Based on the codebase scan, analyze:\n"
-                        "1. Architectural patterns and design principles\n"
-                        "2. Code quality and potential improvements\n"
-                        "3. Documentation gaps\n\n"
-                        "Previous scan: {{ sheets.0.output }}"
-                    ),
-                    "dependencies": ["scan-codebase"],
-                    "timeout_seconds": 240,
-                    "validation": [
-                        {
-                            "type": "regex_match",
-                            "description": "Analysis contains patterns and improvements",
-                            "pattern": "patterns|quality|improvements",
-                        }
-                    ],
+                    "type": "file_exists",
+                    "description": "Analysis report was written",
+                    "path": "analysis-summary.md",
                 },
             ],
         },
@@ -619,52 +630,28 @@ def _build_code_analysis_template() -> dict[str, Any]:
 
 
 def _build_test_generation_template() -> dict[str, Any]:
-    """Build test generation job template."""
+    """Build test generation score template."""
     return {
         "name": "Test Generation Template",
         "description": "Template for generating comprehensive tests for existing code",
         "use_cases": ["test coverage", "quality assurance", "regression testing"],
         "config": {
-            "job_id": "test-generation-{timestamp}",
+            "name": "test-generation-{timestamp}",
             "description": "Generate comprehensive tests for codebase",
-            "instrument": "claude_cli",
-            "backend": {"disable_mcp": True},
-            "sheets": [
+            "instrument": "claude-code",
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {
+                "template": (
+                    "Identify components that need test coverage and write "
+                    "tests/generated/test_plan.md with priorities, edge cases, "
+                    "and commands to run."
+                )
+            },
+            "validations": [
                 {
-                    "name": "identify-testable-units",
-                    "prompt": (
-                        "Identify functions, classes, and modules that need test coverage:\n"
-                        "1. List main functions and classes\n"
-                        "2. Identify current test coverage gaps\n"
-                        "3. Prioritize by importance and complexity"
-                    ),
-                    "timeout_seconds": 180,
-                    "validation": [
-                        {
-                            "type": "regex_match",
-                            "description": "Lists testable units",
-                            "pattern": "functions|classes|coverage|test",
-                        }
-                    ],
-                },
-                {
-                    "name": "generate-unit-tests",
-                    "prompt": (
-                        "Generate unit tests for the identified components:\n"
-                        "1. Create comprehensive test cases\n"
-                        "2. Include edge cases and error conditions\n"
-                        "3. Follow project testing conventions\n\n"
-                        "Components to test: {{ sheets.0.output }}"
-                    ),
-                    "dependencies": ["identify-testable-units"],
-                    "timeout_seconds": 300,
-                    "validation": [
-                        {
-                            "type": "file_exists",
-                            "description": "Test files created",
-                            "path": "tests/",
-                        }
-                    ],
+                    "type": "file_exists",
+                    "description": "Test plan was written",
+                    "path": "tests/generated/test_plan.md",
                 },
             ],
         },
@@ -672,56 +659,33 @@ def _build_test_generation_template() -> dict[str, Any]:
 
 
 def _build_documentation_template() -> dict[str, Any]:
-    """Build documentation generation job template."""
+    """Build documentation generation score template."""
     return {
         "name": "Documentation Template",
         "description": "Template for generating project documentation",
         "use_cases": ["API documentation", "user guides", "README creation"],
         "config": {
-            "job_id": "documentation-{timestamp}",
+            "name": "documentation-{timestamp}",
             "description": "Generate comprehensive project documentation",
-            "instrument": "claude_cli",
-            "backend": {"disable_mcp": True},
-            "sheets": [
+            "instrument": "claude-code",
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {
+                "template": (
+                    "Create README.md with setup instructions, usage examples, "
+                    "and an API overview for this project."
+                )
+            },
+            "validations": [
                 {
-                    "name": "create-readme",
-                    "prompt": (
-                        "Create a comprehensive README.md file including:\n"
-                        "1. Project description and purpose\n"
-                        "2. Installation instructions\n"
-                        "3. Usage examples\n"
-                        "4. Contributing guidelines"
-                    ),
-                    "timeout_seconds": 240,
-                    "validation": [
-                        {
-                            "type": "file_exists",
-                            "description": "README.md created",
-                            "path": "README.md",
-                        },
-                        {
-                            "type": "regex_match",
-                            "description": "README contains required sections",
-                            "pattern": "Installation|Usage|Contributing",
-                        },
-                    ],
+                    "type": "file_exists",
+                    "description": "README.md created",
+                    "path": "README.md",
                 },
                 {
-                    "name": "api-documentation",
-                    "prompt": (
-                        "Generate API documentation:\n"
-                        "1. Document all public functions and classes\n"
-                        "2. Include parameter descriptions and examples\n"
-                        "3. Add usage examples for key features"
-                    ),
-                    "timeout_seconds": 300,
-                    "validation": [
-                        {
-                            "type": "file_exists",
-                            "description": "API documentation created",
-                            "path": "docs/",
-                        }
-                    ],
+                    "type": "content_regex",
+                    "description": "README contains required sections",
+                    "path": "README.md",
+                    "pattern": "Installation|Usage|API",
                 },
             ],
         },
@@ -729,56 +693,34 @@ def _build_documentation_template() -> dict[str, Any]:
 
 
 def _build_refactoring_template() -> dict[str, Any]:
-    """Build code refactoring job template."""
+    """Build code refactoring score template."""
     return {
         "name": "Code Refactoring Template",
         "description": "Template for systematic code refactoring and improvement",
         "use_cases": ["code cleanup", "performance optimization", "modernization"],
         "config": {
-            "job_id": "refactoring-{timestamp}",
+            "name": "refactoring-{timestamp}",
             "description": "Systematic code refactoring and improvement",
-            "instrument": "claude_cli",
-            "backend": {"disable_mcp": True},
-            "learning": {"enabled": True, "pattern_detection": True},
-            "sheets": [
+            "instrument": "claude-code",
+            "learning": {"enabled": True, "use_global_patterns": True},
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {
+                "template": (
+                    "Identify safe refactoring opportunities, apply the smallest "
+                    "useful changes, and write refactor-summary.md with the "
+                    "changed files and verification commands."
+                )
+            },
+            "validations": [
                 {
-                    "name": "identify-improvements",
-                    "prompt": (
-                        "Identify code improvements:\n"
-                        "1. Find code duplication and redundancy\n"
-                        "2. Identify performance bottlenecks\n"
-                        "3. Look for outdated patterns or deprecated usage\n"
-                        "4. Suggest modernization opportunities"
-                    ),
-                    "timeout_seconds": 180,
-                    "validation": [
-                        {
-                            "type": "regex_match",
-                            "description": "Identifies specific improvements",
-                            "pattern": "duplication|performance|deprecated|improvements",
-                        }
-                    ],
+                    "type": "file_exists",
+                    "description": "Refactor summary was written",
+                    "path": "refactor-summary.md",
                 },
                 {
-                    "name": "implement-refactoring",
-                    "prompt": (
-                        "Implement the identified improvements:\n"
-                        "1. Refactor duplicated code into reusable functions\n"
-                        "2. Optimize performance bottlenecks\n"
-                        "3. Update deprecated usage\n"
-                        "4. Ensure backward compatibility\n\n"
-                        "Improvements to implement: {{ sheets.0.output }}"
-                    ),
-                    "dependencies": ["identify-improvements"],
-                    "timeout_seconds": 400,
-                    "max_retries": 2,
-                    "validation": [
-                        {
-                            "type": "custom",
-                            "description": "Code still compiles after refactoring",
-                            "command": "python -m py_compile **/*.py",
-                        }
-                    ],
+                    "type": "command_succeeds",
+                    "description": "Python files still compile",
+                    "command": "python -m compileall -q .",
                 },
             ],
         },
@@ -786,25 +728,24 @@ def _build_refactoring_template() -> dict[str, Any]:
 
 
 def _build_template_usage_guide() -> dict[str, Any]:
-    """Build usage guidance for job templates."""
+    """Build usage guidance for score templates."""
     return {
         "description": (
-            "Marianne job templates provide starting points"
+            "Marianne score templates provide starting points"
             " for common development tasks"
         ),
         "how_to_use": [
-            "Copy the desired template configuration",
+            "Copy the desired score configuration",
             "Replace {timestamp} placeholders with actual values",
             "Modify prompts and validation rules for your specific needs",
             "Add or remove sheets based on your requirements",
-            "Configure backend settings for your environment",
+            "Configure instrument and instrument_config for your environment",
         ],
         "customization_tips": [
             "Adjust timeout_seconds based on expected task complexity",
             "Add sheet dependencies to ensure proper execution order",
-            "Use regex_match validation for content verification",
+            "Use content_regex validation for content verification",
             "Use file_exists validation for output verification",
             "Enable learning to improve performance over time",
         ],
     }
-

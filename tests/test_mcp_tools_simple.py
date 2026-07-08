@@ -48,7 +48,7 @@ class TestJobToolsBasic:
 
         assert "content" in result
         assert len(result["content"]) == 1
-        assert "Marianne MCP Job Listing" in result["content"][0]["text"]
+        assert "Marianne MCP Submitted Scores" in result["content"][0]["text"]
 
     @patch("marianne.mcp.tools.JobControlService")
     async def test_get_job_success(
@@ -92,8 +92,8 @@ class TestJobToolsBasic:
 
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "Marianne Job Details: test-job-123" in content_text
-        assert "Job Name: Test Job" in content_text
+        assert "Marianne Submitted Score Details: test-job-123" in content_text
+        assert "Score Name: Test Job" in content_text
         assert "Status: running" in content_text
 
     async def test_get_job_not_found(self, mock_state_backend: Mock, temp_workspace):
@@ -114,7 +114,7 @@ class TestJobToolsBasic:
 
         assert "isError" in result
         assert result["isError"] is True
-        assert "Configuration file not found" in result["content"][0]["text"]
+        assert "Score file not found" in result["content"][0]["text"]
 
 
 class TestControlToolsBasic:
@@ -168,7 +168,7 @@ class TestControlToolsBasic:
 
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✓ Pause request sent to job: test-job-123" in content_text
+        assert "✓ Pause request sent for submitted score: test-job-123" in content_text
 
     @patch("marianne.mcp.tools.JobControlService")
     async def test_pause_job_failure(
@@ -193,7 +193,7 @@ class TestControlToolsBasic:
 
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✗ Failed to pause job: test-job-123" in content_text
+        assert "✗ Failed to pause submitted score: test-job-123" in content_text
 
     async def test_unknown_tool(self, mock_state_backend: Mock, temp_workspace):
         """Test calling an unknown tool returns proper error."""
@@ -231,9 +231,9 @@ class TestMCPCoverage:
         config_file = temp_workspace / "test.yaml"
         config_file.write_text("""
 name: "Test Job"
-backend:
-  type: claude_cli
+instrument: claude-code
 sheet:
+  size: 1
   total_sheets: 3
 """)
 
@@ -260,7 +260,7 @@ sheet:
             },
         )
 
-        assert "✓ Marianne job started successfully!" in result["content"][0]["text"]
+        assert "Marianne score submitted to the conductor." in result["content"][0]["text"]
         assert "Self-healing: Enabled" in result["content"][0]["text"]
 
     @patch("marianne.mcp.tools.JobControlService")
@@ -277,7 +277,10 @@ sheet:
         control_tools = ControlTools(mock_state_backend, temp_workspace)
         result = await control_tools.call_tool("resume_job", {"job_id": "test-job"})
 
-        assert "✓ Job resumed successfully: test-job" in result["content"][0]["text"]
+        assert (
+            "✓ Submitted score resumed successfully: test-job"
+            in result["content"][0]["text"]
+        )
 
     @patch("marianne.mcp.tools.JobControlService")
     async def test_cancel_job_success(self, mock_service_class, mock_state_backend, temp_workspace):
@@ -293,7 +296,10 @@ sheet:
         control_tools = ControlTools(mock_state_backend, temp_workspace)
         result = await control_tools.call_tool("cancel_job", {"job_id": "test-job"})
 
-        assert "✓ Job cancelled successfully: test-job" in result["content"][0]["text"]
+        assert (
+            "✓ Submitted score cancelled successfully: test-job"
+            in result["content"][0]["text"]
+        )
         assert "permanent and cannot be undone" in result["content"][0]["text"]
 
     @patch("marianne.mcp.tools.JobControlService")
@@ -313,7 +319,10 @@ sheet:
 
         assert "isError" in result
         assert result["isError"] is True
-        assert "Failed to pause job: Service error" in result["content"][0]["text"]
+        assert (
+            "Failed to pause submitted score: Service error"
+            in result["content"][0]["text"]
+        )
 
 
 # ===========================================================================

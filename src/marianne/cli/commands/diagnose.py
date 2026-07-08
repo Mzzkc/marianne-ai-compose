@@ -40,7 +40,13 @@ from marianne.core.checkpoint import (
     ErrorRecord,
     SheetStatus,
 )
-from marianne.core.constants import SHEET_NUM_KEY, STATE_DB_FILENAME
+from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY, STATE_DB_FILENAME
+from marianne.core.log_sources import (
+    LogSource,
+    discover_job_log_sources,
+    line_matches_job,
+    read_registry_job_metadata,
+)
 from marianne.core.logging import find_log_files, get_default_log_path
 
 from ..helpers import (
@@ -179,11 +185,14 @@ class LogFollower:
 
         parts: list[str] = []
         if timestamp:
-            if "T" in timestamp:
+            if isinstance(timestamp, int | float):
+                ts_short = datetime.fromtimestamp(timestamp, tz=UTC).strftime("%H:%M:%S")
+                parts.append(f"[dim]{ts_short}[/dim]")
+            elif "T" in timestamp:
                 ts_short = timestamp.split("T")[1].split("+")[0].split(".")[0]
                 parts.append(f"[dim]{ts_short}[/dim]")
             else:
-                parts.append(f"[dim]{timestamp[:19]}[/dim]")
+                parts.append(f"[dim]{str(timestamp)[:19]}[/dim]")
 
         parts.append(f"[{level_color}]{level_str:7}[/{level_color}]")
 
@@ -227,7 +236,10 @@ class LogFollower:
         except OSError as e:
             output_error(
                 f"Cannot read log file: {e}",
-                hints=["Check that the Marianne log file exists at ~/.marianne/marianne.log"],
+                hints=[
+                    "Check the configured conductor logging root "
+                    "(default: ~/.marianne/logs/conductor.log)."
+                ],
             )
             return []
 
@@ -304,7 +316,10 @@ class LogFollower:
         except OSError as e:
             output_error(
                 f"Cannot follow log file: {e}",
-                hints=["Check that the Marianne log file exists at ~/.marianne/marianne.log"],
+                hints=[
+                    "Check the configured conductor logging root "
+                    "(default: ~/.marianne/logs/conductor.log)."
+                ],
             )
             raise typer.Exit(1) from None
         finally:
@@ -318,6 +333,55 @@ class LogFollower:
 # =============================================================================
 # logs command
 # =============================================================================
+
+
+async def _resolve_job_log_sources(
+    job_id: str,
+    *,
+    db_path: Path | None = None,
+) -> list[LogSource]:
+    """Resolve daemon-managed log sources for a known score id."""
+    from marianne.daemon.registry_backend import RegistryFirstReadBackend
+
+    resolved_db_path = db_path or DAEMON_STATE_DB_PATH
+    backend = RegistryFirstReadBackend(Path.cwd(), db_path=resolved_db_path)
+    try:
+        state = await backend.load(job_id)
+    finally:
+        await backend.close()
+
+    if state is None:
+        return []
+
+    registry_metadata = read_registry_job_metadata(job_id, db_path=resolved_db_path)
+    return discover_job_log_sources(
+        job_id,
+        state,
+        db_path=resolved_db_path,
+        registry_metadata=registry_metadata,
+    )
+
+
+def _display_log_source(
+    source: LogSource,
+    *,
+    min_level: int,
+    json_output: bool,
+    num_lines: int | None,
+) -> None:
+    follower = LogFollower(
+        log_path=source.path,
+        job_id=source.job_filter,
+        min_level=min_level,
+        json_output=json_output,
+    )
+    if not is_quiet() and not json_output:
+        console.print(
+            "[dim]Log source: "
+            f"{source.path} ({source.label}, {source.kind}, "
+            f"alias={source.alias_state}, raw={source.raw_state})[/dim]"
+        )
+    follower.display(num_lines=num_lines)
 
 
 def logs(
@@ -377,32 +441,14 @@ def logs(
         mzt logs --json                  # Output raw JSON entries
 
     Note:
-        Log files are stored at {workspace}/logs/marianne.log by default.
-        Use --file to specify a different log file path.
+        Daemon-managed logs live under the conductor logging root by default.
+        Use --file only for explicit offline/debug log files.
     """
     from ._shared import validate_job_id
 
     if job_id is not None:
         job_id = validate_job_id(job_id)
     configure_global_logging(console)
-
-    # Determine log file path
-    ws = workspace or Path.cwd()
-    target_log = log_file or get_default_log_path(ws)
-
-    # Check if log file exists
-    if not target_log.exists():
-        # Try to find any log files in the workspace
-        available_logs = find_log_files(ws, target_log)
-        if not available_logs:
-            console.print(f"[yellow]No log files found at:[/yellow] {target_log}")
-            console.print(
-                "\n[dim]Hint: Logs are created when running scores with file logging enabled.\n"
-                "Use --log-file or --log-format=both with mzt run to enable file logging.[/dim]"
-            )
-            raise typer.Exit(1)
-        # Use the first available log
-        target_log = available_logs[0]
 
     # Parse log level filter
     min_level = 0
@@ -415,6 +461,53 @@ def logs(
             )
             raise typer.Exit(1)
         min_level = _LEVEL_ORDER[level_upper]
+
+    if job_id is not None and workspace is None and log_file is None:
+        sources = asyncio.run(_resolve_job_log_sources(job_id))
+        if sources:
+            if follow:
+                source = next((item for item in sources if item.follow), sources[0])
+                follower = LogFollower(
+                    log_path=source.path,
+                    job_id=source.job_filter,
+                    min_level=min_level,
+                    json_output=json_output,
+                )
+                if not is_quiet() and not json_output:
+                    console.print(
+                        "[dim]Log source: "
+                        f"{source.path} ({source.label}, {source.kind}, "
+                        f"alias={source.alias_state}, raw={source.raw_state})[/dim]"
+                    )
+                follower.follow()
+                return
+
+            for source in sources:
+                _display_log_source(
+                    source,
+                    min_level=min_level,
+                    json_output=json_output,
+                    num_lines=lines if lines > 0 else None,
+                )
+            return
+
+    # Determine log file path
+    ws = workspace or Path.cwd()
+    target_log = log_file or get_default_log_path(ws)
+
+    # Check if log file exists
+    if not target_log.exists():
+        # Try to find any log files in the workspace
+        available_logs = find_log_files(ws, target_log)
+        if not available_logs:
+            console.print(f"[yellow]No log files found at:[/yellow] {target_log}")
+            console.print(
+                "\n[dim]Hint: daemon logs are owned by the conductor logging root.\n"
+                "Use --file only when inspecting an explicit offline/debug log.[/dim]"
+            )
+            raise typer.Exit(1)
+        # Use the first available log
+        target_log = available_logs[0]
 
     follower = LogFollower(
         log_path=target_log,
@@ -529,7 +622,7 @@ async def _errors_job(
     except DaemonError as err:
         output_error(
             str(err),
-            hints=["Restart the conductor: mzt restart"],
+            hints=["Pause or finish active scores before restarting: mzt restart"],
             json_output=json_output,
         )
         raise typer.Exit(1) from None
@@ -805,7 +898,7 @@ async def _diagnose_job(
     except DaemonError as err:
         output_error(
             str(err),
-            hints=["Restart the conductor: mzt restart"],
+            hints=["Pause or finish active scores before restarting: mzt restart"],
             json_output=json_output,
         )
         raise typer.Exit(1) from None
@@ -844,8 +937,16 @@ async def _diagnose_job(
         )
         raise typer.Exit(1)
 
+    log_sources: list[LogSource] | None = None
+    if workspace is None:
+        log_sources = await _resolve_job_log_sources(job_id)
+
     # Build diagnostic report
-    report: dict[str, Any] = _build_diagnostic_report(found_job, workspace=effective_workspace)
+    report: dict[str, Any] = _build_diagnostic_report(
+        found_job,
+        workspace=effective_workspace,
+        log_sources=log_sources,
+    )
 
     # Inline log content if requested
     if include_logs:
@@ -921,6 +1022,34 @@ def _discover_log_files(workspace: Path | None) -> list[dict[str, Any]]:
     return discovered
 
 
+def _log_source_entries(sources: list[LogSource]) -> list[dict[str, Any]]:
+    """Convert shared log-source records into diagnostic log metadata."""
+    entries: list[dict[str, Any]] = []
+    for source in sources:
+        try:
+            stat = source.path.stat()
+        except OSError:
+            continue
+
+        entries.append(
+            {
+                "path": str(source.path),
+                "name": source.path.name,
+                "size_bytes": stat.st_size,
+                "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+                "category": source.kind,
+                "source_label": source.label,
+                "source_id": source.source_id,
+                "follow": source.follow,
+                "job_filter": source.job_filter,
+                "alias_state": source.alias_state,
+                "raw_state": source.raw_state,
+                "source_state": source.state,
+            }
+        )
+    return entries
+
+
 # Default number of tail lines to inline from each log file
 _INCLUDE_LOGS_TAIL_LINES = 50
 
@@ -942,6 +1071,9 @@ def _attach_log_contents(report: dict[str, Any]) -> None:
             continue
         try:
             lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+            job_filter = log_info.get("job_filter")
+            if isinstance(job_filter, str) and job_filter:
+                lines = [line for line in lines if line_matches_job(line, job_filter)]
             tail = lines[-_INCLUDE_LOGS_TAIL_LINES:]
             log_contents[str(log_path)] = "\n".join(tail)
         except OSError:
@@ -1050,12 +1182,15 @@ def _build_diagnostic_report(
     job: CheckpointState,
     *,
     workspace: Path | None = None,
+    log_sources: list[LogSource] | None = None,
 ) -> dict[str, Any]:
     """Build comprehensive diagnostic report from job state.
 
     Args:
         job: CheckpointState to analyze.
         workspace: Optional workspace directory for log file discovery.
+        log_sources: Optional shared daemon log sources. When supplied, these
+            are used instead of the legacy workspace scanner.
 
     Returns:
         Dictionary with diagnostic information.
@@ -1259,7 +1394,11 @@ def _build_diagnostic_report(
         }
 
     # Log file discovery
-    log_files = _discover_log_files(workspace)
+    log_files = (
+        _log_source_entries(log_sources)
+        if log_sources is not None
+        else _discover_log_files(workspace)
+    )
     report["log_files"] = log_files
 
     # Log rotation hint metadata
@@ -1726,7 +1865,7 @@ async def _history_job(
     except DaemonError as err:
         output_error(
             str(err),
-            hints=["Restart the conductor: mzt restart"],
+            hints=["Pause or finish active scores before restarting: mzt restart"],
             json_output=json_output,
         )
         raise typer.Exit(1) from None

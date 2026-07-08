@@ -1,6 +1,6 @@
 # Getting Started with Marianne AI Compose
 
-Marianne AI Compose orchestrates multi-phase AI workflows with checkpointing, validation gates, and automatic recovery. You write a declarative YAML configuration (a **score**), and Marianne decomposes it into **sheets** (execution stages), runs each one through an AI **instrument**, validates the output, and recovers from failures automatically.
+Marianne AI Compose orchestrates multi-phase AI workflows with checkpointing, validation gates, and automatic recovery. A composer writes a declarative YAML configuration (a **score**), and Marianne decomposes it into **sheets** (concrete execution units), runs each one through an AI **instrument**, validates the output, and recovers from failures automatically.
 
 **Repository:** [github.com/Mzzkc/marianne-ai-compose](https://github.com/Mzzkc/marianne-ai-compose)
 
@@ -39,13 +39,15 @@ mzt --version
 
 ## Prerequisites
 
-Marianne uses Claude CLI as its default instrument. Ensure you have:
+Before running a score, ensure you have:
 
-1. **Claude CLI installed**: Follow [Claude CLI installation guide](https://docs.anthropic.com/claude-code)
-2. **API access configured**: Claude CLI should be authenticated
-3. **Daemon support installed**: `pip install -e ".[daemon]"` or `./setup.sh --daemon`
+1. **Daemon support installed**: `pip install -e ".[daemon]"` or `./setup.sh --daemon`
+2. **The conductor can start**: `mzt start` should succeed
+3. **At least one execution-ready instrument**: run `mzt doctor` and `mzt instruments list`
 
-After installation, run `mzt doctor` to verify your environment is ready.
+`hello-setup` can discover a free, local, or paid instrument for the first run.
+For a custom score, choose an instrument that `mzt instruments list` reports as
+ready. `claude-code` is a common example, not a requirement.
 
 ## Quick Start: Run hello
 
@@ -71,7 +73,7 @@ mzt status hello
 
 ## How Sheets Work
 
-Marianne splits work into **sheets** — execution stages processed one at a time (or in parallel when dependencies allow). You write one prompt template, and Marianne runs it once per sheet with different variables:
+Marianne splits work into **sheets** — concrete execution units processed one at a time (or in parallel when dependencies allow). You write one prompt template, and Marianne runs it once per sheet with different variables:
 
 | Config | Meaning |
 |--------|---------|
@@ -92,6 +94,7 @@ Create a file called `my-first-score.yaml`:
 name: "my-first-score"
 description: "Process files in sheets of 10"
 
+# Pick a ready instrument from `mzt instruments list`.
 instrument: claude-code
 
 sheet:
@@ -148,7 +151,11 @@ INFO (consider reviewing):
 Validation: PASSED (with warnings)
 ```
 
-The `V205` note is just advice — your score is valid. It's pointing out that `file_exists` validations can be fooled by leftover files from a previous run. Adding `file_modified` or `content_contains` checks makes validations more robust.
+The `V205` note is advice, not a launch blocker. It points out that
+`file_exists` validations can be fooled by leftover files from a previous run.
+Adding `file_modified`, `content_contains`, `content_regex`,
+`command_succeeds`, or structured checks such as `field_match` makes
+validations more meaningful.
 
 ### Step 3: Dry Run
 
@@ -389,7 +396,7 @@ Available in prompts and validation paths (see syntax note below):
 | `end_item` | | `10` | Last item in sheet |
 | `workspace` | | `./workspace` | Workspace path |
 | `stakes` | | `"Be careful!"` | Custom stakes text |
-| `thinking_method` | | `"Think step by step"` | Thinking guidance |
+| `thinking_method` | | `"Review evidence before writing"` | Review guidance |
 | `stage` | `movement` | `2` | Logical stage number (with fan-out) |
 | `instance` | `voice` | `1` | Instance within fan-out group |
 | `fan_count` | `voice_count` | `3` | Total instances in stage |
@@ -442,7 +449,7 @@ mzt dashboard --port 3000
 - [Configuration Reference](configuration-reference.md) — Every config field documented
 
 **Explore examples:**
-- [Examples](../examples/) — 43 score configurations across software, research, writing, and planning
+- [Examples](../examples/) — Score configurations across software, research, writing, and planning, with current validation status noted near runnable examples
 - [Marianne Score Playspace](https://github.com/Mzzkc/marianne-score-playspace) — Creative showcase with real output: philosophy, worldbuilding, education, and more
 
 **Go deeper:**

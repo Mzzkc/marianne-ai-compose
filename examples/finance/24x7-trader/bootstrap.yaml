@@ -32,7 +32,6 @@ workspace_lifecycle:
   archive_on_fresh: false        # never wipe trade history with --fresh
 
 instrument: claude-code
-instrument_fallbacks: [opencode, gemini-cli]
 instrument_config:
   timeout_seconds: 900
 
@@ -58,7 +57,7 @@ movements:
     instrument: synthesizer      # deep reasoning to codify philosophy
   3:
     name: "Schema Emission"
-    instrument: cli              # deterministic translation to YAML
+    instrument: synthesizer      # translate strategy into schema-valid YAML
 
 sheet:
   size: 1

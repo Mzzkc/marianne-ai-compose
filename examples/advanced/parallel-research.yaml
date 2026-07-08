@@ -57,7 +57,7 @@
 # Usage:
 #   mzt validate examples/advanced/parallel-research.yaml
 #   mzt run examples/advanced/parallel-research.yaml
-#   mzt status parallel-research -w ../../workspaces/parallel-workspace
+#   mzt status parallel-research --watch
 #
 # Estimated Time: ~15-25 minutes (3 parallel searches + synthesis + report)
 # Estimated Cost: $0.50-$3.00 (depends on research depth)

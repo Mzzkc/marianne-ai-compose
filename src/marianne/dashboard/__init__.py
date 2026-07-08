@@ -1,9 +1,9 @@
-"""Marianne Dashboard - Web interface for job monitoring.
+"""Marianne Dashboard - Web interface for submitted score monitoring.
 
 This module provides a FastAPI-based REST API for:
-- Listing jobs and their status
-- Viewing detailed job information
-- Monitoring job progress
+- Listing submitted scores and their conductor status
+- Viewing detailed score-run information
+- Monitoring score progress
 
 Usage:
     from marianne.dashboard import create_app

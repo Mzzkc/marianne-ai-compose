@@ -31,7 +31,8 @@ from marianne.core.checkpoint import CheckpointState, JobStatus, SheetStatus
 from marianne.core.config import JobConfig
 from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY
 from marianne.core.logging import get_logger
-from marianne.execution.validation import ValidationEngine
+from marianne.execution.validation import SheetValidationResult, ValidationEngine
+from marianne.utils.time import utc_now
 
 from ..helpers import configure_global_logging
 from ..output import console, output_error
@@ -102,6 +103,37 @@ def _get_db_path() -> Path:
     return DAEMON_STATE_DB_PATH.expanduser()
 
 
+def _load_checkpoint_row(conn: Any, job_id: str) -> tuple[str, str | None] | None:
+    """Load checkpoint JSON plus registry config path when the DB has one.
+
+    Older test and user databases may only have ``checkpoint_json``. Newer
+    conductor registries also persist ``jobs.config_path``. Recovery must use
+    that registry path as a fallback when legacy checkpoints lack
+    ``config_snapshot``/``config_path``; otherwise validation-based recovery
+    cannot prove completed work and unnecessarily resets sheets.
+    """
+    columns = {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+    }
+    if "config_path" in columns:
+        row = conn.execute(
+            "SELECT checkpoint_json, config_path FROM jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return row[0], row[1]
+
+    row = conn.execute(
+        "SELECT checkpoint_json FROM jobs WHERE job_id=?",
+        (job_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return row[0], None
+
+
 def _reset_sheet_data_for_retry(sdata: dict[str, Any]) -> None:
     """Reset a serialized sheet dict to PENDING for a fresh recovery attempt.
 
@@ -126,6 +158,59 @@ def _reset_sheet_data_for_retry(sdata: dict[str, Any]) -> None:
     # phantom "(was X: rate_limit)" tag after a clean restart.
     sdata["instrument_fallback_history"] = []
     sdata["fallback_attempts"] = {}
+
+
+def _has_stale_validation_failure(sdata: dict[str, Any]) -> bool:
+    """Return true when a completed sheet still carries failed validation data."""
+    if sdata.get("status") != SheetStatus.COMPLETED.value:
+        return False
+    return (
+        sdata.get("validation_passed") is False
+        or bool(sdata.get("failed_validations"))
+    )
+
+
+def _mark_sheet_validated_completed(
+    sdata: dict[str, Any],
+    result: SheetValidationResult,
+) -> None:
+    """Mark a serialized sheet complete after recovery validations pass.
+
+    Successful recovery is a state repair, not only a status flip. A sheet that
+    previously failed may carry stale validation metadata; leaving that metadata
+    intact makes status and diagnose render a completed sheet as failed (#391).
+    """
+    validation_details = result.to_dict_list()
+    sdata["status"] = SheetStatus.COMPLETED.value
+    sdata["completed_at"] = utc_now().isoformat()
+    sdata["exit_code"] = 0
+    sdata["validation_passed"] = True
+    sdata["validation_details"] = validation_details
+    sdata["last_pass_percentage"] = float(result.pass_percentage)
+    sdata["passed_validations"] = [
+        str(detail.get("description") or detail.get("rule_type") or "validation")
+        for detail in validation_details
+    ]
+    sdata["failed_validations"] = []
+    sdata.pop("error_message", None)
+    sdata.pop("error_code", None)
+    sdata.pop("error_category", None)
+
+
+def _refresh_checkpoint_progress(checkpoint: dict[str, Any]) -> None:
+    """Refresh checkpoint-level progress fields after direct sheet mutation."""
+    checkpoint["updated_at"] = utc_now().isoformat()
+    sheets = checkpoint.get("sheets", {})
+    if not isinstance(sheets, dict):
+        return
+    completed = sum(
+        1 for sdata in sheets.values()
+        if isinstance(sdata, dict)
+        and sdata.get("status") == SheetStatus.COMPLETED.value
+    )
+    checkpoint["last_completed_sheet"] = completed
+    if completed == checkpoint.get("total_sheets"):
+        checkpoint["current_sheet"] = None
 
 
 def recover(
@@ -207,8 +292,7 @@ async def _recover_cascade(
     # Load checkpoint
     conn = sqlite3.connect(str(db_path))
     cur = conn.cursor()
-    cur.execute("SELECT checkpoint_json FROM jobs WHERE job_id=?", (job_id,))
-    row = cur.fetchone()
+    row = _load_checkpoint_row(conn, job_id)
 
     if not row or not row[0]:
         conn.close()
@@ -218,7 +302,10 @@ async def _recover_cascade(
         )
         raise typer.Exit(1)
 
-    checkpoint = json.loads(row[0])
+    checkpoint_json, registry_config_path = row
+    checkpoint = json.loads(checkpoint_json)
+    if registry_config_path and not checkpoint.get("config_path"):
+        checkpoint["config_path"] = registry_config_path
     sheets = checkpoint.get("sheets", {})
 
     # Count before
@@ -317,9 +404,7 @@ async def _recover_job(
         raise typer.Exit(1)
 
     conn = sqlite3.connect(str(db_path))
-    row = conn.execute(
-        "SELECT checkpoint_json FROM jobs WHERE job_id=?", (job_id,),
-    ).fetchone()
+    row = _load_checkpoint_row(conn, job_id)
 
     if not row or not row[0]:
         conn.close()
@@ -332,7 +417,10 @@ async def _recover_job(
     import json
     import shutil
 
-    checkpoint = json.loads(row[0])
+    checkpoint_json, registry_config_path = row
+    checkpoint = json.loads(checkpoint_json)
+    if registry_config_path and not checkpoint.get("config_path"):
+        checkpoint["config_path"] = registry_config_path
     sheets = checkpoint.get("sheets", {})
 
     # Determine which sheets to recover
@@ -342,7 +430,7 @@ async def _recover_job(
         if skey in sheets and sheets[skey].get("status") in (
             SheetStatus.FAILED.value,
             SheetStatus.SKIPPED.value,
-        ):
+        ) or (skey in sheets and _has_stale_validation_failure(sheets[skey])):
             sheets_to_reset = [skey]
         elif skey not in sheets:
             conn.close()
@@ -352,7 +440,10 @@ async def _recover_job(
             raise typer.Exit(1)
     else:
         for skey, sdata in sheets.items():
-            if sdata.get("status") in (SheetStatus.FAILED.value, SheetStatus.SKIPPED.value):
+            if sdata.get("status") in (
+                SheetStatus.FAILED.value,
+                SheetStatus.SKIPPED.value,
+            ) or _has_stale_validation_failure(sdata):
                 sheets_to_reset.append(skey)
 
     if not sheets_to_reset:
@@ -378,6 +469,7 @@ async def _recover_job(
     for skey in sorted(sheets_to_reset, key=int):
         snum = int(skey)
         sdata = sheets[skey]
+        stale_completed = _has_stale_validation_failure(sdata)
 
         if config and config.validations:
             # Run validations to check if work was actually done
@@ -398,13 +490,22 @@ async def _recover_job(
 
             if vresult.all_passed:
                 if not dry_run:
-                    sdata["status"] = SheetStatus.COMPLETED.value
-                    sdata.pop("error_message", None)
-                    sdata.pop("error_code", None)
+                    _mark_sheet_validated_completed(sdata, vresult)
                 validated_count += 1
                 console.print(f"  Sheet {snum}: [green]validations passed → completed[/green]")
                 continue
+            if stale_completed:
+                console.print(
+                    f"  Sheet {snum}: [yellow]validations still failing — left unchanged[/yellow]"
+                )
+                continue
             # Validations failed — fall through to reset
+
+        if stale_completed:
+            console.print(
+                f"  Sheet {snum}: [yellow]no validation proof available — left unchanged[/yellow]"
+            )
+            continue
 
         # No config or validations failed — reset to PENDING for retry
         if not dry_run:
@@ -442,6 +543,7 @@ async def _recover_job(
     shutil.copy2(_get_db_path(), backup)
 
     # Update job status
+    _refresh_checkpoint_progress(checkpoint)
     all_complete = all(
         s.get("status") == SheetStatus.COMPLETED.value for s in sheets.values()
     )

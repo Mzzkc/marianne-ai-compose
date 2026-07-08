@@ -128,6 +128,7 @@ contract (`_techniques/<name>.md`), then point the corresponding
 ### 4. Run bootstrap once
 
 ```bash
+mzt validate examples/finance/24x7-trader/bootstrap.yaml
 mzt run examples/finance/24x7-trader/bootstrap.yaml
 ```
 
@@ -287,8 +288,12 @@ Read these before you trust the family with capital, paper or otherwise:
 For testing, you can run any score directly:
 
 ```bash
+mzt validate examples/finance/24x7-trader/pre-market.yaml
 mzt run examples/finance/24x7-trader/pre-market.yaml
 mzt status 24x7-trader-pre-market --watch
+
+mzt validate examples/finance/24x7-trader/market-open.yaml
+mzt validate examples/finance/24x7-trader/weekly-review.yaml
 ```
 
 The workspace persists between phases — running pre-market then

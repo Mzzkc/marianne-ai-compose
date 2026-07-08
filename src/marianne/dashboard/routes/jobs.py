@@ -1,4 +1,4 @@
-"""Job control API endpoints."""
+"""Submitted-score control API endpoints."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.daemon.exceptions import DaemonNotRunningError
 from marianne.dashboard.app import get_daemon_client, get_state_backend
+from marianne.dashboard.routes.scores import parse_yaml_safely, validate_schema
 from marianne.dashboard.services.job_control import (
     JobActionResult,
     JobControlService,
@@ -27,13 +28,19 @@ router = APIRouter(prefix="/api/jobs", tags=["Job Control"])
 
 
 class StartJobRequest(BaseModel):
-    """Request to start a new job."""
+    """Request to submit a score to the conductor."""
 
-    config_content: str | None = Field(None, description="YAML config content as string")
-    config_path: str | None = Field(None, description="Path to YAML config file")
+    config_content: str | None = Field(None, description="Score YAML content as string")
+    config_path: str | None = Field(None, description="Path to score YAML file")
     workspace: str | None = Field(None, description="Override workspace directory")
     start_sheet: int = Field(1, ge=1, description="Starting sheet number")
     fresh: bool = Field(False, description="Start with clean state")
+    confirm_fresh: bool = Field(
+        False,
+        description=(
+            "Required when fresh is true; confirms existing score state may be cleared"
+        ),
+    )
     self_healing: bool = Field(False, description="Enable self-healing mode")
     self_healing_auto_confirm: bool = Field(
         False, description="Auto-confirm self-healing fixes"
@@ -79,7 +86,7 @@ class JobActionResponse(BaseModel):
 
 
 class StartJobResponse(BaseModel):
-    """Response from starting a job."""
+    """Response from submitting a score to the conductor."""
 
     success: bool
     job_id: str
@@ -102,7 +109,7 @@ class StartJobResponse(BaseModel):
             workspace=str(result.workspace),
             total_sheets=result.total_sheets,
             pid=result.pid,
-            message=f"Job {result.job_name} started successfully",
+            message=f"Score {result.job_name} submitted to the conductor",
             via_daemon=result.via_daemon,
         )
 
@@ -117,6 +124,75 @@ def _get_job_control_service() -> JobControlService:
     return JobControlService(get_daemon_client())
 
 
+def _reject_unconfirmed_fresh(fresh: bool, confirm_fresh: bool) -> None:
+    """Reject destructive fresh submissions unless the API caller confirms them."""
+    if fresh and not confirm_fresh:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "fresh=true clears existing score state and requires "
+                "confirm_fresh=true"
+            ),
+        )
+
+
+def _resolve_scoped_path(raw_path: str, *, field_name: str) -> Path:
+    """Resolve dashboard paths under cwd or home before conductor submission."""
+    resolved = Path(raw_path).resolve()
+    cwd = Path.cwd().resolve()
+    home = Path.home().resolve()
+    if not (resolved.is_relative_to(cwd) or resolved.is_relative_to(home)):
+        raise ValueError(
+            f"{field_name} must be under the current directory or user home"
+        )
+    return resolved
+
+
+def _validate_local_score_request(
+    request: StartJobRequest,
+) -> tuple[Path | None, Path | None, Path | None]:
+    """Validate score content/path and scoped paths before daemon access."""
+    config_path = Path(request.config_path) if request.config_path else None
+
+    if request.config_content:
+        _, yaml_error = parse_yaml_safely(request.config_content)
+        if yaml_error:
+            raise ValueError(f"Invalid YAML: {yaml_error}")
+        _, schema_error = validate_schema(request.config_content)
+        if schema_error:
+            raise ValueError(f"Invalid score YAML: {schema_error}")
+
+    if config_path is not None:
+        resolved_config = config_path.resolve()
+        if config_path.suffix not in (".yaml", ".yml"):
+            raise ValueError(
+                f"Config path must be a YAML file (.yaml/.yml): {config_path}"
+            )
+        if ".." in config_path.parts:
+            raise ValueError(
+                f"Config path must not contain '..' traversal: {config_path}"
+            )
+        if not resolved_config.exists():
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+        _, schema_error = validate_schema(resolved_config.read_text())
+        if schema_error:
+            raise ValueError(f"Invalid score YAML: {schema_error}")
+        config_path = resolved_config
+
+    workspace = (
+        _resolve_scoped_path(request.workspace, field_name="Workspace path")
+        if request.workspace
+        else None
+    )
+    client_cwd = (
+        _resolve_scoped_path(request.client_cwd, field_name="Client working directory")
+        if request.client_cwd
+        else None
+    )
+
+    return config_path, workspace, client_cwd
+
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -126,16 +202,14 @@ def _get_job_control_service() -> JobControlService:
 async def start_job(
     request: StartJobRequest,
 ) -> StartJobResponse:
-    """Start a new Marianne job execution via the conductor.
+    """Submit a Marianne score execution via the conductor.
 
-    Supports both inline YAML config content or path to config file.
+    Supports both inline score YAML content or a path to a score YAML file.
     """
     try:
         request.validate_config_source()
-
-        config_path = Path(request.config_path) if request.config_path else None
-        workspace = Path(request.workspace) if request.workspace else None
-        client_cwd = Path(request.client_cwd) if request.client_cwd else None
+        _reject_unconfirmed_fresh(request.fresh, request.confirm_fresh)
+        config_path, workspace, client_cwd = _validate_local_score_request(request)
 
         service = _get_job_control_service()
         result = await service.start_job(
@@ -158,12 +232,12 @@ async def start_job(
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail=str(exc) or "Invalid job configuration",
+            detail=str(exc) or "Invalid score YAML",
         ) from None
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=404,
-            detail=str(exc) or "Configuration file not found",
+            detail=str(exc) or "Score file not found",
         ) from None
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc) or "Conductor unavailable") from None

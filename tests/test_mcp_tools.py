@@ -90,7 +90,15 @@ class TestJobTools:
 
         # Verify tool schemas
         start_job_tool = next(tool for tool in tools if tool["name"] == "start_job")
-        assert "config_path" in start_job_tool["inputSchema"]["properties"]
+        properties = start_job_tool["inputSchema"]["properties"]
+        assert "config_path" in properties
+        assert "client_cwd" in properties
+        assert "runtime_variables" in properties
+        assert "dry_run" in properties
+        assert "fresh" in properties
+        assert "confirm_fresh" in properties
+        assert "self_healing_auto_confirm" in properties
+        assert "escalation" in properties
         assert start_job_tool["inputSchema"]["required"] == ["config_path"]
 
     async def test_list_jobs_placeholder(self, job_tools: JobTools):
@@ -101,7 +109,7 @@ class TestJobTools:
 
         assert "content" in result
         assert len(result["content"]) == 1
-        assert "Marianne MCP Job Listing" in result["content"][0]["text"]
+        assert "Marianne MCP Submitted Scores" in result["content"][0]["text"]
         assert "mzt list" in result["content"][0]["text"]
 
     async def test_get_job_success(
@@ -132,8 +140,8 @@ class TestJobTools:
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "Marianne Job Details: test-job-123" in content_text
-        assert "Job Name: Test Job" in content_text
+        assert "Marianne Submitted Score Details: test-job-123" in content_text
+        assert "Score Name: Test Job" in content_text
         assert "Status: running" in content_text
         assert "PID: 12345" in content_text
         assert "Is Alive: True" in content_text
@@ -159,9 +167,9 @@ class TestJobTools:
         config_content = """
 name: "Test Job"
 description: "A test job"
-backend:
-  type: claude_cli
+instrument: claude-code
 sheet:
+  size: 1
   total_sheets: 5
 """
         config_file.write_text(config_content)
@@ -179,23 +187,72 @@ sheet:
 
         # Execute
         result = await job_tools.call_tool(
-            "start_job", {"config_path": str(config_file), "start_sheet": 1, "self_healing": True}
+            "start_job",
+            {
+                "config_path": str(config_file),
+                "start_sheet": 1,
+                "self_healing": True,
+                "self_healing_auto_confirm": True,
+                "escalation": True,
+                "dry_run": True,
+                "fresh": True,
+                "confirm_fresh": True,
+                "client_cwd": str(temp_workspace),
+                "runtime_variables": {"target": "mcp"},
+            },
         )
 
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✓ Marianne job started successfully!" in content_text
+        assert "Marianne score submitted to the conductor." in content_text
         assert "Job ID: new-job-456" in content_text
-        assert "Job Name: Test Job" in content_text
+        assert "Score Name: Test Job" in content_text
         assert "Status: running" in content_text
         assert "Process ID: 54321" in content_text
         assert "Self-healing: Enabled" in content_text
+        assert "Dry run: Requested" in content_text
+        assert "Fresh state: Confirmed" in content_text
 
         # Verify job_control.start_job was called correctly
         job_tools.job_control.start_job.assert_called_once_with(
-            config_path=config_file, workspace=None, start_sheet=1, self_healing=True
+            config_path=config_file,
+            workspace=None,
+            start_sheet=1,
+            fresh=True,
+            self_healing=True,
+            self_healing_auto_confirm=True,
+            escalation=True,
+            dry_run=True,
+            chain_depth=None,
+            client_cwd=temp_workspace,
+            runtime_variables={"target": "mcp"},
         )
+
+    async def test_start_job_rejects_unconfirmed_fresh(
+        self, job_tools: JobTools, temp_workspace: Path
+    ):
+        """MCP submit requires explicit confirmation before fresh clears state."""
+        config_file = temp_workspace / "test-config.yaml"
+        config_file.write_text(
+            """
+name: "Test Job"
+instrument: claude-code
+sheet:
+  size: 1
+  total_items: 1
+prompt:
+  template: "Do the work"
+"""
+        )
+
+        result = await job_tools.call_tool(
+            "start_job",
+            {"config_path": str(config_file), "fresh": True},
+        )
+
+        assert result["isError"] is True
+        assert "confirm_fresh=true" in result["content"][0]["text"]
 
     async def test_start_job_config_not_found(self, job_tools: JobTools):
         """Test start_job with non-existent config file."""
@@ -203,7 +260,7 @@ sheet:
 
         assert "isError" in result
         assert result["isError"] is True
-        assert "Configuration file not found" in result["content"][0]["text"]
+        assert "Score file not found" in result["content"][0]["text"]
 
     async def test_start_job_control_failure(self, job_tools: JobTools, temp_workspace: Path):
         """Test start_job when job control service fails."""
@@ -211,15 +268,15 @@ sheet:
         config_file = temp_workspace / "test-config.yaml"
         config_content = """
 name: "Test Job"
-backend:
-  type: claude_cli
+instrument: claude-code
 sheet:
+  size: 1
   total_sheets: 3
 """
         config_file.write_text(config_content)
 
         # Mock job control failure
-        job_tools.job_control.start_job.side_effect = RuntimeError("Backend not available")
+        job_tools.job_control.start_job.side_effect = RuntimeError("Instrument not available")
 
         # Execute
         result = await job_tools.call_tool("start_job", {"config_path": str(config_file)})
@@ -227,7 +284,7 @@ sheet:
         # Verify
         assert "isError" in result
         assert result["isError"] is True
-        assert "Failed to start job" in result["content"][0]["text"]
+        assert "Failed to submit score" in result["content"][0]["text"]
 
 
 class TestControlTools:
@@ -289,7 +346,7 @@ class TestControlTools:
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✓ Pause request sent to job: test-job-123" in content_text
+        assert "✓ Pause request sent for submitted score: test-job-123" in content_text
         assert "Status: running" in content_text
         assert "gracefully at the next sheet boundary" in content_text
 
@@ -307,7 +364,7 @@ class TestControlTools:
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✗ Failed to pause job: test-job-123" in content_text
+        assert "✗ Failed to pause submitted score: test-job-123" in content_text
         assert "Status: failed" in content_text
         assert "Error: Job not found" in content_text
 
@@ -328,7 +385,7 @@ class TestControlTools:
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✓ Job resumed successfully: test-job-123" in content_text
+        assert "✓ Submitted score resumed successfully: test-job-123" in content_text
         assert "Status: running" in content_text
 
     async def test_resume_job_failure(self, control_tools: ControlTools):
@@ -345,7 +402,7 @@ class TestControlTools:
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✗ Failed to resume job: test-job-123" in content_text
+        assert "✗ Failed to resume submitted score: test-job-123" in content_text
         assert "Error: Process not found" in content_text
 
     async def test_cancel_job_success(self, control_tools: ControlTools):
@@ -365,7 +422,7 @@ class TestControlTools:
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✓ Job cancelled successfully: test-job-123" in content_text
+        assert "✓ Submitted score cancelled successfully: test-job-123" in content_text
         assert "Status: cancelled" in content_text
         assert "permanent and cannot be undone" in content_text
 
@@ -383,7 +440,7 @@ class TestControlTools:
         # Verify
         assert "content" in result
         content_text = result["content"][0]["text"]
-        assert "✗ Failed to cancel job: test-job-123" in content_text
+        assert "✗ Failed to cancel submitted score: test-job-123" in content_text
         assert "Error: Permission denied" in content_text
 
     async def test_unknown_tool(self, control_tools: ControlTools):
@@ -405,7 +462,10 @@ class TestControlTools:
         # Verify
         assert "isError" in result
         assert result["isError"] is True
-        assert "Failed to pause job: Service unavailable" in result["content"][0]["text"]
+        assert (
+            "Failed to pause submitted score: Service unavailable"
+            in result["content"][0]["text"]
+        )
 
 
 class TestArtifactTools:
@@ -491,9 +551,9 @@ class TestMCPToolsIntegration:
         config_file = temp_workspace / "lifecycle-test.yaml"
         config_content = """
 name: "Lifecycle Test"
-backend:
-  type: claude_cli
+instrument: claude-code
 sheet:
+  size: 1
   total_sheets: 3
 """
         config_file.write_text(config_content)
@@ -510,7 +570,7 @@ sheet:
         job_tools.job_control.start_job = AsyncMock(return_value=start_result)
 
         result = await job_tools.call_tool("start_job", {"config_path": str(config_file)})
-        assert "✓ Marianne job started successfully!" in result["content"][0]["text"]
+        assert "Marianne score submitted to the conductor." in result["content"][0]["text"]
 
         # 2. Get job status
         checkpoint_state = CheckpointState(
@@ -528,7 +588,7 @@ sheet:
         job_tools.job_control.verify_process_health = AsyncMock(return_value=health)
 
         result = await job_tools.call_tool("get_job", {"job_id": "lifecycle-job"})
-        assert "Job Name: Lifecycle Test" in result["content"][0]["text"]
+        assert "Score Name: Lifecycle Test" in result["content"][0]["text"]
         assert "Status: running" in result["content"][0]["text"]
 
         # 3. Pause job
@@ -538,7 +598,10 @@ sheet:
         control_tools.job_control.pause_job = AsyncMock(return_value=pause_result)
 
         result = await control_tools.call_tool("pause_job", {"job_id": "lifecycle-job"})
-        assert "✓ Pause request sent to job: lifecycle-job" in result["content"][0]["text"]
+        assert (
+            "✓ Pause request sent for submitted score: lifecycle-job"
+            in result["content"][0]["text"]
+        )
 
         # 4. Resume job
         resume_result = JobActionResult(
@@ -547,7 +610,10 @@ sheet:
         control_tools.job_control.resume_job = AsyncMock(return_value=resume_result)
 
         result = await control_tools.call_tool("resume_job", {"job_id": "lifecycle-job"})
-        assert "✓ Job resumed successfully: lifecycle-job" in result["content"][0]["text"]
+        assert (
+            "✓ Submitted score resumed successfully: lifecycle-job"
+            in result["content"][0]["text"]
+        )
 
         # 5. Cancel job
         cancel_result = JobActionResult(
@@ -556,7 +622,10 @@ sheet:
         control_tools.job_control.cancel_job = AsyncMock(return_value=cancel_result)
 
         result = await control_tools.call_tool("cancel_job", {"job_id": "lifecycle-job"})
-        assert "✓ Job cancelled successfully: lifecycle-job" in result["content"][0]["text"]
+        assert (
+            "✓ Submitted score cancelled successfully: lifecycle-job"
+            in result["content"][0]["text"]
+        )
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ routes IPC requests to JobService, and cancels all tasks on shutdown.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import time
@@ -139,6 +140,36 @@ def _should_auto_fresh(config_path: Path, completed_at: float | None) -> bool:
 _RESUME_PRESERVE_TERMINAL_STATUSES = frozenset(
     {DaemonJobStatus.PAUSED, DaemonJobStatus.PAUSED_AT_CHAIN}
 )
+_ACTIVE_DAEMON_STATUSES = frozenset(
+    {DaemonJobStatus.QUEUED, DaemonJobStatus.RUNNING}
+)
+_TERMINAL_CHECKPOINT_STATUSES = frozenset(
+    {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+)
+
+
+def _checkpoint_status_and_updated_at(
+    checkpoint_json: str | None,
+) -> tuple[str | None, datetime | None]:
+    """Extract terminal comparison fields from serialized checkpoint JSON."""
+    if not checkpoint_json:
+        return None, None
+    try:
+        data = json.loads(checkpoint_json)
+    except (json.JSONDecodeError, TypeError):
+        return None, None
+    raw_status = data.get("status")
+    status = raw_status if isinstance(raw_status, str) else None
+    raw_updated_at = data.get("updated_at")
+    if not isinstance(raw_updated_at, str):
+        return status, None
+    try:
+        parsed = datetime.fromisoformat(raw_updated_at)
+    except ValueError:
+        return status, None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return status, parsed
 
 
 def _reset_sheets_for_resume(
@@ -1664,9 +1695,10 @@ class JobManager:
         """Get full status of a specific job.
 
         Resolution order (no workspace/disk fallback):
-        1. Live in-memory state (running jobs)
+        1. Live in-memory state for active jobs
         2. Registry checkpoint (historical jobs — persisted on every save)
-        3. Basic metadata (jobs that never ran / pre-checkpoint registry)
+        3. Terminal live-state fallback if no registry checkpoint is available
+        4. Basic metadata (jobs that never ran / pre-checkpoint registry)
         """
         _ = workspace  # Unused — daemon is the single source of truth
 
@@ -1678,9 +1710,12 @@ class JobManager:
             if record is None:
                 raise JobSubmissionError(f"Job '{job_id}' not found")
 
-        # 1. Live in-memory state (running jobs)
+        # 1. Live in-memory state for active jobs. Terminal live states are a
+        # cache: direct recovery and registry reconciliation can update the DB
+        # without changing this process' old object, so non-active jobs must
+        # read the registry before trusting _live_states.
         live = self._live_states.get(job_id)
-        if live is not None:
+        if live is not None and meta is not None and meta.status in _ACTIVE_DAEMON_STATUSES:
             live_data = _normalize_cancelled_checkpoint_status(
                 live.model_dump(mode="json"),
             )
@@ -1692,9 +1727,10 @@ class JobManager:
         # 2. Registry checkpoint (historical/terminal jobs)
         #    Skip if meta shows an active status — the checkpoint is stale
         #    between resume acceptance and the first new state save.
-        _active = (DaemonJobStatus.QUEUED, DaemonJobStatus.RUNNING)
-        if meta is None or meta.status not in _active:
+        if meta is None or meta.status not in _ACTIVE_DAEMON_STATUSES:
             try:
+                if record is None:
+                    record = await self._registry.get_job(job_id)
                 checkpoint_json = await self._registry.load_checkpoint(job_id)
                 if checkpoint_json is not None:
                     import json
@@ -1705,9 +1741,9 @@ class JobManager:
                     # persisted before a cancel/fail was recorded in the
                     # registry's status column.
                     authoritative_status = (
-                        meta.status.value
-                        if meta is not None
-                        else (record.status.value if record is not None else None)
+                        record.status.value
+                        if record is not None
+                        else (meta.status.value if meta is not None else None)
                     )
                     if (
                         authoritative_status
@@ -1728,7 +1764,18 @@ class JobManager:
                     exc_info=True,
                 )
 
-        # 2b. Detect stale RUNNING status (no live state + no running task).
+        # 3. Terminal live-state fallback for a known job whose registry has no
+        # checkpoint yet.
+        if live is not None:
+            live_data = _normalize_cancelled_checkpoint_status(
+                live.model_dump(mode="json"),
+            )
+            return await self._merge_registry_hook_metadata(
+                job_id,
+                live_data,
+            )
+
+        # 3b. Detect stale RUNNING status (no live state + no running task).
         #     This happens when meta was restored from the registry after a
         #     daemon restart but the job's process no longer exists.
         if meta is not None and meta.status == DaemonJobStatus.RUNNING:
@@ -1766,7 +1813,7 @@ class JobManager:
                         exc_info=True,
                     )
 
-        # 3. Basic metadata (job never produced a checkpoint, or active job
+        # 4. Basic metadata (job never produced a checkpoint, or active job
         #    whose registry checkpoint is stale)
         if meta is not None:
             return await self._merge_registry_hook_metadata(job_id, meta.to_dict())
@@ -2209,20 +2256,34 @@ class JobManager:
         """
         seen: set[str] = set()
         result: list[dict[str, Any]] = []
+        registry_records = {
+            record.job_id: record
+            for record in await self._registry.list_jobs()
+        }
 
-        # Active jobs first — enrich with live progress
+        # Active jobs first — enrich with live progress. Terminal in-memory
+        # metadata is only a cache; direct recovery can repair the registry
+        # without mutating this process' stale JobMeta (#391).
         for meta in self._job_meta.values():
-            entry = meta.to_dict()
-            live = self._live_states.get(meta.job_id)
-            if live is not None:
-                completed = sum(1 for s in live.sheets.values() if s.status.value == "completed")
-                entry["progress_completed"] = completed
-                entry["progress_total"] = len(live.sheets)
+            if meta.status in _ACTIVE_DAEMON_STATUSES:
+                entry = meta.to_dict()
+                live = self._live_states.get(meta.job_id)
+                if live is not None:
+                    completed = sum(
+                        1 for s in live.sheets.values()
+                        if s.status.value == "completed"
+                    )
+                    entry["progress_completed"] = completed
+                    entry["progress_total"] = len(live.sheets)
+            elif meta.job_id in registry_records:
+                entry = registry_records[meta.job_id].to_dict()
+            else:
+                entry = meta.to_dict()
             result.append(entry)
             seen.add(meta.job_id)
 
         # Historical jobs from registry
-        for record in await self._registry.list_jobs():
+        for record in registry_records.values():
             if record.job_id not in seen:
                 result.append(record.to_dict())
 
@@ -2744,17 +2805,55 @@ class JobManager:
             await self._checkpoint_writer.stop()
             self._checkpoint_writer = None
 
-        # Final checkpoint flush: persist ALL live states to registry before
-        # closing. This synchronous flush ensures no progress is lost.
+        # Final checkpoint flush: persist live states to registry before
+        # closing. Active states preserve progress; terminal states are skipped
+        # if direct recovery already wrote a newer registry checkpoint (#391).
+        flushed, skipped_newer_registry = await self._flush_live_checkpoints_on_shutdown()
+        if flushed:
+            _logger.info("manager.shutdown_checkpoint_flush", flushed=flushed)
+        if skipped_newer_registry:
+            _logger.info(
+                "manager.shutdown_checkpoint_flush_skipped_newer_registry",
+                skipped=skipped_newer_registry,
+            )
+
+        await self._registry.close()
+        self._shutdown_event.set()
+        _logger.info("manager.shutdown_complete")
+
+    async def _flush_live_checkpoints_on_shutdown(self) -> tuple[int, int]:
+        """Persist live checkpoints without overwriting newer terminal registry state."""
         flushed = 0
+        skipped_newer_registry = 0
         for jid, live in self._live_states.items():
             try:
+                registry_status, registry_updated_at = _checkpoint_status_and_updated_at(
+                    await self._registry.load_checkpoint(jid)
+                )
+                live_status = (
+                    live.status.value
+                    if hasattr(live.status, "value")
+                    else str(live.status)
+                )
+                if (
+                    live.status in _TERMINAL_CHECKPOINT_STATUSES
+                    and (
+                        (
+                            registry_status is not None
+                            and registry_status != live_status
+                        )
+                        or (
+                            live.updated_at is not None
+                            and registry_updated_at is not None
+                            and registry_updated_at > live.updated_at
+                        )
+                    )
+                ):
+                    skipped_newer_registry += 1
+                    continue
                 checkpoint_json = live.model_dump_json()
                 await self._registry.save_checkpoint(jid, checkpoint_json)
-                await self._registry.update_status(
-                    jid,
-                    live.status.value if hasattr(live.status, "value") else str(live.status),
-                )
+                await self._registry.update_status(jid, live_status)
                 flushed += 1
             except Exception:
                 _logger.warning(
@@ -2762,12 +2861,7 @@ class JobManager:
                     job_id=jid,
                     exc_info=True,
                 )
-        if flushed:
-            _logger.info("manager.shutdown_checkpoint_flush", flushed=flushed)
-
-        await self._registry.close()
-        self._shutdown_event.set()
-        _logger.info("manager.shutdown_complete")
+        return flushed, skipped_newer_registry
 
     async def wait_for_shutdown(self) -> None:
         """Block until shutdown is complete."""

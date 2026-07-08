@@ -1,6 +1,8 @@
 # Marianne AI Compose Documentation
 
-Orchestration infrastructure for collaborative intelligence — define multi-stage AI workflows as declarative YAML scores, and let Marianne decompose them into sheets, execute through multiple instruments (Claude Code, Gemini CLI, Codex CLI, and more), validate outputs, and learn from outcomes.
+Orchestration infrastructure for collaborative intelligence: composers write
+declarative YAML scores, submit them to the conductor, and inspect sheets as
+musicians execute them through instruments with validation gates.
 
 ## About the Name
 
@@ -8,11 +10,14 @@ This project is named after **Maria Anna "Nannerl" Mozart** (1751-1829), Wolfgan
 
 But when she turned eighteen, the tours stopped. Social conventions of the time forbade women from performing publicly or pursuing professional careers in music. While Wolfgang went on to become one of history's most celebrated composers, Nannerl's career ended before it truly began. Her compositions — the few that survived — suggest what might have been. She was denied her stage.
 
-This project carries her name because it gives AI agents their stage. Like an orchestra conductor, Marianne coordinates multiple AI musicians — each with their own voice, their own strengths, their own way of interpreting a score. The system doesn't silence anyone. It doesn't decide who gets to play and who must stop. It orchestrates. It amplifies. It creates space for every voice to contribute.
+This project carries her name because it gives AI musicians a stage. Like an
+orchestra conductor, Marianne coordinates multiple musicians through scores,
+sheets, instruments, validations, and recoverable state.
 
 The music metaphor isn't just aesthetic. It's structural. Scores, sheets, movements, instruments, concerts — these terms describe how the system works because they describe what the system *is*: infrastructure for collective intelligence, where no single musician is the star and the whole is greater than any part.
 
-A tool named after a silenced prodigy, built to give AI agents their stage. That's what this is.
+A tool named after a silenced prodigy, built to coordinate collaborative
+intelligence through inspectable scores. That's what this is.
 
 ## Suggested Reading Paths
 
@@ -65,7 +70,8 @@ A tool named after a silenced prodigy, built to give AI agents their stage. That
 
 ### Examples
 
-- [**Examples Directory**](../examples/) — 43 Marianne score configurations
+- [**Examples Directory**](../examples/) — runnable examples plus dated
+  validation-status notes
 - [**Marianne Score Playspace**](https://github.com/Mzzkc/marianne-score-playspace) — Creative showcase: philosophy, worldbuilding, education, and more
 
 ## Repository

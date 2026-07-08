@@ -460,7 +460,7 @@ prompt:
   variables:
     focus_area: "error handling"
   stakes: "This code will be deployed to production."
-  thinking_method: "Think step by step."
+  thinking_method: "Review failure modes before writing changes."
   prompt_extensions:
     - "Always write unit tests for new code."
     - "Follow the existing code style in the project."
@@ -1105,6 +1105,11 @@ ai_review:
 
 *Source: `src/marianne/core/config/workspace.py` — `LogConfig`*
 
+Score-level logging config controls score/workspace log formatting for
+compatibility and explicit offline debugging. It does not choose the conductor's
+daemon event-log destination. Daemon logging is controlled by `DaemonConfig`
+under `~/.marianne/conductor.yaml`.
+
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `level` | `"DEBUG" \| "INFO" \| "WARNING" \| "ERROR"` | `"INFO"` | | Minimum log level |
@@ -1118,8 +1123,7 @@ ai_review:
 ```yaml
 logging:
   level: DEBUG
-  format: both
-  file_path: ./workspace/marianne.log
+  format: console
   max_file_size_mb: 100
 ```
 
@@ -1189,7 +1193,13 @@ Available but rarely need changing:
 | `resource_limits` | `ResourceLimitConfig` | *(see sub-config)* | | Resource constraints |
 | `state_backend_type` | `"sqlite"` | `"sqlite"` | **Reserved — frozen to sqlite.** Changing has no effect. |
 | `state_db_path` | `Path` | `~/.marianne/daemon-state.db` | **Reserved — not yet implemented.** | Future daemon state database path |
-| `log_file` | `Path \| None` | `None` | | Log file path. `None` = stderr only. |
+| `logging.root` | `Path` | `~/.marianne/logs` | | Conductor-owned logging root |
+| `logging.event_log_name` | `str` | `conductor.log` | | Primary conductor event log file |
+| `logging.max_file_size_mb` | `int` | `50` | `1–1000` | Maximum event log size before rotation |
+| `logging.backup_count` | `int` | `5` | `0–100` | Rotated event logs to keep |
+| `logging.compress` | `bool` | `true` | | Compress rotated event logs |
+| `logging.retention_days` | `int` | `14` | `1–3650` | Retention window for managed cleanup |
+| `log_file` | `Path \| None` | *(derived)* | | Legacy alias normalized into `logging.root` and `logging.event_log_name` |
 | `shutdown_timeout_seconds` | `float` | `300.0` | `>= 10` | Max seconds for graceful shutdown |
 | `monitor_interval_seconds` | `float` | `15.0` | `>= 5` | Interval between resource monitor checks |
 | `max_job_history` | `int` | `1000` | `>= 10` | Completed/failed/cancelled jobs to keep in memory |

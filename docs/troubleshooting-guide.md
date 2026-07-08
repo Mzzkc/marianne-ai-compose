@@ -27,19 +27,19 @@ When a Marianne score fails, follow this systematic approach. Each step narrows 
 
 ```bash
 # 1. What happened?
-mzt status my-job -w workspaces/my-workspace
+mzt status my-score
 
 # 2. Full diagnostic report
-mzt diagnose my-job -w workspaces/my-workspace
+mzt diagnose my-score --workspace workspaces/my-workspace
 
 # 3. Error history with details
-mzt errors my-job --verbose
+mzt errors my-score --verbose
 
 # 4. Check logs
-mzt logs my-job --level ERROR
+mzt logs my-score --level ERROR
 
 # 5. Try recovery (re-validate without re-executing)
-mzt recover my-job --dry-run
+mzt recover my-score --dry-run
 ```
 
 Do not skip steps. `mzt status` gives you the high-level picture. `mzt diagnose` gives you everything — preflight warnings, prompt metrics, execution timeline, errors with full context, and log file locations. `mzt errors` lets you filter by type, sheet, or error code. `mzt logs` shows the raw log trail. `mzt recover` checks whether the work was actually done despite the error.
@@ -58,15 +58,12 @@ The fastest way to check a score's current state:
 # Basic status
 mzt status my-score
 
-# With workspace path
-mzt status my-score -w workspaces/my-workspace
-
 # Watch mode (updates every 2 seconds)
-mzt status my-score -w workspaces/my-workspace --watch
+mzt status my-score --watch
 ```
 
 **What it shows:**
-- Overall job state (RUNNING, PAUSED, FAILED, COMPLETED)
+- Overall score state (RUNNING, PAUSED, FAILED, COMPLETED)
 - Current sheet number and progress
 - Last validation results
 - Time elapsed
@@ -107,9 +104,6 @@ mzt validate my-score.yaml
 
 # JSON output (for automation)
 mzt validate my-score.yaml --json
-
-# With self-healing suggestions
-mzt validate my-score.yaml --self-healing
 ```
 
 **What it checks:**
@@ -136,7 +130,7 @@ mzt doctor
 - Python version compatibility
 - Required packages installed
 - Conductor daemon support
-- Default instrument availability (Claude CLI)
+- Instrument availability and readiness
 - Workspace permissions
 - State directory writability
 
@@ -148,13 +142,13 @@ Sometimes a sheet fails (non-zero exit code) but the work was actually done — 
 
 ```bash
 # Check which sheets would recover
-mzt recover my-job --dry-run
+mzt recover my-score --dry-run
 
 # Recover a specific sheet
-mzt recover my-job --sheet 6
+mzt recover my-score --sheet 6
 
 # Recover all failed sheets
-mzt recover my-job
+mzt recover my-score
 ```
 
 If validations pass, the sheet is marked as complete. This is useful when:
@@ -353,12 +347,10 @@ Error: [V002] Workspace parent directory does not exist: /path/to/parent
 ```bash
 # Manual fix
 mkdir -p /path/to/parent
-
-# Or use auto-fix
-mzt validate my-score.yaml --self-healing --yes
 ```
 
-The `--self-healing` flag detects fixable issues and offers to create missing directories.
+`mzt validate` reports this before launch; create the parent directory or choose
+a workspace path whose parent already exists.
 
 ### Pattern 6: Rate Limit Deadlock
 
@@ -423,7 +415,7 @@ mzt stop          # Waits for jobs, then stops
 When interrupting a running score, use `mzt pause` instead of killing the conductor:
 
 ```bash
-mzt pause my-score -w workspaces/my-workspace
+mzt pause my-score --wait
 ```
 
 ---
@@ -455,7 +447,6 @@ ERROR [V002] Workspace parent directory does not exist
 **Fix:**
 ```bash
 mkdir -p $(dirname <workspace-path>)
-# Or: mzt validate --self-healing --yes
 ```
 
 ### V003: Template File Not Found
@@ -626,7 +617,7 @@ mzt instruments list
 claude --version
 
 # Check conductor logs for instrument errors
-tail -f ~/.marianne/marianne.log
+mzt logs my-score --follow
 ```
 
 If the instrument exists but isn't responding, try:
@@ -772,13 +763,13 @@ Error: IPC request timed out
 
 ```bash
 # Check conductor logs
-tail -f ~/.marianne/marianne.log
+tail -f ~/.marianne/logs/conductor.log
 
 # Check conductor status
 mzt conductor-status
 
 # Look for errors in the log
-grep ERROR ~/.marianne/marianne.log
+grep ERROR ~/.marianne/logs/conductor.log
 ```
 
 **Fix:**
@@ -797,7 +788,7 @@ grep ERROR ~/.marianne/marianne.log
 journalctl -u mzt --since "1 hour ago"
 
 # Check Python traceback in logs
-grep -A 20 "Traceback" ~/.marianne/marianne.log
+grep -A 20 "Traceback" ~/.marianne/logs/conductor.log
 ```
 
 **Common causes:**
@@ -824,7 +815,7 @@ ls workspaces/my-workspace-archives/
 The conductor marks orphaned jobs as failed on startup. Resume them to continue from the last checkpoint:
 
 ```bash
-mzt resume my-job
+mzt resume my-score
 ```
 
 ---
@@ -912,12 +903,12 @@ This clears the learning store's rate limit state without affecting job progress
 
 2. **Check MCP loading:**
 
-   MCP server initialization adds ~2 seconds per sheet. Disable if not needed:
-
-   ```yaml
-   instrument_config:
-     disable_mcp: true
-   ```
+   MCP server initialization adds overhead when an instrument profile loads
+   MCP tools for each sheet. Choose or create an instrument profile with the
+   MCP behavior you need, or use the conductor's shared MCP pool when the task
+   needs project resources. Do not add old score-local keys such as
+   `instrument_config.disable_mcp`; current profiles ignore those backend-era
+   knobs.
 
 3. **Check prompt size:**
 
@@ -1059,41 +1050,41 @@ export MARIANNE_LOG_LEVEL=DEBUG
 mzt run my-score.yaml
 
 # Check logs
-tail -f ~/.marianne/marianne.log
+mzt logs my-score --follow
 ```
 
 ### Filtering Error History
 
 ```bash
 # By sheet
-mzt errors my-job --sheet 3
+mzt errors my-score --sheet 3
 
 # By error type
-mzt errors my-job --type transient
-mzt errors my-job --type rate_limit
-mzt errors my-job --type permanent
+mzt errors my-score --type transient
+mzt errors my-score --type rate_limit
+mzt errors my-score --type permanent
 
 # By error code
-mzt errors my-job --code E001
+mzt errors my-score --code E001
 
 # With full stdout/stderr
-mzt errors my-job --verbose
+mzt errors my-score --verbose
 ```
 
 ### Log Analysis
 
 ```bash
 # Recent logs
-mzt logs my-job
+mzt logs my-score
 
 # Error-level only
-mzt logs my-job --level ERROR
+mzt logs my-score --level ERROR
 
 # Follow in real-time
 mzt logs --follow
 
 # Specific log file
-mzt logs --file ./workspace/logs/marianne.log
+mzt logs --file ~/.marianne/logs/conductor.log
 
 # Last 100 lines
 mzt logs --lines 100
@@ -1105,7 +1096,7 @@ mzt logs --lines 100
 
 If the debugging protocol does not resolve your issue:
 
-1. Run `mzt diagnose my-job --include-logs --json > diagnostic.json`
+1. Run `mzt diagnose my-score --include-logs --json > diagnostic.json`
 2. File a bug with the diagnostic output:
    ```bash
    gh issue create --repo Mzzkc/marianne-ai-compose \

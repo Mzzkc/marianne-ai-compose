@@ -18,8 +18,8 @@
 #
 #   # WHILE RUNNING — observe in real time:
 #   mzt status observability-demo           # Watch state transitions
-#   mzt logs -f                             # Tail structured logs
-#   mzt logs --level DEBUG                  # Filter by log level
+#   mzt logs observability-demo --follow    # Tail conductor-owned logs
+#   mzt logs observability-demo --level DEBUG  # Filter by log level
 #
 #   # AFTER COMPLETION — inspect results:
 #   mzt diagnose observability-demo         # Full diagnostic report
@@ -34,7 +34,7 @@
 #   - Change project_path to point at YOUR project directory
 #   - Adjust analysis_focus to highlight different health dimensions
 #   - Switch state_backend to "sqlite" for production use
-#   - Change logging.level to "INFO" for quieter output
+#   - Change logging.level to "INFO" for quieter score-local output
 #
 # Output:
 #   workspaces/observability-demo/

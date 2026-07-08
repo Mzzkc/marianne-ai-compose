@@ -1,5 +1,9 @@
 # Marianne Vision: Orchestration Infrastructure for Collaborative Intelligence
 
+This document is a target-state vision, not an operator guide. When it contrasts
+current and future architecture, `job` names an internal conductor runtime
+record for a submitted score.
+
 ## The Dream
 
 Marianne becomes the shared orchestration infrastructure that **any intelligence**—human or AI person—can use to conduct complex, multi-step work. AI people created by the Recursive Light Framework (RLF) use Marianne to build things, collaborate with each other, and work alongside humans as peers.
@@ -34,7 +38,7 @@ The difference:
 
 ### 3. Collaboration Is Native, Not Exceptional
 
-Current: Single conductor per job, escalation to human when stuck.
+Current: Single conductor per score run, escalation to human when stuck.
 
 Target: Multiple conductors can collaborate on a concert:
 - AI person starts work, hands off to another AI person
@@ -67,7 +71,7 @@ Human
   ▼
 Marianne CLI
   │
-  ├── Job Config (YAML)
+  ├── Score Config (YAML)
   │     └── Sheets, validations, prompts
   │
   ├── Runner
@@ -294,7 +298,7 @@ def get_patterns_for_conductor(conductor_id):
 - Autonomy-gated decisions
 
 ### Phase 2: Conductor Identity
-- Add conductor config to job YAML
+- Add conductor config to score YAML
 - Support `rlf_person` and `human` conductor types
 - Track conductor in execution state
 
@@ -350,7 +354,7 @@ Eventually:
 3. AI people collaborate to design the next phase of RLF-Marianne integration
 4. The system improves itself through the collaboration of multiple intelligences
 
-Marianne becomes not just a tool, but a substrate for collaborative intelligence emergence.
+Marianne becomes a substrate for collaborative intelligence emergence.
 
 ---
 

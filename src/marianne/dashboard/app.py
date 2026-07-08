@@ -1,6 +1,6 @@
 """FastAPI application factory for Marianne dashboard.
 
-Provides the web server for job monitoring and control.
+Provides the web server for submitted score monitoring and control.
 The dashboard is a conductor-only proxy — every operation routes through
 the conductor's Unix domain socket via ``DaemonClient``.
 """
@@ -137,11 +137,12 @@ def create_app(
     app = FastAPI(
         title=title,
         version=version,
-        description="REST API for Marianne job orchestration",
+        description="REST API for Marianne score orchestration",
         lifespan=lifespan,
     )
 
     app.state.backend = _state_backend
+    app.state.connects_daemon = daemon_client is not None
     if daemon_client is not None:
         app.state.daemon_client = daemon_client
 
@@ -255,6 +256,15 @@ def create_app(
         with the conductor marked ``down`` (and is logged) rather than a false
         ``healthy`` (#322) or a silently swallowed error (#266).
         """
+        if not getattr(app.state, "connects_daemon", False):
+            return {
+                "status": "degraded",
+                "version": version,
+                "service": "marianne-dashboard",
+                "conductor": "down",
+                "message": "Conductor unavailable for isolated dashboard",
+            }
+
         conductor_up = False
         try:
             conductor_up = await asyncio.wait_for(

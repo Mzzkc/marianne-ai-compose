@@ -38,7 +38,6 @@ workspace_lifecycle:
   archive_on_fresh: false
 
 instrument: claude-code
-instrument_fallbacks: [opencode, gemini-cli]
 instrument_config:
   timeout_seconds: 1200
 
@@ -360,13 +359,6 @@ prompt:
 
     {# ── Stage 4: Envelope Re-Check (Tool Chain) ─────────────────────────── #}
     {% elif stage == 4 %}
-    # Market-Open — Stage 4: Envelope Re-Check
-
-    Re-run the deterministic envelope check on the FINAL slate. Tier
-    demotions in arbitration changed sizes; the envelope check on
-    pre-market's slate doesn't cover the final shape.
-
-    ```bash
     set -e
     : "${CHECK_ENVELOPE_CMD:?CHECK_ENVELOPE_CMD must be an absolute path}"
     today=$(cat {{ workspace }}/today-date.txt)
@@ -383,17 +375,9 @@ prompt:
     rc=$?
     cat {{ workspace }}/proposals/${today}-envelope-check-final.log
     exit $rc
-    ```
 
     {# ── Stage 5: Execute (deterministic — Tool Chain) ────────────────────── #}
     {% elif stage == 5 %}
-    # Market-Open — Stage 5: Execute (deterministic)
-
-    No agent judgment here. Invoke `execute_slate.sh` and let it iterate
-    the final slate, place orders with deterministic client_order_ids,
-    and set initial stops.
-
-    ```bash
     set -e
     : "${EXECUTE_SLATE_CMD:?EXECUTE_SLATE_CMD must be an absolute path}"
     today=$(cat {{ workspace }}/today-date.txt)
@@ -403,11 +387,6 @@ prompt:
     mkdir -p {{ workspace }}/journal
 
     bash "$EXECUTE_SLATE_CMD" {{ workspace }} "$SLATE" "$RESULTS" "$FAILURES"
-    ```
-
-    `execute_slate.sh` writes results.jsonl (one row per attempt), the
-    failures file (always touched, content only on failure), appends
-    successes to `trade-log.jsonl`, and refreshes `positions.json`.
 
     {# ── Stage 6: Journal & Notify (interpretive) ─────────────────────────── #}
     {% elif stage == 6 %}

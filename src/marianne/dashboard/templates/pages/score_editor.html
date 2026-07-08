@@ -246,8 +246,8 @@
                                         <span class="text-gray-700 dark:text-gray-300 font-medium" x-text="lastValidation.config_summary.total_sheets"></span>
                                     </div>
                                     <div class="flex justify-between">
-                                        <span class="text-gray-500 dark:text-gray-400">Backend</span>
-                                        <span class="text-gray-700 dark:text-gray-300 font-medium" x-text="lastValidation.config_summary.backend_type"></span>
+                                        <span class="text-gray-500 dark:text-gray-400">Instrument</span>
+                                        <span class="text-gray-700 dark:text-gray-300 font-medium" x-text="lastValidation.config_summary.instrument"></span>
                                     </div>
                                     <div class="flex justify-between">
                                         <span class="text-gray-500 dark:text-gray-400">Validations</span>
@@ -313,12 +313,21 @@
                             <div class="text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading templates...</div>
                         </div>
                     </template>
-                    <template x-if="!loadingTemplates && availableTemplates.length === 0">
+                    <template x-if="!loadingTemplates && templateError">
+                        <div class="text-center py-8 space-y-3">
+                            <p class="text-sm text-red-600 dark:text-red-300" x-text="templateError"></p>
+                            <button @click="fetchTemplates(true)"
+                                    class="text-xs px-3 py-1.5 rounded border border-red-200 dark:border-red-700 text-red-700 dark:text-red-200 hover:bg-red-50 dark:hover:bg-red-900/20">
+                                Retry
+                            </button>
+                        </div>
+                    </template>
+                    <template x-if="!loadingTemplates && !templateError && availableTemplates.length === 0">
                         <div class="text-center py-8">
                             <p class="text-sm text-gray-500 dark:text-gray-400">No templates available.</p>
                         </div>
                     </template>
-                    <template x-if="!loadingTemplates && availableTemplates.length > 0">
+                    <template x-if="!loadingTemplates && !templateError && availableTemplates.length > 0">
                         <div class="space-y-2">
                             <template x-for="tmpl in availableTemplates" :key="tmpl.name">
                                 <button @click="loadTemplate(tmpl)"
@@ -362,6 +371,7 @@ function scoreEditor() {
         submitResult: null,
         showTemplatePicker: false,
         loadingTemplates: false,
+        templateError: null,
         availableTemplates: [],
 
         defaultContent: [
@@ -500,11 +510,14 @@ function scoreEditor() {
         async loadTemplateByName(name) {
             try {
                 const res = await fetch('/api/scores/templates/' + encodeURIComponent(name));
-                if (!res.ok) return;
+                if (!res.ok) throw new Error('Template is unavailable');
                 const tmpl = await res.json();
                 this.setContent(tmpl.content || '');
             } catch (e) {
-                // Silently fail — user can load manually
+                this.submitResult = {
+                    success: false,
+                    message: 'Template unavailable: ' + e.message
+                };
             }
         },
 
@@ -513,16 +526,18 @@ function scoreEditor() {
             this.showTemplatePicker = false;
         },
 
-        async fetchTemplates() {
-            if (this.availableTemplates.length > 0) return;
+        async fetchTemplates(force = false) {
+            if (!force && this.availableTemplates.length > 0) return;
             this.loadingTemplates = true;
+            this.templateError = null;
             try {
                 const res = await fetch('/api/scores/templates/list');
-                if (!res.ok) return;
+                if (!res.ok) throw new Error('Template list is unavailable');
                 const data = await res.json();
                 this.availableTemplates = data.templates || [];
             } catch (e) {
-                // Silently fail
+                this.availableTemplates = [];
+                this.templateError = e.message || 'Template list is unavailable';
             } finally {
                 this.loadingTemplates = false;
             }

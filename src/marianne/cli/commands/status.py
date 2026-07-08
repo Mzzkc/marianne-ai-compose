@@ -290,7 +290,10 @@ async def _status_job(
         _logger.error("status_conductor_error", error=error_detail, exc_info=True)
         output_error(
             f"Conductor error: {error_detail}",
-            hints=["Check conductor logs: tail -f ~/.marianne/marianne.log"],
+            hints=[
+                "Check conductor logs under the configured logging root "
+                "(default: ~/.marianne/logs/conductor.log)."
+            ],
             json_output=json_output,
         )
         raise typer.Exit(1) from None
@@ -384,7 +387,7 @@ async def _status_job_watch(
                     f"Conductor error: {error_detail}",
                     hints=[
                         "Check conductor health: mzt conductor-status",
-                        "Restart if needed: mzt restart",
+                        "Pause or finish active scores before restarting: mzt restart",
                     ],
                 )
                 await asyncio.sleep(interval)
@@ -2248,7 +2251,7 @@ def clear(
 
     Examples:
         mzt clear                                 # Clear all terminal scores
-        mzt clear --job conductor-fix             # Clear a specific score
+        mzt clear --score conductor-fix           # Clear a specific score
         mzt clear --status failed                 # Clear only failed scores
         mzt clear --status failed -s cancelled    # Clear failed + cancelled
         mzt clear --older-than 3600               # Terminal scores older than 1h

@@ -43,7 +43,7 @@
 # Usage:
 #   mzt validate examples/research/parallel-research-fanout.yaml
 #   mzt run examples/research/parallel-research-fanout.yaml
-#   mzt status fanout-research -w ../../workspaces/fanout-workspace
+#   mzt status fanout-research --watch
 #
 # Estimated Time: ~15-25 minutes (3 parallel searches + synthesis)
 # Estimated Cost: $0.50-$2.00 (depends on research depth; claude-code primary, anthropic_api fallback)

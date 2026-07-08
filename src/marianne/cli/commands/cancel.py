@@ -1,9 +1,9 @@
 """Cancel command for Marianne CLI.
 
-Provides `mzt cancel` to immediately cancel a running job via
-asyncio task cancellation. Unlike `pause`, this interrupts mid-sheet
-and does not wait for a clean boundary. Use `pause` for graceful
-stops; use `cancel` when the job must stop now.
+Provides `mzt cancel` to immediately cancel a running score through the
+conductor. Unlike `pause`, this interrupts mid-sheet and does not wait for a
+clean boundary. Use `pause` for graceful stops; use `cancel` when the score
+must stop now.
 """
 
 from __future__ import annotations
@@ -29,9 +29,9 @@ def cancel(
 ) -> None:
     """Cancel a running Marianne score immediately.
 
-    Unlike `pause`, this does not wait for a sheet boundary. The score's
-    asyncio task is cancelled, in-progress work is rolled back, and the
-    score is marked as CANCELLED. Use `pause` for graceful stops.
+    Unlike `pause`, this does not wait for a sheet boundary. The conductor
+    cancels the running score, in-progress work is rolled back, and the score
+    is marked as CANCELLED. Use `pause` for graceful stops.
 
     Examples:
         mzt cancel my-job

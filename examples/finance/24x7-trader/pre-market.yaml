@@ -35,7 +35,6 @@ workspace_lifecycle:
   archive_on_fresh: false        # never wipe trade history
 
 instrument: claude-code
-instrument_fallbacks: [opencode, gemini-cli]
 instrument_config:
   timeout_seconds: 1200
 
@@ -440,18 +439,6 @@ prompt:
 
     {# ── Stage 5: Risk-Envelope Check (Tool Chain — deterministic) ─────────── #}
     {% elif stage == 5 %}
-    # Pre-Market — Stage 5: Risk-Envelope Check
-
-    Run the deterministic envelope check on the slate produced in stage 4.
-    This stage is mechanical: invoke the script, capture output, fail if
-    the script fails.
-
-    The script needs three arguments:
-      check_envelope.sh <workspace> <slate.json> <balance.json>
-
-    The balance.json was refreshed by stage 1 from the broker's `get_balance`.
-
-    ```bash
     set -e
     : "${CHECK_ENVELOPE_CMD:?CHECK_ENVELOPE_CMD must be an absolute path to check_envelope.sh}"
     today=$(cat {{ workspace }}/today-date.txt)
@@ -468,12 +455,6 @@ prompt:
     rc=$?
     cat {{ workspace }}/proposals/${today}-envelope-check.log
     exit $rc
-    ```
-
-    The validation for this stage runs the same check via
-    `command_succeeds` — that is the gate. If this stage fails, the
-    market-open phase will not proceed (the slate it would consume is
-    flagged as failing).
 
     {# ── Stage 6: Journal & Commit ───────────────────────────────────────── #}
     {% elif stage == 6 %}

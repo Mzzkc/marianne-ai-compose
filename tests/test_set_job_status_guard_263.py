@@ -23,6 +23,10 @@ The allow-list is the audited result (2026-05-31):
                          meta/live/registry through ``_set_job_status``.
 - ``shutdown``         — final flush; writes registry FROM ``live.status`` (the
                          authority) — reconciliation, never divergence.
+- ``_flush_live_checkpoints_on_shutdown`` — extracted final-flush helper used
+                         only by ``shutdown``; skips terminal live caches when
+                         the registry checkpoint is newer or has different
+                         terminal status (#391).
 """
 
 from __future__ import annotations
@@ -31,7 +35,14 @@ import ast
 from pathlib import Path
 
 _ALLOWED_CALLERS = frozenset(
-    {"_set_job_status", "start", "submit_job", "_cancel_cleanup", "shutdown"}
+    {
+        "_set_job_status",
+        "start",
+        "submit_job",
+        "_cancel_cleanup",
+        "shutdown",
+        "_flush_live_checkpoints_on_shutdown",
+    }
 )
 
 

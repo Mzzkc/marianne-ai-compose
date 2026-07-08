@@ -40,17 +40,18 @@ def client(app):
 
 @pytest.fixture
 def sample_config_yaml():
-    """Sample YAML config content."""
+    """Sample score YAML content."""
     return """
 name: Test Job
 workspace: ./test-workspace
+instrument: claude-code
 sheet:
-  total_sheets: 3
+  size: 1
+  total_items: 3
+prompt:
   template: |
     SHEET: {{sheet_num}}
     Test sheet content
-backend:
-  type: claude_cli
 """
 
 
@@ -108,8 +109,9 @@ name: Test Job
 
             response = client.post("/api/jobs", json={"config_content": malformed_yaml})
 
-        assert response.status_code == 503
+        assert response.status_code == 400
         assert "Invalid YAML" in response.json()["detail"]
+        mock_start.assert_not_called()
 
     def test_start_job_with_all_optional_parameters(self, client, sample_config_yaml):
         """Test starting job with all optional parameters."""
@@ -138,12 +140,13 @@ name: Test Job
                     "workspace": "./custom-workspace",
                     "start_sheet": 2,
                     "fresh": True,
+                    "confirm_fresh": True,
                     "self_healing": True,
                     "self_healing_auto_confirm": True,
                     "escalation": True,
                     "dry_run": True,
                     "chain_depth": 4,
-                    "client_cwd": "/tmp",
+                    "client_cwd": ".",
                     "runtime_variables": {"platform": "shorts"},
                 },
             )
@@ -163,7 +166,7 @@ name: Test Job
         assert kwargs["escalation"] is True
         assert kwargs["dry_run"] is True
         assert kwargs["chain_depth"] == 4
-        assert kwargs["client_cwd"] == Path("/tmp")
+        assert kwargs["client_cwd"] == Path.cwd().resolve()
         assert kwargs["runtime_variables"] == {"platform": "shorts"}
 
     def test_pause_job_already_paused(self, client):

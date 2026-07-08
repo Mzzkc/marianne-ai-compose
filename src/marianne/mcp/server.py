@@ -1,8 +1,8 @@
 """Marianne MCP Server implementation.
 
-This module implements the core MCP server that exposes Marianne job management
-capabilities through the Model Context Protocol. The server provides tools
-and resources for external AI agents to interact with Marianne.
+This module implements the core MCP server that exposes conductor-managed
+Marianne score execution through the Model Context Protocol. The server
+provides tools and resources for external AI agents to interact with Marianne.
 
 The server implements JSON-RPC 2.0 over HTTP/SSE transport and follows the
 MCP specification for capability negotiation, tool execution, and resource access.
@@ -23,7 +23,7 @@ class MCPServer:
     """Marianne MCP Server - Exposes Marianne capabilities via Model Context Protocol.
 
     The server implements the MCP specification to provide:
-    - Job management tools (run, pause, resume, cancel, status)
+    - Submitted-score management tools (run, pause, resume, cancel, status)
     - Artifact browsing and log streaming
     - Configuration access as resources
 
@@ -58,7 +58,7 @@ class MCPServer:
         # Initialize tool categories
         self.job_tools = JobTools(self.state_backend, self.workspace_root)
         self.control_tools = ControlTools(self.state_backend, self.workspace_root)
-        self.artifact_tools = ArtifactTools(self.workspace_root)
+        self.artifact_tools = ArtifactTools(self.workspace_root, self.state_backend)
         self.score_tools = ScoreTools(self.workspace_root)
 
         # Initialize resources
@@ -107,7 +107,9 @@ class MCPServer:
             "serverInfo": {
                 "name": "marianne-mcp-server",
                 "version": "1.0.0",
-                "description": "Marianne AI Compose MCP Server - Job management and orchestration"
+                "description": (
+                    "Marianne AI Compose MCP Server - conductor-managed score execution"
+                )
             }
         }
 

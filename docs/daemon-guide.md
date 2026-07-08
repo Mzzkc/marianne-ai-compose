@@ -171,7 +171,9 @@ The conductor is configured via a YAML file passed to `mzt start --config <path>
 | `shutdown_timeout_seconds` | `float` | `300.0` | Max wait for graceful shutdown (5 min) |
 | `monitor_interval_seconds` | `float` | `15.0` | Resource check interval |
 | `max_job_history` | `int` | `1000` | Terminal jobs kept in memory before eviction |
-| `log_file` | `Path \| None` | `None` | Log file path (`None` = stderr only) |
+| `logging.root` | `Path` | `~/.marianne/logs` | Conductor-owned logging root |
+| `logging.event_log_name` | `str` | `conductor.log` | Primary conductor event log file under `logging.root` |
+| `log_file` | `Path \| None` | *(derived)* | Legacy alias normalized into `logging.root` and `logging.event_log_name` |
 | `learning.*` | `SemanticLearningConfig` | *(see below)* | Semantic learning via LLM analysis |
 
 ### Semantic Learning (nested under `learning`)
@@ -225,7 +227,13 @@ For more control:
 max_concurrent_jobs: 10
 job_timeout_seconds: 43200  # 12 hours for long jobs
 log_level: debug
-log_file: ~/.marianne/marianne.log
+
+logging:
+  root: ~/.marianne/logs
+  event_log_name: conductor.log
+  max_file_size_mb: 50
+  backup_count: 5
+  compress: true
 
 resource_limits:
   max_memory_mb: 4096
@@ -326,11 +334,16 @@ Readiness shows `[+] ready` when the conductor is accepting jobs, or `[-] not_re
 
 ### Conductor Logs
 
-In foreground mode, logs go to stderr in console format. In background mode, logs are structured JSON. If `log_file` is configured, logs are written there:
+In foreground mode, logs are also shown on stderr in console format. The
+conductor's durable event log is structured JSON under the configured logging
+root. The default event log is `~/.marianne/logs/conductor.log`.
 
 ```bash
-# View conductor logs (if log_file is set)
-tail -f ~/.marianne/marianne.log
+# View conductor events directly
+tail -f ~/.marianne/logs/conductor.log
+
+# Prefer the Marianne log reader for score-specific filtering
+mzt logs my-score --follow
 ```
 
 ### Programmatic Health Probes

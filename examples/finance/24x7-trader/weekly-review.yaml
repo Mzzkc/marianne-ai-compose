@@ -42,7 +42,6 @@ workspace_lifecycle:
 
 # Score-level default for non-reviewer sheets (1, 8, 9, 10).
 instrument: claude-code
-instrument_fallbacks: [opencode, gemini-cli]
 instrument_config:
   timeout_seconds: 1500
 
@@ -169,23 +168,11 @@ prompt:
   template: |
     {# ── Stage 1: Aggregate Week (deterministic) ──────────────────────────── #}
     {% if stage == 1 %}
-    # Weekly Review — Stage 1: Aggregate Week
-
-    ## Fermata check (HALT IF PRESENT)
-
-    ```bash
     if [[ -f {{ workspace }}/proposals/PENDING-COMPOSER-REVIEW.md ]]; then
       echo "FERMATA: PENDING-COMPOSER-REVIEW.md already exists — halting weekly-review (the stage-6 fermata-write would overwrite operator context)" >&2
       exit 1
     fi
-    ```
 
-    ## Pull this week's data
-
-    Produce a deterministic aggregate document that the three reviewers
-    will all consume.
-
-    ```bash
     set -e
     today=$(date +%F)
     echo "$today" > {{ workspace }}/today-date.txt
@@ -261,36 +248,52 @@ prompt:
         echo               >> {{ workspace }}/today-week-journals.md
       fi
     done
-    ```
 
-    Now write the aggregate document the reviewers will read:
+    python3 - <<'PY' > {{ workspace }}/weekly-reviews/today-aggregate.md
+    import json
+    from pathlib import Path
+    ws = Path('{{ workspace }}')
+    stats = json.loads((ws / 'today-week-stats.json').read_text())
+    trades = json.loads((ws / 'today-week-trades.json').read_text())
+    strategy = (ws / '02-strategy.md').read_text() if (ws / '02-strategy.md').exists() else ''
+    envelope = (ws / 'risk-envelope.yaml').read_text() if (ws / 'risk-envelope.yaml').exists() else ''
+    journals = (ws / 'today-week-journals.md').read_text() if (ws / 'today-week-journals.md').exists() else ''
+    learnings = (ws / 'learnings.md').read_text() if (ws / 'learnings.md').exists() else ''
+    print('# Weekly Review Aggregate')
+    print()
+    print('## Week Window')
+    print(f"{stats.get('week_start')} to {stats.get('week_end')}")
+    print()
+    print('## Numbers')
+    print('```json')
+    print(json.dumps(stats, indent=2))
+    print('```')
+    print()
+    print('## Trades This Week')
+    print('```json')
+    print(json.dumps(trades, indent=2))
+    print('```')
+    print()
+    print('## Drawdown')
+    print(f"Weekly drawdown pct: {stats.get('weekly_drawdown_pct', 0)}")
+    print()
+    print('## Strategy Version')
+    print('\n'.join(strategy.splitlines()[:20]) or 'strategy.md missing')
+    print()
+    print('## Risk Envelope')
+    print('```yaml')
+    print(envelope.strip() or 'risk-envelope.yaml missing')
+    print('```')
+    print()
+    print('## This Week Journals')
+    print(journals.strip() or 'No journal entries found for this week.')
+    print()
+    print('## Active Learnings')
+    print(learnings.strip() or 'No learnings.md found.')
+    PY
 
-    `{{ workspace }}/weekly-reviews/today-aggregate.md`:
-
-    - `## Week Window` — week_start to week_end
-    - `## Numbers` — full week stats from `today-week-stats.json` (table)
-    - `## Trades This Week` — count, breakdown by side, by tier; full
-      trade list table from `today-week-trades.json`
-    - `## Drawdown` — weekly drawdown pct + the envelope's halt threshold
-      (from risk-envelope.yaml)
-    - `## Strategy Version` — first 5 lines of `02-strategy.md` for
-      version reference
-    - `## Charter Snippet` — `## Sovereign Operator Rules` from strategy
-    - `## This Week's Journals` — concat from `today-week-journals.md`
-    - `## Operator's Tracked Questions` — copy "What I'm trying to
-      learn" from operator-charter.md, three items
-    - `## Active Learnings (current)` — current `learnings.md` "Hot"
-      section
-
-    Length: as long as the data warrants. The point is reviewers see
-    everything in one place.
-
-    Also save dated copy:
-
-    ```bash
     cp {{ workspace }}/weekly-reviews/today-aggregate.md \
        {{ workspace }}/weekly-reviews/$(cat {{ workspace }}/today-date.txt)-aggregate.md
-    ```
 
     {# ── Stage 2: Delphi Round 1 (independent) ────────────────────────────── #}
     {% elif stage == 2 %}
@@ -452,22 +455,6 @@ prompt:
 
     {# ── Stage 5: Threshold Check (Quorum Trigger) ────────────────────────── #}
     {% elif stage == 5 %}
-    # Weekly Review — Stage 5: Threshold Check
-
-    Deterministic check. The drawdown number is read from the **deterministic
-    aggregate** at `today-week-stats.json`, NOT from the synthesizer's
-    decision JSON — the synthesizer is an LLM and cannot be trusted with
-    safety-critical numbers. We additionally cross-check that the
-    synthesizer's reported drawdown matches the deterministic source within
-    a small tolerance; mismatch is itself a failure.
-
-    Strategy-change detection scans the synthesis MARKDOWN for proposed
-    edits to `strategy.md` or `risk-envelope.yaml` (not just the
-    decision JSON's structured field), so the synthesizer can't dodge
-    fermata by suppressing the structured field while writing changes
-    in prose.
-
-    ```bash
     set -e
     python3 - <<'PY' > {{ workspace }}/weekly-reviews/today-threshold.json
     import json, sys, re
@@ -534,7 +521,6 @@ prompt:
     PY
 
     cat {{ workspace }}/weekly-reviews/today-threshold.json
-    ```
 
     {# ── Stage 6: Fermata Gate ────────────────────────────────────────────── #}
     {% elif stage == 6 %}

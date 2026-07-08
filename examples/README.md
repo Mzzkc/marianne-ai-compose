@@ -11,7 +11,7 @@ results no single agent could reach alone.
 ```bash
 pip install marianne-ai-compose
 mzt start
-mzt run examples/getting-started/hello.yaml
+mzt run examples/getting-started/hello-setup.yaml
 ```
 
 ## Categories
@@ -27,7 +27,10 @@ mzt run examples/getting-started/hello.yaml
 | [advanced](advanced/README.md) | Explicit dependency DAGs, multi-instrument routing, echelon-tiered analysis, multi-source convergence | 2 | `instrument-showcase.yaml` |
 | [finance/24x7-trader](finance/24x7-trader/README.md) | **Flagship family.** Six scores operating an autonomous swing-trading agent: deterministic risk-envelope enforcement, three-frame Source Triangulation pre-market, Red Team / Blue Team adversarial review at the open, two-round Delphi weekly retros, file-based fermata. Vendor-neutral via technique contracts. Paper-safe by default. | 1 family (6 scores) | `finance/24x7-trader/README.md` |
 
-40 examples + 1 flagship family across 8 categories.
+The inventory changes as examples are added or reclassified. As of the
+2026-07-08 corpus audit, the sweep covered 67 YAML configs under `examples/`
+and `scores/`: 39 clean, 13 warning-bearing, and 15 failing or internal/template
+configs. Treat that as a dated snapshot, not a permanent health claim.
 
 ## Running Examples
 
@@ -88,19 +91,25 @@ interactive guidance.
 
 ## Quality
 
-All 40 examples validate clean with `mzt validate`. Every score uses
-`instrument_fallbacks` for resilience — if the primary instrument is
-unavailable, execution falls back automatically. Validation paths use correct
-syntax (`{workspace}` for Python format strings, `{{ workspace }}` for Jinja2
-templates). No hardcoded paths, no undefined template variables, no
-placeholder prompts.
+Public examples should validate clean or state their warning, provider,
+template, archive, or internal status. The 2026-07-08 corpus audit found
+remaining validation debt, including raw `cli` prompt/fallback warnings, partial
+fan-out instrument coverage warnings, private absolute paths in internal-style
+examples, weak file-exists-only validations, and folded multi-line validation
+commands. Do not use this README as proof that every checked-in YAML is clean;
+run `mzt validate` on the score you plan to copy.
+
+Every public score should use `instrument_fallbacks` intentionally. Validation
+paths use Python format strings (`{workspace}` for validation paths and
+commands, `{{ workspace }}` for Jinja2 templates). If a score is template-only
+or provider-gated, it should say so near the command that runs it.
 
 Scores in `patterns/`, `research/`, and `engineering/` include substantive
 validations beyond `file_exists` — content checks, structural regex, and
 command-based verification that outputs contain real work.
 
-All examples passed three-stage commissioning validation:
+Commissioning for this corpus should check:
 
 1. **Syntax**: YAML parses, Pydantic schemas validate, no critical errors
 2. **Structure**: Required fields present (instrument, movements, dependencies, fallbacks)
-3. **Compliance**: Generic/reusable, meaningful validations, real work prompts, professional content
+3. **Compliance**: Generic/reusable where public, meaningful validations, real work prompts, professional content

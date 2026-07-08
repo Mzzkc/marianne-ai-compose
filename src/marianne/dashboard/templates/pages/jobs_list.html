@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Jobs — Marianne{% endblock %}
+{% block title %}Submitted Scores — Marianne{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
     <!-- Page header -->
     <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Jobs</h1>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Submitted Scores</h1>
         <a href="/editor"
            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-marianne-500 text-white hover:bg-marianne-600 transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,14 +49,14 @@
         </div>
     </div>
 
-    <!-- Jobs list (htmx-loaded, auto-refresh every 10s) -->
+    <!-- Submitted score list (htmx-loaded, auto-refresh every 10s) -->
     <div id="jobs-list-container"
          hx-get="/jobs/list"
          hx-trigger="load, every 10s"
          hx-swap="innerHTML"
          hx-indicator="#jobs-loading">
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-            <div class="text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading jobs...</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading submitted scores...</div>
         </div>
     </div>
 </div>

@@ -1433,6 +1433,26 @@ class CheckpointState(BaseModel):
         sheet.exit_code = 0
         sheet.validation_passed = validation_passed
         sheet.validation_details = validation_details
+        if validation_details is not None:
+            sheet.passed_validations = [
+                str(detail.get("description") or detail.get("rule_type") or "validation")
+                for detail in validation_details
+                if detail.get("passed", False)
+            ]
+            sheet.failed_validations = [
+                str(detail.get("description") or detail.get("rule_type") or "validation")
+                for detail in validation_details
+                if not detail.get("passed", False)
+            ]
+            if validation_details:
+                passed = len(sheet.passed_validations)
+                sheet.last_pass_percentage = passed / len(validation_details) * 100.0
+            else:
+                sheet.last_pass_percentage = 100.0
+        elif validation_passed:
+            sheet.failed_validations = []
+            if sheet.last_pass_percentage is not None:
+                sheet.last_pass_percentage = 100.0
         if execution_duration_seconds is not None:
             sheet.execution_duration_seconds = execution_duration_seconds
 

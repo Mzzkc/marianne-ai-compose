@@ -2,7 +2,7 @@
 
 **If it runs in a CLI, Marianne can orchestrate it.**
 
-Marianne is a universal asynchronous orchestrator. You write a declarative YAML score describing what you want built, analyzed, or created. Marianne decomposes it into sheets, executes them through any combination of AI instruments, validates every output against acceptance criteria, and feeds learned patterns forward. The system doesn't wait. The human conducts.
+Marianne is a universal asynchronous orchestrator. A composer writes a declarative YAML score describing what should be built, analyzed, or created. Marianne decomposes it into sheets, executes them through any combination of AI instruments, validates every output against acceptance criteria, and feeds learned patterns forward. The conductor owns execution state; the composer directs the work.
 
 ```bash
 pip install -e ".[daemon]"
@@ -30,7 +30,9 @@ Full-stack SaaS applications from YAML. Parallel backend and frontend tracks val
 
 PRISMA-compliant academic literature reviews. Strategic planning with multi-framework analysis. Training data curation with inter-annotator agreement. Nonfiction book manuscripts. Contract generation with cross-reference validation. Recruitment screening with weighted criteria. Dinner party logistics. World-building.
 
-43 example scores ship with the project. Not demos — production patterns.
+The examples directory contains runnable patterns across engineering, research,
+creative work, product work, and operations. Its README carries the current
+validation status for the checked-in examples.
 
 ---
 
@@ -84,7 +86,7 @@ The conductor handles:
 - **Learning** — records outcomes, detects patterns, improves future executions
 - **Conductor clones** — isolated test conductors via `--conductor-clone` for safe experimentation
 
-The human conducts. Pause a running score, modify its config, resume. Cancel one score while others keep running. Monitor everything from the terminal or the web dashboard. The conductor is the single execution authority — no split-brain, no orphaned agents, no corrupted state.
+A composer conducts. Pause a running score, modify its config, resume. Cancel one score while others keep running. Monitor everything from the terminal or the web dashboard. The conductor is the single execution authority — no split-brain, no orphaned agents, no corrupted state.
 
 ```bash
 mzt pause my-score         # Pause gracefully
@@ -97,9 +99,11 @@ mzt stop                   # Stop conductor (only when no scores are running)
 
 ## Self-Evolution
 
-Marianne developed itself through autonomous self-evolution scores — each one analyzing the codebase, identifying improvements, implementing changes, running tests, and validating results. The system that runs your scores is the system that built itself.
+Marianne developed much of itself through autonomous self-evolution scores — each one analyzing the codebase, identifying improvements, implementing changes, running tests, and validating results. The system that runs your scores is the system that helped build itself.
 
-The project includes 261 source files, 372 test files, and 10,354+ individual tests. The learning system has accumulated patterns across every execution. When Marianne encounters a problem it's seen before, it knows what worked.
+For current source and test counts, inspect the repository and CI output rather
+than a static README number. The learning system records execution outcomes and
+can feed useful patterns forward when the conductor has evidence for them.
 
 This isn't a prototype. It's an R&D factory that happens to also be the product.
 
@@ -145,7 +149,13 @@ retry:
 
 Sheets divide work into atomic units. Each sheet gets its own prompt, execution, validation, and retry budget. Validation is not optional — exit code 0 does not mean success. Only passing all validations means success.
 
-Five validation types: `file_exists`, `file_modified`, `content_contains`, `content_regex`, `command_succeeds`. Validation paths use Python format strings: `{workspace}`, `{sheet_num}`.
+First-class validation types include `file_exists`, `file_modified`,
+`content_contains`, `content_regex`, `command_succeeds`, `path_in_scope`,
+`field_match`, `file_sha256`, and `csv_unique_key`. Static preflight checks
+also catch common score-authoring traps before launch, including Bash/Jinja
+collisions, raw `cli` prompt bodies that do not render as shell, partial
+fan-out instrument coverage, and prompt/validation section-label drift.
+Validation paths use Python format strings: `{workspace}`, `{sheet_num}`.
 
 For parallel execution, declare dependencies as a DAG:
 
@@ -278,7 +288,9 @@ See [examples/README.md](examples/README.md) for the complete catalogue with com
 ### Prerequisites
 
 - Python 3.11+
-- At least one AI CLI tool installed and authenticated (e.g., Claude Code for the `claude-code` instrument)
+- At least one execution-ready instrument. Run `mzt doctor` and
+  `mzt instruments list` after installation; `hello-setup` can discover a
+  free, local, or paid path for the first run.
 
 ### Quick Setup
 
@@ -348,7 +360,7 @@ mzt instruments list        # See available instruments
 |---------|---------|
 | `mzt diagnose <id>` | Comprehensive diagnostic report |
 | `mzt errors <id>` | Color-coded error history |
-| `mzt logs <id>` | View or tail log files |
+| `mzt logs <id>` | View or tail log sources |
 | `mzt history <id>` | Execution history from SQLite |
 | `mzt recover <id>` | Re-validate without re-execution |
 
@@ -358,7 +370,7 @@ mzt instruments list        # See available instruments
 |---------|---------|
 | `mzt start` | Start the conductor |
 | `mzt stop` | Stop (warns if scores are running) |
-| `mzt restart` | Restart |
+| `mzt restart` | Restart only after active scores are drained or paused |
 | `mzt conductor-status` | Health and uptime |
 | `mzt clear-rate-limits` | Clear stale instrument rate limits |
 
@@ -392,7 +404,8 @@ ruff check src/      # Lint
 ## Documentation & Community
 
 - **Get started:** [`examples/getting-started/`](examples/getting-started/) — run
-  [`hello.yaml`](examples/getting-started/hello.yaml) free, end to end, in minutes.
+  [`hello-setup.yaml`](examples/getting-started/hello-setup.yaml) first; it
+  discovers an instrument, writes the resolved hello score, and runs it.
 - **Free / local quickstart:** [`docs/sandbox-free-quickstart.md`](docs/sandbox-free-quickstart.md)
 - **Write your own scores:** [`docs/score-writing-guide.md`](docs/score-writing-guide.md)
   and the [score-authoring skill](plugins/marianne/skills/score-authoring/SKILL.md)

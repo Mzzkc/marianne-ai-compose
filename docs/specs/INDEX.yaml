@@ -11,6 +11,9 @@ files:
   - name: 2026-04-13-composition-compiler-design.md
     purpose: "Composition compiler — compiling compose output into executable scores"
     status: active
+  - name: 2026-04-15-compiler-compose-decoupling.md
+    purpose: "Compiler/compose decoupling — separates the implemented batch compiler from the planned interactive compose experience"
+    status: active
   - name: 2026-04-13-instrument-forge-spec.md
     purpose: "Instrument Forge — dynamic provider discovery and profile generation system"
     status: draft

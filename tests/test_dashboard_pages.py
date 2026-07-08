@@ -69,6 +69,8 @@ class TestPageRoutes:
         response = client.get("/jobs")
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
+        assert "Submitted Scores" in response.text
+        assert ">Jobs<" not in response.text
 
     def test_jobs_list_partial_renders_empty(self, client):
         """GET /jobs/list should return HTML partial with empty job list."""

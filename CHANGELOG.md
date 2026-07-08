@@ -10,33 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Daemon Mode (marianned) — 2026-02-11
-- **Daemon service** (`marianned start/stop/status`) — Long-running process that manages multiple concurrent jobs
+- **Daemon service** (`marianned start/stop/status`) — Long-running conductor process that manages multiple concurrent score runs
 - **IPC layer** — Unix domain socket with JSON-RPC 2.0 protocol for client-daemon communication
-- **Job manager** — Tracks job lifecycle, handles submission/cancellation
+- **Score-run manager** — Tracks conductor runtime records and handles submission/cancellation
 - **Resource monitor** — Tracks CPU/memory/process usage with configurable limits
 - **Health checks** — Liveness/readiness probes for daemon health monitoring
-- **Cross-job scheduler** — GlobalSheetScheduler for sheet-level coordination across jobs (built and tested, not yet wired)
-- **Rate limit coordinator** — Shares rate limit state across concurrent jobs (built and tested, not yet wired)
-- **Backpressure controller** — Adaptive load management to prevent resource exhaustion; gates job submission based on memory pressure
-- **Learning hub** — Centralizes pattern learning across all daemon-managed jobs
+- **Cross-score scheduler** — GlobalSheetScheduler for sheet-level coordination across score runs (built and tested, not yet wired)
+- **Rate limit coordinator** — Shares rate limit state across concurrent score runs (built and tested, not yet wired)
+- **Backpressure controller** — Adaptive load management to prevent resource exhaustion; gates score submission based on memory pressure
+- **Learning hub** — Centralizes pattern learning across all daemon-managed score runs
 - **`mzt config`** — New command with subcommands: `show`, `set`, `path`, `init` for daemon configuration management
-- **`mzt list`** — Now routes through daemon; shows active jobs by default, `--all` for everything, `--limit` defaults to 20
+- **`mzt list`** — Now routes through daemon; shows active score runs by default, `--all` for everything, `--limit` defaults to 20
 - **Systemd integration** — Service file and installation scripts for production deployment
 - **Dashboard wiring** — Dashboard routes through daemon when available
 - **MCP wiring** — MCP server routes through daemon for coordinated execution
 
 #### MCP Server — 2026-01-24
 - **`mzt mcp`** — Start MCP (Model Context Protocol) server for external AI agent integration
-- **Job management tools** — Run, status, pause, resume, cancel via MCP
+- **Score-run tools** — Run, status, pause, resume, cancel via MCP
 - **Artifact browsing** — List and read workspace files through MCP
-- **Log streaming** — Access job logs through MCP tools
-- **Quality scoring** — Validate and generate quality scores through MCP
-- **Configuration resources** — Expose job configs as MCP resources
+- **Log streaming** — Access score-run logs through MCP tools
+- **Validation resources** — Expose validation and score-authoring guidance through MCP
+- **Configuration resources** — Expose score configs as MCP resources
 
 #### Dashboard Enhancements — 2026-01-16 to 2026-02-12
-- **Job control endpoints** — POST endpoints for start, pause, resume, cancel, delete jobs
+- **Score-run control endpoints** — POST endpoints for start, pause, resume, cancel, delete conductor records
 - **Sheet details** — GET endpoint for individual sheet status, logs, validation, costs, tokens
-- **SSE streaming** — Real-time job status and log streaming via Server-Sent Events
+- **SSE streaming** — Real-time score-run status and log streaming via Server-Sent Events
 - **Log endpoints** — Static download, info metadata, follow mode for log files
 - **Artifact management** — Secure file listing and reading within workspaces
 - **Template system** — Browse, filter, download, and use configuration templates
@@ -58,12 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Compound conditions** — Support for `and` conditions in validation rules
 
 #### Pause/Modify Workflow — 2026-01-13
-- **`mzt pause`** — Gracefully pause running jobs at next sheet boundary
+- **`mzt pause`** — Gracefully pause running score runs at next sheet boundary
 - **`mzt modify`** — Combine pause + config update + optional resume in one command
 - **Auto-reload config on resume** — Config automatically reloads from the original YAML file on resume (cached snapshot is fallback). Use `--no-reload` for deterministic replay from cache
 
 #### Learning System Enhancements — 2025-12-27 to 2026-02-04
-- **Pattern broadcasting** — Automatic pattern sharing across jobs with auto-retirement
+- **Pattern broadcasting** — Automatic pattern sharing across score runs with auto-retirement
 - **Metacognitive reflection** (`patterns-why`) — Analyze WHY patterns succeed, not just that they do
 - **Shannon entropy monitoring** (`patterns-entropy`) — Detect pattern population collapse
 - **Exploration budget** (`patterns-budget`) — Entropy-driven budget adjustments to maintain diversity
@@ -101,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Config modularization** — Single `config.py` restructured into `config/` package (6 modules)
 - **Error modularization** — Single `errors.py` restructured into `errors/` package (5 modules)
 - **26+ registered commands** — Up from 7 in v0.1.0
-- **Default active-only listing** — `mzt list` shows only active jobs by default
+- **Default active-only listing** — `mzt list` shows only active score runs by default
 
 #### Examples
 - **`docs-generator.yaml`** — Documentation generation orchestration
@@ -131,7 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **"Batch" → "Sheet" terminology** — All config keys, template variables, CLI flags, and internal references renamed from `batch` to `sheet`
-- **`mzt list` default behavior** — Shows active jobs only (queued, running, paused); use `--all` for everything
+- **`mzt list` default behavior** — Shows active score runs only (queued, running, paused); use `--all` for everything
 - **`mzt list` requires daemon** — Routes through `marianned`; use `mzt status` for direct file-based status
 - **Default JSON output format** — Backends default to JSON output to prevent streaming mode errors
 

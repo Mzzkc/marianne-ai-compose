@@ -1,11 +1,68 @@
 schema_version: 1
 instructions: |
-  This is the master navigation index for all Marianne documentation.
+  This is the master navigation index for current top-level Marianne
+  documentation and the archived/planning documentation directories.
   Use this to find where things are. Use per-directory INDEX.yaml
   for semantic context about what's in each directory.
 
   Maintenance: When adding, moving, or completing a document,
   update this index AND the relevant directory's INDEX.yaml.
+
+top_level_docs:
+  - name: DISTRIBUTED-LEARNING-ARCHITECTURE.md
+    purpose: "Distributed learning architecture notes"
+  - name: MCP-INTEGRATION.md
+    purpose: "MCP integration guide for daemon-facing clients"
+  - name: PLAN-ANALYSIS.md
+    purpose: "Plan analysis notes"
+  - name: QUALITY-SWEEP-2026-04-10.md
+    purpose: "Quality sweep report"
+  - name: README.md
+    purpose: "Documentation directory overview"
+  - name: cli-reference.md
+    purpose: "CLI command reference"
+  - name: compile-reference.md
+    purpose: "Implemented composition compiler command reference"
+  - name: concert-patterns-guide.md
+    purpose: "Concert orchestration patterns"
+  - name: conductor-pattern-guide.md
+    purpose: "Conductor operational patterns"
+  - name: configuration-reference.md
+    purpose: "Score configuration reference"
+  - name: daemon-guide.md
+    purpose: "Conductor daemon guide"
+  - name: dashboard-security-review.md
+    purpose: "Dashboard security review notes"
+  - name: examples-README.md
+    purpose: "Examples documentation mirror"
+  - name: getting-started.md
+    purpose: "Composer first-run guide"
+  - name: index.md
+    purpose: "Documentation landing page"
+  - name: instrument-authoring-tutorial.md
+    purpose: "Instrument authoring tutorial"
+  - name: instrument-guide.md
+    purpose: "Instrument usage guide"
+  - name: learning-system-guide.md
+    purpose: "Learning system guide"
+  - name: limitations.md
+    purpose: "Current limitations and boundaries"
+  - name: marianne-reference.md
+    purpose: "Current broad Marianne reference"
+  - name: movement-design-guide.md
+    purpose: "Movement and fan-out design guide"
+  - name: roadmap.md
+    purpose: "Project roadmap"
+  - name: sandbox-free-quickstart.md
+    purpose: "Sandbox-free first-run path"
+  - name: score-writing-guide.md
+    purpose: "Score authoring guide"
+  - name: technique-ideas.md
+    purpose: "Technique idea backlog"
+  - name: troubleshooting-guide.md
+    purpose: "Operational troubleshooting guide"
+  - name: validation-patterns-guide.md
+    purpose: "Validation authoring patterns"
 
 directories:
   plans/compose-system:

@@ -215,7 +215,7 @@ The dashboard UI is functional but has limited coverage:
 
 ### Validation Condition Expressions
 
-Validation `condition` fields support comparison expressions with any context variable and boolean AND:
+Validation `condition` fields support numeric comparison expressions and boolean AND:
 
 ```yaml
 validations:
@@ -228,15 +228,24 @@ validations:
 
 **Supported operators:** `>=`, `<=`, `==`, `!=`, `>`, `<`
 
-**Supported variables:** Any variable from the sheet context — `sheet_num`, `stage`, `instance`, `fan_count`, `total_stages`, and any user-defined `prompt.variables`.
+**Supported variables:** At runtime, conditions are evaluated against
+`Sheet.template_variables()`: built-ins such as `sheet_num`, `total_sheets`,
+`movement`, `voice`, `voice_count`, `total_movements`, and the
+backward-compatible `stage`, `instance`, `fan_count`, `total_stages`, plus
+numeric values from `prompt.variables`. During `mzt validate` preview,
+condition applicability is computed from built-ins only.
 
 **What's NOT supported:**
 
 - Complex expressions: `sheet_num in [1, 3, 5]`
 - Boolean OR: `sheet_num == 3 or sheet_num == 5`
 - Nested expressions: `(sheet_num > 2) and (stage < 3)`
+- String comparisons: `environment == "prod"`
 
-**Why:** The condition evaluator in `engine.py` splits on `" and "` and evaluates each clause as a `variable operator value` triple. Unrecognized conditions silently fall back to "always apply" behavior.
+**Why:** The condition evaluator in `engine.py` splits on `" and "` and
+evaluates each clause as a `variable operator integer` triple. Missing or
+non-numeric variables make the rule not apply. Malformed expressions still fall
+back to "always apply" behavior, so use simple numeric conditions.
 
 **Workaround:** For OR logic, use multiple validation entries, each with a simple condition.
 

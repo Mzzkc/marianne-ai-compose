@@ -27,6 +27,23 @@ Each gap entry has:
 
 ---
 
+## Current Status Index
+
+This index is current as of the 2026-07-08 corpus overhaul. It does not replace
+historical rows; it points readers to the latest proof boundary for gaps whose
+original entries are older than later source, test, or live-proof notes.
+
+| Gap | Current status | Proof class | Current note |
+|---|---|---|---|
+| Gap 13 | Static launch-gate mitigation exists through V305; keep the historical row for why prompt rendering hazards mattered. | source/test-backed static mitigation | See 2026-07-07 static prompt rendering note. |
+| Gap 14 | Partially mitigated through V307 raw-CLI checks; repository examples still include warning-bearing raw CLI fallbacks. | source/test-backed partial mitigation; open corpus debt | See 2026-07-07 static prompt note and 2026-07-08 corpus audit. |
+| Gap 16 | Partially mitigated through V308 fan-out instrument coverage warning; semantic intent still needs docs/examples to teach the pattern. | source/test-backed warning; open semantic intent | See 2026-07-07 static prompt note. |
+| Gap 29 | Dashboard/API/status source and tests expose more dispatch-wait state, but restarted-conductor/dashboard live proof remains open. | source/test mitigation; live-proof-open | See 2026-07-07 runtime/compiler/docs note and corpus audit. |
+| Gap 35 | Source/test mitigation exists for validation retry visibility; live validation-retry evidence remains open. | source/test mitigation; live-proof-open | See 2026-07-08 validation surfaces note. |
+| Gap 37 | Live tmux/process cleanup proof remains open. | live-proof-open | See 2026-07-08 validation surfaces note. |
+| Gap 38 | Live provider quota/failure classification proof remains open. | live-proof-open | See 2026-07-08 validation surfaces note. |
+| Gap 45 | Explicit state-backend isolation is source/test/browser-backed; exact `/health` isolation coverage remains a test gap. | source/test/browser mitigation with residual test gap | See 2026-06-23 row and 2026-07-08 corpus audit. |
+
 ## 2026-05-05 — 24x7-trader thinking-lab review
 
 Five-model review (Opus 4.7 / Gemini 3.1 Pro / Gemma 4 / GLM 5.1 / GPT-5.5)

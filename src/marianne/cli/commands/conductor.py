@@ -123,9 +123,13 @@ def restart(
         ),
     ] = None,
 ) -> None:
-    """Restart the Marianne conductor (stop + start)."""
+    """Restart the Marianne conductor after the active-score safety check."""
     from marianne.daemon.clone import get_clone_name, is_clone_active, set_clone_name
+    from marianne.daemon.config import DaemonConfig
     from marianne.daemon.process import (
+        _pid_alive,
+        _read_pid,
+        _resolve_live_pid_file,
         start_conductor,
         stop_conductor,
         wait_for_conductor_exit,
@@ -148,11 +152,30 @@ def restart(
         if pid_file is None:
             pid_file = resolve_clone_paths(clone_name).pid_file
 
-    # Stop (ignore exit if not running)
+    def conductor_still_running(path: Path | None) -> bool:
+        resolved = (
+            path
+            if path is not None
+            else _resolve_live_pid_file(DaemonConfig().pid_file)
+        )
+        pid = _read_pid(resolved)
+        return pid is not None and _pid_alive(pid)
+
+    # Stop. If no conductor was running, continue into start. If stop refused
+    # or failed while a conductor is still alive, do not start a second one.
     try:
         stop_conductor(pid_file=pid_file)
-    except SystemExit:
-        pass
+    except (SystemExit, typer.Exit):
+        if conductor_still_running(pid_file):
+            output_error(
+                "Conductor restart aborted before start.",
+                hints=[
+                    "Pause or finish active scores before restarting.",
+                    "Check active scores: mzt status",
+                    "Use mzt stop --force only when you accept orphaning active work.",
+                ],
+            )
+            raise typer.Exit(1) from None
 
     # Wait for old process to fully exit before starting the new one.
     # Without this, start_conductor sees the dying process and says
@@ -160,7 +183,10 @@ def restart(
     if not wait_for_conductor_exit(pid_file, timeout=30.0):
         output_error(
             "Old conductor did not exit within 30 seconds.",
-            hints=["Try 'mzt stop --force' to send SIGKILL."],
+            hints=[
+                "Check active scores before retrying: mzt status",
+                "Try 'mzt stop --force' only when you accept orphaning active work.",
+            ],
         )
         raise typer.Exit(1)
 

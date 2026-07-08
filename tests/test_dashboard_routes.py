@@ -105,17 +105,18 @@ def sample_job_state():
 
 @pytest.fixture
 def sample_config_yaml():
-    """Sample YAML config content."""
+    """Sample score YAML content."""
     return """
 name: Test Job
 workspace: ./test-workspace
+instrument: claude-code
 sheet:
-  total_sheets: 3
+  size: 1
+  total_items: 3
+prompt:
   template: |
     SHEET: {{sheet_num}}
     Test sheet content
-backend:
-  type: claude_cli
 """
 
 
@@ -147,12 +148,13 @@ class TestJobRoutes:
                     "workspace": "./custom-workspace",
                     "start_sheet": 1,
                     "fresh": True,
+                    "confirm_fresh": True,
                     "self_healing": True,
                     "self_healing_auto_confirm": True,
                     "escalation": True,
                     "dry_run": True,
                     "chain_depth": 2,
-                    "client_cwd": "/tmp",
+                    "client_cwd": ".",
                     "runtime_variables": {"target": "dashboard"},
                 },
             )
@@ -170,7 +172,7 @@ class TestJobRoutes:
         mock_start.assert_called_once()
         args, kwargs = mock_start.call_args
         assert kwargs["config_content"] == sample_config_yaml
-        assert kwargs["workspace"] == Path("./custom-workspace")
+        assert kwargs["workspace"] == (Path.cwd() / "custom-workspace").resolve()
         assert kwargs["start_sheet"] == 1
         assert kwargs["fresh"] is True
         assert kwargs["self_healing"] is True
@@ -178,8 +180,21 @@ class TestJobRoutes:
         assert kwargs["escalation"] is True
         assert kwargs["dry_run"] is True
         assert kwargs["chain_depth"] == 2
-        assert kwargs["client_cwd"] == Path("/tmp")
+        assert kwargs["client_cwd"] == Path.cwd().resolve()
         assert kwargs["runtime_variables"] == {"target": "dashboard"}
+
+    def test_start_job_rejects_unconfirmed_fresh(self, client, sample_config_yaml):
+        """fresh submissions require an explicit confirmation flag."""
+        response = client.post(
+            "/api/jobs",
+            json={
+                "config_content": sample_config_yaml,
+                "fresh": True,
+            },
+        )
+
+        assert response.status_code == 400
+        assert "confirm_fresh=true" in response.json()["detail"]
 
     def test_start_job_with_config_path(self, client, temp_state_dir, sample_config_yaml):
         """Test starting job with config file path."""
@@ -229,6 +244,63 @@ class TestJobRoutes:
 
         assert response.status_code == 400
         assert "Cannot provide both" in response.json()["detail"]
+
+    def test_start_job_invalid_inline_yaml_is_local_validation_error(self, client):
+        """Invalid inline score YAML is rejected before conductor access."""
+        with patch("marianne.dashboard.routes.jobs.get_daemon_client") as get_client:
+            response = client.post("/api/jobs", json={"config_content": "name: ["})
+
+        assert response.status_code == 400
+        assert "Invalid YAML" in response.json()["detail"]
+        get_client.assert_not_called()
+
+    def test_start_job_invalid_schema_is_local_validation_error(self, client):
+        """Schema errors do not become conductor-unavailable responses."""
+        with patch("marianne.dashboard.routes.jobs.get_daemon_client") as get_client:
+            response = client.post(
+                "/api/jobs",
+                json={
+                    "config_content": """
+name: invalid-schema
+sheet:
+  size: nope
+  total_items: 1
+prompt:
+  template: "Task"
+""",
+                },
+            )
+
+        assert response.status_code == 400
+        assert "Invalid score YAML" in response.json()["detail"]
+        get_client.assert_not_called()
+
+    def test_start_job_missing_config_path_is_local_not_found(self, client, tmp_path):
+        """Missing score paths return 404 without requiring a conductor."""
+        missing = tmp_path / "missing.yaml"
+        with patch("marianne.dashboard.routes.jobs.get_daemon_client") as get_client:
+            response = client.post("/api/jobs", json={"config_path": str(missing)})
+
+        assert response.status_code == 404
+        assert "Config file not found" in response.json()["detail"]
+        get_client.assert_not_called()
+
+    def test_start_job_rejects_unscoped_workspace_before_conductor(
+        self, client, sample_config_yaml
+    ):
+        """Lower-level submit endpoint uses the same workspace allow-list."""
+        with patch("marianne.dashboard.routes.jobs.get_daemon_client") as get_client:
+            response = client.post(
+                "/api/jobs",
+                json={
+                    "config_content": sample_config_yaml,
+                    "workspace": "/etc/marianne-outside",
+                },
+            )
+
+        assert response.status_code == 400
+        assert "Workspace path" in response.json()["detail"]
+        get_client.assert_not_called()
 
     def test_start_job_file_not_found(self, client):
         """Test file not found error."""
@@ -626,6 +698,15 @@ class TestCoreReadRoutes:
         assert data["conductor"] in ("up", "down")
         assert (data["status"] == "healthy") == (data["conductor"] == "up")
         assert "version" in data
+
+    def test_health_check_isolated_backend_does_not_probe_conductor(self, client):
+        """Explicit-backend dashboards report isolation without daemon access."""
+        with patch("marianne.dashboard.app.get_daemon_client") as get_client:
+            response = client.get("/health")
+
+        assert response.status_code == 200
+        assert response.json()["message"] == "Conductor unavailable for isolated dashboard"
+        get_client.assert_not_called()
 
     def test_list_jobs_empty(self, client):
         """Test listing jobs when none exist."""

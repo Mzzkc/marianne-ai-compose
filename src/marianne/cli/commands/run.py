@@ -368,7 +368,7 @@ async def _try_daemon_submit(
         if isinstance(exc, DaemonError):
             output_error(
                 str(exc),
-                hints=["Restart the conductor: mzt restart"],
+                hints=["Pause or finish active scores before restarting: mzt restart"],
                 json_output=json_output,
             )
             raise typer.Exit(1) from None

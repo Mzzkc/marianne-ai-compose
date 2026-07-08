@@ -2,7 +2,7 @@
 
 Provides four operating modes:
 
-1. **TUI (default)** — Rich Textual-based terminal UI showing job-centric
+1. **TUI (default)** — Rich Textual-based terminal UI showing score-centric
    process tree, event timeline, and system metrics.
 
 2. **JSON (``--json``)** — Streams NDJSON snapshots to stdout for piping
@@ -78,7 +78,10 @@ def top(
         None, "--trace", help="Attach full strace to PID and stream output"
     ),
     filter_job: str | None = typer.Option(
-        None, "--score", "-s", help="Filter by score ID"
+        None,
+        "--score",
+        "-s",
+        help="Filter JSON/history output by score ID; TUI mode is not filtered yet",
     ),
     interval: float = typer.Option(
         2.0, "--interval", "-i", help="Refresh interval in seconds"
@@ -93,7 +96,7 @@ def top(
         mzt top                    # Launch TUI monitor
         mzt top --json             # Stream NDJSON snapshots
         mzt top --history 1h       # Replay last hour
-        mzt top --score my-review  # Filter by score
+        mzt top --score my-review --json  # Filter JSON output by score
         mzt top --interval 5       # 5-second refresh
         mzt top --trace 12345      # Attach full strace to PID
     """
@@ -139,7 +142,7 @@ def _tui_mode(*, filter_job: str | None, interval: float) -> None:
     if filter_job:
         _stderr_console.print(
             f"[dim]Note: --score filter ({filter_job}) is not yet supported "
-            f"in TUI mode. Use --json for filtered output.[/dim]"
+            f"in TUI mode. Use --json or --history for filtered output.[/dim]"
         )
     app = MonitorApp(reader=reader, refresh_interval=interval)
     try:
@@ -329,7 +332,7 @@ async def _history_tui(
     if filter_job:
         _stderr_console.print(
             f"[dim]Note: --score filter ({filter_job}) is not yet supported "
-            f"in history TUI mode. Use --json for filtered output.[/dim]"
+            f"in history TUI mode. Use --history with --json for filtered output.[/dim]"
         )
     app.run()
 

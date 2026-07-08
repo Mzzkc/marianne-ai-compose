@@ -8,12 +8,15 @@ pruning.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.exceptions import JobSubmissionError
 from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
@@ -528,6 +531,57 @@ class TestListJobs:
         job_ids = {j["job_id"] for j in result}
         assert job_ids == {"job-1", "job-2"}
 
+    @pytest.mark.asyncio
+    async def test_list_jobs_registry_overrides_stale_terminal_meta(
+        self,
+        manager: JobManager,
+        tmp_path: Path,
+    ) -> None:
+        """Recovered terminal registry rows must win over stale JobMeta (#391)."""
+        job_id = "list-recovered"
+        config_path = tmp_path / "score.yaml"
+        config_path.write_text("name: list-recovered\n")
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+
+        manager._job_meta[job_id] = JobMeta(
+            job_id=job_id,
+            config_path=config_path,
+            workspace=workspace,
+            status=DaemonJobStatus.FAILED,
+        )
+        manager._live_states[job_id] = CheckpointState(
+            job_id=job_id,
+            job_name=job_id,
+            total_sheets=1,
+            last_completed_sheet=0,
+            status=JobStatus.FAILED,
+            sheets={1: SheetState(sheet_num=1, status=SheetStatus.FAILED)},
+        )
+
+        repaired = CheckpointState(
+            job_id=job_id,
+            job_name=job_id,
+            total_sheets=1,
+            last_completed_sheet=1,
+            status=JobStatus.COMPLETED,
+            config_path=str(config_path),
+            sheets={1: SheetState(sheet_num=1, status=SheetStatus.COMPLETED)},
+        )
+        await manager._registry.register_job(job_id, config_path, workspace)
+        await manager._registry.save_checkpoint(job_id, repaired.model_dump_json())
+        await manager._registry.update_status(job_id, DaemonJobStatus.COMPLETED.value)
+
+        result = await manager.list_jobs()
+        listed = next(item for item in result if item["job_id"] == job_id)
+        status = (
+            listed["status"].value
+            if isinstance(listed["status"], DaemonJobStatus)
+            else listed["status"]
+        )
+
+        assert status == "completed"
+
 
 # ─── Get Job Status ───────────────────────────────────────────────────
 
@@ -575,6 +629,131 @@ class TestGetJobStatus:
         assert status["status"] in ("failed", DaemonJobStatus.FAILED)
         # Meta should also be corrected in place
         assert manager._job_meta["stale-1"].status == DaemonJobStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_get_status_registry_overrides_terminal_live_cache(
+        self,
+        manager: JobManager,
+        tmp_path: Path,
+    ) -> None:
+        """Recovered registry state wins over stale terminal _live_states."""
+        job_id = "recovered-job"
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        config_path = tmp_path / "score.yaml"
+        config_path.write_text("name: recovered-job\n")
+
+        manager._job_meta[job_id] = JobMeta(
+            job_id=job_id,
+            config_path=config_path,
+            workspace=workspace,
+            status=DaemonJobStatus.FAILED,
+        )
+        manager._live_states[job_id] = CheckpointState(
+            job_id=job_id,
+            job_name=job_id,
+            total_sheets=2,
+            last_completed_sheet=0,
+            status=JobStatus.FAILED,
+            sheets={
+                1: SheetState(sheet_num=1, status=SheetStatus.FAILED),
+                2: SheetState(sheet_num=2, status=SheetStatus.SKIPPED),
+            },
+        )
+
+        repaired = CheckpointState(
+            job_id=job_id,
+            job_name=job_id,
+            total_sheets=2,
+            last_completed_sheet=1,
+            status=JobStatus.PAUSED,
+            config_path=str(config_path),
+            sheets={
+                1: SheetState(sheet_num=1, status=SheetStatus.COMPLETED),
+                2: SheetState(sheet_num=2, status=SheetStatus.PENDING),
+            },
+        )
+        await manager._registry.register_job(job_id, config_path, workspace)
+        await manager._registry.save_checkpoint(job_id, repaired.model_dump_json())
+        await manager._registry.update_status(job_id, DaemonJobStatus.PAUSED.value)
+
+        status = await manager.get_job_status(job_id)
+
+        assert status["status"] == "paused"
+        assert status["sheets"]["1"]["status"] == "completed"
+        assert status["sheets"]["2"]["status"] == "pending"
+
+
+# ─── Shutdown Checkpoint Flush ────────────────────────────────────────
+
+
+class TestShutdownCheckpointFlush:
+    """Tests for final checkpoint flushing during daemon shutdown."""
+
+    @pytest.mark.asyncio
+    async def test_flush_skips_terminal_live_state_when_registry_is_newer(
+        self,
+        manager: JobManager,
+        tmp_path: Path,
+    ) -> None:
+        """Shutdown must not overwrite direct recovery with stale terminal cache (#391)."""
+        job_id = "shutdown-recovered"
+        config_path = tmp_path / "score.yaml"
+        config_path.write_text("name: shutdown-recovered\n")
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+
+        shared_updated_at = datetime.now(UTC)
+        stale_live = CheckpointState(
+            job_id=job_id,
+            job_name=job_id,
+            total_sheets=1,
+            last_completed_sheet=0,
+            status=JobStatus.FAILED,
+            updated_at=shared_updated_at,
+            sheets={
+                1: SheetState(
+                    sheet_num=1,
+                    status=SheetStatus.FAILED,
+                    validation_passed=False,
+                    failed_validations=["old failure"],
+                )
+            },
+        )
+        repaired_registry = CheckpointState(
+            job_id=job_id,
+            job_name=job_id,
+            total_sheets=1,
+            last_completed_sheet=1,
+            status=JobStatus.COMPLETED,
+            updated_at=shared_updated_at,
+            sheets={
+                1: SheetState(
+                    sheet_num=1,
+                    status=SheetStatus.COMPLETED,
+                    validation_passed=True,
+                    failed_validations=[],
+                )
+            },
+        )
+
+        await manager._registry.register_job(job_id, config_path, workspace)
+        await manager._registry.save_checkpoint(job_id, repaired_registry.model_dump_json())
+        await manager._registry.update_status(job_id, DaemonJobStatus.COMPLETED.value)
+        manager._live_states[job_id] = stale_live
+
+        flushed, skipped = await manager._flush_live_checkpoints_on_shutdown()
+
+        assert flushed == 0
+        assert skipped == 1
+        raw = await manager._registry.load_checkpoint(job_id)
+        assert raw is not None
+        persisted = json.loads(raw)
+        assert persisted["status"] == "completed"
+        assert persisted["last_completed_sheet"] == 1
+        assert persisted["sheets"]["1"]["status"] == "completed"
+        assert persisted["sheets"]["1"]["validation_passed"] is True
+        assert persisted["sheets"]["1"]["failed_validations"] == []
 
 
 # ─── Pause Job ─────────────────────────────────────────────────────────

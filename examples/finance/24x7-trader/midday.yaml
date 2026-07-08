@@ -32,7 +32,6 @@ workspace_lifecycle:
   archive_on_fresh: false
 
 instrument: claude-code
-instrument_fallbacks: [opencode, gemini-cli]
 instrument_config:
   timeout_seconds: 1200
 
@@ -256,16 +255,6 @@ prompt:
 
     {# ── Stage 3: Envelope Check ──────────────────────────────────────────── #}
     {% elif stage == 3 %}
-    # Midday — Stage 3: Envelope Check
-
-    Midday actions can violate the envelope in subtler ways than entries:
-    a partial sell still leaves the position; a stop adjustment could
-    set a stop too tight; a SELL could exceed held quantity.
-
-    First confirm the envelope itself wasn't modified during this run,
-    then check action-specific constraints.
-
-    ```bash
     set -e
     hash_now=$(sha256sum {{ workspace }}/risk-envelope.yaml | awk '{print $1}')
     hash_then=$(cat {{ workspace }}/today-envelope-hash.txt)
@@ -318,7 +307,6 @@ prompt:
         sys.exit(1)
     print('midday envelope check OK')
     PY
-    ```
 
     {# ── Stage 4: Execute (deterministic) & Journal ────────────────────────── #}
     {% elif stage == 4 %}

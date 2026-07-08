@@ -85,16 +85,18 @@ validations:
 
 ### Available Variables in Validations
 
-All validation `path`, `command`, and `working_directory` fields support:
+Validation fields and validation conditions use related but different variable
+contexts.
 
-- `{workspace}` — always available
-- `{sheet_num}` — always available
-- `{start_item}` — always available
-- `{end_item}` — always available
-- `{stage}` — when fan-out is configured
-- `{instance}` — when fan-out is configured
+| Surface | Variables |
+|---|---|
+| `path`, `source_path`, `command`, `working_directory` at runtime | Built-ins from `Sheet.template_variables()` plus `prompt.variables`. Built-ins include `{workspace}`, `{sheet_num}`, `{total_sheets}`, `{instrument_name}`, `{movement}`, `{voice}`, `{voice_count}`, `{total_movements}`, and backward-compatible `{stage}`, `{instance}`, `{fan_count}`, `{total_stages}`. |
+| `path` and `source_path` in `mzt validate` preview | `prompt.variables` plus the same built-ins where static preview can compute them. Built-ins win if a custom variable uses the same name. |
+| `condition` at runtime | Numeric comparison variables from `Sheet.template_variables()`, including numeric custom `prompt.variables`. |
+| `condition` in `mzt validate` preview | Built-ins only: `sheet_num`, `start_item`, `end_item`, `stage`, `instance`, `fan_count`, `total_sheets`, and `total_stages`. |
 
-**Not available:** `total_sheets`, user variables from `prompt.variables`, `previous_outputs`. Use `command_succeeds` if you need complex logic.
+`previous_outputs` is not a validation variable. Use `command_succeeds` when a
+check needs to inspect prior artifacts or apply richer logic.
 
 ---
 
@@ -190,7 +192,13 @@ validations:
 
 ## Conditional Validations
 
-The `condition` field controls when a validation applies. Supports: `>=`, `<=`, `==`, `!=`, `>`, `<`, and `and` (no `or` — use separate rules).
+The `condition` field controls when a validation applies. It supports numeric
+comparisons with `>=`, `<=`, `==`, `!=`, `>`, `<`, joined by lowercase `and`.
+It does not support `or`, `in`, parentheses, strings, or function calls.
+
+Use variables that resolve to integers. A missing or non-numeric variable makes
+the rule not apply. A malformed expression is treated as unconditional by the
+current engine, so keep conditions simple and validate the score before launch.
 
 ### Sheet-Specific Validations
 

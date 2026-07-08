@@ -2,7 +2,7 @@
 
 Complete reference for all Marianne CLI commands and options. Marianne provides a single entry point:
 
-- **`mzt`** — Job orchestration CLI (run, monitor, diagnose, learn, conductor management)
+- **`mzt`** — Score orchestration CLI (run, monitor, diagnose, learn, conductor management)
 
 ---
 
@@ -78,7 +78,6 @@ Usage: mzt run [OPTIONS] CONFIG_FILE
 |--------|-------|---------|-------------|
 | `--dry-run` | `-n` | false | Show what would be executed without running |
 | `--start-sheet` | `-s` | | Override starting sheet number |
-| `--workspace` | `-w` | | Override workspace directory (creates if missing; takes precedence over YAML config) |
 | `--json` | `-j` | false | Output result as JSON for machine parsing |
 | `--escalation` | `-e` | false | Pause sheets in FERMATA on retry exhaustion for a composer decision; resolve with `mzt resolve`. Works without `--self-healing` |
 | `--self-healing` | `-H` | false | Enable automatic diagnosis and remediation when retries are exhausted |
@@ -120,9 +119,6 @@ mzt run job.yaml
 # Dry run to preview (works without conductor)
 mzt run job.yaml --dry-run
 
-# Custom workspace
-mzt run job.yaml --workspace ./output
-
 # Start from sheet 3
 mzt run job.yaml --start-sheet 3
 
@@ -163,10 +159,10 @@ Loads the score state and continues execution from where it left off. By default
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--config` | `-c` | | Path to config file (optional if `config_snapshot` exists in state) |
-| `--workspace` | `-w` | | *(hidden)* Debug override: bypass conductor for resume |
 | `--force` | `-f` | false | Force resume even if score appears completed |
 | `--escalation` | `-e` | false | Pause sheets in FERMATA on retry exhaustion for a composer decision; resolve with `mzt resolve`. Works without `--self-healing` |
 | `--no-reload` | | false | Use cached config snapshot instead of auto-reloading from YAML file |
+| `--from-sheet` | | | Reset every sheet >= N to pending and re-run from there, including completed or skipped sheets |
 | `--self-healing` | `-H` | false | Enable automatic diagnosis and remediation when retries are exhausted |
 | `--yes` | `-y` | false | Auto-confirm suggested fixes when using `--self-healing` |
 
@@ -185,8 +181,11 @@ mzt resume my-job --config updated.yaml
 # Resume using cached snapshot (skip auto-reload)
 mzt resume my-job --no-reload
 
-# Force restart completed score
+# Force resume a completed score
 mzt resume my-job --force
+
+# Re-run from sheet 5 onward
+mzt resume my-job --from-sheet 5
 ```
 
 #### Resumable States
@@ -196,7 +195,7 @@ mzt resume my-job --force
 | `paused` | Yes | Continues from last sheet |
 | `failed` | Yes | Retries from failed sheet |
 | `running` | Yes | Continues from last sheet |
-| `completed` | With `--force` | Restarts entire job |
+| `completed` | With `--force` | Re-runs the completed score |
 | `pending` | No | Use `run` instead |
 
 ---
@@ -209,31 +208,34 @@ Pause a running Marianne score gracefully.
 Usage: mzt pause [OPTIONS] JOB_ID
 ```
 
-Creates a pause signal that the job detects at the next sheet boundary. The job saves its state and can be resumed with `mzt resume`.
+Creates a pause signal that the score detects at the next sheet boundary. The score saves its state and can be resumed with `mzt resume`.
 
 #### Arguments
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `JOB_ID` | Yes | Job ID to pause |
+| `JOB_ID` | Yes | Score ID to pause |
 
 #### Options
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--workspace` | `-w` | | *(hidden)* Debug override: bypass conductor for pause |
-| `--wait` | | false | Wait for job to acknowledge pause signal |
+| `--wait` | | false | Wait for the score to acknowledge the pause signal |
 | `--timeout` | `-t` | 60 | Timeout in seconds when using `--wait` |
 | `--json` | `-j` | false | Output result as JSON |
+| `--force` | `-f` | false | Force-cancel the score immediately without waiting for a sheet boundary |
 
 #### Examples
 
 ```bash
-# Pause a running job
+# Pause a running score
 mzt pause my-job
 
 # Pause and wait for acknowledgment
 mzt pause my-job --wait --timeout 30
+
+# Cancel immediately without waiting for a sheet boundary
+mzt pause my-job --force
 ```
 
 ---
@@ -280,26 +282,25 @@ mzt resolve my-score 3 accept
 
 ### `mzt modify`
 
-Modify a job's configuration and optionally resume execution.
+Modify a score's configuration and optionally resume execution.
 
 ```
 Usage: mzt modify [OPTIONS] JOB_ID
 ```
 
-Convenience command that combines pause + config validation. If the job is running, it will be paused first. Use `--resume` to immediately resume with the new configuration.
+Convenience command that combines pause + config validation. If the score is running, it will be paused first. Use `--resume` to immediately resume with the new configuration.
 
 #### Arguments
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `JOB_ID` | Yes | Job ID to modify |
+| `JOB_ID` | Yes | Score ID to modify |
 
 #### Options
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--config` | `-c` | **required** | New configuration file |
-| `--workspace` | `-w` | | *(hidden)* Debug override: bypass conductor for modify |
 | `--resume` | `-r` | false | Immediately resume with new config after pausing |
 | `--wait` | | false | Wait for job to pause before resuming (when `--resume`) |
 | `--timeout` | `-t` | 60 | Timeout in seconds for pause acknowledgment |
@@ -467,26 +468,26 @@ List scores from the conductor.
 Usage: mzt list [OPTIONS]
 ```
 
-By default shows only active jobs (queued, running, paused). Use `--all` to include completed, failed, and cancelled jobs.
+By default shows active score runs (queued, running, paused). Use `--all` to include completed, failed, and cancelled conductor records.
 
-> **Note:** This command requires a running Marianne conductor (`mzt start`). Use `mzt status <job-id>` for checking individual jobs.
+> **Note:** This command requires a running Marianne conductor (`mzt start`). Use `mzt status <job-id>` for checking one submitted score by its conductor runtime handle.
 
 #### Options
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--all` | `-a` | false | Show all jobs including completed, failed, and cancelled |
-| `--status` | `-s` | | Filter by job status: `queued`, `running`, `completed`, `failed`, `paused` |
-| `--limit` | `-l` | 20 | Maximum number of jobs to display |
+| `--all` | `-a` | false | Show all score runs including completed, failed, and cancelled |
+| `--status` | `-s` | | Filter by score-run status: `queued`, `running`, `completed`, `failed`, `paused` |
+| `--limit` | `-l` | 20 | Maximum number of score runs to display |
 | `--json` | | false | Output as JSON array for machine parsing |
 
 #### Examples
 
 ```bash
-# List active jobs (default)
+# List active score runs (default)
 mzt list
 
-# List all jobs including completed
+# List all score runs including completed
 mzt list --all
 
 # Filter by status
@@ -576,10 +577,8 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 |------|-------------|
 | V104 | Very long timeout (> 4h) |
 | V203 | No validation rules defined |
-| V204 | `skip_permissions` not enabled for Claude CLI |
 | V205 | Only `file_exists` validations (weak acceptance criteria) |
 | V207 | Fan-out without parallel execution enabled |
-| V209 | `disable_mcp` not enabled for Claude CLI |
 
 #### Examples
 
@@ -662,8 +661,8 @@ Cancel a running score immediately.
 Usage: mzt cancel [OPTIONS] SCORE_ID
 ```
 
-Unlike `pause`, this does not wait for a sheet boundary. The score's task is
-cancelled, in-progress work is rolled back, and the score is marked as
+Unlike `pause`, this does not wait for a sheet boundary. The conductor cancels
+the running score, in-progress work is rolled back, and the score is marked as
 CANCELLED.
 
 #### Arguments
@@ -707,7 +706,7 @@ tracking. Running and queued scores are never cleared.
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--job` | `-j` | | Specific score ID(s) to clear. Can be repeated. |
+| `--score` | `-j` | | Specific score ID(s) to clear. Can be repeated. |
 | `--status` | `-s` | all terminal | Status(es) to clear: `failed`, `completed`, `cancelled`. Can be repeated. |
 | `--older-than` | | | Only clear scores older than this many seconds |
 | `--yes` | `-y` | false | Skip confirmation prompt |
@@ -719,7 +718,7 @@ tracking. Running and queued scores are never cleared.
 mzt clear
 
 # Clear a specific score
-mzt clear --job conductor-fix
+mzt clear --score conductor-fix
 
 # Clear only failed scores
 mzt clear --status failed
@@ -735,26 +734,28 @@ mzt clear --older-than 3600 -y
 
 ### `mzt logs`
 
-Show or tail log files for a job.
+Show or tail log sources for a score run.
 
 ```
 Usage: mzt logs [OPTIONS] [JOB_ID]
 ```
 
-Displays log entries from Marianne log files. Supports both current log files and compressed rotated logs (`.gz`).
+Displays log entries from Marianne log sources. Daemon-managed score runs use
+the conductor logging root by default, with compatibility workspace aliases and
+rotated logs handled by the log reader where available.
 
 #### Arguments
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `JOB_ID` | No | Job ID to filter logs for (shows all if not specified) |
+| `JOB_ID` | No | Score-run ID to filter logs for; this is the conductor's runtime handle |
 
 #### Options
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--workspace` | `-w` | `.` | *(hidden)* Debug override: specify workspace for log file lookup |
-| `--file` | `-f` | | Specific log file path (overrides workspace default) |
+| `--file` | `-f` | | Explicit offline/debug log file path |
 | `--follow` | `-F` | false | Follow the log file for new entries (like `tail -f`) |
 | `--lines` | `-n` | 50 | Number of lines to show (0 for all) |
 | `--level` | `-l` | | Filter by minimum log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
@@ -766,7 +767,7 @@ Displays log entries from Marianne log files. Supports both current log files an
 # Show recent logs
 mzt logs
 
-# Filter by job
+# Filter by score run
 mzt logs my-job
 
 # Follow logs in real-time
@@ -775,15 +776,15 @@ mzt logs --follow
 # Show last 100 lines of errors only
 mzt logs --lines 100 --level ERROR
 
-# Use specific log file
-mzt logs --file ./workspace/logs/marianne.log
+# Use a specific offline/debug log file
+mzt logs --file ~/.marianne/logs/conductor.log
 ```
 
 ---
 
 ### `mzt errors`
 
-List all errors for a job with detailed information.
+List all errors for a score run with detailed information.
 
 ```
 Usage: mzt errors [OPTIONS] JOB_ID
@@ -798,7 +799,7 @@ Displays errors grouped by sheet, with color-coding by error type:
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `JOB_ID` | Yes | Job ID to show errors for |
+| `JOB_ID` | Yes | Score-run ID to show errors for; this is the conductor's runtime handle |
 
 #### Options
 
@@ -834,14 +835,14 @@ mzt errors my-job --verbose
 
 ### `mzt diagnose`
 
-Generate a comprehensive diagnostic report for a job.
+Generate a comprehensive diagnostic report for a score run.
 
 ```
 Usage: mzt diagnose [OPTIONS] JOB_ID
 ```
 
 The diagnostic report includes:
-- Job overview and current status
+- Score-run overview and current status
 - Preflight warnings from all sheets
 - Prompt metrics (token counts, line counts)
 - Execution timeline with timing information
@@ -853,7 +854,7 @@ The diagnostic report includes:
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `JOB_ID` | Yes | Job ID to diagnose |
+| `JOB_ID` | Yes | Score-run ID to diagnose; this is the conductor's runtime handle |
 
 #### Options
 
@@ -862,6 +863,7 @@ The diagnostic report includes:
 | `--workspace` | `-w` | | Workspace directory. When the conductor doesn't recognize a score ID, Marianne falls back to reading state directly from this workspace directory. Useful for diagnosing scores from stopped conductors or clone conductors. |
 | `--json` | `-j` | false | Output diagnostic report as JSON |
 | `--include-logs` | | false | Inline the last 50 lines from each sheet/hook log file |
+| `--resources` | | false | Include resource profile data such as peak memory, CPU time, syscalls, and anomalies |
 
 #### Examples
 
@@ -874,6 +876,9 @@ mzt diagnose my-job --json
 
 # Include inline log content
 mzt diagnose my-job --include-logs
+
+# Include resource profile data
+mzt diagnose my-job --resources
 
 # Diagnose from workspace (when conductor doesn't know the score)
 mzt diagnose my-job -w ./workspaces/my-job
@@ -896,6 +901,7 @@ Validates that your environment is ready to run Marianne scores. Checks Python v
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--json` | | false | Output results as JSON |
+| `--clean` | | false | Delete storage-hygiene findings after explicit confirmation |
 
 #### Checks Performed
 
@@ -904,10 +910,11 @@ Validates that your environment is ready to run Marianne scores. Checks Python v
 | Python | Version 3.11+ installed |
 | Marianne | Marianne package installed, version displayed |
 | Conductor | Whether the conductor daemon is running (PID file + process check) |
-| Instruments | Each registered instrument's binary availability on PATH |
+| Instruments | Configured instruments, binary readiness, execution readiness, and runtime rate-limit state when the conductor is running |
 | Safety | Whether cost limits are configured |
+| Storage | Cleanable stale state or backup artifacts |
 
-For instruments, CLI instruments are checked by looking for the executable on PATH (via `shutil.which`). HTTP instruments are reported as available without a connectivity probe — they are assumed reachable if configured.
+For instruments, CLI instruments are checked by looking for the executable on PATH and whether the profile can execute prompts. HTTP instruments are reported from configuration and execution-state metadata; `doctor` does not prove provider account availability unless a live execution check has run. Runtime rate-limit state is shown when the conductor is running.
 
 #### Examples
 
@@ -917,6 +924,9 @@ mzt doctor
 
 # JSON output for scripting
 mzt doctor --json
+
+# Review and remove cleanable storage findings
+mzt doctor --clean
 ```
 
 #### Sample Output
@@ -1003,14 +1013,14 @@ Runs validations for failed sheets without re-executing them. If validations pas
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `JOB_ID` | Yes | Job ID to recover |
+| `JOB_ID` | Yes | Score ID to recover |
 
 #### Options
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--sheet` | `-s` | | Specific sheet number to recover (default: all failed sheets) |
-| `--workspace` | `-w` | | *(hidden)* Debug override: bypass conductor for recovery |
+| `--from-sheet` | `-f` | | Reset all failed sheets >= this number to pending for cascade recovery |
 | `--dry-run` | `-n` | false | Check validations without modifying state |
 
 #### Examples
@@ -1024,6 +1034,9 @@ mzt recover my-job --sheet 6
 
 # Check without modifying (dry run)
 mzt recover my-job --dry-run
+
+# Reset cascade failures from sheet 211 onward
+mzt recover my-job --from-sheet 211
 ```
 
 ---
@@ -1036,7 +1049,9 @@ Start the web dashboard.
 Usage: mzt dashboard [OPTIONS]
 ```
 
-Launches the Marianne dashboard API server for job monitoring and control.
+Launches the Marianne dashboard API server for submitted scores, conductor
+state, logs, artifacts, and controls. API payloads still use `job_id` as the
+conductor's runtime record handle.
 
 #### Options
 
@@ -1169,7 +1184,7 @@ Real-time system monitor — like htop for your conductor.
 Usage: mzt top [OPTIONS]
 ```
 
-Shows a job-centric process tree, resource metrics, event timeline, anomaly
+Shows a score-centric process tree, resource metrics, event timeline, anomaly
 detection, and learning insights. Four operating modes:
 
 | Mode | Flag | Description |
@@ -1186,7 +1201,7 @@ detection, and learning insights. Four operating modes:
 | `--json` | | false | Stream JSON snapshots (NDJSON format) |
 | `--history` | | | Replay historical data (e.g., `1h`, `30m`, `2h30m`) |
 | `--trace` | | | Attach strace to a specific PID |
-| `--job` | `-j` | | Filter by score ID |
+| `--score` | `-s` | | Filter JSON/history output by score ID; TUI mode is not filtered yet |
 | `--interval` | `-i` | `2.0` | Refresh interval in seconds |
 
 #### Examples
@@ -1195,8 +1210,8 @@ detection, and learning insights. Four operating modes:
 # Live TUI monitor
 mzt top
 
-# Filter to a specific score
-mzt top --job my-pipeline
+# Filter JSON output to a specific score
+mzt top --score my-pipeline --json
 
 # JSON output for scripting
 mzt top --json
@@ -1649,6 +1664,7 @@ Usage: mzt start [OPTIONS]
 | `--foreground` | `-f` | false | Run in foreground (for development) |
 | `--log-level` | `-l` | `info` | Logging level |
 | `--profile` | `-p` | | Daemon operational profile: `dev`, `intensive`, `minimal`. Overrides config file defaults. |
+| `--conductor-clone` | | | Start a clone conductor; use `--conductor-clone=` for the default clone or `--conductor-clone=NAME` for a named clone |
 
 ```bash
 # Start in background (production)
@@ -1668,7 +1684,7 @@ mzt start --log-level debug
 
 ### `mzt stop`
 
-Stop the running conductor. If jobs are actively running, warns and asks for confirmation before proceeding — stopping the conductor while jobs run orphans active agents and may corrupt job state.
+Stop the running conductor. If scores are actively running, warns and asks for confirmation before proceeding. Stopping the conductor while scores run can orphan active agents and corrupt score state.
 
 ```
 Usage: mzt stop [OPTIONS]
@@ -1678,8 +1694,9 @@ Usage: mzt stop [OPTIONS]
 |--------|-------|---------|-------------|
 | `--pid-file` | | `~/.config/mzt/mzt.pid` | Path to PID file |
 | `--force` | | false | Skip safety check, send SIGKILL instead of SIGTERM |
+| `--conductor-clone` | | | Stop a clone conductor; use `--conductor-clone=` for the default clone or `--conductor-clone=NAME` for a named clone |
 
-**Safety guard:** When jobs are running, `mzt stop` probes the conductor via IPC to check for active jobs. If any are found, it warns with the job count and asks for confirmation. The `--force` flag bypasses this check entirely and sends SIGKILL.
+**Safety guard:** When scores are running, `mzt stop` probes the conductor via IPC to check for active scores. If any are found, it warns with the count and asks for confirmation. The `--force` flag bypasses this check entirely and sends SIGKILL.
 
 ```bash
 # Normal stop (warns if jobs running)
@@ -1693,7 +1710,9 @@ mzt stop --force
 
 ### `mzt restart`
 
-Restart the conductor (stop + start).
+Restart the conductor after the same active-score safety check used by `mzt stop`.
+
+`mzt restart` first runs the stop path. If that path refuses to proceed because active scores are running, restart aborts before starting a new conductor. Pause or finish active scores before restarting.
 
 ```
 Usage: mzt restart [OPTIONS]
@@ -1706,6 +1725,7 @@ Usage: mzt restart [OPTIONS]
 | `--log-level` | `-l` | `info` | Logging level |
 | `--pid-file` | | `~/.config/mzt/mzt.pid` | Path to PID file |
 | `--profile` | `-p` | | Daemon operational profile: `dev`, `intensive`, `minimal`. Overrides config file defaults. |
+| `--conductor-clone` | | | Restart a clone conductor; use `--conductor-clone=` for the default clone or `--conductor-clone=NAME` for a named clone |
 
 ```bash
 mzt restart
@@ -1768,12 +1788,12 @@ mzt clear-rate-limits --json
 
 ## Configuration Reference
 
-Job configurations are defined in YAML files. Here are the key sections:
+Score configurations are defined in YAML files. Here are the key sections:
 
 ### Minimal Example
 
 ```yaml
-name: "my-job"
+name: "my-score"
 workspace: "./workspace"
 instrument: claude-code
 instrument_config:

@@ -1,4 +1,4 @@
-"""Score configuration validation API endpoints."""
+"""Score validation API endpoints."""
 
 from __future__ import annotations
 
@@ -32,12 +32,12 @@ router = APIRouter(prefix="/api/scores", tags=["Score Editor"])
 
 
 class ValidateConfigRequest(BaseModel):
-    """Request to validate a YAML configuration."""
+    """Request to validate score YAML."""
 
     content: str = Field(
         ...,
         max_length=1_000_000,
-        description="YAML configuration content to validate",
+        description="Score YAML content to validate",
     )
     filename: str = Field("config.yaml", description="Virtual filename for context")
     workspace_path: str | None = Field(
@@ -59,14 +59,14 @@ class ValidationIssueResponse(BaseModel):
 
 
 class ValidateConfigResponse(BaseModel):
-    """Response from configuration validation."""
+    """Response from score YAML validation."""
 
     valid: bool = Field(..., description="True if no ERROR-level issues found")
     yaml_syntax_valid: bool = Field(..., description="True if YAML parses correctly")
     schema_valid: bool = Field(..., description="True if Pydantic validation passes")
     issues: list[ValidationIssueResponse] = Field(..., description="All validation issues found")
     counts: dict[str, int] = Field(..., description="Issue counts by severity")
-    config_summary: dict[str, Any] | None = Field(None, description="Config summary if valid")
+    config_summary: dict[str, Any] | None = Field(None, description="Score summary if valid")
     error_message: str | None = Field(None, description="Fatal error message if parsing failed")
 
 
@@ -111,7 +111,7 @@ def validate_schema(
     except ValidationError as e:
         return None, f"Schema validation failed: {e}"
     except Exception as e:
-        return None, f"Configuration error: {e}"
+        return None, f"Score YAML error: {e}"
 
 
 def run_extended_validation(
@@ -169,13 +169,13 @@ def run_extended_validation(
 
 
 def build_config_summary(config: JobConfig) -> dict[str, Any]:
-    """Build a summary of the configuration for display.
+    """Build a summary of the score for display.
 
     Args:
         config: Parsed JobConfig object
 
     Returns:
-        Dictionary with configuration summary information
+        Dictionary with score summary information
     """
     # Phase 5: expose the effective instrument name (which may come from
     # the score's ``instrument:`` field or the legacy ``backend.type``
@@ -203,7 +203,7 @@ def build_config_summary(config: JobConfig) -> dict[str, Any]:
 
 @router.post("/validate", response_model=ValidateConfigResponse)
 async def validate_config(request: ValidateConfigRequest) -> ValidateConfigResponse:
-    """Validate a YAML configuration for Marianne jobs.
+    """Validate score YAML for Marianne execution.
 
     Performs comprehensive validation including:
     - YAML syntax checking
@@ -265,7 +265,7 @@ async def validate_config(request: ValidateConfigRequest) -> ValidateConfigRespo
                         config, content, filename, request.workspace_path
                     )
 
-                    # Build config summary for valid configurations
+                    # Build score summary for valid score YAML.
                     config_summary = build_config_summary(config)
 
                 except Exception as e:
@@ -290,7 +290,7 @@ async def validate_config(request: ValidateConfigRequest) -> ValidateConfigRespo
         if severity in counts:
             counts[severity] += 1
 
-    # Determine if configuration is valid (no ERROR-level issues and basic validation passed)
+    # Determine if score YAML is valid (no ERROR-level issues and basic validation passed)
     valid = yaml_syntax_valid and schema_valid and counts["ERROR"] == 0
 
     return ValidateConfigResponse(
@@ -316,6 +316,12 @@ class SubmitScoreRequest(BaseModel):
     workspace: str | None = Field(None, description="Override workspace directory")
     start_sheet: int = Field(1, ge=1, description="Starting sheet number")
     fresh: bool = Field(False, description="Start with clean state")
+    confirm_fresh: bool = Field(
+        False,
+        description=(
+            "Required when fresh is true; confirms existing score state may be cleared"
+        ),
+    )
     self_healing: bool = Field(False, description="Enable self-healing mode")
     self_healing_auto_confirm: bool = Field(
         False, description="Auto-confirm self-healing fixes"
@@ -349,10 +355,17 @@ async def submit_score(
 
     Validates the score first, then submits it via JobControlService.
     """
-    job_service = JobControlService(get_daemon_client())
     content = request.content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="Score content is empty")
+    if request.fresh and not request.confirm_fresh:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "fresh=true clears existing score state and requires "
+                "confirm_fresh=true"
+            ),
+        )
 
     # Validate before submitting
     _, yaml_error = parse_yaml_safely(content)
@@ -361,7 +374,7 @@ async def submit_score(
 
     config, schema_error = validate_schema(content)
     if schema_error:
-        raise HTTPException(status_code=400, detail=f"Invalid config: {schema_error}")
+        raise HTTPException(status_code=400, detail=f"Invalid score YAML: {schema_error}")
 
     # Validate workspace path to prevent path traversal (same allow-list as validate endpoint)
     workspace: Path | None = None
@@ -390,6 +403,8 @@ async def submit_score(
             )
         client_cwd = cwd_path
 
+    job_service = JobControlService(get_daemon_client())
+
     try:
         result = await job_service.start_job(
             config_content=content,
@@ -415,7 +430,7 @@ async def submit_score(
         success=True,
         job_id=result.job_id,
         job_name=result.job_name,
-        message=f"Job '{result.job_name}' submitted successfully",
+        message=f"Score '{result.job_name}' submitted to the conductor",
     )
 
 

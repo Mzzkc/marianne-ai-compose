@@ -1,7 +1,7 @@
 """Tests for Marianne MCP Artifact Tools - Comprehensive test suite for artifact management."""
 
 import tempfile
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -230,7 +230,8 @@ class TestArtifactTools:
         )
 
         text = result["content"][0]["text"]
-        assert "📋 Logs for Marianne Job: job1" in text
+        assert "Logs for submitted score: job1" in text
+        assert "Source: workspace/marianne.log" in text
         assert "INFO: Job started" in text
         assert "DEBUG: Processing sheet 1" in text
         assert "ERROR: Validation failed" in text
@@ -283,15 +284,95 @@ class TestArtifactTools:
 
         mock_find.assert_called_once_with("job1")
         text = result["content"][0]["text"]
-        assert "📋 Logs for Marianne Job: job1" in text
+        assert "Logs for submitted score: job1" in text
+
+    async def test_get_logs_uses_state_backed_sources_without_workspace(
+        self,
+        temp_workspace,
+    ):
+        """MCP log retrieval uses shared sources when checkpoint state exists."""
+        backend = AsyncMock()
+        backend.load.return_value = CheckpointState(
+            job_id="job1",
+            job_name="job1",
+            status=JobStatus.COMPLETED,
+            total_sheets=1,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            config_snapshot={"workspace": str(temp_workspace / "job1")},
+        )
+        tools = ArtifactTools(temp_workspace, backend)
+
+        result = await tools._get_logs({"job_id": "job1", "lines": 10, "level": "all"})
+
+        text = result["content"][0]["text"]
+        assert "Source: workspace/marianne.log" in text
+        assert "Alias state: compatibility" in text
+        assert "INFO: Job started" in text
 
     async def test_get_logs_no_logs_found(self, artifact_tools, temp_workspace):
         """Test log retrieval when no log files exist."""
         empty_job_dir = temp_workspace / "empty_job"
         empty_job_dir.mkdir()
 
-        with pytest.raises(FileNotFoundError, match="No log files found"):
-            await artifact_tools._get_logs({"job_id": "empty_job", "workspace": str(empty_job_dir)})
+        result = await artifact_tools._get_logs(
+            {"job_id": "empty_job", "workspace": str(empty_job_dir)}
+        )
+
+        text = result["content"][0]["text"]
+        assert "State: no-sources" in text
+        assert "No log source was found" in text
+
+    async def test_get_logs_empty_log_file_reports_no_lines(
+        self, artifact_tools, temp_workspace
+    ):
+        """An empty source is different from a missing source."""
+        empty_job_dir = temp_workspace / "empty_with_log"
+        empty_job_dir.mkdir()
+        (empty_job_dir / "marianne.log").write_text("")
+
+        result = await artifact_tools._get_logs(
+            {"job_id": "empty_with_log", "workspace": str(empty_job_dir)}
+        )
+
+        text = result["content"][0]["text"]
+        assert "State: available" in text
+        assert "Source: workspace/marianne.log" in text
+        assert "State: no-lines" in text
+
+    async def test_get_logs_reads_logs_subdirectory_source(
+        self, artifact_tools, temp_workspace
+    ):
+        """MCP logs include the dashboard's workspace/logs/marianne.log source."""
+        job_dir = temp_workspace / "logs_subdir_job"
+        (job_dir / "logs").mkdir(parents=True)
+        (job_dir / "logs" / "marianne.log").write_text("INFO: nested source\n")
+
+        result = await artifact_tools._get_logs(
+            {"job_id": "logs_subdir_job", "workspace": str(job_dir)}
+        )
+
+        text = result["content"][0]["text"]
+        assert "Source: workspace/logs/marianne.log" in text
+        assert "INFO: nested source" in text
+
+    async def test_get_logs_reports_stream_only_for_oversized_sources(
+        self, artifact_tools, temp_workspace, monkeypatch
+    ):
+        """Oversized logs remain inspectable through bounded tails."""
+        job_dir = temp_workspace / "oversized"
+        job_dir.mkdir()
+        (job_dir / "marianne.log").write_text("INFO: one\nINFO: two\n")
+        monkeypatch.setattr("marianne.mcp.tools.MCP_LOG_STREAM_ONLY_BYTES", 1)
+
+        result = await artifact_tools._get_logs(
+            {"job_id": "oversized", "workspace": str(job_dir), "lines": 1}
+        )
+
+        text = result["content"][0]["text"]
+        assert "State: stream-only" in text
+        assert "INFO: two" in text
+        assert "INFO: one" not in text
 
     async def test_list_artifacts_all_types(self, artifact_tools, temp_workspace):
         """Test listing all artifacts."""
@@ -628,18 +709,18 @@ class TestCustomLogLevelCache:
         )
         assert "info" not in artifact_tools._custom_level_cache
 
-    async def test_empty_log_dir_raises(self, artifact_tools, temp_workspace) -> None:
-        """Should raise FileNotFoundError when no log files exist."""
+    async def test_empty_log_dir_reports_no_sources(self, artifact_tools, temp_workspace) -> None:
+        """Should report no-sources when no log files exist."""
         empty_job = temp_workspace / "empty"
         empty_job.mkdir()
-        with pytest.raises(FileNotFoundError, match="No log files found"):
-            await artifact_tools._get_logs(
-                {
-                    "job_id": "empty",
-                    "workspace": str(empty_job),
-                    "level": "all",
-                }
-            )
+        result = await artifact_tools._get_logs(
+            {
+                "job_id": "empty",
+                "workspace": str(empty_job),
+                "level": "all",
+            }
+        )
+        assert "State: no-sources" in result["content"][0]["text"]
 
 
 class TestMakeErrorResponse:

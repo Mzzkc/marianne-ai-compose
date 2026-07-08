@@ -6,8 +6,9 @@ minutes, on a **free-tier model**, without ever touching Marianne's sandbox.
 ## Why "sandbox-free"?
 
 Marianne has an optional code-execution sandbox (`code_mode`, backed by
-`bwrap`) that is **currently broken** (see [KNOWN-ISSUES.md](../KNOWN-ISSUES.md)
-§2 and issue [#210](https://github.com/Mzzkc/marianne-ai-compose/issues/210)).
+`bwrap`). The historical path-mismatch blocker is marked closed in project
+status, but `code_mode` is still a specialized, opt-in generated-code path.
+This guide keeps new composers on CLI instruments first.
 
 The good news: the sandbox is **opt-in**. It only runs for sheets that
 explicitly set a `code_mode:` block. Every **CLI instrument**
@@ -16,8 +17,8 @@ explicitly set a `code_mode:` block. Every **CLI instrument**
 sandbox**. So the entire normal workflow — the one this guide uses — is
 sandbox-free today.
 
-**Rule of thumb:** don't put `code_mode:` in your scores until the sandbox is
-fixed. That's the whole limitation.
+**Rule of thumb:** don't put `code_mode:` in first-run scores. Use CLI
+instruments unless you specifically need generated-code execution.
 
 ---
 
@@ -76,13 +77,23 @@ If you have a Claude Max subscription, a Google AI subscription, or a Z.AI
 Coding Plan, the `claude-code`, `gemini-cli`, or `opencode` (with the
 `zai-coding-plan` provider) instruments all work and are all sandbox-free.
 
-> **Both flagship scores are free now.** `examples/getting-started/hello.yaml`
-> runs on a deep, free instrument fallback chain — free OpenRouter models first,
-> falling back to a local Ollama model — so it needs no paid account.
-> `hello-local.yaml` (below) is the pure-offline twin: identical orchestration,
-> but it skips the OpenRouter attempts and runs entirely on your local model.
+> **First-run route:** `examples/getting-started/hello-setup.yaml` discovers a
+> ready free, local, or paid instrument path and writes a resolved hello score.
+> Direct `hello.yaml` remains useful once the instrument path is known, but
+> current validation may warn about its raw-CLI fallback chain.
+> `hello-local.yaml` (below) is the pure-offline twin: same orchestration, but
+> it skips OpenRouter attempts and runs entirely on your local model.
 
 ## Step 3 — Run the curated example score
+
+For the broad first-run path, use `hello-setup`:
+
+```bash
+mzt start
+mzt run examples/getting-started/hello-setup.yaml
+mzt status hello
+open workspaces/hello/the-sky-library.html
+```
 
 [`examples/getting-started/hello-local.yaml`](https://github.com/Mzzkc/marianne-ai-compose/blob/main/examples/getting-started/hello-local.yaml)
 runs entirely on a local Ollama model — no cloud, no account. Same orchestration
@@ -115,7 +126,7 @@ mzt validate examples/getting-started/hello-local.yaml
 
 | Avoided | Why |
 |---|---|
-| `code_mode:` in scores | The sandbox path is broken ([#210](https://github.com/Mzzkc/marianne-ai-compose/issues/210)). |
+| `code_mode:` in first-run scores | It is an opt-in generated-code path; CLI instruments are the safer onboarding route. |
 | `claude-code` / `anthropic_api` as defaults | Require a paid Anthropic account; not free-tier. |
 | Restarting the conductor mid-run | Recovery of interrupted in-flight work is not fully reliable (KNOWN-ISSUES §3). |
 

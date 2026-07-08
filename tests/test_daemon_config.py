@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from marianne.daemon.config import (
     DaemonConfig,
+    DaemonLoggingConfig,
     ResourceLimitConfig,
     SemanticLearningConfig,
     SocketConfig,
@@ -126,7 +127,10 @@ class TestDaemonConfig:
         assert config.state_backend_type == "sqlite"
         assert config.state_db_path == Path("~/.marianne/daemon-state.db")
         assert config.log_level == "info"
-        assert config.log_file is None
+        assert isinstance(config.logging, DaemonLoggingConfig)
+        assert config.logging.root == Path.home() / ".marianne" / "logs"
+        assert config.logging.event_log_name == "conductor.log"
+        assert config.log_file == Path.home() / ".marianne" / "logs" / "conductor.log"
 
     def test_nested_socket_defaults(self):
         """Test socket config is initialized with defaults."""
@@ -203,9 +207,35 @@ class TestDaemonConfig:
         assert config.log_level == "debug"
 
     def test_custom_log_file(self):
-        """Test custom log file path."""
+        """Legacy log_file input is normalized into daemon logging config."""
         config = DaemonConfig(log_file=Path("/var/log/marianne.log"))
         assert config.log_file == Path("/var/log/marianne.log")
+        assert config.logging.root == Path("/var/log")
+        assert config.logging.event_log_name == "marianne.log"
+
+    def test_custom_logging_root(self):
+        """Daemon logging config owns the event log path."""
+        config = DaemonConfig(
+            logging=DaemonLoggingConfig(
+                root=Path("~/custom-mzt-logs"),
+                event_log_name="events.jsonl",
+                max_file_size_mb=25,
+                backup_count=3,
+                compress=False,
+                retention_days=30,
+            )
+        )
+        assert config.logging.root == Path.home() / "custom-mzt-logs"
+        assert config.log_file == Path.home() / "custom-mzt-logs" / "events.jsonl"
+        assert config.logging.max_file_size_mb == 25
+        assert config.logging.backup_count == 3
+        assert config.logging.compress is False
+        assert config.logging.retention_days == 30
+
+    def test_logging_event_log_name_must_be_file_name(self):
+        """Daemon event log names cannot escape the logging root."""
+        with pytest.raises(ValidationError, match="single file name"):
+            DaemonLoggingConfig(event_log_name="../events.log")
 
     def test_full_custom_config(self):
         """Test fully customized daemon config (only implemented fields)."""
@@ -225,7 +255,10 @@ class TestDaemonConfig:
             state_backend_type="sqlite",
             state_db_path=Path("/data/marianne.db"),
             log_level="debug",
-            log_file=Path("/var/log/marianne.log"),
+            logging=DaemonLoggingConfig(
+                root=Path("/var/log/marianne"),
+                event_log_name="conductor.jsonl",
+            ),
         )
         assert config.socket.path == Path("/run/user/1000/marianne.sock")
         assert config.socket.permissions == 0o600
@@ -240,7 +273,7 @@ class TestDaemonConfig:
         assert config.state_backend_type == "sqlite"
         assert config.state_db_path == Path("/data/marianne.db")
         assert config.log_level == "debug"
-        assert config.log_file == Path("/var/log/marianne.log")
+        assert config.log_file == Path("/var/log/marianne/conductor.jsonl")
 
     def test_serialization_roundtrip(self):
         """Test config survives model_dump -> model_validate roundtrip."""
@@ -285,6 +318,43 @@ class TestDaemonConfig:
         """config_file defaults to None."""
         config = DaemonConfig()
         assert config.config_file is None
+
+    def test_load_legacy_log_file_from_yaml_normalizes_logging(self, tmp_path: Path):
+        """_load_config accepts existing log_file YAML while preserving one authority."""
+        from marianne.daemon.process import _load_config
+
+        log_path = tmp_path / "legacy" / "marianne.log"
+        cfg_path = tmp_path / "daemon.yaml"
+        cfg_path.write_text(yaml.dump({"log_file": str(log_path)}))
+
+        config = _load_config(cfg_path)
+        assert config.log_file == log_path
+        assert config.logging.root == log_path.parent
+        assert config.logging.event_log_name == log_path.name
+
+    def test_load_logging_root_from_yaml(self, tmp_path: Path):
+        """_load_config accepts the canonical daemon logging model."""
+        from marianne.daemon.process import _load_config
+
+        log_root = tmp_path / "logs"
+        cfg_path = tmp_path / "daemon.yaml"
+        cfg_path.write_text(
+            yaml.dump(
+                {
+                    "logging": {
+                        "root": str(log_root),
+                        "event_log_name": "daemon.jsonl",
+                        "backup_count": 2,
+                    }
+                }
+            )
+        )
+
+        config = _load_config(cfg_path)
+        assert config.logging.root == log_root
+        assert config.logging.event_log_name == "daemon.jsonl"
+        assert config.logging.backup_count == 2
+        assert config.log_file == log_root / "daemon.jsonl"
 
 
 class TestLoadConfig:

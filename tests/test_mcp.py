@@ -206,17 +206,27 @@ class TestConfigResources:
         resources = ConfigResources()
         result = await resources.read_resource("config://example")
         content = result["contents"][0]
-        assert "sheets:" in content["text"]
+        assert "sheet:" in content["text"]
         assert "instrument:" in content["text"]
+        assert "backend:" not in content["text"]
 
-    async def test_get_backend_options(self) -> None:
+    async def test_get_instrument_options(self) -> None:
+        resources = ConfigResources()
+        result = await resources.read_resource("config://instrument-options")
+        content = result["contents"][0]
+        data = json.loads(content["text"])
+        assert "available_instruments" in data
+        assert "claude_cli" in data["available_instruments"]
+        assert "anthropic_api" in data["available_instruments"]
+
+    async def test_backend_options_compatibility_uri_returns_instruments(self) -> None:
         resources = ConfigResources()
         result = await resources.read_resource("config://backend-options")
         content = result["contents"][0]
         data = json.loads(content["text"])
-        assert "available_backends" in data
-        assert "claude_cli" in data["available_backends"]
-        assert "anthropic_api" in data["available_backends"]
+        assert content["uri"] == "config://instrument-options"
+        assert "available_instruments" in data
+        assert "available_backends" not in data
 
     async def test_get_validation_types(self) -> None:
         resources = ConfigResources()
@@ -225,7 +235,7 @@ class TestConfigResources:
         data = json.loads(content["text"])
         assert "available_validation_types" in data
         assert "file_exists" in data["available_validation_types"]
-        assert "regex_match" in data["available_validation_types"]
+        assert "content_regex" in data["available_validation_types"]
 
     async def test_get_learning_options(self) -> None:
         resources = ConfigResources()
@@ -542,7 +552,10 @@ class TestArtifactTools:
                 "workspace": str(tmp_path),
             },
         )
-        assert result.get("isError") is True
+        assert not result.get("isError")
+        text = result["content"][0]["text"]
+        assert "State: no-sources" in text
+        assert "No log source was found" in text
 
     async def test_get_logs_with_log_file(self, tmp_path: Path) -> None:
         log_file = tmp_path / "marianne.log"
@@ -558,6 +571,8 @@ class TestArtifactTools:
         )
         assert not result.get("isError")
         text = result["content"][0]["text"]
+        assert "Logs for submitted score: test-job" in text
+        assert "Source: workspace/marianne.log" in text
         assert "Starting job" in text
 
     async def test_get_logs_level_filter(self, tmp_path: Path) -> None:
@@ -826,7 +841,7 @@ class TestResourceURIParametrized:
         "uri,expected_key",
         [
             ("config://schema", "properties"),
-            ("config://backend-options", "available_backends"),
+            ("config://backend-options", "available_instruments"),
             ("config://validation-types", "available_validation_types"),
             ("config://learning-options", "learning_system"),
         ],

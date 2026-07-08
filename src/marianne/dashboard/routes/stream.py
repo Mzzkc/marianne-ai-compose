@@ -12,7 +12,6 @@ import json
 import re
 import sqlite3
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -23,6 +22,11 @@ from pydantic import BaseModel, Field
 
 from marianne.core.checkpoint import CheckpointState, JobStatus
 from marianne.core.constants import DAEMON_STATE_DB_PATH
+from marianne.core.log_sources import (
+    LogSource,
+    discover_job_log_sources,
+    iter_source_lines,
+)
 from marianne.core.logging import get_logger
 from marianne.dashboard.app import get_state_backend
 from marianne.dashboard.services.event_bridge import DaemonEventBridge
@@ -101,16 +105,6 @@ class LogDownloadInfo(BaseModel):
     sources: list[str] = Field(default_factory=list)
     download_available: bool = True
     download_limit_bytes: int = MAX_STATIC_LOG_DOWNLOAD_BYTES
-
-
-@dataclass(frozen=True)
-class LogSource:
-    """Concrete source that can contribute lines to the dashboard log view."""
-
-    path: Path
-    label: str
-    follow: bool = False
-    job_filter: str | None = None
 
 
 # ============================================================================
@@ -365,64 +359,11 @@ async def _get_job_log_sources(job_id: str, backend: StateBackend) -> list[LogSo
     if state is None:
         raise HTTPException(status_code=404, detail=f"Score not found: {job_id}")
 
-    metadata = _read_registry_job_metadata(job_id)
-    sources: list[LogSource] = []
-    seen: set[Path] = set()
-
-    _append_log_source(
-        sources,
-        seen,
-        metadata.get("log_path"),
-        "registry log_path",
-        follow=state.status == JobStatus.RUNNING,
+    sources = discover_job_log_sources(
+        job_id,
+        state,
+        registry_metadata=_read_registry_job_metadata(job_id),
     )
-
-    workspaces: list[Path] = []
-    if state.worktree_path:
-        workspaces.append(Path(state.worktree_path))
-    if metadata.get("workspace"):
-        workspaces.append(Path(str(metadata["workspace"])))
-    if isinstance(state.config_snapshot, dict):
-        raw_workspace = state.config_snapshot.get("workspace")
-        if raw_workspace:
-            workspaces.append(Path(str(raw_workspace)))
-
-    workspace_seen: set[Path] = set()
-    for workspace in workspaces:
-        try:
-            resolved_workspace = workspace.expanduser().resolve()
-        except OSError:
-            resolved_workspace = workspace.expanduser()
-        if resolved_workspace in workspace_seen:
-            continue
-        workspace_seen.add(resolved_workspace)
-        _append_workspace_log_sources(sources, seen, resolved_workspace, state)
-
-    snapshot_paths: list[Path] = []
-    if metadata.get("snapshot_path"):
-        snapshot_paths.append(Path(str(metadata["snapshot_path"])))
-    snapshot_root = Path("~/.marianne/snapshots").expanduser() / job_id
-    if snapshot_root.is_dir():
-        snapshot_paths.extend(
-            path for path in sorted(snapshot_root.iterdir(), reverse=True) if path.is_dir()
-        )
-
-    snapshot_seen: set[Path] = set()
-    for snapshot_path in snapshot_paths:
-        try:
-            resolved_snapshot = snapshot_path.expanduser().resolve()
-        except OSError:
-            resolved_snapshot = snapshot_path.expanduser()
-        if resolved_snapshot in snapshot_seen:
-            continue
-        snapshot_seen.add(resolved_snapshot)
-        _append_snapshot_log_sources(sources, seen, resolved_snapshot, job_id)
-
-    _append_interactive_log_sources(sources, seen, job_id, state)
-
-    # Last-resort source: filtered conductor events. This is often the only
-    # durable place where hook failures and CLI-run status transitions live.
-    _append_conductor_log_source(sources, seen, job_id, state)
 
     if not sources:
         raise HTTPException(status_code=404, detail=f"Log file not found for job {job_id}")
@@ -609,20 +550,7 @@ def _read_tail_lines(log_file: Path, tail_lines: int) -> tuple[list[str], int]:
 
 def _iter_source_lines(source: LogSource) -> list[str]:
     """Read source lines, applying a job filter for shared conductor logs."""
-    with open(source.path, encoding="utf-8", errors="replace") as f:
-        if source.job_filter is None:
-            return list(f)
-
-        needle_spaced = f'"job_id": "{source.job_filter}"'
-        needle_compact = f'"job_id":"{source.job_filter}"'
-        transcript_needle = f"mzt-{source.job_filter}-"
-        return [
-            line
-            for line in f
-            if needle_spaced in line
-            or needle_compact in line
-            or transcript_needle in line
-        ]
+    return iter_source_lines(source)
 
 
 def _read_tail_lines_from_source(source: LogSource, tail_lines: int) -> tuple[list[str], int]:

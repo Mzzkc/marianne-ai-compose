@@ -133,7 +133,7 @@ from .output import console
 
 app = typer.Typer(
     name="marianne",
-    help="Orchestration system for AI agent workflows",
+    help="Score orchestration through the conductor, sheets, and instruments",
     add_completion=False,
 )
 
@@ -270,7 +270,7 @@ def main(
         ),
     ] = None,
 ) -> None:
-    """Marianne AI Compose - Orchestration system for AI agent workflows."""
+    """Marianne AI Compose - score orchestration through the conductor."""
     # Configure logging based on CLI options (called once)
     configure_global_logging(console)
 
@@ -284,14 +284,14 @@ app.command(rich_help_panel="Getting Started")(init)
 app.command(rich_help_panel="Getting Started")(compose)
 app.command(name="compile", rich_help_panel="Getting Started")(compile_scores)
 
-# Job execution commands
-app.command(rich_help_panel="Jobs")(run)
-app.command(rich_help_panel="Jobs")(resume)
-app.command(rich_help_panel="Jobs")(pause)
-app.command(rich_help_panel="Jobs")(resolve)  # #361: resolve FERMATA sheets
-app.command(rich_help_panel="Jobs")(modify)
-app.command(rich_help_panel="Jobs")(cancel)
-app.command(rich_help_panel="Jobs")(validate)
+# Score execution commands
+app.command(rich_help_panel="Score Runs")(run)
+app.command(rich_help_panel="Score Runs")(resume)
+app.command(rich_help_panel="Score Runs")(pause)
+app.command(rich_help_panel="Score Runs")(resolve)  # #361: resolve FERMATA sheets
+app.command(rich_help_panel="Score Runs")(modify)
+app.command(rich_help_panel="Score Runs")(cancel)
+app.command(rich_help_panel="Score Runs")(validate)
 
 # Job status commands
 app.command(rich_help_panel="Monitoring")(status)
@@ -307,7 +307,7 @@ app.command(rich_help_panel="Diagnostics")(diagnose)
 app.command(rich_help_panel="Diagnostics")(history)
 app.command(rich_help_panel="Diagnostics")(doctor)
 # #338: discoverable — a user whose job failed must be able to find recovery.
-app.command(rich_help_panel="Jobs")(recover)
+app.command(rich_help_panel="Score Runs")(recover)
 
 # Server commands
 app.command(rich_help_panel="Services")(dashboard)

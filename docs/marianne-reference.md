@@ -1,9 +1,11 @@
-# Marianne AI Compose: The Definitive Reference
+# Marianne AI Compose Reference
 
 > **Purpose:** Comprehensive reference for AI assistants and developers working on Marianne.
-> This document should be kept current by the `docs-generator` score.
+> This document is a human-readable reference snapshot. When it conflicts with
+> source, generated command help, or `mzt instruments list`, source and command
+> output win.
 >
-> **Last updated:** 2026-04-07
+> **Last reviewed for corpus overhaul:** 2026-07-08
 
 ---
 
@@ -15,22 +17,22 @@ The musical metaphor is load-bearing architecture, not decoration:
 
 | Musical Term | System Concept | Implementation |
 |-------------|---------------|----------------|
-| **Score** | Job configuration | `JobConfig` — the YAML file defining what to execute |
-| **Sheet** | Execution unit | `SheetState` — one stage of work within a score |
+| **Score** | Declarative YAML for orchestrated work | `JobConfig` — the YAML file defining what to execute |
+| **Sheet** | Concrete execution unit | `SheetState` — one dispatched unit within a score |
 | **Movement** | Named phase | `MovementDef` — logical grouping of sheets (Planning, Implementation, Review) |
 | **Voice** | Parallel instance | Fan-out instance within a movement |
-| **Concert** | Job chain | Jobs spawning jobs via `on_success` hooks |
+| **Concert** | Multi-score orchestration | Scores spawning scores via `on_success` hooks |
 | **Conductor** | Daemon process | `mzt start` — the long-running process that orchestrates everything |
 | **Baton** | Execution engine | `BatonCore` — event-driven dispatch: decides WHEN and HOW MUCH |
 | **Musician** | Sheet executor | `sheet_task()` — plays once, reports result (never retries or decides) |
-| **Instrument** | AI backend | `InstrumentProfile` — Claude Code, Gemini CLI, Aider, etc. |
+| **Instrument** | Execution profile or wrapped provider | `InstrumentProfile` — Claude Code, Gemini CLI, Aider, custom CLIs, APIs, etc. |
 | **Technique** | Tool/MCP/skill | How you play the instrument — tools, MCP servers, skill files |
 | **Preamble** | Positional identity | Dynamic header telling agents who they are in the score |
 | **Cadenza** | Per-sheet injection | Files injected into specific sheets (context, skills, tools) |
 | **Prelude** | Global injection | Files injected into every sheet |
 | **Libretto** | Specification corpus | `.marianne/spec/` — project knowledge injected into agent prompts |
 | **Passage** | Spec fragment | Tagged excerpt from the libretto, filtered per-sheet |
-| **Fermata** | Escalation pause | Holds execution for human or AI judgment |
+| **Fermata** | Escalation pause | Holds execution for composer judgment |
 | **Tempo** | Execution rate | Pacing, rate limits, backpressure — never failure conditions |
 
 ---
@@ -279,18 +281,19 @@ Per-instrument health with circuit breaker: `CLOSED` (healthy) → `OPEN` (unhea
 
 ## The Instrument System
 
-Instruments are AI backends. Marianne ships with 6 config-driven instrument profiles and bridges 4 native Python backends, giving 10+ instruments out of the box. Adding a new instrument is ~30 lines of YAML, not ~300 lines of Python.
+Instruments are configured execution profiles or wrapped providers. Marianne
+loads built-in profiles, user profiles, and venue profiles; current availability
+depends on installed binaries, credentials, rate limits, and local config. Run
+`mzt instruments list` for the live catalog instead of relying on a static count
+in this reference.
 
-### Built-in Instruments
+### Built-in Instrument Profiles
 
-| Instrument | Kind | Capabilities | Default Model |
-|-----------|------|-------------|---------------|
-| **claude-code** | CLI | tool_use, file_editing, shell_access, vision, mcp, structured_output, streaming, thinking | claude-sonnet-4-5-20250929 |
-| **gemini-cli** | CLI | tool_use, file_editing, shell_access, vision, structured_output | gemini-2.5-pro |
-| **codex-cli** | CLI | tool_use, file_editing, shell_access, mcp, structured_output, session_resume, streaming | o3 |
-| **cline-cli** | CLI | tool_use, file_editing, shell_access, mcp, structured_output, thinking, session_resume | — |
-| **aider** | CLI | file_editing, shell_access | — |
-| **goose** | CLI | tool_use, file_editing, shell_access, mcp, structured_output, session_resume, streaming | — |
+The built-in profile set includes agent harnesses such as `claude-code`,
+`gemini-cli`, `codex-cli`, `cline-cli`, `aider`, `goose`, `crush`, and
+`opencode`, plus native/API/local providers where configured. Model defaults
+change over time; the authoritative sources are the profile YAML files and
+`mzt instruments list`.
 
 ### Native Backends (Python implementations)
 
@@ -629,7 +632,7 @@ Everything else has sensible defaults.
 + any custom variables from prompt.variables
 ```
 
-### Validation System — 5 Types
+### Validation System
 
 ```yaml
 validations:
@@ -649,6 +652,23 @@ validations:
 
   - type: command_succeeds
     command: "pytest -x -q --tb=no"
+
+  - type: path_in_scope
+    path: "{workspace}/result.md"
+    path_scope: "{workspace}"
+
+  - type: field_match
+    path: "{workspace}/facts.json"
+    field_path: "status"
+    expected_value: "complete"
+
+  - type: file_sha256
+    path: "{workspace}/input.lock"
+    sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+  - type: csv_unique_key
+    path: "{workspace}/rows.csv"
+    key_field: "id"
 ```
 
 **Important:** Validation paths use Python format strings with single braces: `{workspace}`. Template prompts use Jinja2 double braces: `{{ workspace }}`. Mixing them causes silent failures.
@@ -656,6 +676,12 @@ validations:
 Key validation features:
 - **Conditional:** `condition: "sheet_num >= 6"` — applies only to matching sheets
 - **Retry with delay:** `retry_count: 3, retry_delay_ms: 200` — for filesystem race conditions
+- **Structured checks:** `field_match`, `file_sha256`, and `csv_unique_key`
+  avoid fragile shell where a first-class validator can express the invariant.
+- **Static preflight:** `mzt validate` also runs score checks such as V305
+  Bash/Jinja collision detection, V307 raw `cli` bash rendering checks, V308
+  fan-out instrument coverage warnings, and V309 prompt/validation label drift
+  warnings.
 
 ### The 6 Score Archetypes
 

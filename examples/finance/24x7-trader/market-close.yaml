@@ -30,7 +30,6 @@ workspace_lifecycle:
   archive_on_fresh: false
 
 instrument: claude-code
-instrument_fallbacks: [opencode, gemini-cli]
 instrument_config:
   timeout_seconds: 1200
 
@@ -92,18 +91,9 @@ prompt:
   template: |
     {# ── Stage 1: Capture ─────────────────────────────────────────────────── #}
     {% if stage == 1 %}
-    # Market-Close — Stage 1: Capture
-
-    ## Bootstrap precondition check
-
-    ```bash
     [[ -f {{ workspace }}/02-strategy.md ]]    || { echo "FAIL: bootstrap not run" >&2; exit 1; }
     [[ -f {{ workspace }}/risk-envelope.yaml ]] || { echo "FAIL: risk-envelope.yaml missing" >&2; exit 1; }
-    ```
 
-    ## Capture
-
-    ```bash
     set -e
     today=$(date +%F)
     echo "$today" > {{ workspace }}/today-date.txt
@@ -177,10 +167,6 @@ prompt:
     PY
 
     cat {{ workspace }}/today-close-stats.json
-    ```
-
-    The output of this stage is `today-close-stats.json` — pure
-    deterministic numbers. No interpretation here.
 
     {# ── Stage 2: Reflect ─────────────────────────────────────────────────── #}
     {% elif stage == 2 %}
@@ -240,25 +226,15 @@ prompt:
     PY
 
     tail -1 {{ workspace }}/benchmarks.csv
-    ```
 
     {# ── Stage 4: Notify ──────────────────────────────────────────────────── #}
     {% elif stage == 4 %}
-    # Market-Close — Stage 4: Notify
-
-    Send the daily close notification.
-
-    ```bash
     set -e
     today=$(cat {{ workspace }}/today-date.txt)
     : "${NOTIFY_CMD:?NOTIFY_CMD must be an absolute path}"
     NOTIFY="$NOTIFY_CMD"
     [[ -x "$NOTIFY" ]] || { echo "NOTIFY_CMD not executable: $NOTIFY" >&2; exit 1; }
     "$NOTIFY" daily "Daily close: $today" {{ workspace }}/journal/${today}-close.md
-    ```
-
-    The validation runs the notify command directly so notify failures
-    register as score failures (operator wants to know).
 
     {% endif %}
 

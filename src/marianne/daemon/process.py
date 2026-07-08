@@ -26,7 +26,7 @@ import typer
 
 from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY
 from marianne.core.logging import get_logger
-from marianne.daemon.config import LEGACY_PID_PATH, DaemonConfig
+from marianne.daemon.config import LEGACY_PID_PATH, DaemonConfig, DaemonLoggingConfig
 from marianne.daemon.pgroup import ProcessGroupManager
 from marianne.daemon.task_utils import log_task_exception
 
@@ -42,6 +42,34 @@ _logger = get_logger("conductor")
 # Advisory lock file descriptor — held for daemon lifetime to prevent
 # concurrent starts.  Set by _write_pid(), released on process exit.
 _pid_lock_fd: int | None = None
+
+
+def _daemon_logging_config(config: DaemonConfig) -> DaemonLoggingConfig:
+    """Return the validated daemon logging policy for startup/reload."""
+    logging_config = getattr(config, "logging", None)
+    if isinstance(logging_config, DaemonLoggingConfig):
+        return logging_config
+    return DaemonLoggingConfig()
+
+
+def _configure_daemon_logging(
+    config: DaemonConfig,
+    *,
+    format: str,  # noqa: A002
+) -> None:
+    """Configure process logging from the conductor-owned logging policy."""
+    from marianne.core.logging import configure_logging
+
+    logging_config = _daemon_logging_config(config)
+    configure_logging(
+        level=config.log_level.upper(),  # type: ignore[arg-type]
+        format=format,  # type: ignore[arg-type]
+        file_path=config.log_file,
+        max_file_size_mb=logging_config.max_file_size_mb,
+        backup_count=logging_config.backup_count,
+        compress_logs=logging_config.compress,
+        include_timestamps=True,
+    )
 
 
 def _read_proc_text(pid: int, name: str) -> str | None:
@@ -119,16 +147,10 @@ def start_conductor(
 
     # Apply clone path overrides when running as a clone conductor
     if clone_name is not None:
-        from marianne.daemon.clone import resolve_clone_paths
+        from marianne.daemon.clone import build_clone_config
 
-        clone_paths = resolve_clone_paths(clone_name)
-        config_dict = config.model_dump()
-        config_dict["socket"] = {"path": str(clone_paths.socket)}
-        config_dict["pid_file"] = str(clone_paths.pid_file)
-        config_dict["state_db_path"] = str(clone_paths.state_db)
-        config = DaemonConfig.model_validate(config_dict)
+        config = build_clone_config(clone_name, base_config=config)
         config.log_level = cast(Any, log_level)
-        config.log_file = clone_paths.log_file
 
     # #227: probe the legacy /tmp PID too — a conductor started before the
     # path move must block a second `mzt start` (both would share the state
@@ -167,15 +189,8 @@ def start_conductor(
             typer.echo("Marianne conductor is starting up (PID file locked)")
             raise typer.Exit(1) from None
 
-    from marianne.core.logging import configure_logging
-
     log_fmt = "console" if foreground else "json"
-    configure_logging(
-        level=log_level.upper(),  # type: ignore[arg-type]
-        format=log_fmt,  # type: ignore[arg-type]
-        file_path=config.log_file,
-        include_timestamps=True,
-    )
+    _configure_daemon_logging(config, format=log_fmt)
 
     if not foreground:
         _daemonize(config)
@@ -1082,15 +1097,12 @@ class DaemonProcess:
         # Reconfigure logging if log_level or log_file changed
         if (
             new_config.log_level != self._config.log_level
+            or new_config.logging != self._config.logging
             or new_config.log_file != self._config.log_file
         ):
-            from marianne.core.logging import configure_logging
-
-            configure_logging(
-                level=new_config.log_level.upper(),  # type: ignore[arg-type]
+            _configure_daemon_logging(
+                new_config,
                 format="json" if new_config.log_file is not None else "console",
-                file_path=new_config.log_file,
-                include_timestamps=True,
             )
             _logger.info(
                 "daemon.sighup_logging_changed",
@@ -1098,6 +1110,8 @@ class DaemonProcess:
                 new_level=new_config.log_level,
                 old_log_file=str(self._config.log_file),
                 new_log_file=str(new_config.log_file),
+                old_log_root=str(self._config.logging.root),
+                new_log_root=str(new_config.logging.root),
             )
 
         self._config = new_config

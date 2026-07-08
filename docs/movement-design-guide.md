@@ -725,7 +725,7 @@ validations:
 ```bash
 mzt start    # Start conductor if not running
 mzt run multi-movement-demo.yaml
-mzt status multi-movement-demo -w ../workspaces/multi-movement-demo
+mzt status multi-movement-demo --watch
 ```
 
 You'll see 3 movements in status output:

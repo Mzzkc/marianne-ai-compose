@@ -2,9 +2,9 @@
 
 ## What Marianne Is
 
-Marianne is an orchestration system that replaces software teams with specification-driven AI agents. You write a declarative YAML score; Marianne decomposes it into sheets, executes them through AI backends, validates outputs against acceptance criteria, learns from outcomes, and feeds knowledge forward.
+Marianne is orchestration infrastructure for collaborative intelligence. A composer writes a declarative YAML score; Marianne decomposes it into sheets, executes them through instruments, validates outputs against acceptance criteria, learns from outcomes, and feeds knowledge forward.
 
-The mental model is drawn from orchestral music and is load-bearing: a **score** is a job config, a **sheet** is one execution stage, a **concert** chains scores, the **conductor** is the daemon, **musicians** are AI agents, **instruments** are backends, and **techniques** are tools/MCP/skills. Use these terms in user-facing output. In code, use `JobConfig`, `SheetState`, etc.
+The mental model is drawn from orchestral music and is load-bearing: a **composer** can be human, an AI person, or an agent system; a **score** is declarative YAML for orchestrated work; a **sheet** is one concrete execution unit; a **concert** chains scores; the **conductor** is the daemon; **musicians** are AI agents; **instruments** are configured execution profiles or wrapped CLIs/APIs; and **techniques** are tools, MCP servers, or skills. Use these terms in user-facing output. In code, use `JobConfig`, `SheetState`, `job_id`, and other schema names where they are the actual API.
 
 Do not assume Marianne's current state. Run the tests. Check the conductor. Verify before claiming anything works.
 
@@ -42,7 +42,7 @@ Core skills for orchestrating work with Marianne are documented in `plugins/`. R
 | Skill | Documentation | Purpose |
 |-------|---------------|---------|
 | **Score Authoring** | `plugins/marianne/skills/score-authoring/SKILL.md` | Crafting declarative YAML scores and sheet logic. |
-| **Command Guide** | `plugins/marianne/skills/command/SKILL.md` | Operational reference for running, monitoring, and debugging jobs. |
+| **Command Guide** | `plugins/marianne/skills/command/SKILL.md` | Operational reference for running, monitoring, and debugging submitted scores. |
 | **Composing** | `plugins/marianne/skills/composing/SKILL.md` | High-level generative score composition from intent. |
 | **Compose Command** | `plugins/marianne/commands/compose.md` | Reference for the `mzt compose` command. |
 

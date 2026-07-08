@@ -73,6 +73,68 @@ class TestVersionCommand:
         assert "Marianne AI Compose" in result.stdout
 
 
+class TestHelpVocabulary:
+    """Tests for first-contact CLI wording."""
+
+    def test_root_help_uses_score_conductor_language(self) -> None:
+        """Root help describes Marianne in score/conductor terms."""
+        result = runner.invoke(app, ["--help"])
+
+        assert result.exit_code == 0
+        assert "Score orchestration" in result.stdout
+        assert "Score Runs" in result.stdout
+        assert "Jobs" not in result.stdout
+        assert "AI agent workflows" not in result.stdout
+
+    def test_top_help_names_filter_limit(self) -> None:
+        """top --score help states the current TUI filtering boundary."""
+        result = runner.invoke(app, ["top", "--help"])
+
+        assert result.exit_code == 0
+        assert "score-centric" in result.stdout
+        assert "Filter JSON/history output" in result.stdout
+        assert "mode is not filtered yet" in result.stdout
+        assert "job-centric" not in result.stdout
+
+    def test_run_help_hides_workspace_option(self) -> None:
+        """The expert workspace override is hidden from ordinary run help."""
+        result = runner.invoke(app, ["run", "--help"])
+
+        assert result.exit_code == 0
+        assert "--workspace" not in result.stdout
+
+    def test_cli_reference_does_not_publish_stale_validation_codes(self) -> None:
+        """Current reference does not teach removed validation checks."""
+        reference = Path("docs/cli-reference.md").read_text()
+
+        assert "V204" not in reference
+        assert "V209" not in reference
+        assert "mzt run job.yaml --workspace" not in reference
+
+    def test_active_docs_do_not_prescribe_removed_backend_keys(self) -> None:
+        """Active guides must not tell composers to set ignored legacy keys."""
+        current_guides = [
+            Path("docs/guides/score-composition-guide.md"),
+            Path("docs/troubleshooting-guide.md"),
+        ]
+
+        for guide in current_guides:
+            text = guide.read_text()
+            assert "skip_permissions: true" not in text
+            assert "disable_mcp: true" not in text
+
+    def test_prompt_like_examples_removed_from_current_authoring_docs(self) -> None:
+        """Current authoring examples avoid generic prompt-hack cues."""
+        docs = [
+            Path("docs/score-writing-guide.md"),
+            Path("docs/getting-started.md"),
+            Path("docs/configuration-reference.md"),
+        ]
+
+        for doc in docs:
+            assert "Think step by step" not in doc.read_text()
+
+
 class TestValidateCommand:
     """Tests for the validate command."""
 

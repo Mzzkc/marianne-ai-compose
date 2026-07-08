@@ -26,7 +26,6 @@ workspace_lifecycle:
   archive_on_fresh: true
 
 instrument: claude-code
-instrument_fallbacks: [opencode]
 instrument_config:
   # Repo-scale audit prompts (read code + git history) need more than the
   # old 600s — the 2026-06-12 goal-mode audit timed out two reviewers at
@@ -103,9 +102,7 @@ parallel:
 prompt:
   template: |
     {% if stage == 1 %}
-    ```bash
     echo "ready" > {{ workspace }}/setup-complete.txt
-    ```
     {% else %}
     {% set reviewer = {2: "Opus 4.7 (Anthropic)", 3: "Gemini 3.1 Pro (Google)", 4: "GLM 5.2 (Z.AI)", 5: "GPT-5.5 (OpenAI)"}[stage] %}
     {% set review_num = stage - 1 %}
@@ -119,23 +116,44 @@ validations:
     path: "{workspace}/setup-complete.txt"
     condition: "stage == 1"
     stage: 1
+  - type: content_regex
+    path: "{workspace}/setup-complete.txt"
+    pattern: "^ready"
+    condition: "stage == 1"
+    stage: 2
   - type: file_exists
     path: "{workspace}/review-1.md"
     condition: "stage == 2"
     stage: 1
+  - type: content_regex
+    path: "{workspace}/review-1.md"
+    pattern: "(?s)\\S"
+    condition: "stage == 2"
+    stage: 2
   - type: file_exists
     path: "{workspace}/review-2.md"
     condition: "stage == 3"
     stage: 1
+  - type: content_regex
+    path: "{workspace}/review-2.md"
+    pattern: "(?s)\\S"
+    condition: "stage == 3"
+    stage: 2
   - type: file_exists
     path: "{workspace}/review-3.md"
     condition: "stage == 4"
     stage: 1
+  - type: content_regex
+    path: "{workspace}/review-3.md"
+    pattern: "(?s)\\S"
+    condition: "stage == 4"
+    stage: 2
   - type: file_exists
     path: "{workspace}/review-4.md"
     condition: "stage == 5"
     stage: 1
-  - type: file_exists
-    path: "{workspace}/review-5.md"
-    condition: "stage == 6"
-    stage: 1
+  - type: content_regex
+    path: "{workspace}/review-4.md"
+    pattern: "(?s)\\S"
+    condition: "stage == 5"
+    stage: 2

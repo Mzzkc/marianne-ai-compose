@@ -68,6 +68,33 @@ SENSITIVE_PATTERNS = frozenset({
 _current_log_path: Path | None = None
 
 
+def get_default_daemon_log_root() -> Path:
+    """Return the default conductor-owned logging root."""
+    return Path.home() / ".marianne" / "logs"
+
+
+def resolve_daemon_log_root(root: Path | str | None = None) -> Path:
+    """Resolve the conductor-owned logging root.
+
+    The daemon owns this directory. Score YAML and per-run options may write
+    diagnostics for the submitting process, but they do not choose where the
+    conductor writes its durable execution log.
+    """
+    if root is None:
+        return get_default_daemon_log_root()
+    return Path(root).expanduser()
+
+
+def resolve_daemon_log_path(
+    root: Path | str | None = None,
+    event_log_name: str = "conductor.log",
+) -> Path:
+    """Resolve the daemon event log path under a logging root."""
+    if Path(event_log_name).name != event_log_name:
+        raise ValueError("event_log_name must be a single file name")
+    return resolve_daemon_log_root(root) / event_log_name
+
+
 def get_current_log_path() -> Path | None:
     """Get the currently configured log file path.
 
@@ -874,8 +901,11 @@ __all__ = [
     "find_log_files",
     "get_current_context",
     "get_current_log_path",
+    "get_default_daemon_log_root",
     "get_default_log_path",
     "get_logger",
+    "resolve_daemon_log_path",
+    "resolve_daemon_log_root",
     "set_context",
     "with_context",
 ]

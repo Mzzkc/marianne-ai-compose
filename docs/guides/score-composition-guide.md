@@ -375,8 +375,9 @@ Attack every sheet:
 4. Are instrument assignments correct POST-EXPANSION?
 5. Do cross-workspace dependencies actually transfer?
 6. Does `mzt validate` pass?
-7. Is `skip_permissions: true` set?
-8. Is `disable_mcp: true` set?
+7. Does each instrument profile match the sheet's permissions, MCP needs, and runtime shape?
+8. Are removed backend-era keys such as `skip_permissions` and `disable_mcp` absent except in migration notes?
+9. Do fan-out instruments cover every expanded sheet intentionally?
 
 ### Failure Modes From Real Experience
 

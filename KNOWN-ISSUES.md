@@ -1,7 +1,7 @@
 # Known Issues — Marianne AI Compose
 
 **Applies to:** `v0.1.0-alpha`
-**Last updated:** 2026-05-29
+**Last updated:** 2026-07-08
 
 This is an **alpha** release. The core orchestration engine is well-tested
 (10,000+ passing tests, `mypy --strict` clean, automated CI), but several
@@ -15,11 +15,12 @@ below are the ones most likely to affect a new user or evaluator.
 
 ---
 
-## 1. Dashboard authentication is unaudited
+## 1. Dashboard remote exposure remains a cautious path
 
 The web dashboard (`mzt dashboard`) ships authentication routes, but they have
-**not** undergone a security review. Treat the dashboard as a local-only,
-trusted-network tool.
+historically been treated as a local-only alpha surface. Project status marks
+the minimal dashboard security review issue as closed, but remote deployment
+still needs current security review for the environment where it will run.
 
 - **Do not** expose the dashboard to the public internet.
 - **Do not** rely on its auth as a security boundary.
@@ -27,17 +28,16 @@ trusted-network tool.
   need remote access.
 
 Tracking: [#292](https://github.com/Mzzkc/marianne-ai-compose/issues/292)
-(minimal dashboard security review).
+(minimal dashboard security review; historical alpha blocker).
 
 ---
 
-## 2. Sandbox (`code_mode`) is broken — use CLI instruments instead
+## 2. `code_mode` is opt-in — prefer CLI instruments for first runs
 
 Marianne has an optional **code-execution sandbox** (`code_mode`, backed by
-`bwrap`). It is currently **non-functional** when `use_sandbox=True` (the
-default for that path): the host workspace path is passed into a bubblewrap
-namespace that remaps the workspace to `/workspace`, so generated code fails
-with `FileNotFoundError` / `SANDBOX_ERROR`.
+`bwrap`). The historical path-mismatch blocker is marked closed in project
+status, but `code_mode` still executes agent-generated code and remains a
+specialized, opt-in path.
 
 **Impact is limited:** `code_mode` is *opt-in*. It only runs for sheets that
 explicitly set a `code_mode:` config. **Normal scores that drive CLI
@@ -46,11 +46,11 @@ provider, etc.) **do not touch the sandbox at all** and are unaffected.
 
 - **Recommended:** follow the [sandbox-free quickstart](docs/sandbox-free-quickstart.md).
   It uses curated CLI-instrument configs that avoid `code_mode` entirely.
-- **Avoid:** authoring scores that use `code_mode:` until the sandbox path is
-  fixed.
+- **Avoid for first runs:** authoring scores that use `code_mode:` unless you
+  specifically need generated-code execution and have reviewed the risk.
 
 Tracking: [#210](https://github.com/Mzzkc/marianne-ai-compose/issues/210)
-(path mismatch), [#165](https://github.com/Mzzkc/marianne-ai-compose/issues/165)
+(path mismatch; historical alpha blocker), [#165](https://github.com/Mzzkc/marianne-ai-compose/issues/165)
 (onboarding blocker).
 
 ---

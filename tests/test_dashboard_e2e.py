@@ -236,7 +236,16 @@ class TestJobLifecycleE2E:
         response = client.post(
             "/api/jobs",
             json={
-                "config_path": "/some/file.yaml",
+                "config_content": """
+name: no-conductor
+workspace: ./workspace
+sheet:
+  size: 1
+  total_items: 1
+prompt:
+  template: |
+    Test sheet {{sheet_num}}
+""",
             },
         )
         assert response.status_code == 503

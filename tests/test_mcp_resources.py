@@ -1,4 +1,4 @@
-"""Tests for Marianne MCP Resources - Job and configuration resource access."""
+"""Tests for Marianne MCP resources for score and conductor records."""
 
 import json
 import tempfile
@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
+from marianne.core.config import JobConfig
 from marianne.mcp.resources import ConfigResources
 from marianne.state.json_backend import JsonStateBackend
 
@@ -86,6 +87,7 @@ class TestConfigResources:
         expected_uris = [
             "config://schema",
             "config://example",
+            "config://instrument-options",
             "config://backend-options",
             "config://validation-types",
             "config://learning-options",
@@ -142,30 +144,42 @@ class TestConfigResources:
         assert content["mimeType"] == "text/yaml"
 
         text = content["text"]
-        assert "job_id: example-review" in text
+        assert "name: example-review" in text
         assert "instrument:" in text
-        assert "sheets:" in text
-        assert "validation:" in text
+        assert "sheet:" in text
+        assert "backend:" not in text
+        assert "validations:" in text
 
-    async def test_get_backend_options(self, config_resources_basic):
-        """Test retrieving backend configuration options."""
-        result = await config_resources_basic._get_backend_options()
+    async def test_get_instrument_options(self, config_resources_basic):
+        """Test retrieving the instrument-options compatibility alias."""
+        result = await config_resources_basic._get_instrument_options()
 
         assert "contents" in result
         content = result["contents"][0]
         assert content["mimeType"] == "application/json"
 
         options = json.loads(content["text"])
-        assert "available_backends" in options
-        assert "claude_cli" in options["available_backends"]
-        assert "anthropic_api" in options["available_backends"]
+        assert "available_instruments" in options
+        assert "claude_cli" in options["available_instruments"]
+        assert "anthropic_api" in options["available_instruments"]
+        assert "Legacy backend blocks were removed" in options["compatibility_note"]
 
         # Phase 5c: registry-driven format — each entry is an instrument
         # profile summary with kind, display_name, capabilities, models, etc.
-        claude_cli = options["available_backends"]["claude_cli"]
+        claude_cli = options["available_instruments"]["claude_cli"]
         assert claude_cli["kind"] == "cli"
         assert "mcp" in claude_cli["capabilities"]
         assert "display_name" in claude_cli
+
+    async def test_backend_options_uri_is_compatibility_alias(self, config_resources_basic):
+        """The old resource URI remains, but the payload teaches instruments."""
+        result = await config_resources_basic.read_resource("config://backend-options")
+
+        content = result["contents"][0]
+        options = json.loads(content["text"])
+        assert content["uri"] == "config://instrument-options"
+        assert "available_instruments" in options
+        assert "available_backends" not in options
 
     async def test_get_validation_types(self, config_resources_basic):
         """Test retrieving validation types reference."""
@@ -177,7 +191,17 @@ class TestConfigResources:
         assert "available_validation_types" in validation_types
         types = validation_types["available_validation_types"]
 
-        expected_types = ["file_exists", "regex_match", "json_schema", "custom", "llm_judge"]
+        expected_types = [
+            "file_exists",
+            "file_modified",
+            "content_contains",
+            "content_regex",
+            "command_succeeds",
+            "path_in_scope",
+            "field_match",
+            "file_sha256",
+            "csv_unique_key",
+        ]
         for vtype in expected_types:
             assert vtype in types
             assert "description" in types[vtype]
@@ -195,7 +219,7 @@ class TestConfigResources:
 
         learning_system = learning_options["learning_system"]
         assert "enabled" in learning_system["options"]
-        assert "pattern_detection" in learning_system["options"]
+        assert "use_global_patterns" in learning_system["options"]
         assert "escalation" in learning_system["options"]
 
     async def test_get_jobs_overview_no_backend(self, config_resources_basic):
@@ -260,6 +284,8 @@ class TestConfigResources:
         assert "sheets" in details
         assert "progress" in details
         assert "configuration" in details
+        assert "instruments_used" in details["configuration"]
+        assert "backend_type" not in details["configuration"]
 
         # Check that we have some sheets
         assert len(details["sheets"]) > 0
@@ -309,16 +335,17 @@ class TestConfigResources:
 
         # Check config has required fields
         config = code_analysis["config"]
-        assert "job_id" in config
-        assert "backend" in config
-        assert "sheets" in config
-        assert len(config["sheets"]) > 0
+        assert "name" in config
+        assert "instrument" in config
+        assert "backend" not in config
+        assert "sheet" in config
+        assert "prompt" in config
+        JobConfig.model_validate(config)
 
-        # Check that sheets have proper structure
-        sheet = config["sheets"][0]
-        assert "name" in sheet
-        assert "prompt" in sheet
-        assert "validation" in sheet
+        for template in templates["templates"].values():
+            template_config = template["config"]
+            assert "backend" not in template_config
+            JobConfig.model_validate(template_config)
 
     async def test_read_resource_config_schema(self, config_resources_basic):
         """Test reading config schema resource."""

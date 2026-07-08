@@ -115,14 +115,11 @@ class TestJobLifecycleIntegration:
             temp_config_path = f.name
 
         try:
-            job_workspace = temp_workspace / "test-job"
-            job_workspace.mkdir(exist_ok=True)
-
             start_response = client.post(
                 "/api/jobs",
                 json={
                     "config_path": temp_config_path,
-                    "workspace": str(job_workspace),
+                    "workspace": "./test-job",
                 },
             )
             assert start_response.status_code == 503
@@ -159,13 +156,11 @@ class TestJobLifecycleIntegration:
         try:
             with patch("marianne.dashboard.app._daemon_client", mock_daemon_client):
                 # 1. Start job
-                job_workspace = temp_workspace / "test-job"
-                job_workspace.mkdir(exist_ok=True)
                 start_response = client.post(
                     "/api/jobs",
                     json={
                         "config_path": temp_config_path,
-                        "workspace": str(job_workspace),
+                        "workspace": "./test-job",
                     },
                 )
 
@@ -282,12 +277,11 @@ class TestJobLifecycleIntegration:
         with patch("marianne.dashboard.app._daemon_client", mock_daemon_client):
             responses = []
             for i in range(3):
-                workspace_path = temp_workspace / f"concurrent-job-{i}"
                 response = client.post(
                     "/api/jobs",
                     json={
                         "config_content": sample_config_content,
-                        "workspace": str(workspace_path),
+                        "workspace": f"./concurrent-job-{i}",
                     },
                 )
                 responses.append(response)

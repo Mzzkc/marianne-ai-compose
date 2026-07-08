@@ -25,6 +25,7 @@ from marianne.core.checkpoint import (
     SheetState,
     SheetStatus,
 )
+from marianne.core.log_sources import LogSource
 
 runner = CliRunner()
 
@@ -849,6 +850,27 @@ class TestAttachLogContents:
         _attach_log_contents(report)
         assert report["log_contents"] == {}
 
+    def test_job_filter_applies_to_shared_log_sources(self, tmp_path: Path) -> None:
+        log_file = tmp_path / "conductor.log"
+        log_file.write_text(
+            "\n".join(
+                [
+                    '{"event":"alpha","job_id":"alpha"}',
+                    '{"event":"beta","job_id":"beta"}',
+                ]
+            )
+            + "\n"
+        )
+
+        report: dict = {
+            "log_files": [{"path": str(log_file), "job_filter": "alpha"}]
+        }
+        _attach_log_contents(report)
+
+        content = report["log_contents"][str(log_file)]
+        assert "alpha" in content
+        assert "beta" not in content
+
 
 class TestDiagnosticReportLogFiles:
     """Tests for log_files integration in _build_diagnostic_report()."""
@@ -872,6 +894,31 @@ class TestDiagnosticReportLogFiles:
         job = _make_job()
         report = _build_diagnostic_report(job, workspace=None)
         assert report["log_files"] == []
+
+    def test_report_uses_shared_log_sources(self, tmp_path: Path) -> None:
+        log_file = tmp_path / "conductor.log"
+        log_file.write_text('{"event":"alpha","job_id":"alpha"}\n')
+        job = _make_job(job_id="alpha")
+
+        report = _build_diagnostic_report(
+            job,
+            log_sources=[
+                LogSource(
+                    path=log_file,
+                    label="conductor events",
+                    job_filter="alpha",
+                    kind="conductor",
+                    alias_state="canonical",
+                    raw_state="redacted",
+                )
+            ],
+        )
+
+        assert len(report["log_files"]) == 1
+        entry = report["log_files"][0]
+        assert entry["category"] == "conductor"
+        assert entry["source_label"] == "conductor events"
+        assert entry["job_filter"] == "alpha"
 
 
 class TestDiagnoseIncludeLogsFlag:

@@ -236,12 +236,13 @@ pipeline.resolve_instruments(agent_def, defaults)
 ## Relationship to mzt compose
 
 `mzt compile` is the batch/programmatic path. It reads a config file and
-produces scores. `mzt compose` (planned) is the interactive path — it
-walks users through goal definition, codebase analysis, and score
+produces scores today. `mzt compose` is design intent for an interactive path
+that will walk composers through goal definition, codebase analysis, and score
 generation with review checkpoints.
 
-Both use the same underlying `CompilationPipeline`. The compile command
-is the automation interface; compose is the human interface.
+The intended compose implementation should reuse the compilation pipeline, but
+current operational documentation should use `mzt compile` when it needs a
+working command.
 
 ## Requirements
 

@@ -49,6 +49,9 @@ validations:
   - type: file_exists
     path: "{workspace}/hello-resolved.yaml"
     description: "A machine-fit orchestration was written"
+  - type: command_succeeds
+    command: "mzt validate {workspace}/hello-resolved.yaml"
+    description: "Resolved hello score validates before chaining"
 
 on_success:
   - type: run_job

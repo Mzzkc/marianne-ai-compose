@@ -1,7 +1,7 @@
 """Dashboard and MCP server commands for Marianne CLI.
 
 This module implements server commands for external integrations:
-- `dashboard`: Start the web dashboard for job monitoring
+- `dashboard`: Start the web dashboard for submitted scores and conductor state
 - `mcp`: Start the Model Context Protocol server for AI agent access
 
 ★ Insight ─────────────────────────────────────
@@ -56,14 +56,15 @@ def dashboard(
 ) -> None:
     """Start the web dashboard.
 
-    Launches the Marianne dashboard API server for job monitoring and control.
-    The API provides endpoints for listing, viewing, and managing jobs.
+    Launches the Marianne dashboard API server for submitted scores,
+    conductor state, logs, artifacts, and controls.
+    API payloads still use job_id as the conductor's runtime record handle.
 
     Examples:
         mzt dashboard                    # Start on localhost:8000
         mzt dashboard --port 3000        # Custom port
         mzt dashboard --host 0.0.0.0     # Allow external connections
-        mzt dashboard --workspace ./jobs # Use specific state directory
+        mzt dashboard --workspace ./runs # Use specific state directory
     """
     try:
         import uvicorn
