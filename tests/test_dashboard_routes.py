@@ -12,9 +12,10 @@ _FIXED_TIME = datetime(2024, 1, 15, 12, 0, 0)
 import pytest
 from fastapi.testclient import TestClient
 
-from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.daemon.ipc.client import DaemonClient
 from marianne.dashboard.app import create_app
+from marianne.dashboard.routes import JobSummary, resolve_active_work
 from marianne.dashboard.routes.jobs import JobActionResponse, StartJobRequest
 from marianne.dashboard.services.job_control import JobActionResult, JobStartResult
 from marianne.state.json_backend import JsonStateBackend
@@ -273,8 +274,8 @@ class TestJobRoutes:
             mock_pause.return_value = JobActionResult(
                 success=True,
                 job_id="test-123",
-                status="paused",
-                message="Job test-123 paused successfully",
+                status="pause_requested",
+                message="Pause request sent to conductor for job test-123",
             )
 
             response = client.post("/api/jobs/test-123/pause")
@@ -283,8 +284,8 @@ class TestJobRoutes:
         data = response.json()
         assert data["success"] is True
         assert data["job_id"] == "test-123"
-        assert data["status"] == "paused"
-        assert "paused successfully" in data["message"]
+        assert data["status"] == "pause_requested"
+        assert "request sent" in data["message"]
 
     def test_pause_job_not_found(self, client):
         """Test pausing non-existent job."""
@@ -319,8 +320,8 @@ class TestJobRoutes:
             mock_resume.return_value = JobActionResult(
                 success=True,
                 job_id="test-123",
-                status="running",
-                message="Job test-123 resumed successfully",
+                status="resume_requested",
+                message="Resume request sent to conductor for job test-123",
             )
 
             response = client.post("/api/jobs/test-123/resume")
@@ -328,7 +329,7 @@ class TestJobRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["status"] == "running"
+        assert data["status"] == "resume_requested"
 
     def test_cancel_job_success(self, client):
         """Test successful job cancellation."""
@@ -342,8 +343,8 @@ class TestJobRoutes:
             mock_cancel.return_value = JobActionResult(
                 success=True,
                 job_id="test-123",
-                status="cancelled",
-                message="Job test-123 cancelled successfully",
+                status="cancel_requested",
+                message="Cancel request sent to conductor for job test-123",
             )
 
             response = client.post("/api/jobs/test-123/cancel")
@@ -351,7 +352,7 @@ class TestJobRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["status"] == "cancelled"
+        assert data["status"] == "cancel_requested"
 
     def test_delete_job_success(self, client):
         """Test successful job deletion."""
@@ -403,6 +404,217 @@ class TestJobRoutes:
 
 class TestCoreReadRoutes:
     """Tests for core read-only API endpoints (list, detail, status, health)."""
+
+    def test_job_summary_prefers_current_sheet_over_later_pending(self):
+        """Active work uses current_sheet, not the first pending future sheet."""
+        state = CheckpointState(
+            job_id="active-current",
+            job_name="Active Current",
+            status=JobStatus.RUNNING,
+            total_sheets=5,
+            current_sheet=3,
+            sheets={
+                3: SheetState(sheet_num=3, status=SheetStatus.WAITING),
+                4: SheetState(sheet_num=4, status=SheetStatus.PENDING),
+            },
+        )
+
+        summary = JobSummary.from_checkpoint(state)
+
+        assert summary.active_sheet == 3
+        assert summary.active_sheet_status == SheetStatus.WAITING
+        assert summary.active_selected_by == "current_sheet"
+        assert "waiting" in summary.active_reason
+
+    @pytest.mark.parametrize(
+        "status",
+        [
+            SheetStatus.DISPATCHED,
+            SheetStatus.IN_PROGRESS,
+            SheetStatus.WAITING,
+            SheetStatus.RETRY_SCHEDULED,
+            SheetStatus.FERMATA,
+        ],
+    )
+    def test_active_work_fallback_uses_only_active_or_blocked_statuses(
+        self,
+        status: SheetStatus,
+    ):
+        state = CheckpointState(
+            job_id=f"fallback-{status.value}",
+            job_name="Fallback",
+            status=JobStatus.RUNNING,
+            total_sheets=3,
+            sheets={2: SheetState(sheet_num=2, status=status)},
+        )
+
+        active = resolve_active_work(state)
+
+        assert active.sheet_num == 2
+        assert active.status == status
+        assert active.selected_by == "fallback_status"
+
+    @pytest.mark.parametrize("status", [SheetStatus.PENDING, SheetStatus.READY])
+    def test_active_work_does_not_promote_queued_statuses(self, status: SheetStatus):
+        state = CheckpointState(
+            job_id=f"queued-{status.value}",
+            job_name="Queued",
+            status=JobStatus.RUNNING,
+            total_sheets=1,
+            sheets={1: SheetState(sheet_num=1, status=status)},
+        )
+
+        active = resolve_active_work(state)
+
+        assert active.sheet_num is None
+        assert active.selected_by == "queued_only"
+
+    @pytest.mark.parametrize(
+        "status",
+        [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED],
+    )
+    def test_active_work_suppresses_stale_terminal_current_sheet(
+        self,
+        status: JobStatus,
+    ):
+        state = CheckpointState(
+            job_id=f"terminal-{status.value}",
+            job_name="Terminal",
+            status=status,
+            total_sheets=2,
+            current_sheet=2,
+            sheets={2: SheetState(sheet_num=2, status=SheetStatus.IN_PROGRESS)},
+        )
+
+        active = resolve_active_work(state)
+
+        assert active.sheet_num is None
+        assert active.selected_by == "terminal_job"
+
+    def test_cockpit_payload_includes_blocked_retry_validation_artifact_and_source(
+        self,
+        client,
+        app,
+        temp_state_dir,
+    ):
+        """The jobs endpoint carries operator cockpit fields, not only counts."""
+        workspace = temp_state_dir / "cockpit-workspace"
+        workspace.mkdir()
+        (workspace / "artifact.txt").write_text("artifact")
+        (workspace / "marianne.log").write_text("line\n")
+
+        backend = app.state.backend
+        sheet = SheetState(
+            sheet_num=2,
+            status=SheetStatus.RETRY_SCHEDULED,
+            attempt_count=2,
+            validation_passed=False,
+            failed_validations=["file_exists"],
+            last_pass_percentage=50.0,
+            execution_mode="retry",
+            dispatch_blocked_reason="rate_limited",
+            dispatch_blocked_details={"backend": "claude"},
+        )
+        state = CheckpointState(
+            job_id="cockpit-job",
+            job_name="Cockpit Job",
+            status=JobStatus.RUNNING,
+            total_sheets=3,
+            current_sheet=2,
+            resume_at="2026-07-07T12:00:00Z",
+            worktree_path=str(workspace),
+            sheets={2: sheet},
+        )
+        asyncio.run(backend.save(state))
+
+        response = client.get("/api/jobs")
+        assert response.status_code == 200
+        data = response.json()
+        job = next(item for item in data["jobs"] if item["job_id"] == "cockpit-job")
+
+        assert job["active_sheet"] == 2
+        assert job["active_sheet_status"] == "retry_scheduled"
+        assert job["dispatch_blocked_reason"] == "rate_limited"
+        assert job["dispatch_blocked_details"] == {"backend": "claude"}
+        assert job["retry_resume_metadata"]["resume_at"] == "2026-07-07T12:00:00Z"
+        assert job["validation_state"] == "validation_failed"
+        assert job["failed_validations"] == ["file_exists"]
+        assert job["artifact_state"]["state"] == "available_artifacts"
+        assert job["artifact_state"]["freshness_state"] == "freshness_not_verified"
+        assert job["log_state"]["state"] == "available"
+        assert job["data_source"] == "checkpoint"
+        assert job["is_partial"] is False
+
+    def test_validation_summary_scopes_percentage_to_failed_evidence(self):
+        """Failure names must not be paired with a later passed sheet's percentage."""
+        failed_sheet = SheetState(
+            sheet_num=1,
+            status=SheetStatus.FAILED,
+            validation_passed=False,
+            failed_validations=["file_exists"],
+            last_pass_percentage=50.0,
+        )
+        passed_sheet = SheetState(
+            sheet_num=3,
+            status=SheetStatus.COMPLETED,
+            validation_passed=True,
+            last_pass_percentage=100.0,
+        )
+        state = CheckpointState(
+            job_id="validation-mixed",
+            job_name="Validation Mixed",
+            status=JobStatus.RUNNING,
+            total_sheets=3,
+            sheets={1: failed_sheet, 3: passed_sheet},
+        )
+
+        summary = JobSummary.from_checkpoint(state)
+
+        assert summary.validation_state == "validation_failed"
+        assert summary.failed_validations == ["file_exists"]
+        assert summary.validation_pass_percent == 50.0
+
+    def test_validation_summary_uses_detail_aggregate_for_failed_details(self):
+        """Failed validation_details use their own aggregate, not later sheet state."""
+        failed_sheet = SheetState(
+            sheet_num=1,
+            status=SheetStatus.FAILED,
+            validation_passed=False,
+            validation_details=[
+                {"description": "file exists", "passed": False},
+                {"description": "format ok", "passed": True},
+            ],
+        )
+        passed_sheet = SheetState(
+            sheet_num=2,
+            status=SheetStatus.COMPLETED,
+            validation_passed=True,
+            last_pass_percentage=100.0,
+        )
+        state = CheckpointState(
+            job_id="validation-detail-mixed",
+            job_name="Validation Detail Mixed",
+            status=JobStatus.RUNNING,
+            total_sheets=2,
+            sheets={1: failed_sheet, 2: passed_sheet},
+        )
+
+        summary = JobSummary.from_checkpoint(state)
+
+        assert summary.validation_state == "validation_failed"
+        assert summary.failed_validations == ["file exists", "Sheet 1 validation failed"]
+        assert summary.validation_pass_percent == 50.0
+
+    def test_daemon_status_isolated_backend_does_not_probe_conductor(self, client):
+        """Explicit-backend dashboards return unavailable instead of touching live daemon."""
+        response = client.get("/api/jobs/daemon/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data == {
+            "connected": False,
+            "message": "Conductor unavailable for isolated dashboard",
+        }
 
     def test_health_check(self, client):
         """Test /health reports real status (conductor probe, not hardcoded)."""
@@ -572,6 +784,9 @@ class TestArtifactRoutes:
         assert data["job_id"] == "test-123"
         assert data["workspace"] == str(workspace)
         assert data["total_files"] == 4  # 2 files + 1 dir + 1 file in subdir
+        assert data["state"] == "available_artifacts"
+        assert data["freshness_verified"] is False
+        assert data["freshness_state"] == "freshness_not_verified"
 
         # Check file info
         files = {f["name"]: f for f in data["files"]}
@@ -611,6 +826,33 @@ class TestArtifactRoutes:
         assert "file1.txt" in file_names
         assert "subdir" in file_names
         assert "hidden.txt" not in file_names
+
+    def test_list_artifacts_directory_only_workspace_is_available(self, client, temp_state_dir):
+        """Directories are intentionally listed as workspace artifact entries."""
+        workspace = temp_state_dir / "test-workspace"
+        workspace.mkdir()
+        (workspace / "outputs").mkdir()
+
+        job_state = CheckpointState(
+            job_id="test-123",
+            job_name="Test Job",
+            status=JobStatus.RUNNING,
+            total_sheets=3,
+            worktree_path=str(workspace),
+            created_at=_FIXED_TIME,
+            updated_at=_FIXED_TIME,
+        )
+
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
+            mock_backend.load = AsyncMock(return_value=job_state)
+            response = client.get("/api/jobs/test-123/artifacts?recursive=false")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["state"] == "available_artifacts"
+        assert data["total_files"] == 1
+        assert data["files"][0]["name"] == "outputs"
+        assert data["files"][0]["type"] == "directory"
 
     def test_list_artifacts_job_not_found(self, client):
         """Test listing artifacts for non-existent job."""

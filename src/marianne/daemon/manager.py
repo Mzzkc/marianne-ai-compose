@@ -1237,6 +1237,44 @@ class JobManager:
         """
         return base_name
 
+    def _ensure_workspace_log_path(self, workspace: Path) -> Path | None:
+        """Expose the daemon log through the score workspace when configured."""
+        daemon_log = self._config.log_file
+        if daemon_log is None:
+            return None
+
+        workspace_log = workspace / "logs" / "marianne.log"
+        target = daemon_log.expanduser()
+        if not target.is_absolute():
+            target = target.resolve(strict=False)
+
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.touch(exist_ok=True)
+            workspace_log.parent.mkdir(parents=True, exist_ok=True)
+
+            if workspace_log.is_symlink():
+                if workspace_log.resolve(strict=False) == target.resolve(strict=False):
+                    return workspace_log
+                workspace_log.unlink()
+            elif workspace_log.exists():
+                if workspace_log.is_file() and workspace_log.stat().st_size == 0:
+                    workspace_log.unlink()
+                else:
+                    return workspace_log
+
+            workspace_log.symlink_to(target)
+            return workspace_log
+        except OSError as exc:
+            _logger.warning(
+                "manager.workspace_log_path_unavailable",
+                workspace=str(workspace),
+                log_path=str(workspace_log),
+                target=str(target),
+                error=str(exc),
+            )
+            return target
+
     # ─── RPC Handlers ─────────────────────────────────────────────────
 
     async def submit_job(self, request: JobRequest) -> JobResponse:
@@ -1413,7 +1451,13 @@ class JobManager:
                 concert_config=concert_config_dict,
             )
             # Register in DB first — if this fails, no phantom in-memory entry
-            await self._registry.register_job(job_id, request.config_path, workspace)
+            log_path = self._ensure_workspace_log_path(workspace)
+            await self._registry.register_job(
+                job_id,
+                request.config_path,
+                workspace,
+                log_path=log_path,
+            )
             self._job_meta[job_id] = meta
 
             # Persist hook config to registry for restart resilience
@@ -1490,7 +1534,13 @@ class JobManager:
             job_id,
         )
         if workspace is not None:
-            await self._registry.register_job(job_id, request.config_path, workspace)
+            log_path = self._ensure_workspace_log_path(workspace)
+            await self._registry.register_job(
+                job_id,
+                request.config_path,
+                workspace,
+                log_path=log_path,
+            )
             self._job_meta[job_id] = JobMeta(
                 job_id=job_id,
                 config_path=request.config_path,

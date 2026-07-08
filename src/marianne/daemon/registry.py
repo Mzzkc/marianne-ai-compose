@@ -211,15 +211,22 @@ class JobRegistry:
         job_id: str,
         config_path: Path,
         workspace: Path,
+        log_path: Path | None = None,
     ) -> None:
         """Register a newly submitted job."""
         await self._db.execute(
             """
             INSERT OR REPLACE INTO jobs
-                (job_id, config_path, workspace, status, submitted_at)
-            VALUES (?, ?, ?, 'queued', ?)
+                (job_id, config_path, workspace, status, submitted_at, log_path)
+            VALUES (?, ?, ?, 'queued', ?, ?)
             """,
-            (job_id, str(config_path), str(workspace), time.time()),
+            (
+                job_id,
+                str(config_path),
+                str(workspace),
+                time.time(),
+                str(log_path) if log_path is not None else None,
+            ),
         )
         await self._db.commit()
 

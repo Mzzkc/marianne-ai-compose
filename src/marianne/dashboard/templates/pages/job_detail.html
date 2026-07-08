@@ -9,13 +9,34 @@
          progress: {{ job.progress_percent }},
          completedSheets: {{ job.last_completed_sheet }},
          totalSheets: {{ job.total_sheets }},
+         currentSheet: {{ job.current_sheet | tojson }},
          expandedSheet: null,
          sheetDetails: {},
+         sheetDetailStates: {},
          actionLoading: null,
          actionError: '',
+         actionNotice: '',
+         artifacts: {
+             state: 'loading',
+             message: 'Loading artifacts...',
+             files: [],
+             totalFiles: null,
+             workspace: null,
+             freshnessState: 'freshness_not_verified'
+         },
 
          statusLabel() {
              return (this.status || 'pending').replace(/_/g, ' ');
+         },
+
+         isTerminal() {
+             return ['completed', 'failed', 'cancelled'].includes(this.status);
+         },
+
+         currentSheetText() {
+             if (this.isTerminal()) return 'No active sheet';
+             if (this.currentSheet) return 'Current: Sheet ' + this.currentSheet;
+             return 'No current sheet reported';
          },
 
          statusBadgeClass() {
@@ -24,20 +45,34 @@
                  completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
                  failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
                  paused: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+                 paused_at_chain: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
                  cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
                  pending: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
              };
-             return colors[this.status] || colors.pending;
+             return colors[this.status] || 'bg-white text-gray-700 ring-1 ring-gray-300 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-600';
+         },
+
+         async refreshStatus() {
+             const resp = await fetch('/api/jobs/{{ job.job_id }}/status');
+             if (!resp.ok) return;
+             const data = await resp.json();
+             if (data.status) this.status = data.status;
+             if (data.progress_percent !== undefined) this.progress = data.progress_percent;
+             if (data.completed_sheets !== undefined) this.completedSheets = data.completed_sheets;
+             if (data.total_sheets !== undefined) this.totalSheets = data.total_sheets;
+             if (data.current_sheet !== undefined) this.currentSheet = data.current_sheet;
          },
 
          async performAction(action) {
              this.actionLoading = action;
              this.actionError = '';
+             this.actionNotice = '';
              try {
                  const resp = await fetch('/api/jobs/{{ job.job_id }}/' + action, { method: 'POST' });
                  const data = await resp.json();
                  if (resp.ok && data.success) {
-                     this.status = data.status;
+                     this.actionNotice = data.message || (action + ' request sent');
+                     await this.refreshStatus();
                  } else {
                      this.actionError = data.detail || data.message || (action + ' failed');
                  }
@@ -56,18 +91,82 @@
              }
              this.expandedSheet = sheetNum;
              if (this.sheetDetails[sheetNum]) return;
+             this.sheetDetailStates[sheetNum] = 'loading';
              try {
                  const resp = await fetch('/api/jobs/{{ job.job_id }}/sheets/' + sheetNum);
                  if (resp.ok) {
                      this.sheetDetails[sheetNum] = await resp.json();
+                     this.sheetDetailStates[sheetNum] = 'loaded';
+                 } else {
+                     let message = 'Sheet details unavailable';
+                     try {
+                         const data = await resp.json();
+                         message = data.detail || message;
+                     } catch (_) {}
+                     this.sheetDetails[sheetNum] = { detail_error: message };
+                     this.sheetDetailStates[sheetNum] = 'unavailable';
                  }
              } catch (e) {
-                 console.error('Failed to load sheet details:', e);
+                 this.sheetDetails[sheetNum] = { detail_error: e.message || 'Sheet details unavailable' };
+                 this.sheetDetailStates[sheetNum] = 'unavailable';
+             }
+         },
+
+         async loadArtifacts() {
+             this.artifacts = {
+                 state: 'loading',
+                 message: 'Loading artifacts...',
+                 files: [],
+                 totalFiles: null,
+                 workspace: null,
+                 freshnessState: 'freshness_not_verified'
+             };
+             try {
+                 const resp = await fetch('/api/jobs/{{ job.job_id }}/artifacts?recursive=false');
+                 if (resp.ok) {
+                     const data = await resp.json();
+                     this.artifacts = {
+                         state: data.state || (data.total_files > 0 ? 'available_artifacts' : 'empty_workspace'),
+                         message: data.message || (data.total_files > 0 ? 'Artifacts available; freshness not verified' : 'Workspace is accessible but empty'),
+                         files: data.files || [],
+                         totalFiles: data.total_files,
+                         workspace: data.workspace,
+                         freshnessState: data.freshness_state || 'freshness_not_verified'
+                     };
+                     return;
+                 }
+                 let detail = 'Artifacts unavailable';
+                 try {
+                     const data = await resp.json();
+                     detail = data.detail || detail;
+                 } catch (_) {}
+                 let state = 'unavailable';
+                 if (resp.status === 404 && detail.includes('No accessible workspace')) state = 'no_accessible_workspace';
+                 else if (resp.status === 404 && detail.includes('Workspace directory not found')) state = 'missing_workspace';
+                 else if (resp.status === 403) state = 'unavailable';
+                 this.artifacts = {
+                     state,
+                     message: detail,
+                     files: [],
+                     totalFiles: null,
+                     workspace: null,
+                     freshnessState: 'freshness_not_verified'
+                 };
+             } catch (e) {
+                 this.artifacts = {
+                     state: 'unavailable',
+                     message: e.message || 'Artifacts unavailable',
+                     files: [],
+                     totalFiles: null,
+                     workspace: null,
+                     freshnessState: 'freshness_not_verified'
+                 };
              }
          },
 
          init() {
-             {% if job.status.value in ('running', 'paused', 'pending') %}
+             this.loadArtifacts();
+             {% if job.status.value in ('running', 'paused', 'paused_at_chain', 'pending') %}
              const source = new EventSource('/api/jobs/{{ job.job_id }}/stream');
          source.addEventListener('job_status', (e) => {
              try {
@@ -76,6 +175,7 @@
                  if (data.progress_percent !== undefined) this.progress = data.progress_percent;
                  if (data.completed_sheets !== undefined) this.completedSheets = data.completed_sheets;
                  if (data.total_sheets !== undefined) this.totalSheets = data.total_sheets;
+                 if (data.current_sheet !== undefined) this.currentSheet = data.current_sheet;
                  } catch(err) { console.debug('SSE status parse error:', err); }
              });
              source.addEventListener('job_finished', () => { location.reload(); });
@@ -135,7 +235,7 @@
             <span x-text="actionLoading === 'cancel' ? 'Cancelling...' : 'Cancel'">Cancel</span>
         </button>
         <button @click="performAction('resume')"
-                x-show="status === 'paused'"
+                x-show="['paused', 'paused_at_chain'].includes(status)"
                 x-cloak
                 :disabled="actionLoading"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-marianne-500 text-white hover:bg-marianne-600 transition-colors disabled:opacity-50">
@@ -146,7 +246,7 @@
             <span x-text="actionLoading === 'resume' ? 'Resuming...' : 'Resume'">Resume</span>
         </button>
         <button @click="performAction('cancel')"
-                x-show="status === 'paused'"
+                x-show="['paused', 'paused_at_chain'].includes(status)"
                 x-cloak
                 :disabled="actionLoading"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
@@ -168,6 +268,9 @@
 
         <template x-if="actionError">
             <div class="basis-full text-xs text-red-600 dark:text-red-400" x-text="actionError"></div>
+        </template>
+        <template x-if="actionNotice">
+            <div class="basis-full text-xs text-gray-600 dark:text-gray-300" x-text="actionNotice"></div>
         </template>
     </div>
 
@@ -191,9 +294,11 @@
             <div class="text-lg font-semibold tabular-nums">
                 <span x-text="completedSheets">{{ job.last_completed_sheet }}</span> / <span x-text="totalSheets">{{ job.total_sheets }}</span>
             </div>
-            {% if job.current_sheet %}
-            <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">Current: Sheet {{ job.current_sheet }}</div>
-            {% endif %}
+            <div class="text-xs mt-1"
+                 :class="currentSheet ? 'text-gray-400 dark:text-gray-500' : 'text-amber-600 dark:text-amber-300'"
+                 x-text="currentSheetText()">
+                {% if job.current_sheet %}Current: Sheet {{ job.current_sheet }}{% else %}No current sheet reported{% endif %}
+            </div>
         </div>
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
             <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Retries</div>
@@ -232,6 +337,70 @@
 
     <!-- SSE connection for live updates managed by Alpine.js init/destroy -->
 
+    <!-- Artifacts -->
+    <div id="artifacts" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+                Artifacts
+            </h2>
+            <button @click="loadArtifacts()"
+                    class="text-xs text-marianne-600 dark:text-marianne-400 hover:underline">
+                Refresh
+            </button>
+        </div>
+        <div class="p-4">
+            <template x-if="artifacts.state === 'loading'">
+                <div class="text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading artifacts...</div>
+            </template>
+            <template x-if="artifacts.state !== 'loading'">
+                <div class="space-y-3">
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                        <span class="font-medium text-gray-900 dark:text-gray-100"
+                              x-text="artifacts.state.replaceAll('_', ' ')"></span>
+                        <span class="text-gray-500 dark:text-gray-400" x-text="artifacts.message"></span>
+                        <span x-show="artifacts.freshnessState === 'freshness_not_verified'"
+                              class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                            Freshness not verified
+                        </span>
+                    </div>
+                    <div x-show="artifacts.workspace" class="text-xs text-gray-500 dark:text-gray-400 font-mono break-all" x-text="artifacts.workspace"></div>
+                    <template x-if="artifacts.files.length > 0">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+                                        <th class="py-1 pr-3 font-medium">Name</th>
+                                        <th class="py-1 pr-3 font-medium">Type</th>
+                                        <th class="py-1 pr-3 font-medium">Size</th>
+                                        <th class="py-1 font-medium">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                    <template x-for="file in artifacts.files" :key="file.path">
+                                        <tr>
+                                            <td class="py-1.5 pr-3 text-gray-900 dark:text-gray-100" x-text="file.name"></td>
+                                            <td class="py-1.5 pr-3 text-gray-500 dark:text-gray-400" x-text="file.type"></td>
+                                            <td class="py-1.5 pr-3 text-gray-500 dark:text-gray-400" x-text="file.size == null ? '' : file.size + ' B'"></td>
+                                            <td class="py-1.5">
+                                                <a x-show="file.type === 'file'"
+                                                   :href="'/api/jobs/{{ job.job_id }}/artifacts/' + file.path.split('/').map(encodeURIComponent).join('/')"
+                                                   class="text-marianne-600 dark:text-marianne-400 hover:underline">Open</a>
+                                                <span x-show="file.type !== 'file'" class="text-gray-400 dark:text-gray-500">Directory</span>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+    </div>
+
     <!-- Sheets table -->
     <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
@@ -263,7 +432,15 @@
                         <td class="px-4 py-2.5">
                             {{ status_badge(sheet.status.value) }}
                         </td>
-                        <td class="px-4 py-2.5 text-gray-600 dark:text-gray-400 tabular-nums">{{ sheet.attempt_count }}</td>
+                        <td class="px-4 py-2.5 text-gray-600 dark:text-gray-400 tabular-nums">
+                            <div>{{ sheet.attempt_count }}</div>
+                            {% if sheet.execution_mode %}
+                            <div class="text-[11px] text-orange-700 dark:text-orange-300">{{ sheet.execution_mode }}</div>
+                            {% endif %}
+                            {% if sheet.dispatch_blocked_reason %}
+                            <div class="text-[11px] text-amber-700 dark:text-amber-300">Blocked: {{ sheet.dispatch_blocked_reason }}</div>
+                            {% endif %}
+                        </td>
                         <td class="px-4 py-2.5">
                             {% if sheet.validation_passed is none %}
                             <span class="text-gray-400 dark:text-gray-500">&mdash;</span>
@@ -275,12 +452,20 @@
                                 Pass
                             </span>
                             {% else %}
-                            <span class="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                </svg>
-                                Fail
-                            </span>
+                            <div class="space-y-0.5">
+                                <span class="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                    Fail
+                                </span>
+                                {% if sheet.failed_validations %}
+                                <div class="text-xs text-red-700 dark:text-red-300">{{ sheet.failed_validations|join(", ") }}</div>
+                                {% endif %}
+                                {% if sheet.last_pass_percentage is not none %}
+                                <div class="text-xs text-gray-500 dark:text-gray-400">{{ "%.1f"|format(sheet.last_pass_percentage) }}% passed</div>
+                                {% endif %}
+                            </div>
                             {% endif %}
                         </td>
                         <td class="px-4 py-2.5 text-gray-400">
@@ -298,8 +483,22 @@
                         x-transition:enter-end="opacity-100"
                         x-cloak>
                         <td colspan="5" class="px-4 py-3 bg-gray-50/50 dark:bg-gray-700/20">
-                            <template x-if="sheetDetails[{{ sheet.sheet_num }}]">
+                            <template x-if="sheetDetails[{{ sheet.sheet_num }}] && !sheetDetails[{{ sheet.sheet_num }}].detail_error">
                                 <div class="space-y-3 text-xs">
+                                    <!-- Dispatch wait details -->
+                                    <template x-if="sheetDetails[{{ sheet.sheet_num }}].dispatch_blocked_reason">
+                                        <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-800/70 dark:bg-amber-900/20 dark:text-amber-200">
+                                            <div class="font-medium mb-1">Dispatch Wait</div>
+                                            <div>
+                                                <span x-text="sheetDetails[{{ sheet.sheet_num }}].dispatch_blocked_reason"></span>
+                                                <span x-show="sheetDetails[{{ sheet.sheet_num }}].dispatch_blocked_at"
+                                                      x-text="' since ' + sheetDetails[{{ sheet.sheet_num }}].dispatch_blocked_at"></span>
+                                            </div>
+                                            <pre class="mt-1 whitespace-pre-wrap font-mono text-[11px]"
+                                                 x-show="sheetDetails[{{ sheet.sheet_num }}].dispatch_blocked_details && Object.keys(sheetDetails[{{ sheet.sheet_num }}].dispatch_blocked_details).length"
+                                                 x-text="JSON.stringify(sheetDetails[{{ sheet.sheet_num }}].dispatch_blocked_details, null, 2)"></pre>
+                                        </div>
+                                    </template>
                                     <!-- Validation details -->
                                     <template x-if="sheetDetails[{{ sheet.sheet_num }}].validation_details && sheetDetails[{{ sheet.sheet_num }}].validation_details.length > 0">
                                         <div>
@@ -349,6 +548,12 @@
                                             <pre class="text-gray-600 dark:text-gray-400 font-mono whitespace-pre-wrap bg-gray-100 dark:bg-gray-800 rounded p-2 max-h-40 overflow-y-auto" x-text="sheetDetails[{{ sheet.sheet_num }}].stdout_tail"></pre>
                                         </div>
                                     </template>
+                                </div>
+                            </template>
+                            <template x-if="sheetDetails[{{ sheet.sheet_num }}] && sheetDetails[{{ sheet.sheet_num }}].detail_error">
+                                <div class="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+                                    <span class="font-medium">Sheet details unavailable:</span>
+                                    <span x-text="sheetDetails[{{ sheet.sheet_num }}].detail_error"></span>
                                 </div>
                             </template>
                             <template x-if="!sheetDetails[{{ sheet.sheet_num }}]">

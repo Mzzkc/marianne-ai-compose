@@ -13,6 +13,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from marianne.core.config import JobConfig
 from marianne.core.logging import get_logger
@@ -60,6 +61,14 @@ class ProcessHealth:
     cpu_percent: float | None = None
     memory_mb: float | None = None
     uptime_seconds: float | None = None
+
+
+def _action_error_message(response: Any, fallback: str) -> str:
+    if isinstance(response, dict):
+        raw = response.get("error") or response.get("message")
+        if raw:
+            return str(raw)
+    return fallback
 
 
 class JobControlService:
@@ -212,14 +221,23 @@ class JobControlService:
     async def pause_job(self, job_id: str) -> JobActionResult:
         """Pause a running job via the conductor."""
         try:
-            await asyncio.wait_for(
+            response = await asyncio.wait_for(
                 self._client.pause_job(job_id, ""),
                 timeout=DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS,
             )
+            paused = bool(response.get("paused")) if isinstance(response, dict) else False
+            if not paused:
+                message = _action_error_message(response, "Pause request was rejected")
+                return JobActionResult(
+                    success=False,
+                    job_id=job_id,
+                    status="pause_rejected",
+                    message=message,
+                )
             return JobActionResult(
                 success=True,
                 job_id=job_id,
-                status="paused",
+                status="pause_requested",
                 message=f"Pause request sent to conductor for job {job_id}",
             )
         except DaemonNotRunningError:
@@ -230,14 +248,23 @@ class JobControlService:
     async def resume_job(self, job_id: str) -> JobActionResult:
         """Resume a paused job via the conductor."""
         try:
-            await asyncio.wait_for(
+            response = await asyncio.wait_for(
                 self._client.resume_job(job_id, ""),
                 timeout=DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS,
             )
+            status = str(response.get("status", "")) if isinstance(response, dict) else ""
+            if status not in ("accepted", "pending"):
+                message = _action_error_message(response, "Resume request was rejected")
+                return JobActionResult(
+                    success=False,
+                    job_id=job_id,
+                    status="resume_rejected",
+                    message=message,
+                )
             return JobActionResult(
                 success=True,
                 job_id=job_id,
-                status="running",
+                status="resume_requested",
                 message=f"Resume request sent to conductor for job {job_id}",
             )
         except DaemonNotRunningError:
@@ -248,14 +275,25 @@ class JobControlService:
     async def cancel_job(self, job_id: str) -> JobActionResult:
         """Cancel a running or paused job via the conductor."""
         try:
-            await asyncio.wait_for(
+            response = await asyncio.wait_for(
                 self._client.cancel_job(job_id, ""),
                 timeout=DASHBOARD_DAEMON_REQUEST_TIMEOUT_SECONDS,
             )
+            cancelled = (
+                bool(response.get("cancelled")) if isinstance(response, dict) else False
+            )
+            if not cancelled:
+                message = _action_error_message(response, "Cancel request was rejected")
+                return JobActionResult(
+                    success=False,
+                    job_id=job_id,
+                    status="cancel_rejected",
+                    message=message,
+                )
             return JobActionResult(
                 success=True,
                 job_id=job_id,
-                status="cancelled",
+                status="cancel_requested",
                 message=f"Cancel request sent to conductor for job {job_id}",
             )
         except DaemonNotRunningError:

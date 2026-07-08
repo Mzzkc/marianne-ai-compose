@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.dashboard.app import create_app
 from marianne.state.json_backend import JsonStateBackend
 
@@ -383,6 +383,55 @@ class TestStreamEndpoints:
         assert response.status_code == 404
 
 
+class TestJobStatusBridgeStream:
+    """Tests for bridge-backed job status SSE behavior."""
+
+    @pytest.mark.asyncio
+    async def test_bridge_emits_current_sheet_only_change(self) -> None:
+        from marianne.dashboard.routes.stream import _job_status_via_bridge
+
+        initial_state = CheckpointState(
+            job_id="stream-current",
+            job_name="Stream Current",
+            status=JobStatus.RUNNING,
+            total_sheets=2,
+            current_sheet=1,
+            created_at=_FIXED_TIME,
+            updated_at=_FIXED_TIME,
+            sheets={
+                1: SheetState(sheet_num=1, status=SheetStatus.IN_PROGRESS),
+                2: SheetState(sheet_num=2, status=SheetStatus.PENDING),
+            },
+        )
+        changed_state = initial_state.model_copy(update={"current_sheet": 2})
+
+        class _Backend:
+            async def load(self, job_id: str) -> CheckpointState | None:
+                assert job_id == "stream-current"
+                return changed_state
+
+        class _Bridge:
+            async def job_events(self, job_id: str):
+                assert job_id == "stream-current"
+                yield {"event": "job.updated", "data": "{}"}
+                yield {"event": "bridge_stopped", "data": "{}"}
+
+        events = [
+            event
+            async for event in _job_status_via_bridge(
+                "stream-current",
+                initial_state,
+                _Backend(),
+                _Bridge(),
+            )
+        ]
+        status_events = [event for event in events if "event: job_status" in event]
+
+        assert len(status_events) == 2
+        assert '"current_sheet": 1' in status_events[0]
+        assert '"current_sheet": 2' in status_events[1]
+
+
 # =============================================================================
 # Artifact security tests
 # =============================================================================
@@ -423,6 +472,39 @@ class TestArtifactSecurity:
 
         # Should be blocked (400 or 404)
         assert response.status_code in (400, 404)
+
+    def test_artifact_listing_filters_symlink_entries(self, client, temp_state_dir) -> None:
+        """Artifact listing should not offer entries the read route rejects."""
+        workspace = temp_state_dir / "test-workspace"
+        workspace.mkdir()
+        (workspace / "visible.txt").write_text("visible")
+        outside_file = temp_state_dir / "secret.txt"
+        outside_file.write_text("sensitive data")
+        symlink = workspace / "secret-link.txt"
+        try:
+            symlink.symlink_to(outside_file)
+        except OSError:
+            pytest.skip("Cannot create symlinks on this platform")
+
+        job_state = CheckpointState(
+            job_id="test-123",
+            job_name="Test Job",
+            status=JobStatus.RUNNING,
+            total_sheets=3,
+            worktree_path=str(workspace),
+            created_at=_FIXED_TIME,
+            updated_at=_FIXED_TIME,
+        )
+
+        with patch("marianne.dashboard.app._state_backend") as mock_backend:
+            mock_backend.load = AsyncMock(return_value=job_state)
+            response = client.get("/api/jobs/test-123/artifacts")
+
+        assert response.status_code == 200
+        data = response.json()
+        names = {item["name"] for item in data["files"]}
+        assert "visible.txt" in names
+        assert "secret-link.txt" not in names
 
     def test_artifact_not_a_file(self, client, temp_state_dir) -> None:
         """Requesting a directory as artifact should return 400."""

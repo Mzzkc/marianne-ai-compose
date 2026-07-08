@@ -320,7 +320,10 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
         # Per-sheet replaces (does not merge) inherited chain.
         if sheet_num in config.sheet.per_sheet_fallbacks:
             fallbacks = list(config.sheet.per_sheet_fallbacks[sheet_num])
-        elif movement in config.movements and config.movements[movement].instrument_fallbacks:
+        elif (
+            movement in config.movements
+            and "instrument_fallbacks" in config.movements[movement].model_fields_set
+        ):
             fallbacks = list(config.movements[movement].instrument_fallbacks)
         else:
             fallbacks = list(config.instrument_fallbacks)

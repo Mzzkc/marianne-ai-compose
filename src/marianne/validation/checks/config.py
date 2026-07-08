@@ -166,6 +166,9 @@ class ValidationTypeCheck:
             "content_regex": ["path", "pattern"],
             "command_succeeds": ["command"],
             "path_in_scope": ["path"],
+            "field_match": ["path", "field_path"],
+            "file_sha256": ["path", "sha256"],
+            "csv_unique_key": ["path", "key_field"],
         }
 
         for i, validation in enumerate(config.validations):
@@ -191,6 +194,26 @@ class ValidationTypeCheck:
                             "validation_index": str(i),
                             "validation_type": validation.type,
                             "missing_fields": ",".join(missing),
+                        },
+                    )
+                )
+
+            if validation.type == "field_match" and not (
+                validation.has_expected_value_literal or validation.source_path
+            ):
+                issues.append(
+                    ValidationIssue(
+                        check_id=self.check_id,
+                        severity=self.severity,
+                        message=(
+                            f"Validation rule {i + 1} (field_match) missing "
+                            "comparison value: expected_value or source_path"
+                        ),
+                        suggestion="Add expected_value or source_path to the validation rule",
+                        metadata={
+                            "validation_index": str(i),
+                            "validation_type": validation.type,
+                            "missing_fields": "expected_value_or_source_path",
                         },
                     )
                 )

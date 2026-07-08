@@ -7,6 +7,14 @@
 **Depends on:** B1+B5 fixes (implemented same session)
 **Related:** [Process Lifecycle](2026-04-16-process-lifecycle-design.md) — shares edit territory in `daemon/baton/` (see Coordination section)
 
+**Implementation status (2026-07-07):** This remains a design spec, not current
+runtime truth. Current source still uses `ExecutionResult.rate_limited`,
+`SheetAttemptResult.rate_limited`, and the success-priority baton branch; the
+`rate_limit_primary` field described below has not been implemented. The
+separate mirror-duration fix uses the shared `RESET_TIME_MAXIMUM_WAIT_SECONDS`
+cap and should not be cited as evidence that this primary-causation design has
+landed.
+
 ## Problem
 
 `ExecutionResult.rate_limited` is a boolean that conflates detection with causation.

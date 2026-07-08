@@ -8,6 +8,7 @@ content_contains, content_regex, and command_succeeds.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from pathlib import Path
 from typing import Any
@@ -204,6 +205,289 @@ class TestPathInScopeValidation:
 
         assert result.all_passed is False
         assert result.results[0].expected_value == f"inside {allowed.resolve()}"
+
+
+# ===========================================================================
+# 2c. structured validation types
+# ===========================================================================
+
+
+class TestFieldMatchValidation:
+    """Tests for field_match structured JSON/YAML comparisons."""
+
+    async def test_matches_literal_json_field(self, temp_workspace: Path) -> None:
+        """A JSON field equal to expected_value passes."""
+        artifact = temp_workspace / "stats.json"
+        artifact.write_text('{"summary": {"drawdown": 12.5}}', encoding="utf-8")
+        rule = _rule_no_retry(
+            type="field_match",
+            path="{workspace}/stats.json",
+            field_path="summary.drawdown",
+            expected_value=12.5,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is True
+        assert result.results[0].actual_value == "12.5"
+        assert result.results[0].expected_value == "12.5"
+
+    async def test_matches_source_field(self, temp_workspace: Path) -> None:
+        """A YAML artifact can be compared against a source field."""
+        source = temp_workspace / "truth.yaml"
+        target = temp_workspace / "report.yaml"
+        source.write_text("facts:\n  trades: 4\n", encoding="utf-8")
+        target.write_text("summary:\n  trade_count: 4\n", encoding="utf-8")
+        rule = _rule_no_retry(
+            type="field_match",
+            path="{workspace}/report.yaml",
+            field_path="summary.trade_count",
+            source_path="{workspace}/truth.yaml",
+            source_field_path="facts.trades",
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is True
+
+    async def test_matches_explicit_null_literal(self, temp_workspace: Path) -> None:
+        """expected_value: null compares against JSON null instead of absence."""
+        artifact = temp_workspace / "report.json"
+        artifact.write_text('{"summary": {"error": null}}', encoding="utf-8")
+        rule = _rule_no_retry(
+            type="field_match",
+            path="{workspace}/report.json",
+            field_path="summary.error",
+            expected_value=None,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is True
+        assert result.results[0].actual_value == "null"
+        assert result.results[0].expected_value == "null"
+
+    async def test_explicit_null_literal_fails_against_non_null(
+        self, temp_workspace: Path
+    ) -> None:
+        """expected_value: null still fails when the field is not null."""
+        artifact = temp_workspace / "report.json"
+        artifact.write_text('{"summary": {"error": "boom"}}', encoding="utf-8")
+        rule = _rule_no_retry(
+            type="field_match",
+            path="{workspace}/report.json",
+            field_path="summary.error",
+            expected_value=None,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        assert result.results[0].failure_category == "mismatch"
+        assert result.results[0].actual_value == '"boom"'
+        assert result.results[0].expected_value == "null"
+
+    async def test_field_mismatch_fails_with_details(self, temp_workspace: Path) -> None:
+        """A mismatched structured value fails with actionable detail."""
+        artifact = temp_workspace / "report.json"
+        artifact.write_text('{"summary": {"trade_count": 3}}', encoding="utf-8")
+        rule = _rule_no_retry(
+            type="field_match",
+            path="{workspace}/report.json",
+            field_path="summary.trade_count",
+            expected_value=4,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        failure = result.results[0]
+        assert failure.failure_category == "mismatch"
+        assert failure.actual_value == "3"
+        assert failure.expected_value == "4"
+        assert "summary.trade_count" in (failure.failure_reason or "")
+
+    async def test_missing_field_fails(self, temp_workspace: Path) -> None:
+        """A missing field is a validation failure, not a crash."""
+        artifact = temp_workspace / "report.json"
+        artifact.write_text('{"summary": {}}', encoding="utf-8")
+        rule = _rule_no_retry(
+            type="field_match",
+            path="{workspace}/report.json",
+            field_path="summary.trade_count",
+            expected_value=4,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        assert result.results[0].failure_category == "missing"
+        assert "Missing field segment" in (result.results[0].failure_reason or "")
+
+    async def test_malformed_json_fails_with_malformed_data(
+        self, temp_workspace: Path,
+    ) -> None:
+        """Malformed structured data returns a categorized validation result."""
+        artifact = temp_workspace / "report.json"
+        artifact.write_text("{not-json", encoding="utf-8")
+        rule = _rule_no_retry(
+            type="field_match",
+            path="{workspace}/report.json",
+            field_path="summary.trade_count",
+            expected_value=4,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        assert result.results[0].failure_category == "malformed"
+        assert result.results[0].error_type == "malformed_data"
+
+    async def test_validation_detail_serializes_field_metadata(
+        self, temp_workspace: Path,
+    ) -> None:
+        """Serialized validation details preserve new rule metadata."""
+        artifact = temp_workspace / "report.json"
+        artifact.write_text('{"summary": {"trade_count": 3}}', encoding="utf-8")
+        rule = _rule_no_retry(
+            type="field_match",
+            path="{workspace}/report.json",
+            field_path="summary.trade_count",
+            expected_value=4,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        detail = result.to_dict_list()[0]
+        assert detail["rule_type"] == "field_match"
+        assert detail["field_path"] == "summary.trade_count"
+        assert detail["actual_value"] == "3"
+        assert detail["expected_value"] == "4"
+
+
+class TestFileSha256Validation:
+    """Tests for file_sha256 integrity checks."""
+
+    async def test_matching_digest_passes(self, temp_workspace: Path) -> None:
+        """A file with the expected digest passes."""
+        artifact = temp_workspace / "risk-envelope.yaml"
+        artifact.write_text("risk: low\n", encoding="utf-8")
+        digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        rule = _rule_no_retry(
+            type="file_sha256",
+            path="{workspace}/risk-envelope.yaml",
+            sha256=digest,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is True
+        assert result.results[0].actual_value == digest
+
+    async def test_digest_mismatch_fails(self, temp_workspace: Path) -> None:
+        """Changed file content fails the pinned digest check."""
+        artifact = temp_workspace / "risk-envelope.yaml"
+        artifact.write_text("risk: high\n", encoding="utf-8")
+        rule = _rule_no_retry(
+            type="file_sha256",
+            path="{workspace}/risk-envelope.yaml",
+            sha256="0" * 64,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        assert result.results[0].failure_category == "integrity"
+        assert result.results[0].expected_value == "0" * 64
+
+    async def test_hashing_streams_file_content(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """file_sha256 does not materialize the whole file with read_bytes()."""
+        artifact = temp_workspace / "large-artifact.bin"
+        content = b"a" * (ValidationEngine._HASH_CHUNK_SIZE + 17)
+        artifact.write_bytes(content)
+        digest = hashlib.sha256(content).hexdigest()
+
+        def fail_read_bytes(_path: Path) -> bytes:
+            raise AssertionError("file_sha256 must stream file content")
+
+        monkeypatch.setattr(Path, "read_bytes", fail_read_bytes)
+        rule = _rule_no_retry(
+            type="file_sha256",
+            path="{workspace}/large-artifact.bin",
+            sha256=digest,
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is True
+        assert result.results[0].actual_value == digest
+
+
+class TestCsvUniqueKeyValidation:
+    """Tests for csv_unique_key tabular invariants."""
+
+    async def test_unique_key_passes(self, temp_workspace: Path) -> None:
+        """CSV rows with unique key values pass."""
+        artifact = temp_workspace / "benchmarks.csv"
+        artifact.write_text("date,value\n2026-07-06,1\n2026-07-07,2\n", encoding="utf-8")
+        rule = _rule_no_retry(
+            type="csv_unique_key",
+            path="{workspace}/benchmarks.csv",
+            key_field="date",
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is True
+        assert result.results[0].actual_value == "rows=2, unique_keys=2"
+
+    async def test_duplicate_key_fails(self, temp_workspace: Path) -> None:
+        """Duplicate CSV key values fail with row numbers."""
+        artifact = temp_workspace / "benchmarks.csv"
+        artifact.write_text("date,value\n2026-07-07,1\n2026-07-07,2\n", encoding="utf-8")
+        rule = _rule_no_retry(
+            type="csv_unique_key",
+            path="{workspace}/benchmarks.csv",
+            key_field="date",
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        failure = result.results[0]
+        assert failure.failure_category == "duplicate"
+        assert "rows 2 and 3" in (failure.actual_value or "")
+
+    async def test_missing_key_column_fails(self, temp_workspace: Path) -> None:
+        """A missing CSV key column fails before checking row values."""
+        artifact = temp_workspace / "benchmarks.csv"
+        artifact.write_text("day,value\n2026-07-07,1\n", encoding="utf-8")
+        rule = _rule_no_retry(
+            type="csv_unique_key",
+            path="{workspace}/benchmarks.csv",
+            key_field="date",
+        )
+        engine = _make_engine(temp_workspace)
+
+        result = await engine.run_validations([rule])
+
+        assert result.all_passed is False
+        assert result.results[0].failure_category == "missing"
 
 
 # ===========================================================================
@@ -1165,6 +1449,16 @@ class TestConditionChecking:
         engine = _make_engine(temp_workspace, {"sheet_num": 1, "stage": "2"})
         assert engine._check_condition("stage == 2") is True
         assert engine._check_condition("stage == 3") is False
+
+    def test_negative_rhs_condition_matches_prompt_semantics(
+        self, temp_workspace: Path
+    ) -> None:
+        """Negative RHS integers are parsed instead of treated as unconditional."""
+        engine = _make_engine(temp_workspace, {"sheet_num": 1, "stage": -1})
+        assert engine._check_condition("stage > -1") is False
+        assert engine._check_condition("stage < -2") is False
+        assert engine._check_condition("stage != -1") is False
+        assert engine._check_condition("stage == -1") is True
 
     def test_ne_condition(self, temp_workspace: Path) -> None:
         """Not-equal condition works."""

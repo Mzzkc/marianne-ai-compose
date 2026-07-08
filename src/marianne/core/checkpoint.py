@@ -49,6 +49,11 @@ class ValidationDetailDict(TypedDict, total=False):
     description: str | None
     path: str | None
     pattern: str | None
+    field_path: str | None
+    source_path: str | None
+    source_field_path: str | None
+    sha256: str | None
+    key_field: str | None
     passed: Required[bool]
     actual_value: str | None
     expected_value: str | None

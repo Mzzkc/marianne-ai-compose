@@ -74,6 +74,40 @@ class TestSubmitJob:
         assert "test-job" in response.job_id
 
     @pytest.mark.asyncio
+    async def test_submit_registers_workspace_log_path(
+        self,
+        sample_config_file: Path,
+        tmp_path: Path,
+    ):
+        """Submitting with daemon file logging exposes a workspace log path."""
+        conductor_log = tmp_path / "conductor.log"
+        config = DaemonConfig(
+            max_concurrent_jobs=2,
+            pid_file=tmp_path / "test.pid",
+            state_db_path=tmp_path / "test-registry.db",
+            log_file=conductor_log,
+        )
+        mgr = JobManager(config)
+        await mgr._registry.open()
+        mgr._service = MagicMock()
+        workspace = tmp_path / "ws"
+
+        try:
+            request = JobRequest(config_path=sample_config_file, workspace=workspace)
+            response = await mgr.submit_job(request)
+
+            assert response.status == "accepted"
+            record = await mgr._registry.get_job(response.job_id)
+            assert record is not None
+            workspace_log = workspace / "logs" / "marianne.log"
+            assert record.log_path == str(workspace_log)
+            assert workspace_log.is_symlink()
+            assert workspace_log.resolve(strict=False) == conductor_log.resolve(strict=False)
+            assert conductor_log.exists()
+        finally:
+            await mgr._registry.close()
+
+    @pytest.mark.asyncio
     async def test_submit_creates_task(
         self,
         manager: JobManager,

@@ -78,7 +78,7 @@ _condition_context_strategy = st.fixed_dictionaries(
 
 
 def _full_validation_rule_strategy() -> st.SearchStrategy[dict[str, Any]]:
-    """Strategy that generates all five validation rule types with valid fields."""
+    """Strategy that generates legacy core validation rule types with valid fields."""
     return st.one_of(
         # file_exists
         st.fixed_dictionaries(

@@ -37,6 +37,10 @@ class ArtifactListResponse(BaseModel):
     workspace: str
     total_files: int
     files: list[FileInfo]
+    state: str
+    message: str
+    freshness_verified: bool = False
+    freshness_state: str = "freshness_not_verified"
 
 
 # ============================================================================
@@ -148,6 +152,8 @@ async def list_artifacts(
                 relative_parts = item.parts[workspace_len:]
                 if not include_hidden and any(part.startswith('.') for part in relative_parts):
                     continue
+                if item.is_symlink():
+                    continue
 
                 try:
                     files.append(_get_file_info(item, workspace))
@@ -159,6 +165,8 @@ async def list_artifacts(
             for item in workspace.iterdir():
                 # Skip hidden files/dirs unless requested
                 if not include_hidden and item.name.startswith('.'):
+                    continue
+                if item.is_symlink():
                     continue
 
                 # Apply pattern filter if provided
@@ -178,7 +186,13 @@ async def list_artifacts(
             job_id=job_id,
             workspace=str(workspace),
             total_files=len(files),
-            files=files
+            files=files,
+            state="available_artifacts" if files else "empty_workspace",
+            message=(
+                "Artifacts available; freshness not verified"
+                if files
+                else "Workspace is accessible but contains no visible artifacts"
+            ),
         )
 
     except PermissionError as e:

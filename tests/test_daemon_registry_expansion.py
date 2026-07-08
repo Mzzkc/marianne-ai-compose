@@ -75,6 +75,22 @@ class TestNewColumns:
         assert "log_path" not in d
         assert "snapshot_path" not in d
 
+    @pytest.mark.asyncio
+    async def test_register_job_persists_log_path(self, registry: JobRegistry):
+        """register_job() stores the log path when file logging is available."""
+        log_path = Path("/tmp/test-workspace/logs/marianne.log")
+        await registry.register_job(
+            job_id="logged-job",
+            config_path=Path("/tmp/test.yaml"),
+            workspace=Path("/tmp/test-workspace"),
+            log_path=log_path,
+        )
+
+        record = await registry.get_job("logged-job")
+        assert record is not None
+        assert record.log_path == str(log_path)
+        assert record.to_dict()["log_path"] == str(log_path)
+
 
 # ─── update_progress ──────────────────────────────────────────────────
 

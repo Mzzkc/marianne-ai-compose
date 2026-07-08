@@ -469,6 +469,40 @@ class TestDaemonProcess:
         assert dp._config.socket.path == Path("/tmp/new-marianne.sock")
 
     @pytest.mark.asyncio
+    async def test_handle_sighup_preserves_json_format_for_file_logging(
+        self,
+        tmp_path: Path,
+    ):
+        """SIGHUP keeps daemon file logs machine-readable when logging changes."""
+        import yaml
+
+        from marianne.daemon.config import DaemonConfig
+
+        cfg_path = tmp_path / "daemon.yaml"
+        log_path = tmp_path / "conductor.log"
+        cfg_path.write_text(
+            yaml.dump(
+                {
+                    "log_level": "debug",
+                    "log_file": str(log_path),
+                }
+            )
+        )
+
+        config = DaemonConfig(log_level="info")
+        config.config_file = cfg_path
+        dp = DaemonProcess(config)
+        dp._manager = MagicMock()
+        dp._monitor = MagicMock()
+
+        with patch("marianne.core.logging.configure_logging") as mock_configure:
+            await dp._handle_sighup()
+
+        mock_configure.assert_called_once()
+        assert mock_configure.call_args.kwargs["format"] == "json"
+        assert mock_configure.call_args.kwargs["file_path"] == log_path
+
+    @pytest.mark.asyncio
     async def test_register_methods_without_health(self):
         """_register_methods skips health probes when health is None."""
         from marianne.daemon.config import DaemonConfig

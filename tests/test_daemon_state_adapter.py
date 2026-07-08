@@ -123,6 +123,9 @@ async def test_list_jobs_handles_individual_failure(
     assert results[1].job_id == "bad-job"
     assert results[1].status == JobStatus.FAILED
     assert results[1].total_sheets == 1  # minimal fallback
+    assert adapter.dashboard_metadata("good-job")["is_partial"] is False
+    assert adapter.dashboard_metadata("bad-job")["is_partial"] is True
+    assert adapter.dashboard_metadata("bad-job")["partial_reason"] == "enrichment_failed"
 
 
 @pytest.mark.asyncio
@@ -168,6 +171,8 @@ async def test_list_jobs_caps_enrichment(
     assert len(results) == DAEMON_STATE_MAX_ENRICHED_JOBS + 2
     assert mock_client.get_job_status.await_count == DAEMON_STATE_MAX_ENRICHED_JOBS
     assert results[-1].job_id == f"job-{DAEMON_STATE_MAX_ENRICHED_JOBS + 1}"
+    assert adapter.dashboard_metadata(results[-1].job_id)["is_partial"] is True
+    assert adapter.dashboard_metadata(results[-1].job_id)["partial_reason"] == "enrichment_cap"
 
 
 @pytest.mark.asyncio

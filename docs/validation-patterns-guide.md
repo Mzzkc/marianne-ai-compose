@@ -9,7 +9,7 @@ This guide teaches validation design patterns: how to combine validation types, 
 ## Table of Contents
 
 - [The Two Syntax Systems](#the-two-syntax-systems)
-- [The Five Validation Types](#the-five-validation-types)
+- [Validation Types](#validation-types)
 - [Layered Validation Pattern](#layered-validation-pattern)
 - [Staged Validations](#staged-validations)
 - [Conditional Validations](#conditional-validations)
@@ -69,7 +69,7 @@ validations:
 
 ---
 
-## The Five Validation Types
+## Validation Types
 
 | Type | What It Checks | Best For |
 |------|---------------|----------|
@@ -78,6 +78,10 @@ validations:
 | `content_contains` | Literal substring appears in file | Structural markers (headings, completion tags) |
 | `content_regex` | Regex pattern matches file content | Flexible pattern matching |
 | `command_succeeds` | Shell command exits with code 0 | Tests, builds, linting, complex logic |
+| `path_in_scope` | Path resolves inside an allowed root | Workspace and artifact boundary safety |
+| `field_match` | JSON/YAML field equals a literal or source field | Structured fact consistency |
+| `file_sha256` | File content matches a pinned SHA-256 digest | Input and handoff integrity |
+| `csv_unique_key` | CSV column values are unique | Tabular invariant checks |
 
 ### Available Variables in Validations
 
@@ -650,6 +654,43 @@ validations:
     command: 'cd {workspace} && pytest tests/ --full'
     timeout_seconds: 7200  # 2 hours
 ```
+
+### CLI Sheet Fails Immediately
+
+**Problem:** A sheet uses `instrument: cli`, but its rendered prompt is markdown
+or prose instead of executable bash. The `cli` instrument passes the prompt
+directly to `bash -c`; it does not interpret fenced code blocks or natural
+language instructions.
+
+```yaml
+# WRONG for instrument: cli
+prompt:
+  template: |
+    ## Build
+    ```bash
+    echo ok > {{ workspace }}/done.txt
+    ```
+
+# CORRECT for instrument: cli
+prompt:
+  template: |
+    set -euo pipefail
+    echo ok > "{{ workspace }}/done.txt"
+```
+
+`mzt validate` renders raw CLI prompts and fails markdown headings, code fences,
+plain prose, and `bash -n` syntax errors before execution. Valid heredocs,
+comments, quoting, functions, and ordinary shell defaults are allowed.
+
+### Bash Array Length Truncates Template
+
+**Problem:** Bash `${#ARR[@]}` and `${#var}` contain `{#`, which Jinja reads as
+a comment opener. The rendered script is silently truncated before the shell
+runs.
+
+**Solution:** Avoid `${#...}` in Jinja templates. Count with a command such as
+`printf '%s\n' "${ARR[@]:-}" | grep -c .`, or use a different empty-check idiom
+such as `[ -z "${ARR[0]:-}" ]`.
 
 ### Validation Fails Even Though Prompt Told Agent to Create File
 

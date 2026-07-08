@@ -145,7 +145,11 @@ retry:
 
 Sheets divide work into atomic units. Each sheet gets its own prompt, execution, validation, and retry budget. Validation is not optional — exit code 0 does not mean success. Only passing all validations means success.
 
-Five validation types: `file_exists`, `file_modified`, `content_contains`, `content_regex`, `command_succeeds`. Validation paths use Python format strings: `{workspace}`, `{sheet_num}`.
+Validation types include file checks (`file_exists`, `file_modified`),
+content checks (`content_contains`, `content_regex`), command checks
+(`command_succeeds`), path boundary checks (`path_in_scope`), and structured
+data checks (`field_match`, `file_sha256`, `csv_unique_key`). Validation paths
+use Python format strings: `{workspace}`, `{sheet_num}`.
 
 For parallel execution, declare dependencies as a DAG:
 

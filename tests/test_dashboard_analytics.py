@@ -58,6 +58,24 @@ class MockStateBackend(StateBackend):
         raise NotImplementedError
 
 
+class PartialMockStateBackend(MockStateBackend):
+    """Mock backend that exposes dashboard source/completeness metadata."""
+
+    def __init__(
+        self,
+        jobs: list[CheckpointState],
+        metadata: dict[str, dict[str, object]],
+    ) -> None:
+        super().__init__(jobs)
+        self._metadata = metadata
+
+    def dashboard_metadata(self, job_id: str) -> dict[str, object]:
+        return self._metadata.get(
+            job_id,
+            {"data_source": "checkpoint", "is_partial": False},
+        )
+
+
 def _make_completed_job(
     job_id: str = "job-1",
     job_name: str = "Completed Job",
@@ -244,6 +262,24 @@ class TestGetStats:
         assert stats["success_rate"] == 0.0
         assert stats["total_spend"] == 0.0
         assert stats["throughput_sheets_per_hour"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_partial_metadata_is_carried_into_stats(self) -> None:
+        jobs = [_make_completed_job("complete"), _make_completed_job("fallback")]
+        backend = PartialMockStateBackend(
+            jobs,
+            {
+                "complete": {"data_source": "daemon_status", "is_partial": False},
+                "fallback": {"data_source": "daemon_roster", "is_partial": True},
+            },
+        )
+        analytics = DaemonAnalytics(backend, cache_ttl=0.0)
+
+        stats = await analytics.get_stats()
+
+        assert stats["is_partial"] is True
+        assert stats["partial_job_ids"] == ["fallback"]
+        assert stats["data_source"] == "mixed"
 
 
 class TestCostRollup:

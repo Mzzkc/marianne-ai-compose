@@ -651,11 +651,18 @@ A list of validation rules applied after each sheet execution. Supports staged e
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `type` | `"file_exists" \| "file_modified" \| "content_contains" \| "content_regex" \| "command_succeeds"` | **required** | | Validation type |
-| `path` | `str \| None` | `None` | Required for `file_exists`, `file_modified`, `content_contains`, `content_regex` | File path. Supports `{sheet_num}`, `{workspace}` templates. |
+| `type` | `"file_exists" \| "file_modified" \| "content_contains" \| "content_regex" \| "command_succeeds" \| "path_in_scope" \| "field_match" \| "file_sha256" \| "csv_unique_key"` | **required** | | Validation type |
+| `path` | `str \| None` | `None` | Required for `file_exists`, `file_modified`, `content_contains`, `content_regex`, `path_in_scope`, `field_match`, `file_sha256`, `csv_unique_key` | File path. Supports `{sheet_num}`, `{workspace}` templates. |
 | `pattern` | `str \| None` | `None` | Required for `content_contains`, `content_regex`. Must be valid regex for `content_regex`. | Pattern for content matching |
 | `command` | `str \| None` | `None` | Required for `command_succeeds` | Shell command to run |
 | `working_directory` | `str \| None` | `None` | | Working directory for command (defaults to workspace) |
+| `path_scope` | `str \| None` | `None` | Optional for `path_in_scope` | Allowed root for canonical path checks; defaults to `{workspace}` |
+| `field_path` | `str \| None` | `None` | Required for `field_match` | Dot/bracket JSON/YAML field path, such as `summary.total` or `positions[0].symbol` |
+| `expected_value` | `Any \| None` | `None` | Optional for `field_match` | Literal comparison value. If omitted, set `source_path`. Use `expected_value: null` to compare against an explicit JSON/YAML null. |
+| `source_path` | `str \| None` | `None` | Optional for `field_match` | Reference JSON/YAML file for source-field comparisons |
+| `source_field_path` | `str \| None` | `None` | Optional for `field_match` | Reference field path; defaults to `field_path` |
+| `sha256` | `str \| None` | `None` | Required for `file_sha256` | Expected 64-character SHA-256 hex digest |
+| `key_field` | `str \| None` | `None` | Required for `csv_unique_key` | CSV column whose values must be unique |
 | `description` | `str \| None` | `None` | | Human-readable description |
 | `stage` | `int` | `1` | `1–10` | Validation stage. Lower stages run first; fail-fast on failure. |
 | `condition` | `str \| None` | `None` | | Condition for when this validation applies. See **Condition syntax** below. |
@@ -671,6 +678,23 @@ A list of validation rules applied after each sheet execution. Supports staged e
 | `content_contains` | `path`, `pattern` | File contains the literal pattern string |
 | `content_regex` | `path`, `pattern` | File content matches the regex pattern |
 | `command_succeeds` | `command` | Shell command exits with code 0 |
+| `path_in_scope` | `path`; optional `path_scope` | Canonical path resolves inside an allowed root |
+| `field_match` | `path`, `field_path`, and `expected_value` or `source_path` | JSON/YAML field equals a literal or reference field |
+| `file_sha256` | `path`, `sha256` | File content matches a pinned SHA-256 digest |
+| `csv_unique_key` | `path`, `key_field` | CSV key column has no duplicate values |
+
+**Static preflight checks:**
+
+`mzt validate` also checks prompt/score contracts that are not runtime
+validation rule types. Raw `cli` prompts are rendered with sheet variables and
+checked as shell input: markdown headings, code fences, prose bullets, plain
+prose, and `bash -n` parse failures are errors. Bash `${#...}` length syntax in
+Jinja templates is also an error because Jinja treats `{#` as a comment opener
+and truncates the script. Fan-out scores with partial concrete instrument
+assignment coverage produce warnings, as do exact section-label
+`content_contains` validations whose literal label is absent from the prompt
+template. Raw shell sheets that inherit non-raw LLM-style fallbacks warn because
+that fallback can change deterministic shell intent into interpretive work.
 
 **Condition syntax:**
 
@@ -705,7 +729,7 @@ Conditions control when a validation rule applies. Each condition compares a con
 | `fan_count` | `int` | Total instances in this stage's fan-out group (default 1) |
 | `total_stages` | `int` | Original stage count before fan-out expansion |
 
-Any variable that is missing or non-integer is treated as "condition satisfied" (fail-open). An unrecognized condition format also passes (fail-open).
+For recognized comparison conditions, any variable that is missing or non-integer is treated as false. An unrecognized condition format still passes for compatibility.
 
 ```yaml
 validations:

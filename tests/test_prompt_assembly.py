@@ -495,6 +495,37 @@ class TestValidationFormatting:
         assert "Success Requirements" not in prompt
         assert "Unknown-gated file" not in prompt
 
+    def test_negative_rhs_condition_matches_runtime(self) -> None:
+        """Prompt filtering parses negative RHS integers like runtime validation."""
+        config = PromptConfig(template="Task", variables={"stage": -1})
+        builder = PromptBuilder(config)
+        ctx = SheetContext(
+            sheet_num=1,
+            total_sheets=1,
+            start_item=1,
+            end_item=1,
+            workspace=Path("/ws"),
+        )
+        rules = [
+            ValidationRule(
+                type="file_exists",
+                path="{workspace}/hidden.md",
+                description="Hidden when stage is -1",
+                condition="stage > -1",
+            ),
+            ValidationRule(
+                type="file_exists",
+                path="{workspace}/visible.md",
+                description="Visible when stage is -1",
+                condition="stage == -1",
+            ),
+        ]
+
+        prompt = builder.build_sheet_prompt(ctx, validation_rules=rules)
+
+        assert "Hidden when stage is -1" not in prompt
+        assert "Visible when stage is -1" in prompt
+
     def test_file_exists_formatting(self) -> None:
         """file_exists rules show the expanded path."""
         config = PromptConfig(template="Task")
@@ -560,6 +591,48 @@ class TestValidationFormatting:
 
         assert "/my/ws/output.md" in prompt
         assert "{workspace}" not in prompt.split("Success Requirements")[1]
+
+    def test_structured_validation_formatting(self) -> None:
+        """New deterministic validators render their payload details."""
+        config = PromptConfig(template="Task")
+        builder = PromptBuilder(config)
+        ctx = SheetContext(
+            sheet_num=1,
+            total_sheets=1,
+            start_item=1,
+            end_item=1,
+            workspace=Path("/ws"),
+        )
+        rules = [
+            ValidationRule(
+                type="field_match",
+                path="{workspace}/report.json",
+                field_path="summary.trade_count",
+                expected_value=4,
+                description="Trade count matches",
+            ),
+            ValidationRule(
+                type="file_sha256",
+                path="{workspace}/risk.yaml",
+                sha256="0" * 64,
+                description="Risk envelope unchanged",
+            ),
+            ValidationRule(
+                type="csv_unique_key",
+                path="{workspace}/benchmarks.csv",
+                key_field="date",
+                description="Dates are unique",
+            ),
+        ]
+
+        prompt = builder.build_sheet_prompt(ctx, validation_rules=rules)
+        requirements = prompt.split("Success Requirements")[1]
+
+        assert "/ws/report.json" in requirements
+        assert "summary.trade_count" in requirements
+        assert "Must equal: `4`" in requirements
+        assert "SHA-256 must equal" in requirements
+        assert "Unique key column: `date`" in requirements
 
 
 # ---------------------------------------------------------------------------

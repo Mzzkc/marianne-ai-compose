@@ -694,3 +694,209 @@ So: if you are an agent reading this before implementing one of
 the gaps above, you are required to do the corpus sweep, read
 every hit in context, and report the false-positive analysis in
 the gap entry **before** declaring the work complete.
+
+---
+
+## 2026-07-07 — validation-core deterministic validator update
+
+This note is append-only status reconciliation for the validation-core slice.
+It does not delete or rewrite the historical gap rows above.
+
+- **Gap 4 / structured metric consistency:** partially closed in core by
+  `field_match`, a first-class validation rule that loads JSON/YAML and compares
+  a configured `field_path` against either `expected_value` or a field in
+  `source_path`. Runtime dispatch, retry participation, serialized validation
+  details, schema validation, static required-field checks, and focused tests
+  landed in `src/marianne/core/config/execution.py`,
+  `src/marianne/execution/validation/engine.py`,
+  `src/marianne/execution/validation/models.py`,
+  `src/marianne/core/checkpoint.py`,
+  `src/marianne/validation/checks/config.py`,
+  `tests/test_validation_engine.py`, `tests/test_config.py`, and
+  `tests/test_validation_checks.py`.
+- **Gap 5 / file integrity:** partially closed in core by `file_sha256`, a
+  deterministic validation rule that compares a file's SHA-256 digest to a
+  pinned 64-character hex value. This closes the reusable pinned-integrity
+  check, while higher-level snapshot orchestration remains score/runtime
+  design work.
+- **Gap 10 / tabular uniqueness:** partially closed in core by
+  `csv_unique_key`, which parses a CSV header and fails when the configured
+  `key_field` repeats. This covers the concrete "unique by date" invariant
+  family without introducing a generic predicate language.
+- **Gap 26 / condition fail-open drift:** validation preview now matches the
+  runtime/prompt behavior for recognized comparison conditions: missing or
+  non-integer variables evaluate false, while unrecognized condition formats
+  remain unconditional for compatibility. Covered in
+  `src/marianne/validation/rendering.py` and
+  `tests/test_validation_coverage_gaps.py`.
+- **Gap 30 / validation type documentation drift:** validation docs and
+  `.marianne/spec/architecture.yaml` now list the implemented validation
+  algebra, including `path_in_scope`, `field_match`, `file_sha256`, and
+  `csv_unique_key`. This documents executable source state only; it does not
+  claim closure for still-unimplemented validators such as
+  `cross_file_similarity`, `llm_judge`, `predicate_against_data`,
+  `produced_by_instrument`, or pre-token `preconditions`.
+
+Targeted evidence from this update:
+
+- `pytest tests/test_validation_engine.py tests/test_validation_checks.py tests/test_config.py tests/test_validation_coverage_gaps.py -q`
+  passed with 331 tests.
+- `pytest tests/test_validation_engine.py tests/test_validation_checks.py tests/test_validation_adversarial.py -q`
+  passed with 230 tests.
+- `ruff check src/marianne/core/checkpoint.py src/marianne/core/config/execution.py src/marianne/execution/validation/engine.py src/marianne/execution/validation/models.py src/marianne/validation/checks/config.py src/marianne/validation/rendering.py tests/test_config.py tests/test_validation_checks.py tests/test_validation_coverage_gaps.py tests/test_validation_engine.py`
+  passed.
+
+---
+
+## 2026-07-07 — static prompt and score preflight update
+
+This note is append-only status reconciliation for the static prompt/score
+slice. It preserves the historical gap rows and distinguishes hard failures
+from warning-only policy surfaces.
+
+- **Gap 13 / Bash `${#...}` Jinja collision:** closed as a static launch gate
+  by promoting V305 `BashArrayLengthCheck` to ERROR severity. The check remains
+  strictly scoped to the literal `${#` sequence in raw template text and does
+  not flag `${{ amount }}`, `${var:-default}`, or bash comments containing
+  Jinja expressions. Covered by `tests/test_bash_array_jinja_check_362.py`.
+- **Gap 14 / markdown or invalid bash in raw CLI sheets:** partially closed by
+  V307 `CliRawPromptBashCheck`, which resolves concrete sheet instruments,
+  renders raw-prompt shell templates with sheet variables, rejects markdown
+  headings, code fences, prose bullets, plain prose, and `bash -n` parse
+  failures, while allowing valid heredocs, comments, quoting, functions, and
+  shell defaults. Raw shell sheets that can fall back to non-raw LLM-style
+  instruments are reported as warnings, not hard errors, because current
+  fallback resolution cannot yet represent an explicit empty movement-level
+  fallback override; a strict `cli_fallback_policy` remains design-open.
+- **Gap 16 / fan-out assignment drift:** partially mitigated by V308
+  `FanOutAssignmentCoverageCheck`, a warning for expanded fan-out movements
+  where only some sibling concrete sheets have explicit instrument coverage.
+  This does not infer arbitrary semantic intent; it surfaces the known partial
+  concrete-assignment failure mode for human review.
+- **Gap 28 / prompt-validation contract drift:** partially mitigated by V309
+  `PromptValidationContractCheck`, a warning when a `content_contains`
+  validation requires an exact section label such as `VERDICT:` or
+  `## Findings`, but the prompt template does not contain that literal label.
+
+Targeted evidence from this update:
+
+- `pytest tests/test_bash_array_jinja_check_362.py tests/test_cli_template_bash_check.py -q`
+  passed with 24 tests.
+- `pytest tests/test_validation_checks.py tests/test_validation_coverage_gaps.py tests/test_raw_prompt.py -q`
+  passed with 137 tests.
+- `pytest tests/test_generic_fleet_preset_contract.py compiler/tests/test_builtin_presets.py compiler/tests/test_compose_validations.py -q`
+  passed with 34 tests.
+- `mzt validate scores-internal/validation-gap-closure/validation-gap-closure.yaml`
+  passed with four V307 fallback-policy warnings and no errors.
+- Corpus sweep over 189 YAML files under `scores/`, `scores-internal/`, and
+  `examples/` parsed 143 current score files and found: V305 0 hits; V307 19
+  rendered raw-CLI bash/prose errors and 56 non-raw fallback warnings; V308 6
+  fan-out coverage warnings; V309 4 exact-section contract warnings. Reviewed
+  representative V307 hits by rendering the raw CLI branch, including
+  `examples/finance/24x7-trader/pre-market.yaml` stage 5, which renders prose
+  plus a fenced bash block directly to `bash -c`; those are true positives, not
+  regex false positives. The 46 unparsed files are pre-existing archived or
+  non-score YAMLs in the corpus.
+
+---
+
+## 2026-07-07 — runtime, compiler, instrument, and spec reconciliation update
+
+This note is append-only status reconciliation for the runtime/compiler/docs
+slice. It records executable changes and keeps live-proof-open gaps explicitly
+separate from source/test mitigations.
+
+- **Gap 29 / dispatch wait visibility:** dashboard sheet-detail JSON now
+  exposes `dispatch_blocked_reason`, `dispatch_blocked_at`, and
+  `dispatch_blocked_details` from `SheetState`, and the job detail page renders
+  a Dispatch Wait block for expanded sheet rows. This adds dashboard/API
+  visibility to the existing `mzt status` and `mzt diagnose` surfaces. Source:
+  `src/marianne/dashboard/routes/jobs.py` and
+  `src/marianne/dashboard/templates/pages/job_detail.html`. Test:
+  `tests/test_dashboard_e2e.py::TestSheetDetailsE2E::test_get_sheet_details_success`.
+  Fresh restarted-conductor proof remains required before calling the original
+  live runtime failure fully commissioned.
+- **Gap 34 / cadenza ID drift:** generated generic-fleet cadenza completion
+  validation now lints direct `shared/active` coordination tables for duplicate
+  concrete IDs and ownerless numeric IDs such as `T-002`, while allowing seeded
+  placeholders such as `{agent}-T-001`. Source:
+  `compiler/src/marianne_compiler/validations.py`. Tests:
+  `compiler/tests/test_compose_validations.py` and
+  `tests/test_generic_fleet_preset_contract.py::test_generic_fleet_cadenza_completion_validation_catches_stale_claim`.
+- **Gaps 15, 16, 17, 22-25, 31, 32, 36, and 41-44 / compiler and fleet
+  contract status:** this slice hardens cadenza hygiene but does not claim a
+  full generated-family manifest, arbitrary fan-out semantic validator,
+  technique proof registry, or append-only coordination lock. Existing compiler
+  and fleet tests remain the evidence for source/test mitigated rows; the
+  remaining policy boundaries stay open.
+- **Gap 39 / rate-limit truth:** the mirror-duration closure remains tied to
+  `RESET_TIME_MAXIMUM_WAIT_SECONDS`. The Rate Limit Primary spec now carries a
+  drift note clarifying that `rate_limit_primary` is not implemented runtime
+  truth in current source.
+- **Spec index and compiler design reconciliation:** `docs/specs/INDEX.yaml`
+  now lists the 2026-06-21 generic fleet cadenza coordination spec as a
+  non-canonical candidate and the broad workstream audit as an audit artifact.
+  `docs/specs/2026-04-13-composition-compiler-design.md` now cross-links the
+  generated cadenza completion validation contract.
+
+Gaps 35, 37, and 38 remain live-proof-open. This update does not add fresh
+validation-retry, tmux/process restart, or non-quota Antigravity execution
+evidence, so those rows must not be rounded up to closed.
+
+---
+
+## 2026-07-08 — remediation review update
+
+This note is append-only status reconciliation for the review-remediation pass.
+It records fixes to newly implemented validation surfaces and preserves the
+remaining commissioning boundaries.
+
+- **Gap 4 / structured field comparisons:** `field_match` now distinguishes an
+  omitted `expected_value` from an explicit JSON/YAML null literal. Source:
+  `src/marianne/core/config/execution.py`,
+  `src/marianne/validation/checks/config.py`, and
+  `src/marianne/execution/validation/engine.py`. Tests:
+  `tests/test_config.py`,
+  `tests/test_validation_checks.py`, and
+  `tests/test_validation_engine.py` cover `expected_value: null` passing
+  against a null field, failing against a non-null field, and still rejecting a
+  rule with neither `expected_value` nor `source_path`.
+- **Gap 5 / pinned file integrity:** `file_sha256` now hashes files in bounded
+  chunks instead of using whole-file `read_bytes()`. Source:
+  `src/marianne/execution/validation/engine.py`. Test:
+  `tests/test_validation_engine.py::TestFileSha256Validation::test_hashing_streams_file_content`
+  monkeypatches `Path.read_bytes` to fail and validates a multi-chunk file.
+- **Gap 26 / condition semantics:** runtime validation and rendering preview
+  now parse negative integer right-hand sides the same way prompt assembly
+  already did. Source: `src/marianne/execution/validation/engine.py` and
+  `src/marianne/validation/rendering.py`. Tests:
+  `tests/test_validation_engine.py`,
+  `tests/test_validation_coverage_gaps.py`, and
+  `tests/test_prompt_assembly.py` cover negative RHS comparisons alongside the
+  existing missing-variable and numeric-string cases.
+- **Gap 14 / raw CLI fallback warning volume:** V307 still reports raw shell
+  sheets with non-raw fallback instruments as warnings, but it now emits one
+  warning per sheet with a grouped fallback list rather than one warning per
+  fallback instrument. Source: `src/marianne/validation/checks/cli.py`. Test:
+  `tests/test_cli_template_bash_check.py`. This improves operator scanability
+  without changing the design-open status of strict raw-shell fallback policy.
+
+Targeted remediation evidence:
+
+- `uv run pytest tests/test_config.py::TestJobConfigEdgeCases::test_field_match_requires_comparison_value tests/test_config.py::TestJobConfigEdgeCases::test_field_match_allows_explicit_null_expected_value tests/test_validation_checks.py::TestValidationTypeCheck::test_field_match_explicit_null_literal_passes tests/test_validation_engine.py::TestFieldMatchValidation::test_matches_explicit_null_literal tests/test_validation_engine.py::TestFieldMatchValidation::test_explicit_null_literal_fails_against_non_null tests/test_validation_engine.py::TestFileSha256Validation::test_hashing_streams_file_content tests/test_validation_engine.py::TestConditionChecking::test_negative_rhs_condition_matches_prompt_semantics tests/test_validation_coverage_gaps.py::TestCheckCondition::test_negative_rhs_variable tests/test_prompt_assembly.py::TestValidationFormatting::test_negative_rhs_condition_matches_runtime -q`
+  passed with 9 tests.
+- `uv run pytest tests/test_validation_engine.py tests/test_validation_checks.py tests/test_config.py tests/test_validation_rendering.py tests/test_prompt_assembly.py tests/test_validation_coverage_gaps.py tests/test_bash_array_jinja_check_362.py tests/test_cli_template_bash_check.py -q`
+  passed with 420 tests.
+- `uv run ruff check` passed for the remediation-touched source and test
+  files.
+- `uv run mzt validate scores-internal/validation-gap-closure/validation-gap-closure.yaml`
+  passed with two grouped V307 fallback-policy warnings and no errors.
+- `uv run mzt validate examples/getting-started/hello.yaml` passed with one
+  grouped V307 fallback-policy warning, replacing the prior eight repeated
+  warnings for the same raw shell sheet.
+
+This remediation does not claim that existing repository scores validate
+cleanly: V307 still has known true-positive rendered raw-CLI score debt from
+the review corpus sweep. It also does not add live conductor, dashboard browser,
+validation-retry, tmux/process, or provider smoke evidence, so Gaps 29, 35, 37,
+and 38 remain live-proof-open until commissioning supplies those proofs.

@@ -209,6 +209,15 @@ def test_dashboard_home_loads(page: Page, base_url: str) -> None:
 
 
 @pytest.mark.playwright
+def test_header_shows_isolated_conductor_unavailable(page: Page, base_url: str) -> None:
+    page.goto(base_url, wait_until="networkidle")
+
+    page.get_by_text(
+        "Conductor disconnected: Conductor unavailable for isolated dashboard"
+    ).wait_for(state="visible")
+
+
+@pytest.mark.playwright
 def test_score_editor_dark_mode_themes_editing_surface(page: Page, base_url: str) -> None:
     page.add_init_script("localStorage.setItem('darkMode', 'true')")
     page.goto(f"{base_url}/editor", wait_until="networkidle")
@@ -236,6 +245,19 @@ def test_jobs_list_page_loads(page: Page, base_url: str, backend: JsonStateBacke
     page.goto(f"{base_url}/jobs")
     content = page.content()
     assert len(content) > 100
+
+
+@pytest.mark.playwright
+def test_jobs_list_mid_viewport_keeps_log_and_artifact_actions_visible(
+    page: Page, base_url: str, backend: JsonStateBackend
+) -> None:
+    _seed_jobs(backend)
+    page.set_viewport_size({"width": 900, "height": 800})
+    page.goto(f"{base_url}/jobs", wait_until="networkidle")
+    page.get_by_text("Playwright Running Job").first.wait_for(state="visible")
+
+    assert page.locator("a", has_text="Logs").first.is_visible()
+    assert page.locator("a", has_text="Artifacts").first.is_visible()
 
 
 @pytest.mark.playwright
@@ -271,7 +293,7 @@ def test_job_status_api(page: Page, base_url: str, backend: JsonStateBackend) ->
 
 
 @pytest.mark.playwright
-def test_job_detail_action_updates_visible_controls(
+def test_job_detail_action_shows_request_sent_without_optimistic_final_status(
     page: Page, base_url: str, backend: JsonStateBackend
 ) -> None:
     _seed_jobs(backend)
@@ -292,8 +314,8 @@ def test_job_detail_action_updates_visible_controls(
                 {
                     "success": True,
                     "job_id": "pw-running-1",
-                    "status": "paused",
-                    "message": "paused",
+                    "status": "pause_requested",
+                    "message": "Pause request sent to conductor for job pw-running-1",
                     "via_daemon": True,
                 }
             ),
@@ -303,9 +325,119 @@ def test_job_detail_action_updates_visible_controls(
     page.goto(f"{base_url}/jobs/pw-running-1/details", wait_until="domcontentloaded")
     page.get_by_role("button", name="Pause").click()
 
-    page.get_by_role("button", name="Resume").wait_for(state="visible")
-    assert page.get_by_role("button", name="Pause").is_hidden()
-    assert page.locator("span", has_text="paused").first.is_visible()
+    page.get_by_text("Pause request sent to conductor").wait_for(state="visible")
+    assert page.get_by_role("button", name="Pause").is_visible()
+    assert page.get_by_role("button", name="Resume").is_hidden()
+    assert page.locator("span", has_text="running").first.is_visible()
+
+
+@pytest.mark.playwright
+def test_paused_at_chain_shows_resume_and_cancel_controls(
+    page: Page, base_url: str, backend: JsonStateBackend
+) -> None:
+    now = datetime(2026, 4, 14, 12, 0, 0, tzinfo=UTC)
+    state = CheckpointState(
+        job_id="pw-paused-chain",
+        job_name="Playwright Paused Chain",
+        status=JobStatus.PAUSED_AT_CHAIN,
+        total_sheets=2,
+        last_completed_sheet=1,
+        current_sheet=2,
+        created_at=now,
+        updated_at=now,
+    )
+    _save_state(backend, state)
+    page.route(
+        "**/api/jobs/pw-paused-chain/stream",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="text/event-stream",
+            body="event: heartbeat\ndata: {}\n\n",
+        ),
+    )
+
+    page.goto(f"{base_url}/jobs/pw-paused-chain/details", wait_until="domcontentloaded")
+
+    assert page.get_by_role("button", name="Resume").is_visible()
+    assert page.get_by_role("button", name="Cancel").is_visible()
+
+
+@pytest.mark.playwright
+def test_job_detail_current_sheet_updates_from_sse(
+    page: Page, base_url: str, backend: JsonStateBackend
+) -> None:
+    _seed_jobs(backend)
+    page.route(
+        "**/api/jobs/pw-running-1/stream",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="text/event-stream",
+            body=(
+                "event: job_status\n"
+                f"data: {json.dumps({'status': 'running', 'current_sheet': 3})}\n\n"
+            ),
+        ),
+    )
+
+    page.goto(f"{base_url}/jobs/pw-running-1/details", wait_until="domcontentloaded")
+
+    page.get_by_text("Current: Sheet 3").wait_for(state="visible")
+
+
+@pytest.mark.playwright
+def test_job_detail_artifact_panel_shows_available_files_and_freshness(
+    page: Page,
+    base_url: str,
+    backend: JsonStateBackend,
+    temp_state_dir: Path,
+) -> None:
+    workspace = temp_state_dir / "pw-artifacts"
+    workspace.mkdir(exist_ok=True)
+    (workspace / "artifact.txt").write_text("artifact")
+    now = datetime(2026, 4, 14, 12, 0, 0, tzinfo=UTC)
+    state = CheckpointState(
+        job_id="pw-artifact-job",
+        job_name="Playwright Artifact Job",
+        status=JobStatus.COMPLETED,
+        total_sheets=1,
+        last_completed_sheet=1,
+        worktree_path=str(workspace),
+        created_at=now,
+        updated_at=now,
+    )
+    _save_state(backend, state)
+
+    page.goto(f"{base_url}/jobs/pw-artifact-job/details", wait_until="networkidle")
+
+    page.get_by_text("available artifacts").wait_for(state="visible")
+    assert page.get_by_text("Freshness not verified", exact=True).is_visible()
+    assert page.get_by_text("artifact.txt").is_visible()
+
+
+@pytest.mark.playwright
+def test_analytics_endpoint_failure_renders_unavailable(
+    page: Page, base_url: str
+) -> None:
+    page.route(
+        "**/api/analytics/**",
+        lambda route: route.fulfill(
+            status=503,
+            content_type="application/json",
+            body=json.dumps({"detail": "analytics unavailable"}),
+        ),
+    )
+    page.route(
+        "**/api/dashboard/stats",
+        lambda route: route.fulfill(
+            status=503,
+            content_type="application/json",
+            body=json.dumps({"detail": "stats unavailable"}),
+        ),
+    )
+
+    page.goto(f"{base_url}/analytics", wait_until="networkidle")
+
+    page.get_by_text("Analytics unavailable").first.wait_for(state="visible")
 
 
 # ---------------------------------------------------------------------------

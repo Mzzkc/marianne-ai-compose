@@ -11,18 +11,34 @@
     "completed": "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
     "failed": "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
     "paused": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+    "paused_at_chain": "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
     "cancelled": "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
     "pending": "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
+    "ready": "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200",
+    "dispatched": "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
+    "in_progress": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+    "waiting": "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+    "retry_scheduled": "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
+    "fermata": "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+    "skipped": "bg-stone-100 text-stone-700 dark:bg-stone-700 dark:text-stone-200",
+    "unknown": "bg-white text-gray-700 ring-1 ring-gray-300 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-600",
+} -%}
+{%- set labels = {
+    "paused_at_chain": "paused at chain",
+    "in_progress": "in progress",
+    "retry_scheduled": "retry scheduled",
 } -%}
 {%- set size_classes = {
     "xs": "px-1.5 py-0.5 text-[10px]",
     "sm": "px-2 py-0.5 text-xs",
     "md": "px-2.5 py-1 text-sm",
 } -%}
-<span class="{{ size_classes.get(size, size_classes.sm) }} font-medium rounded-full inline-flex items-center gap-1 {{ colors.get(status, colors.pending) }}">
-    {%- if status == "running" -%}
+{%- set known = status in colors and status != "unknown" -%}
+<span class="{{ size_classes.get(size, size_classes.sm) }} font-medium rounded-full inline-flex items-center gap-1 {{ colors.get(status, colors.unknown) }}"
+      data-status="{{ status if known else 'unknown' }}">
+    {%- if status in ("running", "in_progress", "dispatched") -%}
     <span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse-dot"></span>
     {%- endif -%}
-    {{ status }}
+    {{ labels.get(status, status if known else "unknown: " ~ status) }}
 </span>
 {% endmacro %}

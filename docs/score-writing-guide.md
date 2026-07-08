@@ -1399,6 +1399,60 @@ validations:
 | `command` | str | yes | Shell command to execute. |
 | `working_directory` | str | no | Working directory for the command (defaults to workspace). |
 
+### `path_in_scope`
+
+Checks that a path resolves inside an allowed root after canonical path
+resolution. This catches traversal and symlink escapes before a score treats a
+path as safe.
+
+```yaml
+validations:
+  - type: path_in_scope
+    path: "{workspace}/reports/summary.md"
+    path_scope: "{workspace}"
+    description: "Report path must stay inside the workspace"
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | str | yes | Path to canonicalize and check. |
+| `path_scope` | str | no | Allowed root; defaults to `{workspace}`. |
+
+### `field_match`
+
+Compares a JSON/YAML field against a literal value or the same field in another
+JSON/YAML file.
+
+```yaml
+validations:
+  - type: field_match
+    path: "{workspace}/summary.json"
+    field_path: "decision.approved"
+    expected_value: true
+```
+
+### `file_sha256`
+
+Pins an input or handoff file to a known SHA-256 digest.
+
+```yaml
+validations:
+  - type: file_sha256
+    path: "{workspace}/inputs/manifest.json"
+    sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+```
+
+### `csv_unique_key`
+
+Checks that a CSV column has no duplicate values.
+
+```yaml
+validations:
+  - type: csv_unique_key
+    path: "{workspace}/trades.csv"
+    key_field: "client_order_id"
+```
+
 **Advanced example** — checking completion percentage from a file:
 
 ```yaml

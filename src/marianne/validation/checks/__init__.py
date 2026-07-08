@@ -16,6 +16,11 @@ from marianne.validation.checks.best_practices import (
     SkipWhenSheetRangeCheck,
     VariableShadowingCheck,
 )
+from marianne.validation.checks.cli import (
+    CliRawPromptBashCheck,
+    FanOutAssignmentCoverageCheck,
+    PromptValidationContractCheck,
+)
 from marianne.validation.checks.config import (
     CodeExecutionSandboxCheck,
     EmptyPatternCheck,
@@ -56,6 +61,9 @@ __all__ = [
     "JinjaUndefinedVariableCheck",
     "FanOutStringFilterCheck",
     "BashArrayLengthCheck",
+    "CliRawPromptBashCheck",
+    "FanOutAssignmentCoverageCheck",
+    "PromptValidationContractCheck",
     # Path checks
     "WorkspaceParentExistsCheck",
     "TemplateFileExistsCheck",

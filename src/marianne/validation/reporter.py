@@ -295,6 +295,18 @@ class ValidationReporter:
                     v["pattern"] = ev.pattern
                 if ev.condition:
                     v["condition"] = ev.condition
+                if ev.field_path:
+                    v["field_path"] = ev.field_path
+                if ev.expected_value is not None:
+                    v["expected_value"] = ev.expected_value
+                if ev.source_path:
+                    v["source_path"] = ev.source_path
+                if ev.source_field_path:
+                    v["source_field_path"] = ev.source_field_path
+                if ev.sha256:
+                    v["sha256"] = ev.sha256
+                if ev.key_field:
+                    v["key_field"] = ev.key_field
                 validations.append(v)
 
             sheet_dict: dict[str, Any] = {

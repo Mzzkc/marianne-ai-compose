@@ -406,6 +406,44 @@ class TestLogFollower:
         assert follower.should_include({"event": "x", "job_id": "other"}) is False
         assert follower.should_include({"event": "x"}) is False
 
+    def test_should_include_job_filter_nested_extra(self, tmp_path: Path) -> None:
+        """Job ID filter includes conductor entries with extra.job_id."""
+        from marianne.cli.commands.diagnose import LogFollower
+
+        follower = LogFollower(log_path=tmp_path / "test.log", job_id="my-job")
+        assert follower.should_include({
+            "event": "x",
+            "extra": {"job_id": "my-job"},
+        }) is True
+        assert follower.should_include({
+            "event": "x",
+            "extra": {"sheets": ["my-job:2"]},
+        }) is True
+        assert follower.should_include({
+            "event": "x",
+            "extra": {"job_id": "other"},
+        }) is False
+
+    def test_format_entry_uses_nested_extra_context(self, tmp_path: Path) -> None:
+        """Formatted conductor entries surface nested job and sheet context."""
+        from marianne.cli.commands.diagnose import LogFollower
+
+        follower = LogFollower(log_path=tmp_path / "test.log")
+        result = follower.format_entry({
+            "event": "baton.stale_check.dispatched",
+            "level": "INFO",
+            "component": "daemon.baton.core",
+            "extra": {
+                "job_id": "my-job",
+                "sheet_num": 2,
+                "instrument": "codex-cli",
+            },
+        })
+
+        assert "my-job" in result
+        assert "sheet:2" in result
+        assert "instrument" in result
+
     def test_format_entry_json_mode(self, tmp_path: Path) -> None:
         """JSON output mode returns raw JSON string."""
         from marianne.cli.commands.diagnose import LogFollower

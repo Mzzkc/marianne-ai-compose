@@ -59,3 +59,13 @@ files:
     status: final
     added: 2026-06-10
     related: [2026-04-16-process-lifecycle-design.md]
+  - name: 2026-06-21-generic-fleet-cadenza-coordination.md
+    purpose: "Generic fleet cadenza coordination — shared/active seeding, injected coordination context, terminal task/status validation, UTC timestamps, owner-scoped placeholder IDs, CLI bash rendering, and inspect artifact path rules for generated generic fleets."
+    status: non-canonical-candidate
+    added: 2026-06-21
+    related: [2026-04-09-generic-agent-score-design.md, 2026-04-13-composition-compiler-design.md, 2026-06-21-marianne-broad-workstream-audit.md]
+  - name: 2026-06-21-marianne-broad-workstream-audit.md
+    purpose: "Broad workstream audit — disk-backed 2026-06-21 proof map for dashboard, compiler, A2A/MCP, interactive, and validation-gap closure state, including residual live-proof and non-canonical-cadenza warnings."
+    status: audit
+    added: 2026-06-21
+    related: [validation-gaps-addendum.md, 2026-06-21-generic-fleet-cadenza-coordination.md]

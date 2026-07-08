@@ -4,6 +4,7 @@ Handles building sheet prompts from templates and generating
 auto-completion prompts for partial sheet recovery.
 """
 
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -728,6 +729,37 @@ class PromptBuilder:
             display_cmd = command[:60] + "..." if len(command) > 60 else command
             lines.append(f"   - Command must succeed: `{display_cmd}`")
 
+        elif rule.type == "path_in_scope":
+            scope = self._expand_template(
+                rule.path_scope or "{workspace}", template_context
+            )
+            lines.append(f"   - Path must stay in scope: `{expanded_path}`")
+            lines.append(f"   - Allowed scope: `{scope}`")
+
+        elif rule.type == "field_match":
+            lines.append(f"   - File: `{expanded_path}`")
+            lines.append(f"   - Field: `{rule.field_path}`")
+            if rule.source_path:
+                source_path = self._expand_template(
+                    rule.source_path, template_context
+                )
+                source_field = rule.source_field_path or rule.field_path
+                lines.append(f"   - Must match: `{source_path}:{source_field}`")
+            else:
+                try:
+                    expected_value = json.dumps(rule.expected_value, sort_keys=True)
+                except TypeError:
+                    expected_value = str(rule.expected_value)
+                lines.append(f"   - Must equal: `{expected_value}`")
+
+        elif rule.type == "file_sha256":
+            lines.append(f"   - File: `{expanded_path}`")
+            lines.append(f"   - SHA-256 must equal: `{rule.sha256}`")
+
+        elif rule.type == "csv_unique_key":
+            lines.append(f"   - CSV file: `{expanded_path}`")
+            lines.append(f"   - Unique key column: `{rule.key_field}`")
+
         lines.append("")
 
     def _expand_template(self, value: str, context: dict[str, Any]) -> str:
@@ -946,6 +978,15 @@ Focus on completing the missing items. Do not start over from scratch."""
                 lines.append(f"  - [VERIFIED] {desc}")
                 if expanded_path:
                     lines.append(f"    File: {expanded_path}")
+            elif rule.type in (
+                "path_in_scope",
+                "field_match",
+                "file_sha256",
+                "csv_unique_key",
+            ):
+                lines.append(f"  - [VERIFIED] {desc}")
+                if expanded_path:
+                    lines.append(f"    Detail: {expanded_path}")
 
         return "\n".join(lines)
 

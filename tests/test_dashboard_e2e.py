@@ -5,6 +5,7 @@ The dashboard no longer spawns subprocesses — every operation routes through
 the conductor via DaemonClient IPC.
 """
 
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -36,7 +37,9 @@ def mock_daemon_client():
         return_value=JobResponse(job_id="test-job-id", status="accepted"),
     )
     client.pause_job = AsyncMock(return_value={"paused": True})
-    client.resume_job = AsyncMock(return_value={"resumed": True})
+    client.resume_job = AsyncMock(
+        return_value={"job_id": "test-job-id", "status": "accepted"},
+    )
     client.cancel_job = AsyncMock(return_value={"cancelled": True})
     client.clear_jobs = AsyncMock(return_value={"deleted": 1})
     client.get_job_status = AsyncMock(return_value={})
@@ -107,7 +110,10 @@ class TestJobLifecycleE2E:
             status="accepted",
         )
         mock_daemon_client.pause_job.return_value = {"paused": True}
-        mock_daemon_client.resume_job.return_value = {"resumed": True}
+        mock_daemon_client.resume_job.return_value = {
+            "job_id": "lifecycle-job-id",
+            "status": "accepted",
+        }
         mock_daemon_client.cancel_job.return_value = {"cancelled": True}
         mock_daemon_client.clear_jobs.return_value = {"deleted": 1}
 
@@ -135,21 +141,21 @@ class TestJobLifecycleE2E:
         pause_data = pause_response.json()
         assert pause_data["success"] is True
         assert pause_data["job_id"] == job_id
-        assert pause_data["status"] == "paused"
+        assert pause_data["status"] == "pause_requested"
         mock_daemon_client.pause_job.assert_called_once_with(job_id, "")
 
         resume_response = client.post(f"/api/jobs/{job_id}/resume")
         assert resume_response.status_code == 200
         resume_data = resume_response.json()
         assert resume_data["success"] is True
-        assert resume_data["status"] == "running"
+        assert resume_data["status"] == "resume_requested"
         mock_daemon_client.resume_job.assert_called_once_with(job_id, "")
 
         cancel_response = client.post(f"/api/jobs/{job_id}/cancel")
         assert cancel_response.status_code == 200
         cancel_data = cancel_response.json()
         assert cancel_data["success"] is True
-        assert cancel_data["status"] == "cancelled"
+        assert cancel_data["status"] == "cancel_requested"
         mock_daemon_client.cancel_job.assert_called_once_with(job_id, "")
 
         delete_response = client.delete(f"/api/jobs/{job_id}")
@@ -244,6 +250,7 @@ class TestSheetDetailsE2E:
     ):
         job_id = "detailed-job"
         sheet_num = 1
+        dispatch_blocked_at = datetime(2026, 7, 7, 12, 30, tzinfo=UTC)
 
         sheet_state = SheetState(
             sheet_num=sheet_num,
@@ -254,6 +261,12 @@ class TestSheetDetailsE2E:
             exit_code=0,
             error_message=None,
             error_category=None,
+            dispatch_blocked_reason="model_concurrency",
+            dispatch_blocked_at=dispatch_blocked_at,
+            dispatch_blocked_details={
+                "model_key": "openai:gpt-5",
+                "model_limit": 4,
+            },
             validation_passed=True,
             validation_details=[
                 {"rule_type": "file_exists", "passed": True, "description": "Output file created"},
@@ -311,6 +324,9 @@ class TestSheetDetailsE2E:
         assert data["status"] == SheetStatus.COMPLETED.value
         assert data["attempt_count"] == 2
         assert data["exit_code"] == 0
+        assert data["dispatch_blocked_reason"] == "model_concurrency"
+        assert data["dispatch_blocked_at"] == dispatch_blocked_at.isoformat()
+        assert data["dispatch_blocked_details"]["model_limit"] == 4
         assert data["validation_passed"] is True
         assert len(data["validation_details"]) == 2
         assert data["execution_duration_seconds"] == 45.2

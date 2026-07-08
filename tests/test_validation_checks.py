@@ -542,6 +542,16 @@ class TestValidationTypeCheck:
               - type: content_contains
                 path: /some/file
                 pattern: "required text"
+              - type: field_match
+                path: /some/report.json
+                field_path: summary.total
+                expected_value: 3
+              - type: file_sha256
+                path: /some/risk.yaml
+                sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+              - type: csv_unique_key
+                path: /some/benchmarks.csv
+                key_field: date
         """).strip()
 
         config_path = tmp_path / "test.yaml"
@@ -552,6 +562,31 @@ class TestValidationTypeCheck:
         issues = check.check(config, config_path, yaml_content)
 
         assert len(issues) == 0
+
+    def test_field_match_explicit_null_literal_passes(self, tmp_path: Path) -> None:
+        """V008 treats expected_value: null as a supplied comparison value."""
+        yaml_content = dedent("""
+            name: test-job
+            sheet:
+              size: 10
+              total_items: 100
+            prompt:
+              template: "Test"
+            validations:
+              - type: field_match
+                path: /some/report.json
+                field_path: summary.error
+                expected_value: null
+        """).strip()
+
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+        config = JobConfig.from_yaml(config_path)
+
+        check = ValidationTypeCheck()
+        issues = check.check(config, config_path, yaml_content)
+
+        assert issues == []
 
     def test_catches_missing_path(self, tmp_path: Path) -> None:
         """Error when file_exists validation missing path — caught by model validator."""
@@ -573,6 +608,28 @@ class TestValidationTypeCheck:
         config_path.write_text(yaml_content)
 
         with pytest.raises(ValidationError, match="requires 'path' field"):
+            JobConfig.from_yaml(config_path)
+
+    def test_new_validation_types_require_payload_fields(self, tmp_path: Path) -> None:
+        """New validation types fail schema validation when payload fields are absent."""
+        from pydantic import ValidationError
+
+        yaml_content = dedent("""
+            name: test-job
+            sheet:
+              size: 10
+              total_items: 100
+            prompt:
+              template: "Test"
+            validations:
+              - type: csv_unique_key
+                path: /some/file.csv
+        """).strip()
+
+        config_path = tmp_path / "test.yaml"
+        config_path.write_text(yaml_content)
+
+        with pytest.raises(ValidationError, match="requires 'key_field' field"):
             JobConfig.from_yaml(config_path)
 
 

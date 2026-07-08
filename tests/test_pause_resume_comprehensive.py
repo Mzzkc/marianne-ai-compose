@@ -17,9 +17,9 @@ from marianne.dashboard.services.job_control import JobActionResult, JobControlS
 
 def _make_daemon_client() -> MagicMock:
     mock = MagicMock()
-    mock.pause_job = AsyncMock(return_value={"status": "paused"})
-    mock.resume_job = AsyncMock(return_value={"status": "running"})
-    mock.cancel_job = AsyncMock(return_value={"status": "cancelled"})
+    mock.pause_job = AsyncMock(return_value={"paused": True})
+    mock.resume_job = AsyncMock(return_value={"status": "accepted"})
+    mock.cancel_job = AsyncMock(return_value={"cancelled": True})
     return mock
 
 
@@ -48,7 +48,7 @@ class TestPauseJob:
         mock.pause_job.assert_awaited_once_with("job-123", "")
         assert result.success
         assert result.job_id == "job-123"
-        assert result.status == "paused"
+        assert result.status == "pause_requested"
         assert "pause" in result.message.lower()
 
     async def test_pause_conductor_not_running(self):
@@ -80,7 +80,7 @@ class TestResumeJob:
         mock.resume_job.assert_awaited_once_with("job-456", "")
         assert result.success
         assert result.job_id == "job-456"
-        assert result.status == "running"
+        assert result.status == "resume_requested"
         assert "resume" in result.message.lower()
 
     async def test_resume_conductor_not_running(self):
@@ -112,7 +112,7 @@ class TestCancelJob:
         mock.cancel_job.assert_awaited_once_with("job-789", "")
         assert result.success
         assert result.job_id == "job-789"
-        assert result.status == "cancelled"
+        assert result.status == "cancel_requested"
         assert "cancel" in result.message.lower()
 
     async def test_cancel_conductor_not_running(self):
@@ -133,11 +133,11 @@ class TestPauseResumeCancelIntegration:
 
         pause_result = await service.pause_job("job-cycle")
         assert pause_result.success
-        assert pause_result.status == "paused"
+        assert pause_result.status == "pause_requested"
 
         resume_result = await service.resume_job("job-cycle")
         assert resume_result.success
-        assert resume_result.status == "running"
+        assert resume_result.status == "resume_requested"
 
         mock.pause_job.assert_awaited_once_with("job-cycle", "")
         mock.resume_job.assert_awaited_once_with("job-cycle", "")
@@ -151,7 +151,7 @@ class TestPauseResumeCancelIntegration:
 
         cancel_result = await service.cancel_job("job-pc")
         assert cancel_result.success
-        assert cancel_result.status == "cancelled"
+        assert cancel_result.status == "cancel_requested"
 
     async def test_concurrent_pause_requests(self):
         mock = _make_daemon_client()

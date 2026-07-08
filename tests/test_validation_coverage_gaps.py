@@ -644,9 +644,22 @@ class TestCheckCondition:
         """Unrecognised condition format is treated as unconditional."""
         assert _check_single("this is not a valid condition", {"x": 1}) is True
 
-    def test_unknown_variable_returns_true(self) -> None:
-        """Variable not in context returns True (unconditional)."""
-        assert _check_single("unknown_var >= 5", {"sheet_num": 3}) is True
+    def test_unknown_variable_returns_false(self) -> None:
+        """Parsed comparison variables missing from context fail closed."""
+        assert _check_single("unknown_var >= 5", {"sheet_num": 3}) is False
+
+    def test_non_integer_variable_returns_false(self) -> None:
+        """Parsed comparison variables with non-integer values fail closed."""
+        assert _check_single("stage >= 2", {"stage": "two"}) is False
+
+    def test_numeric_string_variable(self) -> None:
+        """Numeric string condition variables match runtime behavior."""
+        assert _check_single("stage == 2", {"stage": "2"}) is True
+
+    def test_negative_rhs_variable(self) -> None:
+        """Negative RHS integers match runtime and prompt behavior."""
+        assert _check_single("stage > -1", {"stage": -1}) is False
+        assert _check_single("stage == -1", {"stage": "-1"}) is True
 
     def test_all_operators(self) -> None:
         ctx = {"x": 5}
@@ -998,6 +1011,63 @@ class TestReportRenderingJson:
         assert v1["condition"] == "sheet_num >= 2"
         assert v1["applicable"] is False
         assert v1["pattern"] == "SUCCESS"
+
+    def test_structured_validation_metadata_fields(self) -> None:
+        """JSON preview includes metadata for deterministic structured checks."""
+        preview = RenderingPreview(
+            sheets=[
+                SheetPreview(
+                    sheet_num=1,
+                    item_range=(1, 5),
+                    rendered_prompt="text",
+                    prompt_snippet="text",
+                    expanded_validations=[
+                        ExpandedValidation(
+                            index=0,
+                            type="field_match",
+                            description="Trade count",
+                            raw_path="/ws/report.json",
+                            expanded_path="/ws/report.json",
+                            pattern=None,
+                            condition=None,
+                            applicable=True,
+                            field_path="summary.trade_count",
+                            expected_value=4,
+                            source_path="/ws/truth.json",
+                            source_field_path="facts.trades",
+                        ),
+                        ExpandedValidation(
+                            index=1,
+                            type="csv_unique_key",
+                            description=None,
+                            raw_path="/ws/benchmarks.csv",
+                            expanded_path="/ws/benchmarks.csv",
+                            pattern=None,
+                            condition=None,
+                            applicable=True,
+                            key_field="date",
+                        ),
+                    ],
+                    stage=None,
+                    instance=None,
+                    fan_count=None,
+                    render_error=None,
+                )
+            ],
+            total_sheets=1,
+            has_fan_out=False,
+            has_dependencies=False,
+        )
+        reporter = ValidationReporter()
+
+        result = reporter.report_rendering_json(preview)
+
+        validations = result["sheets"][0]["validations"]
+        assert validations[0]["field_path"] == "summary.trade_count"
+        assert validations[0]["expected_value"] == 4
+        assert validations[0]["source_path"] == "/ws/truth.json"
+        assert validations[0]["source_field_path"] == "facts.trades"
+        assert validations[1]["key_field"] == "date"
 
     def test_fan_out_fields(self) -> None:
         preview = _make_rendering_preview(num_sheets=1, has_fan_out=True)

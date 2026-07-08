@@ -283,3 +283,56 @@ class TestSystemRoutes:
     ) -> None:
         resp = app_with_system_view.get("/api/system/learning?limit=101")
         assert resp.status_code == 422
+
+    def test_isolated_app_rate_limits_returns_unavailable_envelope(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        backend = JsonStateBackend(tmp_path / "isolated-state")
+        app = create_app(state_backend=backend)
+        client = TestClient(app)
+
+        resp = client.get("/api/system/rate-limits")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["connected"] is False
+        assert data["state"] == "unavailable"
+        assert data["backends"] == {}
+        assert data["active_limits"] == 0
+        assert not hasattr(app.state, "daemon_client")
+        assert not hasattr(app.state, "event_bridge")
+        assert not hasattr(app.state, "system_view")
+
+    def test_isolated_app_pressure_returns_unavailable_envelope(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        backend = JsonStateBackend(tmp_path / "isolated-pressure-state")
+        app = create_app(state_backend=backend)
+        client = TestClient(app)
+
+        resp = client.get("/api/system/pressure")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["connected"] is False
+        assert data["state"] == "unavailable"
+        assert data["level"] == "unavailable"
+        assert data["color"] == "gray"
+
+    def test_isolated_app_learning_returns_unavailable_envelope(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        backend = JsonStateBackend(tmp_path / "isolated-learning-state")
+        app = create_app(state_backend=backend)
+        client = TestClient(app)
+
+        resp = client.get("/api/system/learning")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["connected"] is False
+        assert data["state"] == "unavailable"
+        assert data["patterns"] == []

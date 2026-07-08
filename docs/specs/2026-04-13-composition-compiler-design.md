@@ -878,6 +878,14 @@ Agents actively curate the shared directories. When an agent produces something 
 
 **Token-efficient shared context**: Agents get a glob listing of all shared directories via prelude (lightweight map — what exists, not what it contains). One curated `shared/active/` directory is loaded as cadenza content — agents manage its contents together, moving relevant artifacts in and archiving stale ones. The coordination technique teaches agents how to use this space. A size signal fires if `active/` exceeds the configured token threshold.
 
+**Generated cadenza validation contract:** The generic fleet preset's current
+coordination checks are specified in
+[`2026-06-21-generic-fleet-cadenza-coordination.md`](2026-06-21-generic-fleet-cadenza-coordination.md).
+Generated cadenza completion validation is not only prompt guidance: it checks
+terminal task-board and status rows, UTC status timestamps, blocked-marker
+fallbacks for shared-file conflicts, owner-scoped cadenza IDs, and the actual
+inspect artifact path emitted by the compiler.
+
 ---
 
 ## 10. Fleet Management

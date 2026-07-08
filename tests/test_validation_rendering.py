@@ -374,6 +374,43 @@ class TestMultipleValidationsExpanded:
         assert ev2.type == "command_succeeds"
         assert ev2.expanded_path is None  # command_succeeds has no path
 
+    def test_structured_validation_metadata_expanded(self, tmp_path: Path) -> None:
+        """Preview exposes metadata for structured validation types."""
+        yaml_str = dedent("""\
+            name: structured-preview-test
+            workspace: {workspace}
+            sheet:
+              size: 1
+              total_items: 1
+            prompt:
+              template: "Work"
+            validations:
+              - type: field_match
+                path: "{{workspace}}/report.json"
+                field_path: summary.trade_count
+                source_path: "{{workspace}}/truth.json"
+                source_field_path: facts.trades
+                description: "Trade count matches"
+              - type: file_sha256
+                path: "{{workspace}}/risk.yaml"
+                sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+              - type: csv_unique_key
+                path: "{{workspace}}/benchmarks.csv"
+                key_field: date
+        """).format(workspace=tmp_path / "ws")
+
+        config_path = tmp_path / "config.yaml"
+        config = _make_config(yaml_str, config_path)
+
+        preview = generate_preview(config, config_path)
+        validations = preview.sheets[0].expanded_validations
+
+        assert validations[0].field_path == "summary.trade_count"
+        assert validations[0].source_path == str(tmp_path / "ws" / "truth.json")
+        assert validations[0].source_field_path == "facts.trades"
+        assert validations[1].sha256 == "0" * 64
+        assert validations[2].key_field == "date"
+
 
 class TestHasFanOutFlag:
     """Test has_fan_out flag on RenderingPreview."""

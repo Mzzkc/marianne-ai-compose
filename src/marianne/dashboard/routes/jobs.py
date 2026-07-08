@@ -10,9 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from marianne.core.constants import SHEET_NUM_KEY
-from marianne.daemon.detect import _resolve_socket_path
 from marianne.daemon.exceptions import DaemonNotRunningError
-from marianne.daemon.ipc.client import DaemonClient
 from marianne.dashboard.app import get_daemon_client, get_state_backend
 from marianne.dashboard.services.job_control import (
     JobActionResult,
@@ -265,6 +263,13 @@ async def get_sheet_details(
         "exit_code": sheet_state.exit_code,
         "error_message": sheet_state.error_message,
         "error_category": sheet_state.error_category,
+        "dispatch_blocked_reason": sheet_state.dispatch_blocked_reason,
+        "dispatch_blocked_at": (
+            sheet_state.dispatch_blocked_at.isoformat()
+            if sheet_state.dispatch_blocked_at
+            else None
+        ),
+        "dispatch_blocked_details": sheet_state.dispatch_blocked_details,
         "validation_passed": sheet_state.validation_passed,
         "validation_details": sheet_state.validation_details or [],
         "execution_duration_seconds": sheet_state.execution_duration_seconds,
@@ -305,7 +310,14 @@ async def get_sheet_details(
 @router.get("/daemon/status", tags=["Daemon"])
 async def daemon_status() -> dict[str, Any]:
     """Check if the Marianne conductor is running and get its status."""
-    client = DaemonClient(_resolve_socket_path(None))
+    try:
+        client = get_daemon_client()
+    except RuntimeError:
+        return {
+            "connected": False,
+            "message": "Conductor unavailable for isolated dashboard",
+        }
+
     try:
         status = await asyncio.wait_for(client.status(), timeout=2.0)
         return {

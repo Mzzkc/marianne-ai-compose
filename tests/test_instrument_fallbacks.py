@@ -307,6 +307,34 @@ class TestBuildSheetsFallbackResolution:
         # Sheet 3 is movement 3 — inherits score-level
         assert sheets[2].instrument_fallbacks == ["ollama"]
 
+    def test_movement_level_empty_list_means_no_fallbacks(self) -> None:
+        """Movement-level empty list explicitly disables score-level fallbacks."""
+        config = JobConfig.from_yaml_string(
+            dedent("""
+            name: movement-disable-fallbacks
+            instrument: claude-code
+            instrument_fallbacks:
+              - ollama
+            movements:
+              2:
+                name: Shell
+                instrument: cli
+                instrument_fallbacks: []
+            sheet:
+              size: 1
+              total_items: 3
+            prompt:
+              template: "Work"
+        """).strip()
+        )
+        sheets = build_sheets(config)
+        # Sheet 1 is movement 1 — inherits score-level
+        assert sheets[0].instrument_fallbacks == ["ollama"]
+        # Sheet 2 is movement 2 — explicit empty list replaces score-level
+        assert sheets[1].instrument_fallbacks == []
+        # Sheet 3 is movement 3 — inherits score-level
+        assert sheets[2].instrument_fallbacks == ["ollama"]
+
     def test_per_sheet_overrides_everything(self) -> None:
         """Per-sheet fallbacks replace both score and movement level."""
         config = JobConfig.from_yaml_string(

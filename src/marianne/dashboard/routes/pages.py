@@ -59,9 +59,18 @@ async def jobs_list_partial(
         jobs = filtered_jobs[:limit]
 
         # Create job summaries for template
-        from marianne.dashboard.routes import JobSummary
+        from marianne.dashboard.routes import JobSummary, _backend_dashboard_metadata
 
-        job_summaries = [JobSummary.from_checkpoint(job) for job in jobs]
+        job_summaries = []
+        for job in jobs:
+            metadata = _backend_dashboard_metadata(backend, job.job_id)
+            job_summaries.append(
+                JobSummary.from_checkpoint(
+                    job,
+                    data_source=str(metadata.get("data_source") or "checkpoint"),
+                    is_partial=bool(metadata.get("is_partial", False)),
+                )
+            )
 
         return templates.TemplateResponse(request,
             "partials/jobs_list_content.html",

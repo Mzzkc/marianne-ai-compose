@@ -63,7 +63,12 @@ class TestJobRoutesExtended:
             coro.close()
             raise TimeoutError
 
-        with patch("marianne.dashboard.routes.jobs.asyncio.wait_for") as mock_wait_for:
+        mock_daemon = AsyncMock(spec=DaemonClient)
+        mock_daemon.status = AsyncMock()
+        with (
+            patch("marianne.dashboard.app._daemon_client", mock_daemon),
+            patch("marianne.dashboard.routes.jobs.asyncio.wait_for") as mock_wait_for,
+        ):
             mock_wait_for.side_effect = _timeout
             response = client.get("/api/jobs/daemon/status")
 

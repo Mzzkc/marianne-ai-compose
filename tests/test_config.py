@@ -847,12 +847,89 @@ class TestJobConfigEdgeCases:
                 "validations": [
                     {"type": "file_exists", "path": "{workspace}/out.txt", "description": "check"},
                     {"type": "command_succeeds", "command": "echo ok", "description": "run"},
+                    {
+                        "type": "field_match",
+                        "path": "{workspace}/report.json",
+                        "field_path": "summary.total",
+                        "expected_value": 3,
+                    },
+                    {
+                        "type": "file_sha256",
+                        "path": "{workspace}/risk.yaml",
+                        "sha256": "0" * 64,
+                    },
+                    {
+                        "type": "csv_unique_key",
+                        "path": "{workspace}/benchmarks.csv",
+                        "key_field": "date",
+                    },
                 ],
             }
         )
-        assert len(config.validations) == 2
+        assert len(config.validations) == 5
         assert config.validations[0].type == "file_exists"
         assert config.validations[1].type == "command_succeeds"
+        assert config.validations[2].type == "field_match"
+        assert config.validations[3].type == "file_sha256"
+        assert config.validations[4].type == "csv_unique_key"
+
+    def test_field_match_requires_comparison_value(self):
+        """field_match requires a literal or source comparison."""
+        with pytest.raises(ValidationError, match="expected_value"):
+            JobConfig.model_validate(
+                {
+                    "name": "test",
+                    "sheet": {"size": 5, "total_items": 10},
+                    "prompt": {"template": "x"},
+                    "validations": [
+                        {
+                            "type": "field_match",
+                            "path": "{workspace}/report.json",
+                            "field_path": "summary.total",
+                        },
+                    ],
+                }
+            )
+
+    def test_field_match_allows_explicit_null_expected_value(self):
+        """field_match treats expected_value: null as a supplied literal."""
+        config = JobConfig.model_validate(
+            {
+                "name": "test",
+                "sheet": {"size": 5, "total_items": 10},
+                "prompt": {"template": "x"},
+                "validations": [
+                    {
+                        "type": "field_match",
+                        "path": "{workspace}/report.json",
+                        "field_path": "summary.error",
+                        "expected_value": None,
+                    },
+                ],
+            }
+        )
+
+        rule = config.validations[0]
+        assert rule.expected_value is None
+        assert rule.has_expected_value_literal is True
+
+    def test_file_sha256_requires_hex_digest(self):
+        """file_sha256 rejects malformed digests."""
+        with pytest.raises(ValidationError, match="64-character"):
+            JobConfig.model_validate(
+                {
+                    "name": "test",
+                    "sheet": {"size": 5, "total_items": 10},
+                    "prompt": {"template": "x"},
+                    "validations": [
+                        {
+                            "type": "file_sha256",
+                            "path": "{workspace}/risk.yaml",
+                            "sha256": "not-a-digest",
+                        },
+                    ],
+                }
+            )
 
     def test_model_dump_roundtrip(self):
         """Config should survive model_dump -> model_validate roundtrip."""

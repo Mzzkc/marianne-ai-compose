@@ -224,14 +224,33 @@ class TestPauseJob:
         job_control_service: JobControlService,
         mock_daemon_client: MagicMock,
     ) -> None:
+        mock_daemon_client.pause_job.return_value = {"paused": True}
+
         result = await job_control_service.pause_job("job-123")
 
         assert isinstance(result, JobActionResult)
         assert result.success is True
         assert result.job_id == "job-123"
-        assert result.status == "paused"
+        assert result.status == "pause_requested"
         assert result.via_daemon is True
         mock_daemon_client.pause_job.assert_called_once_with("job-123", "")
+
+    @pytest.mark.asyncio
+    async def test_pause_job_rejected_response_is_not_success(
+        self,
+        job_control_service: JobControlService,
+        mock_daemon_client: MagicMock,
+    ) -> None:
+        mock_daemon_client.pause_job.return_value = {
+            "paused": False,
+            "error": "Score not found: job-123",
+        }
+
+        result = await job_control_service.pause_job("job-123")
+
+        assert result.success is False
+        assert result.status == "pause_rejected"
+        assert result.message == "Score not found: job-123"
 
     @pytest.mark.asyncio
     async def test_pause_job_conductor_not_running(
@@ -252,13 +271,37 @@ class TestResumeJob:
         job_control_service: JobControlService,
         mock_daemon_client: MagicMock,
     ) -> None:
+        mock_daemon_client.resume_job.return_value = {
+            "job_id": "job-123",
+            "status": "accepted",
+            "message": None,
+        }
+
         result = await job_control_service.resume_job("job-123")
 
         assert result.success is True
         assert result.job_id == "job-123"
-        assert result.status == "running"
+        assert result.status == "resume_requested"
         assert result.via_daemon is True
         mock_daemon_client.resume_job.assert_called_once_with("job-123", "")
+
+    @pytest.mark.asyncio
+    async def test_resume_job_rejected_response_is_not_success(
+        self,
+        job_control_service: JobControlService,
+        mock_daemon_client: MagicMock,
+    ) -> None:
+        mock_daemon_client.resume_job.return_value = {
+            "job_id": "job-123",
+            "status": "rejected",
+            "message": "Job is not paused",
+        }
+
+        result = await job_control_service.resume_job("job-123")
+
+        assert result.success is False
+        assert result.status == "resume_rejected"
+        assert result.message == "Job is not paused"
 
     @pytest.mark.asyncio
     async def test_resume_job_conductor_not_running(
@@ -279,13 +322,29 @@ class TestCancelJob:
         job_control_service: JobControlService,
         mock_daemon_client: MagicMock,
     ) -> None:
+        mock_daemon_client.cancel_job.return_value = {"cancelled": True}
+
         result = await job_control_service.cancel_job("job-123")
 
         assert result.success is True
         assert result.job_id == "job-123"
-        assert result.status == "cancelled"
+        assert result.status == "cancel_requested"
         assert result.via_daemon is True
         mock_daemon_client.cancel_job.assert_called_once_with("job-123", "")
+
+    @pytest.mark.asyncio
+    async def test_cancel_job_rejected_response_is_not_success(
+        self,
+        job_control_service: JobControlService,
+        mock_daemon_client: MagicMock,
+    ) -> None:
+        mock_daemon_client.cancel_job.return_value = {"cancelled": False}
+
+        result = await job_control_service.cancel_job("job-123")
+
+        assert result.success is False
+        assert result.status == "cancel_rejected"
+        assert result.message == "Cancel request was rejected"
 
     @pytest.mark.asyncio
     async def test_cancel_job_conductor_not_running(

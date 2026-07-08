@@ -61,6 +61,20 @@ def _job_status_event(job_id: str, state: Any) -> SSEEvent:
     )
 
 
+def _job_status_signature(state: Any) -> tuple[Any, ...]:
+    """Fields that must trigger a visible job-status update."""
+    completed, total = state.get_progress()
+    return (
+        state.status.value,
+        state.get_progress_percent(),
+        completed,
+        total,
+        state.current_sheet,
+        state.error_message,
+        state.updated_at,
+    )
+
+
 def _get_event_bridge_safe() -> DaemonEventBridge | None:
     """Get the event bridge if available, without raising."""
     try:
@@ -457,15 +471,14 @@ async def _job_status_via_bridge(
     Sends an initial snapshot, then yields SSE events as they arrive
     from ``daemon.monitor.stream``.
     """
-    last_status = initial_state.status.value
-    last_progress = initial_state.get_progress_percent()
+    last_signature = _job_status_signature(initial_state)
 
     yield _job_status_event(job_id, initial_state).format()
 
     if initial_state.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
         final_event = SSEEvent(
             event="job_finished",
-            data=json.dumps({"job_id": job_id, "final_status": last_status}),
+            data=json.dumps({"job_id": job_id, "final_status": initial_state.status.value}),
             id=f"finished-{job_id}-{datetime.now().timestamp()}",
         )
         yield final_event.format()
@@ -493,37 +506,18 @@ async def _job_status_via_bridge(
             ).format()
             break
 
-        status = current_state.status.value
-        progress = current_state.get_progress_percent()
+        current_signature = _job_status_signature(current_state)
 
-        if status != last_status or progress != last_progress:
-            completed, total = current_state.get_progress()
-            status_event = SSEEvent(
-                event="job_status",
-                data=json.dumps(
-                    {
-                        "job_id": job_id,
-                        "status": status,
-                        "progress_percent": progress,
-                        "completed_sheets": completed,
-                        "total_sheets": total,
-                        "current_sheet": current_state.current_sheet,
-                        "error_message": current_state.error_message,
-                        "updated_at": current_state.updated_at.isoformat()
-                        if current_state.updated_at
-                        else None,
-                    }
-                ),
-                id=f"status-{job_id}-{datetime.now().timestamp()}",
-            )
-            yield status_event.format()
-            last_status = status
-            last_progress = progress
+        if current_signature != last_signature:
+            yield _job_status_event(job_id, current_state).format()
+            last_signature = current_signature
 
         if current_state.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
             final_event = SSEEvent(
                 event="job_finished",
-                data=json.dumps({"job_id": job_id, "final_status": status}),
+                data=json.dumps(
+                    {"job_id": job_id, "final_status": current_state.status.value}
+                ),
                 id=f"finished-{job_id}-{datetime.now().timestamp()}",
             )
             yield final_event.format()

@@ -34,22 +34,22 @@
         </div>
     </div>
 
-    <!-- Active jobs panel (auto-refresh every 5s) -->
+    <!-- Active work panel (auto-refresh every 5s) -->
     <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
         <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
-                Active Jobs
+                Active Work
             </h2>
             <a href="/jobs" class="text-xs text-marianne-600 dark:text-marianne-400 hover:underline">View all</a>
         </div>
         <div id="active-jobs-container"
-             hx-get="/jobs/list?status=running"
+             hx-get="/jobs/list?limit=8"
              hx-trigger="load, every 5s"
              hx-swap="innerHTML">
-            <div class="p-4 text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading active jobs...</div>
+            <div class="p-4 text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading active work...</div>
         </div>
     </div>
 

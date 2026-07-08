@@ -39,6 +39,14 @@ def set_system_view(view: DaemonSystemView | None) -> None:
     _system_view = view
 
 
+def _system_unavailable(resource: str) -> dict[str, Any]:
+    return {
+        "connected": False,
+        "state": "unavailable",
+        "message": f"{resource} unavailable: dashboard is not connected to the conductor",
+    }
+
+
 # ------------------------------------------------------------------
 # Endpoints
 # ------------------------------------------------------------------
@@ -47,18 +55,38 @@ def set_system_view(view: DaemonSystemView | None) -> None:
 @router.get("/rate-limits")
 async def system_rate_limits() -> dict[str, Any]:
     """Current rate limit state per backend."""
-    return await get_system_view().rate_limit_state()
+    try:
+        return await get_system_view().rate_limit_state()
+    except RuntimeError:
+        return {
+            **_system_unavailable("Rate limit state"),
+            "backends": {},
+            "active_limits": 0,
+        }
 
 
 @router.get("/pressure")
 async def system_pressure() -> dict[str, Any]:
     """Backpressure level from latest system snapshot."""
-    return await get_system_view().pressure_level()
+    try:
+        return await get_system_view().pressure_level()
+    except RuntimeError:
+        return {
+            **_system_unavailable("System pressure"),
+            "level": "unavailable",
+            "color": "gray",
+        }
 
 
 @router.get("/learning")
 async def system_learning(
     limit: int = Query(default=20, ge=1, le=100),
-) -> list[dict[str, Any]]:
+) -> list[dict[str, Any]] | dict[str, Any]:
     """Recent learning insights from the daemon."""
-    return await get_system_view().learning_patterns(limit=limit)
+    try:
+        return await get_system_view().learning_patterns(limit=limit)
+    except RuntimeError:
+        return {
+            **_system_unavailable("Learning patterns"),
+            "patterns": [],
+        }

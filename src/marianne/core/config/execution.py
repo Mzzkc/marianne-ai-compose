@@ -7,7 +7,7 @@ cost limits, and parallel execution.
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -518,6 +518,9 @@ class ValidationRule(BaseModel):
         "content_regex",
         "command_succeeds",
         "path_in_scope",
+        "field_match",
+        "file_sha256",
+        "csv_unique_key",
     ]
     path: str | None = Field(
         default=None, description="File path (supports {sheet_num}, {workspace})"
@@ -539,6 +542,39 @@ class ValidationRule(BaseModel):
             "{workspace} and other validation context placeholders; "
             "defaults to {workspace}."
         ),
+    )
+    field_path: str | None = Field(
+        default=None,
+        description=(
+            "Dot/bracket path for field_match validations, for example "
+            "'summary.drawdown' or 'positions[0].symbol'."
+        ),
+    )
+    expected_value: Any | None = Field(
+        default=None,
+        description=(
+            "Literal expected value for field_match validations. If omitted, "
+            "source_path/source_field_path must identify the comparison value."
+        ),
+    )
+    source_path: str | None = Field(
+        default=None,
+        description="Reference file path for field_match source comparisons.",
+    )
+    source_field_path: str | None = Field(
+        default=None,
+        description=(
+            "Reference field path for field_match source comparisons. "
+            "Defaults to field_path when source_path is set."
+        ),
+    )
+    sha256: str | None = Field(
+        default=None,
+        description="Expected lowercase or uppercase SHA-256 hex digest for file_sha256.",
+    )
+    key_field: str | None = Field(
+        default=None,
+        description="CSV column that must be unique for csv_unique_key validations.",
     )
     stage: int = Field(
         default=1,
@@ -590,6 +626,11 @@ class ValidationRule(BaseModel):
             self.condition = f"sheet_num == {self.sheet}"
         return self
 
+    @property
+    def has_expected_value_literal(self) -> bool:
+        """Return true when expected_value was supplied, including explicit null."""
+        return "expected_value" in self.model_fields_set
+
     @model_validator(mode="after")
     def _check_type_specific_fields(self) -> ValidationRule:
         """Validate that type-specific required fields are present."""
@@ -599,6 +640,9 @@ class ValidationRule(BaseModel):
             "content_contains",
             "content_regex",
             "path_in_scope",
+            "field_match",
+            "file_sha256",
+            "csv_unique_key",
         ):
             if self.path is None:
                 raise ValueError(
@@ -613,6 +657,33 @@ class ValidationRule(BaseModel):
             if self.command is None:
                 raise ValueError(
                     "Validation type 'command_succeeds' requires 'command' field"
+                )
+        if self.type == "field_match":
+            if self.field_path is None:
+                raise ValueError(
+                    "Validation type 'field_match' requires 'field_path' field"
+                )
+            has_literal = self.has_expected_value_literal
+            has_source = self.source_path is not None
+            if not has_literal and not has_source:
+                raise ValueError(
+                    "Validation type 'field_match' requires either "
+                    "'expected_value' or 'source_path'"
+                )
+        if self.type == "file_sha256":
+            if self.sha256 is None:
+                raise ValueError(
+                    "Validation type 'file_sha256' requires 'sha256' field"
+                )
+            if not re.fullmatch(r"[0-9a-fA-F]{64}", self.sha256):
+                raise ValueError(
+                    "Validation type 'file_sha256' requires a 64-character "
+                    "SHA-256 hex digest"
+                )
+        if self.type == "csv_unique_key":
+            if self.key_field is None:
+                raise ValueError(
+                    "Validation type 'csv_unique_key' requires 'key_field' field"
                 )
         if self.type == "content_regex" and self.pattern is not None:
             try:

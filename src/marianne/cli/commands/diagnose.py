@@ -122,10 +122,39 @@ class LogFollower:
         except json_module.JSONDecodeError:
             return {"event": line, "_raw": True}
 
+    @staticmethod
+    def _extra_value(entry: dict[str, Any], key: str) -> Any | None:
+        extra = entry.get("extra")
+        if isinstance(extra, dict):
+            return extra.get(key)
+        return None
+
+    @classmethod
+    def _entry_job_id(cls, entry: dict[str, Any]) -> str:
+        job_id = entry.get("job_id") or cls._extra_value(entry, "job_id")
+        return job_id if isinstance(job_id, str) else ""
+
+    @classmethod
+    def _matches_job_id(cls, entry: dict[str, Any], job_id: str) -> bool:
+        if cls._entry_job_id(entry) == job_id:
+            return True
+
+        extra = entry.get("extra")
+        if not isinstance(extra, dict):
+            return False
+
+        sheets = extra.get("sheets")
+        if isinstance(sheets, list):
+            return any(
+                isinstance(sheet, str) and sheet.startswith(f"{job_id}:")
+                for sheet in sheets
+            )
+        return False
+
     def should_include(self, entry: dict[str, Any]) -> bool:
         """Check if a log entry passes the configured filters."""
         if self.job_id:
-            if entry.get("job_id", "") != self.job_id:
+            if not self._matches_job_id(entry, self.job_id):
                 return False
         entry_level = entry.get("level", "INFO").upper()
         entry_level_num = _LEVEL_ORDER.get(entry_level, 1)
@@ -143,8 +172,8 @@ class LogFollower:
         level_str = entry.get("level", "INFO").upper()
         event = entry.get("event", "")
         component = entry.get("component", "")
-        entry_job_id = entry.get("job_id", "")
-        sheet_num = entry.get(SHEET_NUM_KEY)
+        entry_job_id = self._entry_job_id(entry)
+        sheet_num = entry.get(SHEET_NUM_KEY) or self._extra_value(entry, SHEET_NUM_KEY)
 
         level_color = _LEVEL_COLORS.get(level_str, "white")
 
@@ -167,6 +196,16 @@ class LogFollower:
         parts.append(event)
 
         extras = {k: v for k, v in entry.items() if k not in _EXCLUDE_KEYS}
+        extra = extras.get("extra")
+        if isinstance(extra, dict):
+            nested_extra = {
+                k: v for k, v in extra.items()
+                if k not in {"job_id", SHEET_NUM_KEY}
+            }
+            if nested_extra:
+                extras["extra"] = nested_extra
+            else:
+                del extras["extra"]
         if extras:
             extras_str = " ".join(f"{k}={v}" for k, v in extras.items())
             parts.append(f"[dim]{extras_str}[/dim]")
@@ -198,23 +237,34 @@ class LogFollower:
 
     def display(self, num_lines: int | None = None) -> None:
         """Display filtered log entries."""
-        raw_lines = self.read_lines(num_lines)
+        # With a job filter, apply the line limit after filtering. A shared
+        # conductor log can have many interleaved jobs, so tail-before-filter
+        # makes active logs look empty whenever another job wrote last.
+        post_filter_limit = num_lines if self.job_id and num_lines and num_lines > 0 else None
+        read_limit = None if post_filter_limit is not None else num_lines
+        raw_lines = self.read_lines(read_limit)
 
         if not raw_lines:
             console.print("[dim]No log entries found.[/dim]")
             return
 
-        displayed = 0
+        formatted_entries: list[str] = []
         for line in raw_lines:
             entry = self.parse_line(line)
             if entry and self.should_include(entry):
-                console.print(self.format_entry(entry))
-                displayed += 1
+                formatted_entries.append(self.format_entry(entry))
 
-        if displayed == 0:
+        if post_filter_limit is not None:
+            formatted_entries = formatted_entries[-post_filter_limit:]
+
+        if not formatted_entries:
             console.print("[dim]No log entries match the specified filters.[/dim]")
             if self.job_id:
                 console.print(f"[dim]Score ID filter: {self.job_id}[/dim]")
+            return
+
+        for formatted_entry in formatted_entries:
+            console.print(formatted_entry)
 
     def follow(self) -> None:
         """Follow log file for new entries (like tail -f)."""

@@ -33,6 +33,12 @@ class ExpandedValidation:
     pattern: str | None
     condition: str | None
     applicable: bool
+    field_path: str | None = None
+    expected_value: object | None = None
+    source_path: str | None = None
+    source_field_path: str | None = None
+    sha256: str | None = None
+    key_field: str | None = None
 
 
 @dataclass
@@ -75,7 +81,7 @@ _CONDITION_OPS: dict[str, object] = {
 }
 
 
-def _check_condition(condition: str | None, context: dict[str, int]) -> bool:
+def _check_condition(condition: str | None, context: dict[str, object]) -> bool:
     """Evaluate a validation condition expression against a context.
 
     Supports compound conditions joined by `` and ``.  Each part is
@@ -96,9 +102,9 @@ def _check_condition(condition: str | None, context: dict[str, int]) -> bool:
     return _check_single(condition, context)
 
 
-def _check_single(condition: str, context: dict[str, int]) -> bool:
+def _check_single(condition: str, context: dict[str, object]) -> bool:
     """Evaluate a single ``var op value`` comparison."""
-    match = re.match(r"(\w+)\s*(>=|<=|==|!=|>|<)\s*(\d+)", condition)
+    match = re.match(r"(\w+)\s*(>=|<=|==|!=|>|<)\s*(-?\d+)", condition)
     if not match:
         return True  # unrecognised → treat as unconditional
 
@@ -107,7 +113,11 @@ def _check_single(condition: str, context: dict[str, int]) -> bool:
 
     var_value = context.get(var_name)
     if var_value is None:
-        return True  # variable not in context → unconditional
+        return False
+    if isinstance(var_value, str) and var_value.strip().lstrip("-").isdigit():
+        var_value = int(var_value.strip())
+    elif type(var_value) is not int:
+        return False
 
     op_fn = _CONDITION_OPS.get(op_str)
     if op_fn is None:
@@ -336,7 +346,7 @@ def generate_preview(
             ),
         })
 
-        condition_context: dict[str, int] = {
+        condition_context: dict[str, object] = {
             SHEET_NUM_KEY: sheet_num,
             "start_item": context.start_item,
             "end_item": context.end_item,
@@ -357,6 +367,12 @@ def generate_preview(
                     expanded_path = _expand_path(rule.path, path_context)
                 except (KeyError, ValueError):
                     expanded_path = rule.path  # leave raw on error
+            expanded_source_path: str | None = None
+            if rule.source_path:
+                try:
+                    expanded_source_path = _expand_path(rule.source_path, path_context)
+                except (KeyError, ValueError):
+                    expanded_source_path = rule.source_path
 
             applicable = _check_condition(rule.condition, condition_context)
 
@@ -370,6 +386,12 @@ def generate_preview(
                     pattern=rule.pattern,
                     condition=rule.condition,
                     applicable=applicable,
+                    field_path=rule.field_path,
+                    expected_value=rule.expected_value,
+                    source_path=expanded_source_path,
+                    source_field_path=rule.source_field_path,
+                    sha256=rule.sha256,
+                    key_field=rule.key_field,
                 )
             )
 

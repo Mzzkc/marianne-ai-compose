@@ -15,6 +15,7 @@
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Total Jobs</p>
             <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.total_jobs ?? '—'"></p>
+            <p x-show="stats.is_partial" class="text-xs text-amber-700 dark:text-amber-300">Partial aggregate</p>
         </div>
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Success Rate</p>
@@ -35,6 +36,7 @@
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Durations</h2>
             <template x-if="durations">
                 <div class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                    <p x-show="durations.is_partial" class="text-xs text-amber-700 dark:text-amber-300">Partial aggregate</p>
                     <p>Avg sheet: <span class="font-mono" x-text="formatDur(durations.avg_sheet_duration_seconds)"></span></p>
                     <p>Median sheet: <span class="font-mono" x-text="formatDur(durations.median_sheet_duration_seconds)"></span></p>
                     <template x-for="s in durations.slowest_sheets || []" :key="s.job_id + '-' + s.sheet_num">
@@ -46,7 +48,7 @@
                 </div>
             </template>
             <template x-if="!durations">
-                <p class="text-sm text-gray-400 dark:text-gray-500" x-text="loading ? 'Loading...' : 'No data'"></p>
+                <p class="text-sm text-gray-400 dark:text-gray-500" x-text="stateText('durations')"></p>
             </template>
         </div>
 
@@ -54,12 +56,14 @@
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Validations</h2>
             <template x-if="validations">
                 <div class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                    <p x-show="validations.is_partial" class="text-xs text-amber-700 dark:text-amber-300">Partial aggregate</p>
                     <p>Pass rate: <span class="font-mono" x-text="validations.overall_pass_rate != null ? validations.overall_pass_rate.toFixed(1) + '%' : '—'"></span></p>
                     <p>Total checks: <span class="font-mono" x-text="validations.total_checks ?? validations.total_validations ?? 0"></span></p>
+                    <p x-show="(validations.total_checks ?? validations.total_validations ?? 0) === 0" class="text-gray-400">No validation checks recorded</p>
                 </div>
             </template>
             <template x-if="!validations">
-                <p class="text-sm text-gray-400 dark:text-gray-500" x-text="loading ? 'Loading...' : 'No data'"></p>
+                <p class="text-sm text-gray-400 dark:text-gray-500" x-text="stateText('validations')"></p>
             </template>
         </div>
 
@@ -67,6 +71,7 @@
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Errors</h2>
             <template x-if="errors">
                 <div class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                    <p x-show="errors.is_partial" class="text-xs text-amber-700 dark:text-amber-300">Partial aggregate</p>
                     <template x-for="[cat, count] in Object.entries(errors.by_category || {})" :key="cat">
                         <p><span x-text="cat"></span>: <span class="font-mono" x-text="count"></span></p>
                     </template>
@@ -74,7 +79,7 @@
                 </div>
             </template>
             <template x-if="!errors">
-                <p class="text-sm text-gray-400 dark:text-gray-500" x-text="loading ? 'Loading...' : 'No data'"></p>
+                <p class="text-sm text-gray-400 dark:text-gray-500" x-text="stateText('errors')"></p>
             </template>
         </div>
 
@@ -82,12 +87,14 @@
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Costs</h2>
             <template x-if="costs">
                 <div class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                    <p x-show="costs.is_partial" class="text-xs text-amber-700 dark:text-amber-300">Partial aggregate</p>
                     <p>Total spend: <span class="font-mono" x-text="'$' + (costs.total_spend ?? 0).toFixed(4)"></span></p>
                     <p>Avg per job: <span class="font-mono" x-text="'$' + (costs.avg_cost_per_job ?? 0).toFixed(4)"></span></p>
+                    <p x-show="(costs.jobs_with_cost ?? 0) === 0" class="text-gray-400">No cost records available</p>
                 </div>
             </template>
             <template x-if="!costs">
-                <p class="text-sm text-gray-400 dark:text-gray-500" x-text="loading ? 'Loading...' : 'No data'"></p>
+                <p class="text-sm text-gray-400 dark:text-gray-500" x-text="stateText('costs')"></p>
             </template>
         </div>
     </div>
@@ -104,6 +111,13 @@ function analyticsPage() {
         validations: null,
         errors: null,
         costs: null,
+        endpointStates: {
+            stats: 'loading',
+            durations: 'loading',
+            validations: 'loading',
+            errors: 'loading',
+            costs: 'loading'
+        },
 
         async init() {
             await this.loadAll();
@@ -121,15 +135,39 @@ function analyticsPage() {
             const fallbackStats = '/api/dashboard/stats';
             try {
                 const r = await fetch(fallbackStats);
-                if (r.ok) this.stats = await r.json();
-            } catch {}
+                if (r.ok) {
+                    this.stats = await r.json();
+                    this.endpointStates.stats = 'loaded';
+                } else {
+                    this.endpointStates.stats = 'unavailable';
+                }
+            } catch {
+                this.endpointStates.stats = 'unavailable';
+            }
             for (const [key, url] of endpoints) {
+                this.endpointStates[key] = 'loading';
                 try {
                     const r = await fetch(url);
-                    if (r.ok) this[key] = await r.json();
-                } catch { /* analytics unavailable */ }
+                    if (r.ok) {
+                        this[key] = await r.json();
+                        this.endpointStates[key] = 'loaded';
+                    } else {
+                        this[key] = null;
+                        this.endpointStates[key] = 'unavailable';
+                    }
+                } catch {
+                    this[key] = null;
+                    this.endpointStates[key] = 'unavailable';
+                }
             }
             this.loading = false;
+        },
+
+        stateText(key) {
+            const state = this.endpointStates[key];
+            if (state === 'loading' || this.loading) return 'Loading...';
+            if (state === 'unavailable') return 'Analytics unavailable';
+            return 'No records available';
         },
 
         formatDur(seconds) {

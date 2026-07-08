@@ -11,8 +11,10 @@ from marianne.validation.base import ValidationCheck, ValidationIssue, Validatio
 from marianne.validation.checks import (
     BashArrayLengthCheck,
     CadenzaOrderingCheck,
+    CliRawPromptBashCheck,
     CodeExecutionSandboxCheck,
     EmptyPatternCheck,
+    FanOutAssignmentCoverageCheck,
     FanOutStringFilterCheck,
     FanOutWithoutDependenciesCheck,
     FanOutWithoutParallelCheck,
@@ -28,6 +30,7 @@ from marianne.validation.checks import (
     NoUsableInstrumentCheck,
     NoValidationsCheck,
     PreludeCadenzaFileCheck,
+    PromptValidationContractCheck,
     RegexPatternCheck,
     SkillFilesExistCheck,
     SkipWhenSheetRangeCheck,
@@ -143,6 +146,7 @@ def create_default_checks() -> list[ValidationCheck]:
         JinjaUndefinedVariableCheck(),
         FanOutStringFilterCheck(),
         BashArrayLengthCheck(),
+        CliRawPromptBashCheck(),
         # Path checks
         WorkspaceParentExistsCheck(),
         TemplateFileExistsCheck(),
@@ -153,6 +157,8 @@ def create_default_checks() -> list[ValidationCheck]:
         # Config checks
         RegexPatternCheck(),
         ValidationTypeCheck(),
+        FanOutAssignmentCoverageCheck(),
+        PromptValidationContractCheck(),
         TimeoutRangeCheck(),
         EmptyPatternCheck(),
         VersionReferenceCheck(),

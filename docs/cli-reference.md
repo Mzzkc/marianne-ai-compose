@@ -546,6 +546,9 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 | V007 | Invalid regex patterns in validations |
 | V008 | Validation rules missing required fields |
 | V009 | Evolved score references previous version paths |
+| V305 | Bash `${#...}` length syntax in Jinja templates |
+| V306 | `path_in_scope` static preflight escape |
+| V307 | Raw `cli` prompt renders markdown/prose or invalid bash |
 
 **Warnings** (flag potential issues):
 
@@ -563,6 +566,9 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 | V210 | Instrument name not found in known profiles |
 | V211 | Instrument fallback name not found in known profiles |
 | V212 | `skip_when` keys reference out-of-range sheets |
+| V307 | Raw shell sheet can fall back to non-raw LLM-style instruments |
+| V308 | Fan-out movement has partial concrete instrument assignment coverage |
+| V309 | Exact section-label validation is absent from the prompt template |
 
 **Info** (suggestions):
 
@@ -1878,6 +1884,10 @@ still resolves — but prefer `claude-code` for new scores.
 | `content_contains` | Check for literal string in file content |
 | `content_regex` | Match regex patterns in file content |
 | `command_succeeds` | Execute shell commands as quality checks |
+| `path_in_scope` | Verify a path resolves inside an allowed root |
+| `field_match` | Compare JSON/YAML fields to literals or source fields |
+| `file_sha256` | Verify a file matches a pinned SHA-256 digest |
+| `csv_unique_key` | Verify a CSV key column has unique values |
 
 ### Error Codes
 

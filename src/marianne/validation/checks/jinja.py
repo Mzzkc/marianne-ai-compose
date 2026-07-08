@@ -484,7 +484,7 @@ class BashArrayLengthCheck:
     prompt mid-token. The `cli` instrument then runs a broken script and dies
     with a bare "Exit code 2" and no stderr. There is no legitimate `${#` in a
     Jinja template (it always opens a comment), so this scan is zero-false-
-    positive. Recommends a length-free idiom (the issue's documented workaround).
+    positive and blocks validation. Recommends a length-free idiom.
     """
 
     @property
@@ -493,7 +493,7 @@ class BashArrayLengthCheck:
 
     @property
     def severity(self) -> ValidationSeverity:
-        return ValidationSeverity.WARNING
+        return ValidationSeverity.ERROR
 
     @property
     def description(self) -> str:
@@ -526,7 +526,7 @@ class BashArrayLengthCheck:
             issues.append(
                 ValidationIssue(
                     check_id="V305",
-                    severity=ValidationSeverity.WARNING,
+                    severity=self.severity,
                     message=(
                         f"{source_name} contains bash '${{#...}}' length syntax. "
                         "Jinja reads the '{#' as a comment opener and silently "

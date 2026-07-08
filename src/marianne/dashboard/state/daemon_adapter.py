@@ -35,6 +35,7 @@ class DaemonStateAdapter(StateBackend):
 
     def __init__(self, client: DaemonClient) -> None:
         self._client = client
+        self._dashboard_metadata: dict[str, dict[str, object]] = {}
 
     # ------------------------------------------------------------------
     # Read methods
@@ -50,6 +51,10 @@ class DaemonStateAdapter(StateBackend):
                 self._client.get_job_status(job_id, ""),
                 timeout=DAEMON_STATE_READ_TIMEOUT_SECONDS,
             )
+            self._dashboard_metadata[job_id] = {
+                "data_source": "daemon_status",
+                "is_partial": False,
+            }
             return CheckpointState(**data)
         except (DaemonError, ConnectionError, TimeoutError, OSError):
             _logger.debug("load_job_not_found", extra={"job_id": job_id})
@@ -79,6 +84,10 @@ class DaemonStateAdapter(StateBackend):
                         self._client.get_job_status(job_id, ""),
                         timeout=DAEMON_STATE_ENRICH_TIMEOUT_SECONDS,
                     )
+                    self._dashboard_metadata[job_id] = {
+                        "data_source": "daemon_status",
+                        "is_partial": False,
+                    }
                     results.append(CheckpointState(**data))
                     continue
                 except (DaemonError, ConnectionError, TimeoutError, OSError):
@@ -87,9 +96,28 @@ class DaemonStateAdapter(StateBackend):
                         extra={"job_id": job_id},
                     )
 
+            reason = (
+                "enrichment_cap"
+                if index >= DAEMON_STATE_MAX_ENRICHED_JOBS
+                else "enrichment_failed"
+            )
+            self._dashboard_metadata[job_id] = {
+                "data_source": "daemon_roster",
+                "is_partial": True,
+                "partial_reason": reason,
+            }
             results.append(_checkpoint_from_roster_entry(entry))
 
         return results
+
+    def dashboard_metadata(self, job_id: str) -> dict[str, object]:
+        """Return source/completeness metadata for the latest dashboard read."""
+        return dict(
+            self._dashboard_metadata.get(
+                job_id,
+                {"data_source": "daemon", "is_partial": True, "partial_reason": "unknown"},
+            )
+        )
 
     # ------------------------------------------------------------------
     # Write methods — not supported (dashboard is read-only)

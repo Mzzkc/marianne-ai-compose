@@ -1088,6 +1088,7 @@ class DaemonProcess:
 
             configure_logging(
                 level=new_config.log_level.upper(),  # type: ignore[arg-type]
+                format="json" if new_config.log_file is not None else "console",
                 file_path=new_config.log_file,
                 include_timestamps=True,
             )

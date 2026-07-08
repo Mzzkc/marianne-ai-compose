@@ -60,19 +60,31 @@ document.addEventListener('htmx:sendError', () => {
 document.addEventListener('htmx:beforeSwap', (event) => {
     if (event.detail.pathInfo?.requestPath === '/api/jobs/daemon/status') {
         const dot = document.getElementById('conductor-dot');
+        const label = document.getElementById('conductor-label');
         if (dot) {
             try {
                 const data = JSON.parse(event.detail.xhr?.responseText || '{}');
                 if (data.connected) {
                     dot.className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse-dot';
+                    dot.title = 'Conductor connected';
+                    if (label) label.textContent = 'Conductor connected';
                 } else {
-                    dot.className = 'w-2 h-2 rounded-full bg-red-500';
+                    const message = data.message || 'Conductor disconnected';
+                    dot.className = message.toLowerCase().includes('timed out')
+                        ? 'w-2 h-2 rounded-full bg-yellow-500'
+                        : 'w-2 h-2 rounded-full bg-red-500';
+                    dot.title = message;
+                    if (label) label.textContent = `Conductor disconnected: ${message}`;
                 }
             } catch (e) {
                 if (event.detail.xhr?.status === 200) {
                     dot.className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse-dot';
+                    dot.title = 'Conductor connected';
+                    if (label) label.textContent = 'Conductor connected';
                 } else {
                     dot.className = 'w-2 h-2 rounded-full bg-red-500';
+                    dot.title = 'Conductor status unavailable';
+                    if (label) label.textContent = 'Conductor unavailable';
                 }
             }
         }

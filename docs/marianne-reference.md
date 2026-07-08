@@ -150,7 +150,10 @@ When you run `mzt run job.yaml`:
                     WAITING ←──── rate limited (tempo change, not failure)
    ```
 
-8. **Validation** — 5 validation types check outputs: `file_exists`, `file_modified`, `content_contains`, `content_regex`, `command_succeeds`. Conditional validation via `condition:`. Retry with delay for filesystem race conditions.
+8. **Validation** — validation types check file existence, modification,
+content, command success, path scope, structured field equality, SHA-256
+integrity, and CSV uniqueness. Conditional validation via `condition:`. Retry
+with delay for filesystem race conditions.
 
 9. **Error Classification** — Multi-phase: structured JSON errors → exit code/signal → regex fallback across 40 error codes in 8 categories. Rate limits get parsed reset times and are treated as tempo changes (the baton pauses that instrument while other instruments continue).
 
@@ -737,7 +740,8 @@ Multi-phase classification pipeline: structured JSON → exit code/signal → re
 ### Composability
 - Instrument profiles: plug in any CLI tool via YAML
 - State backends: JSON for simplicity, SQLite for queries, Memory for tests
-- 5 validation types with conditional application and retry
+- Validation types for files, content, commands, path scope, structured fields,
+  file hashes, and CSV uniqueness with conditional application and retry
 - Notification channels: desktop, Slack, webhook
 - Everything is YAML-configurable with sensible defaults
 - 9-layer prompt assembly with per-sheet knowledge injection

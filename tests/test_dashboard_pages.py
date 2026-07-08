@@ -11,7 +11,7 @@ import jinja2
 import pytest
 from fastapi.testclient import TestClient
 
-from marianne.core.checkpoint import CheckpointState, JobStatus
+from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.dashboard.app import create_app
 from marianne.state.json_backend import JsonStateBackend
 
@@ -85,6 +85,81 @@ class TestPageRoutes:
         """GET /jobs/list?limit=10 should accept limit parameter."""
         response = client.get("/jobs/list?limit=10")
         assert response.status_code == 200
+
+    def test_home_page_uses_active_work_not_running_only(self, client):
+        """The first screen should not define active work as status=running only."""
+        response = client.get("/")
+        assert response.status_code == 200
+        text = response.text
+        assert "Active Work" in text
+        assert "/jobs/list?limit=8" in text
+        assert "/jobs/list?status=running" not in text
+
+    def test_jobs_list_partial_shows_operator_cockpit_fields(
+        self,
+        client,
+        temp_state_dir,
+    ):
+        backend = JsonStateBackend(temp_state_dir)
+        state = CheckpointState(
+            job_id="page-active",
+            job_name="Page Active",
+            total_sheets=2,
+            status=JobStatus.RUNNING,
+            current_sheet=1,
+            sheets={
+                1: SheetState(
+                    sheet_num=1,
+                    status=SheetStatus.FERMATA,
+                    validation_passed=False,
+                    failed_validations=["file_sha256"],
+                    last_pass_percentage=50.0,
+                    fermata_reason="retry exhausted",
+                )
+            },
+        )
+        asyncio.run(backend.save(state))
+
+        response = client.get("/jobs/list")
+
+        assert response.status_code == 200
+        html = response.text
+        assert "Sheet 1" in html
+        assert "fermata" in html
+        assert "Validation failed" in html
+        assert "file_sha256" in html
+        assert "Logs:" in html
+        assert "Artifacts:" in html
+
+    @pytest.mark.parametrize(
+        "status",
+        [
+            "pending",
+            "running",
+            "completed",
+            "failed",
+            "paused",
+            "paused_at_chain",
+            "cancelled",
+            "ready",
+            "dispatched",
+            "in_progress",
+            "waiting",
+            "retry_scheduled",
+            "fermata",
+            "skipped",
+            "mystery_status",
+        ],
+    )
+    def test_status_badge_vocabulary_is_explicit(self, app, status):
+        template = app.state.templates.get_template("components/status_badge.html")
+        module = template.make_module({})
+        rendered = str(module.status_badge(status))
+        if status == "mystery_status":
+            assert "unknown: mystery_status" in rendered
+            assert "data-status=\"unknown\"" in rendered
+        else:
+            assert status.replace("_", " ") in rendered or status in rendered
 
     def test_job_details_not_found(self, client):
         """GET /jobs/{id}/details should 404 for missing job."""

@@ -29,6 +29,7 @@ def _aggregate_stats(jobs: list[CheckpointState]) -> dict[str, Any]:
         "completed": 0,
         "failed": 0,
         "paused": 0,
+        "paused_at_chain": 0,
         "cancelled": 0,
         "pending": 0,
     }
@@ -59,6 +60,7 @@ def _aggregate_stats(jobs: list[CheckpointState]) -> dict[str, Any]:
         "completed_jobs": counts["completed"],
         "failed_jobs": counts["failed"],
         "paused_jobs": counts["paused"],
+        "paused_at_chain_jobs": counts["paused_at_chain"],
         "cancelled_jobs": counts["cancelled"],
         "pending_jobs": counts["pending"],
         "success_rate": round(success_rate, 1),
@@ -260,8 +262,34 @@ class DaemonAnalytics:
 
         jobs = await self._list_jobs_cached()
         result = aggregator(jobs)
+        self._apply_completeness_markers(result, jobs)
         self._set_cache(cache_key, result)
         return result
+
+    def _apply_completeness_markers(
+        self,
+        result: dict[str, Any],
+        jobs: list[CheckpointState],
+    ) -> None:
+        metadata_getter = getattr(self._adapter, "dashboard_metadata", None)
+        partial_job_ids: list[str] = []
+        data_sources: set[str] = set()
+
+        for job in jobs:
+            metadata: dict[str, Any] = {}
+            if callable(metadata_getter):
+                raw_metadata = metadata_getter(job.job_id)
+                if isinstance(raw_metadata, dict):
+                    metadata = raw_metadata
+            data_sources.add(str(metadata.get("data_source") or "checkpoint"))
+            if bool(metadata.get("is_partial", False)):
+                partial_job_ids.append(job.job_id)
+
+        result["is_partial"] = bool(partial_job_ids)
+        result["partial_job_ids"] = partial_job_ids
+        result["data_source"] = (
+            "mixed" if len(data_sources) > 1 else next(iter(data_sources), "checkpoint")
+        )
 
     # ------------------------------------------------------------------
     # Cache helpers

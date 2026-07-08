@@ -384,6 +384,36 @@ async def test_generic_fleet_cadenza_completion_validation_catches_stale_claim(
     result = await engine.run_validations(rules)
     assert result.all_passed is True
 
+    task_board.write_text(
+        "# Task Board\n\n"
+        "| id | owner | status | task | evidence |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        "| bedrock-T-002 | bedrock | done | Write cycle plan. | `cycle-state/bedrock-plan.md` |\n"
+        "| bedrock-T-002 | bedrock | done | Duplicate row. | `cycle-state/bedrock-plan.md` |\n"
+    )
+    result = await engine.run_validations(rules)
+    assert result.all_passed is False
+    error = result.results[0].error_message or ""
+    assert "repeats concrete cadenza id 'bedrock-T-002'" in error
+
+    task_board.write_text(
+        "# Task Board\n\n"
+        "| id | owner | status | task | evidence |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        "| T-002 | bedrock | done | Write cycle plan. | `cycle-state/bedrock-plan.md` |\n"
+    )
+    result = await engine.run_validations(rules)
+    assert result.all_passed is False
+    error = result.results[0].error_message or ""
+    assert "uses global numeric cadenza id 'T-002'" in error
+
+    task_board.write_text(
+        "# Task Board\n\n"
+        "| id | owner | status | task | evidence |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        "| bedrock-T-002 | bedrock | done | Write cycle plan. | `cycle-state/bedrock-plan.md` |\n"
+    )
+
     future_local_as_z = (datetime.now(UTC) + timedelta(hours=2)).strftime(
         "%Y-%m-%dT%H:%MZ"
     )

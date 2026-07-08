@@ -48,9 +48,9 @@ def mock_daemon_client():
     client.submit_job = AsyncMock(
         return_value=JobResponse(job_id="test-job-001", status="accepted"),
     )
-    client.pause_job = AsyncMock(return_value=None)
-    client.resume_job = AsyncMock(return_value=None)
-    client.cancel_job = AsyncMock(return_value=None)
+    client.pause_job = AsyncMock(return_value={"paused": True})
+    client.resume_job = AsyncMock(return_value={"status": "accepted"})
+    client.cancel_job = AsyncMock(return_value={"cancelled": True})
     client.clear_jobs = AsyncMock(return_value={"deleted": 1})
     client.get_job_status = AsyncMock(return_value=None)
     return client
@@ -184,7 +184,7 @@ class TestJobLifecycleIntegration:
                 pause_data = pause_response.json()
                 assert pause_data["success"] is True
                 assert pause_data["job_id"] == job_id
-                assert pause_data["status"] == "paused"
+                assert pause_data["status"] == "pause_requested"
                 mock_daemon_client.pause_job.assert_awaited_once_with(job_id, "")
 
                 # 3. Resume job
@@ -193,7 +193,7 @@ class TestJobLifecycleIntegration:
                 resume_data = resume_response.json()
                 assert resume_data["success"] is True
                 assert resume_data["job_id"] == job_id
-                assert resume_data["status"] == "running"
+                assert resume_data["status"] == "resume_requested"
                 mock_daemon_client.resume_job.assert_awaited_once_with(job_id, "")
 
                 # 4. Cancel job
@@ -202,7 +202,7 @@ class TestJobLifecycleIntegration:
                 cancel_data = cancel_response.json()
                 assert cancel_data["success"] is True
                 assert cancel_data["job_id"] == job_id
-                assert cancel_data["status"] == "cancelled"
+                assert cancel_data["status"] == "cancel_requested"
                 mock_daemon_client.cancel_job.assert_awaited_once_with(job_id, "")
 
         finally:

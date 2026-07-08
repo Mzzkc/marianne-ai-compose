@@ -31,7 +31,7 @@ def _make_service() -> tuple[JobControlService, MagicMock]:
         return_value=JobResponse(job_id="job-1", status="accepted"),
     )
     mock_client.pause_job = AsyncMock(return_value={"paused": True})
-    mock_client.resume_job = AsyncMock(return_value={"resumed": True})
+    mock_client.resume_job = AsyncMock(return_value={"status": "accepted"})
     mock_client.cancel_job = AsyncMock(return_value={"cancelled": True})
     mock_client.clear_jobs = AsyncMock(return_value={"deleted": 1})
     mock_client.get_job_status = AsyncMock(
@@ -98,7 +98,7 @@ name: "test-job"
         service, mock_client = _make_service()
         result = await service.pause_job("job-1")
         assert result.success is True
-        assert result.status == "paused"
+        assert result.status == "pause_requested"
         assert result.job_id == "job-1"
         mock_client.pause_job.assert_awaited_once_with("job-1", "")
 
@@ -112,7 +112,7 @@ name: "test-job"
         service, mock_client = _make_service()
         result = await service.resume_job("job-1")
         assert result.success is True
-        assert result.status == "running"
+        assert result.status == "resume_requested"
         assert result.job_id == "job-1"
         mock_client.resume_job.assert_awaited_once_with("job-1", "")
 
@@ -126,7 +126,7 @@ name: "test-job"
         service, mock_client = _make_service()
         result = await service.cancel_job("job-1")
         assert result.success is True
-        assert result.status == "cancelled"
+        assert result.status == "cancel_requested"
         assert result.job_id == "job-1"
         mock_client.cancel_job.assert_awaited_once_with("job-1", "")
 

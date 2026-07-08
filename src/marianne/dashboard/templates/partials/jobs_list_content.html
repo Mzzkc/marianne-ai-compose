@@ -12,9 +12,9 @@
                 <tr>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Name</th>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Progress</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">Sheets</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">Submitted</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Active Work</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">Validation</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden lg:table-cell">Evidence</th>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Updated</th>
                 </tr>
             </thead>
@@ -27,31 +27,106 @@
                             {{ job.job_name }}
                         </a>
                         <div class="text-xs text-gray-400 font-mono mt-0.5">{{ job.job_id[:12] }}</div>
+                        <div class="mt-2 flex flex-wrap gap-1 md:hidden">
+                            {% if job.validation_state == "validation_failed" %}
+                            <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                                Validation failed: {{ job.failed_validations|join(", ") if job.failed_validations else job.validation_failed_count }}
+                            </span>
+                            {% elif job.validation_state == "unavailable" %}
+                            <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-gray-50 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                Validation unavailable
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300">
+                                Validation passed
+                            </span>
+                            {% endif %}
+                            {% if job.is_partial %}
+                            <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                                Partial data
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-2 text-[11px] lg:hidden" onclick="event.stopPropagation()">
+                            <a href="/jobs/{{ job.job_id }}/logs" class="text-marianne-600 dark:text-marianne-400 hover:underline">Logs</a>
+                            <a href="/jobs/{{ job.job_id }}/details#artifacts" class="text-marianne-600 dark:text-marianne-400 hover:underline">Artifacts</a>
+                            <span class="text-gray-500 dark:text-gray-400">{{ job.artifact_state.state.replace("_", " ") }}</span>
+                        </div>
                     </td>
                     <td class="px-4 py-2.5">
                         {{ status_badge(job.status.value) }}
+                        {% if job.is_partial %}
+                        <div class="mt-1 text-[11px] text-amber-600 dark:text-amber-300">Partial data</div>
+                        {% endif %}
                     </td>
-                    <td class="px-4 py-2.5">
-                        <div class="flex items-center gap-2">
-                            <div class="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                                <div class="h-1.5 rounded-full transition-all duration-300
-                                    {% if job.status.value == 'failed' %}bg-red-500
-                                    {% elif job.status.value == 'completed' %}bg-green-500
-                                    {% else %}bg-marianne-500
-                                    {% endif %}"
-                                    style="width: {{ job.progress_percent }}%"></div>
+                    <td class="px-4 py-2.5 min-w-[16rem]">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                                {% if job.active_sheet %}
+                                <span class="font-medium text-gray-900 dark:text-gray-100">Sheet {{ job.active_sheet }}</span>
+                                {% if job.active_sheet_status %}
+                                {{ status_badge(job.active_sheet_status.value, "xs") }}
+                                {% endif %}
+                                {% else %}
+                                <span class="font-medium text-gray-700 dark:text-gray-300">No current sheet</span>
+                                {% endif %}
                             </div>
-                            <span class="text-xs text-gray-500 dark:text-gray-400 tabular-nums">{{ "%.0f"|format(job.progress_percent) }}%</span>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ job.active_reason }}</div>
+                            {% if job.dispatch_blocked_reason %}
+                            <div class="text-xs text-amber-700 dark:text-amber-300">Dispatch blocked: {{ job.dispatch_blocked_reason }}</div>
+                            {% endif %}
+                            {% if job.retry_resume_metadata.resume_at %}
+                            <div class="text-xs text-orange-700 dark:text-orange-300">Resume at {{ job.retry_resume_metadata.resume_at }}</div>
+                            {% endif %}
+                            <div class="flex items-center gap-2 pt-1">
+                                <div class="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                    <div class="h-1.5 rounded-full transition-all duration-300
+                                        {% if job.status.value == 'failed' %}bg-red-500
+                                        {% elif job.status.value == 'completed' %}bg-green-500
+                                        {% else %}bg-marianne-500
+                                        {% endif %}"
+                                        style="width: {{ job.progress_percent }}%"></div>
+                                </div>
+                                <span class="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                                    {{ "%.0f"|format(job.progress_percent) }}% · {{ job.completed_sheets }}/{{ job.total_sheets }}
+                                </span>
+                            </div>
                         </div>
                     </td>
-                    <td class="px-4 py-2.5 text-gray-600 dark:text-gray-400 hidden sm:table-cell">
-                        <span class="tabular-nums">{{ job.completed_sheets }}/{{ job.total_sheets }}</span>
+                    <td class="px-4 py-2.5 hidden md:table-cell">
+                        {% if job.validation_state == "validation_failed" %}
+                        <div class="text-xs text-red-700 dark:text-red-300">
+                            <div class="font-medium">Validation failed</div>
+                            <div>{{ job.failed_validations|join(", ") if job.failed_validations else job.validation_failed_count ~ " failed" }}</div>
+                            {% if job.validation_pass_percent is not none %}
+                            <div>{{ "%.1f"|format(job.validation_pass_percent) }}% passed</div>
+                            {% endif %}
+                        </div>
+                        {% elif job.validation_state == "unavailable" %}
+                        <div class="text-xs text-gray-500 dark:text-gray-400">Validation unavailable</div>
+                        {% else %}
+                        <div class="text-xs text-green-700 dark:text-green-300">Validation passed</div>
+                        {% endif %}
                     </td>
-                    <td class="px-4 py-2.5 text-xs text-gray-500 dark:text-gray-400 hidden md:table-cell">
-                        {{ job.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    <td class="px-4 py-2.5 hidden lg:table-cell" onclick="event.stopPropagation()">
+                        <div class="flex flex-col gap-1 text-xs">
+                            <a href="/jobs/{{ job.job_id }}/logs"
+                               class="text-marianne-600 dark:text-marianne-400 hover:underline">Logs: {{ job.log_state.state.replace("_", " ") }}</a>
+                            <a href="/jobs/{{ job.job_id }}/details#artifacts"
+                               class="text-marianne-600 dark:text-marianne-400 hover:underline">Artifacts: {{ job.artifact_state.state.replace("_", " ") }}</a>
+                            {% if job.artifact_state.freshness_state == "freshness_not_verified" %}
+                            <span class="text-gray-500 dark:text-gray-400">Freshness not verified</span>
+                            {% endif %}
+                            {% if job.cost_uncertain %}
+                            <span class="text-amber-700 dark:text-amber-300">Cost uncertain</span>
+                            {% elif job.total_estimated_cost %}
+                            <span class="text-gray-500 dark:text-gray-400">${{ "%.4f"|format(job.total_estimated_cost) }}</span>
+                            {% endif %}
+                        </div>
                     </td>
                     <td class="px-4 py-2.5 text-xs text-gray-500 dark:text-gray-400">
-                        {{ job.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                        <div>{{ job.updated_at.strftime('%Y-%m-%d %H:%M') }}</div>
+                        <div class="text-[11px] text-gray-400 dark:text-gray-500">{{ job.data_source.replace("_", " ") }}</div>
                     </td>
                 </tr>
                 {% endfor %}
