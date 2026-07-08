@@ -70,6 +70,8 @@ while True:
     log.write(line)
     log.flush()
     if "DO-TASK" in line or "please continue" in line:
+        print("fake-agent completed task", flush=True)
+        time.sleep(0.2)
         with open(marker, "w", encoding="utf-8") as fh:
             fh.write("done")
 """
@@ -262,7 +264,7 @@ class TestDriverAgainstRealTmux:
 
         assert result.outcome == "completed", result.detail
         assert transcript.exists()
-        assert "fake-agent booted" in transcript.read_text(
+        assert "fake-agent completed task" in transcript.read_text(
             encoding="utf-8", errors="replace",
         )
 

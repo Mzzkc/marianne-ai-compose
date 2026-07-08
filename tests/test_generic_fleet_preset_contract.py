@@ -6,10 +6,20 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 import yaml
 from jinja2 import Environment
-from marianne_compiler.pipeline import CompilationPipeline
-from marianne_compiler.presets import load_builtin_preset, prepare_builtin_preset
+
+try:
+    from marianne_compiler.pipeline import CompilationPipeline
+    from marianne_compiler.presets import load_builtin_preset, prepare_builtin_preset
+except ModuleNotFoundError as exc:
+    if exc.name != "marianne_compiler":
+        raise
+    pytestmark = pytest.mark.skip(reason="marianne_compiler is an optional submodule package")
+    CompilationPipeline = None
+    load_builtin_preset = None
+    prepare_builtin_preset = None
 
 from marianne.core.config import JobConfig
 from marianne.core.config.techniques import TechniqueConfig
