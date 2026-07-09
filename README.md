@@ -12,7 +12,7 @@ mzt run examples/getting-started/hello-setup.yaml
 
 Three commands. `hello-setup` discovers what's on your machine, then chains to the `hello` orchestration: parallel agents write a story, one composes a soundtrack, one writes the synthesis finale, and a deterministic tool builds a self-contained website that opens in your browser. That's Marianne working across multiple domains within a single run.
 
-It should be noted that Marianne's developer abhors the notion of using AI to replace artists and creatives. Creative-like examples are provided on an experimental basis and for demonstration purposes only. Just because Marianne and AI *can* do something, doesn't mean you should.
+It should be noted that Marianne's developer abhors the notion of using AI to replace artists and creatives. Creative-like examples are provided on an experimental basis and for demonstration purposes only. Just because Marianne and AI *can* do something, doesn't mean you should. It's far better to use Marianne to remove common administrative barriers and replace outmoded ways of managing a business. Marianne exists to give its users more time to work on the things they care about. Let it handle the boring, repetitive stuff. That's what it's good at.  
 
 ---
 
