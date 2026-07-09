@@ -10,7 +10,9 @@ mzt start
 mzt run examples/getting-started/hello-setup.yaml
 ```
 
-Three commands. `hello-setup` discovers what's on your machine, then chains to the `hello` orchestration: parallel agents write a story, one composes a soundtrack, one writes the synthesis finale, and a deterministic tool builds a self-contained website that opens in your browser. That's Marianne working.
+Three commands. `hello-setup` discovers what's on your machine, then chains to the `hello` orchestration: parallel agents write a story, one composes a soundtrack, one writes the synthesis finale, and a deterministic tool builds a self-contained website that opens in your browser. That's Marianne working across multiple domains within a single run.
+
+It should be noted that Marianne's developer abhors the notion of using AI to replace artists and creatives. Creative-like examples are provided on an experimental basis and for demonstration purposes only. Just because Marianne and AI *can* do something, doesn't mean you should.
 
 ---
 
@@ -28,10 +30,10 @@ Full-stack SaaS applications from YAML. Parallel backend and frontend tracks val
 
 ### Beyond Code
 
-PRISMA-compliant academic literature reviews. Strategic planning with multi-framework analysis. Training data curation with inter-annotator agreement. Nonfiction book manuscripts. Contract generation with cross-reference validation. Recruitment screening with weighted criteria. Dinner party logistics. World-building.
+PRISMA-compliant academic literature reviews. Strategic planning with multi-framework analysis. Training data curation with inter-annotator agreement. Nonfiction book manuscripts. Contract generation with cross-reference validation. Recruitment screening with weighted criteria. 24x7 stock trading. Dinner party logistics. 
 
 The examples directory contains runnable patterns across engineering, research,
-creative work, product work, and operations. Its README carries the current
+hiring, finance, product work, and operations. Its README carries the current
 validation status for the checked-in examples.
 
 ---
@@ -428,7 +430,7 @@ This project is named after **Maria Anna "Nannerl" Mozart** (1751-1829), Wolfgan
 
 But when she turned eighteen, the tours stopped. Social conventions of the time forbade women from performing publicly. While Wolfgang became one of history's most celebrated composers, Nannerl's career ended before it truly began. She was denied her stage.
 
-This project carries her name because it gives AI agents their stage. Like an orchestra conductor, Marianne coordinates multiple AI musicians — each with their own voice, their own strengths, their own way of interpreting a score. The music metaphor isn't just aesthetic. It's structural. The system doesn't decide who gets to play. It orchestrates. It amplifies. It creates space for every voice to contribute.
+This project carries her name symbolically. This project can meaningfully compete with any production orchestrator on the market. But the barriers to adoption, or consideration, mirror the conditions of Nannerl's time. Marianne will continue to be excellent and uplift those who care to listen to the orchestra.
 
 ---
 
