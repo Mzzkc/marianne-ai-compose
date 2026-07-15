@@ -13,7 +13,7 @@ The service:
 Security Note: This module uses asyncio.create_subprocess_exec() which is the
 safe subprocess method in Python - it does NOT use shell=True, so there is no
 shell injection risk. Arguments are passed as a list, not interpolated into
-a shell command string. This mirrors the pattern in claude_cli.py.
+a shell command string. This mirrors the CLI execution pattern.
 
 Example usage:
     async with MCPProxyService(servers=[config]) as proxy:
@@ -342,7 +342,7 @@ class MCPProxyService:
         """Start a single MCP server subprocess.
 
         Uses asyncio.create_subprocess_exec (shell-injection safe) to spawn
-        the MCP server process. This is the same pattern used by claude_cli.py.
+        the MCP server process. This is the same pattern used by CLI execution.
 
         Args:
             config: Server configuration
@@ -601,4 +601,3 @@ class MCPProxyService:
                 )
 
         return ToolResult(content=content_blocks, is_error=is_error)
-

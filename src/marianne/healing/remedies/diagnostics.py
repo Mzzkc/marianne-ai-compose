@@ -9,8 +9,7 @@ detailed guidance for manual resolution:
 Phase 5 note — both remedies are now instrument-aware. They honor the
 active instrument profile's CLI executable name and auth environment
 variable where available, and fall back to the Claude-specific
-messaging only when the job is configured for the legacy
-``claude_cli``/``anthropic_api`` instruments.
+messaging only when the job is configured for a Claude Code instrument.
 """
 
 import re
@@ -28,28 +27,26 @@ if TYPE_CHECKING:
 # intentionally small — unknown instruments drop to generic guidance that
 # names the instrument rather than hardcoding Anthropic environment
 # variables.
-_ANTHROPIC_AUTH_INSTRUMENTS: frozenset[str] = frozenset(
-    {"claude_cli", "claude-code", "anthropic_api", "claude"},
-)
+_ANTHROPIC_AUTH_INSTRUMENTS: frozenset[str] = frozenset({"claude-code", "claude"})
 
 
 def _effective_instrument(context: "ErrorContext") -> str:
     """Return the effective instrument name for ``context``.
 
-    Falls back to ``"claude_cli"`` when no config is available — this
+    Falls back to ``"claude-code"`` when no config is available — this
     preserves historical behavior for the paths that do not carry a
     ``JobConfig`` (raw preflight diagnostics).
     """
     cfg = context.config
     if cfg is None:
-        return "claude_cli"
+        return "claude-code"
     try:
         return cfg.effective_instrument_name
     except AttributeError:
         # Defensive: some preflight paths may pass a non-JobConfig-shaped
         # stub. The Claude-family fallback is the safest default because
         # the remedies were written against it.
-        return "claude_cli"
+        return "claude-code"
 
 
 def _cli_binary_for(instrument: str) -> str:
@@ -57,20 +54,15 @@ def _cli_binary_for(instrument: str) -> str:
 
     Consults the instrument registry (built-in profiles) when available.
     Falls back to a heuristic based on the instrument name, and ultimately
-    to ``claude`` to preserve historical behavior for the ``claude_cli``
+    to ``claude`` to preserve historical behavior for the ``claude-code``
     instrument.
     """
     # Best-effort registry lookup — registry instantiation is cheap and
     # does not require the daemon to be running.
     try:
-        from marianne.instruments.registry import (
-            InstrumentRegistry,
-            register_native_instruments,
-        )
+        from marianne.instruments.loader import load_all_profiles
 
-        registry = InstrumentRegistry()
-        register_native_instruments(registry)
-        profile = registry.get(instrument)
+        profile = load_all_profiles().get(instrument)
         cli = getattr(profile, "cli", None) if profile is not None else None
         executable = getattr(getattr(cli, "command", None), "executable", None)
         if executable:
@@ -361,7 +353,7 @@ class DiagnoseMissingCLIRemedy(BaseRemedy):
     reads the executable name from the instrument registry (via
     ``_cli_binary_for``) and falls back to ``claude`` only when the
     registry entry cannot be resolved (preserves behaviour for the
-    legacy ``claude_cli`` instrument).
+    Claude Code instrument).
 
     Triggers when:
     - Error indicates the configured CLI is not found

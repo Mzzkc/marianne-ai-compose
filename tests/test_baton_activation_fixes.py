@@ -502,7 +502,7 @@ def _make_mock_config(parallel: bool = False) -> MagicMock:
     """Create a mock JobConfig for testing."""
     config = MagicMock()
     config.name = "test-job"
-    config.backend.type = "claude_cli"
+    config.backend.type = "claude-code"
     config.retry.max_retries = 3
     config.cost_limits.enabled = False
     config.cost_limits.max_cost_per_job = None

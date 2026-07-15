@@ -614,15 +614,11 @@ class CliProfile(BaseModel):
     )
 
 
-# --- HTTP Profile (stub — deferred to v1.1) ---
+# --- HTTP Profile ---
 
 
 class HttpProfile(BaseModel):
-    """HTTP instrument profile. Designed for, not implemented in v1.
-
-    Covers OpenAI-compatible, Anthropic API, and Gemini API endpoints.
-    One HTTP handler will cover most of them via schema_family.
-    """
+    """Configuration for the shared OpenAI-compatible HTTP executor."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -633,8 +629,8 @@ class HttpProfile(BaseModel):
         default="/v1/chat/completions",
         description="API endpoint path",
     )
-    schema_family: Literal["openai", "anthropic", "gemini"] = Field(
-        description="API schema family for request/response formatting",
+    schema_family: Literal["openai"] = Field(
+        description="OpenAI-compatible request and response contract",
     )
     auth_env_var: str | None = Field(
         default=None,

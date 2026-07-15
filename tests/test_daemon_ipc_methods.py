@@ -85,7 +85,7 @@ class TestRateLimitsHandler:
         mgr = MagicMock()
         coordinator = MagicMock()
         type(coordinator).active_limits = PropertyMock(
-            return_value={"claude_cli": 42.5, "openai": 10.0},
+            return_value={"claude-code": 42.5, "openai": 10.0},
         )
         # Two mock events
         type(coordinator).recent_events = PropertyMock(
@@ -99,8 +99,8 @@ class TestRateLimitsHandler:
         result = await fn({}, None)
         assert result["active_limits"] == 2
         assert result["recent_events_count"] == 3
-        assert "claude_cli" in result["backends"]
-        assert result["backends"]["claude_cli"] == {"seconds_remaining": 42.5}
+        assert "claude-code" in result["backends"]
+        assert result["backends"]["claude-code"] == {"seconds_remaining": 42.5}
         assert result["backends"]["openai"] == {"seconds_remaining": 10.0}
 
 

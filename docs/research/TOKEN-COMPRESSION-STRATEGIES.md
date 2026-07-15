@@ -1,5 +1,8 @@
 # Token Compression Strategies for Marianne
 
+> Historical research snapshot. Backend class examples below predate the
+> profile-driven execution cleanup and are retained only as research context.
+
 > **Status: Research / Not Implemented** — This document describes strategies under consideration. None have been implemented.
 
 **Research Date:** 2026-01-05

@@ -32,7 +32,7 @@ Watch as sheets 2-4 execute simultaneously (academic, industry, patent searches)
 4. Update `workspace` path to your output location
 
 **Prerequisites:**
-- No API keys or external tools required (uses claude-code with anthropic_api fallback)
+- Claude Code and Codex CLI configured (uses claude-code with codex-cli fallback)
 - Score validates clean: `mzt validate examples/advanced/parallel-research.yaml`
 
 ## Patterns Demonstrated

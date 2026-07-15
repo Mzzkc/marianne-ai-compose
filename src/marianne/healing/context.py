@@ -12,7 +12,7 @@ from marianne.core.checkpoint import ValidationDetailDict
 from marianne.core.constants import HEALING_CONTEXT_TAIL_CHARS
 
 if TYPE_CHECKING:
-    from marianne.backends.base import ExecutionResult
+    from marianne.execution.base import ExecutionResult
     from marianne.core.checkpoint import SheetState
     from marianne.core.config import JobConfig
 

@@ -37,13 +37,13 @@ class TestReporting:
     ):
         """Reporting a limit makes the backend rate-limited."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=1,
         )
 
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is True
         assert remaining > 0
         assert remaining <= 30.0
@@ -55,19 +55,19 @@ class TestReporting:
     ):
         """A longer wait replaces a shorter existing limit."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=10.0,
             job_id="job-a",
             sheet_num=1,
         )
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=60.0,
             job_id="job-b",
             sheet_num=2,
         )
 
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is True
         # Should reflect the longer limit, not the shorter one
         assert remaining > 10.0
@@ -79,19 +79,19 @@ class TestReporting:
     ):
         """A shorter wait does NOT reduce an existing longer limit."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=60.0,
             job_id="job-a",
             sheet_num=1,
         )
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=5.0,
             job_id="job-b",
             sheet_num=2,
         )
 
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is True
         assert remaining > 5.0  # Still waiting for the longer one
 
@@ -102,7 +102,7 @@ class TestReporting:
     ):
         """Limits on one backend don't affect others."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=1,
@@ -119,7 +119,7 @@ class TestReporting:
     ):
         """Reported events are stored and accessible."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=3,
@@ -127,7 +127,7 @@ class TestReporting:
 
         events = coordinator.recent_events
         assert len(events) == 1
-        assert events[0].instrument == "claude_cli"
+        assert events[0].instrument == "claude-code"
         assert events[0].job_id == "job-a"
         assert events[0].sheet_num == 3
         assert events[0].suggested_wait_seconds == 30.0
@@ -146,13 +146,13 @@ class TestProtocolCompliance:
     ):
         """Returns (True, float) when limited."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=1,
         )
 
-        result = await coordinator.is_rate_limited("claude_cli")
+        result = await coordinator.is_rate_limited("claude-code")
         assert isinstance(result, tuple)
         assert len(result) == 2
         assert result[0] is True
@@ -164,7 +164,7 @@ class TestProtocolCompliance:
         coordinator: RateLimitCoordinator,
     ):
         """Returns (False, 0.0) when not limited."""
-        result = await coordinator.is_rate_limited("claude_cli")
+        result = await coordinator.is_rate_limited("claude-code")
         assert result == (False, 0.0)
 
     @pytest.mark.asyncio
@@ -174,7 +174,7 @@ class TestProtocolCompliance:
     ):
         """The model parameter is accepted (protocol compat)."""
         result = await coordinator.is_rate_limited(
-            "claude_cli",
+            "claude-code",
             model="claude-sonnet-4-5-20250929",
         )
         assert result == (False, 0.0)
@@ -193,7 +193,7 @@ class TestProperties:
     ):
         """active_limits returns only currently active limits."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=1,
@@ -206,11 +206,11 @@ class TestProperties:
         )
 
         limits = coordinator.active_limits
-        assert "claude_cli" in limits
+        assert "claude-code" in limits
         assert "openai" in limits
-        assert limits["claude_cli"] > 0
+        assert limits["claude-code"] > 0
         assert limits["openai"] > 0
-        assert limits["openai"] > limits["claude_cli"]
+        assert limits["openai"] > limits["claude-code"]
 
     @pytest.mark.asyncio
     async def test_active_limits_excludes_expired(
@@ -220,7 +220,7 @@ class TestProperties:
         """Expired limits are not included in active_limits."""
         # Report a limit that expires almost immediately
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=0.01,
             job_id="job-a",
             sheet_num=1,
@@ -228,7 +228,7 @@ class TestProperties:
         await asyncio.sleep(0.02)  # Let it expire
 
         limits = coordinator.active_limits
-        assert "claude_cli" not in limits
+        assert "claude-code" not in limits
 
     @pytest.mark.asyncio
     async def test_recent_events_ordered_newest_first(
@@ -238,7 +238,7 @@ class TestProperties:
         """recent_events returns newest events first."""
         for i in range(3):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=float(i + 1),
                 job_id=f"job-{i}",
                 sheet_num=i + 1,
@@ -265,7 +265,7 @@ class TestEventPruning:
         """Events older than 1 hour are pruned when new events arrive."""
         # Manually inject an old event
         old_event = RateLimitEvent(
-            instrument="claude_cli",
+            instrument="claude-code",
             detected_at=time.monotonic() - 7200,  # 2 hours ago
             suggested_wait_seconds=30.0,
             job_id="old-job",
@@ -299,7 +299,7 @@ class TestPruneStale:
     ):
         """prune_stale() removes events older than 1 hour."""
         old_event = RateLimitEvent(
-            instrument="claude_cli",
+            instrument="claude-code",
             detected_at=time.monotonic() - 7200,
             suggested_wait_seconds=30.0,
             job_id="old-job",
@@ -318,7 +318,7 @@ class TestPruneStale:
     ):
         """prune_stale() preserves events from the last hour."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=30.0,
             job_id="recent-job",
             sheet_num=1,
@@ -406,13 +406,13 @@ class TestInputValidation:
     ):
         """Negative wait_seconds is clamped to 0 (no blocking)."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=-10.0,
             job_id="job-a",
             sheet_num=1,
         )
 
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         # With wait=0, the resume time is now, so it should not be limited
         assert is_limited is False or remaining <= 0.01
 
@@ -423,13 +423,13 @@ class TestInputValidation:
     ):
         """wait_seconds=0 should not create a blocking limit."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=0.0,
             job_id="job-a",
             sheet_num=1,
         )
 
-        is_limited, _ = await coordinator.is_rate_limited("claude_cli")
+        is_limited, _ = await coordinator.is_rate_limited("claude-code")
         assert is_limited is False
 
     @pytest.mark.asyncio
@@ -441,13 +441,13 @@ class TestInputValidation:
         from marianne.daemon.rate_coordinator import MAX_WAIT_SECONDS
 
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=999999.0,  # ~11.5 days
             job_id="job-a",
             sheet_num=1,
         )
 
-        _, remaining = await coordinator.is_rate_limited("claude_cli")
+        _, remaining = await coordinator.is_rate_limited("claude-code")
         # Should be capped at MAX_WAIT_SECONDS
         assert remaining <= MAX_WAIT_SECONDS
 
@@ -487,13 +487,13 @@ class TestNonFiniteWaitSeconds:
     ):
         """NaN wait_seconds is clamped to 0 — no blocking."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=float("nan"),
             job_id="job-a",
             sheet_num=1,
         )
 
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is False or remaining <= 0.01
 
     @pytest.mark.asyncio
@@ -503,13 +503,13 @@ class TestNonFiniteWaitSeconds:
     ):
         """Positive inf wait_seconds is clamped to 0 — no permanent blocking."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=float("inf"),
             job_id="job-a",
             sheet_num=1,
         )
 
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is False or remaining <= 0.01
 
     @pytest.mark.asyncio
@@ -519,13 +519,13 @@ class TestNonFiniteWaitSeconds:
     ):
         """Negative inf wait_seconds is clamped to 0."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=float("-inf"),
             job_id="job-a",
             sheet_num=1,
         )
 
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is False or remaining <= 0.01
 
     @pytest.mark.asyncio
@@ -535,7 +535,7 @@ class TestNonFiniteWaitSeconds:
     ):
         """NaN wait results in an event recorded with wait=0."""
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=float("nan"),
             job_id="job-a",
             sheet_num=1,
@@ -565,7 +565,7 @@ class TestConcurrentRateLimitStress:
 
         async def reporter(idx: int):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=float(idx % 10 + 1),
                 job_id=f"job-{idx}",
                 sheet_num=idx,
@@ -671,7 +671,7 @@ class TestConcurrentRateLimitStress:
         async def reporter():
             for i in range(30):
                 await coordinator.report_rate_limit(
-                    instrument="claude_cli",
+                    instrument="claude-code",
                     wait_seconds=0.05,
                     job_id=f"job-{i}",
                     sheet_num=i,
@@ -725,29 +725,29 @@ class TestReportExpireReportCycle:
         """Report → wait for expiry → verify clear → re-report → verify active."""
         # Phase 1: Report a short limit
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=0.03,
             job_id="job-a",
             sheet_num=1,
         )
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is True
         assert remaining > 0
 
         # Phase 2: Wait for expiry
         await asyncio.sleep(0.05)
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is False
         assert remaining == 0.0
 
         # Phase 3: Re-report on the same backend
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=0.03,
             job_id="job-b",
             sheet_num=2,
         )
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is True
         assert remaining > 0
 
@@ -765,7 +765,7 @@ class TestReportExpireReportCycle:
         """Expire/re-report on one backend doesn't affect another."""
         # Report on both backends
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=0.03,
             job_id="job-a",
             sheet_num=1,
@@ -781,19 +781,19 @@ class TestReportExpireReportCycle:
         await asyncio.sleep(0.05)
 
         # claude_cli expired, openai still active
-        is_limited_cli, _ = await coordinator.is_rate_limited("claude_cli")
+        is_limited_cli, _ = await coordinator.is_rate_limited("claude-code")
         is_limited_oai, _ = await coordinator.is_rate_limited("openai")
         assert is_limited_cli is False
         assert is_limited_oai is True
 
         # Re-report claude_cli — openai unchanged
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=30.0,
             job_id="job-a",
             sheet_num=2,
         )
-        is_limited_cli, _ = await coordinator.is_rate_limited("claude_cli")
+        is_limited_cli, _ = await coordinator.is_rate_limited("claude-code")
         is_limited_oai, _ = await coordinator.is_rate_limited("openai")
         assert is_limited_cli is True
         assert is_limited_oai is True
@@ -806,14 +806,14 @@ class TestReportExpireReportCycle:
         """Multiple rapid report/expire cycles don't accumulate stale state."""
         for i in range(10):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=0.01,
                 job_id=f"job-{i}",
                 sheet_num=i,
             )
             await asyncio.sleep(0.02)
 
-            is_limited, _ = await coordinator.is_rate_limited("claude_cli")
+            is_limited, _ = await coordinator.is_rate_limited("claude-code")
             assert is_limited is False, f"Cycle {i}: should have expired"
 
         # All 10 events should be recorded
@@ -842,14 +842,14 @@ class TestSchedulerIntegration:
 
         # Register sheets with different backends
         sheets = [
-            SheetInfo(job_id="job-a", sheet_num=1, instrument="claude_cli"),
+            SheetInfo(job_id="job-a", sheet_num=1, instrument="claude-code"),
             SheetInfo(job_id="job-a", sheet_num=2, instrument="openai"),
         ]
         await scheduler.register_job("job-a", sheets)
 
         # Rate-limit claude_cli
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=60.0,
             job_id="job-a",
             sheet_num=1,
@@ -875,13 +875,13 @@ class TestSchedulerIntegration:
         scheduler.set_rate_limiter(coordinator)
 
         sheets = [
-            SheetInfo(job_id="job-a", sheet_num=1, instrument="claude_cli"),
+            SheetInfo(job_id="job-a", sheet_num=1, instrument="claude-code"),
         ]
         await scheduler.register_job("job-a", sheets)
 
         # Rate-limit for a very short time
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=0.01,
             job_id="job-a",
             sheet_num=1,
@@ -893,4 +893,4 @@ class TestSchedulerIntegration:
         # Now it should dispatch
         entry = await scheduler.next_sheet()
         assert entry is not None
-        assert entry.info.instrument == "claude_cli"
+        assert entry.info.instrument == "claude-code"

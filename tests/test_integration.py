@@ -18,7 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.cli import app
 from marianne.core.checkpoint import CheckpointState, JobStatus, SheetState, SheetStatus
 from marianne.dashboard import create_app
@@ -350,7 +350,7 @@ class TestRunStatusResumeWorkflow:
         config_dict = {
             "name": "e2e-test-job",
             "description": "End-to-end test",
-            "backend": {"type": "claude_cli", "skip_permissions": True},
+            "backend": {"type": "claude-code", "skip_permissions": True},
             "sheet": {"size": 5, "total_items": 15},  # 3 sheets
             "prompt": {"template": "Process sheet {{ sheet_num }}"},
             "retry": {"max_retries": 1},

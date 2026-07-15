@@ -37,7 +37,7 @@ description: >
 workspace: "../workspaces/instrument-catalog-build"
 
 instrument: claude-code
-instrument_fallbacks: [anthropic_api]
+instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1200
 

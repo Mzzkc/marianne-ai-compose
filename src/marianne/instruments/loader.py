@@ -209,24 +209,16 @@ def load_all_profiles() -> dict[str, InstrumentProfile]:
     """Load all instrument profiles from all standard sources.
 
     Convenience function that encapsulates the standard loading order:
-        1. Native instruments (4 built-in backends)
-        2. Built-in YAML profiles (shipped with Marianne)
-        3. Organization profiles (~/.marianne/instruments/)
-        4. Venue profiles (.marianne/instruments/)
+        1. Built-in YAML profiles (shipped with Marianne)
+        2. Organization profiles (~/.marianne/instruments/)
+        3. Venue profiles (.marianne/instruments/)
 
     Later sources override earlier ones on name collision.
 
     Returns:
         Dict of profile name → InstrumentProfile.
     """
-    from marianne.instruments.registry import InstrumentRegistry, register_native_instruments
-
-    registry = InstrumentRegistry()
-    register_native_instruments(registry)
-
-    profiles: dict[str, InstrumentProfile] = {
-        p.name: p for p in registry.list_all()
-    }
+    profiles: dict[str, InstrumentProfile] = {}
 
     builtins_dir = Path(__file__).resolve().parent / "builtins"
     org_dir = Path.home() / ".marianne" / "instruments"

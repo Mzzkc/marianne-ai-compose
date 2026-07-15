@@ -88,7 +88,6 @@ class TestConfigResources:
             "config://schema",
             "config://example",
             "config://instrument-options",
-            "config://backend-options",
             "config://validation-types",
             "config://learning-options",
             "marianne://jobs",
@@ -151,7 +150,7 @@ class TestConfigResources:
         assert "validations:" in text
 
     async def test_get_instrument_options(self, config_resources_basic):
-        """Test retrieving the instrument-options compatibility alias."""
+        """Test retrieving current instrument options."""
         result = await config_resources_basic._get_instrument_options()
 
         assert "contents" in result
@@ -160,26 +159,24 @@ class TestConfigResources:
 
         options = json.loads(content["text"])
         assert "available_instruments" in options
-        assert "claude_cli" in options["available_instruments"]
-        assert "anthropic_api" in options["available_instruments"]
-        assert "Legacy backend blocks were removed" in options["compatibility_note"]
+        assert "claude-code" in options["available_instruments"]
+        assert "ollama" in options["available_instruments"]
+        assert "compatibility_note" not in options
 
         # Phase 5c: registry-driven format — each entry is an instrument
         # profile summary with kind, display_name, capabilities, models, etc.
-        claude_cli = options["available_instruments"]["claude_cli"]
-        assert claude_cli["kind"] == "cli"
-        assert "mcp" in claude_cli["capabilities"]
-        assert "display_name" in claude_cli
+        claude_code = options["available_instruments"]["claude-code"]
+        assert claude_code["kind"] == "cli"
+        assert "mcp" in claude_code["capabilities"]
+        assert "display_name" in claude_code
 
-    async def test_backend_options_uri_is_compatibility_alias(self, config_resources_basic):
-        """The old resource URI remains, but the payload teaches instruments."""
+    async def test_retired_backend_options_uri_is_unknown(self, config_resources_basic):
+        """The removed resource URI does not masquerade as a current one."""
         result = await config_resources_basic.read_resource("config://backend-options")
 
         content = result["contents"][0]
-        options = json.loads(content["text"])
-        assert content["uri"] == "config://instrument-options"
-        assert "available_instruments" in options
-        assert "available_backends" not in options
+        assert content["uri"] == "config://backend-options"
+        assert "Unknown resource URI" in content["text"]
 
     async def test_get_validation_types(self, config_resources_basic):
         """Test retrieving validation types reference."""

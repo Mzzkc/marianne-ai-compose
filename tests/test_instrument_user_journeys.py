@@ -24,8 +24,7 @@ from marianne.core.config.instruments import (
     CliProfile,
     InstrumentProfile,
 )
-from marianne.instruments.loader import InstrumentProfileLoader
-from marianne.instruments.registry import InstrumentRegistry, register_native_instruments
+from marianne.instruments.loader import InstrumentProfileLoader, load_all_profiles
 
 # =============================================================================
 # Story 1: Discovering Instruments
@@ -45,7 +44,7 @@ class TestDiscoverInstruments:
         )
         profiles = InstrumentProfileLoader.load_directory(builtins_dir)
 
-        # All built-in CLI profiles should load
+        # Built-in CLI and HTTP profiles should load from YAML.
         expected_names = {
             "claude-code",
             "gemini-cli",
@@ -58,12 +57,13 @@ class TestDiscoverInstruments:
             "crush",
             "cli",
             "gpt-5.6",
+            "ollama",
         }
         assert len(profiles) == len(expected_names)
         assert set(profiles.keys()) == expected_names
 
     def test_builtin_profiles_have_required_fields(self) -> None:
-        """Every built-in profile has name, kind, display_name, and cli config."""
+        """Every built-in profile has name, kind, display_name and matching config."""
         builtins_dir = (
             Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
         )
@@ -72,9 +72,11 @@ class TestDiscoverInstruments:
         for name, profile in profiles.items():
             assert profile.name, f"{name}: missing name"
             assert profile.display_name, f"{name}: missing display_name"
-            assert profile.kind == "cli", f"{name}: expected CLI, got {profile.kind}"
-            assert profile.cli is not None, f"{name}: missing CLI profile"
-            assert profile.cli.command.executable, f"{name}: missing executable"
+            if profile.kind == "cli":
+                assert profile.cli is not None, f"{name}: missing CLI profile"
+                assert profile.cli.command.executable, f"{name}: missing executable"
+            else:
+                assert profile.http is not None, f"{name}: missing HTTP profile"
 
     def test_builtin_profiles_have_at_least_one_model(self) -> None:
         """Every CLI instrument should document at least one model."""
@@ -94,40 +96,16 @@ class TestDiscoverInstruments:
             f"but only {profiles_with_models} do"
         )
 
-    def test_native_instruments_register(self) -> None:
-        """The 4 native instruments register correctly."""
-        registry = InstrumentRegistry()
-        register_native_instruments(registry)
-
-        assert registry.get("claude_cli") is not None
-        assert registry.get("anthropic_api") is not None
-        assert registry.get("ollama") is not None
-        assert registry.get("recursive_light") is not None
-
-    def test_builtins_plus_native_coexist_in_registry(self) -> None:
-        """Registry can hold both native and plugin instruments."""
-        registry = InstrumentRegistry()
-        register_native_instruments(registry)
-
-        builtins_dir = (
-            Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
-        )
-        profiles = InstrumentProfileLoader.load_directory(builtins_dir)
-
-        for profile in profiles.values():
-            registry.register(profile)
-
-        # Native compatibility profiles and YAML built-ins coexist without
-        # silently dropping a newly shipped profile.
-        all_instruments = registry.list_all()
-        assert len(all_instruments) == 4 + len(profiles)
-
+    def test_clean_break_instruments_load_from_yaml(self) -> None:
+        """Built-ins expose current names without compatibility aliases."""
+        profiles = load_all_profiles()
+        assert {"claude-code", "ollama"} <= set(profiles)
 
 # =============================================================================
 # Story 2: Writing a Score with instrument:
 #
 # Sarah writes her first score using `instrument: gemini-cli` instead of
-# `backend: {type: claude_cli}`. Does it validate? Does it coexist with
+# `backend: {type: claude-code}`. Does it validate? Does it coexist with
 # the old `backend:` syntax?
 # =============================================================================
 

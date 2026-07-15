@@ -69,9 +69,12 @@ class TestBuiltinProfilesValid:
         profile = InstrumentProfile.model_validate(data)
         assert profile.name
         assert profile.display_name
-        assert profile.kind == "cli"
-        assert profile.cli is not None
-        assert profile.cli.command.executable
+        assert profile.kind in {"cli", "http"}
+        if profile.kind == "cli":
+            assert profile.cli is not None
+            assert profile.cli.command.executable
+        else:
+            assert profile.http is not None
 
     def test_profile_has_executable(self, profile_name: str) -> None:
         """Each profile has a non-empty executable name."""
@@ -79,7 +82,11 @@ class TestBuiltinProfilesValid:
         with open(path) as fh:
             data = yaml.safe_load(fh)
         profile = InstrumentProfile.model_validate(data)
-        assert len(profile.cli.command.executable) > 0  # type: ignore[union-attr]
+        if profile.kind == "cli":
+            assert len(profile.cli.command.executable) > 0  # type: ignore[union-attr]
+        else:
+            assert profile.http is not None
+            assert profile.http.endpoint == "/chat/completions"
 
 
 class TestProfileDetails:
@@ -191,6 +198,9 @@ class TestProfileDetails:
             with open(f) as fh:
                 data = yaml.safe_load(fh)
             profile = InstrumentProfile.model_validate(data)
+            if profile.kind == "http":
+                assert profile.http is not None
+                continue
             assert profile.cli is not None
             if f.name in skip_no_rate_limit:
                 continue

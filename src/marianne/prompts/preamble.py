@@ -2,7 +2,7 @@
 
 Generates preambles that tell agents who they are, where they are in the
 concert, and what success looks like. Replaces the static 5-rule warning
-label that was previously hardcoded in ClaudeCliBackend.
+label that was previously hardcoded in the retired native CLI executor.
 """
 
 from pathlib import Path

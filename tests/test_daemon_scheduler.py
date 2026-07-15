@@ -45,7 +45,7 @@ def _sheet(
     job_priority: int = 5,
     dag_depth: int = 0,
     retries: int = 0,
-    backend: str = "claude_cli",
+    backend: str = "claude-code",
 ) -> SheetInfo:
     """Helper to create a SheetInfo with sensible defaults."""
     return SheetInfo(
@@ -431,12 +431,12 @@ class TestRateLimitIntegration:
                 instrument: str,
                 model: str | None = None,
             ) -> tuple[bool, float]:
-                return (instrument == "claude_cli", 30.0)
+                return (instrument == "claude-code", 30.0)
 
         scheduler.set_rate_limiter(MockRateLimiter())
 
         sheets = [
-            _sheet("job-a", 1, backend="claude_cli"),
+            _sheet("job-a", 1, backend="claude-code"),
             _sheet("job-a", 2, backend="openai"),
         ]
         await scheduler.register_job("job-a", sheets)
@@ -470,7 +470,7 @@ class TestRateLimitIntegration:
 
         scheduler.set_rate_limiter(AllLimitedRateLimiter())
 
-        sheets = [_sheet("job-a", i, backend="claude_cli") for i in range(1, 4)]
+        sheets = [_sheet("job-a", i, backend="claude-code") for i in range(1, 4)]
         await scheduler.register_job("job-a", sheets)
 
         # Capture state before dispatch attempt
@@ -1505,8 +1505,8 @@ class TestEndToEndIntegration:
         await scheduler.register_job(
             "job-claude",
             [
-                _sheet("job-claude", 1, backend="claude_cli"),
-                _sheet("job-claude", 2, backend="claude_cli"),
+                _sheet("job-claude", 1, backend="claude-code"),
+                _sheet("job-claude", 2, backend="claude-code"),
             ],
         )
         await scheduler.register_job(
@@ -1518,14 +1518,14 @@ class TestEndToEndIntegration:
 
         # Report rate limit on claude_cli via coordinator
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=60.0,
             job_id="job-claude",
             sheet_num=1,
         )
 
         # Verify coordinator has the limit
-        is_limited, remaining = await coordinator.is_rate_limited("claude_cli")
+        is_limited, remaining = await coordinator.is_rate_limited("claude-code")
         assert is_limited is True
         assert remaining > 0
 
@@ -1624,7 +1624,7 @@ class TestEndToEndIntegration:
 
             # Report a rate limit
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -1658,8 +1658,8 @@ class TestEndToEndIntegration:
         await scheduler.register_job(
             "job-a",
             [
-                _sheet("job-a", 1, backend="claude_cli"),
-                _sheet("job-a", 2, backend="claude_cli"),
+                _sheet("job-a", 1, backend="claude-code"),
+                _sheet("job-a", 2, backend="claude-code"),
                 _sheet("job-a", 3, backend="openai"),
             ],
         )
@@ -1684,7 +1684,7 @@ class TestEndToEndIntegration:
 
         # Phase 3: Rate limit hits claude_cli
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=0.05,  # Short for testing
             job_id="job-a",
             sheet_num=1,
@@ -1711,7 +1711,7 @@ class TestEndToEndIntegration:
         await asyncio.sleep(0.06)
 
         # Verify rate limit cleared
-        is_limited, _ = await coordinator.is_rate_limited("claude_cli")
+        is_limited, _ = await coordinator.is_rate_limited("claude-code")
         assert is_limited is False
 
         # Phase 5: Remaining claude_cli sheets can now dispatch
@@ -1747,9 +1747,9 @@ class TestEndToEndIntegration:
         coordinator = scheduler_with_rate_only["coordinator"]
 
         sheets = [
-            _sheet("job-dag", 1, backend="claude_cli"),
-            _sheet("job-dag", 2, backend="claude_cli"),
-            _sheet("job-dag", 3, backend="claude_cli"),
+            _sheet("job-dag", 1, backend="claude-code"),
+            _sheet("job-dag", 2, backend="claude-code"),
+            _sheet("job-dag", 3, backend="claude-code"),
         ]
         deps = {2: {1}, 3: {2}}
 
@@ -1766,7 +1766,7 @@ class TestEndToEndIntegration:
 
         # Rate limit hits
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=0.05,
             job_id="job-dag",
             sheet_num=1,
@@ -1805,14 +1805,14 @@ class TestEndToEndIntegration:
         await scheduler.register_job(
             "job-a",
             [
-                _sheet("job-a", 1, backend="claude_cli"),
+                _sheet("job-a", 1, backend="claude-code"),
                 _sheet("job-a", 2, backend="openai"),
             ],
         )
 
         # Rate-limit claude_cli
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=60.0,
             job_id="job-a",
             sheet_num=1,
@@ -2330,7 +2330,7 @@ class TestTripleComponentIntegration:
 
         # Rate-limit claude_cli
         await coordinator.report_rate_limit(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=60.0,
             job_id="job-a",
             sheet_num=1,
@@ -2350,9 +2350,9 @@ class TestTripleComponentIntegration:
         await scheduler_rate_only.register_job(
             "job-a",
             [
-                _sheet("job-a", 1, backend="claude_cli"),
+                _sheet("job-a", 1, backend="claude-code"),
                 _sheet("job-a", 2, backend="openai"),
-                _sheet("job-a", 3, backend="claude_cli"),
+                _sheet("job-a", 3, backend="claude-code"),
             ],
         )
 

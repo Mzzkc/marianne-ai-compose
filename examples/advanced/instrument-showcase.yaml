@@ -34,14 +34,14 @@
 #   2. instrument_map: — Batch assignment of instruments to specific sheets
 #   3. instrument_fallbacks: — Score-level fallback chain for resilience
 #   4. instrument_config: — Score-level default instrument configuration
-#   5. per_sheet_fallbacks: — Per-sheet fallback override (Gemini -> Claude -> API)
+#   5. per_sheet_fallbacks: — Per-sheet fallback override (Gemini -> Claude -> Codex)
 #   6. per_sheet_instrument_config: — Per-sheet config overrides (Gemini timeout)
 #   7. Movement-level instrument — Movement 1 sets instrument directly
 #   8. Cross-family verification — Gemini reviews Claude's analysis independently
 #
 # Instrument Resolution Chain (highest to lowest priority):
 #   per_sheet_instruments > instrument_map > movement instrument >
-#   score-level instrument > backend default
+#   score-level instrument > Marianne default
 #
 # In this score:
 #   Sheet 1: Movement 1 instrument (claude-code) — no instrument_map entry
@@ -106,9 +106,9 @@ instrument: claude-code
 instrument_config:
   timeout_seconds: 600
 
-# Score-level fallback: if any instrument is unavailable, try anthropic_api.
+# Score-level fallback: if any instrument is unavailable, try codex-cli.
 instrument_fallbacks:
-  - anthropic_api
+  - codex-cli
 
 # --- Named Instrument Definitions ---
 # Score-local aliases that reference registered profiles with config overrides.
@@ -176,10 +176,10 @@ sheet:
 
   # --- Per-Sheet Fallback Override ---
   # E3 stage (Gemini) gets a custom fallback chain: try claude-code first
-  # (maintaining analysis quality), then anthropic_api as last resort.
+  # (maintaining analysis quality), then claude-code as last resort.
   # Cross-family diversity is preferred but not required.
   per_sheet_fallbacks:
-    5: [claude-code, anthropic_api]
+    5: [claude-code, codex-cli]
 
   # --- Per-Sheet Instrument Config Override ---
   # Gemini stage gets a custom timeout for architectural review.

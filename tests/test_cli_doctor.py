@@ -97,8 +97,8 @@ class TestDoctorConductorChecks:
 class TestDoctorInstrumentChecks:
     """Verify instrument availability reporting."""
 
-    def test_native_instruments_listed(self) -> None:
-        """Doctor should list the native instruments."""
+    def test_builtin_profiles_listed(self) -> None:
+        """Doctor should list built-in instrument profiles."""
         with patch(
             "marianne.cli.commands.doctor._check_conductor_status",
             return_value=("not running", None),

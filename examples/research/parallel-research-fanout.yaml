@@ -46,7 +46,7 @@
 #   mzt status fanout-research --watch
 #
 # Estimated Time: ~15-25 minutes (3 parallel searches + synthesis)
-# Estimated Cost: $0.50-$2.00 (depends on research depth; claude-code primary, anthropic_api fallback)
+# Estimated Cost: depends on the configured Claude Code or Codex subscription (claude-code primary, codex-cli fallback)
 #
 # Output:
 #   - 01-research-setup.md: Search strategy and quality criteria
@@ -59,7 +59,7 @@ description: "Multi-source research using fan-out for parallel search"
 workspace: "../../workspaces/fanout-workspace"
 
 instrument: claude-code
-instrument_fallbacks: [anthropic_api]
+instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1800
 

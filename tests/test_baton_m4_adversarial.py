@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import jinja2
 import pytest
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.core.config.execution import ValidationRule
 from marianne.core.config.job import InjectionCategory, InjectionItem
 from marianne.core.sheet import Sheet

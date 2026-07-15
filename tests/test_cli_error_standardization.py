@@ -76,8 +76,8 @@ def _make_http_profile(
         default_timeout_seconds=300.0,
         http=HttpProfile(
             base_url="https://api.example.com",
-            endpoint="/v1/messages",
-            schema_family="anthropic",
+            endpoint="/v1/chat/completions",
+            schema_family="openai",
         ),
     )
 
@@ -118,7 +118,7 @@ class TestInstrumentsHttpStatus:
     def test_http_instrument_shows_unchecked_not_http(self) -> None:
         """HTTP instruments show '? unchecked' in STATUS column, not 'http'."""
         profiles = {
-            "anthropic_api": _make_http_profile("anthropic_api", "Anthropic API"),
+            "ollama": _make_http_profile("ollama", "Ollama"),
         }
         with patch(
             "marianne.cli.commands.instruments._load_all_profiles",
@@ -137,7 +137,7 @@ class TestInstrumentsHttpStatus:
         """HTTP instruments shouldn't be counted as 'ready' since we can't verify them."""
         profiles = {
             "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
-            "anthropic_api": _make_http_profile("anthropic_api", "Anthropic API"),
+            "ollama": _make_http_profile("ollama", "Ollama"),
         }
         with (
             patch(
@@ -156,7 +156,7 @@ class TestInstrumentsHttpStatus:
     def test_http_instrument_json_has_unchecked_status(self) -> None:
         """JSON output for HTTP instruments should show status as unchecked."""
         profiles = {
-            "anthropic_api": _make_http_profile("anthropic_api", "Anthropic API"),
+            "ollama": _make_http_profile("ollama", "Ollama"),
         }
         with patch(
             "marianne.cli.commands.instruments._load_all_profiles",
@@ -174,8 +174,8 @@ class TestInstrumentsHttpStatus:
         """Summary line distinguishes verified CLI from unchecked HTTP instruments."""
         profiles = {
             "claude-code": _make_cli_profile("claude-code", "Claude Code", "claude"),
-            "anthropic_api": _make_http_profile("anthropic_api", "Anthropic API"),
             "ollama": _make_http_profile("ollama", "Ollama"),
+            "local-http": _make_http_profile("local-http", "Local HTTP"),
         }
         with (
             patch(

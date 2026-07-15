@@ -6,7 +6,7 @@
 #
 #   1. Discover  →  resolve-hello.py picks the best AVAILABLE + REACHABLE
 #      instrument (free first: local Ollama → free OpenRouter → a paid CLI sub →
-#      a paid API) and a browser-open command for your OS/shell.
+#      a configured paid CLI) and a browser-open command for your OS/shell.
 #   2. Template  →  it reads examples/getting-started/hello.yaml, swaps in that
 #      one instrument, and adds an on_success hook to open the finished page.
 #      It writes the result to workspaces/hello/hello-resolved.yaml.

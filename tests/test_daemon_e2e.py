@@ -932,23 +932,23 @@ class TestRealE2EExecution:
         IPC client → daemon socket → JSON-RPC dispatch → JobManager →
         JobService.start_job() → _setup_components() (real backend creation) →
         BatonAdapter.activate() → baton dispatch → musician task →
-        ClaudeCliBackend.execute() → [PATCHED HERE] → ExecutionResult →
+        PluginCliBackend.execute() → [PATCHED HERE] → ExecutionResult →
         validation → checkpoint save → completion → IPC status queryable
 
-    Only ClaudeCliBackend.execute() is patched — everything above and below
+    Only PluginCliBackend.execute() is patched — everything above and below
     runs for real.  This verifies the entire daemon stack is wired together
     and produces real workspace artifacts (state files, checkpoints).
     """
 
     @pytest.fixture
     async def real_execution_daemon(self, tmp_path: Path):
-        """Start a real daemon with ClaudeCliBackend.execute() patched.
+        """Start a real daemon with PluginCliBackend.execute() patched.
 
         The patch returns a synthetic ExecutionResult that simulates a
         successful 1-sheet Claude CLI execution.  The daemon, IPC, manager,
         service, baton, state backend, and checkpoint all run for real.
         """
-        from marianne.backends.base import ExecutionResult
+        from marianne.execution.base import ExecutionResult
 
         config = _make_daemon_config(tmp_path)
         dp = DaemonProcess(config)
@@ -968,7 +968,7 @@ class TestRealE2EExecution:
             patch.object(dp._pgroup, "cleanup_orphans", return_value=[]),
             # Patch at the lowest possible level — the actual CLI execution
             patch(
-                "marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.execute",
+                "marianne.execution.instruments.cli_backend.PluginCliBackend.execute",
                 new_callable=AsyncMock,
                 return_value=mock_result,
             ),
@@ -1014,7 +1014,7 @@ class TestRealE2EExecution:
     ):
         """Full job lifecycle: submit → execute → complete → queryable via IPC.
 
-        The entire execution stack runs for real except ClaudeCliBackend.execute().
+        The entire execution stack runs for real except PluginCliBackend.execute().
         Verifies:
         - Config is parsed from YAML
         - Workspace is created on disk
@@ -1141,7 +1141,7 @@ class TestCrossJobLearning:
         Job A runs → discovers pattern → records to shared store →
         Job B runs → reads shared store → sees Job A's pattern
 
-    Everything except ClaudeCliBackend.execute() runs for real:
+    Everything except PluginCliBackend.execute() runs for real:
     daemon boot, IPC, manager, JobService with injected learning store,
     LearningHub with real GlobalLearningStore (in-memory SQLite for test).
     """
@@ -1155,7 +1155,7 @@ class TestCrossJobLearning:
         After daemon boot, captures the manager reference from within
         the running daemon by patching _register_methods.
         """
-        from marianne.backends.base import ExecutionResult
+        from marianne.execution.base import ExecutionResult
 
         config = _make_daemon_config(tmp_path)
         dp = DaemonProcess(config)
@@ -1187,7 +1187,7 @@ class TestCrossJobLearning:
             patch.object(dp._pgroup, "kill_all_children"),
             patch.object(dp._pgroup, "cleanup_orphans", return_value=[]),
             patch(
-                "marianne.execution.instruments.claude_cli_legacy.ClaudeCliBackend.execute",
+                "marianne.execution.instruments.cli_backend.PluginCliBackend.execute",
                 new_callable=AsyncMock,
                 return_value=mock_result,
             ),

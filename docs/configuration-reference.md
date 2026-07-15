@@ -65,7 +65,7 @@ and constraints are extracted directly from the Pydantic v2 config models in
 | `description` | `str \| None` | `None` | Human-readable description |
 | `workspace` | `Path` | `./workspace` | Output directory. Resolved to absolute path at construction time. |
 | `instrument` | `str \| None` | `None` | Named instrument to use (e.g., `claude-code`, `gemini-cli`). Run `mzt instruments list` to see available instruments. If unset, defaults to `claude-code`. |
-| `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults. Functional keys: `model` (alias: `cli_model`), `timeout_seconds`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`. Unknown keys are ignored. |
+| `instrument_config` | `dict` | `{}` | Per-score overrides for the named instrument's defaults. Functional keys: `model`, `timeout_seconds`, `interactive`, `interactive_max_nudges`, `interactive_nudge_message`. Unknown keys are ignored. |
 | `instruments` | `dict[str, InstrumentDef]` | `{}` | Named instrument definitions local to this score. Declares reusable aliases referencing registered instrument profiles with optional overrides. Referenced by name in per-sheet or per-movement `instrument:` fields. See [instruments](#instruments). |
 | `movements` | `dict[int, MovementDef]` | `{}` | Movement declarations. Map of movement number to MovementDef. Each movement can specify a name, instrument, instrument config, and voice count. See [movements](#movements). |
 | `instrument_fallbacks` | `list[str]` | `[]` | Score-level default fallback instrument chain. Tried in order when the primary instrument is unavailable or rate-limited to exhaustion. Each entry is an instrument name (profile or score alias). See [Instrument Fallbacks](#instrument-fallbacks). |
@@ -1178,7 +1178,7 @@ These are the fields most users will configure:
 | `log_level` | `"debug" \| "info" \| "warning" \| "error"` | `"info"` | | Daemon log level |
 | `job_timeout_seconds` | `float` | `86400.0` | `>= 60` | Maximum wall-clock time per job (24 hours default). |
 | `learning.enabled` | `bool` | `true` | | Semantic learning on/off |
-| `learning.instrument` | `str` | `"anthropic_api"` | | Which instrument powers semantic analysis |
+| `learning.instrument` | `str` | `"claude-code"` | | Which instrument powers semantic analysis |
 | `profiler.enabled` | `bool` | `true` | | Resource monitoring on/off |
 
 ### Advanced Fields
@@ -1255,12 +1255,12 @@ Profiles are partial overrides merged on top of your config file. Resolution ord
 
 Controls the conductor's LLM-based analysis of sheet completions. The SemanticAnalyzer subscribes to EventBus sheet events, sends completion context to an LLM, and stores insights as `SEMANTIC_INSIGHT` patterns in the global learning store. These patterns are automatically picked up by the existing pattern injection pipeline.
 
-Analysis runs through the instrument plugin system — any registered instrument profile (`claude-code`, `opencode`, `ollama`, `anthropic_api`, ...) can power semantic analysis.
+Analysis runs through the instrument plugin system — any registered instrument profile (`claude-code`, `opencode`, `ollama`, ...) can power semantic analysis.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
 | `enabled` | `bool` | `true` | | Enable semantic learning. When the conductor is running, learning is on by default. |
-| `instrument` | `str` | `"anthropic_api"` | min_length=1 | Instrument profile name for semantic-analysis LLM calls. |
+| `instrument` | `str` | `"claude-code"` | min_length=1 | Instrument profile name for semantic-analysis LLM calls. |
 | `model` | `str \| None` | `None` | | Model override for semantic analysis. `None` uses the instrument profile's default model. |
 | `timeout_seconds` | `float` | `120.0` | `> 0` | Per-analysis LLM call timeout (also bounds the shutdown drain wait). |
 | `analyze_on` | `list["success" \| "failure"]` | `["success", "failure"]` | Non-empty, no duplicates | Which sheet outcomes trigger analysis |

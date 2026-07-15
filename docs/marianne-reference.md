@@ -291,18 +291,17 @@ in this reference.
 
 The built-in profile set includes agent harnesses such as `claude-code`,
 `gemini-cli`, `codex-cli`, `cline-cli`, `aider`, `goose`, `crush`, and
-`opencode`, plus native/API/local providers where configured. Model defaults
+`opencode`, plus profile-driven API and local providers where configured. Model defaults
 change over time; the authoritative sources are the profile YAML files and
 `mzt instruments list`.
 
-### Native Backends (Python implementations)
+### Execution Transports
 
-| Backend | Module | Purpose |
-|---------|--------|---------|
-| Claude CLI | `backends/claude_cli.py` | Direct Claude CLI integration (legacy) |
-| Anthropic API | `backends/anthropic_api.py` | Direct API calls |
-| Ollama | `backends/ollama.py` | Local model execution |
-| Recursive Light | `backends/recursive_light.py` | Recursive self-improvement framework |
+| Transport | Purpose |
+|---------|---------|
+| Plugin CLI | Executes CLI profiles from profile command metadata |
+| Interactive CLI | Executes profiles with verified terminal interaction support |
+| OpenAI-compatible HTTP | Executes profile-selected chat-completions requests, including Ollama |
 
 ### Profile Loading Cascade
 
@@ -746,7 +745,7 @@ Multi-phase classification pipeline: structured JSON → exit code/signal → re
 - Rate limits are tempo changes, not failures — other instruments continue
 
 ### Multi-Instrument Orchestration
-- 10+ instruments out of the box (6 config-driven profiles + 4 native backends)
+- 10+ instruments out of the box, all config-driven profiles
 - Config-driven: new instruments in ~30 lines of YAML
 - Per-sheet assignment with cascading precedence
 - Named instrument aliases with movement-level overrides
@@ -813,7 +812,7 @@ Multi-phase classification pipeline: structured JSON → exit code/signal → re
 | Learning store modules | 16 |
 | Pattern types | 8 |
 | Baton event types | 20+ |
-| Instruments | 10+ (6 config-driven profiles + 4 native backends) |
+| Instruments | 10+ config-driven profiles |
 | State backends | 3 (JSON, SQLite, Memory) |
 | Notification channels | 3 (Desktop, Slack, Webhook) |
 | Validation types | 5 |

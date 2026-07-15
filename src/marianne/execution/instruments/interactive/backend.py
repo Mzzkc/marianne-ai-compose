@@ -28,7 +28,7 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 
-from marianne.backends.base import Backend, ExecutionResult
+from marianne.execution.base import Backend, ExecutionResult
 from marianne.core.config.instruments import InstrumentProfile, InteractiveCliConfig
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger

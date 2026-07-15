@@ -48,7 +48,7 @@ from marianne.core.config.judgment import JudgmentConfig
 from marianne.core.logging import get_logger
 
 if TYPE_CHECKING:
-    from marianne.backends.base import Backend
+    from marianne.execution.base import Backend
     from marianne.core.checkpoint import CheckpointState, SheetState
     from marianne.daemon.event_bus import EventBus
     from marianne.daemon.types import ObserverEvent

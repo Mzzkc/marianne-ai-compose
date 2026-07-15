@@ -4,8 +4,8 @@
 name: simple-task
 workspace: ./workspace
 
-backend:
-  type: claude_cli
+instrument: claude-code
+instrument_config:
   model: haiku  # Fast and cost-effective for simple tasks
 
 sheet:

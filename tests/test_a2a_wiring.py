@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.core.config.a2a import A2ASkill, AgentCard
 from marianne.core.config.job import PromptConfig
 from marianne.core.config.techniques import TechniqueConfig, TechniqueKind

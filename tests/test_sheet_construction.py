@@ -54,14 +54,14 @@ class TestBuildSheetsBasic:
         for sheet in sheets:
             assert sheet.instrument_name == "claude-code"
 
-    def test_instrument_name_from_anthropic_api(self):
-        """Backend type anthropic_api maps correctly."""
+    def test_explicit_instrument_name_is_preserved(self):
+        """A current explicit profile name reaches each constructed sheet."""
         from marianne.core.sheet import build_sheets
 
-        config = self._make_config(instrument="anthropic_api")
+        config = self._make_config(instrument="gemini-cli")
         sheets = build_sheets(config)
         for sheet in sheets:
-            assert sheet.instrument_name == "anthropic_api"
+            assert sheet.instrument_name == "gemini-cli"
 
     def test_prompt_template_from_config(self):
         """prompt_template comes from prompt.template."""

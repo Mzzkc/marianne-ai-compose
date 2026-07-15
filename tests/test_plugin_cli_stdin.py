@@ -2,8 +2,8 @@
 
 When an instrument profile sets `prompt_via_stdin: true`, the backend
 must pass the prompt via subprocess stdin instead of CLI args. This
-avoids ARG_MAX limits on large prompts and matches the behavior of
-the native ClaudeCliBackend.
+avoids ARG_MAX limits on large prompts and preserves the proven behavior of
+the retired native implementation.
 
 TDD: Red first, then green.
 """

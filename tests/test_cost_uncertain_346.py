@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.core.checkpoint import SheetState
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.musician import _estimate_cost, _pricing_missing

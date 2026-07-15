@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from marianne.core.logging import get_logger
 
 if TYPE_CHECKING:
-    from marianne.backends.base import Backend
+    from marianne.execution.base import Backend
     from marianne.core.config import AIReviewConfig
 
 # Module-level logger for code review scoring

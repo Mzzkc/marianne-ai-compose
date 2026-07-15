@@ -1,5 +1,9 @@
 # Quality Sweep Report — April 10, 2026
 
+> Historical snapshot. Paths and execution classes below describe the
+> repository on 2026-04-10; provider-specific native backends were removed by
+> the July 2026 profile-driven execution cleanup.
+
 **Method:** Immune Cascade — 5 orthogonal triage sweeps, then convergence analysis on 2+ agent signals.
 **Scope:** `src/marianne/` (6,430 lines in core modules, 373 test files, 230K lines of tests)
 **Agents:** 5 Gemini subagents (API consistency, dead code, error handling, config drift, test quality)

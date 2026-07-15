@@ -488,7 +488,7 @@ class TestFormatErrorDetails:
             error_code="E201",
             attempt_number=2,
             timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC),
-            context={"sheet_num": 3, "backend": "claude_cli"},
+            context={"sheet_num": 3, "backend": "claude-code"},
             stdout_tail=None,
             stderr_tail=None,
             stack_trace=None,

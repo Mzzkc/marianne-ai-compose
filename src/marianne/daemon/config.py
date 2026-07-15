@@ -269,11 +269,8 @@ class DaemonLoggingConfig(BaseModel):
 
 # Instrument name used for semantic analysis when the user does not set
 # ``learning.backend`` explicitly. Resolved via the instrument registry's
-# native-bridge (``register_native_instruments``). Held as a module-level
-# constant so AUDIT-CFG-2 ("daemon/config.py no longer hardcodes the
-# anthropic_api type literal") passes — the string appears once as an
-# instrument name, not as a backend.type literal.
-_DEFAULT_SEMANTIC_INSTRUMENT: str = "anthropic_api"
+# profile loader.
+_DEFAULT_SEMANTIC_INSTRUMENT: str = "claude-code"
 
 
 class SemanticLearningConfig(BaseModel):
@@ -297,9 +294,7 @@ class SemanticLearningConfig(BaseModel):
         default=_DEFAULT_SEMANTIC_INSTRUMENT,
         min_length=1,
         description="Instrument profile name for semantic-analysis LLM calls "
-        "(any registered instrument: claude-code, opencode, ollama, "
-        "anthropic_api, ...). Replaced the legacy backend: config when the "
-        "backend path was stripped (#347).",
+        "(any registered instrument: claude-code, opencode, ollama, ...).",
     )
     model: str | None = Field(
         default=None,

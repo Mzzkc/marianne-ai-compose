@@ -3,8 +3,7 @@
 Shared guards for process group operations that prevent PID-recycle
 or mock-object bugs from escalating into session-wide kills (F-490).
 Also hosts ``reap_descendant_trees`` — the Claude Code #1935 orphan
-process cleanup helper relocated from ``backends/claude_cli.py`` in
-Phase 4c of the backend atlas migration.
+process cleanup helper used by CLI execution.
 """
 
 from __future__ import annotations
@@ -73,7 +72,7 @@ def reap_descendant_trees(pid: int) -> None:
     commands from Claude Code's Bash tool (``shell-snapshot`` in cmdline),
     so there is no risk of signalling unrelated processes.
 
-    Relocated from ``marianne.execution.instruments.claude_cli_legacy._reap_descendant_trees``
+    Shared by the CLI execution layer.
     in Phase 4c of the backend atlas migration so the helper survives
     retirement of the native Claude CLI backend class.
     """

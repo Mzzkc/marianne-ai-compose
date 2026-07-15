@@ -183,7 +183,7 @@ Controls the SemanticAnalyzer — LLM-based analysis of sheet completions that p
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `true` | Enable semantic learning. Defaults to on when the conductor is running. |
-| `instrument` | `str` | `"anthropic_api"` | Instrument profile that powers the analysis LLM. Any registered instrument works: `claude-code` (no API key needed), `opencode`, `ollama` (free local models), `anthropic_api`, ... |
+| `instrument` | `str` | `"claude-code"` | Instrument profile that powers the analysis LLM. Any registered instrument works: `claude-code`, `opencode`, `ollama` (free local models), ... |
 | `model` | `str \| None` | `None` | Model override for analysis calls. `None` uses the instrument profile's default model. |
 | `timeout_seconds` | `float` | `120.0` | Per-analysis LLM call timeout. |
 | `analyze_on` | `list` | `["success", "failure"]` | Which outcomes to analyze: `success`, `failure`, or both |

@@ -762,19 +762,19 @@ class TestAgentCard:
 # =============================================================================
 
 
-class TestOpenRouterBackend:
-    """OpenRouterBackend — HTTP backend for OpenRouter API."""
+class TestOpenAICompatibleBackend:
+    """Generic OpenAI-compatible HTTP backend."""
 
     def test_backend_importable(self) -> None:
-        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
 
-        assert OpenRouterBackend is not None
+        assert OpenAICompatibleBackend is not None
 
-    def test_default_model(self) -> None:
-        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
+    def test_transport_requires_profile_selected_connection_details(self) -> None:
+        from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
 
-        backend = OpenRouterBackend()
-        assert backend.model == "minimax/minimax-m1-80k"
+        with pytest.raises(TypeError):
+            OpenAICompatibleBackend()  # type: ignore[call-arg]
 
 
 # =============================================================================

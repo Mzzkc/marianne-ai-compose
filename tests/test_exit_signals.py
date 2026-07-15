@@ -2,7 +2,7 @@
 
 Tests cover:
 - ExecutionResult signal fields
-- ClaudeCliBackend signal detection
+- profile-driven CLI signal detection
 - ErrorClassifier signal handling
 - SheetState signal persistence
 """
@@ -11,7 +11,7 @@ import signal
 
 import pytest
 
-from marianne.backends.base import ExecutionResult, ExitReason
+from marianne.execution.base import ExecutionResult, ExitReason
 from marianne.core.checkpoint import SheetState, SheetStatus
 from marianne.core.errors import (
     FATAL_SIGNALS,

@@ -76,7 +76,7 @@ description: "Multi-source research with parallel execution via explicit depende
 workspace: "../../workspaces/parallel-workspace"
 
 instrument: claude-code
-instrument_fallbacks: [anthropic_api]
+instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1800
 

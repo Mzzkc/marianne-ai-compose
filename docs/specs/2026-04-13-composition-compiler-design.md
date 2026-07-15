@@ -1,7 +1,8 @@
 # Composition Compiler & Agent Infrastructure Design
 
 **Date:** 2026-04-13
-**Status:** Draft — pending review
+**Status:** Historical draft. Its native-backend topology is superseded by the
+profile-driven execution system; retained as design history, not runtime truth.
 
 ---
 

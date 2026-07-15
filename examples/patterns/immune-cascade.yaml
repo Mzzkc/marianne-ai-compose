@@ -89,7 +89,7 @@ description: "Immune Cascade: graduated security hardening — cheap sweeps narr
 workspace: ../../workspaces/immune-cascade-workspace
 
 instrument: claude-code
-instrument_fallbacks: [anthropic_api]
+instrument_fallbacks: [codex-cli]
 instrument_config:
   timeout_seconds: 1800
 

@@ -1,8 +1,8 @@
 """Tests for F-271: PluginCliBackend MCP disabling.
 
-The legacy ClaudeCliBackend adds --strict-mcp-config --mcp-config '{"mcpServers":{}}'
-to prevent spawning MCP child processes. The PluginCliBackend (used by the baton)
-has a mcp_config_flag defined in profiles but never used it.
+Claude Code requires --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+to prevent spawning MCP child processes. PluginCliBackend reads that behavior
+from the selected profile.
 
 Without MCP disabling: 4 musicians spawn ~80 child processes (MCP servers,
 docker containers) instead of ~8. Potential deadlocks.
@@ -151,9 +151,8 @@ class TestClaudeCodeProfileMcpDisable:
         assert "--mcp-config" in disable_args
         assert '{"mcpServers":{}}' in disable_args
 
-    def test_claude_code_mcp_parity_with_legacy(self) -> None:
-        """PluginCliBackend with claude-code profile produces the same MCP
-        args as the legacy ClaudeCliBackend."""
+    def test_claude_code_profile_drives_mcp_isolation(self) -> None:
+        """The claude-code profile supplies the required MCP isolation args."""
         from marianne.instruments.loader import InstrumentProfileLoader
 
         profiles = InstrumentProfileLoader.load_directory(
@@ -165,7 +164,7 @@ class TestClaudeCodeProfileMcpDisable:
         backend = PluginCliBackend(claude_profile)
         cmd = backend._build_command("test", timeout_seconds=None)
 
-        # Legacy backend adds these exact args when disable_mcp=True
+        # These exact args isolate each musician from ambient MCP servers.
         assert "--strict-mcp-config" in cmd
         assert "--mcp-config" in cmd
         mcp_idx = cmd.index("--mcp-config")

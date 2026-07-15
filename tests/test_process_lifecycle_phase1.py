@@ -562,7 +562,7 @@ class TestMusicianWrapperWiresCallback:
             cb = backend._on_process_group_spawned
             if cb is not None:
                 cb(pid, pgid)
-            from marianne.backends.base import ExecutionResult
+            from marianne.execution.base import ExecutionResult
             return ExecutionResult(
                 success=True, stdout="ok", stderr="", exit_code=0,
                 duration_seconds=0.01,
@@ -628,7 +628,7 @@ class TestMusicianWrapperWiresCallback:
             if cb is not None:
                 cb(pid, pgid)
             mid_execute_snapshot.update(adapter._active_pids)
-            from marianne.backends.base import ExecutionResult
+            from marianne.execution.base import ExecutionResult
             return ExecutionResult(
                 success=True, stdout="ok", stderr="", exit_code=0,
                 duration_seconds=0.01,
@@ -679,7 +679,7 @@ class TestMusicianWrapperWiresCallback:
         backend = MagicMock(spec=["execute", "set_preamble"])
 
         async def fake_execute(*args, **kwargs):
-            from marianne.backends.base import ExecutionResult
+            from marianne.execution.base import ExecutionResult
             return ExecutionResult(
                 success=True, stdout="ok", stderr="", exit_code=0,
                 duration_seconds=0.01,

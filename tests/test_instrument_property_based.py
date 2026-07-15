@@ -155,7 +155,7 @@ def http_profile_strategy() -> st.SearchStrategy[dict[str, Any]]:
     return st.fixed_dictionaries(
         {
             "base_url": _nonempty_text.map(lambda s: f"http://{s}"),
-            "schema_family": st.sampled_from(["openai", "anthropic", "gemini"]),
+            "schema_family": st.just("openai"),
         }
     )
 

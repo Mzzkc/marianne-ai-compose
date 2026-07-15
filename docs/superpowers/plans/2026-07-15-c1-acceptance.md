@@ -1,5 +1,11 @@
 # C1 Marianne Acting Acceptance Implementation Plan
 
+> **Historical — superseded 2026-07-15.** This compatibility-oriented plan was
+> rejected by the composer. Do not execute it. The accepted clean break removes
+> legacy names and provider-specific executors, updates maintained examples,
+> keeps Ollama only as a generic OpenAI-compatible YAML profile, and does not
+> ship a built-in direct Anthropic API profile.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Use Marianne and the candidate Marianne Expert to reconcile and complete native-backend unification against current source.
@@ -75,4 +81,3 @@
 - [ ] Hash the source candidate and dispatch independent inspection.
 - [ ] If inspection changes source, invalidate the digest and repeat all verification.
 - [ ] Write release evidence only when inspected and verified digests match.
-

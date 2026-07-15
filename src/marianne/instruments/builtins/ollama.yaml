@@ -1,0 +1,16 @@
+name: ollama
+display_name: "Ollama"
+description: "Local Ollama execution through its OpenAI-compatible chat endpoint"
+kind: http
+capabilities: [structured_output]
+default_model: llama3.1:8b
+default_timeout_seconds: 300
+models:
+  - name: llama3.1:8b
+    context_window: 32768
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+http:
+  base_url: http://localhost:11434/v1
+  endpoint: /chat/completions
+  schema_family: openai

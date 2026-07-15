@@ -77,9 +77,8 @@ IMPORTABLE_MODULES = [
     "marianne.cli.commands.diagnose",
     "marianne.cli.commands.dashboard",
     "marianne.cli.commands.config_cmd",
-    # Backends
-    "marianne.backends",
-    "marianne.backends.base",
+    # Execution contracts
+    "marianne.execution.base",
     # State
     "marianne.state",
     "marianne.state.base",

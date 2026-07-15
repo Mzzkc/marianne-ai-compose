@@ -59,7 +59,6 @@ workspace: ../../workspaces/hello
 #   FREE local   opencode & a direct HTTP profile  →  local Ollama (no account)
 #   PAID subs    Z.AI Coding Plan (opencode/glm) → Google (gemini-cli)
 #                → Anthropic Max (claude-code)
-#   PAID API     anthropic_api — the very last resort
 #
 # A new user with NOTHING set up: install Ollama and `ollama pull gemma2` (free,
 # local, no account), OR set OPENROUTER_API_KEY (free). See the quickstart.
@@ -89,7 +88,7 @@ instruments:
 # configured they HANG to the timeout instead of erroring, which would stall a
 # first run — and crush already covers free OpenRouter.
 instrument_fallbacks:
-  [cr-gemma, cr-gptoss, oc-local, http-local, goose-local, zai, google, anthropic, anthropic_api]
+  [cr-gemma, cr-gptoss, oc-local, http-local, goose-local, zai, google, anthropic, claude-code]
 
 movements:
   1:

@@ -409,7 +409,7 @@ class TestBuiltInProfileValidation:
         for name, profile in profiles.items():
             assert profile.name == name, f"Profile name mismatch: {profile.name} != {name}"
             assert profile.display_name, f"{name} missing display_name"
-            assert profile.kind in ("cli", "api", "native"), f"{name} invalid kind: {profile.kind}"
+            assert profile.kind in ("cli", "http"), f"{name} invalid kind: {profile.kind}"
 
     def test_gemini_cli_has_error_patterns(self) -> None:
         """gemini-cli profile must have comprehensive error patterns."""

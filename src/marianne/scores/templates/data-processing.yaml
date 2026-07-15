@@ -4,8 +4,8 @@
 name: data-processing-pipeline
 workspace: ./workspace
 
-backend:
-  type: claude_cli
+instrument: claude-code
+instrument_config:
   model: sonnet  # Good for data analysis reasoning
 
 sheet:

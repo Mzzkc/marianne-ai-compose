@@ -46,10 +46,10 @@ class TestNoUsableInstrument:
         assert "ollama" in (issues[0].suggestion or "").lower()
 
     def test_http_only_chain_warns_about_endpoints(self) -> None:
-        # No installed CLI, but an HTTP instrument (anthropic_api) is present:
+        # No installed CLI, but the maintained Ollama HTTP profile is present:
         # the message must flag that HTTP needs a server/key, not claim success.
         issues = _run(
-            _config(instrument="ghost-instrument-xyz", fallbacks=["anthropic_api"])
+            _config(instrument="ghost-instrument-xyz", fallbacks=["ollama"])
         )
         assert len(issues) == 1
         assert "HTTP" in issues[0].message

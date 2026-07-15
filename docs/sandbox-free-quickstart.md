@@ -127,7 +127,7 @@ mzt validate examples/getting-started/hello-local.yaml
 | Avoided | Why |
 |---|---|
 | `code_mode:` in first-run scores | It is an opt-in generated-code path; CLI instruments are the safer onboarding route. |
-| `claude-code` / `anthropic_api` as defaults | Require a paid Anthropic account; not free-tier. |
+| `claude-code` as the default | Requires a configured Claude Code installation; not a guaranteed free tier. |
 | Restarting the conductor mid-run | Recovery of interrupted in-flight work is not fully reliable (KNOWN-ISSUES §3). |
 
 See [KNOWN-ISSUES.md](../KNOWN-ISSUES.md) for the full list of alpha

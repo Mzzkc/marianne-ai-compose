@@ -4,6 +4,9 @@
 
 **Date:** 2026-03-26
 
+> Historical research snapshot. Descriptions of Marianne's then-current
+> backends predate the profile-driven execution cleanup completed in July 2026.
+
 ---
 
 ## Executive Summary
