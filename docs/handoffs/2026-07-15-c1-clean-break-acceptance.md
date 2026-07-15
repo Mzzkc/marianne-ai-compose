@@ -16,19 +16,27 @@ maintained examples be updated instead. The accepted boundary is:
   routed through a provider special case.
 
 This candidate is based on `79995feead02c4acbae772f4ac8ff3f29726dda5`
-on `codex/marianne-c1-acting`. The exact source diff, excluding this report, is:
+on `codex/marianne-c1-acting` and was committed as
+`0cc3e675a9cad4b607ba83b4dd6d3a55c77617ff`. The reproducible commit-range
+diff, excluding this report, is:
 
 ```text
-b1f44107c927ee3717fae55ad7ed211c81058b3de964ea96ede5b3e3f7ddf67c
+5627dcbe4bed20d7c907eb33c6c98e9035347fe577511ae64e8e7c55a2abc57e
 ```
 
 Generated with:
 
 ```bash
-git diff --binary HEAD -- . \
+git diff --binary \
+  79995feead02c4acbae772f4ac8ff3f29726dda5..0cc3e675a9cad4b607ba83b4dd6d3a55c77617ff \
+  -- . \
   ':(exclude)docs/handoffs/2026-07-15-c1-clean-break-acceptance.md' \
   | sha256sum
 ```
+
+The earlier pre-commit working-tree hash omitted untracked additions because
+`git diff HEAD` does not include untracked files. The live Marianne Expert
+identified that provenance defect; this commit-range hash replaces it.
 
 ## Implementation
 
@@ -111,4 +119,12 @@ Additional gates passed:
 - `mzt instruments check anthropic_api` returns `Unknown instrument`, as the
   breaking contract requires.
 
-The candidate is ready for the final live Marianne Expert acceptance score.
+## Live acting acceptance
+
+Marianne job `final-score` completed in one attempt in 7m35s with all eight
+validations passing. The injected Marianne Expert reviewed exact commit
+`0cc3e67`, proved candidate import provenance, ran 37 focused tests, verified
+the compatibility/test disposition, and issued PASS without changing source.
+The score then ran its candidate-bound full-suite validation successfully. Its
+report is at
+`/home/emzi/workspaces/marianne-expert-c1-final-20260715/final-review.md`.
