@@ -85,12 +85,18 @@ cli:
     # Verified 2026-06-21/22 against Antigravity CLI 1.0.10. Default-on
     # because daemon print mode can emit a Bubble Tea TTY error on stdout
     # while exiting 0, which looks like success to generic CLI dispatch.
+    # Trust-dialog gate added 2026-07-15 against agy 1.1.2 — fresh
+    # directories show "Do you trust the contents of this project?" with
+    # "Yes, I trust this folder" pre-selected; Enter accepts.
     enabled_by_default: true
     inherit_auto_approve: true
     inherit_mcp_disable_args: false
     extra_args:
       - "--sandbox"
       - "false"
+    startup_gates:
+      - pattern: "Do you trust the contents of this project"
+        keys: ["Enter"]
     ready_pattern: '(?m)^>\s*$'
     busy_patterns:
       - 'esc to (?:cancel|interrupt)'
