@@ -46,7 +46,6 @@ class TestDiscoverInstruments:
         profiles = InstrumentProfileLoader.load_directory(builtins_dir)
 
         # All built-in CLI profiles should load
-        assert len(profiles) == 10
         expected_names = {
             "claude-code",
             "gemini-cli",
@@ -58,7 +57,9 @@ class TestDiscoverInstruments:
             "opencode",
             "crush",
             "cli",
+            "gpt-5.6",
         }
+        assert len(profiles) == len(expected_names)
         assert set(profiles.keys()) == expected_names
 
     def test_builtin_profiles_have_required_fields(self) -> None:
@@ -116,9 +117,10 @@ class TestDiscoverInstruments:
         for profile in profiles.values():
             registry.register(profile)
 
-        # 4 native + 10 built-in = 14
+        # Native compatibility profiles and YAML built-ins coexist without
+        # silently dropping a newly shipped profile.
         all_instruments = registry.list_all()
-        assert len(all_instruments) == 14
+        assert len(all_instruments) == 4 + len(profiles)
 
 
 # =============================================================================
