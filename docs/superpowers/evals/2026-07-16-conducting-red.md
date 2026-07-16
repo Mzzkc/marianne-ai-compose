@@ -34,7 +34,7 @@ and explain your reasoning.
 > 2. Put one bounded P0 assignment on the authoritative shared task board and
 > directives log:
 >
-> > Owner: musician best matched to the affected subsystem.  
+> > Owner: musician best matched to the affected subsystem.
 > > Reproduce the defect, implement the smallest correct fix, add or update the
 > > focused regression test, and record commands/results. Post reproduction
 > > evidence within 5 minutes; deliver the patch within 20. If blocked for 5
@@ -264,7 +264,7 @@ scores yourself.
 > 2. Hold only the two affected lanes; allow unrelated fleet work to continue.
 > 3. Issue this directive:
 >
-> > **COMPILER-VALIDATION-WIRING — owner: conductor**  
+> > **COMPILER-VALIDATION-WIRING — owner: conductor**
 > > Add generic validation-wiring emission to the fleet compiler. Add regression
 > > coverage proving both affected score shapes receive it. Keep the
 > > implementation generic and configuration-driven. Do not patch generated
