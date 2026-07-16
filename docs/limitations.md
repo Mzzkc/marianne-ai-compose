@@ -107,11 +107,11 @@ Marianne runs on a single machine. There is no distributed execution, remote wor
 
 ### Instrument Plugin System
 
-Marianne supports multiple AI instruments through a config-driven plugin system. Twelve instruments ship as built-in profiles, and users can add custom instruments via YAML files.
+Marianne supports multiple AI instruments through a config-driven plugin system. Eleven instruments ship as built-in profiles, and users can add custom instruments via YAML files.
 
 **Built-in instruments:** `aider`, `antigravity`, `claude-code`, `cli`,
-`cline-cli`, `codex-cli`, `crush`, `gemini-cli`, `goose`, `gpt-5.6`,
-`ollama`, `opencode`
+`cline-cli`, `codex-cli`, `crush`, `gemini-cli`, `goose`, `ollama`,
+`opencode`
 
 **Execution model:** instrument profiles select shared CLI, interactive CLI,
 or OpenAI-compatible HTTP executors. Marianne has no provider-specific native

@@ -1343,11 +1343,11 @@ mzt instruments list --json
   NAME              KIND    STATUS          DEFAULT MODEL
   aider             cli     ✗ not found     (instrument default)
   claude-code       cli     ✓ ready         (instrument default)
-  codex-cli         cli     ✓ ready         gpt-5.6-codex
+  codex-cli         cli     ✓ ready         (instrument default)
   gemini-cli        cli     ✓ ready         gemini-2.5-pro
   ollama            http    http            llama3.1:8b
 
-12 instruments configured (installation readiness varies)
+11 instruments configured (installation readiness varies)
 ```
 
 **Status values:**

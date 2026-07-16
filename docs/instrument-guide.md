@@ -103,6 +103,19 @@ instrument_config:
 These overrides are flat key-value pairs that adjust the resolved instrument
 profile without replacing it.
 
+GPT-5.6 is a model family played through the `codex-cli` instrument. Select a
+tier explicitly when the score needs one:
+
+```yaml
+instrument: codex-cli
+instrument_config:
+  model: gpt-5.6-luna
+```
+
+If `instrument_config.model` is omitted, Marianne passes no `--model` flag and
+the installed Codex client chooses its configured default. Marianne does not
+implicitly default Codex to Luna, Terra, or Sol.
+
 ---
 
 ## Adding Your Own Instruments
