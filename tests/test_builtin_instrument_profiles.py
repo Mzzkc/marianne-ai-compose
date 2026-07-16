@@ -52,6 +52,10 @@ class TestBuiltinProfilesExist:
         missing = expected - actual
         assert not missing, f"Missing profiles: {missing}"
 
+    def test_standalone_gpt_5_6_profile_is_removed(self) -> None:
+        """GPT-5.6 is a Codex model family, not an instrument."""
+        assert not (BUILTINS_DIR / "gpt-5.6.yaml").exists()
+
 
 class TestBuiltinProfilesValid:
     """Verify all profiles parse into valid InstrumentProfile instances."""
@@ -166,6 +170,39 @@ class TestProfileDetails:
         assert profile.cli is not None
         assert profile.cli.command.prompt_flag is None
         assert profile.cli.command.subcommand == "exec"
+
+    def test_codex_owns_complete_gpt_5_6_family_without_default(self) -> None:
+        """Codex carries GPT-5.6 metadata but lets the client choose its default."""
+        path = BUILTINS_DIR / "codex-cli.yaml"
+        with open(path) as fh:
+            data = yaml.safe_load(fh)
+        profile = InstrumentProfile.model_validate(data)
+
+        assert profile.default_model is None
+        assert {"vision", "thinking"} <= set(profile.capabilities)
+        assert profile.cli is not None
+        assert profile.cli.command.model_flag == "--model"
+
+        expected = {
+            "gpt-5.6-sol": (272_000, 0.005, 0.030, 128_000, 4),
+            "gpt-5.6-sol[1m]": (1_050_000, 0.005, 0.030, 128_000, 4),
+            "gpt-5.6-terra": (272_000, 0.0025, 0.015, 128_000, 6),
+            "gpt-5.6-terra[1m]": (1_050_000, 0.0025, 0.015, 128_000, 6),
+            "gpt-5.6-luna": (272_000, 0.001, 0.006, 128_000, 8),
+            "gpt-5.6-luna[1m]": (1_050_000, 0.001, 0.006, 128_000, 8),
+        }
+        actual = {
+            model.name: (
+                model.context_window,
+                model.cost_per_1k_input,
+                model.cost_per_1k_output,
+                model.max_output_tokens,
+                model.max_concurrent,
+            )
+            for model in profile.models
+            if model.name.startswith("gpt-5.6-")
+        }
+        assert actual == expected
 
     def test_opencode_has_mcp_and_free_models(self) -> None:
         """OpenCode profile declares MCP capability and free-tier models."""

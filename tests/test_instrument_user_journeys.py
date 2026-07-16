@@ -30,7 +30,7 @@ from marianne.instruments.loader import InstrumentProfileLoader, load_all_profil
 # Story 1: Discovering Instruments
 #
 # Sarah runs `mzt instruments list` (conceptually). What does she see?
-# Does the built-in profile loading work? Are the 6 shipped profiles valid?
+# Does the built-in profile loading work? Are the shipped profiles valid?
 # =============================================================================
 
 
@@ -38,7 +38,7 @@ class TestDiscoverInstruments:
     """Can a user discover what instruments are available?"""
 
     def test_builtin_profiles_all_load_successfully(self) -> None:
-        """All 6 built-in profiles parse without errors."""
+        """All built-in profiles parse without errors."""
         builtins_dir = (
             Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
         )
@@ -56,11 +56,11 @@ class TestDiscoverInstruments:
             "opencode",
             "crush",
             "cli",
-            "gpt-5.6",
             "ollama",
         }
         assert len(profiles) == len(expected_names)
         assert set(profiles.keys()) == expected_names
+        assert "gpt-5.6" not in profiles
 
     def test_builtin_profiles_have_required_fields(self) -> None:
         """Every built-in profile has name, kind, display_name and matching config."""
