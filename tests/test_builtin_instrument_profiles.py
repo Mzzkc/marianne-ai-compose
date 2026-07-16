@@ -171,6 +171,19 @@ class TestProfileDetails:
         assert profile.cli.command.prompt_flag is None
         assert profile.cli.command.subcommand == "exec"
 
+    def test_codex_uses_current_unattended_exec_flag(self) -> None:
+        """Codex exec uses the unattended flag exposed by current releases."""
+        path = BUILTINS_DIR / "codex-cli.yaml"
+        with open(path) as fh:
+            data = yaml.safe_load(fh)
+        profile = InstrumentProfile.model_validate(data)
+
+        assert profile.cli is not None
+        assert (
+            profile.cli.command.auto_approve_flag
+            == "--dangerously-bypass-approvals-and-sandbox"
+        )
+
     def test_codex_owns_complete_gpt_5_6_family_without_default(self) -> None:
         """Codex carries GPT-5.6 metadata but lets the client choose its default."""
         path = BUILTINS_DIR / "codex-cli.yaml"

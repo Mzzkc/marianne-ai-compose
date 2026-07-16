@@ -93,15 +93,15 @@ cli:
       - OPENAI_API_KEY
       - CODEX_API_KEY
     model_flag: "--model"
-    auto_approve_flag: "--full-auto"
+    auto_approve_flag: "--dangerously-bypass-approvals-and-sandbox"
     output_format_flag: "--json"
     output_format_value: null  # boolean flag, no value
     extra_flags:
       - "--skip-git-repo-check"
   # Interactive mode — drive the codex TUI in a tmux session.
-  # Patterns spike-verified 2026-06-11 against codex v0.139.0.
-  # The headless auto-approve flag (--full-auto) is exec-only and REJECTED
-  # by the TUI — the interactive equivalent goes via extra_args.
+  # Patterns verified through codex v0.144.4.
+  # inherit_auto_approve stays false because the interactive invocation owns
+  # its explicit bypass flag through extra_args.
   interactive:
     # Verified, but opt-in: interactive-by-default is claude-code only
     # (composer decision 2026-06-11). Scores enable per-sheet/score via

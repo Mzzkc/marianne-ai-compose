@@ -472,9 +472,8 @@ class InteractiveCliConfig(BaseModel):
     inherit_auto_approve: bool = Field(
         default=True,
         description="Include the command's auto_approve_flag in the "
-        "interactive launch. Set False when the flag is headless-only "
-        "(e.g. codex's --full-auto is rejected by its TUI) and supply the "
-        "interactive equivalent via extra_args.",
+        "interactive launch. Set False when the interactive invocation owns "
+        "its approval policy through extra_args.",
     )
     inherit_mcp_disable_args: bool = Field(
         default=True,

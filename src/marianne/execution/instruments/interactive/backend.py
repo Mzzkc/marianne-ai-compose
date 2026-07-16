@@ -252,8 +252,7 @@ class InteractiveCliBackend(Backend):
         (prompt flag, output-format, timeout flag, the HEADLESS subcommand).
         The interactive config controls what carries over: its own
         ``subcommand`` (e.g. goose's ``session``), whether the
-        auto-approve flag applies interactively (codex's ``--full-auto``
-        is exec-only and rejected by its TUI), and whether mcp_disable_args
+        auto-approve flag applies interactively, and whether mcp_disable_args
         carry over (F-271 — verified for claude-code).
         """
         cmd = self._cli.command
