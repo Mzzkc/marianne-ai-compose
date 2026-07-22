@@ -59,12 +59,10 @@ capabilities:
 default_model: gemini-3.5-flash-medium
 default_timeout_seconds: 1800
 
-# max_concurrent is per MODEL FAMILY. The AGY effort suffix (-high / -medium /
-# -low) is a selection tier over each family, not a distinct model, so all
-# tiers within a family share the family's concurrency budget:
-#   gemini-3.6-flash  → 6  (fast family, high throughput)
-#   gemini-3.5-flash  → 6  (default/balanced family)
-#   gemini-3.1-pro    → 4  (deep reasoning, reserve capacity)
+# Marianne enforces max_concurrent per exact (instrument, model-slug) pair.
+# AGY's effort suffix (-high / -medium / -low) is part of that selected slug,
+# so each tier has its own baton limit; score- and daemon-level ceilings remain
+# the outer aggregate guard. Flash tiers use 6 and Pro tiers use 4.
 models:
   # ── gemini-3.6-flash tier (fast family) ──
   - name: gemini-3.6-flash-high

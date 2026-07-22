@@ -41,9 +41,8 @@ class TestDiscoverInstruments:
     def test_builtin_profiles_all_load_successfully(self) -> None:
         """All documented built-in profiles parse without errors.
 
-        Uses semantic membership (subset) instead of a brittle exact total
-        count so that shipping a new profile (e.g. gpt-5.6) does not break
-        this gate, while removing a required profile still does.
+        Pins the semantic profile-name inventory instead of only a total count,
+        so additions and removals both require an intentional contract update.
         """
         builtins_dir = (
             Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
@@ -62,9 +61,14 @@ class TestDiscoverInstruments:
             "opencode",
             "crush",
             "cli",
+            "gpt-5.6",
         }
-        missing = expected_names - set(profiles.keys())
-        assert not missing, f"Missing required built-in profiles: {sorted(missing)}"
+        actual_names = set(profiles)
+        assert actual_names == expected_names, (
+            f"Built-in profile inventory drifted: missing="
+            f"{sorted(expected_names - actual_names)}, "
+            f"extra={sorted(actual_names - expected_names)}"
+        )
 
     def test_builtin_profiles_have_required_fields(self) -> None:
         """Every built-in profile has name, kind, display_name, and cli config."""
@@ -111,9 +115,8 @@ class TestDiscoverInstruments:
     def test_builtins_plus_native_coexist_in_registry(self) -> None:
         """Registry can hold both native and plugin instruments.
 
-        Every native bridge name and every loaded built-in profile must
-        resolve. The total count is intentionally not pinned so that adding
-        a new built-in profile does not break this gate.
+        Every native bridge name and every loaded built-in profile must resolve,
+        with no silent omissions or unexpected registry entries.
         """
         registry = InstrumentRegistry()
         register_native_instruments(registry)
@@ -136,11 +139,19 @@ class TestDiscoverInstruments:
             assert registry.get(builtin_name) is not None, (
                 f"Built-in profile {builtin_name!r} not registered"
             )
-        # The registry must hold at least the natives plus the built-ins.
+        # The registry must hold exactly the native and loaded built-in names.
         all_instruments = registry.list_all()
-        assert len(all_instruments) >= len(profiles) + 4, (
-            f"Registry has {len(all_instruments)} instruments; expected at "
-            f"least {len(profiles)} built-ins + 4 native bridge names."
+        expected_registry_names = set(profiles) | {
+            "claude_cli",
+            "anthropic_api",
+            "ollama",
+            "recursive_light",
+        }
+        actual_registry_names = {instrument.name for instrument in all_instruments}
+        assert actual_registry_names == expected_registry_names, (
+            f"Registry inventory drifted: missing="
+            f"{sorted(expected_registry_names - actual_registry_names)}, "
+            f"extra={sorted(actual_registry_names - expected_registry_names)}"
         )
 
 
