@@ -1,26 +1,42 @@
 # Antigravity CLI - Google's successor terminal agent for Gemini CLI.
 #
-# Local help, model flag, and interactive tmux mode verified 2026-06-22
-# against agy 1.0.10:
+# Local help, model flag, and interactive tmux mode verified 2026-07-22
+# against agy 1.1.5:
 #   agy -p/--print <prompt>            one-shot print command, but non-TTY
 #                                      daemon dispatch can fail with a
 #                                      Bubble Tea TTY error while exiting 0
-#   agy --model <model>                model override
+#   agy --model <model>                model override (selects a full slug
+#                                      below; the -high/-medium/-low effort
+#                                      tier is part of the slug, not --effort)
+#   agy --effort <low|medium|high>     reasoning effort for the session
 #   agy --dangerously-skip-permissions auto-approve tools
 #   agy --sandbox <bool>               terminal sandbox toggle
 #   agy --print-timeout <duration>     print-mode wait timeout
 #   agy models                         lists configured models
 #   workspace .agents/mcp_config.json  initializes configured MCP servers
 #
+# Model set refreshed 2026-07-22 against `agy models` on agy 1.1.5. The eight
+# Gemini slugs span three model families; the AGY effort suffix (-high /
+# -medium / -low) is a selection tier over each family:
+#   gemini-3.6-flash  (high / medium / low)
+#   gemini-3.5-flash  (high / medium / low)   <- default family
+#   gemini-3.1-pro    (high / low)
+# Stale unsuffixed aliases (gemini-3.5-flash, gemini-3.5-flash-lite,
+# gemini-3.5-pro) were removed — they no longer resolve in `agy models`.
+#
 # This profile defaults to interactive tmux mode. Print mode is kept for
 # explicit callers, but daemon-run print mode is not treated as reliable until
 # Antigravity stops requiring a controlling TTY for print-mode failures.
 #
+# Cost model: per-token costs are zero because this profile models the installed
+# subscription-backed CLI capacity, not direct API billing. Capacity metadata is
+# conservative (1,000,000 context / 65,536 output) and internally consistent.
+#
 # MCP note: Antigravity has no CLI flag analogous to Claude Code's
-# --mcp-config. A live 2026-06-21 smoke proved agy 1.0.10 reads
-# workspace-local .agents/mcp_config.json and initializes a configured MCP
-# server. Marianne materializes the conductor-generated shared-pool config at
-# that path for the duration of a sheet, then restores/deletes it.
+# --mcp-config. A live smoke proved agy 1.1.5 reads workspace-local
+# .agents/mcp_config.json and initializes a configured MCP server. Marianne
+# materializes the conductor-generated shared-pool config at that path for the
+# duration of a sheet, then restores/deletes it.
 #
 # Error classifiers are conservative until real Antigravity failure samples are
 # captured. Do not broaden these from another instrument without samples.
@@ -40,26 +56,67 @@ capabilities:
   - mcp
   - session_resume
 
-default_model: gemini-3.5-flash
+default_model: gemini-3.5-flash-medium
 default_timeout_seconds: 1800
 
+# max_concurrent is per MODEL FAMILY. The AGY effort suffix (-high / -medium /
+# -low) is a selection tier over each family, not a distinct model, so all
+# tiers within a family share the family's concurrency budget:
+#   gemini-3.6-flash  → 6  (fast family, high throughput)
+#   gemini-3.5-flash  → 6  (default/balanced family)
+#   gemini-3.1-pro    → 4  (deep reasoning, reserve capacity)
 models:
-  - name: gemini-3.5-flash
-    context_window: 1000000
-    cost_per_1k_input: 0.00015
-    cost_per_1k_output: 0.0006
-    max_output_tokens: 65536
-    max_concurrent: 6
-  - name: gemini-3.5-flash-lite
+  # ── gemini-3.6-flash tier (fast family) ──
+  - name: gemini-3.6-flash-high
     context_window: 1000000
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     max_output_tokens: 65536
-    max_concurrent: 8
-  - name: gemini-3.5-pro
+    max_concurrent: 6
+  - name: gemini-3.6-flash-medium
     context_window: 1000000
-    cost_per_1k_input: 0.00125
-    cost_per_1k_output: 0.005
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-3.6-flash-low
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+
+  # ── gemini-3.5-flash tier (default/balanced family) ──
+  - name: gemini-3.5-flash-high
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-3.5-flash-medium
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-3.5-flash-low
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+
+  # ── gemini-3.1-pro tier (deep reasoning family) ──
+  - name: gemini-3.1-pro-high
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 4
+  - name: gemini-3.1-pro-low
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
     max_output_tokens: 65536
     max_concurrent: 4
 
@@ -82,12 +139,15 @@ cli:
       - "--print-timeout"
       - "30m"
   interactive:
-    # Verified 2026-06-21/22 against Antigravity CLI 1.0.10. Default-on
-    # because daemon print mode can emit a Bubble Tea TTY error on stdout
-    # while exiting 0, which looks like success to generic CLI dispatch.
-    # Trust-dialog gate added 2026-07-15 against agy 1.1.2 — fresh
-    # directories show "Do you trust the contents of this project?" with
-    # "Yes, I trust this folder" pre-selected; Enter accepts.
+    # Verified 2026-07-22 against Antigravity CLI 1.1.5 (flags --sandbox,
+    # --print-timeout, --dangerously-skip-permissions all confirmed via
+    # `agy --help`). Default-on because daemon print mode can emit a Bubble
+    # Tea TTY error on stdout while exiting 0, which looks like success to
+    # generic CLI dispatch.
+    # Trust-dialog gate added 2026-07-15 against agy 1.1.2 and re-verified
+    # against agy 1.1.5 — fresh directories show "Do you trust the contents
+    # of this project?" with "Yes, I trust this folder" pre-selected; Enter
+    # accepts.
     enabled_by_default: true
     inherit_auto_approve: true
     inherit_mcp_disable_args: false

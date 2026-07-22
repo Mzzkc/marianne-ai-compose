@@ -39,14 +39,18 @@ class TestDiscoverInstruments:
     """Can a user discover what instruments are available?"""
 
     def test_builtin_profiles_all_load_successfully(self) -> None:
-        """All 6 built-in profiles parse without errors."""
+        """All documented built-in profiles parse without errors.
+
+        Uses semantic membership (subset) instead of a brittle exact total
+        count so that shipping a new profile (e.g. gpt-5.6) does not break
+        this gate, while removing a required profile still does.
+        """
         builtins_dir = (
             Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
         )
         profiles = InstrumentProfileLoader.load_directory(builtins_dir)
 
-        # All built-in CLI profiles should load
-        assert len(profiles) == 10
+        # Every documented built-in CLI profile must load.
         expected_names = {
             "claude-code",
             "gemini-cli",
@@ -59,7 +63,8 @@ class TestDiscoverInstruments:
             "crush",
             "cli",
         }
-        assert set(profiles.keys()) == expected_names
+        missing = expected_names - set(profiles.keys())
+        assert not missing, f"Missing required built-in profiles: {sorted(missing)}"
 
     def test_builtin_profiles_have_required_fields(self) -> None:
         """Every built-in profile has name, kind, display_name, and cli config."""
@@ -104,7 +109,12 @@ class TestDiscoverInstruments:
         assert registry.get("recursive_light") is not None
 
     def test_builtins_plus_native_coexist_in_registry(self) -> None:
-        """Registry can hold both native and plugin instruments."""
+        """Registry can hold both native and plugin instruments.
+
+        Every native bridge name and every loaded built-in profile must
+        resolve. The total count is intentionally not pinned so that adding
+        a new built-in profile does not break this gate.
+        """
         registry = InstrumentRegistry()
         register_native_instruments(registry)
 
@@ -116,9 +126,22 @@ class TestDiscoverInstruments:
         for profile in profiles.values():
             registry.register(profile)
 
-        # 4 native + 10 built-in = 14
+        # Every native bridge name must resolve.
+        for native_name in ("claude_cli", "anthropic_api", "ollama", "recursive_light"):
+            assert registry.get(native_name) is not None, (
+                f"Native bridge name {native_name!r} not registered"
+            )
+        # Every loaded built-in profile must resolve alongside the natives.
+        for builtin_name in profiles:
+            assert registry.get(builtin_name) is not None, (
+                f"Built-in profile {builtin_name!r} not registered"
+            )
+        # The registry must hold at least the natives plus the built-ins.
         all_instruments = registry.list_all()
-        assert len(all_instruments) == 14
+        assert len(all_instruments) >= len(profiles) + 4, (
+            f"Registry has {len(all_instruments)} instruments; expected at "
+            f"least {len(profiles)} built-ins + 4 native bridge names."
+        )
 
 
 # =============================================================================
