@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 CATALOG_PATH = (
@@ -16,6 +17,9 @@ CATALOG_PATH = (
 
 def test_current_catalog_places_gpt_5_6_under_codex() -> None:
     """GPT-5.6 is a Codex model family, never a separate instrument."""
+    if not CATALOG_PATH.is_file():
+        pytest.skip("instrument catalog is an optional plugin submodule asset")
+
     catalog = yaml.safe_load(CATALOG_PATH.read_text())
     codex = catalog["instruments"]["codex-cli"]
     expected = {
