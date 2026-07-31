@@ -11,7 +11,6 @@ import signal
 
 import pytest
 
-from marianne.execution.base import ExecutionResult, ExitReason
 from marianne.core.checkpoint import SheetState, SheetStatus
 from marianne.core.errors import (
     FATAL_SIGNALS,
@@ -20,6 +19,7 @@ from marianne.core.errors import (
     ErrorClassifier,
     get_signal_name,
 )
+from marianne.execution.base import ExecutionResult, ExitReason
 
 # ============================================================================
 # ExecutionResult Tests

@@ -8,7 +8,6 @@ from typing import Any
 
 import pytest
 
-from marianne.execution.base import ExecutionResult
 from marianne.core.config.a2a import A2ASkill, AgentCard
 from marianne.core.config.job import PromptConfig
 from marianne.core.config.techniques import TechniqueConfig, TechniqueKind
@@ -16,6 +15,7 @@ from marianne.core.sheet import Sheet
 from marianne.daemon.a2a.inbox import A2AInbox, A2ATaskStatus
 from marianne.daemon.a2a.registry import AgentCardRegistry
 from marianne.daemon.baton.events import SheetAttemptResult, ShutdownRequested
+from marianne.execution.base import ExecutionResult
 
 
 def _sheet(workspace: Path, num: int = 1, movement: int = 1) -> Sheet:

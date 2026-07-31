@@ -28,9 +28,9 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from marianne.execution.base import Backend, ExecutionResult, ExitReason
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.logging import get_logger
+from marianne.execution.base import Backend, ExecutionResult, ExitReason
 from marianne.utils.json_path import extract_json_path
 from marianne.utils.process import safe_killpg as _safe_killpg
 

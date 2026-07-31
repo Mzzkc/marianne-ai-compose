@@ -30,8 +30,8 @@ import logging
 
 import pytest
 
-from marianne.execution.base import ExecutionResult
 from marianne.daemon.baton.musician import _estimate_cost
+from marianne.execution.base import ExecutionResult
 from marianne.instruments.loader import load_all_profiles
 from marianne.instruments.registry import InstrumentRegistry
 

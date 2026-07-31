@@ -10,13 +10,13 @@ from typing import Any
 import pytest
 import yaml
 
-from marianne.execution.base import ExecutionResult
 from marianne.core.config.execution import ValidationRule
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.config.job import PromptConfig
 from marianne.core.config.techniques import TechniqueConfig, TechniqueKind
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import ShutdownRequested
+from marianne.execution.base import ExecutionResult
 
 BUILTINS_DIR = Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
 

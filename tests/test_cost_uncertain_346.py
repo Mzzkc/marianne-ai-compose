@@ -16,10 +16,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from marianne.execution.base import ExecutionResult
 from marianne.core.checkpoint import SheetState
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.musician import _estimate_cost, _pricing_missing
+from marianne.execution.base import ExecutionResult
 
 
 def _result(input_tokens: int = 1_000_000, output_tokens: int = 1_000_000) -> ExecutionResult:

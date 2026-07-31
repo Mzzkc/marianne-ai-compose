@@ -31,7 +31,6 @@ def _mock_profiles():
         "gemini-cli": None,
         "codex-cli": None,
         "ollama": None,
-        "claude-code": None,
     }
     with patch(
         "marianne.instruments.loader.load_all_profiles",

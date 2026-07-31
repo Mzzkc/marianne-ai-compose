@@ -24,12 +24,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from marianne.execution.base import ExecutionResult
 from marianne.core.config.techniques import TechniqueConfig, TechniqueKind
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import AttemptContext, AttemptMode
 from marianne.daemon.technique_router import OutputKind, TechniqueRouter
+from marianne.execution.base import ExecutionResult
 
 # =========================================================================
 # Helpers

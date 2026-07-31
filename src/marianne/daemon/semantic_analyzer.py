@@ -16,7 +16,6 @@ import re
 import time
 from typing import Any
 
-from marianne.execution.base import Backend
 from marianne.core.checkpoint import CheckpointState
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
@@ -24,6 +23,7 @@ from marianne.daemon.config import SemanticLearningConfig
 from marianne.daemon.event_bus import EventBus
 from marianne.daemon.learning_hub import LearningHub
 from marianne.daemon.types import ObserverEvent
+from marianne.execution.base import Backend
 from marianne.learning.patterns import PatternType
 
 _logger = get_logger("daemon.semantic_analyzer")

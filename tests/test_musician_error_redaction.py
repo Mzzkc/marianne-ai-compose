@@ -482,9 +482,9 @@ class TestClassifyErrorPathRedaction:
         Exercises the TRANSIENT path at musician.py _classify_error line 608
         (exit_code=None → process killed by signal).
         """
-        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.events import SheetAttemptResult
         from marianne.daemon.baton.musician import sheet_task
+        from marianne.execution.base import ExecutionResult
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -525,9 +525,9 @@ class TestClassifyErrorPathRedaction:
 
         Exercises the AUTH_FAILURE path at musician.py _classify_error line 622.
         """
-        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.events import SheetAttemptResult
         from marianne.daemon.baton.musician import sheet_task
+        from marianne.execution.base import ExecutionResult
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -569,9 +569,9 @@ class TestClassifyErrorPathRedaction:
 
         Exercises the default EXECUTION_ERROR path at _classify_error line 627.
         """
-        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.events import SheetAttemptResult
         from marianne.daemon.baton.musician import sheet_task
+        from marianne.execution.base import ExecutionResult
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -609,9 +609,9 @@ class TestClassifyErrorPathRedaction:
 
     async def test_none_error_message_passes_through(self, tmp_path: Path) -> None:
         """Backend returning error_message=None: passes through unchanged."""
-        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.events import SheetAttemptResult
         from marianne.daemon.baton.musician import sheet_task
+        from marianne.execution.base import ExecutionResult
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()
@@ -648,9 +648,9 @@ class TestClassifyErrorPathRedaction:
 
     async def test_clean_error_message_preserved(self, tmp_path: Path) -> None:
         """Backend returning error_message without credentials: preserved intact."""
-        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.events import SheetAttemptResult
         from marianne.daemon.baton.musician import sheet_task
+        from marianne.execution.base import ExecutionResult
 
         sheet = self._make_sheet(tmp_path)
         context = self._make_context()

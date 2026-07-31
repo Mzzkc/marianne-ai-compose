@@ -207,7 +207,7 @@ def _build_openai_family_backend(
             "a profile default_model."
         )
     auth_env = profile.http.auth_env_var
-    backend: Backend = OpenAICompatibleBackend(
+    backend = OpenAICompatibleBackend(
         model=resolved_model,
         api_key_env=auth_env,
         timeout_seconds=profile.default_timeout_seconds,

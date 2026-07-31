@@ -1493,8 +1493,8 @@ class TestCrossSystemIntegration:
         "EXECUTION_ERROR". The baton uses these to decide retry/fail/escalate.
         If the mapping is wrong, good classifications lead to bad decisions.
         """
-        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.musician import _classify_error
+        from marianne.execution.base import ExecutionResult
 
         # AUTH_FAILURE → baton should fail immediately (no retry)
         auth_result = ExecutionResult(
@@ -1536,8 +1536,8 @@ class TestCrossSystemIntegration:
         6+ storage locations (F-003). The redaction happens in the musician's
         _capture_output, which is the single bottleneck for all output.
         """
-        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.musician import _capture_output
+        from marianne.execution.base import ExecutionResult
 
         result = ExecutionResult(
             success=True,
@@ -1562,8 +1562,8 @@ class TestCrossSystemIntegration:
         and retries. Without this contract, every sheet without validations
         would retry until exhaustion.
         """
-        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.musician import _validate
+        from marianne.execution.base import ExecutionResult
 
         sheet = Sheet(
             num=1,

@@ -21,7 +21,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import jinja2
 import pytest
 
-from marianne.execution.base import ExecutionResult
 from marianne.core.config.execution import ValidationRule
 from marianne.core.config.job import InjectionCategory, InjectionItem
 from marianne.core.sheet import Sheet
@@ -31,6 +30,7 @@ from marianne.daemon.baton.state import (
     AttemptMode,
     BatonSheetStatus,
 )
+from marianne.execution.base import ExecutionResult
 
 # =========================================================================
 # Helpers

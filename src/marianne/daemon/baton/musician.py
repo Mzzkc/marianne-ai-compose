@@ -41,7 +41,6 @@ from typing import Any, NamedTuple
 
 import jinja2
 
-from marianne.execution.base import Backend, ExecutionResult
 from marianne.core.config.job import InjectionCategory, InjectionItem
 from marianne.core.constants import SHEET_NUM_KEY, TRUNCATE_STDOUT_TAIL_CHARS
 from marianne.core.errors.classifier import ErrorClassifier
@@ -52,6 +51,7 @@ from marianne.core.tokens import estimate_tokens, get_effective_window_size
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import AttemptContext
 from marianne.daemon.technique_router import ClassifiedOutput, OutputKind, TechniqueRouter
+from marianne.execution.base import Backend, ExecutionResult
 from marianne.execution.code_mode import (
     CodeExecutionResult,
     CodeExecutionStatus,
