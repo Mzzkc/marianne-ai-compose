@@ -193,7 +193,10 @@ def test_generic_fleet_preset_is_generic_and_uses_portable_self_chain(
     assert "llama-4-maverick" not in str(canyon).lower()
     assert "kimi" not in str(canyon).lower()
     assert "claude-code--glm-5.2-1m" in canyon["instruments"]
-    assert "antigravity--gemini-3.5-flash" in canyon["instruments"]
+    assert "antigravity--gemini-3.5-flash-medium" in canyon["instruments"]
+    assert "antigravity--gemini-3.5-flash-low" in canyon["instruments"]
+    assert "antigravity--gemini-3.5-flash" not in canyon["instruments"]
+    assert "antigravity--gemini-3.5-flash-lite" not in canyon["instruments"]
     assert "gemini-cli--gemini-3.5-flash" not in canyon["instruments"]
     assert canyon["sheet"]["per_sheet_instruments"][5] == "claude-code--glm-5-turbo"
     assert canyon["instruments"]["claude-code--glm-5-turbo"]["config"] == {

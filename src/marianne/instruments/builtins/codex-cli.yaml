@@ -23,6 +23,24 @@ capabilities:
 default_timeout_seconds: 1800
 
 models:
+  # ── GPT-5.6 family (July 2026) — see builtins/gpt-5.6.yaml for the full ──
+  # ── tiered profile. Listed here so codex-cli can play them directly.    ──
+  - name: gpt-5.6-sol
+    context_window: 272000
+    cost_per_1k_input: 0.005
+    cost_per_1k_output: 0.030
+    max_output_tokens: 128000
+  - name: gpt-5.6-terra
+    context_window: 272000
+    cost_per_1k_input: 0.0025
+    cost_per_1k_output: 0.015
+    max_output_tokens: 128000
+  - name: gpt-5.6-luna
+    context_window: 272000
+    cost_per_1k_input: 0.001
+    cost_per_1k_output: 0.006
+    max_output_tokens: 128000
+  # ── Legacy / prior-generation models ──
   - name: o3
     context_window: 200000
     cost_per_1k_input: 0.01

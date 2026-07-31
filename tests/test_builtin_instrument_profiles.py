@@ -197,3 +197,142 @@ class TestProfileDetails:
             assert len(profile.cli.errors.rate_limit_patterns) > 0, (
                 f"{f.name} has no rate limit patterns"
             )
+
+
+# =============================================================================
+# Antigravity model set — pinned to the exact Gemini slugs advertised by the
+# installed AGY 1.1.5 CLI. Hermetic: hard-codes the expected slugs rather than
+# shelling out to `agy models`, so the gate stays green on a machine without a
+# live Antigravity installation. The live CLI is the authority at commissioning
+# time only (see plan integration gate); these unit tests pin the contract.
+# =============================================================================
+
+
+# The eight Gemini slugs reported by `agy models` on AGY 1.1.5 (2026-07-22).
+# Three model families; the -high/-medium/-low suffix is an AGY effort tier
+# over each family, not a distinct model.
+ANTIGRAVITY_EXPECTED_SLUGS: frozenset[str] = frozenset(
+    {
+        "gemini-3.6-flash-high",
+        "gemini-3.6-flash-medium",
+        "gemini-3.6-flash-low",
+        "gemini-3.5-flash-high",
+        "gemini-3.5-flash-medium",
+        "gemini-3.5-flash-low",
+        "gemini-3.1-pro-high",
+        "gemini-3.1-pro-low",
+    }
+)
+
+# Unsuffixed / pre-effort-tier aliases that must NOT survive the refresh.
+ANTIGRAVITY_STALE_ALIASES: frozenset[str] = frozenset(
+    {
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-pro",
+    }
+)
+
+
+def _load_antigravity_profile() -> InstrumentProfile:
+    """Load and validate the shipped antigravity profile from disk."""
+    path = BUILTINS_DIR / "antigravity.yaml"
+    with open(path) as fh:
+        data = yaml.safe_load(fh)
+    return InstrumentProfile.model_validate(data)
+
+
+class TestAntigravityModelSet:
+    """Pin the exact Antigravity model set, default, and registry membership.
+
+    The Antigravity profile represents the installed subscription-backed CLI
+    (ChatGPT/Google subscription capacity), not direct API billing, so per-token
+    costs are intentionally zero.
+    """
+
+    def test_exactly_eight_gemini_slugs(self) -> None:
+        """The profile exposes exactly the eight AGY 1.1.5 Gemini slugs."""
+        profile = _load_antigravity_profile()
+        model_names = {m.name for m in profile.models}
+        assert model_names == set(ANTIGRAVITY_EXPECTED_SLUGS), (
+            f"Antigravity model set drifted from `agy models` (AGY 1.1.5).\n"
+            f"  expected: {sorted(ANTIGRAVITY_EXPECTED_SLUGS)}\n"
+            f"  actual:   {sorted(model_names)}\n"
+            f"  missing:  {sorted(ANTIGRAVITY_EXPECTED_SLUGS - model_names)}\n"
+            f"  extra:    {sorted(model_names - ANTIGRAVITY_EXPECTED_SLUGS)}"
+        )
+
+    def test_balanced_default_is_medium_flash(self) -> None:
+        """The balanced compatibility default is gemini-3.5-flash-medium."""
+        profile = _load_antigravity_profile()
+        assert profile.default_model == "gemini-3.5-flash-medium", (
+            f"Default model is {profile.default_model!r}, expected "
+            f"'gemini-3.5-flash-medium' (balanced compatibility tier)."
+        )
+        # The default must also be a declared model.
+        declared = {m.name for m in profile.models}
+        assert "gemini-3.5-flash-medium" in declared, (
+            "Default model gemini-3.5-flash-medium is not in the declared "
+            "model set."
+        )
+
+    def test_no_stale_unsuffixed_aliases(self) -> None:
+        """No pre-effort-tier (unsuffixed) model aliases survive the refresh."""
+        profile = _load_antigravity_profile()
+        model_names = {m.name for m in profile.models}
+        stale = model_names & ANTIGRAVITY_STALE_ALIASES
+        assert not stale, (
+            f"Stale unsuffixed aliases still present: {sorted(stale)}. "
+            f"These pre-date AGY effort tiers and no longer resolve in "
+            f"`agy models` (AGY 1.1.5)."
+        )
+
+    def test_costs_are_zero_subscription_backed(self) -> None:
+        """Per-token costs are zero: subscription-backed CLI, not API billing."""
+        profile = _load_antigravity_profile()
+        for model in profile.models:
+            assert model.cost_per_1k_input == 0.0, (
+                f"{model.name} has non-zero input cost "
+                f"({model.cost_per_1k_input}); this profile models the "
+                f"installed subscription-backed CLI, not API billing."
+            )
+            assert model.cost_per_1k_output == 0.0, (
+                f"{model.name} has non-zero output cost "
+                f"({model.cost_per_1k_output}); this profile models the "
+                f"installed subscription-backed CLI, not API billing."
+            )
+
+    def test_conservative_capacity_metadata(self) -> None:
+        """Context/output metadata is conservative and internally consistent."""
+        profile = _load_antigravity_profile()
+        for model in profile.models:
+            assert model.context_window == 1_000_000, (
+                f"{model.name} context_window={model.context_window}, "
+                f"expected the conservative 1,000,000."
+            )
+            assert model.max_output_tokens == 65_536, (
+                f"{model.name} max_output_tokens={model.max_output_tokens}, "
+                f"expected the conservative 65,536."
+            )
+
+    def test_registry_membership(self) -> None:
+        """Antigravity loads via the loader and resolves through the registry.
+
+        Semantic membership: the profile is discoverable by name and carries
+        the exact expected model set + default, independent of how many other
+        built-in profiles happen to ship alongside it.
+        """
+        from marianne.instruments.loader import InstrumentProfileLoader
+        from marianne.instruments.registry import InstrumentRegistry
+
+        profiles = InstrumentProfileLoader.load_directory(BUILTINS_DIR)
+        assert "antigravity" in profiles, "antigravity profile missing from builtins"
+
+        registry = InstrumentRegistry()
+        for shipped in profiles.values():
+            registry.register(shipped)
+
+        resolved = registry.get("antigravity")
+        assert resolved is not None, "antigravity did not resolve through the registry"
+        assert resolved.default_model == "gemini-3.5-flash-medium"
+        assert {m.name for m in resolved.models} == set(ANTIGRAVITY_EXPECTED_SLUGS)

@@ -39,14 +39,17 @@ class TestDiscoverInstruments:
     """Can a user discover what instruments are available?"""
 
     def test_builtin_profiles_all_load_successfully(self) -> None:
-        """All 6 built-in profiles parse without errors."""
+        """All documented built-in profiles parse without errors.
+
+        Pins the semantic profile-name inventory instead of only a total count,
+        so additions and removals both require an intentional contract update.
+        """
         builtins_dir = (
             Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
         )
         profiles = InstrumentProfileLoader.load_directory(builtins_dir)
 
-        # All built-in CLI profiles should load
-        assert len(profiles) == 10
+        # Every documented built-in CLI profile must load.
         expected_names = {
             "claude-code",
             "gemini-cli",
@@ -58,8 +61,14 @@ class TestDiscoverInstruments:
             "opencode",
             "crush",
             "cli",
+            "gpt-5.6",
         }
-        assert set(profiles.keys()) == expected_names
+        actual_names = set(profiles)
+        assert actual_names == expected_names, (
+            f"Built-in profile inventory drifted: missing="
+            f"{sorted(expected_names - actual_names)}, "
+            f"extra={sorted(actual_names - expected_names)}"
+        )
 
     def test_builtin_profiles_have_required_fields(self) -> None:
         """Every built-in profile has name, kind, display_name, and cli config."""
@@ -104,7 +113,11 @@ class TestDiscoverInstruments:
         assert registry.get("recursive_light") is not None
 
     def test_builtins_plus_native_coexist_in_registry(self) -> None:
-        """Registry can hold both native and plugin instruments."""
+        """Registry can hold both native and plugin instruments.
+
+        Every native bridge name and every loaded built-in profile must resolve,
+        with no silent omissions or unexpected registry entries.
+        """
         registry = InstrumentRegistry()
         register_native_instruments(registry)
 
@@ -116,9 +129,30 @@ class TestDiscoverInstruments:
         for profile in profiles.values():
             registry.register(profile)
 
-        # 4 native + 10 built-in = 14
+        # Every native bridge name must resolve.
+        for native_name in ("claude_cli", "anthropic_api", "ollama", "recursive_light"):
+            assert registry.get(native_name) is not None, (
+                f"Native bridge name {native_name!r} not registered"
+            )
+        # Every loaded built-in profile must resolve alongside the natives.
+        for builtin_name in profiles:
+            assert registry.get(builtin_name) is not None, (
+                f"Built-in profile {builtin_name!r} not registered"
+            )
+        # The registry must hold exactly the native and loaded built-in names.
         all_instruments = registry.list_all()
-        assert len(all_instruments) == 14
+        expected_registry_names = set(profiles) | {
+            "claude_cli",
+            "anthropic_api",
+            "ollama",
+            "recursive_light",
+        }
+        actual_registry_names = {instrument.name for instrument in all_instruments}
+        assert actual_registry_names == expected_registry_names, (
+            f"Registry inventory drifted: missing="
+            f"{sorted(expected_registry_names - actual_registry_names)}, "
+            f"extra={sorted(actual_registry_names - expected_registry_names)}"
+        )
 
 
 # =============================================================================
