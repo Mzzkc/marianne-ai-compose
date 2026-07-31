@@ -425,33 +425,33 @@ class TestCreateBackendForProfile:
         backend = _create_backend_for_profile(profile, working_directory=Path("/tmp/test"))
         assert backend.working_directory == Path("/tmp/test")
 
-    async def test_openrouter_profile_creates_openrouter_backend(self) -> None:
-        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
+    async def test_openrouter_profile_creates_generic_http_backend(self) -> None:
+        from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
 
         profile = _make_openrouter_profile()
         backend = _create_backend_for_profile(profile)
-        assert isinstance(backend, OpenRouterBackend)
+        assert isinstance(backend, OpenAICompatibleBackend)
 
     async def test_openrouter_profile_with_api_key(self) -> None:
-        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
 
         profile = _make_openrouter_profile()
         backend = _create_backend_for_profile(
             profile,
             api_key="sk-test-injected-key",
         )
-        assert isinstance(backend, OpenRouterBackend)
+        assert isinstance(backend, OpenAICompatibleBackend)
         assert backend._api_key == "sk-test-injected-key"
 
     async def test_openrouter_profile_with_model_override(self) -> None:
-        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
 
         profile = _make_openrouter_profile()
         backend = _create_backend_for_profile(
             profile,
             model="google/gemma-4",
         )
-        assert isinstance(backend, OpenRouterBackend)
+        assert isinstance(backend, OpenAICompatibleBackend)
         assert backend.model == "google/gemma-4"
 
 
@@ -496,7 +496,7 @@ class TestKeyringIntegration:
     """BackendPool uses keyring for HTTP backend API keys."""
 
     async def test_keyring_injects_api_key(self, tmp_path: Path) -> None:
-        from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
+        from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
 
         # Set up key file
         key_file = tmp_path / "openrouter.key"
@@ -516,7 +516,7 @@ class TestKeyringIntegration:
         pool = BackendPool(registry, keyring=keyring)
 
         backend = await pool.acquire("openrouter")
-        assert isinstance(backend, OpenRouterBackend)
+        assert isinstance(backend, OpenAICompatibleBackend)
         assert backend._api_key == "sk-from-keyring"
         await pool.close_all()
 

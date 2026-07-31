@@ -5,7 +5,7 @@ Run by the cli prescore (`hello-setup.yaml`). No AI, no network model calls, so
 it can never hang. It:
 
   1. picks the best AVAILABLE + REACHABLE instrument, free first (Ollama →
-     free OpenRouter via crush → a paid CLI sub → a paid API);
+     free OpenRouter via crush → a configured paid CLI subscription);
   2. detects the browser-open command for this OS/shell (wslview / xdg-open /
      open / explorer.exe) and reports it (the assembler does the actual opening);
   3. reads the hello orchestration template and writes a RESOLVED copy with the
@@ -53,8 +53,6 @@ def pick_instrument() -> tuple[str | None, str | None, str]:
         return "gemini-cli", None, "paid · Google"
     if _have("opencode") and os.environ.get("ZAI_API_KEY"):
         return "opencode", "zai-coding-plan/glm-5.2", "paid · Z.AI Coding Plan"
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return "anthropic_api", None, "paid · Anthropic API"
     return None, None, ""
 
 

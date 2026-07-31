@@ -30,12 +30,10 @@ import logging
 
 import pytest
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.daemon.baton.musician import _estimate_cost
-from marianne.instruments.registry import (
-    InstrumentRegistry,
-    register_native_instruments,
-)
+from marianne.instruments.loader import load_all_profiles
+from marianne.instruments.registry import InstrumentRegistry
 
 # ---------------------------------------------------------------------------
 # Test doubles
@@ -64,13 +62,9 @@ def _make_exec_result(
 
 @pytest.fixture
 def registry() -> InstrumentRegistry:
-    """A registry populated with the 4 native instrument profiles.
-
-    Uses the real ``register_native_instruments`` bridge — the same bridge
-    the daemon relies on. No mocks.
-    """
+    """A registry populated from the same YAML profile loader as the daemon."""
     r = InstrumentRegistry()
-    register_native_instruments(r)
+    r.replace_all(load_all_profiles())
     return r
 
 
@@ -91,7 +85,7 @@ def test_claude_sonnet_profile_pricing_is_used_and_matches_profile(
 
     Doctrine: RULE "cost tracking must use instrument profile pricing".
     """
-    profile = registry.get("claude_cli")
+    profile = registry.get("claude-code")
     assert profile is not None
     sonnet = next(m for m in profile.models if "sonnet" in m.name)
 
@@ -123,10 +117,10 @@ def test_claude_opus_profile_pricing_distinguishes_profile_from_fallback(
 
     Doctrine: RULE "cost tracking must use instrument profile pricing".
     """
-    profile = registry.get("claude_cli")
+    profile = registry.get("claude-code")
     assert profile is not None
     opus = next((m for m in profile.models if "opus" in m.name), None)
-    assert opus is not None, "claude_cli profile is expected to include Opus"
+    assert opus is not None, "Claude Code profile is expected to include Opus"
 
     result = _make_exec_result(input_tokens=100_000, output_tokens=10_000)
     cost = _estimate_cost(
@@ -208,38 +202,6 @@ def test_missing_pricing_reports_zero_not_sonnet() -> None:
     assert cost == 0.0, (
         "Doctrine violated (RULE cost tracking must use instrument profile "
         f"pricing): missing pricing must report $0, not a fabricated rate. Got {cost}."
-    )
-
-
-def test_recursive_light_instrument_without_pricing_reports_zero(
-    registry: InstrumentRegistry,
-) -> None:
-    """Non-Claude instrument + missing profile pricing = $0, not Sonnet (#346).
-
-    The ``recursive_light`` profile registers with ``models=[]`` (no pricing
-    info available), so the baton passes ``None, None`` to ``_estimate_cost``.
-    Previously a Recursive Light job was billed at Claude Sonnet rates; the
-    doctrine fix reports $0 and flags the sheet cost-uncertain instead.
-
-    Doctrine: RULE "cost tracking must use instrument profile pricing, not
-    hardcoded Claude Sonnet rates".
-    """
-    profile = registry.get("recursive_light")
-    assert profile is not None
-    assert profile.models == [] or profile.models is None, (
-        "recursive_light profile is expected to carry no pricing today — "
-        "if pricing was added, update this test to use it."
-    )
-
-    # Simulate what adapter.py does when no model pricing is available:
-    # both cost_per_1k_{input,output} end up None.
-    result = _make_exec_result(input_tokens=10_000, output_tokens=5_000)
-    cost = _estimate_cost(result, cost_per_1k_input=None, cost_per_1k_output=None)
-
-    assert cost == 0.0, (
-        "Doctrine violated (RULE cost tracking must use instrument profile "
-        "pricing): Recursive Light has no pricing, so cost must be $0 "
-        f"(cost-uncertain), not a fabricated Sonnet figure. Got {cost}."
     )
 
 

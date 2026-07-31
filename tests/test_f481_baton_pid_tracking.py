@@ -1,9 +1,8 @@
 """TDD tests for F-481: Wire PID tracking into baton path.
 
-The legacy runner path already has PID tracking via callbacks on
-ClaudeCliBackend. The baton path creates backends via BackendPool
-→ PluginCliBackend, which lacks callback slots. Without them,
-baton-created backends have zero orphan detection.
+The original runner path established PID tracking through callbacks. The baton
+path creates profile-driven backends through BackendPool, so it must preserve
+the same callback contract or baton-created backends have no orphan detection.
 
 These tests verify:
 1. PluginCliBackend has callback slots

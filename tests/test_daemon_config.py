@@ -495,7 +495,7 @@ class TestSemanticLearningConfig:
         """Test default values are applied correctly."""
         config = SemanticLearningConfig()
         assert config.enabled is True
-        assert config.instrument == "anthropic_api"
+        assert config.instrument == "claude-code"
         assert config.model is None
         assert config.timeout_seconds == 120.0
         assert config.analyze_on == ["success", "failure"]
@@ -560,14 +560,14 @@ class TestSemanticLearningConfig:
         assert hasattr(config, "learning")
         assert isinstance(config.learning, SemanticLearningConfig)
         assert config.learning.enabled is True
-        assert config.learning.instrument == "anthropic_api"
+        assert config.learning.instrument == "claude-code"
 
     def test_daemon_config_custom_learning(self):
         """Test DaemonConfig accepts custom learning config."""
         config = DaemonConfig(
             learning=SemanticLearningConfig(
                 enabled=False,
-                instrument="anthropic_api",
+                instrument="claude-code",
                 model="claude-haiku-4-5-20251001",
                 timeout_seconds=120.0,
             ),
@@ -592,7 +592,7 @@ class TestSemanticLearningConfig:
         """Test SemanticLearningConfig survives model_dump -> model_validate."""
         original = SemanticLearningConfig(
             enabled=False,
-            instrument="anthropic_api",
+            instrument="claude-code",
             model="test-model",
             timeout_seconds=120.0,
             analyze_on=["failure"],
@@ -611,7 +611,7 @@ class TestSemanticLearningConfig:
         original = DaemonConfig(
             learning=SemanticLearningConfig(
                 enabled=False,
-                instrument="anthropic_api",
+                instrument="claude-code",
                 model="claude-haiku-4-5-20251001",
             ),
         )

@@ -213,7 +213,7 @@ class TestCurrentLevel:
             # Simulate an active rate limit
             import time
 
-            coordinator._active_limits["claude_cli"] = time.monotonic() + 60
+            coordinator._active_limits["claude-code"] = time.monotonic() + 60
             assert controller.current_level() == PressureLevel.HIGH
 
 
@@ -749,7 +749,7 @@ class TestRateCoordinatorPublicAPI:
 
             # Report via public API
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -826,7 +826,7 @@ class TestRateLimitExpiryTransitions:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=0.5,
                 job_id="job-a",
                 sheet_num=1,
@@ -863,7 +863,7 @@ class TestRateLimitExpiryTransitions:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=0.02,
                 job_id="job-a",
                 sheet_num=1,
@@ -911,7 +911,7 @@ class TestRateLimitedRejection:
         ):
             # Report rate limit
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -953,7 +953,7 @@ class TestRateLimitedRejection:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -985,7 +985,7 @@ class TestRateLimitedRejection:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -1066,7 +1066,7 @@ class TestCombinedConditions:
             assert controller.current_level() == PressureLevel.MEDIUM
 
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=30.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -1098,7 +1098,7 @@ class TestCombinedConditions:
             assert controller.current_level() == PressureLevel.HIGH
 
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=30.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -1127,7 +1127,7 @@ class TestCombinedConditions:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=30.0,
                 job_id="job-a",
                 sheet_num=1,

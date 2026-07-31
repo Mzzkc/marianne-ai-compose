@@ -302,7 +302,7 @@ def classify_single_json_error(
                 suggested_wait_seconds=30.0,
                 error_info=ErrorInfo(
                     reason="BINARY_NOT_FOUND",
-                    # Phase 5: domain is no longer claude_cli-specific. The
+                    # Phase 5: domain is no longer Claude Code-specific. The
                     # classifier runs against any CLI instrument, so the
                     # domain names the instrument kind ("cli") rather than
                     # a specific backend type. Callers that need the exact

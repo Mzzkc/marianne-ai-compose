@@ -1,5 +1,8 @@
 # Universal Instrument API Research
 
+> Historical research snapshot. Its inventory of native provider backends
+> describes the pre-unification system and is not current runtime guidance.
+
 **Date:** 2026-03-26
 **Purpose:** Document HTTP API interfaces for major AI model providers to inform the design of Marianne's universal instrument plugin system.
 

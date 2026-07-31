@@ -345,7 +345,7 @@ class TestValidationPerformance:
             "name: test",
             "name: test-job",
             "name: test-job\nbackend:",
-            "name: test-job\nbackend:\n  type: claude_cli",
+            "name: test-job\ninstrument: claude-code",
         ]
 
         # In real implementation, only the last change would trigger validation
@@ -376,7 +376,7 @@ class TestValidationPerformance:
             validation_cache[content_hash] = result
             return result
 
-        content = "name: test-job\nbackend:\n  type: claude_cli"
+        content = "name: test-job\ninstrument: claude-code"
 
         # First call - miss
         result1 = cached_validate(content)

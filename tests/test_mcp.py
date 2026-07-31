@@ -216,17 +216,15 @@ class TestConfigResources:
         content = result["contents"][0]
         data = json.loads(content["text"])
         assert "available_instruments" in data
-        assert "claude_cli" in data["available_instruments"]
-        assert "anthropic_api" in data["available_instruments"]
+        assert "claude-code" in data["available_instruments"]
+        assert "ollama" in data["available_instruments"]
 
-    async def test_backend_options_compatibility_uri_returns_instruments(self) -> None:
+    async def test_retired_backend_options_uri_is_unknown(self) -> None:
         resources = ConfigResources()
         result = await resources.read_resource("config://backend-options")
         content = result["contents"][0]
-        data = json.loads(content["text"])
-        assert content["uri"] == "config://instrument-options"
-        assert "available_instruments" in data
-        assert "available_backends" not in data
+        assert content["uri"] == "config://backend-options"
+        assert "Unknown resource URI" in content["text"]
 
     async def test_get_validation_types(self) -> None:
         resources = ConfigResources()
@@ -841,7 +839,7 @@ class TestResourceURIParametrized:
         "uri,expected_key",
         [
             ("config://schema", "properties"),
-            ("config://backend-options", "available_instruments"),
+            ("config://instrument-options", "available_instruments"),
             ("config://validation-types", "available_validation_types"),
             ("config://learning-options", "learning_system"),
         ],

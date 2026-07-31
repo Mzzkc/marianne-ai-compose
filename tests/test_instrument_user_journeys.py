@@ -24,14 +24,13 @@ from marianne.core.config.instruments import (
     CliProfile,
     InstrumentProfile,
 )
-from marianne.instruments.loader import InstrumentProfileLoader
-from marianne.instruments.registry import InstrumentRegistry, register_native_instruments
+from marianne.instruments.loader import InstrumentProfileLoader, load_all_profiles
 
 # =============================================================================
 # Story 1: Discovering Instruments
 #
 # Sarah runs `mzt instruments list` (conceptually). What does she see?
-# Does the built-in profile loading work? Are the 6 shipped profiles valid?
+# Does the built-in profile loading work? Are the shipped profiles valid?
 # =============================================================================
 
 
@@ -49,7 +48,7 @@ class TestDiscoverInstruments:
         )
         profiles = InstrumentProfileLoader.load_directory(builtins_dir)
 
-        # Every documented built-in CLI profile must load.
+        # Every documented built-in CLI and HTTP profile must load.
         expected_names = {
             "claude-code",
             "gemini-cli",
@@ -61,7 +60,7 @@ class TestDiscoverInstruments:
             "opencode",
             "crush",
             "cli",
-            "gpt-5.6",
+            "ollama",
         }
         actual_names = set(profiles)
         assert actual_names == expected_names, (
@@ -69,9 +68,10 @@ class TestDiscoverInstruments:
             f"{sorted(expected_names - actual_names)}, "
             f"extra={sorted(actual_names - expected_names)}"
         )
+        assert "gpt-5.6" not in profiles
 
     def test_builtin_profiles_have_required_fields(self) -> None:
-        """Every built-in profile has name, kind, display_name, and cli config."""
+        """Every built-in profile has name, kind, display_name and matching config."""
         builtins_dir = (
             Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
         )
@@ -80,9 +80,11 @@ class TestDiscoverInstruments:
         for name, profile in profiles.items():
             assert profile.name, f"{name}: missing name"
             assert profile.display_name, f"{name}: missing display_name"
-            assert profile.kind == "cli", f"{name}: expected CLI, got {profile.kind}"
-            assert profile.cli is not None, f"{name}: missing CLI profile"
-            assert profile.cli.command.executable, f"{name}: missing executable"
+            if profile.kind == "cli":
+                assert profile.cli is not None, f"{name}: missing CLI profile"
+                assert profile.cli.command.executable, f"{name}: missing executable"
+            else:
+                assert profile.http is not None, f"{name}: missing HTTP profile"
 
     def test_builtin_profiles_have_at_least_one_model(self) -> None:
         """Every CLI instrument should document at least one model."""
@@ -102,64 +104,16 @@ class TestDiscoverInstruments:
             f"but only {profiles_with_models} do"
         )
 
-    def test_native_instruments_register(self) -> None:
-        """The 4 native instruments register correctly."""
-        registry = InstrumentRegistry()
-        register_native_instruments(registry)
-
-        assert registry.get("claude_cli") is not None
-        assert registry.get("anthropic_api") is not None
-        assert registry.get("ollama") is not None
-        assert registry.get("recursive_light") is not None
-
-    def test_builtins_plus_native_coexist_in_registry(self) -> None:
-        """Registry can hold both native and plugin instruments.
-
-        Every native bridge name and every loaded built-in profile must resolve,
-        with no silent omissions or unexpected registry entries.
-        """
-        registry = InstrumentRegistry()
-        register_native_instruments(registry)
-
-        builtins_dir = (
-            Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
-        )
-        profiles = InstrumentProfileLoader.load_directory(builtins_dir)
-
-        for profile in profiles.values():
-            registry.register(profile)
-
-        # Every native bridge name must resolve.
-        for native_name in ("claude_cli", "anthropic_api", "ollama", "recursive_light"):
-            assert registry.get(native_name) is not None, (
-                f"Native bridge name {native_name!r} not registered"
-            )
-        # Every loaded built-in profile must resolve alongside the natives.
-        for builtin_name in profiles:
-            assert registry.get(builtin_name) is not None, (
-                f"Built-in profile {builtin_name!r} not registered"
-            )
-        # The registry must hold exactly the native and loaded built-in names.
-        all_instruments = registry.list_all()
-        expected_registry_names = set(profiles) | {
-            "claude_cli",
-            "anthropic_api",
-            "ollama",
-            "recursive_light",
-        }
-        actual_registry_names = {instrument.name for instrument in all_instruments}
-        assert actual_registry_names == expected_registry_names, (
-            f"Registry inventory drifted: missing="
-            f"{sorted(expected_registry_names - actual_registry_names)}, "
-            f"extra={sorted(actual_registry_names - expected_registry_names)}"
-        )
-
+    def test_clean_break_instruments_load_from_yaml(self) -> None:
+        """Built-ins expose current names without compatibility aliases."""
+        profiles = load_all_profiles()
+        assert {"claude-code", "ollama"} <= set(profiles)
 
 # =============================================================================
 # Story 2: Writing a Score with instrument:
 #
 # Sarah writes her first score using `instrument: gemini-cli` instead of
-# `backend: {type: claude_cli}`. Does it validate? Does it coexist with
+# `backend: {type: claude-code}`. Does it validate? Does it coexist with
 # the old `backend:` syntax?
 # =============================================================================
 

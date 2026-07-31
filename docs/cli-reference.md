@@ -1318,7 +1318,7 @@ List all available instruments and their readiness status.
 Usage: mzt instruments list [OPTIONS]
 ```
 
-Shows every registered instrument: native backends (built into Marianne), built-in profiles (shipped as YAML), organization profiles (`~/.marianne/instruments/`), and venue profiles (`.marianne/instruments/`). Later profiles override earlier ones on name collision.
+Shows every registered instrument: built-in profiles (shipped as YAML), organization profiles (`~/.marianne/instruments/`), and venue profiles (`.marianne/instruments/`). Later profiles override earlier ones on name collision.
 
 #### Options
 
@@ -1342,13 +1342,12 @@ mzt instruments list --json
                     Instruments
   NAME              KIND    STATUS          DEFAULT MODEL
   aider             cli     ✗ not found     (instrument default)
-  anthropic_api     http    http            claude-sonnet-4-5-20250929
   claude-code       cli     ✓ ready         (instrument default)
-  claude_cli        cli     ✓ ready         (instrument default)
+  codex-cli         cli     ✓ ready         (instrument default)
   gemini-cli        cli     ✓ ready         gemini-2.5-pro
   ollama            http    http            llama3.1:8b
 
-10 instruments configured (6 ready)
+11 instruments configured (installation readiness varies)
 ```
 
 **Status values:**
@@ -1890,10 +1889,11 @@ Run `mzt instruments list` to see all available instruments. Built-in instrument
 | `cline-cli` | CLI | Cline CLI |
 | `aider` | CLI | Aider pair programming |
 | `goose` | CLI | Block's Goose agent |
+| `ollama` | HTTP | Local models through Ollama's OpenAI-compatible endpoint |
 
-The names `claude_cli`, `anthropic_api`, `ollama`, and `recursive_light` remain
-registered as instrument profiles for compatibility — `instrument: claude_cli`
-still resolves — but prefer `claude-code` for new scores.
+Retired backend-era names do not resolve. Update old scores to a current CLI
+profile, or use `ollama` when a local OpenAI-compatible text endpoint is the
+right execution surface.
 
 ### Validation Types
 

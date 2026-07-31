@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 import yaml
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.core.config.execution import ValidationRule
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.config.job import PromptConfig

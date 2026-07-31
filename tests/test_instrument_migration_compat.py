@@ -105,21 +105,21 @@ class TestInstrumentConfigTimeout:
         assert sheets[0].timeout_seconds == 1800.0
 
 
-class TestCliModelAliasNormalization:
-    """Legacy \'cli_model\' spelling normalizes onto \'model\' at sheet build."""
+class TestModelConfiguration:
+    """Only the current ``model`` key selects a musician."""
 
-    def test_cli_model_aliased(self) -> None:
+    def test_model_reaches_sheet(self) -> None:
         config = JobConfig(**_minimal(
             instrument="claude-code",
-            instrument_config={"cli_model": "claude-opus-4-8"},
+            instrument_config={"model": "claude-opus-4-8"},
         ))
         sheets = build_sheets(config)
         assert sheets[0].instrument_config["model"] == "claude-opus-4-8"
 
-    def test_explicit_model_wins_over_cli_model(self) -> None:
+    def test_retired_cli_model_is_not_normalized(self) -> None:
         config = JobConfig(**_minimal(
             instrument="claude-code",
-            instrument_config={"model": "a", "cli_model": "b"},
+            instrument_config={"cli_model": "retired-name"},
         ))
         sheets = build_sheets(config)
-        assert sheets[0].instrument_config["model"] == "a"
+        assert "model" not in sheets[0].instrument_config

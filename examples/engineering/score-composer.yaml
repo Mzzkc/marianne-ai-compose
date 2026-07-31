@@ -53,7 +53,7 @@ workspace: "../../workspaces/score-composer-workspace"
 
 instrument: claude-code
 instrument_fallbacks:
-  - anthropic_api
+  - codex-cli
 
 instrument_config:
   timeout_seconds: 1200

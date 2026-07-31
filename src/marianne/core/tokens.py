@@ -62,12 +62,9 @@ _DEFAULT_EFFECTIVE_WINDOW: int = 128_000
 # Instruments may impose their own context window limits independent of the
 # underlying model. The effective window is min(instrument, model).
 # Instruments not listed here impose no additional limit.
-# Keys are lowercase with hyphens; lookup normalizes both case and separators.
+# Keys are lowercase profile names.
 _INSTRUMENT_EFFECTIVE_WINDOWS: dict[str, int] = {
     "claude-code": 196_000,
-    "claude-cli": 196_000,
-    "claude": 196_000,
-    "anthropic-api": 196_000,
     "gemini-cli": 1_000_000,
     "codex-cli": 196_000,
     "ollama": 128_000,
@@ -187,29 +184,25 @@ def _resolve_model_window(model: str | None) -> int | None:
 def _resolve_instrument_window(instrument: str) -> int | None:
     """Resolve the effective window for an instrument name, or None if unknown.
 
-    Case-insensitive. Normalizes underscores to hyphens so both ``claude_cli``
-    and ``claude-cli`` match.
+    Case-insensitive. Instrument names are resolved as declared in profiles.
 
-    Phase 5: the hardcoded ``_INSTRUMENT_EFFECTIVE_WINDOWS`` table still
-    wins for the 6 legacy instruments it already covered. Those values
+    The hardcoded ``_INSTRUMENT_EFFECTIVE_WINDOWS`` table still wins for the
+    maintained built-in instruments it covers. Those values
     are "effective" (raw context window minus output reservation) — the
     registry profiles carry the raw ``context_window`` and cannot be
     substituted without subtracting a reservation. For every OTHER
-    instrument (anything not in the legacy table), the registry's
+    instrument (anything not in the maintained override table), the registry's
     ``InstrumentProfile.ModelCapacity.context_window`` is consulted so
     new profiles automatically surface correct numbers without having
-    to touch this file. This satisfies Doctrine RULE "Token window
-    constants must migrate to InstrumentProfile.ModelCapacity" for the
-    open-world case while preserving the effective-window semantics
-    the legacy callers (and ~100 existing tests) depend on.
+    to touch this file while preserving the effective-window semantics existing
+    callers depend on.
     """
-    normalized = instrument.lower().replace("_", "-")
+    normalized = instrument.lower()
 
-    # 1. Legacy hardcoded table — authoritative for the 6 instruments
-    #    that predate the registry (values are already "effective").
-    legacy = _INSTRUMENT_EFFECTIVE_WINDOWS.get(normalized)
-    if legacy is not None:
-        return legacy
+    # 1. Maintained built-in table (values are already "effective").
+    built_in = _INSTRUMENT_EFFECTIVE_WINDOWS.get(normalized)
+    if built_in is not None:
+        return built_in
 
     # 2. Unknown instrument — fall through to the registry so new
     #    profiles work without requiring a dict entry here.
@@ -222,22 +215,14 @@ def _resolve_instrument_window_from_registry(instrument: str) -> int | None:
     Returns ``None`` when the registry does not recognize the instrument
     or when no ModelCapacity records are attached. The lookup
     constructs a fresh registry each call — the built-in profile list
-    is small (5 entries as of Phase 5) and the cost is negligible
+    is small and the cost is negligible
     compared to an actual sheet execution.
     """
     try:
-        from marianne.instruments.registry import (
-            InstrumentRegistry,
-            register_native_instruments,
-        )
+        from marianne.instruments.loader import load_all_profiles
 
-        registry = InstrumentRegistry()
-        register_native_instruments(registry)
-        profile = registry.get(instrument)
-        if profile is None:
-            # Try normalized form too (instrument names are sometimes
-            # stored with hyphens in tests vs underscores in profiles).
-            profile = registry.get(instrument.lower().replace("-", "_"))
+        profiles = load_all_profiles()
+        profile = profiles.get(instrument)
         if profile is None:
             return None
         models = getattr(profile, "models", None) or []

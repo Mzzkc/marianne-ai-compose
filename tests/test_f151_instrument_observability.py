@@ -87,7 +87,7 @@ class TestBatonPathInstrumentPopulation:
         mock_config.retry.max_retries = 3
         mock_config.cost_limits.enabled = False
         mock_config.cost_limits.max_cost_per_job = None
-        mock_config.backend.type = "claude_cli"
+        mock_config.backend.type = "claude-code"
         mock_config.parallel.enabled = False
         mock_config.cross_sheet = None
 
@@ -139,7 +139,7 @@ class TestBatonPathInstrumentPopulation:
         mock_config.retry.max_retries = 3
         mock_config.cost_limits.enabled = False
         mock_config.cost_limits.max_cost_per_job = None
-        mock_config.backend.type = "claude_cli"
+        mock_config.backend.type = "claude-code"
         mock_config.parallel.enabled = False
         mock_config.cross_sheet = None
 

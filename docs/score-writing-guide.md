@@ -298,7 +298,7 @@ keys:
 
 | Key | Description |
 |-----|-------------|
-| `model` | Model override (alias: `cli_model`). `null` uses the profile default. |
+| `model` | Model override. `null` uses the profile default. |
 | `timeout_seconds` | Per-sheet execution timeout (seconds). |
 | `interactive` | Force interactive (tmux-driven) or headless execution. Unset uses the profile default. |
 | `interactive_max_nudges` | Consecutive-idle nudge budget for interactive sheets. |
@@ -2244,7 +2244,7 @@ section to convert old scores.
 | Before (`backend:`) | After (`instrument:`) |
 |----------------------|-----------------------|
 | `backend: { type: claude_cli }` | `instrument: claude-code` |
-| `backend: { type: anthropic_api }` | `instrument: anthropic_api` |
+| `backend: { type: anthropic_api }` | no built-in direct-API replacement; use a current CLI profile or define an appropriate HTTP profile |
 | `backend: { type: ollama }` | `instrument: ollama` |
 | no `backend:` at all | nothing — `claude-code` is the default |
 
@@ -2260,7 +2260,7 @@ backend:
   type: claude_cli
   timeout_seconds: 1800
   skip_permissions: true
-  cli_model: claude-sonnet-4-6
+  model: claude-sonnet-4-6
   timeout_overrides:
     3: 3600
 ```
@@ -2285,9 +2285,9 @@ sheet:
 
 | `backend:` field | Where it lives now | Notes |
 |------------------|--------------------|-------|
-| `type` | `instrument:` (top-level) | Name changes: `claude_cli` → `claude-code` |
+| `type` | `instrument:` (top-level) | Backend-era aliases are retired; choose a currently registered profile |
 | `timeout_seconds` | `instrument_config.timeout_seconds` | Same name |
-| `cli_model` / `model` | `instrument_config.model` | `cli_model` still accepted as an alias |
+| `cli_model` / `model` | `instrument_config.model` | Rename `cli_model` to `model`; the old key is not normalized |
 | `timeout_overrides` / `sheet_overrides` | `sheet.per_sheet_instrument_config` | `{3: {timeout_seconds: 3600}}` |
 | `skip_permissions` | instrument profile | Built-in profiles already pass the auto-approve flag; drop the key |
 | `disable_mcp` | instrument profile | Built-in claude-code profile passes `--strict-mcp-config`; drop the key |

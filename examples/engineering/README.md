@@ -129,7 +129,7 @@ The score is language-agnostic — it generates test/typecheck/lint runner scrip
 3. Set `project_context` to describe your project — language, frameworks, codebase size, source layout, test directory, key conventions
 4. Set `granularity` to "fine" for small TDD-strict tasks (2-5 min each) or "coarse" for larger units of work (10-20 min each)
 5. Set `target_workspace` to where the generated implementation score should write its output
-6. Set `target_instrument` to the instrument the generated score should use (e.g., "claude-code", "anthropic_api")
+6. Set `target_instrument` to the instrument the generated score should use (e.g., "claude-code", "codex-cli")
 
 **Prerequisites:** Design document exists, project root is accessible
 

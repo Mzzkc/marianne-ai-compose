@@ -1,4 +1,4 @@
-"""Abstract base for Claude execution backends."""
+"""Shared execution contracts for profile-driven instruments."""
 
 from __future__ import annotations
 
@@ -116,7 +116,7 @@ class ExecutionResult:
 
 
 class Backend(ABC):
-    """Abstract base class for Claude execution backends.
+    """Abstract execution contract for profile-driven instruments.
 
     Backends handle the actual execution of prompts through Claude,
     whether via CLI subprocess or direct API calls.
@@ -171,7 +171,7 @@ class Backend(ABC):
     def working_directory(self) -> Path | None:
         """Working directory for backend execution.
 
-        Subprocess-based backends (e.g. ClaudeCliBackend) use this as the cwd
+        Subprocess-based instruments use this as the cwd
         for child processes. API-based backends store it but don't use it directly.
 
         Returns None if no working directory is set, meaning the process CWD is used.
@@ -351,8 +351,8 @@ class HttpxClientMixin:
     """Shared lazy httpx.AsyncClient lifecycle for HTTP-based backends.
 
     Provides `_get_client()` for lazy initialization with connection pooling
-    and `_close_httpx_client()` for cleanup. Both Ollama and RecursiveLight
-    backends use this same pattern.
+    and `_close_httpx_client()` for cleanup. HTTP instrument adapters share
+    this same pattern.
     """
 
     _client: httpx.AsyncClient | None

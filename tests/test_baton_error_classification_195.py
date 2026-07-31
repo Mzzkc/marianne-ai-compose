@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import pytest
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.core.errors.codes import ErrorCategory
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.musician import _CATEGORY_TO_BUCKET, _classify_error

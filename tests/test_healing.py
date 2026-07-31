@@ -16,7 +16,7 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.healing.context import ErrorContext
 from marianne.healing.coordinator import HealingReport, SelfHealingCoordinator
 from marianne.healing.diagnosis import Diagnosis, DiagnosisEngine

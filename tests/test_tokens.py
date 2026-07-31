@@ -357,10 +357,8 @@ class TestInstrumentAwareWindows:
             ("gemini-cli", 1_000_000),
             ("codex-cli", 196_000),
             ("ollama", 128_000),
-            ("anthropic-api", 196_000),
-            ("claude-cli", 196_000),
         ],
-        ids=["claude-code", "gemini-cli", "codex-cli", "ollama", "anthropic-api", "claude-cli"],
+        ids=["claude-code", "gemini-cli", "codex-cli", "ollama"],
     )
     def test_known_instrument_window(self, instrument: str, expected: int) -> None:
         """Known instruments return their configured window size."""
@@ -412,25 +410,6 @@ class TestInstrumentAwareWindows:
         """Instrument lookup is case-insensitive."""
         result = get_effective_window_size(instrument=instrument)
         assert result == 196_000
-
-    # Underscore/hyphen normalization for instruments
-    @pytest.mark.parametrize(
-        "instrument,expected",
-        [
-            ("claude_cli", 196_000),  # underscore → hyphen
-            ("claude-cli", 196_000),  # already hyphenated
-            ("gemini_cli", 1_000_000),  # underscore variant
-            ("codex_cli", 196_000),  # underscore variant
-            ("anthropic_api", 196_000),  # underscore variant
-        ],
-        ids=["claude_cli", "claude-cli", "gemini_cli", "codex_cli", "anthropic_api"],
-    )
-    def test_instrument_underscore_hyphen_normalization(
-        self, instrument: str, expected: int
-    ) -> None:
-        """Both underscore and hyphen variants resolve to the same instrument."""
-        assert get_effective_window_size(instrument=instrument) == expected
-
 
 class TestModelCaseInsensitivity:
     """Tests for case-insensitive model name lookup."""

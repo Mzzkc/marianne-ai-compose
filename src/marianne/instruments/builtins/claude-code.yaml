@@ -119,7 +119,7 @@ cli:
     executable: claude
     prompt_flag: "-p"
     # Deliver prompt via stdin (-p - sentinel) to avoid ARG_MAX limits
-    # on large prompts. This matches the native ClaudeCliBackend behavior
+    # on large prompts. This preserves the proven stdin-delivery behavior
     # and is required for production-length agent prompts (F-105).
     prompt_via_stdin: true
     stdin_sentinel: "-"

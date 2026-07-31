@@ -36,8 +36,8 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from marianne.backends.base import Backend
 from marianne.core.config.instruments import InstrumentProfile
+from marianne.execution.base import Backend
 from marianne.instruments.registry import InstrumentRegistry
 
 if TYPE_CHECKING:
@@ -111,11 +111,7 @@ def _create_backend_for_profile(
             backend.apply_overrides({"model": model})
         return backend
 
-    # HTTP instruments — route by HttpProfile.schema_family (Phase 3).
-    # Dispatch is now driven purely off the schema_family field on
-    # HttpProfile (``openai`` | ``anthropic`` | ``gemini``); there is no
-    # hardcoded instrument-name check. Previously-unrecognised HTTP
-    # profiles raise a structured ValueError with migration guidance.
+    # HTTP instruments select their transport from profile metadata.
     return _dispatch_http_profile(
         profile,
         working_directory=working_directory,
@@ -166,24 +162,7 @@ def _dispatch_http_profile(
     model: str | None,
     api_key: str | None,
 ) -> Backend:
-    """Dispatch an HTTP InstrumentProfile to the handler for its schema family.
-
-    Doctrine RULE: "Generic HTTP instrument dispatch must work for all
-    HttpProfile schema families". Handlers are selected by
-    ``profile.http.schema_family``:
-
-    - ``openai``   → OpenAI-compatible chat/completions (OpenRouter,
-      OpenAI proper, self-hosted OpenAI-compat servers).
-    - ``anthropic``→ Anthropic Messages API (routed through the native
-      AnthropicApiBackend exception per Doctrine Exception Registry).
-    - ``gemini``   → Google Gemini API. Translator is designed but not
-      yet wired — raises a structured ``ValueError`` with migration
-      guidance.
-
-    The handler is free to use any backing implementation (native SDK,
-    generic httpx, third-party library). The pool only cares that it
-    returns a configured ``Backend`` (or raises a structured error).
-    """
+    """Dispatch an HTTP profile through the built-in generic wire contract."""
     if profile.kind != "http" or profile.http is None:
         raise ValueError(
             f"_dispatch_http_profile called with non-HTTP profile "
@@ -191,36 +170,17 @@ def _dispatch_http_profile(
             f"programming error in backend_pool.py."
         )
 
-    family = profile.http.schema_family
-    if family == "openai":
-        return _build_openai_family_backend(
-            profile,
-            working_directory=working_directory,
-            model=model,
-            api_key=api_key,
-        )
-    if family == "anthropic":
-        return _build_anthropic_family_backend(
-            profile,
-            working_directory=working_directory,
-            model=model,
-            api_key=api_key,
-        )
-    if family == "gemini":
+    if profile.http.schema_family != "openai":
         raise ValueError(
-            f"HTTP instrument '{profile.name}' uses schema_family='gemini' "
-            f"but no Gemini translator is wired yet. Migration guidance: "
-            f"use a CLI instrument profile (e.g. gemini-cli) or wait for "
-            f"the gemini schema-family HTTP translator to land. See "
-            f"docs/research/2026-03-26-universal-instrument-api-research.md."
+            f"HTTP instrument '{profile.name}' declares unsupported "
+            f"schema_family={profile.http.schema_family!r}. Built-in HTTP "
+            "execution supports the OpenAI-compatible chat contract only."
         )
-    # Unknown schema family — raise an actionable ValueError (NOT a bare
-    # deferred-implementation stub).
-    raise ValueError(
-        f"HTTP instrument '{profile.name}' declares schema_family="
-        f"{family!r} which has no dispatch handler. "
-        f"Supported HttpProfile schema families: 'openai', 'anthropic'. "
-        f"('gemini' is declared but the translator is not yet wired.)"
+    return _build_openai_family_backend(
+        profile,
+        working_directory=working_directory,
+        model=model,
+        api_key=api_key,
     )
 
 
@@ -233,57 +193,30 @@ def _build_openai_family_backend(
 ) -> Backend:
     """Construct a Backend for schema_family='openai' profiles.
 
-    Uses the OpenRouter backend implementation as the generic OpenAI-compat
-    handler — it speaks standard OpenAI chat/completions protocol and works
-    for any profile whose schema family is 'openai', including OpenRouter
-    itself, OpenAI proper, and self-hosted OpenAI-compat servers.
+    Uses the generic OpenAI-compatible handler selected entirely by profile
+    fields, including endpoint and optional authentication.
     """
-    from marianne.execution.instruments.openai_compat_backend import OpenRouterBackend
+    from marianne.execution.instruments.openai_compat_backend import OpenAICompatibleBackend
 
     assert profile.http is not None  # narrowed by dispatcher
 
-    resolved_model = model or profile.default_model or "minimax/minimax-m1-80k"
-    auth_env = profile.http.auth_env_var or "OPENROUTER_API_KEY"
-    backend: Backend = OpenRouterBackend(
+    resolved_model = model or profile.default_model
+    if not resolved_model:
+        raise ValueError(
+            f"HTTP instrument '{profile.name}' requires a model override or "
+            "a profile default_model."
+        )
+    auth_env = profile.http.auth_env_var
+    backend: Backend = OpenAICompatibleBackend(
         model=resolved_model,
         api_key_env=auth_env,
         timeout_seconds=profile.default_timeout_seconds,
         base_url=profile.http.base_url,
+        endpoint=profile.http.endpoint,
     )
     # Inject API key from keyring if provided.
-    if api_key is not None and hasattr(backend, "_api_key"):
-        object.__setattr__(backend, "_api_key", api_key)
-    if working_directory is not None:
-        backend.working_directory = working_directory
-    return backend
-
-
-def _build_anthropic_family_backend(
-    profile: InstrumentProfile,
-    *,
-    working_directory: Path | None,
-    model: str | None,
-    api_key: str | None,
-) -> Backend:
-    """Construct a Backend for schema_family='anthropic' profiles.
-
-    Uses the native AnthropicApiBackend (Doctrine Exception Registry: the
-    Anthropic SDK provides thinking/streaming/tool_use features that a
-    generic HTTP POST cannot replicate, so this backend remains native).
-    """
-    from marianne.backends.anthropic_api import AnthropicApiBackend
-
-    assert profile.http is not None  # narrowed by dispatcher
-
-    resolved_model = model or profile.default_model or "claude-sonnet-4-5-20250929"
-    auth_env = profile.http.auth_env_var or "ANTHROPIC_API_KEY"
-    backend: Backend = AnthropicApiBackend(
-        model=resolved_model,
-        api_key_env=auth_env,
-        timeout_seconds=profile.default_timeout_seconds,
-    )
-    if api_key is not None and hasattr(backend, "_api_key"):
-        object.__setattr__(backend, "_api_key", api_key)
+    if api_key is not None:
+        backend.set_api_key(api_key)
     if working_directory is not None:
         backend.working_directory = working_directory
     return backend
@@ -624,7 +557,7 @@ class BackendPool:
 
         # Wire PID tracking for orphan detection when running under daemon.
         # Same pattern as JobService._setup_components — set callbacks on
-        # backends that support them (PluginCliBackend, ClaudeCliBackend).
+        # backends that support them (PluginCliBackend, InteractiveCliBackend).
         if self._pgroup is not None:
             if hasattr(backend, "_on_process_spawned"):
                 backend._on_process_spawned = self._pgroup.track_backend_pid

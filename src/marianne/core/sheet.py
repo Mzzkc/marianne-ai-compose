@@ -279,12 +279,6 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
                 **config.sheet.per_sheet_instrument_config[sheet_num],
             }
 
-        # Normalize the legacy 'cli_model' spelling onto 'model' (the key
-        # dispatch reads). Scores written against the backend-era docs use
-        # cli_model; without this they silently ran the profile default.
-        if "model" not in instrument_config and "cli_model" in instrument_config:
-            instrument_config["model"] = instrument_config["cli_model"]
-
         # --- Timeout ---
         # From the merged instrument_config (score -> movement -> alias ->
         # per-sheet merges above), so per-scope timeout_seconds overrides

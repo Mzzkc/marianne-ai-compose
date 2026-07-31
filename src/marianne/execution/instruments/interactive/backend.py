@@ -28,7 +28,7 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 
-from marianne.backends.base import Backend, ExecutionResult
+from marianne.execution.base import Backend, ExecutionResult
 from marianne.core.config.instruments import InstrumentProfile, InteractiveCliConfig
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
@@ -252,8 +252,7 @@ class InteractiveCliBackend(Backend):
         (prompt flag, output-format, timeout flag, the HEADLESS subcommand).
         The interactive config controls what carries over: its own
         ``subcommand`` (e.g. goose's ``session``), whether the
-        auto-approve flag applies interactively (codex's ``--full-auto``
-        is exec-only and rejected by its TUI), and whether mcp_disable_args
+        auto-approve flag applies interactively, and whether mcp_disable_args
         carry over (F-271 — verified for claude-code).
         """
         cmd = self._cli.command

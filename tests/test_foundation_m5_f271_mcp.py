@@ -92,9 +92,8 @@ class TestPluginCliBackendMcpDisabling:
         extra_idx = cmd.index("--extra-flag")
         assert mcp_idx < extra_idx, "MCP disable args must come before extra_flags"
 
-    def test_matches_legacy_backend_behavior(self) -> None:
-        """Profile-driven MCP disabling produces the same sequence as
-        the legacy ClaudeCliBackend's disable_mcp=True behavior."""
+    def test_profile_driven_mcp_disable_sequence(self) -> None:
+        """Profile-driven MCP disabling produces the required sequence."""
         profile = _make_profile(
             mcp_disable_args=[
                 "--strict-mcp-config",

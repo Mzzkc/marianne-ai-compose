@@ -107,11 +107,16 @@ Marianne runs on a single machine. There is no distributed execution, remote wor
 
 ### Instrument Plugin System
 
-Marianne supports multiple AI instruments through a config-driven plugin system. Six instruments ship as built-in profiles, and users can add custom instruments via YAML files.
+Marianne supports multiple AI instruments through a config-driven plugin system. Eleven instruments ship as built-in profiles, and users can add custom instruments via YAML files.
 
-**Built-in instruments:** `claude-code`, `gemini-cli`, `codex-cli`, `cline-cli`, `aider`, `goose`
+**Built-in instruments:** `aider`, `antigravity`, `claude-code`, `cli`,
+`cline-cli`, `codex-cli`, `crush`, `gemini-cli`, `goose`, `ollama`,
+`opencode`
 
-**Native backends:** `claude_cli` (ClaudeCliBackend), `anthropic_api`, `ollama`, `recursive_light`
+**Execution model:** instrument profiles select shared CLI, interactive CLI,
+or OpenAI-compatible HTTP executors. Marianne has no provider-specific native
+backend classes. Ollama ships as an HTTP profile because it exposes the shared
+OpenAI-compatible contract.
 
 Run `mzt instruments list` to see all available instruments and their status.
 

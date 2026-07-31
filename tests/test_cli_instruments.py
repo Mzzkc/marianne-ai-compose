@@ -379,25 +379,24 @@ class TestInstrumentsCheck:
         from marianne.core.config.instruments import HttpProfile
 
         http_profile = InstrumentProfile(
-            name="anthropic-api",
-            display_name="Anthropic API",
-            description="Direct API access",
+            name="local-http",
+            display_name="Local HTTP",
+            description="OpenAI-compatible API access",
             kind="http",
             http=HttpProfile(
-                base_url="https://api.anthropic.com",
-                endpoint="/v1/messages",
-                schema_family="anthropic",
-                auth_env_var="ANTHROPIC_API_KEY",
+                base_url="http://localhost:9000/v1",
+                endpoint="/chat/completions",
+                schema_family="openai",
             ),
         )
-        profiles = {"anthropic-api": http_profile}
+        profiles = {"local-http": http_profile}
         with patch(
             "marianne.cli.commands.instruments._load_all_profiles",
             return_value=profiles,
         ):
-            result = runner.invoke(app, ["instruments", "check", "anthropic-api"])
+            result = runner.invoke(app, ["instruments", "check", "local-http"])
 
         assert result.exit_code == 0
-        assert "anthropic-api" in result.stdout.lower()
+        assert "local-http" in result.stdout.lower()
         # HTTP instruments should show endpoint info
-        assert "api.anthropic.com" in result.stdout
+        assert "localhost:9000/v1/chat/completions" in result.stdout

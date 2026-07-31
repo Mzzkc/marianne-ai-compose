@@ -468,7 +468,7 @@ class TestJobConfigNestedIntegration:
             prompt=PromptConfig(template="Do task {sheet_num}"),
             retry=RetryConfig(max_retries=5),
             logging=LogConfig(level="DEBUG", format="json"),
-            instrument="anthropic_api",
+            instrument="claude-code",
             learning=LearningConfig(
                 enabled=True,
                 exploration_budget=ExplorationBudgetConfig(enabled=True),

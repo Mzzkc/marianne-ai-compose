@@ -1,54 +1,18 @@
-"""Observer test — generic HTTP instrument dispatch (Phase 3 enforcement).
+"""Contracts for profile-driven HTTP instrument dispatch.
 
-This file is an OBSERVER test written before the Phase 3 migration begins.
-Its job is not to test current behavior; its job is to lock in the
-Doctrine Rule that generic HTTP dispatch must work for every
-``HttpProfile`` schema family after Phase 3 lands. When Phase 3 ships,
-the xfail-marked tests must flip to passing — that is the signal that
-the doctrine rule has been honoured.
-
-Coverage gap addressed: G-1 (Critical)
-Target module: ``src/marianne/daemon/baton/backend_pool.py:78-123``
-
-Doctrine rule enforced
-----------------------
-RULE: Generic HTTP instrument dispatch must work for all HttpProfile
-schema families.
-
-SCOPE: ``daemon/baton/backend_pool.py:78-123``
-
-RATIONALE: The current implementation only supports OpenRouter via a
-hardcoded name check at ``:90`` and raises ``NotImplementedError`` for
-all other HTTP instruments at ``:118``. The ``HttpProfile`` schema family
-field (``Literal["openai", "anthropic", "gemini"]``) at
-``core/config/instruments.py:261`` was designed to drive generic routing
-— implementation was deferred. Phase 3 must deliver this.
-
-EVIDENCE:
-- ``daemon/baton/backend_pool.py:90-116`` (OpenRouter hardcoded)
-- ``daemon/baton/backend_pool.py:118-123`` (NotImplementedError)
-- ``core/config/instruments.py:396`` (schema family literal)
-- Triangulation C-3 confirms.
-
-Audit hooks enforced by this file
----------------------------------
-- AUDIT-INV-3: backend_pool.py has no ``NotImplementedError`` for HTTP dispatch
-- AUDIT-INV-4: the hardcoded ``profile.name == "openrouter"`` check is gone
-
-Why xfail and not skip
-----------------------
-Per the observer-test authoring rules: a test that cannot be expressed
-today because the feature is not wired must be marked ``xfail``, not
-``skip``. Xfail is visible in ``pytest`` reporting — when the
-implementation lands and the test starts passing, ``pytest`` will raise
-``XPASS`` and force the author to remove the xfail marker. Skip would
-silently drop the test from the run and the doctrine rule would decay.
+OpenAI-compatible profiles share one generic transport. Other wire schemas
+are rejected with an actionable error until a schema codec exists; they do not
+gain provider-specific Python backend classes. Source-level guards pin that
+dispatch contains neither provider-name special cases nor stub exceptions.
 """
 
 from __future__ import annotations
 
 import inspect
 from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
 
 from marianne.core.config.instruments import (
     HttpProfile,
@@ -67,13 +31,7 @@ from marianne.instruments.registry import InstrumentRegistry
 # ---------------------------------------------------------------------------
 
 
-DOCTRINE_RULE = (
-    "Generic HTTP instrument dispatch must work for all HttpProfile schema "
-    "families (doctrine RULE: 'Generic HTTP instrument dispatch must work for "
-    "all HttpProfile schema families', audit hooks AUDIT-INV-3 / AUDIT-INV-4). "
-    "See `docs/plans/` Atlas Doctrine and `docs/research/"
-    "2026-03-26-universal-instrument-api-research.md`."
-)
+GENERIC_HTTP_RULE = "OpenAI-compatible profiles use one profile-driven transport."
 
 
 def _make_http_profile(
@@ -121,21 +79,12 @@ def _registry_with(*profiles: InstrumentProfile) -> InstrumentRegistry:
 
 
 # ---------------------------------------------------------------------------
-# 1. Regression guard — the currently-working OpenRouter path must not
-#    regress while Phase 3 rewires the dispatch. This test should PASS
-#    today and continue to pass after Phase 3.
+# A named provider profile is ordinary OpenAI-compatible configuration.
 # ---------------------------------------------------------------------------
 
 
 def test_openrouter_http_profile_still_routes_to_backend() -> None:
-    """OpenRouter profile must acquire *some* HTTP backend, pre- and post-Phase-3.
-
-    The currently-shipping code creates ``OpenRouterBackend`` via a hardcoded
-    name check. Phase 3 replaces that with generic ``HttpProfile``-based
-    routing. Either way, the pool must return a non-None Backend. This
-    test asserts only the invariant — no coupling to the concrete class —
-    so it survives the migration and acts as a regression guard.
-    """
+    """An OpenRouter profile routes through the generic HTTP contract."""
     profile = _make_http_profile(
         "openrouter",
         base_url="https://openrouter.ai/api/v1",
@@ -147,26 +96,17 @@ def test_openrouter_http_profile_still_routes_to_backend() -> None:
 
     assert backend is not None, (
         "OpenRouter HTTP profile failed to resolve to a backend. "
-        f"Regression guard for: {DOCTRINE_RULE}"
+        f"Regression guard for: {GENERIC_HTTP_RULE}"
     )
 
 
 # ---------------------------------------------------------------------------
-# 2. Schema-family dispatch — one test per HttpProfile schema family.
-#    Each asserts that a non-OpenRouter profile in that family produces a
-#    working backend. All three xfail today (NotImplementedError is raised
-#    at backend_pool.py:118-123). When Phase 3 lands, these flip.
+# Generic dispatch is selected by schema, not provider name.
 # ---------------------------------------------------------------------------
 
 
 def test_openai_family_non_openrouter_profile_acquires_backend() -> None:
-    """OpenAI-family HTTP profile (not OpenRouter) must yield a backend.
-
-    After Phase 3, a profile like a hypothetical ``openai-compat`` or
-    ``groq`` — anything with ``schema_family='openai'`` — must route
-    through generic dispatch. Today the pool raises NotImplementedError
-    because only the OpenRouter name / host is recognised.
-    """
+    """Any OpenAI-compatible profile yields the generic backend."""
     profile = _make_http_profile(
         "openai-compat",
         base_url="http://localhost:9001/v1",
@@ -178,125 +118,25 @@ def test_openai_family_non_openrouter_profile_acquires_backend() -> None:
 
     assert backend is not None, (
         "OpenAI-family (non-OpenRouter) HTTP dispatch missing. "
-        f"Doctrine: {DOCTRINE_RULE}"
+        f"Contract: {GENERIC_HTTP_RULE}"
     )
 
 
-def test_anthropic_family_http_profile_acquires_backend() -> None:
-    """Anthropic-family HTTP profile must yield a backend through the pool.
-
-    The native ``anthropic_api`` profile has ``schema_family='anthropic'``
-    and is registered by ``register_native_instruments()``. After Phase 3
-    it should also resolve via ``_create_backend_for_profile`` rather than
-    requiring a separate SDK-specific code path.
-    """
-    profile = _make_http_profile(
-        "anthropic-http",
-        base_url="https://api.anthropic.com",
-        endpoint="/v1/messages",
-        schema_family="anthropic",
-        auth_env_var="ANTHROPIC_API_KEY",
-    )
-
-    backend = _create_backend_for_profile(profile)
-
-    assert backend is not None, (
-        "Anthropic-family HTTP dispatch missing. "
-        f"Doctrine: {DOCTRINE_RULE}"
-    )
-
-
-def test_gemini_family_http_profile_raises_actionable_error_not_notimplementederror() -> None:
-    """Gemini-family HTTP profile must raise a structured, non-stub error.
-
-    The ``HttpProfile.schema_family`` literal already enumerates
-    ``'gemini'`` — the schema is designed for it — but the translator
-    is intentionally deferred per the Exception Registry. Phase 3 still
-    honours AUDIT-INV-3: no ``NotImplementedError`` escapes. Instead a
-    ``ValueError`` names the instrument and points at the migration
-    guidance.
-    """
-    profile = _make_http_profile(
-        "gemini-http",
-        base_url="https://generativelanguage.googleapis.com",
-        endpoint="/v1beta/models/gemini-2.5-pro:generateContent",
-        schema_family="gemini",
-        auth_env_var="GEMINI_API_KEY",
-    )
-
-    raised: BaseException | None = None
-    try:
-        _create_backend_for_profile(profile)
-    except BaseException as exc:  # noqa: BLE001 — observer test
-        raised = exc
-
-    assert raised is not None, (
-        "Gemini-family HTTP profile must raise — silent None is worse. "
-        f"Doctrine: {DOCTRINE_RULE}"
-    )
-    assert not isinstance(raised, NotImplementedError), (
-        "Gemini-family HTTP profile raised NotImplementedError — violates "
-        f"AUDIT-INV-3. Doctrine: {DOCTRINE_RULE}"
-    )
-    assert "gemini" in str(raised).lower(), (
-        "Gemini-family error must name the schema family / instrument. "
-        f"Got: {raised!s}"
-    )
+@pytest.mark.parametrize("schema_family", ["anthropic", "gemini"])
+def test_non_openai_wire_schema_is_rejected_by_profile(
+    schema_family: str,
+) -> None:
+    """Profiles cannot advertise a wire contract the runtime cannot execute."""
+    with pytest.raises(ValidationError, match="schema_family"):
+        _make_http_profile(
+            f"{schema_family}-http",
+            base_url="https://example.invalid",
+            schema_family=schema_family,
+        )
 
 
 # ---------------------------------------------------------------------------
-# 3. Error shape — an unrecognised HTTP profile must fail with an actionable
-#    error, NOT a bare NotImplementedError. The doctrine calls this out
-#    specifically: the current error is exactly what Phase 3 is meant to
-#    replace.
-# ---------------------------------------------------------------------------
-
-
-def test_unrecognised_http_profile_raises_actionable_error_not_notimplementederror() -> None:
-    """Unwired HTTP schema must surface a useful, structured diagnostic.
-
-    Doctrine is explicit: ``NotImplementedError`` is the smell Phase 3
-    removes. An unsupported HTTP instrument must raise a domain error
-    (e.g. ``ValueError``) whose message names the instrument and tells
-    the user what to do.
-    """
-    # gemini is declared in the schema but intentionally not yet wired —
-    # it is the canonical "recognised family, no handler" case Phase 3
-    # designed for.
-    profile = _make_http_profile(
-        "some-gemini-endpoint",
-        base_url="https://generativelanguage.googleapis.com",
-        endpoint="/v1beta/models/gemini-2.5-pro:generateContent",
-        schema_family="gemini",
-        auth_env_var="GEMINI_API_KEY",
-    )
-
-    raised: BaseException | None = None
-    try:
-        _create_backend_for_profile(profile)
-    except BaseException as exc:  # noqa: BLE001 — observer test, capture all
-        raised = exc
-
-    assert raised is not None, (
-        "Unrecognised HTTP profile must raise *some* error — returning a "
-        f"silent None is worse than NotImplementedError. Doctrine: {DOCTRINE_RULE}"
-    )
-    assert not isinstance(raised, NotImplementedError), (
-        "Unrecognised HTTP profile raised NotImplementedError, violating "
-        f"doctrine AUDIT-INV-3 and the rule: {DOCTRINE_RULE}. "
-        f"Message was: {raised!s}"
-    )
-    message = str(raised)
-    assert profile.name in message, (
-        "Actionable error must name the instrument. "
-        f"Got: {type(raised).__name__}: {message!r}. Doctrine: {DOCTRINE_RULE}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# 4. Source-level invariants — pin AUDIT-INV-3 and AUDIT-INV-4 as unit tests
-#    so the static audit hooks become regression alarms rather than
-#    developer-memory items.
+# Source-level invariants keep generic dispatch free of provider branches.
 # ---------------------------------------------------------------------------
 
 
@@ -307,39 +147,26 @@ def _backend_pool_source() -> str:
 
 
 def test_backend_pool_has_no_hardcoded_openrouter_name_check() -> None:
-    """Source-level guard for AUDIT-INV-4.
-
-    Phase 3 must remove the hardcoded name check. The doctrine hook
-    greps for ``profile.name == "openrouter"``; we mirror it here so the
-    check runs under ``pytest`` as well as CI grep.
-    """
+    """Generic dispatch must not branch on the OpenRouter profile name."""
     source = _backend_pool_source()
     assert 'profile.name == "openrouter"' not in source, (
         "backend_pool.py still contains hardcoded OpenRouter name check. "
-        f"Doctrine AUDIT-INV-4 violated. Rule: {DOCTRINE_RULE}"
+        f"Generic dispatch violated. Rule: {GENERIC_HTTP_RULE}"
     )
 
 
 def test_backend_pool_has_no_notimplementederror_for_http_dispatch() -> None:
-    """Source-level guard for AUDIT-INV-3.
-
-    The doctrine requires that the NotImplementedError branch be removed
-    once generic HTTP dispatch is wired. We search the dispatch code
-    region of the module (not docstrings or any references that simply
-    spell the identifier in commentary) for a ``raise NotImplementedError``.
-    """
+    """HTTP dispatch must use domain errors, not stub exceptions."""
     source = _backend_pool_source()
     assert "raise NotImplementedError" not in source, (
         "backend_pool.py still raises NotImplementedError for HTTP "
-        "dispatch. Doctrine AUDIT-INV-3 violated. "
-        f"Rule: {DOCTRINE_RULE}"
+        "dispatch. "
+        f"Rule: {GENERIC_HTTP_RULE}"
     )
 
 
 # ---------------------------------------------------------------------------
-# 5. Pool-level integration — exercise the live `BackendPool.acquire` code
-#    path (not just the private factory). Phase 3 must make this work for
-#    every schema family registered in the registry.
+# Pool-level integration exercises the path called by the baton.
 # ---------------------------------------------------------------------------
 
 
@@ -349,7 +176,7 @@ async def test_pool_acquire_end_to_end_for_openai_family_profile() -> None:
     This is the shape the baton actually calls — ``await pool.acquire(
     instrument_name)``. It validates that the wiring through
     ``_acquire_locked`` → ``_create_backend_for_profile`` all succeeds
-    for a non-OpenRouter HTTP profile after Phase 3.
+    for a non-OpenRouter OpenAI-compatible profile.
     """
     profile = _make_http_profile(
         "generic-openai",
@@ -364,14 +191,14 @@ async def test_pool_acquire_end_to_end_for_openai_family_profile() -> None:
         backend = await pool.acquire(profile.name)
         assert backend is not None, (
             f"Pool returned None backend for '{profile.name}'. "
-            f"Doctrine: {DOCTRINE_RULE}"
+            f"Contract: {GENERIC_HTTP_RULE}"
         )
         # HTTP is singleton — a second acquire should reuse the same
         # instance and not explode.
         backend2 = await pool.acquire(profile.name)
         assert backend2 is backend, (
             "HTTP backends must be singletons per instrument. "
-            f"Doctrine: {DOCTRINE_RULE}"
+            f"Contract: {GENERIC_HTTP_RULE}"
         )
     finally:
         await pool.close_all()

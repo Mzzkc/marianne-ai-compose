@@ -4,8 +4,8 @@
 name: testing-workflow
 workspace: ./workspace
 
-backend:
-  type: claude_cli
+instrument: claude-code
+instrument_config:
   model: sonnet  # Good reasoning for test planning
 
 sheet:

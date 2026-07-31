@@ -11,7 +11,7 @@ These scores teach you how to orchestrate AI agents to produce outcomes no singl
 | [hello-local](hello-local.yaml) | The pure-local twin of `hello` — same orchestration, run entirely on a local Ollama model (no cloud, no account) | 7 | Fan-out + Synthesis, Tool-Chain | ~5-15m | free |
 | [simple-sheet](simple-sheet.yaml) | Demonstrates basic parallel execution with minimal configuration — the fastest path from zero to running job | 2 | none | ~2m | ~$0.10 |
 | [cross-sheet-test](cross-sheet-test.yaml) | Builds a three-stage research pipeline where each stage reads and transforms previous outputs | 3 | Succession Pipeline | ~3m | ~$0.15 |
-| [api-backend](api-backend.yaml) | Generates structured technical briefings using the Anthropic API directly — no CLI needed | 3 | Succession Pipeline | ~2m | ~$0.20 |
+| [api-backend](api-backend.yaml) | Generates structured technical briefings through local Ollama's OpenAI-compatible endpoint | 3 | Succession Pipeline | hardware-dependent | $0 API cost |
 | [prelude-cadenza-example](prelude-cadenza-example.yaml) | Produces documentation through research → draft → review with injected context files at each stage | 3 | Succession Pipeline | ~4m | ~$0.25 |
 | [observability-demo](observability-demo.yaml) | Runs a project health check while teaching you how to monitor jobs with logs, diagnostics, and state inspection | 3 | none | ~4m | ~$0.20 |
 | [worktree-isolation](worktree-isolation.yaml) | Performs parallel code review where three expert perspectives work simultaneously in isolated git worktrees | 5 | Fan-out + Synthesis | ~5m | ~$0.25 |
@@ -30,9 +30,13 @@ Divides 10 items across 2 sheets running in parallel. Each sheet produces a mark
 
 Demonstrates the Succession Pipeline pattern: discovery → analysis → synthesis. Each stage reads workspace files from previous stages and builds on their results. Shows how `cross_sheet` configuration, `previous_outputs`, and `previous_files` enable multi-stage workflows where later work depends on earlier findings.
 
-### api-backend.yaml — Direct API Integration
+### api-backend.yaml — OpenAI-Compatible API Integration
 
-Creates technical briefings using the Anthropic Messages API directly instead of Claude CLI. Useful when you need specific model parameters, faster text-only execution, or are running in environments without Claude CLI. Each stage receives previous outputs via cross_sheet context since the API backend has no filesystem access.
+Creates technical briefings through a local Ollama server using its
+OpenAI-compatible endpoint. This demonstrates that a provider profile supplies
+connection details while Marianne's shared HTTP executor supplies the wire
+behavior. Each stage receives previous outputs through cross-sheet context
+because the HTTP executor has no filesystem tools.
 
 ### prelude-cadenza-example.yaml — Context Injection Workflow
 
@@ -74,12 +78,12 @@ All scores use `prompt.variables` for customization. The patterns:
 3. **Workspace paths** — set to `../../workspaces/NAME` relative to score location; adjust to your preferred output directory
 
 **Prerequisites:**
-- `ANTHROPIC_API_KEY` environment variable for `api-backend.yaml` and any score using `anthropic_api` instrument
+- A running Ollama server with `llama3.1:8b` for `api-backend.yaml`
 - Git repository for `worktree-isolation.yaml`
 - Project directory to analyze for `observability-demo.yaml`
 
 **Common customizations:**
-- Change `instrument:` to use different backends (`claude-code`, `anthropic_api`)
+- Change `instrument:` to use another registered profile (`claude-code`, `codex-cli`, `ollama`)
 - Adjust `sheet.size` and `total_items` to control parallelization
 - Modify `instrument_config.timeout_seconds` for longer/shorter work
 - Add `instrument_fallbacks` for resilience (scores already include this)

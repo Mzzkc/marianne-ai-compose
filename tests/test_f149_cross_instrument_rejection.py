@@ -82,7 +82,7 @@ class TestF149RateLimitsDoNotBlockJobs:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -111,7 +111,7 @@ class TestF149RateLimitsDoNotBlockJobs:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -198,7 +198,7 @@ class TestF149RateLimitsDoNotBlockJobs:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -240,7 +240,7 @@ class TestSheetDispatchStillConsidersRateLimits:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,
@@ -269,7 +269,7 @@ class TestSheetDispatchStillConsidersRateLimits:
             ),
         ):
             await coordinator.report_rate_limit(
-                instrument="claude_cli",
+                instrument="claude-code",
                 wait_seconds=60.0,
                 job_id="job-a",
                 sheet_num=1,

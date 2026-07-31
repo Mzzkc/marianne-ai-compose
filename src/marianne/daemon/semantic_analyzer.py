@@ -16,7 +16,7 @@ import re
 import time
 from typing import Any
 
-from marianne.backends.base import Backend
+from marianne.execution.base import Backend
 from marianne.core.checkpoint import CheckpointState
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger

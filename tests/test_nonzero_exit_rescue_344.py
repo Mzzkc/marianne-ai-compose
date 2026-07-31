@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.core.config.instruments import (
     CliCommand,
     CliErrorConfig,

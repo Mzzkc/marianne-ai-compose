@@ -567,8 +567,7 @@ def test_start_job_503_without_conductor(page: Page, base_url: str) -> None:
             const yaml = [
                 'name: test',
                 'workspace: /tmp',
-                'backend:',
-                '  type: claude_cli',
+                'instrument: claude-code',
                 'sheet:',
                 '  total_sheets: 1',
                 'prompt:',

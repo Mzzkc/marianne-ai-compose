@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from marianne.backends.base import Backend, ExecutionResult
+from marianne.execution.base import Backend, ExecutionResult
 from marianne.core.checkpoint import CheckpointState, SheetState, SheetStatus
 from marianne.daemon.config import SemanticLearningConfig
 from marianne.daemon.event_bus import EventBus

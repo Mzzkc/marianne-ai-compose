@@ -4,16 +4,10 @@ TDD: These tests define the contract for:
 1. The `instrument:` field on JobConfig (string, optional)
 2. The `instrument_config:` field on JobConfig (dict, optional)
 3. Coexistence rules between `instrument:` and `backend:`
-4. YAML alias validators for backward compatibility
+4. Rejection of the removed backend configuration surface
 
-Per the design spec (2026-03-26-instrument-plugin-system-design.md):
-- instrument: and backend: are two ways to specify the same thing
-- If both present → validation error
-- If only backend: → works as today
-- If only instrument: → resolves via profile registry at runtime
-- If neither → defaults to claude_cli (current default)
-
-The `backend:` field is NOT deprecated. `instrument:` is additive.
+The current contract has one path: ``instrument:`` resolves a profile at
+runtime, while the removed ``backend:`` field fails loudly.
 """
 
 from __future__ import annotations
@@ -88,7 +82,7 @@ class TestBackendStripped:
         from pydantic import ValidationError
 
         with _pytest.raises(ValidationError, match="extra_forbidden"):
-            JobConfig(**_minimal_job_config(backend={"type": "anthropic_api"}))
+            JobConfig(**_minimal_job_config(backend={"type": "claude_cli"}))
 
     def test_no_instrument_uses_default(self) -> None:
         config = JobConfig(**_minimal_job_config())

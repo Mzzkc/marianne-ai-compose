@@ -62,15 +62,6 @@ class ConfigResources:
                 "mimeType": _CONTENT_TYPE_JSON
             },
             {
-                "uri": "config://backend-options",
-                "name": "Instrument Options (compatibility URI)",
-                "description": (
-                    "Compatibility alias for config://instrument-options; "
-                    "Marianne score YAML uses instrument profiles, not backend blocks"
-                ),
-                "mimeType": _CONTENT_TYPE_JSON
-            },
-            {
                 "uri": "config://validation-types",
                 "name": "Validation Types Reference",
                 "description": "Available validation types and their parameters",
@@ -118,7 +109,6 @@ class ConfigResources:
         "config://schema": "_get_config_schema",
         "config://example": "_get_config_example",
         "config://instrument-options": "_get_instrument_options",
-        "config://backend-options": "_get_instrument_options",
         "config://validation-types": "_get_validation_types",
         "config://learning-options": "_get_learning_options",
         "marianne://jobs": "_get_jobs_overview",
@@ -168,7 +158,7 @@ description: Example Marianne score configuration
 
 # The top-level ``instrument:`` key resolves through the instrument
 # registry and works for any registered instrument profile
-# (claude-code, anthropic_api, gemini-cli, etc.).
+# (claude-code, gemini-cli, ollama, etc.).
 instrument: claude-code
 instrument_config:
   timeout_seconds: 300
@@ -211,27 +201,17 @@ notifications:
     async def _get_instrument_options(self) -> dict[str, Any]:
         """Get instrument configuration options.
 
-        Phase 5: registry-driven. Reads the live ``InstrumentRegistry``
-        (populated by ``register_native_instruments()`` plus any
-        user/project profiles) instead of hardcoding the legacy 4
-        backend options. Each registered profile is surfaced with its
+        Reads the profile loader's merged built-in, user, and project profiles
+        instead of hardcoding provider implementations. Each registered
+        profile is surfaced with its
         kind, capabilities, default model, timeout, and model capacity
         list so MCP clients see an accurate, extensible picture rather
-        than a stale backend snapshot.
+        than a stale provider snapshot.
         """
-        from marianne.instruments.registry import (
-            InstrumentRegistry,
-            register_native_instruments,
-        )
-
-        # Build a local registry view. We avoid holding a registry on the
-        # ConfigResources instance because MCP resources are read-only
-        # snapshots — each call reflects the current native bridge state.
-        registry = InstrumentRegistry()
-        register_native_instruments(registry)
+        from marianne.instruments.loader import load_all_profiles
 
         available: dict[str, Any] = {}
-        for profile in registry.list_all():
+        for profile in load_all_profiles().values():
             available[profile.name] = {
                 "display_name": profile.display_name,
                 "description": profile.description,
@@ -251,13 +231,7 @@ notifications:
                 ],
             }
 
-        instrument_options = {
-            "available_instruments": available,
-            "compatibility_note": (
-                "Legacy backend blocks were removed from score YAML. "
-                "Use the top-level instrument field and instrument_config instead."
-            ),
-        }
+        instrument_options = {"available_instruments": available}
         return self._mcp_json_content("config://instrument-options", instrument_options)
 
     async def _get_validation_types(self) -> dict[str, Any]:

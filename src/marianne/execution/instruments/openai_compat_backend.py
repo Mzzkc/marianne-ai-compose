@@ -1,11 +1,7 @@
-"""OpenAI-compatible HTTP backend used by schema_family='openai' instruments.
+"""Generic OpenAI-compatible HTTP execution for profile-driven instruments.
 
-Relocated from ``marianne.backends.openrouter`` in Phase 4b of the backend
-atlas migration. The class name ``OpenRouterBackend`` is preserved for
-compatibility with tests and internal callers, but conceptually this is
-the generic OpenAI-compatible handler: it speaks the standard OpenAI
-chat/completions protocol and works against any HTTP service that exposes
-one (OpenRouter, OpenAI proper, self-hosted vLLM, etc.).
+The backend speaks the standard OpenAI chat/completions protocol and works
+against any compatible HTTP service, including hosted and local servers.
 
 Usage is internal only — it is constructed by
 ``marianne.daemon.baton.backend_pool._build_openai_family_backend``
@@ -33,30 +29,24 @@ from typing import Any
 
 import httpx
 
-from marianne.backends.base import Backend, ExecutionResult, HttpxClientMixin
 from marianne.core.errors import ErrorClassifier
 from marianne.core.logging import get_logger
+from marianne.execution.base import Backend, ExecutionResult, HttpxClientMixin
 from marianne.utils.time import utc_now
 
-_logger = get_logger("backend.openrouter")
+_logger = get_logger("execution.openai_compat")
 
-# OpenRouter API base URL (without trailing endpoint path)
-_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+class OpenAICompatibleBackend(HttpxClientMixin, Backend):
+    """Run prompts through a profile-selected OpenAI-compatible API.
 
-# Default model — free-tier on OpenRouter
-_DEFAULT_MODEL = "minimax/minimax-m1-80k"
-
-
-class OpenRouterBackend(HttpxClientMixin, Backend):
-    """Run prompts via the OpenRouter API (OpenAI-compatible).
-
-    Provides direct HTTP access to 300+ models including free-tier options.
-    Uses HttpxClientMixin for lazy, connection-pooled httpx client lifecycle.
+    Connection details come from an instrument profile. The executor carries
+    no provider-specific endpoint, model, authentication, or headers.
 
     Example usage::
 
-        backend = OpenRouterBackend(
+        backend = OpenAICompatibleBackend(
             model="minimax/minimax-m1-80k",
+            base_url="https://openrouter.ai/api/v1",
             api_key_env="OPENROUTER_API_KEY",
         )
         result = await backend.execute("Explain quicksort")
@@ -64,27 +54,28 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
 
     def __init__(
         self,
-        model: str = _DEFAULT_MODEL,
-        api_key_env: str = "OPENROUTER_API_KEY",
+        model: str,
+        base_url: str,
+        *,
+        api_key_env: str | None = None,
         max_tokens: int = 16384,
         temperature: float = 0.7,
         timeout_seconds: float = 300.0,
-        base_url: str = _OPENROUTER_BASE_URL,
+        endpoint: str = "/chat/completions",
     ) -> None:
-        """Initialize OpenRouter backend.
+        """Initialize a profile-selected OpenAI-compatible transport.
 
         Args:
-            model: Model ID (e.g., 'minimax/minimax-m1-80k', 'google/gemma-4').
-            api_key_env: Environment variable containing API key.
+            model: Model ID understood by the selected endpoint.
+            base_url: API base URL (without endpoint path).
+            api_key_env: Optional environment variable containing an API key.
             max_tokens: Maximum tokens for response.
             temperature: Sampling temperature (0.0-2.0).
             timeout_seconds: Maximum time for API request.
-            base_url: OpenRouter API base URL (without endpoint path).
+            endpoint: Profile-selected OpenAI chat-completions endpoint.
         """
         if not model:
             raise ValueError("model must be a non-empty string")
-        if not api_key_env:
-            raise ValueError("api_key_env must be a non-empty string")
         if max_tokens < 1:
             raise ValueError(f"max_tokens must be >= 1, got {max_tokens}")
         if timeout_seconds <= 0:
@@ -95,10 +86,11 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.timeout_seconds = timeout_seconds
+        self.endpoint = endpoint
         self._working_directory: Path | None = None
 
         # Read API key from environment (may be None — checked at execute time)
-        self._api_key: str | None = os.environ.get(api_key_env)
+        self._api_key: str | None = os.environ.get(api_key_env) if api_key_env else None
 
         # Error classifier for rate limit wait extraction
         self._error_classifier = ErrorClassifier()
@@ -117,12 +109,9 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         self._preamble: str | None = None
         self._prompt_extensions: list[str] = []
 
-        # Build auth headers
-        headers: dict[str, str] = {
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/Mzzkc/marianne-ai-compose",
-            "X-Title": "Marianne AI Compose",
-        }
+        # The generic transport adds only protocol-required headers. Profiles
+        # choose authentication; provider-specific metadata belongs outside it.
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
@@ -137,7 +126,15 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
     @property
     def name(self) -> str:
         """Human-readable backend name including model."""
-        return f"openrouter:{self.model}"
+        return f"openai-compatible:{self.model}"
+
+    def set_api_key(self, api_key: str | None) -> None:
+        """Set a key supplied by the runtime keyring, if one is available."""
+        self._api_key = api_key
+        if api_key:
+            self._httpx_headers["Authorization"] = f"Bearer {api_key}"
+        else:
+            self._httpx_headers.pop("Authorization", None)
 
     def apply_overrides(self, overrides: dict[str, object]) -> None:
         """Apply per-sheet overrides for the next execution."""
@@ -226,10 +223,9 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
     async def execute(
         self, prompt: str, *, timeout_seconds: float | None = None,
     ) -> ExecutionResult:
-        """Execute a prompt via the OpenRouter API.
+        """Execute a prompt via the selected OpenAI-compatible API.
 
-        Sends a chat completion request to OpenRouter's OpenAI-compatible
-        endpoint and returns the result.
+        Sends a chat completion request and returns the generic response.
 
         Args:
             prompt: The prompt to send.
@@ -242,7 +238,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         if timeout_seconds is not None:
             _logger.debug(
                 "timeout_override_ignored",
-                backend="openrouter",
+                backend="openai-compatible",
                 requested=timeout_seconds,
                 actual=self.timeout_seconds,
             )
@@ -251,18 +247,18 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         started_at = utc_now()
 
         _logger.debug(
-            "openrouter_execute_start",
+            "openai_compatible_execute_start",
             model=self.model,
             prompt_length=len(prompt),
             max_tokens=self.max_tokens,
         )
 
         # Check API key before making request
-        if not self._api_key:
+        if self.api_key_env and not self._api_key:
             duration = time.monotonic() - start_time
             msg = (
                 f"API key not found in environment variable: {self.api_key_env}. "
-                "Set it with: export OPENROUTER_API_KEY=your-key"
+                f"Set {self.api_key_env} or configure the instrument keyring."
             )
             _logger.error(
                 "configuration_error",
@@ -294,7 +290,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
             client = await self._get_client()
 
             response = await client.post(
-                "/chat/completions",
+                self.endpoint,
                 json=payload,
             )
 
@@ -314,7 +310,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
 
         except httpx.ConnectError as e:
             duration = time.monotonic() - start_time
-            _logger.error("openrouter_connection_error", error=str(e))
+            _logger.error("openai_compatible_connection_error", error=str(e))
             self._write_log_file(self._stderr_log_path, str(e))
             return ExecutionResult(
                 success=False,
@@ -331,7 +327,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         except httpx.TimeoutException as e:
             duration = time.monotonic() - start_time
             _logger.error(
-                "openrouter_timeout",
+                "openai_compatible_timeout",
                 timeout_seconds=self.timeout_seconds,
                 error=str(e),
             )
@@ -352,7 +348,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         except Exception as e:
             duration = time.monotonic() - start_time
             _logger.exception(
-                "openrouter_execute_error",
+                "openai_compatible_execute_error",
                 model=self.model,
                 error=str(e),
             )
@@ -393,7 +389,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
             wait_seconds = self._error_classifier.extract_rate_limit_wait(body_text)
 
         _logger.warning(
-            "openrouter_rate_limited",
+            "openai_compatible_rate_limited",
             model=self.model,
             retry_after_header=retry_after,
             parsed_wait_seconds=wait_seconds,
@@ -441,14 +437,14 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         if status == 401:
             error_type = "authentication"
             _logger.error(
-                "openrouter_auth_error",
+                "openai_compatible_auth_error",
                 api_key_env=self.api_key_env,
                 status_code=status,
             )
         elif status == 400:
             error_type = "bad_request"
             _logger.error(
-                "openrouter_bad_request",
+                "openai_compatible_bad_request",
                 model=self.model,
                 status_code=status,
                 response_length=len(body_text),
@@ -456,21 +452,21 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         elif status == 402:
             error_type = "insufficient_credits"
             _logger.error(
-                "openrouter_insufficient_credits",
+                "openai_compatible_insufficient_credits",
                 model=self.model,
                 status_code=status,
             )
         elif status == 503:
             error_type = "service_unavailable"
             _logger.error(
-                "openrouter_service_unavailable",
+                "openai_compatible_service_unavailable",
                 model=self.model,
                 status_code=status,
             )
         else:
             error_type = "api_error"
             _logger.error(
-                "openrouter_http_error",
+                "openai_compatible_http_error",
                 model=self.model,
                 status_code=status,
                 response_length=len(body_text),
@@ -496,7 +492,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         duration: float,
         started_at: Any,
     ) -> ExecutionResult:
-        """Parse a successful OpenRouter API response.
+        """Parse a successful OpenAI-compatible API response.
 
         Extracts content text and token usage from the OpenAI-compatible
         response format.
@@ -528,7 +524,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         actual_model = data.get("model", self.model)
 
         _logger.info(
-            "openrouter_execute_complete",
+            "openai_compatible_execute_complete",
             model=actual_model,
             duration_seconds=duration,
             input_tokens=input_tokens,
@@ -553,7 +549,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         )
 
     async def health_check(self) -> bool:
-        """Check if the OpenRouter API is reachable and authenticated.
+        """Check if the selected API is reachable and authenticated.
 
         Uses the /models endpoint (lightweight, no token consumption)
         to verify connectivity and authentication.
@@ -561,7 +557,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         Returns:
             True if healthy, False otherwise.
         """
-        if not self._api_key:
+        if self.api_key_env and not self._api_key:
             _logger.warning(
                 "health_check_failed",
                 error_type="MissingAPIKey",
@@ -575,13 +571,13 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
             if response.status_code == 200:
                 return True
             _logger.warning(
-                "openrouter_health_check_failed",
+                "openai_compatible_health_check_failed",
                 status_code=response.status_code,
             )
             return False
         except (httpx.HTTPError, OSError, ValueError) as e:
             _logger.warning(
-                "openrouter_health_check_error",
+                "openai_compatible_health_check_error",
                 error=str(e),
                 error_type=type(e).__name__,
             )
@@ -593,7 +589,7 @@ class OpenRouterBackend(HttpxClientMixin, Backend):
         Verifies that the API key is present and the httpx client can be
         created. Does NOT make any HTTP requests.
         """
-        if not self._api_key:
+        if self.api_key_env and not self._api_key:
             return False
         try:
             await self._get_client()

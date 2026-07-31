@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from marianne.backends.base import ExecutionResult
+from marianne.execution.base import ExecutionResult
 from marianne.core.config.techniques import TechniqueConfig, TechniqueKind
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult

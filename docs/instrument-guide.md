@@ -27,22 +27,20 @@ mzt doctor
 
 ## Built-in Instruments
 
-Marianne ships with 10 instruments: 4 native backends (built into the Python code)
-and 6 config-driven profiles (YAML files).
+Marianne ships config-driven instrument profiles as YAML files. The profile
+selects a CLI or HTTP transport; provider-specific wire details remain inside
+the profile-driven execution layer.
 
-### Native Backends
+### Maintained Profiles
 
-These are built into Marianne and require no configuration beyond installing
-the tool and authenticating:
+The maintained built-ins include:
 
 | Name | Tool | Auth |
 |------|------|------|
-| `claude_cli` | Claude CLI (`claude`) | `claude login` |
-| `anthropic_api` | Anthropic Messages API | `ANTHROPIC_API_KEY` env var |
-| `ollama` | Ollama local server | None (runs locally) |
-| `recursive_light` | Recursive Light Framework | RLF credentials |
+| `claude-code` | Claude Code CLI (`claude`) | `claude login` |
+| `ollama` | Local OpenAI-compatible server | Optional local auth |
 
-### Config-Driven Profiles
+### Agent Profiles
 
 These ship as YAML profiles bundled with Marianne and are loaded at conductor
 startup:
@@ -104,6 +102,19 @@ instrument_config:
 
 These overrides are flat key-value pairs that adjust the resolved instrument
 profile without replacing it.
+
+GPT-5.6 is a model family played through the `codex-cli` instrument. Select a
+tier explicitly when the score needs one:
+
+```yaml
+instrument: codex-cli
+instrument_config:
+  model: gpt-5.6-luna
+```
+
+If `instrument_config.model` is omitted, Marianne passes no `--model` flag and
+the installed Codex client chooses its configured default. Marianne does not
+implicitly default Codex to Luna, Terra, or Sol.
 
 ---
 
@@ -288,10 +299,10 @@ in the registry and creates a `PluginCliBackend` configured from the profile.
 When a score is submitted, the instrument is resolved:
 
 1. If the score has `instrument:` — look up the name in the registry
-2. If the score has `backend:` — use the native backend directly
-3. If neither — default to `claude_cli`
+2. If omitted — default to `claude-code`
 
-Both paths produce a `Backend` instance that the conductor uses to execute sheets.
+The resolved profile produces a shared execution-contract instance that the
+conductor uses to execute sheets.
 
 ### Command Construction
 

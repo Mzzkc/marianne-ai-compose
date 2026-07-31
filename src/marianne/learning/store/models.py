@@ -223,7 +223,7 @@ class PatternRecord:
     """SHA-256 hash of pattern content for cross-name deduplication."""
 
     instrument_name: str | None = None
-    """Backend instrument that produced this pattern (e.g., 'claude_cli')."""
+    """Instrument that produced this pattern (e.g., 'claude-code')."""
 
     def __post_init__(self) -> None:
         """Clamp scored fields to valid ranges."""

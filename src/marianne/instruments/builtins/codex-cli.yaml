@@ -15,31 +15,62 @@ capabilities:
   - tool_use
   - file_editing
   - shell_access
+  - vision
   - mcp
   - structured_output
   - session_resume
   - streaming
+  - thinking
 
 default_timeout_seconds: 1800
 
 models:
-  # ── GPT-5.6 family (July 2026) — see builtins/gpt-5.6.yaml for the full ──
-  # ── tiered profile. Listed here so codex-cli can play them directly.    ──
+  # ── GPT-5.6 family (July 2026) ────────────────────────────────────────
+  # GPT-5.6 is a model family played through this Codex instrument.
+  # No default_model is set: the installed Codex client selects its default
+  # unless a score supplies instrument_config.model.
+  # Sol: flagship reasoning tier.
   - name: gpt-5.6-sol
     context_window: 272000
     cost_per_1k_input: 0.005
     cost_per_1k_output: 0.030
     max_output_tokens: 128000
+    max_concurrent: 4
+  - name: "gpt-5.6-sol[1m]"
+    context_window: 1050000
+    cost_per_1k_input: 0.005
+    cost_per_1k_output: 0.030
+    max_output_tokens: 128000
+    max_concurrent: 4
+
+  # Terra: balanced agentic work tier.
   - name: gpt-5.6-terra
     context_window: 272000
     cost_per_1k_input: 0.0025
     cost_per_1k_output: 0.015
     max_output_tokens: 128000
+    max_concurrent: 6
+  - name: "gpt-5.6-terra[1m]"
+    context_window: 1050000
+    cost_per_1k_input: 0.0025
+    cost_per_1k_output: 0.015
+    max_output_tokens: 128000
+    max_concurrent: 6
+
+  # Luna: fast, affordable, high-throughput tier.
   - name: gpt-5.6-luna
     context_window: 272000
     cost_per_1k_input: 0.001
     cost_per_1k_output: 0.006
     max_output_tokens: 128000
+    max_concurrent: 8
+  - name: "gpt-5.6-luna[1m]"
+    context_window: 1050000
+    cost_per_1k_input: 0.001
+    cost_per_1k_output: 0.006
+    max_output_tokens: 128000
+    max_concurrent: 8
+
   # ── Legacy / prior-generation models ──
   - name: o3
     context_window: 200000
@@ -62,15 +93,15 @@ cli:
       - OPENAI_API_KEY
       - CODEX_API_KEY
     model_flag: "--model"
-    auto_approve_flag: "--full-auto"
+    auto_approve_flag: "--dangerously-bypass-approvals-and-sandbox"
     output_format_flag: "--json"
     output_format_value: null  # boolean flag, no value
     extra_flags:
       - "--skip-git-repo-check"
   # Interactive mode — drive the codex TUI in a tmux session.
-  # Patterns spike-verified 2026-06-11 against codex v0.139.0.
-  # The headless auto-approve flag (--full-auto) is exec-only and REJECTED
-  # by the TUI — the interactive equivalent goes via extra_args.
+  # Patterns verified through codex v0.144.4.
+  # inherit_auto_approve stays false because the interactive invocation owns
+  # its explicit bypass flag through extra_args.
   interactive:
     # Verified, but opt-in: interactive-by-default is claude-code only
     # (composer decision 2026-06-11). Scores enable per-sheet/score via

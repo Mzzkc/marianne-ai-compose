@@ -1,24 +1,24 @@
-# Example: API Backend — Technical Briefing Pipeline
+# Example: OpenAI-Compatible API — Technical Briefing Pipeline
 #
-# Demonstrates the anthropic_api instrument: direct Anthropic Messages API
-# access without needing Claude CLI installed. Useful when you need more
-# control over model parameters, want faster execution for text-only
-# prompts, or are running in an environment without Claude CLI.
+# Demonstrates the ollama instrument: a profile selecting Marianne's shared
+# OpenAI-compatible HTTP executor. This is useful for local, text-only work
+# that does not require an agent harness or filesystem tools.
 #
 # This 3-stage pipeline generates a structured technical briefing:
 #   Movement 1 — Research Outline: identify themes, questions, structure
 #   Movement 2 — Detailed Analysis: expand each theme with evidence
 #   Movement 3 — Executive Briefing: synthesize into recommendations
 #
-# The anthropic_api instrument returns pure text (no filesystem tools).
+# The ollama instrument returns pure text (no filesystem tools).
 # Stages communicate via cross_sheet context, which passes each stage's
 # captured output to the next. Output is saved to workspace log files
 # at logs/sheet-NN.stdout.log for inspection.
 #
-# Category: getting-started — Introduction to the API backend instrument
+# Category: getting-started — Introduction to profile-driven HTTP execution
 #
 # Requirements:
-#   export ANTHROPIC_API_KEY=sk-ant-...
+#   ollama serve
+#   ollama pull llama3.1:8b
 #
 # Usage:
 #   mzt start
@@ -27,7 +27,7 @@
 #
 # How to Adapt:
 #   - Change topic, audience, and focus_areas in prompt.variables
-#   - Adjust instrument_config.model for different Claude models
+#   - Adjust instrument_config.model for another locally installed model
 #   - Modify max_tokens for longer or shorter outputs
 #
 # Output:
@@ -36,20 +36,19 @@
 #     sheet-02.stdout.log  — Detailed analysis
 #     sheet-03.stdout.log  — Executive briefing
 #
-# Time: ~2 minutes  |  Cost: ~$0.10-0.30  |  Sheets: 3
+# Time: depends on local hardware  |  API Cost: $0  |  Sheets: 3
 
 name: api-briefing
-description: "Technical briefing pipeline using the Anthropic API directly"
+description: "Technical briefing pipeline using Ollama's OpenAI-compatible API"
 
 workspace: ../../workspaces/api-workspace
 
-# Instrument: Anthropic Messages API — no CLI needed.
-# Falls back to claude-code if the API key is missing or unavailable.
-instrument: anthropic_api
-instrument_fallbacks: [claude-code]
+# Instrument: local OpenAI-compatible HTTP endpoint through an explicit profile.
+# Falls back to Codex CLI if the local Ollama service is unavailable.
+instrument: ollama
+instrument_fallbacks: [codex-cli]
 instrument_config:
-  model: claude-sonnet-4-5-20250929
-  api_key_env: ANTHROPIC_API_KEY
+  model: llama3.1:8b
   max_tokens: 4096
   timeout_seconds: 180
 

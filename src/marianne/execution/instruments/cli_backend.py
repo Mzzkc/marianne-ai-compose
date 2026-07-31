@@ -28,7 +28,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from marianne.backends.base import Backend, ExecutionResult, ExitReason
+from marianne.execution.base import Backend, ExecutionResult, ExitReason
 from marianne.core.config.instruments import InstrumentProfile
 from marianne.core.logging import get_logger
 from marianne.utils.json_path import extract_json_path
@@ -231,7 +231,7 @@ class PluginCliBackend(Backend):
         # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 1, 3).
         self._on_process_group_spawned: Callable[[int, int], None] | None = None
 
-        # Override tracking — mirrors the pattern in ClaudeCliBackend.
+        # Override tracking is shared by profile-driven executions.
         # _saved_model stores the pre-override value so clear_overrides()
         # can restore it. _has_overrides guards against double-clear.
         self._saved_model: str | None = None

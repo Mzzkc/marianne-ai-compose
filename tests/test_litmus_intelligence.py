@@ -1493,7 +1493,7 @@ class TestCrossSystemIntegration:
         "EXECUTION_ERROR". The baton uses these to decide retry/fail/escalate.
         If the mapping is wrong, good classifications lead to bad decisions.
         """
-        from marianne.backends.base import ExecutionResult
+        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.musician import _classify_error
 
         # AUTH_FAILURE → baton should fail immediately (no retry)
@@ -1536,7 +1536,7 @@ class TestCrossSystemIntegration:
         6+ storage locations (F-003). The redaction happens in the musician's
         _capture_output, which is the single bottleneck for all output.
         """
-        from marianne.backends.base import ExecutionResult
+        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.musician import _capture_output
 
         result = ExecutionResult(
@@ -1562,7 +1562,7 @@ class TestCrossSystemIntegration:
         and retries. Without this contract, every sheet without validations
         would retry until exhaustion.
         """
-        from marianne.backends.base import ExecutionResult
+        from marianne.execution.base import ExecutionResult
         from marianne.daemon.baton.musician import _validate
 
         sheet = Sheet(
@@ -4016,21 +4016,18 @@ class TestMethodNotFoundErrorDifferentiation:
 # =============================================================================
 
 
-class TestPluginCliBackendMcpGap:
-    """F-255.3 litmus: does PluginCliBackend handle MCP configuration?
+class TestPluginCliBackendMcpContract:
+    """F-255.3 litmus: does PluginCliBackend honor MCP configuration?
 
-    The legacy ClaudeCliBackend has disable_mcp=True by default, which adds
-    --strict-mcp-config --mcp-config '{"mcpServers":{}}' to prevent spawning
-    MCP child processes. The PluginCliBackend (used by the baton via instrument
-    profiles) has a mcp_config_flag defined in the profile but does NOT use it
-    in _build_command().
+    Claude Code needs --strict-mcp-config plus an empty MCP config to prevent
+    spawning ambient MCP child processes. PluginCliBackend must obtain those
+    arguments from the profile and apply them in _build_command().
 
     WITHOUT MCP handling: 4 musicians spawn ~80 child processes (MCP servers,
     docker containers) instead of ~8. Deadlock risk per legacy backend comments.
     WITH MCP handling: MCP servers are disabled, clean execution.
 
-    The litmus: the MCP field EXISTS in the data model but is NEVER USED in
-    the command builder. This is "correct code that isn't effective."
+    The litmus guards runtime wiring, not merely presence of the data field.
     """
 
     def test_mcp_config_flag_exists_on_profile(self) -> None:
@@ -5070,7 +5067,6 @@ class TestProcessControlSafeKillGuardsIntelligence:
 
         # Files that are ALLOWED to call os.killpg directly
         allowed_files = {
-            "backends/claude_cli.py",  # legacy _safe_killpg (pre-refactor)
             "daemon/pgroup.py",  # ProcessGroupManager (SIG_IGN guarded)
             "utils/process.py",  # _safe_killpg canonical location (F-490)
         }

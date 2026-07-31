@@ -200,7 +200,7 @@ class TestF441StrictnessEdges:
         rather than silently ignoring the block.
         """
         data = _minimal_job_config(instrument="claude-code")
-        data["backend"] = {"type": "claude_cli"}
+        data["backend"] = {"type": "claude-code"}
         with pytest.raises(ValidationError, match="extra_forbidden"):
             JobConfig(**data)
 

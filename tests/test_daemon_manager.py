@@ -1561,10 +1561,10 @@ class TestOnRateLimit:
         manager._rate_coordinator = MagicMock()
         manager._rate_coordinator.report_rate_limit = AsyncMock()
 
-        await manager._on_rate_limit("claude_cli", 60.0, "job-1", 3)
+        await manager._on_rate_limit("claude-code", 60.0, "job-1", 3)
 
         manager._rate_coordinator.report_rate_limit.assert_awaited_once_with(
-            instrument="claude_cli",
+            instrument="claude-code",
             wait_seconds=60.0,
             job_id="job-1",
             sheet_num=3,

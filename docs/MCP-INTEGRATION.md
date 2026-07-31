@@ -217,9 +217,6 @@ Parameters:
 - `config://schema`: JSON schema for current score YAML.
 - `config://example`: current score YAML example using `instrument`.
 - `config://instrument-options`: instrument profiles and configuration options.
-- `config://backend-options`: compatibility alias for
-  `config://instrument-options`; new score YAML should use `instrument` and
-  `instrument_config`.
 - `config://validation-types`: current validation types.
 - `config://learning-options`: learning configuration reference.
 
