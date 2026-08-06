@@ -905,7 +905,7 @@ requires-dist = [
     { name = "mkdocs-gen-files", marker = "extra == 'docs'", specifier = ">=0.5" },
     { name = "mkdocs-literate-nav", marker = "extra == 'docs'", specifier = ">=0.6" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
-    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.24" },
+    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=1.0.4" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19,<1.20" },
     { name = "plyer", specifier = ">=2.1.0" },
     { name = "psutil", marker = "extra == 'daemon'", specifier = ">=5.9" },
