@@ -12,7 +12,6 @@ plays a test note.
 
 from __future__ import annotations
 
-import json
 import shutil
 
 import typer
@@ -172,7 +171,7 @@ def _list_json(profiles: dict[str, InstrumentProfile]) -> None:
             "capabilities": sorted(profile.capabilities),
         })
 
-    console.print(json.dumps(result, indent=2))
+    output_json(result)
 
 
 @instruments_app.command(name="check")
@@ -297,4 +296,4 @@ def _check_json(profile: InstrumentProfile) -> None:
 
     result["ready"] = found
 
-    console.print(json.dumps(result, indent=2))
+    output_json(result)
