@@ -107,6 +107,21 @@ class TestProfileDetails:
         assert profile.cli.command.mcp_config_flag is not None
         assert profile.cli.command.mcp_config_prefix_args == ["--strict-mcp-config"]
 
+    def test_claude_code_has_glm_5_3_max_reasoning(self) -> None:
+        """Claude Code exposes only the 1M GLM 5.3 route at max effort."""
+        path = BUILTINS_DIR / "claude-code.yaml"
+        with open(path) as fh:
+            data = yaml.safe_load(fh)
+        profile = InstrumentProfile.model_validate(data)
+
+        models = {model.name: model for model in profile.models}
+        assert "glm-5.3[1m]" in models
+        assert "glm-5.2[1m]" not in models
+        assert models["glm-5.3[1m]"].context_window == 1_000_000
+        assert models["glm-5.3[1m]"].max_output_tokens == 131_072
+        assert profile.cli is not None
+        assert profile.cli.command.extra_flags[-2:] == ["--effort", "max"]
+
     def test_gemini_has_models(self) -> None:
         """Gemini CLI profile has model definitions and direct MCP settings merge."""
         path = BUILTINS_DIR / "gemini-cli.yaml"

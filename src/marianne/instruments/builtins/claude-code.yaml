@@ -41,11 +41,11 @@ default_timeout_seconds: 1800
 # Tier rationale: Haiku (cheap, fast) → 8, Sonnet (mid) → 6, Opus (expensive) → 4.
 models:
   # ── Gateway-routed models (Anthropic-compatible Claude Code gateway) ──
-  - name: "glm-5.2[1m]"
+  - name: "glm-5.3[1m]"
     context_window: 1000000
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
-    max_output_tokens: 65536
+    max_output_tokens: 131072
     max_concurrent: 4
   - name: glm-5-Turbo
     context_window: 1000000
@@ -162,6 +162,10 @@ cli:
       - "--strict-mcp-config"
       - "--mcp-config"
       - '{"mcpServers":{}}'
+    # GLM 5.3's post-training gains are realized at high/max reasoning.
+    extra_flags:
+      - "--effort"
+      - "max"
   # Interactive mode — drive the full Claude Code TUI in a tmux session
   # instead of headless -p. Patterns spike-verified 2026-06-10 against
   # Claude Code v2.1.172 (see docs/specs/2026-06-10-interactive-mode-design.md).
