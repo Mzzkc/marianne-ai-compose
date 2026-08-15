@@ -39,6 +39,7 @@ env/
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Workspaces — all job workspaces live under workspaces/ (or legacy dot-prefixed)
+.worktrees/
 workspaces/
 *-workspace/
 *-workspace-*/
