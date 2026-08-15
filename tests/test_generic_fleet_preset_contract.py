@@ -192,7 +192,7 @@ def test_generic_fleet_preset_is_generic_and_uses_portable_self_chain(
     assert "flowspec" not in str(canyon).lower()
     assert "llama-4-maverick" not in str(canyon).lower()
     assert "kimi" not in str(canyon).lower()
-    assert "claude-code--glm-5.2-1m" in canyon["instruments"]
+    assert "claude-code--glm-5.3-1m" in canyon["instruments"]
     assert "antigravity--gemini-3.5-flash-medium" in canyon["instruments"]
     assert "antigravity--gemini-3.5-flash-low" in canyon["instruments"]
     assert "antigravity--gemini-3.5-flash" not in canyon["instruments"]
