@@ -3,7 +3,9 @@
 # Open source (Apache 2.0). Tool use, file editing, shell access,
 # vision, and structured output. Uses --yolo for auto-approval.
 #
-# Auth: Requires GOOGLE_API_KEY or gcloud auth.
+# Auth: Gemini CLI's documented API-key variable is GEMINI_API_KEY. This
+# profile also preserves GOOGLE_API_KEY plus Google ADC/gcloud surfaces for
+# existing direct Google API and cloud-auth configurations.
 #
 # SECURITY NOTE: Vendor sandboxing is disabled by default (--sandbox false).
 # Marianne manages workspace isolation at the orchestration layer. Scores
@@ -11,7 +13,7 @@
 # to re-enable sandboxing (--sandbox true). See design rationale in
 # docs/specs/2026-04-16-process-lifecycle-design.md.
 #
-# Verified: 2026-03-31 against gemini-cli 0.35.1
+# Client mechanics verified: 2026-03-31 against gemini-cli 0.35.1
 #   - JSON output: clean on stdout, preamble (YOLO warnings, keychain) on stderr
 #   - Error format: {"error": {"type": "...", "message": "...", "code": N}} on stdout
 #   - Stack traces on stderr (verbose Node.js, not structured — ignore)
@@ -20,6 +22,21 @@
 #     Token counts span multiple models under stats.models.*
 #     Token paths use aggregate: true to sum across all models
 #   - Rate limit patterns: untested (need live rate limit hit to verify)
+#
+# Current client/model census: 2026-08-17
+#   - Local Gemini CLI version: 0.50.0
+#   - Stable/GA API model: gemini-3.7-flash (released 2026-08-13)
+#   - Input: text, image, video, audio, PDF; output: text
+#   - Thinking levels: low, medium, high (`minimal` returns an error)
+#   - Model features include function calling, structured output, caching,
+#     code execution, search grounding, URL context, file search, and preview
+#     computer use where the client exposes them.
+#   - Official model facts verified 2026-08-17:
+#     https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash
+#     https://ai.google.dev/gemini-api/docs/latest-model
+#     https://ai.google.dev/gemini-api/docs/changelog
+#   - Local prompt execution was not re-verified: the shipped profile retains
+#     its honest unsupported individual-OAuth status below.
 #
 # MCP note: Gemini CLI 0.46.0 supports project-scoped MCP servers in
 # workspace `.gemini/settings.json` under top-level `mcpServers`. Marianne
@@ -43,12 +60,21 @@ capabilities:
   - vision
   - mcp
   - structured_output
+  - thinking
 
-default_model: gemini-3.1-pro-preview
+default_model: gemini-3.7-flash
 default_timeout_seconds: 1800
 
 models:
-  # ── Current generation ──
+  # ── Current stable generation ──
+  - name: gemini-3.7-flash
+    context_window: 1048576
+    cost_per_1k_input: 0.00075
+    cost_per_1k_output: 0.00375
+    max_output_tokens: 65536
+    max_concurrent: 8
+
+  # ── Previous generations retained as explicit fallbacks/history ──
   - name: gemini-3.5-flash
     context_window: 1000000
     cost_per_1k_input: 0.00015
@@ -79,7 +105,6 @@ models:
     cost_per_1k_output: 0.0
     max_output_tokens: 65536
     max_concurrent: 8
-  # ── Previous generation ──
   - name: gemini-2.5-pro
     context_window: 1000000
     cost_per_1k_input: 0.00125
@@ -103,9 +128,10 @@ cli:
   command:
     executable: gemini
     prompt_flag: "-p"
-    # Credential filtering: only pass Google auth env vars to gemini subprocess.
+    # Credential filtering: only pass Gemini/Google auth env vars to the subprocess.
     # Prevents ANTHROPIC_API_KEY, OPENAI_API_KEY, etc. from leaking to Google's CLI.
     required_env:
+      - GEMINI_API_KEY
       - GOOGLE_API_KEY
       - GOOGLE_APPLICATION_CREDENTIALS
       - GOOGLE_CLOUD_PROJECT

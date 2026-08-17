@@ -15,11 +15,12 @@
 #   agy models                         lists configured models
 #   workspace .agents/mcp_config.json  initializes configured MCP servers
 #
-# Model set refreshed 2026-07-22 against `agy models` on agy 1.1.5. The eight
-# Gemini slugs span three model families; the AGY effort suffix (-high /
+# Model set refreshed 2026-08-17 against `agy models` on agy 1.1.13. The eleven
+# Gemini slugs span four model families; the AGY effort suffix (-high /
 # -medium / -low) is a selection tier over each family:
+#   gemini-3.7-flash  (high / medium / low)   <- current default family
 #   gemini-3.6-flash  (high / medium / low)
-#   gemini-3.5-flash  (high / medium / low)   <- default family
+#   gemini-3.5-flash  (high / medium / low)
 #   gemini-3.1-pro    (high / low)
 # Stale unsuffixed aliases (gemini-3.5-flash, gemini-3.5-flash-lite,
 # gemini-3.5-pro) were removed — they no longer resolve in `agy models`.
@@ -28,9 +29,19 @@
 # explicit callers, but daemon-run print mode is not treated as reliable until
 # Antigravity stops requiring a controlling TTY for print-mode failures.
 #
+# Gemini 3.7 Flash is stable/GA (released 2026-08-13), accepts text, image,
+# video, audio, and PDF input, emits text, and supports low/medium/high thinking;
+# `minimal` returns an error. Relevant API capabilities include function calling,
+# structured output, caching, code execution, search grounding, URL context,
+# file search, and preview computer use. Official facts verified 2026-08-17:
+#   https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash
+#   https://ai.google.dev/gemini-api/docs/latest-model
+#   https://ai.google.dev/gemini-api/docs/changelog
+#
 # Cost model: per-token costs are zero because this profile models the installed
-# subscription-backed CLI capacity, not direct API billing. Capacity metadata is
-# conservative (1,000,000 context / 65,536 output) and internally consistent.
+# subscription-backed CLI capacity, not direct API billing. Gemini 3.7 uses the
+# official 1,048,576 context / 65,536 output limits; older retained families keep
+# their prior conservative metadata as explicit fallbacks/history.
 #
 # MCP note: Antigravity has no CLI flag analogous to Claude Code's
 # --mcp-config. A live smoke proved agy 1.1.5 reads workspace-local
@@ -55,8 +66,9 @@ capabilities:
   - shell_access
   - mcp
   - session_resume
+  - thinking
 
-default_model: gemini-3.5-flash-medium
+default_model: gemini-3.7-flash-medium
 default_timeout_seconds: 1800
 
 # Marianne enforces max_concurrent per exact (instrument, model-slug) pair.
@@ -64,6 +76,27 @@ default_timeout_seconds: 1800
 # so each tier has its own baton limit; score- and daemon-level ceilings remain
 # the outer aggregate guard. Flash tiers use 6 and Pro tiers use 4.
 models:
+  # ── gemini-3.7-flash tier (current stable/default family) ──
+  - name: gemini-3.7-flash-high
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-3.7-flash-medium
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-3.7-flash-low
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+
+  # Older families remain available as explicit fallbacks/history.
   # ── gemini-3.6-flash tier (fast family) ──
   - name: gemini-3.6-flash-high
     context_window: 1000000
@@ -84,7 +117,7 @@ models:
     max_output_tokens: 65536
     max_concurrent: 6
 
-  # ── gemini-3.5-flash tier (default/balanced family) ──
+  # ── gemini-3.5-flash tier (previous/historical family) ──
   - name: gemini-3.5-flash-high
     context_window: 1000000
     cost_per_1k_input: 0.0
