@@ -276,18 +276,21 @@ class TestProfileDetails:
 
 # =============================================================================
 # Antigravity model set — pinned to the exact Gemini slugs advertised by the
-# installed AGY 1.1.5 CLI. Hermetic: hard-codes the expected slugs rather than
+# installed AGY 1.1.13 CLI. Hermetic: hard-codes the expected slugs rather than
 # shelling out to `agy models`, so the gate stays green on a machine without a
 # live Antigravity installation. The live CLI is the authority at commissioning
 # time only (see plan integration gate); these unit tests pin the contract.
 # =============================================================================
 
 
-# The eight Gemini slugs reported by `agy models` on AGY 1.1.5 (2026-07-22).
-# Three model families; the -high/-medium/-low suffix is an AGY effort tier
+# The eleven Gemini slugs reported by `agy models` on AGY 1.1.13 (2026-08-17).
+# Four model families; the -high/-medium/-low suffix is an AGY effort tier
 # over each family, not a distinct model.
 ANTIGRAVITY_EXPECTED_SLUGS: frozenset[str] = frozenset(
     {
+        "gemini-3.7-flash-high",
+        "gemini-3.7-flash-medium",
+        "gemini-3.7-flash-low",
         "gemini-3.6-flash-high",
         "gemini-3.6-flash-medium",
         "gemini-3.6-flash-low",
@@ -325,12 +328,12 @@ class TestAntigravityModelSet:
     costs are intentionally zero.
     """
 
-    def test_exactly_eight_gemini_slugs(self) -> None:
-        """The profile exposes exactly the eight AGY 1.1.5 Gemini slugs."""
+    def test_exactly_eleven_gemini_slugs(self) -> None:
+        """The profile exposes exactly the eleven AGY 1.1.13 Gemini slugs."""
         profile = _load_antigravity_profile()
         model_names = {m.name for m in profile.models}
         assert model_names == set(ANTIGRAVITY_EXPECTED_SLUGS), (
-            f"Antigravity model set drifted from `agy models` (AGY 1.1.5).\n"
+            f"Antigravity model set drifted from `agy models` (AGY 1.1.13).\n"
             f"  expected: {sorted(ANTIGRAVITY_EXPECTED_SLUGS)}\n"
             f"  actual:   {sorted(model_names)}\n"
             f"  missing:  {sorted(ANTIGRAVITY_EXPECTED_SLUGS - model_names)}\n"
@@ -338,16 +341,16 @@ class TestAntigravityModelSet:
         )
 
     def test_balanced_default_is_medium_flash(self) -> None:
-        """The balanced compatibility default is gemini-3.5-flash-medium."""
+        """The balanced current default is gemini-3.7-flash-medium."""
         profile = _load_antigravity_profile()
-        assert profile.default_model == "gemini-3.5-flash-medium", (
+        assert profile.default_model == "gemini-3.7-flash-medium", (
             f"Default model is {profile.default_model!r}, expected "
-            f"'gemini-3.5-flash-medium' (balanced compatibility tier)."
+            f"'gemini-3.7-flash-medium' (balanced current tier)."
         )
         # The default must also be a declared model.
         declared = {m.name for m in profile.models}
-        assert "gemini-3.5-flash-medium" in declared, (
-            "Default model gemini-3.5-flash-medium is not in the declared "
+        assert "gemini-3.7-flash-medium" in declared, (
+            "Default model gemini-3.7-flash-medium is not in the declared "
             "model set."
         )
 
@@ -359,7 +362,7 @@ class TestAntigravityModelSet:
         assert not stale, (
             f"Stale unsuffixed aliases still present: {sorted(stale)}. "
             f"These pre-date AGY effort tiers and no longer resolve in "
-            f"`agy models` (AGY 1.1.5)."
+            f"`agy models` (AGY 1.1.13)."
         )
 
     def test_costs_are_zero_subscription_backed(self) -> None:
@@ -377,13 +380,18 @@ class TestAntigravityModelSet:
                 f"installed subscription-backed CLI, not API billing."
             )
 
-    def test_conservative_capacity_metadata(self) -> None:
-        """Context/output metadata is conservative and internally consistent."""
+    def test_capacity_metadata_matches_current_and_historical_contracts(self) -> None:
+        """3.7 uses official capacity; retained families keep prior metadata."""
         profile = _load_antigravity_profile()
         for model in profile.models:
-            assert model.context_window == 1_000_000, (
+            expected_context = (
+                1_048_576
+                if model.name.startswith("gemini-3.7-flash-")
+                else 1_000_000
+            )
+            assert model.context_window == expected_context, (
                 f"{model.name} context_window={model.context_window}, "
-                f"expected the conservative 1,000,000."
+                f"expected {expected_context}."
             )
             assert model.max_output_tokens == 65_536, (
                 f"{model.name} max_output_tokens={model.max_output_tokens}, "
@@ -409,5 +417,5 @@ class TestAntigravityModelSet:
 
         resolved = registry.get("antigravity")
         assert resolved is not None, "antigravity did not resolve through the registry"
-        assert resolved.default_model == "gemini-3.5-flash-medium"
+        assert resolved.default_model == "gemini-3.7-flash-medium"
         assert {m.name for m in resolved.models} == set(ANTIGRAVITY_EXPECTED_SLUGS)
