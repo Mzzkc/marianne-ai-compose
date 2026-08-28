@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from datetime import datetime
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from marianne.cli.commands.status import _list_jobs, _status_job
 from marianne.cli.output import console
 from marianne.core.checkpoint import CheckpointState, JobStatus
+
+status_module = importlib.import_module("marianne.cli.commands.status")
 
 
 def _checkpoint_payload() -> dict[str, Any]:
@@ -121,3 +124,59 @@ async def test_default_list_keeps_terminal_job_with_live_recurrence_visible(
     rendered = capture.get()
     assert "recurring-job [recurring]" in rendered
     assert "[paused]" in rendered
+
+
+@pytest.mark.asyncio
+async def test_meta_fallback_json_strips_private_schedule_extras(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "job_id": "recurring-job",
+        "status": "scheduled",
+        "config_path": "/scores/recurring.yaml",
+        "submitted_at": 1_999_999_000.0,
+        "schedule": {
+            **_schedule_payload(),
+            "lease_digest": "private",
+            "timer_handle": "private",
+        },
+    }
+    monkeypatch.setattr(
+        "marianne.daemon.detect.try_daemon_route",
+        AsyncMock(return_value=(True, payload)),
+    )
+
+    with console.capture() as capture:
+        await _status_job("recurring-job", True, None)
+
+    rendered = json.loads(capture.get())
+    assert rendered["schedule"] == _schedule_payload()
+    assert "lease_digest" not in capture.get()
+    assert "timer_handle" not in capture.get()
+
+
+@pytest.mark.asyncio
+async def test_meta_fallback_omits_malformed_schedule_with_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "job_id": "recurring-job",
+        "status": "scheduled",
+        "config_path": "/scores/recurring.yaml",
+        "schedule": {"enabled": True, "lease_digest": "private"},
+    }
+    warning = MagicMock()
+    monkeypatch.setattr(status_module._logger, "warning", warning)
+    monkeypatch.setattr(
+        "marianne.daemon.detect.try_daemon_route",
+        AsyncMock(return_value=(True, payload)),
+    )
+
+    with console.capture() as capture:
+        await _status_job("recurring-job", False, None)
+
+    rendered = capture.get()
+    assert "recurring-job" in rendered
+    assert "[recurring]" not in rendered
+    assert "lease_digest" not in rendered
+    warning.assert_called_once()

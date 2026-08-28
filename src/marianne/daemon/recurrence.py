@@ -28,6 +28,8 @@ SubmitJob = Callable[[JobRequest], Awaitable[JobResponse]]
 ScheduleTick = Callable[[float, CronTick], TimerHandle]
 CancelTick = Callable[[TimerHandle], bool]
 IsScheduleActive = Callable[[str], bool]
+LifecycleAdmission = Callable[[tuple[str, ...]], None]
+LifecycleProbe = Callable[[tuple[str, ...]], bool]
 
 
 class RecurrenceController:
@@ -80,6 +82,9 @@ class RecurrenceController:
         self,
         score_path: Path,
         config: JobConfig | None = None,
+        *,
+        before_wait: LifecycleProbe | None = None,
+        before_mutation: LifecycleAdmission | None = None,
     ) -> ScheduleRecord | None:
         """Register or replace the current schedule declaration for one score."""
         resolved_path = score_path.resolve(strict=False)
@@ -99,7 +104,14 @@ class RecurrenceController:
                 if prior.score_path == resolved_path
                 and prior.schedule_id != config.name
             }
+            mutation_ids = tuple(sorted({config.name, *prior_ids}))
+            if before_wait is not None and not before_wait(mutation_ids):
+                raise RuntimeError(
+                    "Schedule lifecycle is already owned by another task"
+                )
             async with self._lock_schedules(config.name, *prior_ids):
+                if before_mutation is not None:
+                    before_mutation(mutation_ids)
                 for prior_id in prior_ids:
                     await self._remove_locked(prior_id)
 
@@ -325,16 +337,30 @@ class RecurrenceController:
         self._arm_next(record.schedule_id, score_path, schedule, next_due, current)
         return None
 
-    async def pause(self, schedule_id: str) -> None:
+    async def pause(
+        self,
+        schedule_id: str,
+        *,
+        before_mutation: LifecycleAdmission | None = None,
+    ) -> None:
         """Pause one schedule and cancel its pending timer."""
         async with self._lock_schedules(schedule_id):
+            if before_mutation is not None:
+                before_mutation((schedule_id,))
             await self._registry.pause(schedule_id)
             self._cancel_timer(schedule_id)
 
-    async def resume(self, schedule_id: str) -> None:
+    async def resume(
+        self,
+        schedule_id: str,
+        *,
+        before_mutation: LifecycleAdmission | None = None,
+    ) -> None:
         """Resume one schedule and restore its one pending due identity."""
         replacement: tuple[Path, JobConfig] | None = None
         async with self._lock_schedules(schedule_id):
+            if before_mutation is not None:
+                before_mutation((schedule_id,))
             await self._registry.resume(schedule_id)
             record = await self._registry.get(schedule_id)
             if record is None:
@@ -352,11 +378,18 @@ class RecurrenceController:
             else:
                 self._arm_record(record, current)
         if replacement is not None:
-            await self.register(*replacement)
+            await self.register(*replacement, before_mutation=before_mutation)
 
-    async def remove(self, schedule_id: str) -> None:
+    async def remove(
+        self,
+        schedule_id: str,
+        *,
+        before_mutation: LifecycleAdmission | None = None,
+    ) -> None:
         """Remove one schedule and revoke its pending timer."""
         async with self._lock_schedules(schedule_id):
+            if before_mutation is not None:
+                before_mutation((schedule_id,))
             await self._remove_locked(schedule_id)
 
     async def describe(self, schedule_id: str | None = None) -> list[ScheduleRecord]:

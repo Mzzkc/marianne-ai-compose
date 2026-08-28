@@ -7,6 +7,7 @@ import hashlib
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -378,8 +379,9 @@ async def test_concurrent_same_job_id_loser_cannot_replace_recurrence(
     async def hold_first_after_publication(
         score_path: Path,
         config: JobConfig | None = None,
+        **kwargs: Any,
     ) -> ScheduleRecord | None:
-        record = await original_register(score_path, config)
+        record = await original_register(score_path, config, **kwargs)
         if score_path == first_path:
             first_published.set()
             await release_first.wait()
@@ -479,8 +481,9 @@ async def test_scheduled_submit_admission_blocks_concurrent_resume(
     async def hold_after_recurrence_publication(
         path: Path,
         config: JobConfig | None = None,
+        **kwargs: Any,
     ) -> ScheduleRecord | None:
-        record = await original_register(path, config)
+        record = await original_register(path, config, **kwargs)
         recurrence_published.set()
         await release_submission.wait()
         return record

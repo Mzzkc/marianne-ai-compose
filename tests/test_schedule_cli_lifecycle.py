@@ -35,7 +35,19 @@ class FakeRecurrenceController:
         self.calls: list[tuple[str, str]] = []
         self.fail: set[str] = set()
 
-    async def register(self, score_path: Path, config: Any) -> SimpleNamespace:
+    async def register(
+        self,
+        score_path: Path,
+        config: Any,
+        *,
+        before_wait: Any = None,
+        before_mutation: Any = None,
+    ) -> SimpleNamespace:
+        schedule_ids = (config.name,)
+        if before_wait is not None:
+            assert before_wait(schedule_ids)
+        if before_mutation is not None:
+            before_mutation(schedule_ids)
         self.calls.append(("register", config.name))
         return self.records[config.name]
 
@@ -45,19 +57,25 @@ class FakeRecurrenceController:
         record = self.records.get(schedule_id)
         return [] if record is None else [record]
 
-    async def pause(self, schedule_id: str) -> None:
+    async def pause(self, schedule_id: str, *, before_mutation: Any = None) -> None:
+        if before_mutation is not None:
+            before_mutation((schedule_id,))
         self.calls.append(("pause", schedule_id))
         if "pause" in self.fail:
             raise RuntimeError("pause failed")
         self.records[schedule_id].enabled = False
 
-    async def resume(self, schedule_id: str) -> None:
+    async def resume(self, schedule_id: str, *, before_mutation: Any = None) -> None:
+        if before_mutation is not None:
+            before_mutation((schedule_id,))
         self.calls.append(("resume", schedule_id))
         if "resume" in self.fail:
             raise RuntimeError("resume failed")
         self.records[schedule_id].enabled = True
 
-    async def remove(self, schedule_id: str) -> None:
+    async def remove(self, schedule_id: str, *, before_mutation: Any = None) -> None:
+        if before_mutation is not None:
+            before_mutation((schedule_id,))
         self.calls.append(("remove", schedule_id))
         if "remove" in self.fail:
             raise RuntimeError("remove failed")

@@ -304,8 +304,8 @@ async def _status_job(
         # Conductor returns CheckpointState when state file exists,
         # or JobMeta dict for queued jobs before first sheet runs.
         try:
-            schedule = _public_schedule(result.get("schedule"))
             found_job = CheckpointState.model_validate(result)
+            schedule = _public_schedule(result.get("schedule"))
         except Exception:
             _logger.debug("checkpoint_model_validate_fallback", exc_info=True)
             _output_meta_status(result, json_output)
@@ -399,8 +399,8 @@ async def _status_job_watch(
 
             if routed and result:
                 try:
-                    schedule = _public_schedule(result.get("schedule"))
                     found_job = CheckpointState.model_validate(result)
+                    schedule = _public_schedule(result.get("schedule"))
                 except Exception:
                     _logger.debug("watch_checkpoint_model_validate_fallback", exc_info=True)
                     console.clear()
@@ -811,7 +811,14 @@ def _public_schedule(raw: object) -> dict[str, Any] | None:
     """Validate and return the exact public recurrence projection."""
     if raw is None:
         return None
-    return ScheduleStatus.model_validate(raw).model_dump(mode="json")
+    try:
+        return ScheduleStatus.model_validate(raw).model_dump(mode="json")
+    except (TypeError, ValueError) as exc:
+        _logger.warning(
+            "schedule_status_invalid",
+            error_type=type(exc).__name__,
+        )
+        return None
 
 
 def _render_schedule_status(schedule: dict[str, Any]) -> None:
@@ -833,15 +840,20 @@ def _output_meta_status(meta: dict[str, Any], json_output: bool) -> None:
     hasn't been written yet (job just started) or the workspace path doesn't
     resolve to a loadable state backend.
     """
+    schedule = _public_schedule(meta.get("schedule"))
+    sanitized_meta = dict(meta)
+    if schedule is None:
+        sanitized_meta.pop("schedule", None)
+    else:
+        sanitized_meta["schedule"] = schedule
     if json_output:
-        output_json(meta)
+        output_json(sanitized_meta)
         return
 
     job_id = meta.get("job_id", "unknown")
     status = meta.get("status", "unknown")
     color = {"running": "green", "queued": "blue", "failed": "red"}.get(status, "yellow")
 
-    schedule = _public_schedule(meta.get("schedule"))
     recurring_label = " \\[recurring]" if schedule is not None else ""
     console.print(Panel(
         f"[bold]{job_id}[/bold]{recurring_label}\n"
