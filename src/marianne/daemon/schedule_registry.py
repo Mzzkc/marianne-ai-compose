@@ -8,7 +8,6 @@ executes score sources or calculates recurrence; callers supply validated
 from __future__ import annotations
 
 import asyncio
-import json
 import math
 import sqlite3
 import time
@@ -16,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import aiosqlite
+from pydantic import ValidationError
 
 from marianne.core.config import ScheduleConfig
 
@@ -30,6 +30,10 @@ class ScheduleRegistryBusyError(ScheduleRegistryError):
 
 class ScheduleRegistryDataError(ScheduleRegistryError):
     """A persisted schedule row cannot safely be interpreted as registry state."""
+
+
+class ScheduleRegistryClaimError(ScheduleRegistryError):
+    """A lifecycle update does not match a durable claimed due identity."""
 
 
 @dataclass(frozen=True)
@@ -148,37 +152,35 @@ class ScheduleRegistry:
         """Insert or replace a schedule declaration without losing its creation time."""
         _require_epoch(next_due_at, name="next_due_at")
         now = time.time()
-        try:
-            await self._db.execute(
-                """
-                INSERT INTO schedules (
-                    schedule_id, score_name, score_path, schedule_json,
-                    source_digest, enabled, next_due_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(schedule_id) DO UPDATE SET
-                    score_name = excluded.score_name,
-                    score_path = excluded.score_path,
-                    schedule_json = excluded.schedule_json,
-                    source_digest = excluded.source_digest,
-                    enabled = excluded.enabled,
-                    next_due_at = excluded.next_due_at,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    schedule_id,
-                    score_name,
-                    str(score_path),
-                    schedule.model_dump_json(),
-                    source_digest,
-                    int(schedule.enabled),
-                    next_due_at,
-                    now,
-                    now,
-                ),
-            )
-            await self._db.commit()
-        except sqlite3.Error as exc:
-            self._raise_database_error("upsert", exc, schedule_id=schedule_id)
+        await self._execute_mutation(
+            "upsert",
+            """
+            INSERT INTO schedules (
+                schedule_id, score_name, score_path, schedule_json,
+                source_digest, enabled, next_due_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(schedule_id) DO UPDATE SET
+                score_name = excluded.score_name,
+                score_path = excluded.score_path,
+                schedule_json = excluded.schedule_json,
+                source_digest = excluded.source_digest,
+                enabled = excluded.enabled,
+                next_due_at = excluded.next_due_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                schedule_id,
+                score_name,
+                str(score_path),
+                schedule.model_dump_json(),
+                source_digest,
+                int(schedule.enabled),
+                next_due_at,
+                now,
+                now,
+            ),
+            schedule_id=schedule_id,
+        )
 
     async def get(self, schedule_id: str) -> ScheduleRecord | None:
         """Return one durable schedule record, or ``None`` when it is absent."""
@@ -211,22 +213,21 @@ class ScheduleRegistry:
         await self._set_enabled(schedule_id, enabled=True)
 
     async def _set_enabled(self, schedule_id: str, *, enabled: bool) -> None:
-        try:
-            await self._db.execute(
-                "UPDATE schedules SET enabled = ?, updated_at = ? WHERE schedule_id = ?",
-                (int(enabled), time.time(), schedule_id),
-            )
-            await self._db.commit()
-        except sqlite3.Error as exc:
-            self._raise_database_error("set enabled state", exc, schedule_id=schedule_id)
+        await self._execute_mutation(
+            "set enabled state",
+            "UPDATE schedules SET enabled = ?, updated_at = ? WHERE schedule_id = ?",
+            (int(enabled), time.time(), schedule_id),
+            schedule_id=schedule_id,
+        )
 
     async def remove(self, schedule_id: str) -> None:
         """Remove a registration and all of its durable lease state."""
-        try:
-            await self._db.execute("DELETE FROM schedules WHERE schedule_id = ?", (schedule_id,))
-            await self._db.commit()
-        except sqlite3.Error as exc:
-            self._raise_database_error("remove", exc, schedule_id=schedule_id)
+        await self._execute_mutation(
+            "remove",
+            "DELETE FROM schedules WHERE schedule_id = ?",
+            (schedule_id,),
+            schedule_id=schedule_id,
+        )
 
     async def claim_due(
         self,
@@ -239,24 +240,21 @@ class ScheduleRegistry:
         _require_epoch(due_at, name="due_at")
         current_time = time.time() if now is None else now
         _require_epoch(current_time, name="now")
-        try:
-            await self._db.execute("BEGIN IMMEDIATE")
-            cursor = await self._db.execute(
-                """
-                UPDATE schedules
-                SET last_claimed_due_at = ?, updated_at = ?
-                WHERE schedule_id = ?
-                  AND enabled = 1
-                  AND next_due_at = ?
-                  AND ? <= ?
-                  AND (last_claimed_due_at IS NULL OR last_claimed_due_at != ?)
-                """,
-                (due_at, time.time(), schedule_id, due_at, due_at, current_time, due_at),
-            )
-            await self._db.commit()
-        except sqlite3.Error as exc:
-            await self._rollback_after_failed_claim()
-            self._raise_database_error("claim due", exc, schedule_id=schedule_id)
+        cursor = await self._execute_mutation(
+            "claim due",
+            """
+            UPDATE schedules
+            SET last_claimed_due_at = ?, updated_at = ?
+            WHERE schedule_id = ?
+              AND enabled = 1
+              AND next_due_at = ?
+              AND ? <= ?
+              AND (last_claimed_due_at IS NULL OR last_claimed_due_at != ?)
+            """,
+            (due_at, time.time(), schedule_id, due_at, due_at, current_time, due_at),
+            schedule_id=schedule_id,
+            immediate=True,
+        )
         if cursor.rowcount != 1:
             return None
         return DueClaim(schedule_id=schedule_id, due_at=due_at)
@@ -264,18 +262,17 @@ class ScheduleRegistry:
     async def record_submission(self, schedule_id: str, due_at: float, run_id: str) -> None:
         """Persist a claimed tick's child identity without advancing recurrence."""
         _require_epoch(due_at, name="due_at")
-        try:
-            await self._db.execute(
-                """
-                UPDATE schedules
-                SET last_due_at = ?, last_run_id = ?, updated_at = ?
-                WHERE schedule_id = ? AND last_claimed_due_at = ?
-                """,
-                (due_at, run_id, time.time(), schedule_id, due_at),
-            )
-            await self._db.commit()
-        except sqlite3.Error as exc:
-            self._raise_database_error("record submission", exc, schedule_id=schedule_id)
+        cursor = await self._execute_mutation(
+            "record submission",
+            """
+            UPDATE schedules
+            SET last_due_at = ?, last_run_id = ?, updated_at = ?
+            WHERE schedule_id = ? AND last_claimed_due_at = ?
+            """,
+            (due_at, run_id, time.time(), schedule_id, due_at),
+            schedule_id=schedule_id,
+        )
+        self._require_claimed_row(cursor.rowcount, schedule_id, due_at)
 
     async def record_tick_outcome(
         self,
@@ -289,33 +286,34 @@ class ScheduleRegistry:
         """Persist a claimed tick outcome and caller-calculated next due time."""
         _require_epoch(due_at, name="due_at")
         _require_epoch(next_due_at, name="next_due_at")
-        try:
-            await self._db.execute(
-                """
-                UPDATE schedules
-                SET last_due_at = ?,
-                    last_outcome = ?,
-                    next_due_at = ?,
-                    consecutive_drops = CASE
-                        WHEN ? THEN consecutive_drops + 1
-                        ELSE 0
-                    END,
-                    updated_at = ?
-                WHERE schedule_id = ? AND last_claimed_due_at = ?
-                """,
-                (
-                    due_at,
-                    outcome,
-                    next_due_at,
-                    int(dropped),
-                    time.time(),
-                    schedule_id,
-                    due_at,
-                ),
-            )
-            await self._db.commit()
-        except sqlite3.Error as exc:
-            self._raise_database_error("record tick outcome", exc, schedule_id=schedule_id)
+        if next_due_at <= due_at:
+            raise ValueError("next_due_at must be later than due_at")
+        cursor = await self._execute_mutation(
+            "record tick outcome",
+            """
+            UPDATE schedules
+            SET last_due_at = ?,
+                last_outcome = ?,
+                next_due_at = ?,
+                consecutive_drops = CASE
+                    WHEN ? THEN consecutive_drops + 1
+                    ELSE 0
+                END,
+                updated_at = ?
+            WHERE schedule_id = ? AND last_claimed_due_at = ?
+            """,
+            (
+                due_at,
+                outcome,
+                next_due_at,
+                int(dropped),
+                time.time(),
+                schedule_id,
+                due_at,
+            ),
+            schedule_id=schedule_id,
+        )
+        self._require_claimed_row(cursor.rowcount, schedule_id, due_at)
 
     async def close(self) -> None:
         """Close the async SQLite connection."""
@@ -330,14 +328,42 @@ class ScheduleRegistry:
     async def __aexit__(self, *exc: object) -> None:
         await self.close()
 
-    async def _rollback_after_failed_claim(self) -> None:
-        """End a partial claim transaction before surfacing a database failure."""
+    async def _execute_mutation(
+        self,
+        operation: str,
+        statement: str,
+        parameters: tuple[object, ...],
+        *,
+        schedule_id: str | None = None,
+        immediate: bool = False,
+    ) -> aiosqlite.Cursor:
+        """Execute one mutation, rolling it back before translating every failure."""
+        try:
+            if immediate:
+                await self._db.execute("BEGIN IMMEDIATE")
+            cursor = await self._db.execute(statement, parameters)
+            await self._db.commit()
+        except sqlite3.Error as exc:
+            await self._rollback_after_failed_mutation()
+            self._raise_database_error(operation, exc, schedule_id=schedule_id)
+        return cursor
+
+    async def _rollback_after_failed_mutation(self) -> None:
+        """End a partial transaction before reporting its original database error."""
         try:
             await self._db.rollback()
         except sqlite3.Error:
             # The original failure is more actionable when BEGIN IMMEDIATE
-            # itself could not acquire the writer lock.
+            # itself could not acquire a writer lock.
             pass
+
+    @staticmethod
+    def _require_claimed_row(rowcount: int, schedule_id: str, due_at: float) -> None:
+        """Reject lifecycle writes without a current durable due-time claim."""
+        if rowcount != 1:
+            raise ScheduleRegistryClaimError(
+                f"Schedule {schedule_id!r} does not hold claimed due time {due_at}"
+            )
 
     @staticmethod
     def _row_to_record(row: aiosqlite.Row) -> ScheduleRecord:
@@ -389,12 +415,10 @@ def _require_epoch(value: float, *, name: str) -> None:
 
 
 def _validate_schedule_json(schedule_json: str, schedule_id: str) -> None:
-    """Confirm persisted configuration is JSON without interpreting its source content."""
+    """Validate persisted configuration without exposing its source content."""
     try:
-        value = json.loads(schedule_json)
-    except json.JSONDecodeError as exc:
+        ScheduleConfig.model_validate_json(schedule_json)
+    except (ValidationError, ValueError) as exc:
         raise ScheduleRegistryDataError(
-            f"Malformed schedule JSON for schedule {schedule_id!r}"
+            f"Invalid schedule configuration for schedule {schedule_id!r}"
         ) from exc
-    if not isinstance(value, dict):
-        raise ScheduleRegistryDataError(f"Malformed schedule JSON for schedule {schedule_id!r}")

@@ -13,7 +13,9 @@ from marianne.daemon.schedule_registry import (
     DueClaim,
     ScheduleRegistry,
     ScheduleRegistryBusyError,
+    ScheduleRegistryClaimError,
     ScheduleRegistryDataError,
+    ScheduleRegistryError,
 )
 
 
@@ -78,8 +80,18 @@ async def test_claim_rejects_disabled_schedule(tmp_path: Path) -> None:
 
 
 @pytest.mark.adversarial
-async def test_malformed_persisted_schedule_json_has_safe_diagnostic(tmp_path: Path) -> None:
-    """Corruption names the schedule but never echoes persisted source content."""
+@pytest.mark.parametrize(
+    "schedule_json",
+    [
+        '{"prompt": "sensitive source content"',
+        "{}",
+        '{"interval": "1h", "hostile": "sensitive source content"}',
+    ],
+)
+async def test_invalid_persisted_schedule_json_has_safe_diagnostic(
+    tmp_path: Path, schedule_json: str
+) -> None:
+    """Invalid JSON/configuration names the schedule without echoing source content."""
     db_path = tmp_path / "conductor-state.db"
     registry = ScheduleRegistry(db_path)
     await registry.open()
@@ -89,7 +101,7 @@ async def test_malformed_persisted_schedule_json_has_safe_diagnostic(tmp_path: P
     async with aiosqlite.connect(str(db_path)) as connection:
         await connection.execute(
             "UPDATE schedules SET schedule_json = ? WHERE schedule_id = ?",
-            ('{"prompt": "sensitive source content"', "daily-report"),
+            (schedule_json, "daily-report"),
         )
         await connection.commit()
 
@@ -103,6 +115,103 @@ async def test_malformed_persisted_schedule_json_has_safe_diagnostic(tmp_path: P
     message = str(exc_info.value)
     assert "daily-report" in message
     assert "sensitive source content" not in message
+
+
+@pytest.mark.adversarial
+@pytest.mark.parametrize("next_due_at", [100.0, 99.0])
+async def test_tick_outcome_rejects_non_advancing_next_due(
+    tmp_path: Path, next_due_at: float
+) -> None:
+    """A claimed tick cannot overwrite its schedule with an equal or older due time."""
+    async with ScheduleRegistry(tmp_path / "conductor-state.db") as registry:
+        await _upsert_due(registry)
+        assert await registry.claim_due("daily-report", 100.0, now=100.0) is not None
+
+        with pytest.raises(ValueError, match="later than due_at"):
+            await registry.record_tick_outcome(
+                "daily-report",
+                100.0,
+                "submitted",
+                next_due_at=next_due_at,
+                dropped=False,
+            )
+
+        record = await registry.get("daily-report")
+
+    assert record is not None
+    assert record.next_due_at == 100.0
+    assert record.last_outcome is None
+
+
+@pytest.mark.adversarial
+async def test_lifecycle_writers_reject_missing_or_unclaimed_due(tmp_path: Path) -> None:
+    """A lifecycle transition must name a durable claim rather than silently no-op."""
+    async with ScheduleRegistry(tmp_path / "conductor-state.db") as registry:
+        with pytest.raises(ScheduleRegistryClaimError, match="missing"):
+            await registry.record_submission("missing", 100.0, "child-100")
+
+        await _upsert_due(registry)
+        with pytest.raises(ScheduleRegistryClaimError, match="daily-report"):
+            await registry.record_submission("daily-report", 100.0, "child-100")
+        with pytest.raises(ScheduleRegistryClaimError, match="daily-report"):
+            await registry.record_tick_outcome(
+                "daily-report",
+                100.0,
+                "submitted",
+                next_due_at=200.0,
+                dropped=False,
+            )
+
+
+@pytest.mark.adversarial
+async def test_lifecycle_writers_reject_a_superseded_claim(tmp_path: Path) -> None:
+    """A former due identity cannot mutate state after the next due is claimed."""
+    async with ScheduleRegistry(tmp_path / "conductor-state.db") as registry:
+        await _upsert_due(registry)
+        assert await registry.claim_due("daily-report", 100.0, now=100.0) is not None
+        await registry.record_tick_outcome(
+            "daily-report",
+            100.0,
+            "submitted",
+            next_due_at=200.0,
+            dropped=False,
+        )
+        assert await registry.claim_due("daily-report", 200.0, now=200.0) is not None
+
+        with pytest.raises(ScheduleRegistryClaimError, match="daily-report"):
+            await registry.record_submission("daily-report", 100.0, "stale-child")
+        with pytest.raises(ScheduleRegistryClaimError, match="daily-report"):
+            await registry.record_tick_outcome(
+                "daily-report",
+                100.0,
+                "stale",
+                next_due_at=300.0,
+                dropped=True,
+            )
+
+
+@pytest.mark.adversarial
+async def test_failed_mutation_rolls_back_before_later_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A commit failure cannot leak a write into a later successful transaction."""
+    async with ScheduleRegistry(tmp_path / "conductor-state.db") as registry:
+        original_commit = registry._db.commit
+
+        async def fail_commit() -> None:
+            raise aiosqlite.OperationalError("injected commit failure")
+
+        monkeypatch.setattr(registry._db, "commit", fail_commit)
+        with pytest.raises(ScheduleRegistryError, match="upsert"):
+            await _upsert_due(registry)
+        monkeypatch.setattr(registry._db, "commit", original_commit)
+
+        assert await registry.get("daily-report") is None
+        await _upsert_due(registry, due_at=200.0)
+        record = await registry.get("daily-report")
+
+    assert record is not None
+    assert record.next_due_at == 200.0
 
 
 @pytest.mark.adversarial
