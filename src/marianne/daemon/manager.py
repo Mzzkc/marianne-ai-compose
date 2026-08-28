@@ -403,6 +403,7 @@ class _JobAdmissionReservation:
 
     owner: asyncio.Task[Any]
     depth: int = 1
+    released: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
 
 
 @dataclass(frozen=True)
@@ -1390,6 +1391,23 @@ class JobManager:
         reservation.depth -= 1
         if reservation.depth == 0:
             self._job_admission_reservations.pop(job_id)
+            reservation.released.set()
+
+    async def _wait_for_job_admission(self, job_id: str) -> None:
+        """Own a queued job's activation boundary once its current owner leaves.
+
+        Each reservation carries its own release generation. A waiter that
+        wakes after another task has already acquired the job ID re-checks the
+        reservation and waits on the new owner's signal instead of crossing
+        that owner's boundary.
+        """
+        while not self._try_reserve_job_admission(job_id, allow_active=True):
+            reservation = self._job_admission_reservations.get(job_id)
+            if reservation is None:
+                raise RuntimeError(
+                    f"job admission for '{job_id}' unavailable without an owner"
+                )
+            await reservation.released.wait()
 
     def _schedule_admission_available(self, schedule_ids: Sequence[str]) -> bool:
         """Return whether this task could claim every schedule without waiting."""
@@ -4304,20 +4322,41 @@ class JobManager:
         timeout = self._config.job_timeout_seconds
 
         async with self._concurrency_semaphore:
-            # Create in-process pause event for this job
-            pause_event = asyncio.Event()
-            self._pause_events[job_id] = pause_event
+            try:
+                await self._wait_for_job_admission(job_id)
+                try:
+                    # A lifecycle owner may have staged this queued job while
+                    # its wrapper waited at the concurrency gate. Only QUEUED
+                    # work may cross the activation boundary.
+                    activation_status = meta.status
+                    if activation_status is not DaemonJobStatus.QUEUED:
+                        coro.close()
+                        return
 
-            meta.started_at = time.time()
-            await self._set_job_status(
-                job_id,
-                DaemonJobStatus.RUNNING,
-                pid=os.getpid(),
-            )
+                    # Create in-process pause event for this job
+                    pause_event = asyncio.Event()
+                    self._pause_events[job_id] = pause_event
+
+                    meta.started_at = time.time()
+                    await self._set_job_status(
+                        job_id,
+                        DaemonJobStatus.RUNNING,
+                        pid=os.getpid(),
+                    )
+                finally:
+                    self._release_job_admission(job_id)
+            except BaseException:
+                coro.close()
+                raise
+
             _logger.info(start_event, job_id=job_id, timeout_seconds=timeout)
 
             # Start observer co-task for filesystem/process monitoring
-            await self._start_observer(job_id)
+            try:
+                await self._start_observer(job_id)
+            except BaseException:
+                coro.close()
+                raise
 
             try:
                 result_status = await asyncio.wait_for(coro, timeout=timeout)

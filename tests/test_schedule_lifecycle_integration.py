@@ -840,6 +840,268 @@ async def test_second_queued_pause_failure_keeps_every_queued_task(
 
 
 @pytest.mark.asyncio
+async def test_real_queued_activation_waits_for_successful_schedule_pause(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A staged queued wrapper settles PAUSED and remains resumable."""
+    life = real_lifecycle
+    queued_id = "Anchor Schedule--scheduled--queued-activation"
+    later_id = "Anchor Schedule--scheduled--pending-after-queued"
+    queued = life.add_meta(queued_id, DaemonJobStatus.QUEUED)
+    life.add_meta(later_id, DaemonJobStatus.PENDING)
+    life.manager._pending_jobs[later_id] = JobRequest(
+        config_path=life.score_path,
+        job_id=later_id,
+        schedule_id=life.schedule_id,
+        scheduled_due_at=2.0,
+    )
+
+    gate = life.manager._concurrency_semaphore
+    gate.set_limit(1)
+    await gate.acquire()
+    gate_wait_entered = asyncio.Event()
+    original_gate_acquire = gate.acquire
+
+    async def observe_gate_wait() -> None:
+        gate_wait_entered.set()
+        await original_gate_acquire()
+
+    monkeypatch.setattr(gate, "acquire", observe_gate_wait)
+
+    activation_boundary = asyncio.Event()
+    execution_started = asyncio.Event()
+    execution_release = asyncio.Event()
+    queued_transitions: list[DaemonJobStatus] = []
+    later_stage_entered = asyncio.Event()
+    release_later_stage = asyncio.Event()
+
+    async def queued_execution() -> DaemonJobStatus:
+        execution_started.set()
+        activation_boundary.set()
+        await execution_release.wait()
+        return DaemonJobStatus.PAUSED
+
+    queued_task: asyncio.Task[None] | None = None
+    original_reserve = life.manager._try_reserve_job_admission
+
+    def observe_activation_reservation(
+        job_id: str,
+        *,
+        allow_active: bool = False,
+    ) -> bool:
+        reserved = original_reserve(job_id, allow_active=allow_active)
+        if job_id == queued_id and asyncio.current_task() is queued_task:
+            activation_boundary.set()
+        return reserved
+
+    monkeypatch.setattr(
+        life.manager,
+        "_try_reserve_job_admission",
+        observe_activation_reservation,
+    )
+    original_set_status = life.manager._set_job_status
+
+    async def hold_later_stage(
+        job_id: str,
+        status: DaemonJobStatus,
+        **kwargs: object,
+    ) -> None:
+        if job_id == queued_id:
+            queued_transitions.append(status)
+        if job_id == later_id and status is DaemonJobStatus.PAUSED:
+            later_stage_entered.set()
+            await release_later_stage.wait()
+        await original_set_status(job_id, status, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(life.manager, "_set_job_status", hold_later_stage)
+
+    queued_task = asyncio.create_task(
+        life.manager._run_managed_task(queued_id, queued_execution()),
+        name=f"job-{queued_id}",
+    )
+    life.manager._jobs[queued_id] = queued_task
+    queued_task.add_done_callback(
+        lambda task: life.manager._on_task_done(queued_id, task)
+    )
+    await asyncio.wait_for(gate_wait_entered.wait(), timeout=1.0)
+
+    pause = asyncio.create_task(life.manager.pause_job(life.schedule_id))
+    await asyncio.wait_for(later_stage_entered.wait(), timeout=1.0)
+    reservation = life.manager._job_admission_reservations[queued_id]
+    assert reservation.owner is pause
+    assert queued.status is DaemonJobStatus.PAUSED
+
+    gate.release()
+    await asyncio.wait_for(activation_boundary.wait(), timeout=1.0)
+    release_later_stage.set()
+
+    assert await asyncio.wait_for(pause, timeout=1.0) is True
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(asyncio.shield(queued_task), timeout=1.0)
+
+    record = await life.manager._schedule_registry.get(life.schedule_id)
+    assert record is not None and record.enabled is False
+    assert queued.status is DaemonJobStatus.PAUSED
+    assert DaemonJobStatus.CANCELLED not in queued_transitions
+    assert execution_started.is_set() is False
+    assert queued_task.done()
+    assert queued_id not in life.manager._jobs
+    assert gate.acquired == 0
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+    resumed: list[str] = []
+
+    async def record_resume(
+        _manager: JobManager,
+        job_id: str,
+        **_kwargs: object,
+    ) -> JobResponse:
+        resumed.append(job_id)
+        return JobResponse(job_id=job_id, status="accepted")
+
+    monkeypatch.setattr(JobManager, "_resume_active_job", record_resume)
+
+    response = await life.manager.resume_job(life.schedule_id)
+
+    assert response.status == "accepted"
+    assert resumed == [queued_id, later_id]
+    record = await life.manager._schedule_registry.get(life.schedule_id)
+    assert record is not None and record.enabled is True
+
+
+@pytest.mark.asyncio
+async def test_real_queued_activation_restarts_after_failed_schedule_pause(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rollback restores QUEUED before a blocked wrapper can run."""
+    life = real_lifecycle
+    queued_id = "Anchor Schedule--scheduled--queued-rollback"
+    later_id = "Anchor Schedule--scheduled--pending-failure"
+    queued = life.add_meta(queued_id, DaemonJobStatus.QUEUED)
+    life.add_meta(later_id, DaemonJobStatus.PENDING)
+    life.manager._pending_jobs[later_id] = JobRequest(
+        config_path=life.score_path,
+        job_id=later_id,
+        schedule_id=life.schedule_id,
+        scheduled_due_at=2.0,
+    )
+
+    gate = life.manager._concurrency_semaphore
+    gate.set_limit(1)
+    await gate.acquire()
+    gate_wait_entered = asyncio.Event()
+    original_gate_acquire = gate.acquire
+
+    async def observe_gate_wait() -> None:
+        gate_wait_entered.set()
+        await original_gate_acquire()
+
+    monkeypatch.setattr(gate, "acquire", observe_gate_wait)
+
+    activation_boundary = asyncio.Event()
+    execution_started = asyncio.Event()
+    execution_release = asyncio.Event()
+    queued_transitions: list[DaemonJobStatus] = []
+    later_stage_entered = asyncio.Event()
+    release_later_stage = asyncio.Event()
+
+    async def queued_execution() -> DaemonJobStatus:
+        execution_started.set()
+        activation_boundary.set()
+        await execution_release.wait()
+        return DaemonJobStatus.PAUSED
+
+    queued_task: asyncio.Task[None] | None = None
+    original_reserve = life.manager._try_reserve_job_admission
+
+    def observe_activation_reservation(
+        job_id: str,
+        *,
+        allow_active: bool = False,
+    ) -> bool:
+        reserved = original_reserve(job_id, allow_active=allow_active)
+        if job_id == queued_id and asyncio.current_task() is queued_task:
+            activation_boundary.set()
+        return reserved
+
+    monkeypatch.setattr(
+        life.manager,
+        "_try_reserve_job_admission",
+        observe_activation_reservation,
+    )
+    original_set_status = life.manager._set_job_status
+
+    async def fail_later_stage(
+        job_id: str,
+        status: DaemonJobStatus,
+        **kwargs: object,
+    ) -> None:
+        if job_id == queued_id:
+            queued_transitions.append(status)
+        if job_id == later_id and status is DaemonJobStatus.PAUSED:
+            later_stage_entered.set()
+            await release_later_stage.wait()
+            raise RuntimeError("later pause stage failed")
+        await original_set_status(job_id, status, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(life.manager, "_set_job_status", fail_later_stage)
+
+    queued_task = asyncio.create_task(
+        life.manager._run_managed_task(queued_id, queued_execution()),
+        name=f"job-{queued_id}",
+    )
+    life.manager._jobs[queued_id] = queued_task
+    queued_cleanup_done = asyncio.Event()
+
+    def clean_up_queued_task(task: asyncio.Task[None]) -> None:
+        life.manager._on_task_done(queued_id, task)
+        queued_cleanup_done.set()
+
+    queued_task.add_done_callback(clean_up_queued_task)
+    await asyncio.wait_for(gate_wait_entered.wait(), timeout=1.0)
+
+    pause = asyncio.create_task(life.manager.pause_job(life.schedule_id))
+    await asyncio.wait_for(later_stage_entered.wait(), timeout=1.0)
+    reservation = life.manager._job_admission_reservations[queued_id]
+    assert reservation.owner is pause
+    assert queued.status is DaemonJobStatus.PAUSED
+
+    gate.release()
+    await asyncio.wait_for(activation_boundary.wait(), timeout=1.0)
+    started_before_release = execution_started.is_set()
+    release_later_stage.set()
+
+    with pytest.raises(RuntimeError, match="later pause stage failed"):
+        await asyncio.wait_for(pause, timeout=1.0)
+    await asyncio.wait_for(execution_started.wait(), timeout=1.0)
+
+    record = await life.manager._schedule_registry.get(life.schedule_id)
+    assert record is not None and record.enabled is True
+    assert started_before_release is False
+    assert queued_transitions == [
+        DaemonJobStatus.PAUSED,
+        DaemonJobStatus.QUEUED,
+        DaemonJobStatus.RUNNING,
+    ]
+    assert queued.status is DaemonJobStatus.RUNNING
+    assert life.manager._jobs[queued_id] is queued_task
+    assert queued_task.done() is False
+    assert gate.acquired == 1
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+    execution_release.set()
+    await asyncio.wait_for(queued_task, timeout=1.0)
+    await asyncio.wait_for(queued_cleanup_done.wait(), timeout=1.0)
+    assert queued.status is DaemonJobStatus.PAUSED
+    assert queued_id not in life.manager._jobs
+    assert gate.acquired == 0
+
+
+@pytest.mark.asyncio
 async def test_pending_pause_caller_cancellation_restores_staged_children(
     real_lifecycle: RealLifecycle,
     monkeypatch: pytest.MonkeyPatch,
