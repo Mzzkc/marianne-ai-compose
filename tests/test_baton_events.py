@@ -205,8 +205,17 @@ class TestTimerEvents:
         assert event.sheet_num == 5
 
     def test_cron_tick(self) -> None:
-        event = CronTick(entry_name="weekly-qa", score_path="scores/qa.yaml")
+        event = CronTick(
+            entry_name="weekly-qa",
+            score_path="scores/qa.yaml",
+            due_at=1_788_000_000.0,
+        )
         assert event.entry_name == "weekly-qa"
+        assert event.due_at == 1_788_000_000.0
+
+    def test_cron_tick_keeps_legacy_construction(self) -> None:
+        event = CronTick(entry_name="weekly-qa", score_path="scores/qa.yaml")
+        assert event.due_at is None
 
     def test_job_timeout(self) -> None:
         event = JobTimeout(job_id="long-job")
@@ -451,11 +460,16 @@ def test_escalation_observer_event_data() -> None:
 
 def test_cron_tick_observer_event_data() -> None:
     """CronTick observer event includes entry name and score path."""
-    event = CronTick(entry_name="nightly", score_path="scores/cleanup.yaml")
+    event = CronTick(
+        entry_name="nightly",
+        score_path="scores/cleanup.yaml",
+        due_at=1_788_000_000.0,
+    )
     result = to_observer_event(event)
     assert result["event"] == "baton.cron.fired"
     assert result["data"]["entry_name"] == "nightly"
     assert result["data"]["score_path"] == "scores/cleanup.yaml"
+    assert result["data"]["due_at"] == 1_788_000_000.0
 
 
 def test_shutdown_observer_event_data() -> None:

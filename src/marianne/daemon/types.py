@@ -38,6 +38,9 @@ class JobSubmitParams(TypedDict, total=False):
     dry_run: bool
     chain_depth: int | None
     client_cwd: str | None
+    job_id: str | None
+    schedule_id: str | None
+    scheduled_due_at: float | None
 
 
 class JobIdentifyParams(TypedDict, total=False):
@@ -68,6 +71,19 @@ class JobRequest(BaseModel):
 
     config_path: Path = Field(
         description="Path to the job configuration YAML file",
+    )
+    job_id: str | None = Field(
+        default=None,
+        description="Explicit runtime job identifier. Manual submissions use the "
+        "configuration path stem when omitted.",
+    )
+    schedule_id: str | None = Field(
+        default=None,
+        description="Stable recurring-schedule lineage for overlap detection",
+    )
+    scheduled_due_at: float | None = Field(
+        default=None,
+        description="Exact durable due identity that produced a scheduled child",
     )
     workspace: Path | None = Field(
         default=None,

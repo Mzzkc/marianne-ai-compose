@@ -44,7 +44,9 @@ from marianne.daemon.observer_recorder import ObserverRecorder
 from marianne.daemon.output import StructuredOutput
 from marianne.daemon.pgroup import ProcessGroupManager
 from marianne.daemon.rate_coordinator import RateLimitCoordinator
+from marianne.daemon.recurrence import RecurrenceController
 from marianne.daemon.registry import DaemonJobStatus, JobRecord, JobRegistry
+from marianne.daemon.schedule_registry import ScheduleRegistry
 from marianne.daemon.scheduler import GlobalSheetScheduler
 from marianne.daemon.semantic_analyzer import SemanticAnalyzer
 from marianne.daemon.snapshot import SnapshotManager
@@ -242,6 +244,7 @@ class JobMeta:
     error_message: str | None = None
     error_traceback: str | None = None
     chain_depth: int | None = None
+    schedule_id: str | None = None
     hook_config: list[dict[str, Any]] | None = field(default=None, repr=False)
     concert_config: dict[str, Any] | None = field(default=None, repr=False)
     completed_new_work: bool = False
@@ -484,6 +487,8 @@ class JobManager:
         # Persistent job registry — survives daemon restarts.
         db_path = config.state_db_path.expanduser()
         self._registry = JobRegistry(db_path)
+        self._schedule_registry = ScheduleRegistry(db_path)
+        self._recurrence_controller: RecurrenceController | None = None
 
         # Event bus for routing runner and observer events to consumers.
         self._event_bus = EventBus(
@@ -529,6 +534,7 @@ class JobManager:
         """Start daemon subsystems (learning hub, monitor, etc.)."""
         # Open the async registry connection (tables + WAL mode)
         await self._registry.open()
+        await self._schedule_registry.open()
 
         # Recover orphaned jobs (left running/queued from previous daemon).
         # Pause-aware: check each orphan's checkpoint to distinguish truly
@@ -681,6 +687,16 @@ class JobManager:
         )
         self._baton_adapter.set_backend_pool(BackendPool(registry, pgroup=self._pgroup))
 
+        recurrence_controller = RecurrenceController(
+            self._schedule_registry,
+            self.submit_job,
+            self._baton_adapter.schedule_cron_tick,
+            self._baton_adapter.cancel_cron_tick,
+            self._is_schedule_active,
+        )
+        self._baton_adapter.set_cron_handler(recurrence_controller.handle_tick)
+        self._recurrence_controller = recurrence_controller
+
         if self._config.mcp_pool.servers:
             from marianne.daemon.mcp_pool import McpPoolManager
 
@@ -718,6 +734,7 @@ class JobManager:
             name="baton-loop",
         )
         _logger.info("manager.baton_adapter_started")
+        await recurrence_controller.restore()
 
         # Interactive-mode hygiene: tmux sessions survive a daemon crash
         # (the tmux server is not our child). Nothing has dispatched yet,
@@ -1268,6 +1285,18 @@ class JobManager:
         """
         return base_name
 
+    def _is_schedule_active(self, schedule_id: str) -> bool:
+        """Return whether any queued or running job belongs to this schedule."""
+        active_statuses = {
+            DaemonJobStatus.PENDING,
+            DaemonJobStatus.QUEUED,
+            DaemonJobStatus.RUNNING,
+        }
+        return any(
+            meta.schedule_id == schedule_id and meta.status in active_statuses
+            for meta in self._job_meta.values()
+        )
+
     def _ensure_workspace_log_path(self, workspace: Path) -> Path | None:
         """Expose the daemon log through the score workspace when configured."""
         daemon_log = self._config.log_file
@@ -1327,7 +1356,7 @@ class JobManager:
                 message="System under high resource pressure — try again later",
             )
 
-        job_id = self._get_job_id(request.config_path.stem)
+        job_id = self._get_job_id(request.job_id or request.config_path.stem)
 
         # Validate config exists and resolve workspace BEFORE acquiring the
         # lock. Config parsing is expensive and doesn't need serialization
@@ -1473,11 +1502,29 @@ class JobManager:
                         message="Score file modified since last completed run — starting fresh",
                     )
 
+            # A manual submission refreshes the source-owned schedule before
+            # its immediate run. Scheduled children carry a durable due
+            # identity and must not recursively reset that projection.
+            if (
+                request.scheduled_due_at is None
+                and parsed_config is not None
+                and self._recurrence_controller is not None
+            ):
+                await self._recurrence_controller.register(
+                    request.config_path,
+                    parsed_config,
+                )
+                if parsed_config.schedule is not None:
+                    request = request.model_copy(
+                        update={"schedule_id": parsed_config.name},
+                    )
+
             meta = JobMeta(
                 job_id=job_id,
                 config_path=request.config_path,
                 workspace=workspace,
                 chain_depth=request.chain_depth,
+                schedule_id=request.schedule_id,
                 hook_config=hook_config_list,
                 concert_config=concert_config_dict,
             )
@@ -1539,7 +1586,7 @@ class JobManager:
 
         Returns a ``pending`` JobResponse with rate limit timing info.
         """
-        job_id = self._get_job_id(request.config_path.stem)
+        job_id = self._get_job_id(request.job_id or request.config_path.stem)
 
         # Minimal validation: config must exist
         if not request.config_path.exists():
@@ -1577,6 +1624,7 @@ class JobManager:
                 config_path=request.config_path,
                 workspace=workspace,
                 status=DaemonJobStatus.PENDING,
+                schedule_id=request.schedule_id,
             )
 
         # Store for auto-start
@@ -2659,6 +2707,18 @@ class JobManager:
         """
         self._shutting_down = True
 
+        # Revoke recurrence-owned handles before waiting for jobs. This blocks
+        # new ticks throughout the shutdown window and, critically, before the
+        # TimerWheel drains non-cancelled events after ShutdownRequested.
+        if self._recurrence_controller is not None:
+            try:
+                await self._recurrence_controller.shutdown()
+            except Exception:
+                _logger.warning(
+                    "manager.recurrence_stop_failed",
+                    exc_info=True,
+                )
+
         if graceful:
             timeout = self._config.shutdown_timeout_seconds
             _logger.info(
@@ -2817,6 +2877,7 @@ class JobManager:
                 skipped=skipped_newer_registry,
             )
 
+        await self._schedule_registry.close()
         await self._registry.close()
         self._shutdown_event.set()
         _logger.info("manager.shutdown_complete")

@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -70,6 +70,8 @@ from marianne.daemon.baton.state import (
 )
 
 _logger = get_logger("daemon.baton.core")
+
+CronHandler = Callable[[CronTick], Awaitable[None]]
 
 
 @dataclass
@@ -133,6 +135,7 @@ class BatonCore:
         *,
         timer: Any | None = None,
         inbox: asyncio.Queue[BatonEvent] | None = None,
+        cron_handler: CronHandler | None = None,
     ) -> None:
         """Initialize the baton core.
 
@@ -154,6 +157,7 @@ class BatonCore:
         self._running = False
         self._state_dirty = False
         self._timer = timer
+        self._cron_handler = cron_handler
 
         # Active rate-limit timer handles per instrument. When a new
         # RateLimitHit arrives for an instrument that already has a pending
@@ -222,6 +226,10 @@ class BatonCore:
     def inbox(self) -> asyncio.Queue[BatonEvent]:
         """The event inbox — put events here for the baton to process."""
         return self._inbox
+
+    def set_cron_handler(self, handler: CronHandler) -> None:
+        """Configure the async callback that receives recurring score ticks."""
+        self._cron_handler = handler
 
     def enqueue_dispatch_retry(self) -> None:
         """Wake the event loop to run a dispatch / completion cycle.
@@ -1284,10 +1292,17 @@ class BatonCore:
                     self._handle_stale_check(event)
 
                 case CronTick():
-                    _logger.warning(
-                        "baton.event.unimplemented",
-                        extra={"event_type": "CronTick"},
-                    )
+                    if self._cron_handler is None:
+                        _logger.error(
+                            "baton.cron_handler_missing",
+                            extra={
+                                "entry_name": event.entry_name,
+                                "score_path": event.score_path,
+                                "due_at": event.due_at,
+                            },
+                        )
+                    else:
+                        await self._cron_handler(event)
 
                 case JobTimeout():
                     self._handle_job_timeout(event)

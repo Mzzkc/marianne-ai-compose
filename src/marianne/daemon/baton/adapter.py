@@ -55,10 +55,11 @@ from marianne.core.constants import VALIDATION_PASS_RATE_KEY
 from marianne.core.sheet import Sheet
 from marianne.daemon.a2a.inbox import A2AInbox
 from marianne.daemon.a2a.registry import AgentCardRegistry
-from marianne.daemon.baton.core import BatonCore
+from marianne.daemon.baton.core import BatonCore, CronHandler
 from marianne.daemon.baton.events import (
     A2ATaskRouted,
     A2ATaskSubmitted,
+    CronTick,
     EscalationResolved,
     FermataCheck,
     RateLimitHit,
@@ -88,6 +89,7 @@ if TYPE_CHECKING:
     from marianne.core.config.workspace import CrossSheetConfig
     from marianne.daemon.baton.backend_pool import BackendPool
     from marianne.daemon.baton.prompt import PromptRenderer
+    from marianne.daemon.baton.timer import TimerHandle
     from marianne.daemon.event_bus import EventBus
     from marianne.daemon.mcp_pool import McpPoolManager
     from marianne.daemon.types import ObserverEvent
@@ -638,6 +640,22 @@ class BatonAdapter:
             pool: The backend pool from the manager.
         """
         self._backend_pool = pool
+
+    def set_cron_handler(self, handler: CronHandler) -> None:
+        """Configure the recurring-score callback on the baton core."""
+        self._baton.set_cron_handler(handler)
+
+    def schedule_cron_tick(
+        self,
+        delay_seconds: float,
+        event: CronTick,
+    ) -> TimerHandle:
+        """Schedule a recurring-score tick on the shared timer wheel."""
+        return self._timer_wheel.schedule(delay_seconds, event)
+
+    def cancel_cron_tick(self, handle: TimerHandle) -> bool:
+        """Cancel a recurring-score tick that has not fired yet."""
+        return self._timer_wheel.cancel(handle)
 
     def set_mcp_pool(self, pool: McpPoolManager | None) -> None:
         """Inject the shared MCP pool used for dispatch-time config files."""

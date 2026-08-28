@@ -254,6 +254,7 @@ class CronTick:
 
     entry_name: str
     score_path: str
+    due_at: float | None = None
     timestamp: float = field(default_factory=time.time)
 
 
@@ -721,6 +722,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "data": {
                     "entry_name": event.entry_name,
                     "score_path": event.score_path,
+                    "due_at": event.due_at,
                 },
                 "timestamp": event.timestamp,
             }
