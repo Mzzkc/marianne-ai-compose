@@ -11,6 +11,10 @@ import re
 from pathlib import Path
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+
+from marianne.core.config.orchestration import ScheduleConfig
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -26,6 +30,33 @@ CHECKPOINT_FILE: Path = SRC_DIR / "marianne" / "core" / "checkpoint.py"
 BARE_MAGICMOCK_BASELINE: int = 1685
 ASYNCIO_SLEEP_BASELINE: int = 146
 ASSERTION_LESS_TEST_BASELINE: int = 132
+
+
+@given(
+    enabled=st.booleans(),
+    quantity=st.floats(min_value=0.1, max_value=100_000.0, allow_nan=False),
+    unit=st.sampled_from(["s", "m", "h", "d"]),
+    timezone=st.sampled_from([None, "UTC", "Australia/Melbourne"]),
+    jitter_seconds=st.integers(min_value=0, max_value=86_400),
+)
+def test_schedule_config_interval_round_trip(
+    enabled: bool,
+    quantity: float,
+    unit: str,
+    timezone: str | None,
+    jitter_seconds: int,
+) -> None:
+    """Valid interval schedules preserve every declaration through parsing."""
+    config = ScheduleConfig(
+        enabled=enabled,
+        interval=f"{quantity}{unit}",
+        timezone=timezone,
+        jitter_seconds=jitter_seconds,
+    )
+
+    restored = ScheduleConfig.model_validate(config.model_dump())
+
+    assert restored == config
 
 
 def _collect_test_files() -> list[Path]:

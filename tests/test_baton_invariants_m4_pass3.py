@@ -94,6 +94,7 @@ from marianne.core.config.orchestration import (
     ConductorPreferences,
     NotificationConfig,
     PostSuccessHookConfig,
+    ScheduleConfig,
 )
 from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
 from marianne.core.config.workspace import (
@@ -206,6 +207,7 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     NotificationConfig,
     PostSuccessHookConfig,
     ConcertConfig,
+    ScheduleConfig,
     # spec.py
     SpecFragment,
     SpecCorpusConfig,
@@ -229,6 +231,11 @@ ALL_CONFIG_MODELS: list[type[BaseModel]] = [
     HttpProfile,
     InstrumentProfile,
 ]
+
+# ScheduleConfig has defaults for individual fields but requires one timing
+# declaration. Its valid construction and round-trip properties are covered by
+# the dedicated schedule tests.
+_MODELS_REQUIRING_DECLARATION: set[type[BaseModel]] = {ScheduleConfig}
 
 
 # =============================================================================
@@ -506,9 +513,10 @@ class TestMethodNotFoundTypePreservation:
 
 
 class TestConfigDefaultConstruction:
-    """Every config model that has all-default fields constructs without args.
+    """Every config model with an empty valid declaration constructs without args.
 
-    Invariant: For every model M where all fields have defaults,
+    Invariant: For every model M where all fields have defaults and no required
+    declaration discriminator,
     M() succeeds and produces a valid instance.
     """
 
@@ -520,7 +528,7 @@ class TestConfigDefaultConstruction:
     def test_all_defaulted_models_construct(self) -> None:
         """Models with all defaults should construct without arguments."""
         for model_cls in ALL_CONFIG_MODELS:
-            if self._has_required_fields(model_cls):
+            if self._has_required_fields(model_cls) or model_cls in _MODELS_REQUIRING_DECLARATION:
                 continue
 
             try:

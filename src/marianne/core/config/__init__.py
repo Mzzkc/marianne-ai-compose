@@ -80,8 +80,11 @@ from marianne.core.config.orchestration import (
     ConductorConfig,
     ConductorPreferences,
     ConductorRole,
+    MisfirePolicy,
     NotificationConfig,
+    OverlapPolicy,
     PostSuccessHookConfig,
+    ScheduleConfig,
 )
 
 # Specification corpus configuration
@@ -160,8 +163,11 @@ __all__ = [
     "ConductorConfig",
     "ConductorPreferences",
     "ConductorRole",
+    "MisfirePolicy",
     "NotificationConfig",
+    "OverlapPolicy",
     "PostSuccessHookConfig",
+    "ScheduleConfig",
     # Spec Corpus
     "SpecCorpusConfig",
     "SpecFragment",

@@ -6,11 +6,62 @@ notifications, and post-success hooks.
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+# croniter does not publish PEP 561 type information.
+from croniter import croniter  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class MisfirePolicy(str, Enum):
+    """Policy for ticks missed while the conductor was unavailable."""
+
+    SKIP = "skip"
+    LATEST = "latest"
+
+
+class OverlapPolicy(str, Enum):
+    """Policy for a tick arriving while a previous run remains active."""
+
+    SKIP = "skip"
+
+
+class ScheduleConfig(BaseModel):
+    """Declarative recurring execution schedule for a score."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(default=True, description="Whether future ticks are enabled")
+    cron: str | None = Field(default=None, description="Five-field cron expression")
+    interval: str | None = Field(default=None, description="Positive s/m/h/d interval")
+    timezone: str | None = Field(default=None, description="Optional IANA timezone")
+    misfire: MisfirePolicy = Field(default=MisfirePolicy.SKIP, description="Downtime policy")
+    overlap: OverlapPolicy = Field(default=OverlapPolicy.SKIP, description="Active-run policy")
+    jitter_seconds: int = Field(default=0, ge=0, description="Bounded dispatch jitter")
+
+    @model_validator(mode="after")
+    def _validate_timing(self) -> ScheduleConfig:
+        """Require one valid timing declaration and an optional valid zone."""
+        if (self.cron is None) == (self.interval is None):
+            raise ValueError("Schedule requires exactly one of cron or interval")
+        if self.cron is not None and (
+            len(self.cron.split()) != 5 or not croniter.is_valid(self.cron)
+        ):
+            raise ValueError("Schedule cron must be a valid five-field expression")
+        if self.interval is not None:
+            match = re.fullmatch(r"[0-9]+(?:\.[0-9]+)?[smhd]", self.interval)
+            if match is None or float(self.interval[:-1]) <= 0:
+                raise ValueError("Schedule interval must be a positive s/m/h/d duration")
+        if self.timezone is not None:
+            try:
+                ZoneInfo(self.timezone)
+            except ZoneInfoNotFoundError as exc:
+                raise ValueError("Schedule timezone must be a valid IANA timezone") from exc
+        return self
 
 
 class ConductorRole(str, Enum):
