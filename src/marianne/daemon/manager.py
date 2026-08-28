@@ -13,7 +13,7 @@ import re
 import time
 import traceback
 from collections import deque
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -46,12 +46,12 @@ from marianne.daemon.pgroup import ProcessGroupManager
 from marianne.daemon.rate_coordinator import RateLimitCoordinator
 from marianne.daemon.recurrence import RecurrenceController
 from marianne.daemon.registry import DaemonJobStatus, JobRecord, JobRegistry
-from marianne.daemon.schedule_registry import ScheduleRegistry
+from marianne.daemon.schedule_registry import ScheduleRecord, ScheduleRegistry
 from marianne.daemon.scheduler import GlobalSheetScheduler
 from marianne.daemon.semantic_analyzer import SemanticAnalyzer
 from marianne.daemon.snapshot import SnapshotManager
 from marianne.daemon.task_utils import log_task_exception
-from marianne.daemon.types import JobRequest, JobResponse, ObserverEvent
+from marianne.daemon.types import JobRequest, JobResponse, ObserverEvent, ScheduleStatus
 from marianne.utils.time import utc_now
 
 _logger = get_logger("daemon.manager")
@@ -2076,9 +2076,94 @@ class JobManager:
                 snapshot["on_success"] = parsed_config
                 data["config_snapshot"] = snapshot
 
-        return data
+        return await self._merge_schedule_status(job_id, data)
+
+    async def _schedule_for_job(
+        self,
+        job_id: str,
+        *,
+        config_path: Path | None = None,
+        records: Sequence[ScheduleRecord] | None = None,
+    ) -> ScheduleRecord | None:
+        """Resolve a job or schedule ID to its durable recurrence projection."""
+        controller = getattr(self, "_recurrence_controller", None)
+        if controller is None:
+            return None
+
+        meta = self._job_meta.get(job_id)
+        schedule_ids = {
+            schedule_id
+            for schedule_id in (meta.schedule_id if meta is not None else None, job_id)
+            if schedule_id is not None
+        }
+        schedule_records = (
+            list(records) if records is not None else await controller.describe()
+        )
+        for record in schedule_records:
+            if record.schedule_id in schedule_ids:
+                return record
+
+        source_path = config_path or (meta.config_path if meta is not None else None)
+        if source_path is not None:
+            resolved_source = source_path.resolve(strict=False)
+            for record in schedule_records:
+                if record.score_path.resolve(strict=False) == resolved_source:
+                    return record
+        return None
+
+    async def _merge_schedule_status(
+        self,
+        job_id: str,
+        data: dict[str, Any],
+        *,
+        records: Sequence[ScheduleRecord] | None = None,
+    ) -> dict[str, Any]:
+        """Add recurrence status only when this job has a durable schedule."""
+        raw_config_path = data.get("config_path")
+        config_path = Path(raw_config_path) if isinstance(raw_config_path, str) else None
+        record = await self._schedule_for_job(
+            job_id,
+            config_path=config_path,
+            records=records,
+        )
+        if record is None:
+            return data
+        result = dict(data)
+        result["schedule"] = ScheduleStatus(
+            enabled=record.enabled,
+            next_due_at=record.next_due_at,
+            last_due_at=record.last_due_at,
+            last_run_id=record.last_run_id,
+            last_outcome=record.last_outcome,
+            consecutive_drops=record.consecutive_drops,
+        ).model_dump(mode="json")
+        return result
 
     async def pause_job(self, job_id: str) -> bool:
+        """Pause recurring ticks and any currently running work."""
+        record = await JobManager._schedule_for_job(self, job_id)
+        if record is None:
+            return await self._pause_active_job(job_id)
+
+        controller = getattr(self, "_recurrence_controller", None)
+        assert controller is not None
+        await controller.pause(record.schedule_id)
+        meta = self._job_meta.get(job_id)
+        if meta is None or meta.status != DaemonJobStatus.RUNNING:
+            return True
+        try:
+            return await self._pause_active_job(job_id)
+        except BaseException as exc:
+            try:
+                await controller.resume(record.schedule_id)
+            except BaseException as rollback_exc:
+                raise RuntimeError(
+                    f"Failed to pause active job {job_id!r}; recurrence rollback "
+                    f"also failed: {rollback_exc}"
+                ) from exc
+            raise
+
+    async def _pause_active_job(self, job_id: str) -> bool:
         """Send pause signal to a running job via in-process event.
 
         Prefers the in-process ``_pause_events`` dict (set during
@@ -2131,6 +2216,86 @@ class JobManager:
         return await self._checked_service.pause_job(meta.job_id, meta.workspace)
 
     async def resume_job(
+        self,
+        job_id: str,
+        workspace: Path | None = None,
+        config_path: Path | None = None,
+        no_reload: bool = False,
+        from_sheet: int | None = None,
+        escalation: bool = False,
+        self_healing: bool = False,
+    ) -> JobResponse:
+        """Enable recurring ticks and resume active work when it is paused."""
+        record = await JobManager._schedule_for_job(self, job_id)
+        if record is None:
+            return await JobManager._resume_active_job(
+                self,
+                job_id,
+                workspace=workspace,
+                config_path=config_path,
+                no_reload=no_reload,
+                from_sheet=from_sheet,
+                escalation=escalation,
+                self_healing=self_healing,
+            )
+
+        controller = getattr(self, "_recurrence_controller", None)
+        assert controller is not None
+        meta = self._job_meta.get(job_id)
+        schedule_id = record.schedule_id
+        active_statuses = {
+            DaemonJobStatus.PENDING,
+            DaemonJobStatus.QUEUED,
+            DaemonJobStatus.RUNNING,
+        }
+        owns_job_admission = meta is None or meta.status not in active_statuses
+        if owns_job_admission and not self._try_reserve_job_admission(job_id):
+            raise JobSubmissionError(f"Score '{job_id}' is already being submitted")
+        try:
+            # A resumed active run represents this due work. Publish its lineage
+            # while controller.resume() resolves a possible overdue tick so the
+            # catch-up cannot create overlapping work before metadata is active.
+            self._reserve_schedule_lineage(schedule_id)
+            try:
+                await controller.resume(schedule_id)
+                if meta is None or meta.status not in {
+                    DaemonJobStatus.PAUSED,
+                    DaemonJobStatus.PAUSED_AT_CHAIN,
+                    DaemonJobStatus.FAILED,
+                    DaemonJobStatus.CANCELLED,
+                }:
+                    return JobResponse(
+                        job_id=job_id,
+                        status="accepted",
+                        message="Recurring schedule resumed",
+                    )
+                try:
+                    return await JobManager._resume_active_job(
+                        self,
+                        job_id,
+                        workspace=workspace,
+                        config_path=config_path,
+                        no_reload=no_reload,
+                        from_sheet=from_sheet,
+                        escalation=escalation,
+                        self_healing=self_healing,
+                    )
+                except BaseException as exc:
+                    try:
+                        await controller.pause(schedule_id)
+                    except BaseException as rollback_exc:
+                        raise RuntimeError(
+                            f"Failed to resume active job {job_id!r}; recurrence "
+                            f"rollback also failed: {rollback_exc}"
+                        ) from exc
+                    raise
+            finally:
+                self._release_schedule_lineage(schedule_id)
+        finally:
+            if owns_job_admission:
+                self._release_job_admission(job_id)
+
+    async def _resume_active_job(
         self,
         job_id: str,
         workspace: Path | None = None,
@@ -2364,6 +2529,52 @@ class JobManager:
             _logger.error("modify.deferred_resume_failed", job_id=job_id, exc_info=True)
 
     async def cancel_job(self, job_id: str, *, source: str = "unknown") -> bool:
+        """Cancel active work and remove its recurrence, when present."""
+        record = await JobManager._schedule_for_job(self, job_id)
+        if record is None:
+            return await self._cancel_active_job(job_id, source=source)
+
+        meta = self._job_meta.get(job_id)
+        active = (
+            job_id in self._pending_jobs
+            or job_id in self._jobs
+            or (
+                meta is not None
+                and meta.status
+                in {
+                    DaemonJobStatus.PENDING,
+                    DaemonJobStatus.QUEUED,
+                    DaemonJobStatus.RUNNING,
+                }
+            )
+        )
+        if active and not await self._cancel_active_job(job_id, source=source):
+            return False
+
+        controller = getattr(self, "_recurrence_controller", None)
+        assert controller is not None
+        try:
+            await controller.remove(record.schedule_id)
+        except BaseException as exc:
+            # Removal failure must never leave future autonomous work enabled.
+            # A durable pause is the safe degraded state and the original
+            # removal error remains loud to the caller.
+            try:
+                await controller.pause(record.schedule_id)
+            except BaseException as safety_exc:
+                raise RuntimeError(
+                    f"Failed to remove recurrence for {job_id!r}; safety pause "
+                    f"also failed: {safety_exc}"
+                ) from exc
+            raise
+        return True
+
+    async def _cancel_active_job(
+        self,
+        job_id: str,
+        *,
+        source: str = "unknown",
+    ) -> bool:
         """Cancel a running or pending job.
 
         For running jobs: sends the cancel signal and updates in-memory
@@ -2473,6 +2684,12 @@ class JobManager:
         """
         seen: set[str] = set()
         result: list[dict[str, Any]] = []
+        recurrence_controller = getattr(self, "_recurrence_controller", None)
+        schedule_records = (
+            await recurrence_controller.describe()
+            if recurrence_controller is not None
+            else []
+        )
         registry_records = {
             record.job_id: record
             for record in await self._registry.list_jobs()
@@ -2496,13 +2713,25 @@ class JobManager:
                 entry = registry_records[meta.job_id].to_dict()
             else:
                 entry = meta.to_dict()
-            result.append(entry)
+            result.append(
+                await self._merge_schedule_status(
+                    meta.job_id,
+                    entry,
+                    records=schedule_records,
+                )
+            )
             seen.add(meta.job_id)
 
         # Historical jobs from registry
         for record in registry_records.values():
             if record.job_id not in seen:
-                result.append(record.to_dict())
+                result.append(
+                    await self._merge_schedule_status(
+                        record.job_id,
+                        record.to_dict(),
+                        records=schedule_records,
+                    )
+                )
 
         return result
 

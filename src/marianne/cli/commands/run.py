@@ -195,8 +195,9 @@ def run(
     # In quiet mode, skip the config panel
     if not is_quiet() and not json_output:
         instrument_display = config.effective_instrument_name
+        recurring_label = " \\[recurring]" if config.schedule is not None else ""
         console.print(Panel(
-            f"[bold]{config.name}[/bold]\n"
+            f"[bold]{config.name}[/bold]{recurring_label}\n"
             f"{config.description or 'No description'}\n\n"
             f"Instrument: {instrument_display}\n"
             f"Sheets: {config.sheet.total_sheets} "

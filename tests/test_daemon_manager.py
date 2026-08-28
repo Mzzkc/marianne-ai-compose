@@ -615,6 +615,20 @@ class TestGetJobStatus:
         assert status["workspace"] == str(Path("/tmp/wa"))
 
     @pytest.mark.asyncio
+    async def test_unscheduled_status_has_no_schedule_key(self, manager: JobManager):
+        """The additive recurrence projection must not alter old snapshots."""
+        manager._job_meta["ordinary"] = JobMeta(
+            job_id="ordinary",
+            config_path=Path("/tmp/ordinary.yaml"),
+            workspace=Path("/tmp/ordinary-workspace"),
+            status=DaemonJobStatus.QUEUED,
+        )
+
+        status = await manager.get_job_status("ordinary")
+
+        assert "schedule" not in status
+
+    @pytest.mark.asyncio
     async def test_get_status_stale_running_corrected(self, manager: JobManager):
         """get_job_status corrects stale RUNNING status to FAILED."""
         manager._job_meta["stale-1"] = JobMeta(

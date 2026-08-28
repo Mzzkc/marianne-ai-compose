@@ -157,6 +157,29 @@ class JobResponse(BaseModel):
     )
 
 
+class ScheduleStatus(BaseModel):
+    """Public recurring-score projection returned by status operations."""
+
+    enabled: bool = Field(description="Whether future recurring ticks are enabled")
+    next_due_at: float = Field(description="Next durable due time as a Unix epoch")
+    last_due_at: float | None = Field(
+        default=None,
+        description="Most recent handled due time as a Unix epoch",
+    )
+    last_run_id: str | None = Field(
+        default=None,
+        description="Most recent scheduled child job identifier",
+    )
+    last_outcome: str | None = Field(
+        default=None,
+        description="Most recent recurring tick outcome",
+    )
+    consecutive_drops: int = Field(
+        ge=0,
+        description="Number of consecutive recurring tick drops",
+    )
+
+
 class ObserverEvent(TypedDict):
     """Structured event emitted by the baton and routed through the daemon.
 
