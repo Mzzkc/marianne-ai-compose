@@ -184,6 +184,8 @@ class TestCancelPendingJob:
             mgr._jobs = {}
             mgr._job_meta = {}
             mgr._live_states = {}
+            mgr._job_admission_reservations = {}
+            mgr._schedule_admission_reservations = {}
             mgr._registry = AsyncMock()
 
             result = await mgr.cancel_job("test-job")
@@ -227,6 +229,8 @@ class TestPendingJobAutoStart:
             mgr._jobs = {}
             mgr._job_meta = {}
             mgr._live_states = {}
+            mgr._job_admission_reservations = {}
+            mgr._schedule_admission_reservations = {}
             mgr._registry = AsyncMock()
             mgr._backpressure = MagicMock()
             mgr._backpressure.should_accept_job.return_value = True

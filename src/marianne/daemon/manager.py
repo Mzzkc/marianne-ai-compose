@@ -1351,7 +1351,12 @@ class JobManager:
             for meta in self._job_meta.values()
         )
 
-    def _try_reserve_job_admission(self, job_id: str) -> bool:
+    def _try_reserve_job_admission(
+        self,
+        job_id: str,
+        *,
+        allow_active: bool = False,
+    ) -> bool:
         """Reserve one job ID before any recurrence projection is published."""
         current_task = asyncio.current_task()
         if current_task is None:
@@ -1365,7 +1370,7 @@ class JobManager:
             return True
 
         existing = self._job_meta.get(job_id)
-        if existing is not None and existing.status in {
+        if not allow_active and existing is not None and existing.status in {
             DaemonJobStatus.PENDING,
             DaemonJobStatus.QUEUED,
             DaemonJobStatus.RUNNING,
@@ -1683,6 +1688,21 @@ class JobManager:
                     if parsed_config.schedule is not None:
                         reservation_id = parsed_config.name
                         self._reserve_schedule_lineage(reservation_id)
+                        # A lifecycle command may hold the controller's
+                        # registration lock while mutating this source. Probe
+                        # every currently known source identity before waiting
+                        # so manual submission rejects instead of blocking on
+                        # the cross-subsystem lock.
+                        source_path = request.config_path.resolve(strict=False)
+                        known_ids = {
+                            parsed_config.name,
+                            *(
+                                current.schedule_id
+                                for current in await self._recurrence_controller.describe()
+                                if current.score_path.resolve(strict=False) == source_path
+                            ),
+                        }
+                        _probe_schedule_admission(tuple(sorted(known_ids)))
                     registered_schedule = await self._recurrence_controller.register(
                         request.config_path,
                         parsed_config,
@@ -1963,19 +1983,43 @@ class JobManager:
             if not self._backpressure.should_accept_job():
                 break  # Pressure returned — stop starting jobs
 
-            request = self._pending_jobs.pop(job_id)
-            # Transition status from PENDING → QUEUED across all stores
-            await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
-            _logger.info(
-                "job.pending_started",
-                job_id=job_id,
-                config_path=str(request.config_path),
-            )
+            request = self._pending_jobs.get(job_id)
+            if request is None:
+                continue
+            if not self._try_reserve_job_admission(job_id, allow_active=True):
+                continue
+            schedule_ids = (request.schedule_id,) if request.schedule_id is not None else ()
+            schedule_owned = False
             try:
-                task = asyncio.create_task(
-                    self._run_job_task(job_id, request),
-                    name=f"job-{job_id}",
+                if schedule_ids:
+                    schedule_owned = self._try_reserve_schedule_admission(schedule_ids)
+                    if not schedule_owned:
+                        continue
+
+                # Ownership is complete before the activation becomes visible.
+                # Keep the request pending until the fallible status write has
+                # succeeded, then publish the task without another await.
+                await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
+                self._pending_jobs.pop(job_id, None)
+                _logger.info(
+                    "job.pending_started",
+                    job_id=job_id,
+                    config_path=str(request.config_path),
                 )
+                try:
+                    task = asyncio.create_task(
+                        self._run_job_task(job_id, request),
+                        name=f"job-{job_id}",
+                    )
+                except RuntimeError:
+                    self._pending_jobs[job_id] = request
+                    await self._set_job_status(job_id, DaemonJobStatus.PENDING)
+                    _logger.error(
+                        "pending.task_creation_failed",
+                        job_id=job_id,
+                        exc_info=True,
+                    )
+                    continue
                 self._jobs[job_id] = task
 
                 def _on_pending_done(
@@ -1986,12 +2030,10 @@ class JobManager:
                     self._on_task_done(_jid, t)
 
                 task.add_done_callback(_on_pending_done)
-            except RuntimeError:
-                _logger.error(
-                    "pending.task_creation_failed",
-                    job_id=job_id,
-                    exc_info=True,
-                )
+            finally:
+                if schedule_owned:
+                    self._release_schedule_admission(schedule_ids)
+                self._release_job_admission(job_id)
 
     async def get_job_status(self, job_id: str, workspace: Path | None = None) -> dict[str, Any]:
         """Get full status of a specific job.
@@ -2300,6 +2342,11 @@ class JobManager:
                 related.append(meta)
         return related
 
+    @staticmethod
+    def _is_stable_schedule_anchor(job_id: str, record: ScheduleRecord) -> bool:
+        """Identify an anchor from durable identity, never child-ID syntax."""
+        return job_id in {record.schedule_id, record.score_path.stem}
+
     def _claim_lifecycle_admission(
         self,
         claims: list[tuple[str, ...]],
@@ -2321,11 +2368,48 @@ class JobManager:
         for schedule_ids in reversed(claims):
             self._release_schedule_admission(schedule_ids)
 
-    async def _pause_related_job(self, meta: JobMeta) -> None:
+    def _claim_related_job_admissions(
+        self,
+        record: ScheduleRecord,
+        owned_job_ids: list[str],
+    ) -> None:
+        """Atomically own every active child before a lifecycle mutation."""
+        cancellable = {
+            DaemonJobStatus.PENDING,
+            DaemonJobStatus.QUEUED,
+            DaemonJobStatus.RUNNING,
+            DaemonJobStatus.PAUSED,
+            DaemonJobStatus.PAUSED_AT_CHAIN,
+        }
+        acquired: list[str] = []
+        for related in sorted(
+            self._schedule_related_meta(record),
+            key=lambda meta: meta.job_id,
+        ):
+            if related.status not in cancellable:
+                continue
+            if not self._try_reserve_job_admission(
+                related.job_id,
+                allow_active=True,
+            ):
+                for job_id in reversed(acquired):
+                    self._release_job_admission(job_id)
+                raise JobSubmissionError(
+                    f"Score '{related.job_id}' is already being submitted"
+                )
+            acquired.append(related.job_id)
+        owned_job_ids.extend(acquired)
+
+    async def _pause_related_job(
+        self,
+        meta: JobMeta,
+        *,
+        defer_baton_event: bool = False,
+    ) -> None:
         """Make one scheduled child non-dispatchable and visibly paused."""
         if meta.status is DaemonJobStatus.PENDING:
-            self._pending_jobs.pop(meta.job_id, None)
             await self._set_job_status(meta.job_id, DaemonJobStatus.PAUSED)
+            self._pending_jobs.pop(meta.job_id, None)
             return
         if meta.status is DaemonJobStatus.QUEUED:
             task = self._jobs.pop(meta.job_id, None)
@@ -2342,7 +2426,10 @@ class JobManager:
             await self._set_job_status(meta.job_id, DaemonJobStatus.PAUSED)
             return
         if meta.status is DaemonJobStatus.RUNNING:
-            await self._pause_active_job(meta.job_id)
+            await self._pause_active_job(
+                meta.job_id,
+                defer_baton_event=defer_baton_event,
+            )
 
     async def _re_pause_resumed_jobs(self, resumed: Sequence[JobMeta]) -> None:
         """Best-effort rollback for a partially resumed schedule lifecycle."""
@@ -2365,21 +2452,116 @@ class JobManager:
         controller = getattr(self, "_recurrence_controller", None)
         assert controller is not None
         claims: list[tuple[str, ...]] = []
-        prior_enabled = record.enabled
+        authority: ScheduleRecord | None = None
+        owned_job_ids: list[str] = []
+        changed_events: list[asyncio.Event] = []
+        created_signals: list[Path] = []
+        changed_baton: list[tuple[JobMeta, bool, bool]] = []
 
         def claim(schedule_ids: tuple[str, ...]) -> None:
             self._claim_lifecycle_admission(claims, schedule_ids)
 
+        def capture_authority(current: ScheduleRecord) -> None:
+            nonlocal authority
+            authority = current
+            self._claim_related_job_admissions(current, owned_job_ids)
+
         try:
-            await controller.pause(record.schedule_id, before_mutation=claim)
-            for meta in self._schedule_related_meta(record):
-                await self._pause_related_job(meta)
+            current = await controller.pause(
+                record.schedule_id,
+                score_path=record.score_path,
+                before_mutation=claim,
+                on_authority=capture_authority,
+            )
+            related = self._schedule_related_meta(current)
+
+            def pause_order(meta: JobMeta) -> int:
+                if meta.status is DaemonJobStatus.RUNNING:
+                    baton_has_job = (
+                        self._baton_adapter is not None
+                        and self._baton_adapter.has_job(meta.job_id)
+                    )
+                    # Fallible filesystem pauses precede local signals. A
+                    # later failure therefore cannot strand an earlier local
+                    # dispatch gate in the paused state.
+                    return 1 if baton_has_job or meta.job_id in self._pause_events else 0
+                if meta.status is DaemonJobStatus.QUEUED:
+                    return 2
+                if meta.status is DaemonJobStatus.PENDING:
+                    return 3
+                return 4
+
+            for meta in sorted(related, key=pause_order):
+                event = self._pause_events.get(meta.job_id)
+                event_was_set = event.is_set() if event is not None else False
+                signal_path = meta.workspace / f".marianne-pause-{meta.job_id}"
+                signal_existed = signal_path.exists()
+                baton_job = (
+                    self._baton_adapter._baton._jobs.get(meta.job_id)
+                    if self._baton_adapter is not None
+                    and meta.status is DaemonJobStatus.RUNNING
+                    else None
+                )
+                baton_prior = (
+                    (baton_job.paused, baton_job.user_paused)
+                    if baton_job is not None
+                    else None
+                )
+                await self._pause_related_job(
+                    meta,
+                    defer_baton_event=baton_prior is not None,
+                )
+                if baton_prior is not None:
+                    changed_baton.append((meta, *baton_prior))
+                if event is not None and not event_was_set and event.is_set():
+                    changed_events.append(event)
+                if not signal_existed and signal_path.exists():
+                    created_signals.append(signal_path)
+            if changed_baton:
+                from marianne.daemon.baton.events import PauseJob
+
+                adapter = self._baton_adapter
+                assert adapter is not None
+                for meta, _paused, _user_paused in changed_baton:
+                    adapter._baton.inbox.put_nowait(
+                        PauseJob(job_id=meta.job_id)
+                    )
             return True
         except BaseException as exc:
-            if prior_enabled and claims:
+            baton_rollback_error: BaseException | None = None
+            for meta, paused, user_paused in reversed(changed_baton):
+                baton_job = (
+                    self._baton_adapter._baton._jobs.get(meta.job_id)
+                    if self._baton_adapter is not None
+                    else None
+                )
+                if baton_job is not None:
+                    baton_job.paused = paused
+                    baton_job.user_paused = user_paused
+                    adapter = self._baton_adapter
+                    assert adapter is not None
+                    adapter._baton._state_dirty = True
+                try:
+                    await self._set_job_status(meta.job_id, DaemonJobStatus.RUNNING)
+                except BaseException as rollback_exc:
+                    if baton_rollback_error is None:
+                        baton_rollback_error = rollback_exc
+            for event in changed_events:
+                event.clear()
+            for signal_path in created_signals:
+                try:
+                    signal_path.unlink(missing_ok=True)
+                except OSError:
+                    _logger.error(
+                        "schedule.pause_signal_rollback_failed",
+                        path=str(signal_path),
+                        exc_info=True,
+                    )
+            if authority is not None and authority.enabled and claims:
                 try:
                     await controller.resume(
-                        record.schedule_id,
+                        authority.schedule_id,
+                        score_path=authority.score_path,
                         before_mutation=claim,
                     )
                 except BaseException as rollback_exc:
@@ -2387,11 +2569,23 @@ class JobManager:
                         f"Failed to pause active job {job_id!r}; recurrence rollback "
                         f"also failed: {rollback_exc}"
                     ) from exc
+            if baton_rollback_error is not None:
+                raise RuntimeError(
+                    f"Failed to pause active job {job_id!r}; baton rollback "
+                    f"also failed: {baton_rollback_error}"
+                ) from exc
             raise
         finally:
             self._release_lifecycle_admission(claims)
+            for owned_job_id in reversed(owned_job_ids):
+                self._release_job_admission(owned_job_id)
 
-    async def _pause_active_job(self, job_id: str) -> bool:
+    async def _pause_active_job(
+        self,
+        job_id: str,
+        *,
+        defer_baton_event: bool = False,
+    ) -> bool:
         """Send pause signal to a running job via in-process event.
 
         Prefers the in-process ``_pause_events`` dict (set during
@@ -2414,12 +2608,29 @@ class JobManager:
         # (returns False, no side effect) when the baton doesn't have the job.
         # Trying this before the wrapper-task check below stops a stale-status
         # guard from destructively marking a still-running recovered job FAILED.
+        baton_job = (
+            self._baton_adapter._baton._jobs.get(job_id)
+            if self._baton_adapter is not None
+            else None
+        )
+        baton_prior = (
+            (baton_job.paused, baton_job.user_paused)
+            if baton_job is not None
+            else None
+        )
         if self._baton_adapter is not None and self._baton_adapter._baton.request_pause(job_id):
             from marianne.daemon.baton.events import PauseJob
 
-            await self._baton_adapter._baton.inbox.put(PauseJob(job_id=job_id))
+            try:
+                await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
+            except BaseException:
+                if baton_job is not None and baton_prior is not None:
+                    baton_job.paused, baton_job.user_paused = baton_prior
+                    self._baton_adapter._baton._state_dirty = True
+                raise
+            if not defer_baton_event:
+                self._baton_adapter._baton.inbox.put_nowait(PauseJob(job_id=job_id))
             _logger.info("job.baton_pause_sent", job_id=job_id)
-            await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
             return True
 
         # Non-baton / not-in-baton: verify an actual running task. A job the baton
@@ -2483,6 +2694,27 @@ class JobManager:
         resumable = [
             meta for meta in related if meta.status in schedule_resumable_statuses
         ]
+        held_chains = [
+            meta
+            for meta in resumable
+            if meta.status is DaemonJobStatus.PAUSED_AT_CHAIN
+            and meta.held_chain_hook is not None
+        ]
+        if len(held_chains) > 1:
+            return JobResponse(
+                job_id=job_id,
+                status="rejected",
+                message=(
+                    "Schedule has multiple held chains; resume each child "
+                    "explicitly to preserve chain ordering"
+                ),
+            )
+        # A held chain submission is irreversible once accepted. Run ordinary
+        # resumptions first and the sole held chain last, so no later child can
+        # fail after its chained job has been published.
+        resumable.sort(
+            key=lambda meta: meta.status is DaemonJobStatus.PAUSED_AT_CHAIN
+        )
         requested_meta = self._job_meta.get(job_id)
         if (
             requested_meta is not None
@@ -2506,89 +2738,116 @@ class JobManager:
             owned_job_ids.append(admission_id)
 
         claims: list[tuple[str, ...]] = []
-        transitioned = False
-        prior_enabled = record.enabled
+        authority: ScheduleRecord | None = None
+        mutation_entered = False
+        lineage_ids: list[str] = []
+        resumed_meta: list[JobMeta] = []
 
         def claim(schedule_ids: tuple[str, ...]) -> None:
             self._claim_lifecycle_admission(claims, schedule_ids)
 
+        def capture_authority(current: ScheduleRecord) -> None:
+            nonlocal authority, mutation_entered
+            authority = current
+            mutation_entered = True
+            self._reserve_schedule_lineage(current.schedule_id)
+            lineage_ids.append(current.schedule_id)
+
+        async def compensate(original_exc: BaseException) -> None:
+            """Restore active work and recurrence before surfacing a failed resume."""
+            active_rollback_error: BaseException | None = None
+            deferred_cancellation: asyncio.CancelledError | None = None
+            if resumed_meta:
+                rollback_task = asyncio.create_task(
+                    self._re_pause_resumed_jobs(resumed_meta),
+                    name=(
+                        "schedule-resume-rollback-"
+                        f"{authority.schedule_id if authority is not None else schedule_id}"
+                    ),
+                )
+                try:
+                    await asyncio.shield(rollback_task)
+                except asyncio.CancelledError as cancel_exc:
+                    deferred_cancellation = cancel_exc
+                    try:
+                        await rollback_task
+                    except BaseException as rollback_exc:
+                        active_rollback_error = rollback_exc
+                except BaseException as rollback_exc:
+                    active_rollback_error = rollback_exc
+
+            recurrence_rollback_error: BaseException | None = None
+            if mutation_entered and authority is not None and not authority.enabled:
+                try:
+                    await controller.pause(
+                        authority.schedule_id,
+                        score_path=authority.score_path,
+                        before_mutation=claim,
+                    )
+                except BaseException as rollback_exc:
+                    recurrence_rollback_error = rollback_exc
+
+            if (
+                active_rollback_error is not None
+                or recurrence_rollback_error is not None
+            ):
+                details: list[str] = []
+                if active_rollback_error is not None:
+                    details.append(f"active rollback failed: {active_rollback_error}")
+                if recurrence_rollback_error is not None:
+                    details.append(
+                        f"recurrence rollback failed: {recurrence_rollback_error}"
+                    )
+                raise RuntimeError(
+                    f"Failed to resume active job {job_id!r}; " + "; ".join(details)
+                ) from original_exc
+            if deferred_cancellation is not None:
+                raise deferred_cancellation
+
         try:
-            # A resumed active run represents this due work. Publish its lineage
-            # while controller.resume() resolves a possible overdue tick so the
-            # catch-up cannot create overlapping work before metadata is active.
-            self._reserve_schedule_lineage(schedule_id)
             try:
-                await controller.resume(schedule_id, before_mutation=claim)
-                transitioned = not prior_enabled
+                await controller.resume(
+                    schedule_id,
+                    score_path=record.score_path,
+                    before_mutation=claim,
+                    on_authority=capture_authority,
+                )
                 if not resumable:
                     return JobResponse(
                         job_id=job_id,
                         status="accepted",
                         message="Recurring schedule resumed",
                     )
-                try:
-                    response: JobResponse | None = None
-                    resumed_meta: list[JobMeta] = []
-                    for resumable_meta in resumable:
-                        is_requested = resumable_meta.job_id == job_id
-                        response = await JobManager._resume_active_job(
-                            self,
-                            resumable_meta.job_id,
-                            workspace=workspace if is_requested else None,
-                            config_path=config_path if is_requested else None,
-                            no_reload=no_reload,
-                            from_sheet=from_sheet if is_requested else None,
-                            escalation=escalation if is_requested else False,
-                            self_healing=self_healing if is_requested else False,
+                response: JobResponse | None = None
+                for resumable_meta in resumable:
+                    is_requested = resumable_meta.job_id == job_id
+                    response = await JobManager._resume_active_job(
+                        self,
+                        resumable_meta.job_id,
+                        workspace=workspace if is_requested else None,
+                        config_path=config_path if is_requested else None,
+                        no_reload=no_reload,
+                        from_sheet=from_sheet if is_requested else None,
+                        escalation=escalation if is_requested else False,
+                        self_healing=self_healing if is_requested else False,
+                    )
+                    if response.status != "accepted":
+                        await compensate(
+                            JobSubmissionError(
+                                response.message
+                                or f"Resume of {resumable_meta.job_id!r} was rejected"
+                            )
                         )
-                        resumed_meta.append(resumable_meta)
-                    assert response is not None
-                    return response
-                except BaseException as exc:
-                    active_rollback_error: BaseException | None = None
-                    if resumed_meta:
-                        rollback_task = asyncio.create_task(
-                            self._re_pause_resumed_jobs(resumed_meta),
-                            name=f"schedule-resume-rollback-{schedule_id}",
-                        )
-                        try:
-                            await asyncio.shield(rollback_task)
-                        except asyncio.CancelledError:
-                            await rollback_task
-                            if not isinstance(exc, asyncio.CancelledError):
-                                raise
-                        except BaseException as rollback_exc:
-                            active_rollback_error = rollback_exc
-                    recurrence_rollback_error: BaseException | None = None
-                    if transitioned:
-                        try:
-                            await controller.pause(
-                                schedule_id,
-                                before_mutation=claim,
-                            )
-                        except BaseException as rollback_exc:
-                            recurrence_rollback_error = rollback_exc
-                    if (
-                        active_rollback_error is not None
-                        or recurrence_rollback_error is not None
-                    ):
-                        details: list[str] = []
-                        if active_rollback_error is not None:
-                            details.append(
-                                f"active rollback failed: {active_rollback_error}"
-                            )
-                        if recurrence_rollback_error is not None:
-                            details.append(
-                                "recurrence rollback failed: "
-                                f"{recurrence_rollback_error}"
-                            )
-                        raise RuntimeError(
-                            f"Failed to resume active job {job_id!r}; "
-                            + "; ".join(details)
-                        ) from exc
-                    raise
+                        return response
+                    resumed_meta.append(resumable_meta)
+                assert response is not None
+                return response
+            except BaseException as exc:
+                await compensate(exc)
+                raise
             finally:
-                self._release_schedule_lineage(schedule_id)
+                for lineage_id in reversed(lineage_ids):
+                    self._release_schedule_lineage(lineage_id)
         finally:
             self._release_lifecycle_admission(claims)
             for owned_job_id in reversed(owned_job_ids):
@@ -2836,34 +3095,47 @@ class JobManager:
         controller = getattr(self, "_recurrence_controller", None)
         assert controller is not None
         claims: list[tuple[str, ...]] = []
+        owned_job_ids: list[str] = []
+        removal_entered = False
 
         def claim(schedule_ids: tuple[str, ...]) -> None:
             self._claim_lifecycle_admission(claims, schedule_ids)
 
-        removal_error: BaseException | None = None
-        try:
-            await controller.remove(record.schedule_id, before_mutation=claim)
-        except BaseException as exc:
-            if not claims:
-                raise
-            # Removal failure must never leave future autonomous work enabled.
-            # A durable pause is the safe degraded state and the original
-            # removal error remains loud to the caller.
-            try:
-                await controller.pause(
-                    record.schedule_id,
-                    before_mutation=claim,
-                )
-            except BaseException as safety_exc:
-                removal_error = RuntimeError(
-                    f"Failed to remove recurrence for {job_id!r}; safety pause "
-                    f"also failed: {safety_exc}"
-                )
-                removal_error.__cause__ = exc
-            else:
-                removal_error = exc
+        def capture_authority(current: ScheduleRecord) -> None:
+            nonlocal removal_entered
+            self._claim_related_job_admissions(current, owned_job_ids)
+            removal_entered = True
 
         try:
+            removal_error: BaseException | None = None
+            try:
+                record = await controller.remove(
+                    record.schedule_id,
+                    score_path=record.score_path,
+                    before_mutation=claim,
+                    on_authority=capture_authority,
+                )
+            except BaseException as exc:
+                if not removal_entered:
+                    raise
+                # Removal failure must never leave future autonomous work enabled.
+                # A durable pause is the safe degraded state and the original
+                # removal error remains loud to the caller.
+                try:
+                    await controller.pause(
+                        record.schedule_id,
+                        score_path=record.score_path,
+                        before_mutation=claim,
+                    )
+                except BaseException as safety_exc:
+                    removal_error = RuntimeError(
+                        f"Failed to remove recurrence for {job_id!r}; safety pause "
+                        f"also failed: {safety_exc}"
+                    )
+                    removal_error.__cause__ = exc
+                else:
+                    removal_error = exc
+
             cleanup = asyncio.create_task(
                 self._cancel_schedule_related(record, source=source),
                 name=f"schedule-cancel-{record.schedule_id}",
@@ -2881,6 +3153,8 @@ class JobManager:
             return True
         finally:
             self._release_lifecycle_admission(claims)
+            for owned_job_id in reversed(owned_job_ids):
+                self._release_job_admission(owned_job_id)
 
     async def _cancel_schedule_related(
         self,
@@ -3082,7 +3356,10 @@ class JobManager:
             )
             result.append(merged)
             matched = await self._schedule_for_job(meta.job_id, index=schedule_index)
-            if matched is not None and "--scheduled--" not in meta.job_id:
+            if matched is not None and self._is_stable_schedule_anchor(
+                meta.job_id,
+                matched,
+            ):
                 represented_schedules.add(matched.schedule_id)
             seen.add(meta.job_id)
 
@@ -3100,7 +3377,10 @@ class JobManager:
                     config_path=Path(record.config_path),
                     index=schedule_index,
                 )
-                if matched is not None and "--scheduled--" not in record.job_id:
+                if matched is not None and self._is_stable_schedule_anchor(
+                    record.job_id,
+                    matched,
+                ):
                     represented_schedules.add(matched.schedule_id)
 
         for schedule_record in schedule_index.records:

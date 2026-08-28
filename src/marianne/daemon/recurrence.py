@@ -30,6 +30,7 @@ CancelTick = Callable[[TimerHandle], bool]
 IsScheduleActive = Callable[[str], bool]
 LifecycleAdmission = Callable[[tuple[str, ...]], None]
 LifecycleProbe = Callable[[tuple[str, ...]], bool]
+LifecycleAuthority = Callable[[ScheduleRecord], None]
 
 
 class RecurrenceController:
@@ -341,30 +342,48 @@ class RecurrenceController:
         self,
         schedule_id: str,
         *,
+        score_path: Path | None = None,
         before_mutation: LifecycleAdmission | None = None,
-    ) -> None:
+        on_authority: LifecycleAuthority | None = None,
+    ) -> ScheduleRecord:
         """Pause one schedule and cancel its pending timer."""
-        async with self._lock_schedules(schedule_id):
+        async with self._lock_current_schedule(schedule_id, score_path) as record:
             if before_mutation is not None:
-                before_mutation((schedule_id,))
-            await self._registry.pause(schedule_id)
-            self._cancel_timer(schedule_id)
+                before_mutation((record.schedule_id,))
+            if on_authority is not None:
+                on_authority(record)
+            await self._registry.pause(record.schedule_id)
+            self._cancel_timer(record.schedule_id)
+            refreshed = await self._registry.get(record.schedule_id)
+            if refreshed is None:
+                raise RuntimeError(
+                    f"Schedule {record.schedule_id!r} disappeared while pausing"
+                )
+            return refreshed
 
     async def resume(
         self,
         schedule_id: str,
         *,
+        score_path: Path | None = None,
         before_mutation: LifecycleAdmission | None = None,
-    ) -> None:
+        on_authority: LifecycleAuthority | None = None,
+    ) -> ScheduleRecord:
         """Resume one schedule and restore its one pending due identity."""
         replacement: tuple[Path, JobConfig] | None = None
-        async with self._lock_schedules(schedule_id):
+        resumed: ScheduleRecord | None = None
+        async with self._lock_current_schedule(schedule_id, score_path) as authority:
             if before_mutation is not None:
-                before_mutation((schedule_id,))
-            await self._registry.resume(schedule_id)
-            record = await self._registry.get(schedule_id)
+                before_mutation((authority.schedule_id,))
+            if on_authority is not None:
+                on_authority(authority)
+            await self._registry.resume(authority.schedule_id)
+            record = await self._registry.get(authority.schedule_id)
             if record is None:
-                return
+                raise RuntimeError(
+                    f"Schedule {authority.schedule_id!r} disappeared while resuming"
+                )
+            resumed = record
             current = self._current_time()
             if record.next_due_at <= current.timestamp():
                 replacement = await self._handle_tick_locked(
@@ -379,18 +398,25 @@ class RecurrenceController:
                 self._arm_record(record, current)
         if replacement is not None:
             await self.register(*replacement, before_mutation=before_mutation)
+        assert resumed is not None
+        return resumed
 
     async def remove(
         self,
         schedule_id: str,
         *,
+        score_path: Path | None = None,
         before_mutation: LifecycleAdmission | None = None,
-    ) -> None:
+        on_authority: LifecycleAuthority | None = None,
+    ) -> ScheduleRecord:
         """Remove one schedule and revoke its pending timer."""
-        async with self._lock_schedules(schedule_id):
+        async with self._lock_current_schedule(schedule_id, score_path) as record:
             if before_mutation is not None:
-                before_mutation((schedule_id,))
-            await self._remove_locked(schedule_id)
+                before_mutation((record.schedule_id,))
+            if on_authority is not None:
+                on_authority(record)
+            await self._remove_locked(record.schedule_id)
+            return record
 
     async def describe(self, schedule_id: str | None = None) -> list[ScheduleRecord]:
         """Return durable schedule projections for later presentation layers."""
@@ -508,6 +534,45 @@ class RecurrenceController:
     def _lifecycle_lock(self, schedule_id: str) -> asyncio.Lock:
         """Return the stable lock serializing one schedule's lifecycle."""
         return self._lifecycle_locks.setdefault(schedule_id, asyncio.Lock())
+
+    @asynccontextmanager
+    async def _lock_current_schedule(
+        self,
+        schedule_id: str,
+        score_path: Path | None,
+    ) -> AsyncIterator[ScheduleRecord]:
+        """Lock the current source-owned identity through one lifecycle mutation."""
+        if score_path is None:
+            async with self._lock_schedules(schedule_id):
+                record = await self._registry.get(schedule_id)
+                if record is None:
+                    raise RuntimeError(f"Schedule {schedule_id!r} does not exist")
+                yield record
+            return
+
+        resolved_path = score_path.resolve(strict=False)
+        async with self._registration_lock:
+            matches = [
+                record
+                for record in await self._registry.list()
+                if record.score_path.resolve(strict=False) == resolved_path
+            ]
+            if len(matches) != 1:
+                raise RuntimeError(
+                    f"Expected one current schedule for source {resolved_path}, "
+                    f"found {len(matches)}"
+                )
+            current = matches[0]
+            async with self._lock_schedules(current.schedule_id):
+                refreshed = await self._registry.get(current.schedule_id)
+                if (
+                    refreshed is None
+                    or refreshed.score_path.resolve(strict=False) != resolved_path
+                ):
+                    raise RuntimeError(
+                        f"Schedule authority changed for source {resolved_path}"
+                    )
+                yield refreshed
 
     @asynccontextmanager
     async def _lock_schedules(

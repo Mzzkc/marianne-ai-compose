@@ -22,6 +22,7 @@ This module implements job status display commands:
 from __future__ import annotations
 
 import asyncio
+import math
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -812,8 +813,16 @@ def _public_schedule(raw: object) -> dict[str, Any] | None:
     if raw is None:
         return None
     try:
-        return ScheduleStatus.model_validate(raw).model_dump(mode="json")
-    except (TypeError, ValueError) as exc:
+        schedule = ScheduleStatus.model_validate(raw).model_dump(mode="json")
+        next_due_at = float(schedule["next_due_at"])
+        if not math.isfinite(next_due_at):
+            raise ValueError("next_due_at must be finite")
+        # Platform timestamp ranges differ. Validate with the same conversion
+        # used by human output so a payload accepted for JSON cannot later
+        # crash Rich rendering on this host.
+        datetime.fromtimestamp(next_due_at)
+        return schedule
+    except (OverflowError, OSError, TypeError, ValueError) as exc:
         _logger.warning(
             "schedule_status_invalid",
             error_type=type(exc).__name__,

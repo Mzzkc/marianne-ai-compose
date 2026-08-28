@@ -14,6 +14,7 @@ import pytest
 from marianne.core.config import JobConfig
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.events import CronTick
+from marianne.daemon.baton.state import SheetExecutionState
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.exceptions import JobSubmissionError
 from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
@@ -36,6 +37,16 @@ class RealLifecycle:
         self.score_path = score_path
         self.workspace = workspace
         self.schedule_id = "Anchor Schedule"
+
+    def replace_schedule_name(self, schedule_id: str) -> None:
+        self.score_path.write_text(
+            f"name: {schedule_id}\n"
+            f"workspace: {self.workspace}\n"
+            "sheet:\n  size: 1\n  total_items: 1\n"
+            "prompt:\n  template: test\n"
+            "schedule:\n  interval: 5m\n",
+            encoding="utf-8",
+        )
 
     def add_meta(self, job_id: str, status: DaemonJobStatus) -> JobMeta:
         meta = JobMeta(
@@ -113,6 +124,75 @@ async def test_anchor_pause_controls_running_scheduled_child(
 
 
 @pytest.mark.asyncio
+async def test_pause_revalidates_completed_identity_replacement_at_mutation(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    life = real_lifecycle
+    lookup_complete = asyncio.Event()
+    release_lifecycle = asyncio.Event()
+    original_lookup = JobManager._schedule_for_job
+
+    async def held_lookup(
+        manager: JobManager,
+        job_id: str,
+        **kwargs: object,
+    ):
+        record = await original_lookup(manager, job_id, **kwargs)  # type: ignore[arg-type]
+        if asyncio.current_task() is pause:
+            lookup_complete.set()
+            await release_lifecycle.wait()
+        return record
+
+    monkeypatch.setattr(JobManager, "_schedule_for_job", held_lookup)
+    pause = asyncio.create_task(life.manager.pause_job(life.score_path.stem))
+    await asyncio.wait_for(lookup_complete.wait(), timeout=1.0)
+    life.replace_schedule_name("Replacement Schedule")
+    replacement = await life.controller.register(life.score_path)
+    assert replacement is not None
+    assert await life.manager._schedule_registry.get(life.schedule_id) is None
+    release_lifecycle.set()
+
+    assert await pause is True
+    current = await life.manager._schedule_registry.get("Replacement Schedule")
+    assert current is not None and current.enabled is False
+
+
+@pytest.mark.asyncio
+async def test_cancel_revalidates_completed_identity_replacement_at_mutation(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    life = real_lifecycle
+    lookup_complete = asyncio.Event()
+    release_lifecycle = asyncio.Event()
+    original_lookup = JobManager._schedule_for_job
+
+    async def held_lookup(
+        manager: JobManager,
+        job_id: str,
+        **kwargs: object,
+    ):
+        record = await original_lookup(manager, job_id, **kwargs)  # type: ignore[arg-type]
+        if asyncio.current_task() is cancel:
+            lookup_complete.set()
+            await release_lifecycle.wait()
+        return record
+
+    monkeypatch.setattr(JobManager, "_schedule_for_job", held_lookup)
+    cancel = asyncio.create_task(life.manager.cancel_job(life.score_path.stem))
+    await asyncio.wait_for(lookup_complete.wait(), timeout=1.0)
+    life.replace_schedule_name("Replacement Schedule")
+    replacement = await life.controller.register(life.score_path)
+    assert replacement is not None
+    assert await life.manager._schedule_registry.get(life.schedule_id) is None
+    release_lifecycle.set()
+
+    assert await cancel is True
+    assert await life.manager._schedule_registry.get("Replacement Schedule") is None
+
+
+@pytest.mark.asyncio
 async def test_anchor_pause_makes_pending_and_queued_children_nondispatchable(
     real_lifecycle: RealLifecycle,
 ) -> None:
@@ -136,6 +216,103 @@ async def test_anchor_pause_makes_pending_and_queued_children_nondispatchable(
     assert queued_task.cancelled()
     assert life.manager._job_meta[pending_id].status is DaemonJobStatus.PAUSED
     assert life.manager._job_meta[queued_id].status is DaemonJobStatus.PAUSED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["pause", "cancel"])
+async def test_pending_activation_owner_rejects_concurrent_lifecycle(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    """A starter owns job and schedule publication before removing PENDING work."""
+    life = real_lifecycle
+    child_id = f"Anchor Schedule--scheduled--starter-first-{operation}"
+    life.add_meta(child_id, DaemonJobStatus.PENDING)
+    life.manager._pending_jobs[child_id] = JobRequest(
+        config_path=life.score_path,
+        job_id=child_id,
+        schedule_id=life.schedule_id,
+        scheduled_due_at=1.0,
+    )
+    life.manager._backpressure.should_accept_job = MagicMock(return_value=True)
+    status_entered = asyncio.Event()
+    release_status = asyncio.Event()
+    original_set_status = life.manager._set_job_status
+
+    async def held_set_status(job_id: str, status: DaemonJobStatus, **kwargs: object) -> None:
+        if asyncio.current_task() is starter and job_id == child_id:
+            status_entered.set()
+            await release_status.wait()
+        await original_set_status(job_id, status, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(life.manager, "_set_job_status", held_set_status)
+    starter = asyncio.create_task(life.manager._start_pending_jobs())
+    await asyncio.wait_for(status_entered.wait(), timeout=1.0)
+
+    try:
+        lifecycle = (
+            life.manager.pause_job(life.schedule_id)
+            if operation == "pause"
+            else life.manager.cancel_job(life.schedule_id)
+        )
+        with pytest.raises(JobSubmissionError, match="already active"):
+            await asyncio.wait_for(lifecycle, timeout=1.0)
+    finally:
+        release_status.set()
+        await starter
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["pause", "cancel"])
+async def test_lifecycle_owner_keeps_pending_activation_nondispatchable(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    """A held lifecycle mutation prevents pending pop, status, and task publication."""
+    life = real_lifecycle
+    child_id = f"Anchor Schedule--scheduled--lifecycle-first-{operation}"
+    request = JobRequest(
+        config_path=life.score_path,
+        job_id=child_id,
+        schedule_id=life.schedule_id,
+        scheduled_due_at=1.0,
+    )
+    life.add_meta(child_id, DaemonJobStatus.PENDING)
+    life.manager._pending_jobs[child_id] = request
+    life.manager._backpressure.should_accept_job = MagicMock(return_value=True)
+    mutation_entered = asyncio.Event()
+    release_mutation = asyncio.Event()
+    registry_operation = "pause" if operation == "pause" else "remove"
+    registry_mutation = getattr(life.manager._schedule_registry, registry_operation)
+
+    async def held_mutation(schedule_id: str) -> None:
+        mutation_entered.set()
+        await release_mutation.wait()
+        await registry_mutation(schedule_id)
+
+    monkeypatch.setattr(
+        life.manager._schedule_registry,
+        registry_operation,
+        held_mutation,
+    )
+    lifecycle = asyncio.create_task(
+        life.manager.pause_job(life.schedule_id)
+        if operation == "pause"
+        else life.manager.cancel_job(life.schedule_id)
+    )
+    await asyncio.wait_for(mutation_entered.wait(), timeout=1.0)
+
+    try:
+        await life.manager._start_pending_jobs()
+
+        assert life.manager._pending_jobs[child_id] is request
+        assert life.manager._job_meta[child_id].status is DaemonJobStatus.PENDING
+        assert child_id not in life.manager._jobs
+    finally:
+        release_mutation.set()
+        await lifecycle
 
 
 @pytest.mark.asyncio
@@ -249,6 +426,116 @@ async def test_cancel_caller_cancellation_finishes_every_child_before_propagatin
 
 
 @pytest.mark.asyncio
+async def test_cancel_owns_swept_child_admission_until_command_returns(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An exact child cannot resume after its recurrence row has been removed."""
+    life = real_lifecycle
+    child_id = "Anchor Schedule--scheduled--swept-before-cancel-return"
+    child = life.add_meta(child_id, DaemonJobStatus.PAUSED)
+    sweep_complete = asyncio.Event()
+    release_cancel = asyncio.Event()
+    original_sweep = life.manager._cancel_schedule_related
+
+    async def held_sweep(record: object, *, source: str) -> None:
+        await original_sweep(record, source=source)  # type: ignore[arg-type]
+        sweep_complete.set()
+        await release_cancel.wait()
+
+    monkeypatch.setattr(life.manager, "_cancel_schedule_related", held_sweep)
+    cancel = asyncio.create_task(life.manager.cancel_job(life.schedule_id))
+    await asyncio.wait_for(sweep_complete.wait(), timeout=1.0)
+    assert await life.manager._schedule_registry.get(life.schedule_id) is None
+    assert child.status is DaemonJobStatus.CANCELLED
+
+    try:
+        with pytest.raises(JobSubmissionError, match="already being submitted"):
+            await life.manager.resume_job(child_id)
+    finally:
+        release_cancel.set()
+        assert await cancel is True
+
+    assert child.status is DaemonJobStatus.CANCELLED
+    assert child_id not in life.manager._jobs
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_exact_child_resume_owner_rejects_concurrent_anchor_cancel(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reverse arrival order rejects cancel before recurrence removal."""
+    life = real_lifecycle
+    child_id = "Anchor Schedule--scheduled--resume-first"
+    life.add_meta(child_id, DaemonJobStatus.PAUSED)
+    resume_entered = asyncio.Event()
+    release_resume = asyncio.Event()
+
+    async def held_resume(
+        _manager: JobManager,
+        job_id: str,
+        **_kwargs: object,
+    ) -> JobResponse:
+        resume_entered.set()
+        await release_resume.wait()
+        return JobResponse(job_id=job_id, status="accepted")
+
+    monkeypatch.setattr(JobManager, "_resume_active_job", held_resume)
+    resume = asyncio.create_task(life.manager.resume_job(child_id))
+    await asyncio.wait_for(resume_entered.wait(), timeout=1.0)
+
+    try:
+        with pytest.raises(JobSubmissionError, match="already active"):
+            await life.manager.cancel_job(life.schedule_id)
+    finally:
+        release_resume.set()
+        assert (await resume).status == "accepted"
+
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.schedule_id in life.controller._timers
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_cancel_child_admission_rejection_releases_its_schedule_claim(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """A pre-mutation child conflict cannot leak cancel's schedule ownership."""
+    life = real_lifecycle
+    child_id = "Anchor Schedule--scheduled--owned-child"
+    life.add_meta(child_id, DaemonJobStatus.PAUSED)
+    owner_ready = asyncio.Event()
+    release_owner = asyncio.Event()
+
+    async def own_child() -> None:
+        assert life.manager._try_reserve_job_admission(child_id, allow_active=True)
+        owner_ready.set()
+        await release_owner.wait()
+        life.manager._release_job_admission(child_id)
+
+    owner = asyncio.create_task(own_child())
+    await asyncio.wait_for(owner_ready.wait(), timeout=1.0)
+
+    with pytest.raises(JobSubmissionError, match="already being submitted"):
+        await life.manager.cancel_job(life.schedule_id)
+
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.schedule_id in life.controller._timers
+    reservation = life.manager._job_admission_reservations[child_id]
+    assert reservation.owner is owner and reservation.depth == 1
+    assert life.manager._schedule_admission_reservations == {}
+    release_owner.set()
+    await owner
+    assert life.manager._job_admission_reservations == {}
+
+
+@pytest.mark.asyncio
 async def test_cancel_remove_failure_leaves_real_recurrence_paused_and_loud(
     real_lifecycle: RealLifecycle,
     monkeypatch: pytest.MonkeyPatch,
@@ -287,6 +574,143 @@ async def test_pause_failure_restores_exact_prior_disabled_state(
 
 
 @pytest.mark.asyncio
+async def test_pause_partial_failure_restores_pending_request_and_status(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """A later RUNNING failure cannot consume earlier pending work."""
+    life = real_lifecycle
+    pending_id = "Anchor Schedule--scheduled--pending-before-failure"
+    running_id = "Anchor Schedule--scheduled--running-failure"
+    pending = life.add_meta(pending_id, DaemonJobStatus.PENDING)
+    life.add_meta(running_id, DaemonJobStatus.RUNNING)
+    request = JobRequest(
+        config_path=life.score_path,
+        job_id=pending_id,
+        schedule_id=life.schedule_id,
+        scheduled_due_at=1.0,
+    )
+    life.manager._pending_jobs[pending_id] = request
+    life.manager._jobs[running_id] = asyncio.create_task(asyncio.Event().wait())
+    life.manager._service.pause_job = AsyncMock(side_effect=RuntimeError("pause failed"))
+
+    with pytest.raises(RuntimeError, match="pause failed"):
+        await life.manager.pause_job(life.schedule_id)
+
+    assert life.manager._pending_jobs[pending_id] is request
+    assert pending.status is DaemonJobStatus.PENDING
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_pause_partial_failure_does_not_cancel_queued_child(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """Fallible running pauses complete before queued work is changed."""
+    life = real_lifecycle
+    queued_id = "Anchor Schedule--scheduled--queued-before-failure"
+    running_id = "Anchor Schedule--scheduled--running-failure"
+    queued = life.add_meta(queued_id, DaemonJobStatus.QUEUED)
+    life.add_meta(running_id, DaemonJobStatus.RUNNING)
+    queued_task = asyncio.create_task(asyncio.Event().wait())
+    life.manager._jobs[queued_id] = queued_task
+    life.manager._jobs[running_id] = asyncio.create_task(asyncio.Event().wait())
+    life.manager._service.pause_job = AsyncMock(side_effect=RuntimeError("pause failed"))
+
+    with pytest.raises(RuntimeError, match="pause failed"):
+        await life.manager.pause_job(life.schedule_id)
+
+    assert life.manager._jobs[queued_id] is queued_task
+    assert not queued_task.done()
+    assert queued.status is DaemonJobStatus.QUEUED
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_pause_partial_failure_clears_earlier_running_pause_request(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """An earlier in-process pause signal is compensated on later failure."""
+    life = real_lifecycle
+    first_id = "Anchor Schedule--scheduled--running-first"
+    second_id = "Anchor Schedule--scheduled--running-failure"
+    life.add_meta(first_id, DaemonJobStatus.RUNNING)
+    life.add_meta(second_id, DaemonJobStatus.RUNNING)
+    first_event = asyncio.Event()
+    life.manager._pause_events[first_id] = first_event
+    life.manager._jobs[first_id] = asyncio.create_task(asyncio.Event().wait())
+    life.manager._jobs[second_id] = asyncio.create_task(asyncio.Event().wait())
+    life.manager._service.pause_job = AsyncMock(side_effect=RuntimeError("pause failed"))
+
+    with pytest.raises(RuntimeError, match="pause failed"):
+        await life.manager.pause_job(life.schedule_id)
+
+    assert not first_event.is_set()
+    assert life.manager._job_meta[first_id].status is DaemonJobStatus.RUNNING
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_pause_partial_failure_restores_baton_gate_and_running_status(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A later child failure compensates an already-paused baton child exactly."""
+    life = real_lifecycle
+    baton_id = "Anchor Schedule--scheduled--baton-first"
+    pending_id = "Anchor Schedule--scheduled--pending-failure"
+    baton_meta = life.add_meta(baton_id, DaemonJobStatus.RUNNING)
+    pending_meta = life.add_meta(pending_id, DaemonJobStatus.PENDING)
+    request = JobRequest(
+        config_path=life.score_path,
+        job_id=pending_id,
+        schedule_id=life.schedule_id,
+        scheduled_due_at=1.0,
+    )
+    life.manager._pending_jobs[pending_id] = request
+    life.manager._baton_adapter = life.adapter
+    life.adapter._baton.register_job(
+        baton_id,
+        {1: SheetExecutionState(sheet_num=1, instrument_name="test")},
+        {},
+    )
+    original_set_status = life.manager._set_job_status
+
+    async def fail_pending(
+        job_id: str,
+        status: DaemonJobStatus,
+        **kwargs: object,
+    ) -> None:
+        if job_id == pending_id and status is DaemonJobStatus.PAUSED:
+            raise RuntimeError("pending pause failed")
+        await original_set_status(job_id, status, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(life.manager, "_set_job_status", fail_pending)
+
+    with pytest.raises(RuntimeError, match="pending pause failed"):
+        await life.manager.pause_job(life.schedule_id)
+
+    baton_state = life.adapter._baton._jobs[baton_id]
+    assert baton_state.paused is False
+    assert baton_state.user_paused is False
+    assert baton_meta.status is DaemonJobStatus.RUNNING
+    assert pending_meta.status is DaemonJobStatus.PENDING
+    assert life.manager._pending_jobs[pending_id] is request
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
 async def test_resume_failure_preserves_exact_prior_enabled_state(
     real_lifecycle: RealLifecycle,
     monkeypatch: pytest.MonkeyPatch,
@@ -305,6 +729,77 @@ async def test_resume_failure_preserves_exact_prior_enabled_state(
     record = await life.manager._schedule_registry.get(life.schedule_id)
     assert record is not None and record.enabled is True
     assert life.schedule_id in life.controller._timers
+
+
+@pytest.mark.asyncio
+async def test_resume_post_enable_controller_failure_restores_disabled_recurrence(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    life = real_lifecycle
+    await life.controller.pause(life.schedule_id)
+    original_get = life.manager._schedule_registry.get
+    injected = False
+
+    async def fail_enabled_suffix(schedule_id: str):  # type: ignore[no-untyped-def]
+        nonlocal injected
+        record = await original_get(schedule_id)
+        if (
+            asyncio.current_task() is resume
+            and record is not None
+            and record.enabled
+            and not injected
+        ):
+            injected = True
+            raise RuntimeError("post-enable suffix failed")
+        return record
+
+    monkeypatch.setattr(life.manager._schedule_registry, "get", fail_enabled_suffix)
+    resume = asyncio.create_task(life.manager.resume_job(life.schedule_id))
+
+    with pytest.raises(RuntimeError, match="post-enable suffix failed"):
+        await resume
+
+    current = await original_get(life.schedule_id)
+    assert current is not None and current.enabled is False
+
+
+@pytest.mark.asyncio
+async def test_resume_cancellation_in_post_enable_suffix_restores_owner_and_state(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    life = real_lifecycle
+    await life.controller.pause(life.schedule_id)
+    suffix_entered = asyncio.Event()
+    release_suffix = asyncio.Event()
+    original_get = life.manager._schedule_registry.get
+
+    async def hold_enabled_suffix(schedule_id: str):  # type: ignore[no-untyped-def]
+        record = await original_get(schedule_id)
+        if (
+            asyncio.current_task() is resume
+            and record is not None
+            and record.enabled
+        ):
+            suffix_entered.set()
+            await release_suffix.wait()
+        return record
+
+    monkeypatch.setattr(life.manager._schedule_registry, "get", hold_enabled_suffix)
+    resume = asyncio.create_task(life.manager.resume_job(life.schedule_id))
+    await asyncio.wait_for(suffix_entered.wait(), timeout=1.0)
+    reservation = life.manager._schedule_admission_reservations[life.schedule_id]
+    assert reservation.owner is resume and reservation.depth == 1
+    resume.cancel()
+    release_suffix.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await resume
+
+    current = await original_get(life.schedule_id)
+    assert current is not None and current.enabled is False
+    assert life.manager._schedule_admission_reservations == {}
 
 
 @pytest.mark.asyncio
@@ -371,6 +866,124 @@ async def test_second_child_resume_failure_repauses_first_and_recurrence(
 
 
 @pytest.mark.asyncio
+async def test_rejected_held_chain_resume_restores_disabled_recurrence(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-accepted child response is a failed schedule transaction."""
+    life = real_lifecycle
+    await life.controller.pause(life.schedule_id)
+    child_id = "Anchor Schedule--scheduled--held-chain"
+    child = life.add_meta(child_id, DaemonJobStatus.PAUSED_AT_CHAIN)
+    child.held_chain_hook = {
+        "job_path": str(life.score_path),
+        "workspace": str(life.workspace),
+    }
+
+    async def reject_resume(
+        _manager: JobManager,
+        job_id: str,
+        **_kwargs: object,
+    ) -> JobResponse:
+        return JobResponse(job_id=job_id, status="rejected", message="chain rejected")
+
+    monkeypatch.setattr(JobManager, "_resume_active_job", reject_resume)
+
+    response = await life.manager.resume_job(life.schedule_id)
+
+    assert response.status == "rejected"
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is False
+    assert child.status is DaemonJobStatus.PAUSED_AT_CHAIN
+
+
+@pytest.mark.asyncio
+async def test_multiple_held_chains_reject_before_any_irreversible_resume(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only one held chain may be released by a schedule-wide command."""
+    life = real_lifecycle
+    await life.controller.pause(life.schedule_id)
+    calls: list[str] = []
+    for suffix in ("first", "second"):
+        child = life.add_meta(
+            f"Anchor Schedule--scheduled--held-{suffix}",
+            DaemonJobStatus.PAUSED_AT_CHAIN,
+        )
+        child.held_chain_hook = {
+            "job_path": str(life.score_path),
+            "workspace": str(life.workspace),
+        }
+
+    async def record_resume(
+        _manager: JobManager,
+        job_id: str,
+        **_kwargs: object,
+    ) -> JobResponse:
+        calls.append(job_id)
+        return JobResponse(job_id=job_id, status="accepted")
+
+    monkeypatch.setattr(JobManager, "_resume_active_job", record_resume)
+
+    response = await life.manager.resume_job(life.schedule_id)
+
+    assert response.status == "rejected"
+    assert calls == []
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is False
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_active_rollback_cannot_skip_recurrence_rollback(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    life = real_lifecycle
+    await life.controller.pause(life.schedule_id)
+    first_id = "Anchor Schedule--scheduled--paused-first"
+    second_id = "Anchor Schedule--scheduled--paused-second"
+    first_meta = life.add_meta(first_id, DaemonJobStatus.PAUSED)
+    life.add_meta(second_id, DaemonJobStatus.PAUSED)
+    rollback_entered = asyncio.Event()
+    release_rollback = asyncio.Event()
+    original_rollback = life.manager._re_pause_resumed_jobs
+
+    async def fail_second_resume(
+        manager: JobManager,
+        job_id: str,
+        **_kwargs: object,
+    ) -> JobResponse:
+        if job_id == second_id:
+            raise RuntimeError("second resume failed")
+        first_meta.status = DaemonJobStatus.QUEUED
+        manager._jobs[job_id] = asyncio.create_task(asyncio.Event().wait())
+        return JobResponse(job_id=job_id, status="accepted")
+
+    async def held_rollback(resumed: object) -> None:
+        rollback_entered.set()
+        await release_rollback.wait()
+        await original_rollback(resumed)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(JobManager, "_resume_active_job", fail_second_resume)
+    monkeypatch.setattr(life.manager, "_re_pause_resumed_jobs", held_rollback)
+    resume = asyncio.create_task(life.manager.resume_job(life.schedule_id))
+    await asyncio.wait_for(rollback_entered.wait(), timeout=1.0)
+    reservation = life.manager._schedule_admission_reservations[life.schedule_id]
+    assert reservation.owner is resume and reservation.depth == 1
+    resume.cancel()
+    release_rollback.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await resume
+
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is False
+    assert first_meta.status is DaemonJobStatus.PAUSED
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
 async def test_schedule_only_status_and_list_survive_anchor_clear(
     real_lifecycle: RealLifecycle,
 ) -> None:
@@ -401,6 +1014,24 @@ async def test_schedule_only_status_and_list_survive_anchor_clear(
     }
     anchor = next(job for job in jobs if job["job_id"] == life.schedule_id)
     assert anchor["status"] == "scheduled"
+
+
+@pytest.mark.asyncio
+async def test_exact_schedule_id_with_child_marker_is_still_one_stable_anchor(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """Anchor visibility uses durable identity, never a child-ID substring."""
+    life = real_lifecycle
+    replacement_id = "Stable--scheduled--Anchor"
+    life.replace_schedule_name(replacement_id)
+    replacement = await life.controller.register(life.score_path)
+    assert replacement is not None
+    life.schedule_id = replacement_id
+    life.add_meta(replacement_id, DaemonJobStatus.COMPLETED)
+
+    jobs = await life.manager.list_jobs()
+
+    assert [job["job_id"] for job in jobs].count(replacement_id) == 1
 
 
 @pytest.mark.asyncio
@@ -592,10 +1223,11 @@ async def test_probe_race_is_closed_by_inside_lock_admission(
     life = real_lifecycle
     register_after_probe = asyncio.Event()
     release_register = asyncio.Event()
-    pause_action_entered = asyncio.Event()
-    release_pause_action = asyncio.Event()
+    publication_entered = asyncio.Event()
+    release_publication = asyncio.Event()
+    release_job = asyncio.Event()
     original_lock = life.controller._lock_schedules
-    original_pause_related = life.manager._pause_related_job
+    original_register_job = life.manager._registry.register_job
 
     @asynccontextmanager
     async def held_lock(*schedule_ids: str):  # type: ignore[no-untyped-def]
@@ -606,17 +1238,21 @@ async def test_probe_race_is_closed_by_inside_lock_admission(
         async with original_lock(*schedule_ids):
             yield
 
-    async def held_pause_related(meta: JobMeta) -> None:
-        pause_action_entered.set()
-        await release_pause_action.wait()
-        await original_pause_related(meta)
+    async def held_register_job(*args: object, **kwargs: object) -> None:
+        publication_entered.set()
+        await release_publication.wait()
+        await original_register_job(*args, **kwargs)  # type: ignore[arg-type]
+
+    async def hold_execution(*_args: object, **_kwargs: object) -> None:
+        await release_job.wait()
 
     child_id = "Anchor Schedule--scheduled--running"
     life.add_meta(child_id, DaemonJobStatus.RUNNING)
     life.manager._jobs[child_id] = asyncio.create_task(asyncio.Event().wait())
     life.manager._pause_events[child_id] = asyncio.Event()
     monkeypatch.setattr(life.controller, "_lock_schedules", held_lock)
-    monkeypatch.setattr(life.manager, "_pause_related_job", held_pause_related)
+    monkeypatch.setattr(life.manager._registry, "register_job", held_register_job)
+    monkeypatch.setattr(life.manager, "_run_job_task", hold_execution)
 
     submit = asyncio.create_task(
         life.manager.submit_job(JobRequest(config_path=life.score_path, fresh=True)),
@@ -624,16 +1260,31 @@ async def test_probe_race_is_closed_by_inside_lock_admission(
     )
     await asyncio.wait_for(register_after_probe.wait(), timeout=1.0)
     assert life.manager._schedule_admission_reservations == {}
-    pause = asyncio.create_task(life.manager.pause_job(life.schedule_id))
-    await asyncio.wait_for(pause_action_entered.wait(), timeout=1.0)
+    raced_pause = asyncio.create_task(life.manager.pause_job(life.schedule_id))
     release_register.set()
+    await asyncio.wait_for(publication_entered.wait(), timeout=1.0)
+
+    try:
+        with pytest.raises(JobSubmissionError, match="already active"):
+            await asyncio.wait_for(raced_pause, timeout=1.0)
+        reservation = life.manager._schedule_admission_reservations[life.schedule_id]
+        assert reservation.owner is submit and reservation.depth == 1
+    finally:
+        release_publication.set()
+
     submitted = await submit
-    assert submitted.status == "rejected"
-    reservation = life.manager._schedule_admission_reservations[life.schedule_id]
-    assert reservation.owner is pause
-    assert reservation.depth == 1
-    release_pause_action.set()
-    assert await pause is True
+    assert submitted.status == "accepted"
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+    assert await life.manager.pause_job(life.schedule_id) is True
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is False
+    assert life.manager._pause_events[child_id].is_set()
+    assert life.manager._job_meta[submitted.job_id].status is DaemonJobStatus.PAUSED
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+    release_job.set()
 
 
 @pytest.mark.asyncio

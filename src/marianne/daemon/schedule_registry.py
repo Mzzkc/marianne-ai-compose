@@ -213,21 +213,29 @@ class ScheduleRegistry:
         await self._set_enabled(schedule_id, enabled=True)
 
     async def _set_enabled(self, schedule_id: str, *, enabled: bool) -> None:
-        await self._execute_mutation(
+        cursor = await self._execute_mutation(
             "set enabled state",
             "UPDATE schedules SET enabled = ?, updated_at = ? WHERE schedule_id = ?",
             (int(enabled), time.time(), schedule_id),
             schedule_id=schedule_id,
         )
+        if cursor.rowcount != 1:
+            raise ScheduleRegistryError(
+                f"Schedule {schedule_id!r} does not exist for enabled-state mutation"
+            )
 
     async def remove(self, schedule_id: str) -> None:
         """Remove a registration and all of its durable lease state."""
-        await self._execute_mutation(
+        cursor = await self._execute_mutation(
             "remove",
             "DELETE FROM schedules WHERE schedule_id = ?",
             (schedule_id,),
             schedule_id=schedule_id,
         )
+        if cursor.rowcount != 1:
+            raise ScheduleRegistryError(
+                f"Schedule {schedule_id!r} does not exist for removal"
+            )
 
     async def claim_due(
         self,

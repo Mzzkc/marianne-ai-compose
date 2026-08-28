@@ -57,29 +57,69 @@ class FakeRecurrenceController:
         record = self.records.get(schedule_id)
         return [] if record is None else [record]
 
-    async def pause(self, schedule_id: str, *, before_mutation: Any = None) -> None:
+    async def pause(
+        self,
+        schedule_id: str,
+        *,
+        score_path: Path | None = None,
+        before_mutation: Any = None,
+        on_authority: Any = None,
+    ) -> SimpleNamespace:
+        _ = score_path
         if before_mutation is not None:
             before_mutation((schedule_id,))
+        record = self.records[schedule_id]
+        if on_authority is not None:
+            on_authority(record)
         self.calls.append(("pause", schedule_id))
         if "pause" in self.fail:
             raise RuntimeError("pause failed")
-        self.records[schedule_id].enabled = False
+        updated = SimpleNamespace(**vars(record))
+        updated.enabled = False
+        self.records[schedule_id] = updated
+        return updated
 
-    async def resume(self, schedule_id: str, *, before_mutation: Any = None) -> None:
+    async def resume(
+        self,
+        schedule_id: str,
+        *,
+        score_path: Path | None = None,
+        before_mutation: Any = None,
+        on_authority: Any = None,
+    ) -> SimpleNamespace:
+        _ = score_path
         if before_mutation is not None:
             before_mutation((schedule_id,))
+        record = self.records[schedule_id]
+        if on_authority is not None:
+            on_authority(record)
         self.calls.append(("resume", schedule_id))
         if "resume" in self.fail:
             raise RuntimeError("resume failed")
-        self.records[schedule_id].enabled = True
+        updated = SimpleNamespace(**vars(record))
+        updated.enabled = True
+        self.records[schedule_id] = updated
+        return updated
 
-    async def remove(self, schedule_id: str, *, before_mutation: Any = None) -> None:
+    async def remove(
+        self,
+        schedule_id: str,
+        *,
+        score_path: Path | None = None,
+        before_mutation: Any = None,
+        on_authority: Any = None,
+    ) -> SimpleNamespace:
+        _ = score_path
         if before_mutation is not None:
             before_mutation((schedule_id,))
+        record = self.records[schedule_id]
+        if on_authority is not None:
+            on_authority(record)
         self.calls.append(("remove", schedule_id))
         if "remove" in self.fail:
             raise RuntimeError("remove failed")
         self.records.pop(schedule_id, None)
+        return record
 
 
 @pytest.fixture

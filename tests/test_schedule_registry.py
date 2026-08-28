@@ -11,7 +11,7 @@ import pytest
 
 from marianne.core.config import ScheduleConfig
 from marianne.daemon.registry import JobRegistry
-from marianne.daemon.schedule_registry import ScheduleRegistry
+from marianne.daemon.schedule_registry import ScheduleRegistry, ScheduleRegistryError
 
 
 @pytest.fixture
@@ -169,6 +169,18 @@ async def test_remove_deletes_registration(registry: ScheduleRegistry) -> None:
 
     assert await registry.get("weekday-report") is None
     assert await registry.list() == []
+
+
+@pytest.mark.parametrize("operation", ["pause", "resume", "remove"])
+async def test_missing_lifecycle_mutation_is_loud(
+    registry: ScheduleRegistry,
+    operation: str,
+) -> None:
+    """A stale lifecycle identity can never report a zero-row mutation as success."""
+    mutate = getattr(registry, operation)
+
+    with pytest.raises(ScheduleRegistryError, match="does not exist"):
+        await mutate("replaced-schedule")
 
 
 async def test_list_orders_by_stable_schedule_id(registry: ScheduleRegistry) -> None:

@@ -180,3 +180,43 @@ async def test_meta_fallback_omits_malformed_schedule_with_diagnostic(
     assert "[recurring]" not in rendered
     assert "lease_digest" not in rendered
     warning.assert_called_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("next_due_at", "json_output"),
+    [
+        (float("nan"), True),
+        (float("inf"), False),
+        (1e300, True),
+        (1e300, False),
+    ],
+)
+async def test_meta_fallback_omits_unrenderable_schedule_due_time(
+    monkeypatch: pytest.MonkeyPatch,
+    next_due_at: float,
+    json_output: bool,
+) -> None:
+    """Malformed epochs never leak non-JSON numbers or crash Rich rendering."""
+    payload = {
+        "job_id": "recurring-job",
+        "status": "scheduled",
+        "config_path": "/scores/recurring.yaml",
+        "schedule": {**_schedule_payload(), "next_due_at": next_due_at},
+    }
+    warning = MagicMock()
+    monkeypatch.setattr(status_module._logger, "warning", warning)
+    monkeypatch.setattr(
+        "marianne.daemon.detect.try_daemon_route",
+        AsyncMock(return_value=(True, payload)),
+    )
+
+    with console.capture() as capture:
+        await _status_job("recurring-job", json_output, None)
+
+    rendered = capture.get()
+    if json_output:
+        assert "schedule" not in json.loads(rendered)
+    else:
+        assert "[recurring]" not in rendered
+    warning.assert_called_once()
