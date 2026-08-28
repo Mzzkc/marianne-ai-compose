@@ -397,6 +397,14 @@ async def _cleanup_worktree_isolation(
         )
 
 
+@dataclass
+class _JobAdmissionReservation:
+    """One task's reentrant ownership of a job-ID activation boundary."""
+
+    owner: asyncio.Task[Any]
+    depth: int = 1
+
+
 class JobManager:
     """Manages concurrent job execution within the daemon.
 
@@ -428,7 +436,7 @@ class JobManager:
         self._job_meta: dict[str, JobMeta] = {}
         # Admission is reserved synchronously before recurrence I/O so a
         # rejected same-ID request cannot publish autonomous work.
-        self._job_admission_reservations: dict[str, int] = {}
+        self._job_admission_reservations: dict[str, _JobAdmissionReservation] = {}
         # Manual scheduled submissions reserve their score-name lineage before
         # recurrence arms a timer and release it only after JobMeta is visible.
         self._schedule_lineage_reservations: dict[str, int] = {}
@@ -1255,12 +1263,28 @@ class JobManager:
                 workspace=str(meta.workspace),
             )
 
-            try:
-                # Create a resume task that will run via the baton
-                task = asyncio.create_task(
-                    self._resume_job_task(job_id, meta.workspace),
-                    name=f"job-recover-{job_id}",
+            if not self._try_reserve_job_admission(job_id):
+                _logger.info(
+                    "baton.orphan_recovery_admission_conflict",
+                    job_id=job_id,
                 )
+                continue
+
+            try:
+                # Publish active status while admission is still owned. The
+                # recovery task may wait at the concurrency gate, but same-ID
+                # submissions must already reject before recurrence mutation.
+                await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
+                resume_coro = self._resume_job_task(job_id, meta.workspace)
+                try:
+                    task = asyncio.create_task(
+                        resume_coro,
+                        name=f"job-recover-{job_id}",
+                    )
+                except Exception:
+                    resume_coro.close()
+                    await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
+                    raise
                 self._jobs[job_id] = task
 
                 def _on_done(
@@ -1278,6 +1302,8 @@ class JobManager:
                     job_id=job_id,
                     exc_info=True,
                 )
+            finally:
+                self._release_job_admission(job_id)
 
         if recovered:
             _logger.info(
@@ -1310,6 +1336,17 @@ class JobManager:
 
     def _try_reserve_job_admission(self, job_id: str) -> bool:
         """Reserve one job ID before any recurrence projection is published."""
+        current_task = asyncio.current_task()
+        if current_task is None:
+            raise RuntimeError("job admission requires a running asyncio task")
+
+        reservation = self._job_admission_reservations.get(job_id)
+        if reservation is not None:
+            if reservation.owner is not current_task:
+                return False
+            reservation.depth += 1
+            return True
+
         existing = self._job_meta.get(job_id)
         if existing is not None and existing.status in {
             DaemonJobStatus.PENDING,
@@ -1317,20 +1354,20 @@ class JobManager:
             DaemonJobStatus.RUNNING,
         }:
             return False
-        if self._job_admission_reservations.get(job_id, 0) > 0:
-            return False
-        self._job_admission_reservations[job_id] = (
-            self._job_admission_reservations.get(job_id, 0) + 1
+        self._job_admission_reservations[job_id] = _JobAdmissionReservation(
+            owner=current_task,
         )
         return True
 
     def _release_job_admission(self, job_id: str) -> None:
         """Release one counted job-ID reservation without disturbing peers."""
-        remaining = self._job_admission_reservations.get(job_id, 0) - 1
-        if remaining > 0:
-            self._job_admission_reservations[job_id] = remaining
-        else:
-            self._job_admission_reservations.pop(job_id, None)
+        reservation = self._job_admission_reservations.get(job_id)
+        current_task = asyncio.current_task()
+        if reservation is None or reservation.owner is not current_task:
+            raise RuntimeError(f"job admission for '{job_id}' released by non-owner")
+        reservation.depth -= 1
+        if reservation.depth == 0:
+            self._job_admission_reservations.pop(job_id)
 
     def _reserve_schedule_lineage(self, schedule_id: str) -> None:
         """Publish one pending manual run before its schedule timer is armed."""
@@ -2161,8 +2198,14 @@ class JobManager:
                 _logger.info("job.resume_cancelled_stale_task", job_id=job_id)
                 try:
                     await old_task
-                except (asyncio.CancelledError, Exception):
-                    pass  # Expected — the task was cancelled or may have errored
+                except asyncio.CancelledError:
+                    current_task = asyncio.current_task()
+                    if current_task is not None and current_task.cancelling():
+                        raise
+                    # Expected: the stale child completed its requested
+                    # cancellation while the resume caller remains live.
+                except Exception:
+                    pass  # Expected — the stale task may already have errored
 
             # Apply new config path before creating the task (task reads
             # meta.config_path).

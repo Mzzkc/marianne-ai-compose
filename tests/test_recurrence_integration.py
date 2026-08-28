@@ -624,6 +624,108 @@ async def test_resume_admission_blocks_concurrent_scheduled_submit(
         await adapter.shutdown()
 
 
+async def test_orphan_recovery_publishes_active_before_scheduled_submit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A gate-waiting recovered orphan rejects recurrence before mutation."""
+    state_db = tmp_path / "conductor-state.db"
+    score_path = tmp_path / "recovered.yaml"
+    workspace = tmp_path / "workspace"
+    score_path.write_text(
+        "name: Recovered Schedule\n"
+        f"workspace: {workspace}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 1\n"
+        "prompt:\n"
+        "  template: Continue recovered work.\n"
+        "schedule:\n"
+        "  interval: 5m\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(
+        DaemonConfig(
+            max_concurrent_jobs=1,
+            pid_file=tmp_path / "daemon.pid",
+            state_db_path=state_db,
+        )
+    )
+    await manager._registry.open()
+    await manager._schedule_registry.open()
+    await manager._registry.register_job("recovered", score_path, workspace)
+    await manager._registry.update_status(
+        "recovered",
+        DaemonJobStatus.PAUSED.value,
+    )
+    manager._job_meta["recovered"] = JobMeta(
+        job_id="recovered",
+        config_path=score_path,
+        workspace=workspace,
+        status=DaemonJobStatus.PAUSED,
+    )
+    adapter = BatonAdapter()
+    manager._baton_adapter = adapter
+    controller = RecurrenceController(
+        manager._schedule_registry,
+        manager.submit_job,
+        adapter.schedule_cron_tick,
+        adapter.cancel_cron_tick,
+        manager._is_schedule_active,
+        now=lambda: datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
+    )
+    manager._recurrence_controller = controller
+    gate_entered = asyncio.Event()
+    release_gate = asyncio.Event()
+    release_recovery = asyncio.Event()
+    release_submission = asyncio.Event()
+    original_acquire = manager._concurrency_semaphore.acquire
+
+    async def hold_gate() -> None:
+        gate_entered.set()
+        await release_gate.wait()
+        await original_acquire()
+
+    async def hold_recovery(*_args: object, **_kwargs: object) -> DaemonJobStatus:
+        await release_recovery.wait()
+        return DaemonJobStatus.PAUSED
+
+    async def hold_submission(*_args: object, **_kwargs: object) -> None:
+        await release_submission.wait()
+
+    monkeypatch.setattr(manager._concurrency_semaphore, "acquire", hold_gate)
+    monkeypatch.setattr(manager, "_resume_via_baton", hold_recovery)
+    monkeypatch.setattr(manager, "_run_job_task", hold_submission)
+
+    orphan_task: asyncio.Task[object] | None = None
+    submitted_task: asyncio.Task[object] | None = None
+    try:
+        await manager._recover_baton_orphans()
+        orphan_task = manager._jobs.get("recovered")
+        await asyncio.wait_for(gate_entered.wait(), timeout=1.0)
+        assert manager._job_meta["recovered"].status is DaemonJobStatus.QUEUED
+        assert manager._job_admission_reservations == {}
+
+        submitted = await manager.submit_job(JobRequest(config_path=score_path))
+        current_task = manager._jobs.get("recovered")
+        if current_task is not orphan_task:
+            submitted_task = current_task
+
+        assert submitted.status == "rejected"
+        assert await manager._schedule_registry.get("Recovered Schedule") is None
+        assert "Recovered Schedule" not in controller._timers
+    finally:
+        release_gate.set()
+        release_recovery.set()
+        release_submission.set()
+        if orphan_task is not None:
+            await asyncio.gather(orphan_task, return_exceptions=True)
+        if submitted_task is not None:
+            await asyncio.gather(submitted_task, return_exceptions=True)
+        await manager.shutdown(graceful=False)
+        await adapter.shutdown()
+
+
 async def test_manager_submits_due_child_and_restart_restores_one_timer(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

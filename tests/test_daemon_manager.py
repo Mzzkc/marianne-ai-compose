@@ -933,6 +933,116 @@ class TestResumeJob:
         with pytest.raises(JobSubmissionError, match="completed"):
             await manager.resume_job("job-done")
 
+    @pytest.mark.asyncio
+    async def test_cancelling_resume_during_stale_task_wait_propagates(
+        self,
+        manager: JobManager,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Caller cancellation cannot queue a resume after cancelling stale work."""
+        job_id = "job-paused"
+        config_path = tmp_path / "job-paused.yaml"
+        workspace = tmp_path / "workspace"
+        await manager._registry.register_job(job_id, config_path, workspace)
+        await manager._registry.update_status(job_id, DaemonJobStatus.PAUSED.value)
+        manager._job_meta[job_id] = JobMeta(
+            job_id=job_id,
+            config_path=config_path,
+            workspace=workspace,
+            status=DaemonJobStatus.PAUSED,
+        )
+        stale_started = asyncio.Event()
+        stale_cancelled = asyncio.Event()
+        release_stale = asyncio.Event()
+        later_execution_entered = asyncio.Event()
+        release_later_execution = asyncio.Event()
+
+        async def stale_task() -> None:
+            stale_started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                stale_cancelled.set()
+                await release_stale.wait()
+                raise
+
+        async def hold_later_execution(*_args: object, **_kwargs: object) -> None:
+            later_execution_entered.set()
+            await release_later_execution.wait()
+
+        monkeypatch.setattr(manager, "_resume_job_task", hold_later_execution)
+        old_task = asyncio.create_task(stale_task())
+        manager._jobs[job_id] = old_task
+        await asyncio.wait_for(stale_started.wait(), timeout=1.0)
+
+        resume_task = asyncio.create_task(manager.resume_job(job_id))
+        later_task: asyncio.Task[object] | None = None
+        try:
+            await asyncio.wait_for(stale_cancelled.wait(), timeout=1.0)
+            resume_task.cancel()
+
+            with pytest.raises(asyncio.CancelledError):
+                await resume_task
+
+            assert manager._job_meta[job_id].status is DaemonJobStatus.PAUSED
+            assert job_id not in manager._jobs
+            assert manager._job_admission_reservations == {}
+
+            later_response = await manager.resume_job(job_id)
+            later_task = manager._jobs.get(job_id)
+            await asyncio.wait_for(later_execution_entered.wait(), timeout=1.0)
+            assert later_response.status == "accepted"
+        finally:
+            release_stale.set()
+            release_later_execution.set()
+            if not resume_task.done():
+                resume_task.cancel()
+            await asyncio.gather(resume_task, old_task, return_exceptions=True)
+            if later_task is not None:
+                await asyncio.gather(later_task, return_exceptions=True)
+
+
+class TestRecoverBatonOrphans:
+    """Startup orphan activation remains rollback-safe."""
+
+    @pytest.mark.asyncio
+    async def test_task_creation_failure_restores_paused_and_releases_admission(
+        self,
+        manager: JobManager,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        job_id = "recovered"
+        config_path = tmp_path / "recovered.yaml"
+        workspace = tmp_path / "workspace"
+        await manager._registry.register_job(job_id, config_path, workspace)
+        await manager._registry.update_status(job_id, DaemonJobStatus.PAUSED.value)
+        manager._job_meta[job_id] = JobMeta(
+            job_id=job_id,
+            config_path=config_path,
+            workspace=workspace,
+            status=DaemonJobStatus.PAUSED,
+        )
+        manager._baton_adapter = MagicMock()
+
+        def fail_task_creation(coro: object, **_kwargs: object) -> None:
+            close = getattr(coro, "close", None)
+            if close is not None:
+                close()
+            raise RuntimeError("task creation failed")
+
+        monkeypatch.setattr(asyncio, "create_task", fail_task_creation)
+
+        await manager._recover_baton_orphans()
+
+        record = await manager._registry.get_job(job_id)
+        assert manager._job_meta[job_id].status is DaemonJobStatus.PAUSED
+        assert record is not None
+        assert record.status is DaemonJobStatus.PAUSED
+        assert job_id not in manager._jobs
+        assert manager._job_admission_reservations == {}
+
 
 # ─── Job History Pruning ──────────────────────────────────────────────
 
