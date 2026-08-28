@@ -14,7 +14,8 @@ from marianne.core.config import JobConfig
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.events import CronTick
 from marianne.daemon.config import DaemonConfig
-from marianne.daemon.manager import DaemonJobStatus, JobManager
+from marianne.daemon.exceptions import JobSubmissionError
+from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 from marianne.daemon.recurrence import RecurrenceController
 from marianne.daemon.schedule_registry import ScheduleRecord, ScheduleRegistry
 from marianne.daemon.types import JobRequest, JobResponse
@@ -419,6 +420,206 @@ async def test_concurrent_same_job_id_loser_cannot_replace_recurrence(
         release_jobs.set()
         if not first_task.done():
             await first_task
+        await manager.shutdown(graceful=False)
+        await adapter.shutdown()
+
+
+async def test_scheduled_submit_admission_blocks_concurrent_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A terminal job cannot resume through an admitted scheduled submit."""
+    state_db = tmp_path / "conductor-state.db"
+    score_path = tmp_path / "shared.yaml"
+    workspace = tmp_path / "workspace"
+    score_path.write_text(
+        "name: Shared Resume Schedule\n"
+        f"workspace: {workspace}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 1\n"
+        "prompt:\n"
+        "  template: Submission owns activation.\n"
+        "schedule:\n"
+        "  interval: 5m\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(
+        DaemonConfig(
+            max_concurrent_jobs=2,
+            pid_file=tmp_path / "daemon.pid",
+            state_db_path=state_db,
+        )
+    )
+    await manager._registry.open()
+    await manager._schedule_registry.open()
+    await manager._registry.register_job("shared", score_path, workspace)
+    await manager._registry.update_status("shared", DaemonJobStatus.FAILED)
+    manager._job_meta["shared"] = JobMeta(
+        job_id="shared",
+        config_path=score_path,
+        workspace=workspace,
+        status=DaemonJobStatus.FAILED,
+    )
+    adapter = BatonAdapter()
+    controller = RecurrenceController(
+        manager._schedule_registry,
+        manager.submit_job,
+        adapter.schedule_cron_tick,
+        adapter.cancel_cron_tick,
+        manager._is_schedule_active,
+        now=lambda: datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
+    )
+    manager._recurrence_controller = controller
+    recurrence_published = asyncio.Event()
+    release_submission = asyncio.Event()
+    release_jobs = asyncio.Event()
+    original_register = controller.register
+
+    async def hold_after_recurrence_publication(
+        path: Path,
+        config: JobConfig | None = None,
+    ) -> ScheduleRecord | None:
+        record = await original_register(path, config)
+        recurrence_published.set()
+        await release_submission.wait()
+        return record
+
+    async def hold_execution(*_args: object, **_kwargs: object) -> None:
+        await release_jobs.wait()
+
+    monkeypatch.setattr(controller, "register", hold_after_recurrence_publication)
+    monkeypatch.setattr(manager, "_run_job_task", hold_execution)
+    monkeypatch.setattr(manager, "_resume_job_task", hold_execution)
+
+    submit_task = asyncio.create_task(
+        manager.submit_job(JobRequest(config_path=score_path))
+    )
+    try:
+        await asyncio.wait_for(recurrence_published.wait(), timeout=1.0)
+        resume_error: JobSubmissionError | None = None
+        try:
+            await manager.resume_job("shared")
+        except JobSubmissionError as exc:
+            resume_error = exc
+        status_while_submit_owned = manager._job_meta["shared"].status
+
+        release_submission.set()
+        submitted = await submit_task
+
+        assert isinstance(resume_error, JobSubmissionError)
+        assert "being submitted" in str(resume_error)
+        assert status_while_submit_owned is DaemonJobStatus.FAILED
+        assert submitted.status == "accepted"
+        record = await manager._schedule_registry.get("Shared Resume Schedule")
+        assert record is not None
+        assert "Shared Resume Schedule" in controller._timers
+    finally:
+        release_submission.set()
+        release_jobs.set()
+        if not submit_task.done():
+            await submit_task
+        await manager.shutdown(graceful=False)
+        await adapter.shutdown()
+
+
+async def test_resume_admission_blocks_concurrent_scheduled_submit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A scheduled submit cannot publish recurrence through an owned resume."""
+    state_db = tmp_path / "conductor-state.db"
+    score_path = tmp_path / "shared.yaml"
+    workspace = tmp_path / "workspace"
+    score_path.write_text(
+        "name: Rejected During Resume\n"
+        f"workspace: {workspace}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 1\n"
+        "prompt:\n"
+        "  template: Resume owns activation.\n"
+        "schedule:\n"
+        "  interval: 5m\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(
+        DaemonConfig(
+            max_concurrent_jobs=2,
+            pid_file=tmp_path / "daemon.pid",
+            state_db_path=state_db,
+        )
+    )
+    await manager._registry.open()
+    await manager._schedule_registry.open()
+    await manager._registry.register_job("shared", score_path, workspace)
+    await manager._registry.update_status("shared", DaemonJobStatus.FAILED)
+    manager._job_meta["shared"] = JobMeta(
+        job_id="shared",
+        config_path=score_path,
+        workspace=workspace,
+        status=DaemonJobStatus.FAILED,
+    )
+    adapter = BatonAdapter()
+    controller = RecurrenceController(
+        manager._schedule_registry,
+        manager.submit_job,
+        adapter.schedule_cron_tick,
+        adapter.cancel_cron_tick,
+        manager._is_schedule_active,
+        now=lambda: datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
+    )
+    manager._recurrence_controller = controller
+    stale_started = asyncio.Event()
+    stale_cancelled = asyncio.Event()
+    release_stale = asyncio.Event()
+    release_jobs = asyncio.Event()
+
+    async def stale_task() -> None:
+        stale_started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            stale_cancelled.set()
+            await release_stale.wait()
+            raise
+
+    async def hold_execution(*_args: object, **_kwargs: object) -> None:
+        await release_jobs.wait()
+
+    monkeypatch.setattr(manager, "_run_job_task", hold_execution)
+    monkeypatch.setattr(manager, "_resume_job_task", hold_execution)
+    old_task = asyncio.create_task(stale_task())
+    manager._jobs["shared"] = old_task
+    await asyncio.wait_for(stale_started.wait(), timeout=1.0)
+
+    resume_task = asyncio.create_task(manager.resume_job("shared"))
+    submitted_execution: asyncio.Task[object] | None = None
+    try:
+        await asyncio.wait_for(stale_cancelled.wait(), timeout=1.0)
+
+        submitted = await manager.submit_job(JobRequest(config_path=score_path))
+        if submitted.status == "accepted":
+            submitted_execution = manager._jobs.get("shared")
+        record_while_resume_owned = await manager._schedule_registry.get(
+            "Rejected During Resume"
+        )
+
+        release_stale.set()
+        resumed = await resume_task
+
+        assert resumed.status == "accepted"
+        assert submitted.status == "rejected"
+        assert record_while_resume_owned is None
+        assert "Rejected During Resume" not in controller._timers
+    finally:
+        release_stale.set()
+        release_jobs.set()
+        if not resume_task.done():
+            await resume_task
+        await asyncio.gather(old_task, return_exceptions=True)
+        if submitted_execution is not None:
+            await asyncio.gather(submitted_execution, return_exceptions=True)
         await manager.shutdown(graceful=False)
         await adapter.shutdown()
 

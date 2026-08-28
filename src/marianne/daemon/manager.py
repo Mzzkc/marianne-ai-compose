@@ -2132,56 +2132,68 @@ class JobManager:
                 "only PAUSED, PAUSED_AT_CHAIN, FAILED, or CANCELLED scores can be resumed"
             )
 
-        # Capture the pre-resume status NOW, before the QUEUED/RUNNING
-        # transitions below overwrite it. The resume task's intrinsic recovery
-        # (#185) keys off this to decide whether to reset failed/cascade-skipped
-        # sheets (FAILED/CANCELLED) or preserve terminal sheets (PAUSED).
-        pre_resume_status = meta.status
+        # Own this terminal -> active transition before any awaited resume I/O.
+        # Scheduled submission acquires the same synchronous reservation before
+        # recurrence publication, preserving recurrence lifecycle -> manager
+        # admission as the only cross-subsystem lock direction.
+        if not self._try_reserve_job_admission(job_id):
+            raise JobSubmissionError(f"Score '{job_id}' is already being submitted")
 
-        # PAUSED_AT_CHAIN: trigger the held chain instead of normal resume
-        if meta.status == DaemonJobStatus.PAUSED_AT_CHAIN and meta.held_chain_hook:
-            return await self._resume_held_chain(job_id, meta)
+        try:
+            # Capture the pre-resume status NOW, before the QUEUED/RUNNING
+            # transitions below overwrite it. The resume task's intrinsic recovery
+            # (#185) keys off this to decide whether to reset failed/cascade-skipped
+            # sheets (FAILED/CANCELLED) or preserve terminal sheets (PAUSED).
+            pre_resume_status = meta.status
 
-        # Cancel stale task and WAIT for it to finish before creating the
-        # new resume task. Without the await, the old task's CancelledError
-        # handler races with the new task's recover_job() and can deregister
-        # the freshly-recovered baton state.
-        old_task = self._jobs.pop(job_id, None)
-        if old_task is not None and not old_task.done():
-            old_task.cancel(msg=f"stale task replaced by resume of {job_id}")
-            _logger.info("job.resume_cancelled_stale_task", job_id=job_id)
-            try:
-                await old_task
-            except (asyncio.CancelledError, Exception):
-                pass  # Expected — the task was cancelled or may have errored
+            # PAUSED_AT_CHAIN: trigger the held chain instead of normal resume.
+            # Keep admission ownership through every submission and rollback path.
+            if meta.status == DaemonJobStatus.PAUSED_AT_CHAIN and meta.held_chain_hook:
+                return await self._resume_held_chain(job_id, meta)
 
-        # Apply new config path before creating the task (task reads meta.config_path)
-        if config_path is not None:
-            meta.config_path = config_path
+            # Cancel stale task and WAIT for it to finish before creating the
+            # new resume task. Without the await, the old task's CancelledError
+            # handler races with the new task's recover_job() and can deregister
+            # the freshly-recovered baton state.
+            old_task = self._jobs.pop(job_id, None)
+            if old_task is not None and not old_task.done():
+                old_task.cancel(msg=f"stale task replaced by resume of {job_id}")
+                _logger.info("job.resume_cancelled_stale_task", job_id=job_id)
+                try:
+                    await old_task
+                except (asyncio.CancelledError, Exception):
+                    pass  # Expected — the task was cancelled or may have errored
 
-        ws = workspace or meta.workspace
-        await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
+            # Apply new config path before creating the task (task reads
+            # meta.config_path).
+            if config_path is not None:
+                meta.config_path = config_path
 
-        task = asyncio.create_task(
-            self._resume_job_task(
-                job_id,
-                ws,
-                no_reload=no_reload,
-                pre_resume_status=pre_resume_status,
-                from_sheet=from_sheet,
-                escalation=escalation,
-                self_healing=self_healing,
-            ),
-            name=f"job-resume-{job_id}",
-        )
-        self._jobs[job_id] = task
-        task.add_done_callback(lambda t: self._on_task_done(job_id, t))
+            ws = workspace or meta.workspace
+            await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
 
-        return JobResponse(
-            job_id=job_id,
-            status="accepted",
-            message="Job resume queued",
-        )
+            task = asyncio.create_task(
+                self._resume_job_task(
+                    job_id,
+                    ws,
+                    no_reload=no_reload,
+                    pre_resume_status=pre_resume_status,
+                    from_sheet=from_sheet,
+                    escalation=escalation,
+                    self_healing=self_healing,
+                ),
+                name=f"job-resume-{job_id}",
+            )
+            self._jobs[job_id] = task
+            task.add_done_callback(lambda t: self._on_task_done(job_id, t))
+
+            return JobResponse(
+                job_id=job_id,
+                status="accepted",
+                message="Job resume queued",
+            )
+        finally:
+            self._release_job_admission(job_id)
 
     async def _resume_held_chain(
         self,
