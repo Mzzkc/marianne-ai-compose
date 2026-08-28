@@ -240,6 +240,189 @@ async def test_manual_registration_reserves_lineage_before_metadata_publish(
         await manager.shutdown(graceful=False)
 
 
+async def test_active_unscheduled_duplicate_cannot_publish_schedule(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rejected scheduled request cannot create future autonomous work."""
+    state_db = tmp_path / "conductor-state.db"
+    active_path = tmp_path / "active" / "shared.yaml"
+    scheduled_path = tmp_path / "scheduled" / "shared.yaml"
+    active_path.parent.mkdir()
+    scheduled_path.parent.mkdir()
+    active_path.write_text(
+        "name: Active Manual Job\n"
+        f"workspace: {tmp_path / 'active-workspace'}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 1\n"
+        "prompt:\n"
+        "  template: Stay active.\n",
+        encoding="utf-8",
+    )
+    scheduled_path.write_text(
+        "name: Rejected Schedule\n"
+        f"workspace: {tmp_path / 'scheduled-workspace'}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 1\n"
+        "prompt:\n"
+        "  template: Must not recur.\n"
+        "schedule:\n"
+        "  interval: 5m\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(
+        DaemonConfig(
+            max_concurrent_jobs=2,
+            pid_file=tmp_path / "daemon.pid",
+            state_db_path=state_db,
+        )
+    )
+    await manager._registry.open()
+    await manager._schedule_registry.open()
+    adapter = BatonAdapter()
+    controller = RecurrenceController(
+        manager._schedule_registry,
+        manager.submit_job,
+        adapter.schedule_cron_tick,
+        adapter.cancel_cron_tick,
+        manager._is_schedule_active,
+        now=lambda: datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
+    )
+    manager._recurrence_controller = controller
+    active_started = asyncio.Event()
+    release_active = asyncio.Event()
+
+    async def hold_execution(_job_id: str, _request: JobRequest) -> None:
+        active_started.set()
+        await release_active.wait()
+
+    monkeypatch.setattr(manager, "_run_job_task", hold_execution)
+
+    try:
+        accepted = await manager.submit_job(JobRequest(config_path=active_path))
+        assert accepted.status == "accepted"
+        await asyncio.wait_for(active_started.wait(), timeout=1.0)
+
+        rejected = await manager.submit_job(JobRequest(config_path=scheduled_path))
+
+        assert rejected.status == "rejected"
+        assert await manager._schedule_registry.get("Rejected Schedule") is None
+        assert "Rejected Schedule" not in controller._timers
+    finally:
+        release_active.set()
+        await manager.shutdown(graceful=False)
+        await adapter.shutdown()
+
+
+async def test_concurrent_same_job_id_loser_cannot_replace_recurrence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The first admitted request owns recurrence before JobMeta publication."""
+    state_db = tmp_path / "conductor-state.db"
+    first_path = tmp_path / "first" / "shared.yaml"
+    second_path = tmp_path / "second" / "shared.yaml"
+    first_path.parent.mkdir()
+    second_path.parent.mkdir()
+    first_path.write_text(
+        "name: Shared Schedule\n"
+        f"workspace: {tmp_path / 'first-workspace'}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 1\n"
+        "prompt:\n"
+        "  template: First request.\n"
+        "schedule:\n"
+        "  interval: 5m\n",
+        encoding="utf-8",
+    )
+    second_path.write_text(
+        "name: Shared Schedule\n"
+        f"workspace: {tmp_path / 'second-workspace'}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 1\n"
+        "prompt:\n"
+        "  template: Losing request.\n"
+        "schedule:\n"
+        "  interval: 10m\n",
+        encoding="utf-8",
+    )
+    manager = JobManager(
+        DaemonConfig(
+            max_concurrent_jobs=2,
+            pid_file=tmp_path / "daemon.pid",
+            state_db_path=state_db,
+        )
+    )
+    await manager._registry.open()
+    await manager._schedule_registry.open()
+    adapter = BatonAdapter()
+    controller = RecurrenceController(
+        manager._schedule_registry,
+        manager.submit_job,
+        adapter.schedule_cron_tick,
+        adapter.cancel_cron_tick,
+        manager._is_schedule_active,
+        now=lambda: datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
+    )
+    manager._recurrence_controller = controller
+    first_published = asyncio.Event()
+    release_first = asyncio.Event()
+    release_jobs = asyncio.Event()
+    original_register = controller.register
+
+    async def hold_first_after_publication(
+        score_path: Path,
+        config: JobConfig | None = None,
+    ) -> ScheduleRecord | None:
+        record = await original_register(score_path, config)
+        if score_path == first_path:
+            first_published.set()
+            await release_first.wait()
+        return record
+
+    async def hold_execution(_job_id: str, _request: JobRequest) -> None:
+        await release_jobs.wait()
+
+    monkeypatch.setattr(controller, "register", hold_first_after_publication)
+    monkeypatch.setattr(manager, "_run_job_task", hold_execution)
+
+    first_task = asyncio.create_task(
+        manager.submit_job(JobRequest(config_path=first_path))
+    )
+    try:
+        await asyncio.wait_for(first_published.wait(), timeout=1.0)
+        before = await manager._schedule_registry.get("Shared Schedule")
+        assert before is not None
+        first_handle = controller._timers["Shared Schedule"][1]
+
+        second = await asyncio.wait_for(
+            manager.submit_job(JobRequest(config_path=second_path)),
+            timeout=1.0,
+        )
+        after = await manager._schedule_registry.get("Shared Schedule")
+        assert after is not None
+        release_first.set()
+        first = await first_task
+
+        assert first.status == "accepted"
+        assert second.status == "rejected"
+        assert after.score_path == before.score_path == first_path.resolve()
+        assert after.schedule_json == before.schedule_json
+        assert after.source_digest == before.source_digest
+        assert controller._timers["Shared Schedule"][1] is first_handle
+    finally:
+        release_first.set()
+        release_jobs.set()
+        if not first_task.done():
+            await first_task
+        await manager.shutdown(graceful=False)
+        await adapter.shutdown()
+
+
 async def test_manager_submits_due_child_and_restart_restores_one_timer(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
