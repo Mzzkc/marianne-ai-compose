@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import random
 from collections.abc import AsyncIterator
@@ -422,3 +423,151 @@ async def test_jitter_is_bounded_and_lifecycle_cancels_handles(
     shutdown_handle = effects.scheduled[-1][2]
     await controller.shutdown()
     assert shutdown_handle in effects.cancelled
+
+
+async def test_register_waits_for_inflight_tick_before_replacing_projection(
+    registry: ScheduleRegistry,
+    tmp_path: Path,
+) -> None:
+    """An old claimed tick cannot overwrite a concurrent source replacement."""
+    score_path = tmp_path / "report.yaml"
+    old_config = _write_score(score_path, schedule={"interval": "5m"})
+    clock = _Clock(datetime(2026, 8, 28, 12, 0, tzinfo=UTC))
+    effects = _Effects()
+    submit_entered = asyncio.Event()
+    release_submit = asyncio.Event()
+
+    async def held_submit(request: JobRequest) -> JobResponse:
+        effects.requests.append(request)
+        submit_entered.set()
+        await release_submit.wait()
+        assert request.job_id is not None
+        return JobResponse(job_id=request.job_id, status="accepted")
+
+    controller = RecurrenceController(
+        registry,
+        held_submit,
+        effects.schedule,
+        effects.cancel,
+        effects.is_active,
+        now=clock,
+    )
+    await controller.register(score_path, old_config)
+    _, old_tick, _ = effects.scheduled[-1]
+    clock.value += timedelta(minutes=5)
+    tick_task = asyncio.create_task(controller.handle_tick(old_tick))
+    await asyncio.wait_for(submit_entered.wait(), timeout=1.0)
+
+    new_config = _write_score(score_path, schedule={"interval": "10m"})
+    register_task = asyncio.create_task(controller.register(score_path, new_config))
+    try:
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(register_task), timeout=0.1)
+    finally:
+        release_submit.set()
+        await tick_task
+        await register_task
+
+    record = await registry.get("weekday-report")
+    assert record is not None
+    assert '"interval":"10m"' in record.schedule_json
+    assert record.next_due_at == datetime(2026, 8, 28, 12, 15, tzinfo=UTC).timestamp()
+    assert effects.scheduled[-1][1].due_at == record.next_due_at
+
+
+async def test_pause_waits_for_inflight_tick_then_revokes_rearm(
+    registry: ScheduleRegistry,
+    tmp_path: Path,
+) -> None:
+    """A tick in submission cannot re-arm after a concurrent pause returns."""
+    score_path = tmp_path / "report.yaml"
+    config = _write_score(score_path, schedule={"interval": "5m"})
+    clock = _Clock(datetime(2026, 8, 28, 12, 0, tzinfo=UTC))
+    effects = _Effects()
+    submit_entered = asyncio.Event()
+    release_submit = asyncio.Event()
+
+    async def held_submit(request: JobRequest) -> JobResponse:
+        effects.requests.append(request)
+        submit_entered.set()
+        await release_submit.wait()
+        assert request.job_id is not None
+        return JobResponse(job_id=request.job_id, status="accepted")
+
+    controller = RecurrenceController(
+        registry,
+        held_submit,
+        effects.schedule,
+        effects.cancel,
+        effects.is_active,
+        now=clock,
+    )
+    await controller.register(score_path, config)
+    _, tick, _ = effects.scheduled[-1]
+    clock.value += timedelta(minutes=5)
+    tick_task = asyncio.create_task(controller.handle_tick(tick))
+    await asyncio.wait_for(submit_entered.wait(), timeout=1.0)
+
+    pause_task = asyncio.create_task(controller.pause("weekday-report"))
+    try:
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(pause_task), timeout=0.1)
+    finally:
+        release_submit.set()
+        await tick_task
+        await pause_task
+
+    record = await registry.get("weekday-report")
+    assert record is not None
+    assert record.enabled is False
+    assert "weekday-report" not in controller._timers
+
+
+async def test_load_score_parses_the_exact_stable_snapshot_during_aba_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A→B→A path contents cannot pair config B with snapshot A's digest."""
+    score_path = tmp_path / "aba-score.yaml"
+    snapshot_a = yaml.safe_dump(
+        {
+            "name": "snapshot-a",
+            "workspace": "relative-a",
+            "sheet": {"size": 1, "total_items": 1},
+            "prompt": {"template": "Snapshot A."},
+            "schedule": {"interval": "5m"},
+        },
+        sort_keys=False,
+    ).encode()
+    score_path.write_text(
+        yaml.safe_dump(
+            {
+                "name": "snapshot-b",
+                "workspace": "relative-b",
+                "sheet": {"size": 1, "total_items": 1},
+                "prompt": {"template": "Snapshot B."},
+                "schedule": {"interval": "10m"},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    original_read_bytes = Path.read_bytes
+    snapshot_reads = 0
+
+    def read_snapshot(path: Path) -> bytes:
+        nonlocal snapshot_reads
+        if path == score_path:
+            snapshot_reads += 1
+            return snapshot_a
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", read_snapshot)
+
+    config, digest = await RecurrenceController._load_score(score_path)
+
+    assert snapshot_reads == 2
+    assert config.name == "snapshot-a"
+    assert config.workspace == (tmp_path / "relative-a").resolve()
+    assert config.schedule is not None and config.schedule.interval == "5m"
+    assert digest == hashlib.sha256(snapshot_a).hexdigest()

@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
+from marianne.core.config import JobConfig
+from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.events import CronTick
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.manager import DaemonJobStatus, JobManager
+from marianne.daemon.recurrence import RecurrenceController
 from marianne.daemon.schedule_registry import ScheduleRecord, ScheduleRegistry
 from marianne.daemon.types import JobRequest, JobResponse
 
@@ -52,6 +56,188 @@ def _write_scheduled_score(path: Path, workspace: Path) -> None:
         "  interval: 5m\n",
         encoding="utf-8",
     )
+
+
+async def test_overdue_latest_waits_for_orphan_interactive_sweep(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Startup cannot dispatch a catch-up run before orphan sessions are swept."""
+    state_db = tmp_path / "conductor-state.db"
+    score_path = tmp_path / "overdue-score.yaml"
+    score_path.write_text(
+        "name: Overdue Report\n"
+        f"workspace: {tmp_path / 'workspace'}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 1\n"
+        "prompt:\n"
+        "  template: Write the overdue report.\n"
+        "schedule:\n"
+        "  interval: 5m\n"
+        "  misfire: latest\n",
+        encoding="utf-8",
+    )
+    config = JobConfig.from_yaml(score_path)
+    assert config.schedule is not None
+    registry = ScheduleRegistry(state_db)
+    await registry.open()
+    due_at = (datetime.now(tz=UTC) - timedelta(minutes=5)).timestamp()
+    await registry.upsert(
+        config.name,
+        config.name,
+        score_path.resolve(),
+        config.schedule,
+        hashlib.sha256(score_path.read_bytes()).hexdigest(),
+        due_at,
+    )
+    await registry.close()
+
+    daemon_config = DaemonConfig(
+        max_concurrent_jobs=2,
+        pid_file=tmp_path / "daemon.pid",
+        state_db_path=state_db,
+    )
+    manager = JobManager(daemon_config)
+    sweep_entered = asyncio.Event()
+    release_sweep = asyncio.Event()
+    sweep_finished = asyncio.Event()
+    submit_called = asyncio.Event()
+    submitted_after_sweep: list[bool] = []
+
+    async def held_sweep() -> None:
+        sweep_entered.set()
+        await release_sweep.wait()
+        sweep_finished.set()
+
+    async def record_submission(request: JobRequest) -> JobResponse:
+        submitted_after_sweep.append(sweep_finished.is_set())
+        submit_called.set()
+        assert request.job_id is not None
+        return JobResponse(job_id=request.job_id, status="accepted")
+
+    monkeypatch.setattr(manager, "_sweep_orphan_interactive_sessions", held_sweep)
+    monkeypatch.setattr(manager, "submit_job", record_submission)
+
+    start_task = asyncio.create_task(manager.start())
+    try:
+        await asyncio.wait_for(sweep_entered.wait(), timeout=1.0)
+        assert submit_called.is_set() is False
+        release_sweep.set()
+        await start_task
+        await asyncio.wait_for(submit_called.wait(), timeout=1.0)
+        assert submitted_after_sweep == [True]
+    finally:
+        release_sweep.set()
+        if not start_task.done():
+            await start_task
+        await manager.shutdown(graceful=False)
+
+
+async def test_manual_registration_reserves_lineage_before_metadata_publish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An armed sub-second due sees the pending manual run as active lineage."""
+    state_db = tmp_path / "conductor-state.db"
+    score_path = tmp_path / "reserved-score.yaml"
+    score_path.write_text(
+        "name: Reserved Report\n"
+        f"workspace: {tmp_path / 'workspace'}\n"
+        "sheet:\n"
+        "  size: 1\n"
+        "  total_items: 1\n"
+        "prompt:\n"
+        "  template: Write the reserved report.\n"
+        "schedule:\n"
+        "  interval: 0.25s\n",
+        encoding="utf-8",
+    )
+    daemon_config = DaemonConfig(
+        max_concurrent_jobs=2,
+        pid_file=tmp_path / "daemon.pid",
+        state_db_path=state_db,
+    )
+    manager = JobManager(daemon_config)
+    await manager._registry.open()
+    await manager._schedule_registry.open()
+    adapter = BatonAdapter()
+    start = datetime(2026, 8, 28, 12, 0, tzinfo=UTC)
+    current = start
+    scheduled_submit_entered = asyncio.Event()
+    metadata_window = asyncio.Event()
+    release_metadata = asyncio.Event()
+    release_jobs = asyncio.Event()
+    original_submit = manager.submit_job
+    original_register_job = manager._registry.register_job
+
+    async def tracked_submit(request: JobRequest) -> JobResponse:
+        scheduled_submit_entered.set()
+        return await original_submit(request)
+
+    async def held_register_job(
+        job_id: str,
+        config_path: Path,
+        workspace: Path,
+        log_path: Path | None = None,
+    ) -> None:
+        metadata_window.set()
+        await release_metadata.wait()
+        await original_register_job(
+            job_id,
+            config_path,
+            workspace,
+            log_path=log_path,
+        )
+
+    async def hold_execution(_job_id: str, _request: JobRequest) -> None:
+        await release_jobs.wait()
+
+    controller = RecurrenceController(
+        manager._schedule_registry,
+        tracked_submit,
+        adapter.schedule_cron_tick,
+        adapter.cancel_cron_tick,
+        manager._is_schedule_active,
+        now=lambda: current,
+    )
+    manager._recurrence_controller = controller
+    monkeypatch.setattr(manager._registry, "register_job", held_register_job)
+    monkeypatch.setattr(manager, "_run_job_task", hold_execution)
+
+    manual_task = asyncio.create_task(
+        original_submit(JobRequest(config_path=score_path))
+    )
+    tick_task: asyncio.Task[None] | None = None
+    submit_wait: asyncio.Task[bool] | None = None
+    try:
+        await asyncio.wait_for(metadata_window.wait(), timeout=1.0)
+        _due_at, handle = next(iter(controller._timers.values()))
+        assert isinstance(handle.event, CronTick)
+        current = datetime.fromtimestamp(handle.event.due_at or 0.0, tz=UTC)
+        tick_task = asyncio.create_task(controller.handle_tick(handle.event))
+        submit_wait = asyncio.create_task(scheduled_submit_entered.wait())
+        done, _pending = await asyncio.wait(
+            {tick_task, submit_wait},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        assert tick_task in done
+        assert scheduled_submit_entered.is_set() is False
+        assert manager._is_schedule_active("Reserved Report") is True
+        record = await manager._schedule_registry.get("Reserved Report")
+        assert record is not None
+        assert record.last_outcome == "overlap_skipped"
+    finally:
+        release_metadata.set()
+        release_jobs.set()
+        if submit_wait is not None and not submit_wait.done():
+            submit_wait.cancel()
+            await asyncio.gather(submit_wait, return_exceptions=True)
+        await manual_task
+        if tick_task is not None:
+            await tick_task
+        await manager.shutdown(graceful=False)
 
 
 async def test_manager_submits_due_child_and_restart_restores_one_timer(

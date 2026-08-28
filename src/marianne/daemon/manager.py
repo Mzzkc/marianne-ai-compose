@@ -426,6 +426,9 @@ class JobManager:
         self._service: JobService | None = None
         self._jobs: dict[str, asyncio.Task[Any]] = {}
         self._job_meta: dict[str, JobMeta] = {}
+        # Manual scheduled submissions reserve their score-name lineage before
+        # recurrence arms a timer and release it only after JobMeta is visible.
+        self._schedule_lineage_reservations: dict[str, int] = {}
         # Live CheckpointState per running job — populated by
         # _PublishingBackend on every state_backend.save() so the
         # conductor can serve status from memory, not disk.
@@ -734,7 +737,6 @@ class JobManager:
             name="baton-loop",
         )
         _logger.info("manager.baton_adapter_started")
-        await recurrence_controller.restore()
 
         # Interactive-mode hygiene: tmux sessions survive a daemon crash
         # (the tmux server is not our child). Nothing has dispatched yet,
@@ -742,6 +744,10 @@ class JobManager:
         # previous daemon life — kill them. Best-effort: a sweep failure
         # must never block conductor startup.
         await self._sweep_orphan_interactive_sessions()
+
+        # Restore recurring work only after stale interactive sessions are
+        # gone. An overdue latest-policy tick may submit immediately.
+        await recurrence_controller.restore()
 
         # Recover paused orphans through the baton.
         await self._recover_baton_orphans()
@@ -1287,6 +1293,8 @@ class JobManager:
 
     def _is_schedule_active(self, schedule_id: str) -> bool:
         """Return whether any queued or running job belongs to this schedule."""
+        if self._schedule_lineage_reservations.get(schedule_id, 0) > 0:
+            return True
         active_statuses = {
             DaemonJobStatus.PENDING,
             DaemonJobStatus.QUEUED,
@@ -1296,6 +1304,20 @@ class JobManager:
             meta.schedule_id == schedule_id and meta.status in active_statuses
             for meta in self._job_meta.values()
         )
+
+    def _reserve_schedule_lineage(self, schedule_id: str) -> None:
+        """Publish one pending manual run before its schedule timer is armed."""
+        self._schedule_lineage_reservations[schedule_id] = (
+            self._schedule_lineage_reservations.get(schedule_id, 0) + 1
+        )
+
+    def _release_schedule_lineage(self, schedule_id: str) -> None:
+        """Release one pending manual reservation without disturbing peers."""
+        remaining = self._schedule_lineage_reservations.get(schedule_id, 0) - 1
+        if remaining > 0:
+            self._schedule_lineage_reservations[schedule_id] = remaining
+        else:
+            self._schedule_lineage_reservations.pop(schedule_id, None)
 
     def _ensure_workspace_log_path(self, workspace: Path) -> Path | None:
         """Expose the daemon log through the score workspace when configured."""
@@ -1469,83 +1491,112 @@ class JobManager:
                 ),
             )
 
-        # Serialize only the duplicate-check → register → insert window
-        # to prevent TOCTOU races between concurrent submissions.
-        async with self._id_gen_lock:
-            # Reject if a job with this name is already active
-            existing = self._job_meta.get(job_id)
-            if existing and existing.status in (DaemonJobStatus.QUEUED, DaemonJobStatus.RUNNING):
-                return JobResponse(
-                    job_id=job_id,
-                    status="rejected",
-                    message=(
-                        f"Job '{job_id}' is already {existing.status.value}. "
-                        "Use 'mzt pause' or 'mzt cancel' first, or wait for it to finish."
-                    ),
-                )
-
-            # Auto-detect changed score file on re-run (#103).
-            # When a COMPLETED job exists and --fresh wasn't set, check
-            # if the score file was modified after the last run completed.
-            if not request.fresh:
-                record = await self._registry.get_job(job_id)
-                if (
-                    record is not None
-                    and record.status == DaemonJobStatus.COMPLETED
-                    and _should_auto_fresh(request.config_path, record.completed_at)
-                ):
-                    request = request.model_copy(update={"fresh": True})
-                    _logger.info(
-                        "auto_fresh.score_changed",
-                        job_id=job_id,
-                        config_path=str(request.config_path),
-                        message="Score file modified since last completed run — starting fresh",
-                    )
-
-            # A manual submission refreshes the source-owned schedule before
-            # its immediate run. Scheduled children carry a durable due
-            # identity and must not recursively reset that projection.
-            if (
-                request.scheduled_due_at is None
-                and parsed_config is not None
-                and self._recurrence_controller is not None
-            ):
-                await self._recurrence_controller.register(
+        # A manual submission refreshes the source-owned schedule before its
+        # immediate run. This lifecycle lock must be acquired before the
+        # manager ID lock; scheduled children skip registration, preserving
+        # that one-way lock order.
+        reservation_id: str | None = None
+        if (
+            request.scheduled_due_at is None
+            and parsed_config is not None
+            and self._recurrence_controller is not None
+        ):
+            if parsed_config.schedule is not None:
+                reservation_id = parsed_config.name
+                self._reserve_schedule_lineage(reservation_id)
+            try:
+                registered_schedule = await self._recurrence_controller.register(
                     request.config_path,
                     parsed_config,
                 )
-                if parsed_config.schedule is not None:
-                    request = request.model_copy(
-                        update={"schedule_id": parsed_config.name},
+            except BaseException:
+                if reservation_id is not None:
+                    self._release_schedule_lineage(reservation_id)
+                raise
+            if registered_schedule is None:
+                if reservation_id is not None:
+                    self._release_schedule_lineage(reservation_id)
+                reservation_id = None
+            else:
+                if registered_schedule.schedule_id != reservation_id:
+                    self._reserve_schedule_lineage(registered_schedule.schedule_id)
+                    if reservation_id is not None:
+                        self._release_schedule_lineage(reservation_id)
+                    reservation_id = registered_schedule.schedule_id
+                request = request.model_copy(
+                    update={"schedule_id": registered_schedule.schedule_id},
+                )
+
+        try:
+            # Serialize only the duplicate-check → insert window to prevent
+            # TOCTOU races between concurrent submissions.
+            async with self._id_gen_lock:
+                # Reject if a job with this name is already active
+                existing = self._job_meta.get(job_id)
+                if existing and existing.status in (
+                    DaemonJobStatus.QUEUED,
+                    DaemonJobStatus.RUNNING,
+                ):
+                    return JobResponse(
+                        job_id=job_id,
+                        status="rejected",
+                        message=(
+                            f"Job '{job_id}' is already {existing.status.value}. "
+                            "Use 'mzt pause' or 'mzt cancel' first, or wait for it to finish."
+                        ),
                     )
 
-            meta = JobMeta(
-                job_id=job_id,
-                config_path=request.config_path,
-                workspace=workspace,
-                chain_depth=request.chain_depth,
-                schedule_id=request.schedule_id,
-                hook_config=hook_config_list,
-                concert_config=concert_config_dict,
-            )
-            # Register in DB first — if this fails, no phantom in-memory entry
-            log_path = self._ensure_workspace_log_path(workspace)
-            await self._registry.register_job(
-                job_id,
-                request.config_path,
-                workspace,
-                log_path=log_path,
-            )
-            self._job_meta[job_id] = meta
+                # Auto-detect changed score file on re-run (#103).
+                # When a COMPLETED job exists and --fresh wasn't set, check
+                # if the score file was modified after the last run completed.
+                if not request.fresh:
+                    record = await self._registry.get_job(job_id)
+                    if (
+                        record is not None
+                        and record.status == DaemonJobStatus.COMPLETED
+                        and _should_auto_fresh(request.config_path, record.completed_at)
+                    ):
+                        request = request.model_copy(update={"fresh": True})
+                        _logger.info(
+                            "auto_fresh.score_changed",
+                            job_id=job_id,
+                            config_path=str(request.config_path),
+                            message=(
+                                "Score file modified since last completed run — "
+                                "starting fresh"
+                            ),
+                        )
 
-            # Persist hook config to registry for restart resilience
-            if hook_config_list:
-                import json
-
-                await self._registry.store_hook_config(
-                    job_id,
-                    json.dumps(hook_config_list),
+                meta = JobMeta(
+                    job_id=job_id,
+                    config_path=request.config_path,
+                    workspace=workspace,
+                    chain_depth=request.chain_depth,
+                    schedule_id=request.schedule_id,
+                    hook_config=hook_config_list,
+                    concert_config=concert_config_dict,
                 )
+                # Register in DB first — if this fails, no phantom in-memory entry
+                log_path = self._ensure_workspace_log_path(workspace)
+                await self._registry.register_job(
+                    job_id,
+                    request.config_path,
+                    workspace,
+                    log_path=log_path,
+                )
+                self._job_meta[job_id] = meta
+
+                # Persist hook config to registry for restart resilience
+                if hook_config_list:
+                    import json
+
+                    await self._registry.store_hook_config(
+                        job_id,
+                        json.dumps(hook_config_list),
+                    )
+        finally:
+            if reservation_id is not None:
+                self._release_schedule_lineage(reservation_id)
 
         try:
             task = asyncio.create_task(
