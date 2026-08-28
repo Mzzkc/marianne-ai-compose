@@ -2344,6 +2344,18 @@ class JobManager:
         if meta.status is DaemonJobStatus.RUNNING:
             await self._pause_active_job(meta.job_id)
 
+    async def _re_pause_resumed_jobs(self, resumed: Sequence[JobMeta]) -> None:
+        """Best-effort rollback for a partially resumed schedule lifecycle."""
+        first_error: Exception | None = None
+        for meta in reversed(resumed):
+            try:
+                await self._pause_related_job(meta)
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+        if first_error is not None:
+            raise first_error
+
     async def pause_job(self, job_id: str) -> bool:
         """Pause recurring ticks and any currently running work."""
         record = await JobManager._schedule_for_job(self, job_id)
@@ -2516,6 +2528,7 @@ class JobManager:
                     )
                 try:
                     response: JobResponse | None = None
+                    resumed_meta: list[JobMeta] = []
                     for resumable_meta in resumable:
                         is_requested = resumable_meta.job_id == job_id
                         response = await JobManager._resume_active_job(
@@ -2528,9 +2541,25 @@ class JobManager:
                             escalation=escalation if is_requested else False,
                             self_healing=self_healing if is_requested else False,
                         )
+                        resumed_meta.append(resumable_meta)
                     assert response is not None
                     return response
                 except BaseException as exc:
+                    active_rollback_error: BaseException | None = None
+                    if resumed_meta:
+                        rollback_task = asyncio.create_task(
+                            self._re_pause_resumed_jobs(resumed_meta),
+                            name=f"schedule-resume-rollback-{schedule_id}",
+                        )
+                        try:
+                            await asyncio.shield(rollback_task)
+                        except asyncio.CancelledError:
+                            await rollback_task
+                            if not isinstance(exc, asyncio.CancelledError):
+                                raise
+                        except BaseException as rollback_exc:
+                            active_rollback_error = rollback_exc
+                    recurrence_rollback_error: BaseException | None = None
                     if transitioned:
                         try:
                             await controller.pause(
@@ -2538,10 +2567,25 @@ class JobManager:
                                 before_mutation=claim,
                             )
                         except BaseException as rollback_exc:
-                            raise RuntimeError(
-                                f"Failed to resume active job {job_id!r}; recurrence "
-                                f"rollback also failed: {rollback_exc}"
-                            ) from exc
+                            recurrence_rollback_error = rollback_exc
+                    if (
+                        active_rollback_error is not None
+                        or recurrence_rollback_error is not None
+                    ):
+                        details: list[str] = []
+                        if active_rollback_error is not None:
+                            details.append(
+                                f"active rollback failed: {active_rollback_error}"
+                            )
+                        if recurrence_rollback_error is not None:
+                            details.append(
+                                "recurrence rollback failed: "
+                                f"{recurrence_rollback_error}"
+                            )
+                        raise RuntimeError(
+                            f"Failed to resume active job {job_id!r}; "
+                            + "; ".join(details)
+                        ) from exc
                     raise
             finally:
                 self._release_schedule_lineage(schedule_id)

@@ -336,6 +336,41 @@ async def test_anchor_resume_skips_historical_failed_child_but_resumes_paused_ch
 
 
 @pytest.mark.asyncio
+async def test_second_child_resume_failure_repauses_first_and_recurrence(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    life = real_lifecycle
+    await life.controller.pause(life.schedule_id)
+    first_id = "Anchor Schedule--scheduled--paused-first"
+    second_id = "Anchor Schedule--scheduled--paused-second"
+    first_meta = life.add_meta(first_id, DaemonJobStatus.PAUSED)
+    life.add_meta(second_id, DaemonJobStatus.PAUSED)
+
+    async def fail_second_resume(
+        manager: JobManager,
+        job_id: str,
+        **_kwargs: object,
+    ) -> JobResponse:
+        if job_id == second_id:
+            raise RuntimeError("second resume failed")
+        first_meta.status = DaemonJobStatus.QUEUED
+        manager._jobs[job_id] = asyncio.create_task(asyncio.Event().wait())
+        return JobResponse(job_id=job_id, status="accepted")
+
+    monkeypatch.setattr(JobManager, "_resume_active_job", fail_second_resume)
+
+    with pytest.raises(RuntimeError, match="second resume failed"):
+        await life.manager.resume_job(life.schedule_id)
+
+    first_task = life.manager._jobs.get(first_id)
+    assert first_task is None or first_task.cancelled()
+    assert first_meta.status is DaemonJobStatus.PAUSED
+    record = await life.manager._schedule_registry.get(life.schedule_id)
+    assert record is not None and record.enabled is False
+
+
+@pytest.mark.asyncio
 async def test_schedule_only_status_and_list_survive_anchor_clear(
     real_lifecycle: RealLifecycle,
 ) -> None:
