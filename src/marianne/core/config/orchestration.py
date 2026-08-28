@@ -6,7 +6,6 @@ notifications, and post-success hooks.
 
 from __future__ import annotations
 
-import re
 from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Literal
@@ -15,6 +14,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 # croniter does not publish PEP 561 type information.
 from croniter import croniter  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from marianne.core.scheduling import parse_interval_seconds
 
 
 class MisfirePolicy(str, Enum):
@@ -53,9 +54,7 @@ class ScheduleConfig(BaseModel):
         ):
             raise ValueError("Schedule cron must be a valid five-field expression")
         if self.interval is not None:
-            match = re.fullmatch(r"[0-9]+(?:\.[0-9]+)?[smhd]", self.interval)
-            if match is None or float(self.interval[:-1]) <= 0:
-                raise ValueError("Schedule interval must be a positive s/m/h/d duration")
+            parse_interval_seconds(self.interval)
         if self.timezone is not None:
             try:
                 ZoneInfo(self.timezone)

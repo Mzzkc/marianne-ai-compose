@@ -75,6 +75,13 @@ def test_schedule_rejects_non_positive_or_malformed_intervals(interval: str) -> 
         ScheduleConfig(interval=interval)
 
 
+@pytest.mark.parametrize("interval", ["0.0000001s", "9" * 400 + "s"])
+def test_schedule_rejects_unrepresentable_intervals(interval: str) -> None:
+    """Schedule declarations must resolve to finite, non-zero datetimes."""
+    with pytest.raises(ValidationError, match="representable"):
+        ScheduleConfig(interval=interval)
+
+
 def test_job_config_keeps_old_score_serialization_schedule_free() -> None:
     """Scores without a declaration preserve their compact legacy dump."""
     score = JobConfig.model_validate(_minimal_score())

@@ -56,6 +56,13 @@ def test_parse_interval_seconds_rejects_invalid_units_and_values(value: str) -> 
         parse_interval_seconds(value)
 
 
+@pytest.mark.parametrize("value", ["0.0000001s", "9" * 400 + "s"])
+def test_parse_interval_seconds_rejects_unrepresentable_durations(value: str) -> None:
+    """Intervals must fit datetime resolution and remain finite."""
+    with pytest.raises(ValueError, match="representable"):
+        parse_interval_seconds(value)
+
+
 def test_next_due_at_rejects_naive_after_datetime() -> None:
     """Recurrence calculation requires a timezone-aware input instant."""
     with pytest.raises(ValueError, match="timezone-aware"):
@@ -73,3 +80,13 @@ def test_interval_next_time_is_strictly_monotonic() -> None:
     assert first_due_at > anchor
     assert second_due_at > first_due_at
     assert second_due_at == datetime(2026, 1, 1, 10, 30, tzinfo=UTC)
+
+
+def test_interval_schedule_advances_distant_stale_anchor_in_constant_time() -> None:
+    """A stale anchor advances by whole periods without per-tick iteration."""
+    anchor = datetime(2000, 1, 1, tzinfo=UTC)
+    after = datetime(2026, 1, 1, tzinfo=UTC)
+
+    due_at = next_due_at(ScheduleConfig(interval="1s"), after, interval_anchor=anchor)
+
+    assert due_at == datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC)
