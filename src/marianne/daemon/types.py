@@ -180,6 +180,42 @@ class ScheduleStatus(BaseModel):
     )
 
 
+class JobDeadlineStatus(BaseModel):
+    """Public, secret-free projection of one job's timeout authority."""
+
+    daemon_limit_seconds: float = Field(
+        description="Configured daemon per-execution timeout",
+    )
+    score_limit_seconds: float | None = Field(
+        default=None,
+        description="Configured score wall-clock limit when valid",
+    )
+    effective_remaining_seconds: float = Field(
+        ge=0,
+        description="Current stricter applicable timeout remainder",
+    )
+    elapsed_seconds: float = Field(
+        ge=0,
+        description="Wall time consumed since the job was first registered",
+    )
+    wall_deadline_at: float | None = Field(
+        default=None,
+        description="Persisted absolute score deadline as a Unix epoch",
+    )
+    terminal_reason: str | None = Field(
+        default=None,
+        description="Machine-readable terminal reason",
+    )
+    cleanup_outcome: str | None = Field(
+        default=None,
+        description="Observed timeout cleanup result",
+    )
+    diagnostic: str | None = Field(
+        default=None,
+        description="Compatibility diagnostic for malformed legacy fields",
+    )
+
+
 class ObserverEvent(TypedDict):
     """Structured event emitted by the baton and routed through the daemon.
 

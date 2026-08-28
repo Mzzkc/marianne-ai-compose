@@ -5,6 +5,7 @@ Defines the state that gets persisted between runs for resumable orchestration.
 
 from __future__ import annotations
 
+import math
 import os
 from datetime import datetime
 from enum import Enum
@@ -1116,6 +1117,21 @@ class CheckpointState(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
+    # Absolute score wall-clock authority. Nullable for checkpoints written
+    # before score-specific deadline support.
+    max_wall_seconds: float | None = Field(
+        default=None,
+        description="Configured score wall-clock limit in seconds",
+    )
+    wall_deadline_at: float | None = Field(
+        default=None,
+        description="Persisted absolute Unix epoch deadline for this job",
+    )
+    terminal_reason: str | None = Field(
+        default=None,
+        description="Machine-readable terminal reason such as timed_out",
+    )
+
     # Progress tracking
     total_sheets: int = Field(ge=1)
     last_completed_sheet: int = Field(
@@ -1253,6 +1269,65 @@ class CheckpointState(BaseModel):
         default_factory=list,
         description="History of circuit breaker state transitions for post-mortem diagnostics",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_deadline_fields(cls, data: Any) -> Any:
+        """Treat malformed nullable legacy deadline fields as absent.
+
+        A checkpoint loaded during resume must never mint a replacement
+        deadline. A valid persisted absolute deadline remains authoritative;
+        invalid or incomplete legacy values fall back to daemon-only timeout
+        behavior and emit a structured diagnostic.
+        """
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        diagnostics: list[str] = []
+
+        for field_name in ("max_wall_seconds", "wall_deadline_at"):
+            raw = normalized.get(field_name)
+            if raw is None:
+                continue
+            if isinstance(raw, bool):
+                diagnostics.append(f"{field_name}:not_numeric")
+                normalized[field_name] = None
+                continue
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                diagnostics.append(f"{field_name}:not_numeric")
+                normalized[field_name] = None
+                continue
+            if not math.isfinite(value) or value <= 0:
+                diagnostics.append(f"{field_name}:not_positive_finite")
+                normalized[field_name] = None
+                continue
+            normalized[field_name] = value
+
+        if (
+            normalized.get("max_wall_seconds") is not None
+            and normalized.get("wall_deadline_at") is None
+        ):
+            diagnostics.append("wall_deadline_at:missing_for_score_limit")
+
+        terminal_reason = normalized.get("terminal_reason")
+        if terminal_reason is not None and not isinstance(terminal_reason, str):
+            diagnostics.append("terminal_reason:not_text")
+            normalized["terminal_reason"] = None
+
+        if diagnostics:
+            _logger.warning(
+                "checkpoint.deadline_fields_malformed",
+                job_id=normalized.get("job_id"),
+                diagnostic=";".join(dict.fromkeys(diagnostics)),
+                fallback=(
+                    "daemon_timeout_only"
+                    if normalized.get("wall_deadline_at") is None
+                    else "deadline"
+                ),
+            )
+        return normalized
 
     @model_validator(mode="after")
     def _enforce_status_invariants(self) -> CheckpointState:

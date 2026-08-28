@@ -13,6 +13,7 @@ the daemon's asyncio event loop — even under heavy concurrent load.
 
 from __future__ import annotations
 
+import math
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -77,6 +78,10 @@ class JobRecord:
     log_path: str | None = None
     snapshot_path: str | None = None
     checkpoint_json: str | None = None
+    max_wall_seconds: float | None = None
+    wall_deadline_at: float | None = None
+    terminal_reason: str | None = None
+    deadline_diagnostic: str | None = field(default=None, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for JSON-RPC responses."""
@@ -98,6 +103,12 @@ class JobRecord:
             result["log_path"] = self.log_path
         if self.snapshot_path:
             result["snapshot_path"] = self.snapshot_path
+        if self.max_wall_seconds is not None:
+            result["max_wall_seconds"] = self.max_wall_seconds
+        if self.wall_deadline_at is not None:
+            result["wall_deadline_at"] = self.wall_deadline_at
+        if self.terminal_reason is not None:
+            result["terminal_reason"] = self.terminal_reason
         return result
 
 
@@ -191,6 +202,9 @@ class JobRegistry:
             ("checkpoint_json", "TEXT"),
             ("hook_config_json", "TEXT"),
             ("hook_results_json", "TEXT"),
+            ("max_wall_seconds", "REAL"),
+            ("wall_deadline_at", "REAL"),
+            ("terminal_reason", "TEXT"),
         ]
         for col_name, col_type in new_columns:
             try:
@@ -212,20 +226,59 @@ class JobRegistry:
         config_path: Path,
         workspace: Path,
         log_path: Path | None = None,
+        *,
+        submitted_at: float | None = None,
+        max_wall_seconds: float | None = None,
+        wall_deadline_at: float | None = None,
     ) -> None:
-        """Register a newly submitted job."""
+        """Register a newly submitted job with one absolute score deadline."""
+        registered_at = time.time() if submitted_at is None else submitted_at
+        if not math.isfinite(registered_at):
+            raise ValueError("submitted_at must be finite")
+        if max_wall_seconds is not None:
+            if not math.isfinite(max_wall_seconds) or max_wall_seconds <= 0:
+                raise ValueError("max_wall_seconds must be finite and positive")
+            if wall_deadline_at is None:
+                wall_deadline_at = registered_at + max_wall_seconds
+        if wall_deadline_at is not None and (
+            not math.isfinite(wall_deadline_at) or wall_deadline_at <= 0
+        ):
+            raise ValueError("wall_deadline_at must be finite and positive")
+        # Conflict replacement keeps the original registration timestamp and
+        # deadline columns. Even a duplicate registration therefore cannot
+        # mint fresh wall-clock time or erase a malformed legacy diagnostic.
         await self._db.execute(
             """
-            INSERT OR REPLACE INTO jobs
-                (job_id, config_path, workspace, status, submitted_at, log_path)
-            VALUES (?, ?, ?, 'queued', ?, ?)
+            INSERT INTO jobs
+                (job_id, config_path, workspace, status, submitted_at, log_path,
+                 max_wall_seconds, wall_deadline_at, terminal_reason)
+            VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, NULL)
+            ON CONFLICT(job_id) DO UPDATE SET
+                config_path = excluded.config_path,
+                workspace = excluded.workspace,
+                status = 'queued',
+                pid = NULL,
+                started_at = NULL,
+                completed_at = NULL,
+                error_message = NULL,
+                current_sheet = NULL,
+                total_sheets = NULL,
+                last_event_at = NULL,
+                log_path = excluded.log_path,
+                snapshot_path = NULL,
+                checkpoint_json = NULL,
+                hook_config_json = NULL,
+                hook_results_json = NULL,
+                terminal_reason = NULL
             """,
             (
                 job_id,
                 str(config_path),
                 str(workspace),
-                time.time(),
+                registered_at,
                 str(log_path) if log_path is not None else None,
+                max_wall_seconds,
+                wall_deadline_at,
             ),
         )
         await self._db.commit()
@@ -238,6 +291,7 @@ class JobRegistry:
         pid: int | None = None,
         error_message: str | None = None,
         snapshot_path: str | None = None,
+        terminal_reason: str | None = None,
     ) -> None:
         """Update a job's status and optional fields in the registry only.
 
@@ -273,6 +327,12 @@ class JobRegistry:
         if snapshot_path is not None:
             updates.append("snapshot_path = ?")
             params.append(snapshot_path)
+
+        if status not in _TERMINAL_STATUSES:
+            updates.append("terminal_reason = NULL")
+        elif terminal_reason is not None:
+            updates.append("terminal_reason = ?")
+            params.append(terminal_reason)
 
         params.append(job_id)
         await self._db.execute(
@@ -528,8 +588,51 @@ class JobRegistry:
 
     @staticmethod
     def _row_to_record(row: aiosqlite.Row) -> JobRecord:
+        job_id: str = row["job_id"]
+        diagnostics: list[str] = []
+
+        def _optional_positive_float(column: str) -> float | None:
+            raw: object = row[column]
+            if raw is None:
+                return None
+            if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+                diagnostics.append(f"{column}:not_numeric")
+                return None
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                diagnostics.append(f"{column}:not_numeric")
+                return None
+            if not math.isfinite(value) or value <= 0:
+                diagnostics.append(f"{column}:not_positive_finite")
+                return None
+            return value
+
+        max_wall_seconds = _optional_positive_float("max_wall_seconds")
+        wall_deadline_at = _optional_positive_float("wall_deadline_at")
+        if max_wall_seconds is not None and wall_deadline_at is None:
+            diagnostics.append("wall_deadline_at:missing_for_score_limit")
+
+        raw_terminal_reason: object = row["terminal_reason"]
+        terminal_reason: str | None
+        if raw_terminal_reason is None:
+            terminal_reason = None
+        elif isinstance(raw_terminal_reason, str):
+            terminal_reason = raw_terminal_reason
+        else:
+            diagnostics.append("terminal_reason:not_text")
+            terminal_reason = None
+
+        deadline_diagnostic = ";".join(dict.fromkeys(diagnostics)) or None
+        if deadline_diagnostic is not None:
+            _logger.warning(
+                "registry.deadline_fields_malformed",
+                job_id=job_id,
+                diagnostic=deadline_diagnostic,
+                fallback="daemon_timeout_only" if wall_deadline_at is None else "deadline",
+            )
         return JobRecord(
-            job_id=row["job_id"],
+            job_id=job_id,
             config_path=row["config_path"],
             workspace=row["workspace"],
             status=DaemonJobStatus(row["status"]),
@@ -544,4 +647,8 @@ class JobRegistry:
             log_path=row["log_path"],
             snapshot_path=row["snapshot_path"],
             checkpoint_json=row["checkpoint_json"],
+            max_wall_seconds=max_wall_seconds,
+            wall_deadline_at=wall_deadline_at,
+            terminal_reason=terminal_reason,
+            deadline_diagnostic=deadline_diagnostic,
         )

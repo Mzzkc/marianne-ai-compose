@@ -496,6 +496,7 @@ class TestPendingJobVisibility:
             mgr._registry.list_jobs = AsyncMock(return_value=[])
             mgr._config = MagicMock()
             mgr._config.max_concurrent_jobs = 5
+            mgr._wall_clock = lambda: 1_000.0
             mgr._config_name_to_conductor_id = {}
             mgr._rate_coordinator = MagicMock()
             mgr._rate_coordinator.active_limits = {"claude-cli": 60.0}

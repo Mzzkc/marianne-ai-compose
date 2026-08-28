@@ -51,7 +51,13 @@ from marianne.daemon.scheduler import GlobalSheetScheduler
 from marianne.daemon.semantic_analyzer import SemanticAnalyzer
 from marianne.daemon.snapshot import SnapshotManager
 from marianne.daemon.task_utils import log_task_exception
-from marianne.daemon.types import JobRequest, JobResponse, ObserverEvent, ScheduleStatus
+from marianne.daemon.types import (
+    JobDeadlineStatus,
+    JobRequest,
+    JobResponse,
+    ObserverEvent,
+    ScheduleStatus,
+)
 from marianne.utils.time import utc_now
 
 _logger = get_logger("daemon.manager")
@@ -245,6 +251,11 @@ class JobMeta:
     error_traceback: str | None = None
     chain_depth: int | None = None
     schedule_id: str | None = None
+    max_wall_seconds: float | None = None
+    wall_deadline_at: float | None = None
+    terminal_reason: str | None = None
+    timeout_cleanup_outcome: str | None = None
+    deadline_diagnostic: str | None = None
     hook_config: list[dict[str, Any]] | None = field(default=None, repr=False)
     concert_config: dict[str, Any] | None = field(default=None, repr=False)
     completed_new_work: bool = False
@@ -277,6 +288,12 @@ class JobMeta:
             result["error_traceback"] = self.error_traceback
         if self.chain_depth is not None:
             result["chain_depth"] = self.chain_depth
+        if self.max_wall_seconds is not None:
+            result["max_wall_seconds"] = self.max_wall_seconds
+        if self.wall_deadline_at is not None:
+            result["wall_deadline_at"] = self.wall_deadline_at
+        if self.terminal_reason is not None:
+            result["terminal_reason"] = self.terminal_reason
         return result
 
 
@@ -431,10 +448,14 @@ class JobManager:
         start_time: float | None = None,
         monitor: ResourceMonitor | None = None,
         pgroup: ProcessGroupManager | None = None,
+        wall_clock: Callable[[], float] = time.time,
+        monotonic_clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._config = config
         self._start_time = start_time or time.monotonic()
         self._pgroup = pgroup
+        self._wall_clock = wall_clock
+        self._monotonic_clock = monotonic_clock
 
         # Phase 3: Centralized learning hub.
         # Single GlobalLearningStore shared across all jobs — pattern
@@ -615,6 +636,29 @@ class JobManager:
 
                     hook_config = json.loads(hook_json)
 
+                max_wall_seconds = record.max_wall_seconds
+                wall_deadline_at = record.wall_deadline_at
+                terminal_reason = record.terminal_reason
+                if wall_deadline_at is None and record.checkpoint_json:
+                    try:
+                        restored_checkpoint = CheckpointState.model_validate_json(
+                            record.checkpoint_json
+                        )
+                    except ValueError:
+                        restored_checkpoint = None
+                    if (
+                        restored_checkpoint is not None
+                        and restored_checkpoint.wall_deadline_at is not None
+                    ):
+                        max_wall_seconds = restored_checkpoint.max_wall_seconds
+                        wall_deadline_at = restored_checkpoint.wall_deadline_at
+                        terminal_reason = restored_checkpoint.terminal_reason
+                        _logger.info(
+                            "manager.deadline_restored_from_checkpoint",
+                            job_id=record.job_id,
+                            wall_deadline_at=wall_deadline_at,
+                        )
+
                 self._job_meta[record.job_id] = JobMeta(
                     job_id=record.job_id,
                     config_path=Path(record.config_path),
@@ -623,6 +667,10 @@ class JobManager:
                     started_at=record.started_at,
                     status=record.status,
                     error_message=record.error_message,
+                    max_wall_seconds=max_wall_seconds,
+                    wall_deadline_at=wall_deadline_at,
+                    terminal_reason=terminal_reason,
+                    deadline_diagnostic=record.deadline_diagnostic,
                     hook_config=hook_config,
                 )
         if all_records:
@@ -943,6 +991,7 @@ class JobManager:
         error_message: str | None = None,
         pid: int | None = None,
         snapshot_path: str | None = None,
+        terminal_reason: str | None = None,
     ) -> None:
         """Update job status across all three stores atomically.
 
@@ -979,6 +1028,7 @@ class JobManager:
             error_message=error_message,
             pid=pid,
             snapshot_path=snapshot_path,
+            terminal_reason=terminal_reason,
         )
 
         # 2. In-memory metadata (always available for active jobs).
@@ -987,6 +1037,14 @@ class JobManager:
             object.__setattr__(meta, "status", status)
             if error_message is not None:
                 meta.error_message = error_message
+            if status not in {
+                DaemonJobStatus.COMPLETED,
+                DaemonJobStatus.FAILED,
+                DaemonJobStatus.CANCELLED,
+            }:
+                meta.terminal_reason = None
+            elif terminal_reason is not None:
+                meta.terminal_reason = terminal_reason
 
         # 3. Live checkpoint state (may not exist yet for queued jobs).
         live = self._live_states.get(job_id)
@@ -994,6 +1052,14 @@ class JobManager:
             cp_status = _DAEMON_TO_CHECKPOINT_STATUS.get(status)
             if cp_status is not None:
                 object.__setattr__(live, "status", cp_status)
+                if status not in {
+                    DaemonJobStatus.COMPLETED,
+                    DaemonJobStatus.FAILED,
+                    DaemonJobStatus.CANCELLED,
+                }:
+                    live.terminal_reason = None
+                elif terminal_reason is not None:
+                    live.terminal_reason = terminal_reason
             else:
                 # #234: an unmapped status must not silently skip the live
                 # update (which would diverge `mzt status` from `mzt list`).
@@ -1801,12 +1867,26 @@ class JobManager:
                                 ),
                             )
 
+                    registered_at = self._wall_clock()
+                    max_wall_seconds = (
+                        parsed_config.max_wall_seconds
+                        if parsed_config is not None
+                        else None
+                    )
+                    wall_deadline_at = (
+                        registered_at + max_wall_seconds
+                        if max_wall_seconds is not None
+                        else None
+                    )
                     meta = JobMeta(
                         job_id=job_id,
                         config_path=request.config_path,
                         workspace=workspace,
+                        submitted_at=registered_at,
                         chain_depth=request.chain_depth,
                         schedule_id=request.schedule_id,
+                        max_wall_seconds=max_wall_seconds,
+                        wall_deadline_at=wall_deadline_at,
                         hook_config=hook_config_list,
                         concert_config=concert_config_dict,
                     )
@@ -1817,6 +1897,9 @@ class JobManager:
                         request.config_path,
                         workspace,
                         log_path=log_path,
+                        submitted_at=registered_at,
+                        max_wall_seconds=max_wall_seconds,
+                        wall_deadline_at=wall_deadline_at,
                     )
                     self._job_meta[job_id] = meta
 
@@ -1904,19 +1987,44 @@ class JobManager:
             job_id,
         )
         if workspace is not None:
+            registered_at = self._wall_clock()
+            max_wall_seconds: float | None = None
+            try:
+                from marianne.core.config import JobConfig
+
+                max_wall_seconds = JobConfig.from_yaml(
+                    request.config_path
+                ).max_wall_seconds
+            except (ValueError, OSError, KeyError, yaml.YAMLError):
+                _logger.debug(
+                    "manager.pending_deadline_config_unavailable",
+                    job_id=job_id,
+                    config_path=str(request.config_path),
+                )
+            wall_deadline_at = (
+                registered_at + max_wall_seconds
+                if max_wall_seconds is not None
+                else None
+            )
             log_path = self._ensure_workspace_log_path(workspace)
             await self._registry.register_job(
                 job_id,
                 request.config_path,
                 workspace,
                 log_path=log_path,
+                submitted_at=registered_at,
+                max_wall_seconds=max_wall_seconds,
+                wall_deadline_at=wall_deadline_at,
             )
             self._job_meta[job_id] = JobMeta(
                 job_id=job_id,
                 config_path=request.config_path,
                 workspace=workspace,
+                submitted_at=registered_at,
                 status=DaemonJobStatus.PENDING,
                 schedule_id=request.schedule_id,
+                max_wall_seconds=max_wall_seconds,
+                wall_deadline_at=wall_deadline_at,
             )
 
         # Store for auto-start
@@ -2242,7 +2350,66 @@ class JobManager:
                 snapshot["on_success"] = parsed_config
                 data["config_snapshot"] = snapshot
 
-        return await self._merge_schedule_status(job_id, data)
+        data = await self._merge_schedule_status(job_id, data)
+        return await self._merge_deadline_status(job_id, data)
+
+    async def _merge_deadline_status(
+        self,
+        job_id: str,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Attach deadline authority and current remaining time when relevant."""
+        meta = self._job_meta.get(job_id)
+        if meta is None:
+            record = await self._registry.get_job(job_id)
+            if record is None:
+                return data
+            submitted_at = record.submitted_at
+            max_wall_seconds = record.max_wall_seconds
+            wall_deadline_at = record.wall_deadline_at
+            terminal_reason = record.terminal_reason
+            cleanup_outcome = None
+            diagnostic = record.deadline_diagnostic
+        else:
+            submitted_at = meta.submitted_at
+            max_wall_seconds = meta.max_wall_seconds
+            wall_deadline_at = meta.wall_deadline_at
+            terminal_reason = meta.terminal_reason
+            cleanup_outcome = meta.timeout_cleanup_outcome
+            diagnostic = meta.deadline_diagnostic
+
+        now_epoch = self._wall_clock()
+        daemon_limit = float(self._config.job_timeout_seconds)
+        score_remaining = (
+            max(0.0, wall_deadline_at - now_epoch)
+            if wall_deadline_at is not None
+            else None
+        )
+        effective_remaining = max(
+            0.0,
+            min(daemon_limit, score_remaining)
+            if score_remaining is not None
+            else daemon_limit,
+        )
+        elapsed = max(0.0, now_epoch - submitted_at)
+        projection = JobDeadlineStatus(
+            daemon_limit_seconds=daemon_limit,
+            score_limit_seconds=max_wall_seconds,
+            effective_remaining_seconds=effective_remaining,
+            elapsed_seconds=elapsed,
+            wall_deadline_at=wall_deadline_at,
+            terminal_reason=terminal_reason,
+            cleanup_outcome=cleanup_outcome,
+            diagnostic=diagnostic,
+        )
+        if max_wall_seconds is not None:
+            data["max_wall_seconds"] = max_wall_seconds
+        if wall_deadline_at is not None:
+            data["wall_deadline_at"] = wall_deadline_at
+        if terminal_reason is not None:
+            data["terminal_reason"] = terminal_reason
+        data["deadline"] = projection.model_dump(mode="json", exclude_none=True)
+        return data
 
     async def _schedule_for_job(
         self,
@@ -4221,6 +4388,11 @@ class JobManager:
             )
         if conductor_key != state.job_id:
             state = state.model_copy(update={"job_id": conductor_key})
+        meta = self._job_meta.get(conductor_key)
+        if meta is not None:
+            state.max_wall_seconds = meta.max_wall_seconds
+            state.wall_deadline_at = meta.wall_deadline_at
+            state.terminal_reason = meta.terminal_reason
         self._live_states[conductor_key] = state
 
         # Persist to registry via the ordered writer (#111 — never block the
@@ -4293,6 +4465,75 @@ class JobManager:
             sheet_num=sheet_num,
         )
 
+    def _timeout_cleanup_via_baton(self, job_id: str) -> str:
+        """Attempt timeout cleanup only through Baton's deregistration seam."""
+        adapter = self._baton_adapter
+        if adapter is None:
+            return "not_attempted_adapter_unavailable"
+        try:
+            adapter.deregister_job(job_id)
+            residual = adapter.has_job(job_id)
+        except Exception:
+            _logger.exception(
+                "job.timeout_cleanup_failed",
+                job_id=job_id,
+                cleanup_path="baton.deregister_job",
+            )
+            return "deregister_failed"
+        return (
+            "deregister_attempted_residual_job"
+            if residual
+            else "deregister_attempted_no_residual_job"
+        )
+
+    async def _record_job_timeout(
+        self,
+        job_id: str,
+        meta: JobMeta,
+        *,
+        effective_timeout: float,
+        execution_elapsed: float,
+        expired_before_execution: bool,
+    ) -> None:
+        """Persist one machine-readable timeout and its observed cleanup."""
+        cleanup_outcome = self._timeout_cleanup_via_baton(job_id)
+        wall_elapsed = max(0.0, self._wall_clock() - meta.submitted_at)
+        meta.error_traceback = None
+        meta.timeout_cleanup_outcome = cleanup_outcome
+        error_msg = (
+            f"Job exceeded timeout of {effective_timeout:.0f}s "
+            f"(ran for {execution_elapsed:.0f}s)"
+        )
+        await self._set_job_status(
+            job_id,
+            DaemonJobStatus.FAILED,
+            error_message=error_msg,
+            terminal_reason="timed_out",
+        )
+        live = self._live_states.get(job_id)
+        if live is not None:
+            checkpoint_json = live.model_dump_json()
+            writer = self._checkpoint_writer
+            if writer is not None and writer.running:
+                writer.enqueue(job_id, checkpoint_json)
+                await writer.drain()
+            else:
+                await self._registry.save_checkpoint(job_id, checkpoint_json)
+        self._recent_failures.append(self._monotonic_clock())
+        _logger.error(
+            "job.timeout",
+            job_id=job_id,
+            daemon_limit_seconds=float(self._config.job_timeout_seconds),
+            score_limit_seconds=meta.max_wall_seconds,
+            effective_timeout_seconds=effective_timeout,
+            execution_elapsed_seconds=round(execution_elapsed, 3),
+            wall_elapsed_seconds=round(wall_elapsed, 3),
+            wall_deadline_at=meta.wall_deadline_at,
+            terminal_reason="timed_out",
+            cleanup_outcome=cleanup_outcome,
+            expired_before_execution=expired_before_execution,
+        )
+
     async def _run_managed_task(
         self,
         job_id: str,
@@ -4322,10 +4563,13 @@ class JobManager:
         coro_started = False
         try:
             meta = self._job_meta[job_id]
-            timeout = self._config.job_timeout_seconds
+            daemon_timeout = float(self._config.job_timeout_seconds)
+            timeout = daemon_timeout
+            execution_started_at: float | None = None
 
             async with self._concurrency_semaphore:
                 await self._wait_for_job_admission(job_id)
+                expired_before_execution = False
                 try:
                     # A lifecycle owner may have staged this queued job while
                     # its wrapper waited at the concurrency gate. Only QUEUED
@@ -4334,20 +4578,53 @@ class JobManager:
                     if activation_status is not DaemonJobStatus.QUEUED:
                         return
 
-                    # Create in-process pause event for this job
-                    pause_event = asyncio.Event()
-                    self._pause_events[job_id] = pause_event
+                    if meta.wall_deadline_at is not None:
+                        score_remaining = max(
+                            0.0,
+                            meta.wall_deadline_at - self._wall_clock(),
+                        )
+                        timeout = min(daemon_timeout, score_remaining)
+                        if score_remaining <= 0:
+                            expired_before_execution = True
 
-                    meta.started_at = time.time()
-                    await self._set_job_status(
-                        job_id,
-                        DaemonJobStatus.RUNNING,
-                        pid=os.getpid(),
-                    )
+                    if expired_before_execution:
+                        continue_execution = False
+                    else:
+                        continue_execution = True
+
+                        # Create in-process pause event for this job
+                        pause_event = asyncio.Event()
+                        self._pause_events[job_id] = pause_event
+
+                        meta.started_at = self._wall_clock()
+                        execution_started_at = self._monotonic_clock()
+                        await self._set_job_status(
+                            job_id,
+                            DaemonJobStatus.RUNNING,
+                            pid=os.getpid(),
+                        )
                 finally:
                     self._release_job_admission(job_id)
 
-                _logger.info(start_event, job_id=job_id, timeout_seconds=timeout)
+                if not continue_execution:
+                    await self._record_job_timeout(
+                        job_id,
+                        meta,
+                        effective_timeout=0.0,
+                        execution_elapsed=0.0,
+                        expired_before_execution=True,
+                    )
+                    return
+
+                _logger.info(
+                    start_event,
+                    job_id=job_id,
+                    timeout_seconds=timeout,
+                    daemon_limit_seconds=daemon_timeout,
+                    score_limit_seconds=meta.max_wall_seconds,
+                    effective_timeout_seconds=timeout,
+                    wall_deadline_at=meta.wall_deadline_at,
+                )
 
                 # Start observer co-task for filesystem/process monitoring
                 await self._start_observer(job_id)
@@ -4399,20 +4676,22 @@ class JobManager:
                         _logger.info("job.completed", job_id=job_id)
 
                 except TimeoutError:
-                    elapsed = time.monotonic() - (meta.started_at or 0)
-                    error_msg = f"Job exceeded timeout of {timeout:.0f}s (ran for {elapsed:.0f}s)"
-                    meta.error_traceback = None
-                    await self._set_job_status(
-                        job_id,
-                        DaemonJobStatus.FAILED,
-                        error_message=error_msg,
+                    timeout_observed_at = self._monotonic_clock()
+                    execution_elapsed = max(
+                        0.0,
+                        timeout_observed_at
+                        - (
+                            execution_started_at
+                            if execution_started_at is not None
+                            else timeout_observed_at
+                        ),
                     )
-                    self._recent_failures.append(time.monotonic())
-                    _logger.error(
-                        "job.timeout",
-                        job_id=job_id,
-                        timeout_seconds=timeout,
-                        elapsed_seconds=round(elapsed, 1),
+                    await self._record_job_timeout(
+                        job_id,
+                        meta,
+                        effective_timeout=timeout,
+                        execution_elapsed=execution_elapsed,
+                        expired_before_execution=False,
                     )
 
                 except asyncio.CancelledError as cancel_exc:
@@ -4650,6 +4929,7 @@ class JobManager:
         # FERMATA-on-exhaustion; healing keeps it as its designed end state.
         # Persisted on the checkpoint so resume/restart recovery inherit it.
         escalation_enabled = request.escalation or request.self_healing
+        meta = self._job_meta.get(job_id)
         initial_state = CheckpointState(
             job_id=job_id,
             job_name=config.name,
@@ -4662,6 +4942,9 @@ class JobManager:
             escalation_enabled=escalation_enabled,
             self_healing_enabled=request.self_healing,
             runtime_variables=dict(request.runtime_variables),  # #359 durable
+            max_wall_seconds=meta.max_wall_seconds if meta is not None else None,
+            wall_deadline_at=meta.wall_deadline_at if meta is not None else None,
+            terminal_reason=meta.terminal_reason if meta is not None else None,
         )
         self._live_states[job_id] = initial_state
 
@@ -4850,6 +5133,19 @@ class JobManager:
                 workspace=str(workspace),
             )
             return DaemonJobStatus.FAILED
+
+        # Registry registration is the primary deadline authority. A valid
+        # checkpoint deadline remains authoritative for databases created by
+        # an intermediate/legacy schema that did not yet have the columns.
+        # Neither path derives a new deadline during resume.
+        if meta.wall_deadline_at is not None:
+            checkpoint.max_wall_seconds = meta.max_wall_seconds
+            checkpoint.wall_deadline_at = meta.wall_deadline_at
+            checkpoint.terminal_reason = meta.terminal_reason
+        elif checkpoint.wall_deadline_at is not None:
+            meta.max_wall_seconds = checkpoint.max_wall_seconds
+            meta.wall_deadline_at = checkpoint.wall_deadline_at
+            meta.terminal_reason = checkpoint.terminal_reason
 
         # #361: inherit the run's persisted escalation/healing options; an
         # explicit resume flag can additionally enable (never disable) them.

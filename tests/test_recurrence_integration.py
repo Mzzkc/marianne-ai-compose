@@ -182,6 +182,10 @@ async def test_manual_registration_reserves_lineage_before_metadata_publish(
         config_path: Path,
         workspace: Path,
         log_path: Path | None = None,
+        *,
+        submitted_at: float | None = None,
+        max_wall_seconds: float | None = None,
+        wall_deadline_at: float | None = None,
     ) -> None:
         metadata_window.set()
         await release_metadata.wait()
@@ -190,6 +194,9 @@ async def test_manual_registration_reserves_lineage_before_metadata_publish(
             config_path,
             workspace,
             log_path=log_path,
+            submitted_at=submitted_at,
+            max_wall_seconds=max_wall_seconds,
+            wall_deadline_at=wall_deadline_at,
         )
 
     async def hold_execution(_job_id: str, _request: JobRequest) -> None:
