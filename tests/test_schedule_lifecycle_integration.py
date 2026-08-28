@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+import gc
+import warnings
+from collections.abc import AsyncIterator, Coroutine, Generator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from types import TracebackType
+from typing import Any
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
@@ -20,6 +24,41 @@ from marianne.daemon.exceptions import JobSubmissionError
 from marianne.daemon.manager import DaemonJobStatus, JobManager, JobMeta
 from marianne.daemon.recurrence import RecurrenceController
 from marianne.daemon.types import JobRequest, JobResponse
+
+
+class _CloseCountingCoroutine(
+    Coroutine[Any, Any, DaemonJobStatus | None],
+):
+    """Delegate to a real coroutine while exposing exact close ownership."""
+
+    def __init__(
+        self,
+        coro: Coroutine[Any, Any, DaemonJobStatus | None],
+    ) -> None:
+        self.coro = coro
+        self.close_calls = 0
+
+    def __await__(self) -> Generator[Any, None, DaemonJobStatus | None]:
+        return self
+
+    def send(self, value: Any) -> Any:
+        return self.coro.send(value)
+
+    def throw(
+        self,
+        typ: type[BaseException] | BaseException,
+        val: BaseException | None = None,
+        tb: TracebackType | None = None,
+    ) -> Any:
+        if val is None:
+            return self.coro.throw(typ)
+        if tb is None:
+            return self.coro.throw(typ, val)
+        return self.coro.throw(typ, val, tb)
+
+    def close(self) -> None:
+        self.close_calls += 1
+        self.coro.close()
 
 
 class RealLifecycle:
@@ -835,6 +874,429 @@ async def test_second_queued_pause_failure_keeps_every_queued_task(
     assert not tasks[second_id].done()
     current = await life.manager._schedule_registry.get(life.schedule_id)
     assert current is not None and current.enabled is True
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_blocked_managed_wrapper_cancellation_closes_execution_coroutine_once(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gate-wait cancellation retains no live unstarted coroutine frame."""
+    life = real_lifecycle
+    job_id = "Anchor Schedule--scheduled--blocked-gate-cancel"
+    meta = life.add_meta(job_id, DaemonJobStatus.QUEUED)
+
+    gate = life.manager._concurrency_semaphore
+    gate.set_limit(1)
+    await gate.acquire()
+    gate_wait_entered = asyncio.Event()
+    original_gate_acquire = gate.acquire
+
+    async def observe_gate_wait() -> None:
+        gate_wait_entered.set()
+        await original_gate_acquire()
+
+    monkeypatch.setattr(gate, "acquire", observe_gate_wait)
+    execution_started = asyncio.Event()
+
+    async def queued_execution() -> DaemonJobStatus | None:
+        execution_started.set()
+        return None
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", RuntimeWarning)
+        execution_coro = queued_execution()
+        counted_coro = _CloseCountingCoroutine(execution_coro)
+        assert execution_coro.cr_frame is not None
+
+        managed_task = asyncio.create_task(
+            life.manager._run_managed_task(job_id, counted_coro),
+        )
+        await asyncio.wait_for(gate_wait_entered.wait(), timeout=1.0)
+        assert gate.acquired == gate.limit == 1
+
+        managed_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await managed_task
+
+        close_calls = counted_coro.close_calls
+        frame_closed = execution_coro.cr_frame is None
+        gate.release()
+        del managed_task
+        del counted_coro
+        del execution_coro
+        gc.collect()
+
+    runtime_warnings = [
+        warning
+        for warning in caught
+        if issubclass(warning.category, RuntimeWarning)
+    ]
+    assert close_calls == 1
+    assert frame_closed is True
+    assert runtime_warnings == []
+    assert execution_started.is_set() is False
+    assert meta.status is DaemonJobStatus.QUEUED
+    assert gate.acquired == 0
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_admission_wait_cancellation_closes_execution_coroutine_once(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Admission-wait cancellation releases the gate and coroutine custody."""
+    life = real_lifecycle
+    job_id = "Anchor Schedule--scheduled--blocked-admission-cancel"
+    meta = life.add_meta(job_id, DaemonJobStatus.QUEUED)
+    owner_ready = asyncio.Event()
+    release_owner = asyncio.Event()
+
+    async def own_admission() -> None:
+        assert life.manager._try_reserve_job_admission(job_id, allow_active=True)
+        owner_ready.set()
+        await release_owner.wait()
+        life.manager._release_job_admission(job_id)
+
+    owner = asyncio.create_task(own_admission())
+    await asyncio.wait_for(owner_ready.wait(), timeout=1.0)
+    admission_wait_entered = asyncio.Event()
+    original_wait = life.manager._wait_for_job_admission
+
+    async def observe_admission_wait(current_job_id: str) -> None:
+        admission_wait_entered.set()
+        await original_wait(current_job_id)
+
+    monkeypatch.setattr(
+        life.manager,
+        "_wait_for_job_admission",
+        observe_admission_wait,
+    )
+    execution_started = asyncio.Event()
+
+    async def queued_execution() -> DaemonJobStatus | None:
+        execution_started.set()
+        return None
+
+    execution_coro = queued_execution()
+    counted_coro = _CloseCountingCoroutine(execution_coro)
+    managed_task = asyncio.create_task(
+        life.manager._run_managed_task(job_id, counted_coro),
+    )
+    await asyncio.wait_for(admission_wait_entered.wait(), timeout=1.0)
+
+    try:
+        managed_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await managed_task
+
+        assert counted_coro.close_calls == 1
+        assert execution_coro.cr_frame is None
+        assert execution_started.is_set() is False
+        assert meta.status is DaemonJobStatus.QUEUED
+        assert life.manager._concurrency_semaphore.acquired == 0
+        reservation = life.manager._job_admission_reservations[job_id]
+        assert reservation.owner is owner and reservation.depth == 1
+    finally:
+        release_owner.set()
+        await owner
+
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_managed_wrapper_waits_across_repeated_admission_generations(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A waiter joins each newer owner and leaves no reservation or task."""
+    life = real_lifecycle
+    job_id = "Anchor Schedule--scheduled--admission-generations"
+    meta = life.add_meta(job_id, DaemonJobStatus.QUEUED)
+    assert life.manager._try_reserve_job_admission(job_id, allow_active=True)
+    first_reservation = life.manager._job_admission_reservations[job_id]
+    second_owner_waiting = asyncio.Event()
+    second_owner_claimed = asyncio.Event()
+    release_second_owner = asyncio.Event()
+
+    async def own_second_generation() -> None:
+        second_owner_waiting.set()
+        await first_reservation.released.wait()
+        assert life.manager._try_reserve_job_admission(job_id, allow_active=True)
+        second_owner_claimed.set()
+        await release_second_owner.wait()
+        life.manager._release_job_admission(job_id)
+
+    second_owner = asyncio.create_task(own_second_generation())
+    await asyncio.wait_for(second_owner_waiting.wait(), timeout=1.0)
+    first_wait_entered = asyncio.Event()
+    second_generation_seen = asyncio.Event()
+    execution_started = asyncio.Event()
+    original_wait = life.manager._wait_for_job_admission
+    original_reserve = life.manager._try_reserve_job_admission
+    managed_task: asyncio.Task[None] | None = None
+
+    async def observe_first_wait(current_job_id: str) -> None:
+        first_wait_entered.set()
+        await original_wait(current_job_id)
+
+    def observe_reservation(
+        current_job_id: str,
+        *,
+        allow_active: bool = False,
+    ) -> bool:
+        reservation = life.manager._job_admission_reservations.get(current_job_id)
+        if (
+            asyncio.current_task() is managed_task
+            and reservation is not None
+            and reservation.owner is second_owner
+        ):
+            second_generation_seen.set()
+        return original_reserve(current_job_id, allow_active=allow_active)
+
+    async def queued_execution() -> DaemonJobStatus | None:
+        execution_started.set()
+        return None
+
+    monkeypatch.setattr(
+        life.manager,
+        "_wait_for_job_admission",
+        observe_first_wait,
+    )
+    monkeypatch.setattr(
+        life.manager,
+        "_try_reserve_job_admission",
+        observe_reservation,
+    )
+    execution_coro = queued_execution()
+    counted_coro = _CloseCountingCoroutine(execution_coro)
+    managed_task = asyncio.create_task(
+        life.manager._run_managed_task(job_id, counted_coro),
+    )
+    await asyncio.wait_for(first_wait_entered.wait(), timeout=1.0)
+
+    life.manager._release_job_admission(job_id)
+    await asyncio.wait_for(second_owner_claimed.wait(), timeout=1.0)
+    await asyncio.wait_for(second_generation_seen.wait(), timeout=1.0)
+    assert execution_started.is_set() is False
+    assert managed_task.done() is False
+
+    release_second_owner.set()
+    await second_owner
+    await managed_task
+
+    assert counted_coro.close_calls == 0
+    assert execution_coro.cr_frame is None
+    assert meta.status is DaemonJobStatus.COMPLETED
+    assert life.manager._concurrency_semaphore.acquired == 0
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_managed_wrapper_balances_same_task_reentrant_admission(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """Same-task activation increments and returns exactly one depth."""
+    life = real_lifecycle
+    job_id = "Anchor Schedule--scheduled--same-task-reentrant"
+    meta = life.add_meta(job_id, DaemonJobStatus.QUEUED)
+    assert life.manager._try_reserve_job_admission(job_id, allow_active=True)
+    outer_reservation = life.manager._job_admission_reservations[job_id]
+
+    async def queued_execution() -> DaemonJobStatus | None:
+        return None
+
+    execution_coro = queued_execution()
+    counted_coro = _CloseCountingCoroutine(execution_coro)
+
+    try:
+        await life.manager._run_managed_task(job_id, counted_coro)
+        current = life.manager._job_admission_reservations[job_id]
+        assert current is outer_reservation
+        assert current.owner is asyncio.current_task()
+        assert current.depth == 1
+    finally:
+        life.manager._release_job_admission(job_id)
+
+    assert counted_coro.close_calls == 0
+    assert execution_coro.cr_frame is None
+    assert meta.status is DaemonJobStatus.COMPLETED
+    assert life.manager._concurrency_semaphore.acquired == 0
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_nonqueued_managed_wrapper_closes_execution_coroutine_once(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """A lifecycle-staged status return closes work that never starts."""
+    life = real_lifecycle
+    job_id = "Anchor Schedule--scheduled--already-paused"
+    meta = life.add_meta(job_id, DaemonJobStatus.PAUSED)
+    execution_started = asyncio.Event()
+
+    async def queued_execution() -> DaemonJobStatus | None:
+        execution_started.set()
+        return None
+
+    execution_coro = queued_execution()
+    counted_coro = _CloseCountingCoroutine(execution_coro)
+
+    await life.manager._run_managed_task(job_id, counted_coro)
+
+    assert counted_coro.close_calls == 1
+    assert execution_coro.cr_frame is None
+    assert execution_started.is_set() is False
+    assert meta.status is DaemonJobStatus.PAUSED
+    assert life.manager._concurrency_semaphore.acquired == 0
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_running_status_failure_closes_execution_coroutine_once(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed RUNNING projection retains custody of unstarted work."""
+    life = real_lifecycle
+    job_id = "Anchor Schedule--scheduled--running-write-failure"
+    meta = life.add_meta(job_id, DaemonJobStatus.QUEUED)
+    execution_started = asyncio.Event()
+
+    async def queued_execution() -> DaemonJobStatus | None:
+        execution_started.set()
+        return None
+
+    set_status = AsyncMock(side_effect=RuntimeError("running write failed"))
+    monkeypatch.setattr(life.manager, "_set_job_status", set_status)
+    execution_coro = queued_execution()
+    counted_coro = _CloseCountingCoroutine(execution_coro)
+
+    with pytest.raises(RuntimeError, match="running write failed"):
+        await life.manager._run_managed_task(job_id, counted_coro)
+
+    set_status.assert_awaited_once_with(
+        job_id,
+        DaemonJobStatus.RUNNING,
+        pid=ANY,
+    )
+    assert counted_coro.close_calls == 1
+    assert execution_coro.cr_frame is None
+    assert execution_started.is_set() is False
+    assert meta.status is DaemonJobStatus.QUEUED
+    assert life.manager._concurrency_semaphore.acquired == 0
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_observer_start_failure_closes_execution_coroutine_once(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Observer admission failure closes work before wait_for owns it."""
+    life = real_lifecycle
+    job_id = "Anchor Schedule--scheduled--observer-start-failure"
+    meta = life.add_meta(job_id, DaemonJobStatus.QUEUED)
+    execution_started = asyncio.Event()
+
+    async def queued_execution() -> DaemonJobStatus | None:
+        execution_started.set()
+        return None
+
+    start_observer = AsyncMock(side_effect=RuntimeError("observer start failed"))
+    monkeypatch.setattr(life.manager, "_start_observer", start_observer)
+    execution_coro = queued_execution()
+    counted_coro = _CloseCountingCoroutine(execution_coro)
+
+    with pytest.raises(RuntimeError, match="observer start failed"):
+        await life.manager._run_managed_task(job_id, counted_coro)
+
+    start_observer.assert_awaited_once_with(job_id)
+    assert counted_coro.close_calls == 1
+    assert execution_coro.cr_frame is None
+    assert execution_started.is_set() is False
+    assert meta.status is DaemonJobStatus.RUNNING
+    assert life.manager._concurrency_semaphore.acquired == 0
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_wait_for_timeout_owns_execution_without_outer_close(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """Once handed to wait_for, timeout settles work without outer close."""
+    life = real_lifecycle
+    job_id = "Anchor Schedule--scheduled--wait-for-timeout"
+    meta = life.add_meta(job_id, DaemonJobStatus.QUEUED)
+    life.manager._config = life.manager._config.model_copy(
+        update={"job_timeout_seconds": 0.0},
+    )
+
+    async def queued_execution() -> DaemonJobStatus | None:
+        await asyncio.Event().wait()
+        return None
+
+    execution_coro = queued_execution()
+    counted_coro = _CloseCountingCoroutine(execution_coro)
+
+    await life.manager._run_managed_task(job_id, counted_coro)
+
+    assert counted_coro.close_calls == 0
+    assert execution_coro.cr_frame is None
+    assert meta.status is DaemonJobStatus.FAILED
+    assert "exceeded timeout" in (meta.error_message or "").lower()
+    assert meta.observer is None
+    assert life.manager._concurrency_semaphore.acquired == 0
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_wait_for_cancellation_owns_execution_without_outer_close(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """Execution cancellation propagates after wait_for settles its coroutine."""
+    life = real_lifecycle
+    job_id = "Anchor Schedule--scheduled--wait-for-cancel"
+    meta = life.add_meta(job_id, DaemonJobStatus.QUEUED)
+    execution_started = asyncio.Event()
+    execution_settled = asyncio.Event()
+
+    async def queued_execution() -> DaemonJobStatus | None:
+        execution_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            execution_settled.set()
+        return None
+
+    execution_coro = queued_execution()
+    counted_coro = _CloseCountingCoroutine(execution_coro)
+    managed_task = asyncio.create_task(
+        life.manager._run_managed_task(job_id, counted_coro),
+    )
+    await asyncio.wait_for(execution_started.wait(), timeout=1.0)
+
+    managed_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await managed_task
+
+    assert execution_settled.is_set()
+    assert counted_coro.close_calls == 0
+    assert execution_coro.cr_frame is None
+    assert meta.status is DaemonJobStatus.CANCELLED
+    assert meta.observer is None
+    assert life.manager._concurrency_semaphore.acquired == 0
     assert life.manager._job_admission_reservations == {}
     assert life.manager._schedule_admission_reservations == {}
 

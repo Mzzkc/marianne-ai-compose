@@ -4318,11 +4318,13 @@ class JobManager:
             start_event: Structlog event name for the start log.
             fail_event: Structlog event name for the failure log.
         """
-        meta = self._job_meta[job_id]
-        timeout = self._config.job_timeout_seconds
+        # This wrapper owns the coroutine until wait_for wraps it in a Task.
+        coro_started = False
+        try:
+            meta = self._job_meta[job_id]
+            timeout = self._config.job_timeout_seconds
 
-        async with self._concurrency_semaphore:
-            try:
+            async with self._concurrency_semaphore:
                 await self._wait_for_job_admission(job_id)
                 try:
                     # A lifecycle owner may have staged this queued job while
@@ -4330,7 +4332,6 @@ class JobManager:
                     # work may cross the activation boundary.
                     activation_status = meta.status
                     if activation_status is not DaemonJobStatus.QUEUED:
-                        coro.close()
                         return
 
                     # Create in-process pause event for this job
@@ -4345,128 +4346,125 @@ class JobManager:
                     )
                 finally:
                     self._release_job_admission(job_id)
-            except BaseException:
-                coro.close()
-                raise
 
-            _logger.info(start_event, job_id=job_id, timeout_seconds=timeout)
+                _logger.info(start_event, job_id=job_id, timeout_seconds=timeout)
 
-            # Start observer co-task for filesystem/process monitoring
-            try:
+                # Start observer co-task for filesystem/process monitoring
                 await self._start_observer(job_id)
-            except BaseException:
-                coro.close()
-                raise
 
-            try:
-                result_status = await asyncio.wait_for(coro, timeout=timeout)
-                final_status = (
-                    result_status
-                    if isinstance(result_status, DaemonJobStatus)
-                    else DaemonJobStatus.COMPLETED
-                )
+                try:
+                    coro_started = True
+                    result_status = await asyncio.wait_for(coro, timeout=timeout)
+                    final_status = (
+                        result_status
+                        if isinstance(result_status, DaemonJobStatus)
+                        else DaemonJobStatus.COMPLETED
+                    )
 
-                # Flush observer recorder to ensure JSONL is complete before snapshot
-                if self._observer_recorder is not None:
-                    try:
-                        self._observer_recorder.flush(job_id)
-                    except Exception:
-                        _logger.warning(
-                            "observer_recorder.flush_failed",
-                            job_id=job_id,
-                            exc_info=True,
+                    # Flush observer recorder to ensure JSONL is complete before snapshot
+                    if self._observer_recorder is not None:
+                        try:
+                            self._observer_recorder.flush(job_id)
+                        except Exception:
+                            _logger.warning(
+                                "observer_recorder.flush_failed",
+                                job_id=job_id,
+                                exc_info=True,
+                            )
+
+                    # Capture completion snapshot for terminal statuses
+                    snapshot_path: str | None = None
+                    if final_status in (DaemonJobStatus.COMPLETED, DaemonJobStatus.FAILED):
+                        snapshot_path = self._snapshot_manager.capture(
+                            job_id,
+                            meta.workspace,
+                            config_path=meta.config_path,
                         )
 
-                # Capture completion snapshot for terminal statuses
-                snapshot_path: str | None = None
-                if final_status in (DaemonJobStatus.COMPLETED, DaemonJobStatus.FAILED):
-                    snapshot_path = self._snapshot_manager.capture(
-                        job_id,
-                        meta.workspace,
-                        config_path=meta.config_path,
-                    )
-
-                await self._set_job_status(
-                    job_id,
-                    final_status,
-                    snapshot_path=snapshot_path,
-                )
-                if final_status == DaemonJobStatus.PAUSED:
-                    pause_reason = "unknown"
-                    if self._baton_adapter:
-                        pause_reason = self._baton_adapter._baton.get_job_pause_reason(job_id)
-                    _logger.info(
-                        "job.paused",
-                        job_id=job_id,
-                        reason=pause_reason,
-                    )
-                else:
-                    _logger.info("job.completed", job_id=job_id)
-
-            except TimeoutError:
-                elapsed = time.monotonic() - (meta.started_at or 0)
-                error_msg = f"Job exceeded timeout of {timeout:.0f}s (ran for {elapsed:.0f}s)"
-                meta.error_traceback = None
-                await self._set_job_status(
-                    job_id,
-                    DaemonJobStatus.FAILED,
-                    error_message=error_msg,
-                )
-                self._recent_failures.append(time.monotonic())
-                _logger.error(
-                    "job.timeout",
-                    job_id=job_id,
-                    timeout_seconds=timeout,
-                    elapsed_seconds=round(elapsed, 1),
-                )
-
-            except asyncio.CancelledError as cancel_exc:
-                # cancel_job() already called _set_job_status(CANCELLED).
-                # Only update if it wasn't set yet (e.g. external cancel).
-                if meta.status != DaemonJobStatus.CANCELLED:
                     await self._set_job_status(
                         job_id,
-                        DaemonJobStatus.CANCELLED,
+                        final_status,
+                        snapshot_path=snapshot_path,
                     )
-                cancel_reason = str(cancel_exc) if str(cancel_exc) else "unknown"
-                _logger.error(
-                    "job.cancelled_during_execution",
-                    job_id=job_id,
-                    reason=cancel_reason,
-                )
-                raise
+                    if final_status == DaemonJobStatus.PAUSED:
+                        pause_reason = "unknown"
+                        if self._baton_adapter:
+                            pause_reason = self._baton_adapter._baton.get_job_pause_reason(job_id)
+                        _logger.info(
+                            "job.paused",
+                            job_id=job_id,
+                            reason=pause_reason,
+                        )
+                    else:
+                        _logger.info("job.completed", job_id=job_id)
 
-            except (OSError, ValueError, DaemonError) as exc:
-                # Expected operational errors: workspace issues, config errors,
-                # permission denied, missing directories, etc.
-                meta.error_traceback = traceback.format_exc()
-                await self._set_job_status(
-                    job_id,
-                    DaemonJobStatus.FAILED,
-                    error_message=str(exc),
-                )
-                self._recent_failures.append(time.monotonic())
-                _logger.error(fail_event, job_id=job_id, error=str(exc))
+                except TimeoutError:
+                    elapsed = time.monotonic() - (meta.started_at or 0)
+                    error_msg = f"Job exceeded timeout of {timeout:.0f}s (ran for {elapsed:.0f}s)"
+                    meta.error_traceback = None
+                    await self._set_job_status(
+                        job_id,
+                        DaemonJobStatus.FAILED,
+                        error_message=error_msg,
+                    )
+                    self._recent_failures.append(time.monotonic())
+                    _logger.error(
+                        "job.timeout",
+                        job_id=job_id,
+                        timeout_seconds=timeout,
+                        elapsed_seconds=round(elapsed, 1),
+                    )
 
-            except Exception as exc:
-                # Unexpected programming bugs — log with full traceback
-                meta.error_traceback = traceback.format_exc()
-                await self._set_job_status(
-                    job_id,
-                    DaemonJobStatus.FAILED,
-                    error_message=f"Unexpected internal error: {exc}",
-                )
-                self._recent_failures.append(time.monotonic())
-                _logger.exception(
-                    "job.unexpected_error",
-                    job_id=job_id,
-                )
+                except asyncio.CancelledError as cancel_exc:
+                    # cancel_job() already called _set_job_status(CANCELLED).
+                    # Only update if it wasn't set yet (e.g. external cancel).
+                    if meta.status != DaemonJobStatus.CANCELLED:
+                        await self._set_job_status(
+                            job_id,
+                            DaemonJobStatus.CANCELLED,
+                        )
+                    cancel_reason = str(cancel_exc) if str(cancel_exc) else "unknown"
+                    _logger.error(
+                        "job.cancelled_during_execution",
+                        job_id=job_id,
+                        reason=cancel_reason,
+                    )
+                    raise
 
-            finally:
-                # Stop observer co-task regardless of outcome
-                await self._stop_observer(job_id)
-                if self._observer_recorder is not None:
-                    self._observer_recorder.unregister_job(job_id)
+                except (OSError, ValueError, DaemonError) as exc:
+                    # Expected operational errors: workspace issues, config errors,
+                    # permission denied, missing directories, etc.
+                    meta.error_traceback = traceback.format_exc()
+                    await self._set_job_status(
+                        job_id,
+                        DaemonJobStatus.FAILED,
+                        error_message=str(exc),
+                    )
+                    self._recent_failures.append(time.monotonic())
+                    _logger.error(fail_event, job_id=job_id, error=str(exc))
+
+                except Exception as exc:
+                    # Unexpected programming bugs — log with full traceback
+                    meta.error_traceback = traceback.format_exc()
+                    await self._set_job_status(
+                        job_id,
+                        DaemonJobStatus.FAILED,
+                        error_message=f"Unexpected internal error: {exc}",
+                    )
+                    self._recent_failures.append(time.monotonic())
+                    _logger.exception(
+                        "job.unexpected_error",
+                        job_id=job_id,
+                    )
+
+                finally:
+                    # Stop observer co-task regardless of outcome
+                    await self._stop_observer(job_id)
+                    if self._observer_recorder is not None:
+                        self._observer_recorder.unregister_job(job_id)
+        finally:
+            if not coro_started:
+                coro.close()
 
     async def _run_job_task(self, job_id: str, request: JobRequest) -> None:
         """Task coroutine that runs a single job through the baton engine."""
