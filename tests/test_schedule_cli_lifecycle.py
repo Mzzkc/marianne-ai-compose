@@ -64,6 +64,7 @@ class FakeRecurrenceController:
         score_path: Path | None = None,
         before_mutation: Any = None,
         on_authority: Any = None,
+        on_mutation: Any = None,
     ) -> SimpleNamespace:
         _ = score_path
         if before_mutation is not None:
@@ -77,6 +78,8 @@ class FakeRecurrenceController:
         updated = SimpleNamespace(**vars(record))
         updated.enabled = False
         self.records[schedule_id] = updated
+        if on_mutation is not None:
+            on_mutation(record)
         return updated
 
     async def resume(

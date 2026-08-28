@@ -316,6 +316,106 @@ async def test_lifecycle_owner_keeps_pending_activation_nondispatchable(
 
 
 @pytest.mark.asyncio
+async def test_ordinary_pending_starter_owner_rejects_concurrent_cancel(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-recurring cancel cannot remove work while its starter owns publication."""
+    life = real_lifecycle
+    job_id = "ordinary-pending-starter-first"
+    config_path = life.score_path.parent / "ordinary.yaml"
+    request = JobRequest(config_path=config_path, job_id=job_id)
+    meta = JobMeta(
+        job_id=job_id,
+        config_path=config_path,
+        workspace=life.workspace,
+        status=DaemonJobStatus.PENDING,
+    )
+    life.manager._job_meta[job_id] = meta
+    life.manager._pending_jobs[job_id] = request
+    life.manager._backpressure.should_accept_job = MagicMock(return_value=True)
+    status_entered = asyncio.Event()
+    release_status = asyncio.Event()
+    release_execution = asyncio.Event()
+    original_set_status = life.manager._set_job_status
+
+    async def held_set_status(
+        current_job_id: str,
+        status: DaemonJobStatus,
+        **kwargs: object,
+    ) -> None:
+        if asyncio.current_task() is starter and current_job_id == job_id:
+            status_entered.set()
+            await release_status.wait()
+        await original_set_status(current_job_id, status, **kwargs)  # type: ignore[arg-type]
+
+    async def hold_execution(*_args: object, **_kwargs: object) -> None:
+        await release_execution.wait()
+
+    monkeypatch.setattr(life.manager, "_set_job_status", held_set_status)
+    monkeypatch.setattr(life.manager, "_run_job_task", hold_execution)
+    starter = asyncio.create_task(life.manager._start_pending_jobs())
+    await asyncio.wait_for(status_entered.wait(), timeout=1.0)
+
+    try:
+        with pytest.raises(JobSubmissionError, match="already being submitted"):
+            await life.manager.cancel_job(job_id)
+    finally:
+        release_status.set()
+        await starter
+
+    assert meta.status is DaemonJobStatus.QUEUED
+    assert job_id in life.manager._jobs
+    assert life.manager._job_admission_reservations == {}
+    release_execution.set()
+
+
+@pytest.mark.asyncio
+async def test_ordinary_cancel_owner_blocks_pending_starter_publication(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cancel-first ownership leaves pending work untouched until cancel commits."""
+    life = real_lifecycle
+    job_id = "ordinary-pending-cancel-first"
+    config_path = life.score_path.parent / "ordinary.yaml"
+    request = JobRequest(config_path=config_path, job_id=job_id)
+    meta = JobMeta(
+        job_id=job_id,
+        config_path=config_path,
+        workspace=life.workspace,
+        status=DaemonJobStatus.PENDING,
+    )
+    life.manager._job_meta[job_id] = meta
+    life.manager._pending_jobs[job_id] = request
+    life.manager._backpressure.should_accept_job = MagicMock(return_value=True)
+    cancel_entered = asyncio.Event()
+    release_cancel = asyncio.Event()
+    original_cancel = life.manager._cancel_active_job
+
+    async def held_cancel(current_job_id: str, *, source: str = "unknown") -> bool:
+        cancel_entered.set()
+        await release_cancel.wait()
+        return await original_cancel(current_job_id, source=source)
+
+    monkeypatch.setattr(life.manager, "_cancel_active_job", held_cancel)
+    cancel = asyncio.create_task(life.manager.cancel_job(job_id))
+    await asyncio.wait_for(cancel_entered.wait(), timeout=1.0)
+
+    try:
+        await life.manager._start_pending_jobs()
+        assert life.manager._pending_jobs[job_id] is request
+        assert meta.status is DaemonJobStatus.PENDING
+        assert job_id not in life.manager._jobs
+    finally:
+        release_cancel.set()
+        assert await cancel is True
+
+    assert meta.status is DaemonJobStatus.CANCELLED
+    assert life.manager._job_admission_reservations == {}
+
+
+@pytest.mark.asyncio
 async def test_anchor_cancel_removes_recurrence_and_every_active_child(
     real_lifecycle: RealLifecycle,
 ) -> None:
@@ -536,6 +636,50 @@ async def test_cancel_child_admission_rejection_releases_its_schedule_claim(
 
 
 @pytest.mark.asyncio
+async def test_pause_child_admission_rejection_does_not_rearm_recurrence(
+    real_lifecycle: RealLifecycle,
+) -> None:
+    """Pre-mutation pause rejection preserves the exact durable timer identity."""
+    life = real_lifecycle
+    child_id = "Anchor Schedule--scheduled--pause-owned-child"
+    life.add_meta(child_id, DaemonJobStatus.PAUSED)
+    owner_ready = asyncio.Event()
+    release_owner = asyncio.Event()
+
+    async def own_child() -> None:
+        assert life.manager._try_reserve_job_admission(child_id, allow_active=True)
+        owner_ready.set()
+        await release_owner.wait()
+        life.manager._release_job_admission(child_id)
+
+    owner = asyncio.create_task(own_child())
+    await asyncio.wait_for(owner_ready.wait(), timeout=1.0)
+    before = await life.manager._schedule_registry.get(life.schedule_id)
+    assert before is not None
+    before_due, before_handle = life.controller._timers[life.schedule_id]
+
+    try:
+        with pytest.raises(JobSubmissionError, match="already being submitted"):
+            await life.manager.pause_job(life.schedule_id)
+
+        after = await life.manager._schedule_registry.get(life.schedule_id)
+        assert after is not None and after.enabled is True
+        assert after.updated_at == before.updated_at
+        assert after.next_due_at == before.next_due_at
+        after_due, after_handle = life.controller._timers[life.schedule_id]
+        assert after_due == before_due
+        assert after_handle is before_handle
+        reservation = life.manager._job_admission_reservations[child_id]
+        assert reservation.owner is owner and reservation.depth == 1
+        assert life.manager._schedule_admission_reservations == {}
+    finally:
+        release_owner.set()
+        await owner
+
+    assert life.manager._job_admission_reservations == {}
+
+
+@pytest.mark.asyncio
 async def test_cancel_remove_failure_leaves_real_recurrence_paused_and_loud(
     real_lifecycle: RealLifecycle,
     monkeypatch: pytest.MonkeyPatch,
@@ -598,6 +742,193 @@ async def test_pause_partial_failure_restores_pending_request_and_status(
 
     assert life.manager._pending_jobs[pending_id] is request
     assert pending.status is DaemonJobStatus.PENDING
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_second_pending_pause_failure_restores_first_pending_child(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A later PENDING status failure restores every earlier staged child."""
+    life = real_lifecycle
+    first_id = "Anchor Schedule--scheduled--pending-first"
+    second_id = "Anchor Schedule--scheduled--pending-second"
+    first = life.add_meta(first_id, DaemonJobStatus.PENDING)
+    second = life.add_meta(second_id, DaemonJobStatus.PENDING)
+    requests = {
+        job_id: JobRequest(
+            config_path=life.score_path,
+            job_id=job_id,
+            schedule_id=life.schedule_id,
+            scheduled_due_at=float(index),
+        )
+        for index, job_id in enumerate((first_id, second_id), start=1)
+    }
+    life.manager._pending_jobs.update(requests)
+    original_set_status = life.manager._set_job_status
+
+    async def fail_second(
+        job_id: str,
+        status: DaemonJobStatus,
+        **kwargs: object,
+    ) -> None:
+        if job_id == second_id and status is DaemonJobStatus.PAUSED:
+            raise RuntimeError("second pending pause failed")
+        await original_set_status(job_id, status, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(life.manager, "_set_job_status", fail_second)
+
+    with pytest.raises(RuntimeError, match="second pending pause failed"):
+        await life.manager.pause_job(life.schedule_id)
+
+    assert first.status is DaemonJobStatus.PENDING
+    assert second.status is DaemonJobStatus.PENDING
+    assert life.manager._pending_jobs[first_id] is requests[first_id]
+    assert life.manager._pending_jobs[second_id] is requests[second_id]
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_second_queued_pause_failure_keeps_every_queued_task(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Queued tasks are not cancelled until all fallible pause writes succeed."""
+    life = real_lifecycle
+    first_id = "Anchor Schedule--scheduled--queued-first"
+    second_id = "Anchor Schedule--scheduled--queued-second"
+    first = life.add_meta(first_id, DaemonJobStatus.QUEUED)
+    second = life.add_meta(second_id, DaemonJobStatus.QUEUED)
+    tasks = {
+        first_id: asyncio.create_task(asyncio.Event().wait()),
+        second_id: asyncio.create_task(asyncio.Event().wait()),
+    }
+    life.manager._jobs.update(tasks)
+    original_set_status = life.manager._set_job_status
+
+    async def fail_second(
+        job_id: str,
+        status: DaemonJobStatus,
+        **kwargs: object,
+    ) -> None:
+        if job_id == second_id and status is DaemonJobStatus.PAUSED:
+            raise RuntimeError("second queued pause failed")
+        await original_set_status(job_id, status, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(life.manager, "_set_job_status", fail_second)
+
+    with pytest.raises(RuntimeError, match="second queued pause failed"):
+        await life.manager.pause_job(life.schedule_id)
+
+    assert first.status is DaemonJobStatus.QUEUED
+    assert second.status is DaemonJobStatus.QUEUED
+    assert life.manager._jobs[first_id] is tasks[first_id]
+    assert life.manager._jobs[second_id] is tasks[second_id]
+    assert not tasks[first_id].done()
+    assert not tasks[second_id].done()
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_pending_pause_caller_cancellation_restores_staged_children(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Caller cancellation remains loud after staged child state is restored."""
+    life = real_lifecycle
+    first_id = "Anchor Schedule--scheduled--pending-cancel-first"
+    second_id = "Anchor Schedule--scheduled--pending-cancel-second"
+    first = life.add_meta(first_id, DaemonJobStatus.PENDING)
+    second = life.add_meta(second_id, DaemonJobStatus.PENDING)
+    requests = {
+        job_id: JobRequest(
+            config_path=life.score_path,
+            job_id=job_id,
+            schedule_id=life.schedule_id,
+            scheduled_due_at=float(index),
+        )
+        for index, job_id in enumerate((first_id, second_id), start=1)
+    }
+    life.manager._pending_jobs.update(requests)
+    second_entered = asyncio.Event()
+    release_second = asyncio.Event()
+    original_set_status = life.manager._set_job_status
+
+    async def hold_second(
+        job_id: str,
+        status: DaemonJobStatus,
+        **kwargs: object,
+    ) -> None:
+        if job_id == second_id and status is DaemonJobStatus.PAUSED:
+            second_entered.set()
+            await release_second.wait()
+        await original_set_status(job_id, status, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(life.manager, "_set_job_status", hold_second)
+    pause = asyncio.create_task(life.manager.pause_job(life.schedule_id))
+    await asyncio.wait_for(second_entered.wait(), timeout=1.0)
+    pause.cancel()
+    release_second.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await pause
+
+    assert first.status is DaemonJobStatus.PENDING
+    assert second.status is DaemonJobStatus.PENDING
+    assert life.manager._pending_jobs[first_id] is requests[first_id]
+    assert life.manager._pending_jobs[second_id] is requests[second_id]
+    current = await life.manager._schedule_registry.get(life.schedule_id)
+    assert current is not None and current.enabled is True
+    assert life.manager._job_admission_reservations == {}
+    assert life.manager._schedule_admission_reservations == {}
+
+
+@pytest.mark.asyncio
+async def test_pending_pause_rollback_failure_is_loud(
+    real_lifecycle: RealLifecycle,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed child rollback is reported after recurrence safety restoration."""
+    life = real_lifecycle
+    first_id = "Anchor Schedule--scheduled--pending-rollback-first"
+    second_id = "Anchor Schedule--scheduled--pending-rollback-second"
+    life.add_meta(first_id, DaemonJobStatus.PENDING)
+    life.add_meta(second_id, DaemonJobStatus.PENDING)
+    for index, job_id in enumerate((first_id, second_id), start=1):
+        life.manager._pending_jobs[job_id] = JobRequest(
+            config_path=life.score_path,
+            job_id=job_id,
+            schedule_id=life.schedule_id,
+            scheduled_due_at=float(index),
+        )
+    original_set_status = life.manager._set_job_status
+
+    async def fail_pause_and_rollback(
+        job_id: str,
+        status: DaemonJobStatus,
+        **kwargs: object,
+    ) -> None:
+        if job_id == second_id and status is DaemonJobStatus.PAUSED:
+            raise RuntimeError("second pending pause failed")
+        if job_id == first_id and status is DaemonJobStatus.PENDING:
+            raise RuntimeError("pending rollback failed")
+        await original_set_status(job_id, status, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(life.manager, "_set_job_status", fail_pause_and_rollback)
+
+    with pytest.raises(RuntimeError, match="rollback.*failed"):
+        await life.manager.pause_job(life.schedule_id)
+
     current = await life.manager._schedule_registry.get(life.schedule_id)
     assert current is not None and current.enabled is True
     assert life.manager._job_admission_reservations == {}

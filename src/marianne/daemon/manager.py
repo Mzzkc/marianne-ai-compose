@@ -2453,18 +2453,25 @@ class JobManager:
         assert controller is not None
         claims: list[tuple[str, ...]] = []
         authority: ScheduleRecord | None = None
+        pause_mutation_entered = False
         owned_job_ids: list[str] = []
         changed_events: list[asyncio.Event] = []
         created_signals: list[Path] = []
         changed_baton: list[tuple[JobMeta, bool, bool]] = []
+        staged_children: list[tuple[JobMeta, DaemonJobStatus]] = []
+        pause_commit_started = False
 
         def claim(schedule_ids: tuple[str, ...]) -> None:
             self._claim_lifecycle_admission(claims, schedule_ids)
 
         def capture_authority(current: ScheduleRecord) -> None:
             nonlocal authority
-            authority = current
             self._claim_related_job_admissions(current, owned_job_ids)
+            authority = current
+
+        def mark_pause_mutation(_current: ScheduleRecord) -> None:
+            nonlocal pause_mutation_entered
+            pause_mutation_entered = True
 
         try:
             current = await controller.pause(
@@ -2472,6 +2479,7 @@ class JobManager:
                 score_path=record.score_path,
                 before_mutation=claim,
                 on_authority=capture_authority,
+                on_mutation=mark_pause_mutation,
             )
             related = self._schedule_related_meta(current)
 
@@ -2492,6 +2500,14 @@ class JobManager:
                 return 4
 
             for meta in sorted(related, key=pause_order):
+                if meta.status in {
+                    DaemonJobStatus.PENDING,
+                    DaemonJobStatus.QUEUED,
+                }:
+                    prior_status = meta.status
+                    staged_children.append((meta, prior_status))
+                    await self._set_job_status(meta.job_id, DaemonJobStatus.PAUSED)
+                    continue
                 event = self._pause_events.get(meta.job_id)
                 event_was_set = event.is_set() if event is not None else False
                 signal_path = meta.workspace / f".marianne-pause-{meta.job_id}"
@@ -2517,6 +2533,36 @@ class JobManager:
                     changed_events.append(event)
                 if not signal_existed and signal_path.exists():
                     created_signals.append(signal_path)
+
+            # Every fallible child status transition has succeeded. Commit
+            # pending removal and queued cancellation only now, so an earlier
+            # child can always be restored without recreating detached work.
+            pause_commit_started = True
+            queued_tasks: list[asyncio.Task[Any]] = []
+            for meta, prior_status in staged_children:
+                if prior_status is DaemonJobStatus.PENDING:
+                    self._pending_jobs.pop(meta.job_id, None)
+                    continue
+                task = self._jobs.pop(meta.job_id, None)
+                if task is not None and not task.done():
+                    task.cancel(msg=f"schedule pause requested for {meta.job_id}")
+                    queued_tasks.append(task)
+            if queued_tasks:
+
+                async def settle_queued_tasks() -> None:
+                    await asyncio.gather(*queued_tasks, return_exceptions=True)
+
+                settlement = asyncio.create_task(
+                    settle_queued_tasks(),
+                    name=f"schedule-pause-settle-{current.schedule_id}",
+                )
+                try:
+                    await asyncio.shield(settlement)
+                except asyncio.CancelledError:
+                    # Cancellation remains loud, but every already-cancelled
+                    # queued task settles before lifecycle ownership is lost.
+                    await settlement
+                    raise
             if changed_baton:
                 from marianne.daemon.baton.events import PauseJob
 
@@ -2528,6 +2574,18 @@ class JobManager:
                     )
             return True
         except BaseException as exc:
+            if pause_commit_started:
+                # The pause is fully committed and all queued tasks have been
+                # joined. Propagate cancellation/failure loudly without
+                # pretending the completed lifecycle transition was undone.
+                raise
+            child_rollback_error: BaseException | None = None
+            for meta, prior_status in reversed(staged_children):
+                try:
+                    await self._set_job_status(meta.job_id, prior_status)
+                except BaseException as rollback_exc:
+                    if child_rollback_error is None:
+                        child_rollback_error = rollback_exc
             baton_rollback_error: BaseException | None = None
             for meta, paused, user_paused in reversed(changed_baton):
                 baton_job = (
@@ -2557,7 +2615,12 @@ class JobManager:
                         path=str(signal_path),
                         exc_info=True,
                     )
-            if authority is not None and authority.enabled and claims:
+            if (
+                pause_mutation_entered
+                and authority is not None
+                and authority.enabled
+                and claims
+            ):
                 try:
                     await controller.resume(
                         authority.schedule_id,
@@ -2573,6 +2636,11 @@ class JobManager:
                 raise RuntimeError(
                     f"Failed to pause active job {job_id!r}; baton rollback "
                     f"also failed: {baton_rollback_error}"
+                ) from exc
+            if child_rollback_error is not None:
+                raise RuntimeError(
+                    f"Failed to pause active job {job_id!r}; child rollback "
+                    f"also failed: {child_rollback_error}"
                 ) from exc
             raise
         finally:
@@ -3090,7 +3158,14 @@ class JobManager:
         """Cancel active work and remove its recurrence, when present."""
         record = await JobManager._schedule_for_job(self, job_id)
         if record is None:
-            return await self._cancel_active_job(job_id, source=source)
+            if not self._try_reserve_job_admission(job_id, allow_active=True):
+                raise JobSubmissionError(
+                    f"Score '{job_id}' is already being submitted"
+                )
+            try:
+                return await self._cancel_active_job(job_id, source=source)
+            finally:
+                self._release_job_admission(job_id)
 
         controller = getattr(self, "_recurrence_controller", None)
         assert controller is not None

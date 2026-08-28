@@ -345,6 +345,7 @@ class RecurrenceController:
         score_path: Path | None = None,
         before_mutation: LifecycleAdmission | None = None,
         on_authority: LifecycleAuthority | None = None,
+        on_mutation: LifecycleAuthority | None = None,
     ) -> ScheduleRecord:
         """Pause one schedule and cancel its pending timer."""
         async with self._lock_current_schedule(schedule_id, score_path) as record:
@@ -353,6 +354,8 @@ class RecurrenceController:
             if on_authority is not None:
                 on_authority(record)
             await self._registry.pause(record.schedule_id)
+            if on_mutation is not None:
+                on_mutation(record)
             self._cancel_timer(record.schedule_id)
             refreshed = await self._registry.get(record.schedule_id)
             if refreshed is None:
