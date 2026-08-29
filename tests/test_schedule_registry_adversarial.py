@@ -124,12 +124,15 @@ async def test_invalid_persisted_schedule_json_has_safe_diagnostic(
     [
         ("schedule_json", '{"interval": "not-a-duration"}'),
         ("next_due_at", "not-a-number"),
+        ("enabled", 2),
+        ("last_outcome", b"not-text"),
+        ("updated_at", "not-a-number"),
     ],
 )
 async def test_bulk_list_exposes_one_idempotent_disabled_diagnostic_per_bad_row(
     tmp_path: Path,
     field: str,
-    value: str,
+    value: object,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A corrupt peer is visible, disabled once, and cannot block a healthy one."""
@@ -148,6 +151,8 @@ async def test_bulk_list_exposes_one_idempotent_disabled_diagnostic_per_bad_row(
         )
 
     async with aiosqlite.connect(str(db_path)) as connection:
+        if field == "enabled":
+            await connection.execute("PRAGMA ignore_check_constraints = ON")
         await connection.execute(
             f"UPDATE schedules SET {field} = ? WHERE schedule_id = ?",
             (value, "daily-report"),
@@ -173,17 +178,24 @@ async def test_bulk_list_exposes_one_idempotent_disabled_diagnostic_per_bad_row(
                     ("daily-report",),
                 )
             ).fetchone()
+        with pytest.raises(ScheduleRegistryDataError):
+            await registry.get("daily-report")
+        for lifecycle in (registry.pause, registry.resume, registry.remove):
+            with pytest.raises(ScheduleRegistryDataError):
+                await lifecycle("daily-report")
 
     assert [record.schedule_id for record in first] == ["daily-report", "healthy-report"]
     assert [record.schedule_id for record in second] == ["daily-report", "healthy-report"]
     diagnostic = first[0]
     assert diagnostic.enabled is False
+    assert diagnostic.diagnostic == "registry_data_error"
     assert diagnostic.last_outcome == "registry_data_error"
     assert diagnostic.schedule_json == ""
     assert diagnostic.score_path == Path("<registry-data-error>")
     assert first_write is not None
     assert first_write[:2] == (0, "registry_data_error")
     assert second_write == first_write
+    assert second[0].diagnostic == "registry_data_error"
     assert second[1].enabled is True
     logged.assert_called_once_with(
         "schedule.registry_data_disabled",

@@ -22,6 +22,7 @@ from marianne.core.config import ScheduleConfig
 from marianne.core.logging import get_logger
 
 _logger = get_logger("daemon.schedule_registry")
+_REGISTRY_DATA_ERROR = "registry_data_error"
 
 
 class ScheduleRegistryError(RuntimeError):
@@ -240,10 +241,10 @@ class ScheduleRegistry:
               AND (enabled != 0 OR COALESCE(last_outcome, '') != ?)
             """,
             (
-                "registry_data_error",
+                _REGISTRY_DATA_ERROR,
                 time.time(),
                 schedule_id,
-                "registry_data_error",
+                _REGISTRY_DATA_ERROR,
             ),
         )
         return cursor.rowcount == 1
@@ -257,6 +258,10 @@ class ScheduleRegistry:
         await self._set_enabled(schedule_id, enabled=True)
 
     async def _set_enabled(self, schedule_id: str, *, enabled: bool) -> None:
+        if await self.get(schedule_id) is None:
+            raise ScheduleRegistryError(
+                f"Schedule {schedule_id!r} does not exist for enabled-state mutation"
+            )
         cursor = await self._execute_mutation(
             "set enabled state",
             "UPDATE schedules SET enabled = ?, updated_at = ? WHERE schedule_id = ?",
@@ -270,6 +275,10 @@ class ScheduleRegistry:
 
     async def remove(self, schedule_id: str) -> None:
         """Remove a registration and all of its durable lease state."""
+        if await self.get(schedule_id) is None:
+            raise ScheduleRegistryError(
+                f"Schedule {schedule_id!r} does not exist for removal"
+            )
         cursor = await self._execute_mutation(
             "remove",
             "DELETE FROM schedules WHERE schedule_id = ?",
@@ -420,6 +429,15 @@ class ScheduleRegistry:
     @staticmethod
     def _row_to_record(row: aiosqlite.Row) -> ScheduleRecord:
         schedule_id = _required_text(row["schedule_id"], "schedule_id")
+        last_outcome = (
+            _required_text(row["last_outcome"], "last_outcome")
+            if row["last_outcome"] is not None
+            else None
+        )
+        if last_outcome == _REGISTRY_DATA_ERROR:
+            raise ScheduleRegistryDataError(
+                f"Schedule {schedule_id!r} is quarantined after registry data corruption"
+            )
         schedule_json = _required_text(row["schedule_json"], "schedule_json")
         _validate_schedule_json(schedule_json, schedule_id)
         return ScheduleRecord(
@@ -442,11 +460,7 @@ class ScheduleRegistry:
                 if row["last_run_id"] is not None
                 else None
             ),
-            last_outcome=(
-                _required_text(row["last_outcome"], "last_outcome")
-                if row["last_outcome"] is not None
-                else None
-            ),
+            last_outcome=last_outcome,
             consecutive_drops=_drop_count(row["consecutive_drops"]),
         )
 
@@ -473,7 +487,7 @@ class ScheduleRegistry:
             updated_at=0.0,
             last_due_at=None,
             last_run_id=None,
-            last_outcome="registry_data_error",
+            last_outcome=_REGISTRY_DATA_ERROR,
             consecutive_drops=0,
             diagnostic="registry_data_error",
         )

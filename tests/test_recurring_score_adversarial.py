@@ -14,6 +14,7 @@ import pytest
 from marianne.daemon.baton.events import CronTick, RateLimitHit
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.manager import DaemonJobStatus, JobManager
+from marianne.daemon.schedule_registry import ScheduleRegistryDataError
 from marianne.daemon.types import JobRequest
 
 
@@ -93,9 +94,15 @@ async def _wait_until(predicate: Callable[[], bool]) -> None:
 async def test_corrupt_schedule_row_is_disabled_without_blocking_restart(
     tmp_path: Path,
 ) -> None:
-    """One corrupt row is loud and disabled; it cannot prevent recovery of the manager."""
+    """A quarantined row stays inert while a healthy peer restores twice."""
     score_path = tmp_path / "score.yaml"
     _write_score(score_path, tmp_path / "workspace")
+    healthy_path = tmp_path / "healthy.yaml"
+    _write_score(
+        healthy_path,
+        tmp_path / "healthy-workspace",
+        name="healthy-runtime-score",
+    )
 
     manager = _manager(tmp_path)
     await manager.start()
@@ -103,6 +110,9 @@ async def test_corrupt_schedule_row_is_disabled_without_blocking_restart(
         response = await manager.submit_job(JobRequest(config_path=score_path))
         assert response.status == "accepted"
         await _wait_for_terminal(manager, response.job_id)
+        healthy_response = await manager.submit_job(JobRequest(config_path=healthy_path))
+        assert healthy_response.status == "accepted"
+        await _wait_for_terminal(manager, healthy_response.job_id)
     finally:
         await manager.shutdown(graceful=False)
 
@@ -114,33 +124,41 @@ async def test_corrupt_schedule_row_is_disabled_without_blocking_restart(
         )
         connection.commit()
 
-    restarted = _manager(tmp_path)
-    await restarted.start()
-    try:
-        with sqlite3.connect(db_path) as connection:
-            row = connection.execute(
-                "SELECT enabled, last_outcome FROM schedules WHERE schedule_id = ?",
-                ("corrupt-runtime-score",),
-            ).fetchone()
-        assert row == (0, "registry_data_error")
-        assert restarted._recurrence_controller is not None
-        assert restarted._recurrence_controller._timers == {}
-        status = next(
-            item
-            for item in await restarted.list_jobs()
-            if item["job_id"] == "corrupt-runtime-score"
-        )
-        assert status["schedule"] == {
-            "enabled": False,
-            "next_due_at": None,
-            "last_due_at": None,
-            "last_run_id": None,
-            "last_outcome": "registry_data_error",
-            "consecutive_drops": 0,
-            "diagnostic": "registry_data_error",
-        }
-    finally:
-        await restarted.shutdown(graceful=False)
+    for _ in range(2):
+        restarted = _manager(tmp_path)
+        await restarted.start()
+        try:
+            with sqlite3.connect(db_path) as connection:
+                row = connection.execute(
+                    "SELECT enabled, last_outcome FROM schedules WHERE schedule_id = ?",
+                    ("corrupt-runtime-score",),
+                ).fetchone()
+            assert row == (0, "registry_data_error")
+            assert restarted._recurrence_controller is not None
+            assert set(restarted._recurrence_controller._timers) == {
+                "healthy-runtime-score"
+            }
+            status = next(
+                item
+                for item in await restarted.list_jobs()
+                if item["job_id"] == "corrupt-runtime-score"
+            )
+            assert status["schedule"] == {
+                "enabled": False,
+                "next_due_at": None,
+                "last_due_at": None,
+                "last_run_id": None,
+                "last_outcome": "registry_data_error",
+                "consecutive_drops": 0,
+                "diagnostic": "registry_data_error",
+            }
+            healthy = await restarted._schedule_registry.get("healthy-runtime-score")
+            assert healthy is not None
+            assert healthy.enabled is True
+            with pytest.raises(ScheduleRegistryDataError):
+                await restarted.resume_job("corrupt-runtime-score")
+        finally:
+            await restarted.shutdown(graceful=False)
 
 
 @pytest.mark.adversarial
