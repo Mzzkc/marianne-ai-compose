@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import aiosqlite
 import pytest
@@ -115,6 +116,128 @@ async def test_invalid_persisted_schedule_json_has_safe_diagnostic(
     message = str(exc_info.value)
     assert "daily-report" in message
     assert "sensitive source content" not in message
+
+
+@pytest.mark.adversarial
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("schedule_json", '{"interval": "not-a-duration"}'),
+        ("next_due_at", "not-a-number"),
+    ],
+)
+async def test_bulk_list_exposes_one_idempotent_disabled_diagnostic_per_bad_row(
+    tmp_path: Path,
+    field: str,
+    value: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A corrupt peer is visible, disabled once, and cannot block a healthy one."""
+    db_path = tmp_path / "conductor-state.db"
+    logged = MagicMock()
+    monkeypatch.setattr("marianne.daemon.schedule_registry._logger.error", logged)
+    async with ScheduleRegistry(db_path) as registry:
+        await _upsert_due(registry)
+        await registry.upsert(
+            "healthy-report",
+            "healthy-report",
+            Path("/scores/healthy-report.yaml"),
+            ScheduleConfig(interval="1h"),
+            "healthy-digest",
+            200.0,
+        )
+
+    async with aiosqlite.connect(str(db_path)) as connection:
+        await connection.execute(
+            f"UPDATE schedules SET {field} = ? WHERE schedule_id = ?",
+            (value, "daily-report"),
+        )
+        await connection.commit()
+
+    async with ScheduleRegistry(db_path) as registry:
+        first = await registry.list()
+        async with aiosqlite.connect(str(db_path)) as connection:
+            first_write = await (
+                await connection.execute(
+                    "SELECT enabled, last_outcome, updated_at FROM schedules "
+                    "WHERE schedule_id = ?",
+                    ("daily-report",),
+                )
+            ).fetchone()
+        second = await registry.list()
+        async with aiosqlite.connect(str(db_path)) as connection:
+            second_write = await (
+                await connection.execute(
+                    "SELECT enabled, last_outcome, updated_at FROM schedules "
+                    "WHERE schedule_id = ?",
+                    ("daily-report",),
+                )
+            ).fetchone()
+
+    assert [record.schedule_id for record in first] == ["daily-report", "healthy-report"]
+    assert [record.schedule_id for record in second] == ["daily-report", "healthy-report"]
+    diagnostic = first[0]
+    assert diagnostic.enabled is False
+    assert diagnostic.last_outcome == "registry_data_error"
+    assert diagnostic.schedule_json == ""
+    assert diagnostic.score_path == Path("<registry-data-error>")
+    assert first_write is not None
+    assert first_write[:2] == (0, "registry_data_error")
+    assert second_write == first_write
+    assert second[1].enabled is True
+    logged.assert_called_once_with(
+        "schedule.registry_data_disabled",
+        schedule_id="daily-report",
+    )
+
+
+@pytest.mark.adversarial
+async def test_bulk_list_repairs_raw_schedule_keys_without_public_key_collisions(
+    tmp_path: Path,
+) -> None:
+    """Empty and non-text SQLite keys retain exact repair identity but safe labels."""
+    db_path = tmp_path / "conductor-state.db"
+    async with ScheduleRegistry(db_path) as registry:
+        await _upsert_due(registry)
+        await registry.upsert(
+            "second-report",
+            "second-report",
+            Path("/scores/second-report.yaml"),
+            ScheduleConfig(interval="1h"),
+            "second-digest",
+            200.0,
+        )
+
+    async with aiosqlite.connect(str(db_path)) as connection:
+        await connection.execute(
+            "UPDATE schedules SET schedule_id = ?, schedule_json = ? "
+            "WHERE schedule_id = ?",
+            ("", '{"interval": "bad"}', "daily-report"),
+        )
+        await connection.execute(
+            "UPDATE schedules SET schedule_id = ?, next_due_at = ? "
+            "WHERE schedule_id = ?",
+            (b"\x00bad-key", "not-a-number", "second-report"),
+        )
+        await connection.commit()
+
+    async with ScheduleRegistry(db_path) as registry:
+        first = await registry.list()
+        second = await registry.list()
+
+    assert len(first) == len(second) == 2
+    assert all(record.enabled is False for record in first)
+    assert all(record.diagnostic == "registry_data_error" for record in first)
+    assert len({record.schedule_id for record in first}) == 2
+    assert all(record.schedule_id.startswith("registry-data-error-") for record in first)
+    async with aiosqlite.connect(str(db_path)) as connection:
+        rows = await (
+            await connection.execute(
+                "SELECT typeof(schedule_id), enabled, last_outcome FROM schedules "
+                "ORDER BY rowid"
+            )
+        ).fetchall()
+    assert rows == [("text", 0, "registry_data_error"), ("blob", 0, "registry_data_error")]
 
 
 @pytest.mark.adversarial

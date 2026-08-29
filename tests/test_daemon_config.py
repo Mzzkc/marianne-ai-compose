@@ -197,9 +197,12 @@ class TestDaemonConfig:
         assert config.pid_file == Path("/run/marianne.pid")
 
     def test_custom_state_db_path(self):
-        """Test custom state DB path."""
+        """A custom state DB path is an active durable-state setting."""
         config = DaemonConfig(state_db_path=Path("/var/lib/marianne/state.db"))
         assert config.state_db_path == Path("/var/lib/marianne/state.db")
+        assert "durable daemon state" in (
+            DaemonConfig.model_fields["state_db_path"].description or ""
+        )
 
     def test_custom_log_level(self):
         """Test custom log level."""
@@ -247,7 +250,7 @@ class TestDaemonConfig:
             ),
             pid_file=Path("/run/marianne.pid"),
             max_concurrent_jobs=10,
-            max_concurrent_sheets=20,  # Warns (Phase 3), but accepted
+            max_concurrent_sheets=20,
             resource_limits=ResourceLimitConfig(
                 max_memory_mb=4096,
                 max_processes=25,

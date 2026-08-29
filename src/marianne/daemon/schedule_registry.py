@@ -8,6 +8,7 @@ executes score sources or calculates recurrence; callers supply validated
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import math
 import sqlite3
 import time
@@ -56,6 +57,7 @@ class ScheduleRecord:
     last_run_id: str | None
     last_outcome: str | None
     consecutive_drops: int
+    diagnostic: str | None = None
 
 
 @dataclass(frozen=True)
@@ -199,12 +201,12 @@ class ScheduleRegistry:
         return self._row_to_record(row)
 
     async def list(self) -> list[ScheduleRecord]:
-        """List valid projections and disable malformed rows with a safe outcome.
+        """List projections, surfacing malformed rows as safe disabled diagnostics.
 
         Startup restoration must not let one damaged durable projection prevent
-        every other schedule from restoring.  ``get()`` remains strict for a
-        caller that explicitly requests that row; the bulk restoration view
-        records the safe disabled state and omits only the malformed schedule.
+        every other schedule from restoring. ``get()`` remains strict for a
+        caller that explicitly requests that row; the bulk view returns one
+        safe disabled diagnostic without deserializing the damaged payload.
         """
         try:
             cursor = await self._db.execute("SELECT * FROM schedules ORDER BY schedule_id")
@@ -216,30 +218,35 @@ class ScheduleRegistry:
             try:
                 records.append(self._row_to_record(row))
             except ScheduleRegistryDataError:
-                schedule_id = str(row["schedule_id"])
-                await self._disable_malformed_record(schedule_id)
-                _logger.error(
-                    "schedule.registry_data_disabled",
-                    schedule_id=schedule_id,
-                )
+                raw_schedule_id = row["schedule_id"]
+                schedule_id = self._diagnostic_schedule_id(raw_schedule_id)
+                changed = await self._disable_malformed_record(raw_schedule_id)
+                if changed:
+                    _logger.error(
+                        "schedule.registry_data_disabled",
+                        schedule_id=schedule_id,
+                    )
+                records.append(self._diagnostic_record(schedule_id))
         return records
 
-    async def _disable_malformed_record(self, schedule_id: str) -> None:
-        """Persist a non-runnable outcome for one row rejected by validation."""
+    async def _disable_malformed_record(self, schedule_id: object) -> bool:
+        """Disable malformed state once, without rewriting a stable diagnostic."""
         cursor = await self._execute_mutation(
             "disable malformed schedule",
             """
             UPDATE schedules
             SET enabled = 0, last_outcome = ?, updated_at = ?
             WHERE schedule_id = ?
+              AND (enabled != 0 OR COALESCE(last_outcome, '') != ?)
             """,
-            ("registry_data_error", time.time(), schedule_id),
-            schedule_id=schedule_id,
+            (
+                "registry_data_error",
+                time.time(),
+                schedule_id,
+                "registry_data_error",
+            ),
         )
-        if cursor.rowcount != 1:
-            raise ScheduleRegistryError(
-                f"Schedule {schedule_id!r} disappeared while disabling malformed state"
-            )
+        return cursor.rowcount == 1
 
     async def pause(self, schedule_id: str) -> None:
         """Disable future claims for a schedule without deleting its history."""
@@ -412,27 +419,63 @@ class ScheduleRegistry:
 
     @staticmethod
     def _row_to_record(row: aiosqlite.Row) -> ScheduleRecord:
-        schedule_id = str(row["schedule_id"])
-        schedule_json = str(row["schedule_json"])
+        schedule_id = _required_text(row["schedule_id"], "schedule_id")
+        schedule_json = _required_text(row["schedule_json"], "schedule_json")
         _validate_schedule_json(schedule_json, schedule_id)
         return ScheduleRecord(
             schedule_id=schedule_id,
-            score_name=str(row["score_name"]),
-            score_path=Path(str(row["score_path"])),
+            score_name=_required_text(row["score_name"], "score_name"),
+            score_path=Path(_required_text(row["score_path"], "score_path")),
             schedule_json=schedule_json,
-            source_digest=str(row["source_digest"]),
-            enabled=bool(row["enabled"]),
-            next_due_at=float(row["next_due_at"]),
-            created_at=float(row["created_at"]),
-            updated_at=float(row["updated_at"]),
+            source_digest=_required_text(row["source_digest"], "source_digest"),
+            enabled=_enabled_value(row["enabled"]),
+            next_due_at=_stored_epoch(row["next_due_at"], "next_due_at"),
+            created_at=_stored_epoch(row["created_at"], "created_at"),
+            updated_at=_stored_epoch(row["updated_at"], "updated_at"),
             last_due_at=(
-                float(row["last_due_at"]) if row["last_due_at"] is not None else None
+                _stored_epoch(row["last_due_at"], "last_due_at")
+                if row["last_due_at"] is not None
+                else None
             ),
-            last_run_id=(str(row["last_run_id"]) if row["last_run_id"] is not None else None),
+            last_run_id=(
+                _required_text(row["last_run_id"], "last_run_id")
+                if row["last_run_id"] is not None
+                else None
+            ),
             last_outcome=(
-                str(row["last_outcome"]) if row["last_outcome"] is not None else None
+                _required_text(row["last_outcome"], "last_outcome")
+                if row["last_outcome"] is not None
+                else None
             ),
-            consecutive_drops=int(row["consecutive_drops"]),
+            consecutive_drops=_drop_count(row["consecutive_drops"]),
+        )
+
+    @staticmethod
+    def _diagnostic_schedule_id(value: object) -> str:
+        """Return a safe public label without altering the raw SQLite key."""
+        if isinstance(value, str) and value:
+            return value
+        identity = repr((type(value).__qualname__, value)).encode("utf-8", "backslashreplace")
+        return f"registry-data-error-{hashlib.sha256(identity).hexdigest()[:12]}"
+
+    @staticmethod
+    def _diagnostic_record(schedule_id: str) -> ScheduleRecord:
+        """Return a non-runnable projection without exposing damaged columns."""
+        return ScheduleRecord(
+            schedule_id=schedule_id,
+            score_name=schedule_id,
+            score_path=Path("<registry-data-error>"),
+            schedule_json="",
+            source_digest="",
+            enabled=False,
+            next_due_at=0.0,
+            created_at=0.0,
+            updated_at=0.0,
+            last_due_at=None,
+            last_run_id=None,
+            last_outcome="registry_data_error",
+            consecutive_drops=0,
+            diagnostic="registry_data_error",
         )
 
     @staticmethod
@@ -467,3 +510,37 @@ def _validate_schedule_json(schedule_json: str, schedule_id: str) -> None:
         raise ScheduleRegistryDataError(
             f"Invalid schedule configuration for schedule {schedule_id!r}"
         ) from exc
+
+
+def _required_text(value: object, field_name: str) -> str:
+    """Decode a required persisted text field without coercing corruption."""
+    if not isinstance(value, str) or not value:
+        raise ScheduleRegistryDataError(f"Invalid persisted {field_name}")
+    return value
+
+
+def _stored_epoch(value: object, field_name: str) -> float:
+    """Decode a finite persisted timestamp without SQLite's permissive coercion."""
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        raise ScheduleRegistryDataError(f"Invalid persisted {field_name}")
+    try:
+        epoch = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ScheduleRegistryDataError(f"Invalid persisted {field_name}") from exc
+    if not math.isfinite(epoch):
+        raise ScheduleRegistryDataError(f"Invalid persisted {field_name}")
+    return epoch
+
+
+def _enabled_value(value: object) -> bool:
+    """Decode SQLite's explicit enabled flag rather than truth-testing arbitrary data."""
+    if type(value) is not int or value not in (0, 1):
+        raise ScheduleRegistryDataError("Invalid persisted enabled")
+    return bool(value)
+
+
+def _drop_count(value: object) -> int:
+    """Decode the non-negative persisted drop counter."""
+    if type(value) is not int or value < 0:
+        raise ScheduleRegistryDataError("Invalid persisted consecutive_drops")
+    return value

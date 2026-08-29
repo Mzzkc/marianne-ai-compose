@@ -104,8 +104,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from marianne.core.config import PromptConfig, ValidationRule
 from marianne.core.config.spec import SpecFragment
 from marianne.core.sheet import Sheet

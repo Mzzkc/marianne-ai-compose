@@ -5,24 +5,30 @@ from __future__ import annotations
 import asyncio
 import os
 import sqlite3
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from marianne.daemon.baton.events import CronTick
+from marianne.daemon.baton.events import CronTick, RateLimitHit
 from marianne.daemon.config import DaemonConfig
 from marianne.daemon.manager import DaemonJobStatus, JobManager
 from marianne.daemon.types import JobRequest
 
 
-def _manager(tmp_path: Path) -> JobManager:
+def _manager(
+    tmp_path: Path,
+    *,
+    recurrence_clock: Callable[[], datetime] | None = None,
+) -> JobManager:
     return JobManager(
         DaemonConfig(
             max_concurrent_jobs=1,
             pid_file=tmp_path / "conductor.pid",
             state_db_path=tmp_path / "conductor-state.db",
-        )
+        ),
+        recurrence_clock=recurrence_clock,
     )
 
 
@@ -77,6 +83,12 @@ async def _tick(manager: JobManager, schedule_id: str, due_at: float) -> None:
     )
 
 
+async def _wait_until(predicate: Callable[[], bool]) -> None:
+    async with asyncio.timeout(8.0):
+        while not predicate():
+            await asyncio.sleep(0)
+
+
 @pytest.mark.adversarial
 async def test_corrupt_schedule_row_is_disabled_without_blocking_restart(
     tmp_path: Path,
@@ -113,6 +125,20 @@ async def test_corrupt_schedule_row_is_disabled_without_blocking_restart(
         assert row == (0, "registry_data_error")
         assert restarted._recurrence_controller is not None
         assert restarted._recurrence_controller._timers == {}
+        status = next(
+            item
+            for item in await restarted.list_jobs()
+            if item["job_id"] == "corrupt-runtime-score"
+        )
+        assert status["schedule"] == {
+            "enabled": False,
+            "next_due_at": None,
+            "last_due_at": None,
+            "last_run_id": None,
+            "last_outcome": "registry_data_error",
+            "consecutive_drops": 0,
+            "diagnostic": "registry_data_error",
+        }
     finally:
         await restarted.shutdown(graceful=False)
 
@@ -242,6 +268,14 @@ class _Clock:
         return self.value
 
 
+class _RecurrenceClock:
+    def __init__(self, value: datetime) -> None:
+        self.value = value
+
+    def __call__(self) -> datetime:
+        return self.value
+
+
 @pytest.mark.adversarial
 async def test_expired_score_deadline_fails_before_cli_dispatch(tmp_path: Path) -> None:
     """A child that waits behind admission consumes its original wall deadline."""
@@ -275,10 +309,10 @@ async def test_expired_score_deadline_fails_before_cli_dispatch(tmp_path: Path) 
 
 
 @pytest.mark.adversarial
-async def test_downtime_latest_and_pending_child_collapse_to_one_action(
+async def test_downtime_latest_reconstructs_one_child_on_a_new_manager(
     tmp_path: Path,
 ) -> None:
-    """Latest recovery and pending admission retain one exact child identity."""
+    """Physical restart collapses multiple missed ticks to one latest child."""
     score_path = tmp_path / "latest.yaml"
     _write_score(
         score_path,
@@ -286,36 +320,104 @@ async def test_downtime_latest_and_pending_child_collapse_to_one_action(
         name="latest-score",
         schedule="  interval: 1h\n  misfire: latest\n",
     )
-    manager = _manager(tmp_path)
+    clock = _RecurrenceClock(datetime(2026, 1, 1, tzinfo=UTC))
+    manager = _manager(tmp_path, recurrence_clock=clock)
     await manager.start()
     try:
         response = await manager.submit_job(JobRequest(config_path=score_path))
         await _wait_for_terminal(manager, response.job_id)
         record = await manager._schedule_registry.get("latest-score")
-        controller = manager._recurrence_controller
         assert record is not None
-        assert controller is not None
-        controller._now = lambda: datetime.fromtimestamp(
-            record.next_due_at + 8 * 3600, tz=UTC
-        )
-        await controller.restore()
-        recovered = await manager._schedule_registry.get("latest-score")
-        children = [job_id for job_id in manager._job_meta if "--scheduled--" in job_id]
+    finally:
+        await manager.shutdown(graceful=False)
+
+    clock.value = datetime.fromtimestamp(record.next_due_at + 8 * 3600, tz=UTC)
+    restarted = _manager(tmp_path, recurrence_clock=clock)
+    await restarted.start()
+    try:
+        children = [job_id for job_id in restarted._job_meta if "--scheduled--" in job_id]
+        assert len(children) == 1
+        await _wait_for_terminal(restarted, children[0])
+        recovered = await restarted._schedule_registry.get("latest-score")
         assert recovered is not None
         assert recovered.last_outcome == "submitted"
-        assert len(children) == 1
+        assert recovered.last_run_id == children[0]
+        assert recovered.last_due_at == record.next_due_at
+        assert recovered.next_due_at == record.next_due_at + 9 * 3600.0
+        assert len([job_id for job_id in restarted._job_meta if "--scheduled--" in job_id]) == 1
+    finally:
+        await restarted.shutdown(graceful=False)
 
-        pending = await manager._queue_pending_job(
-            JobRequest(
-                config_path=score_path,
-                job_id="latest-score--scheduled--pending",
-                schedule_id="latest-score",
-                scheduled_due_at=recovered.next_due_at,
-                fresh=True,
+
+@pytest.mark.adversarial
+async def test_rate_limited_scheduled_child_uses_real_baton_dispatch_and_one_due_claim(
+    tmp_path: Path,
+) -> None:
+    """A held Baton instrument delays one normal due child until it is cleared."""
+    score_path = tmp_path / "rate-limited.yaml"
+    run_log = tmp_path / "runs.log"
+    _write_score(
+        score_path,
+        tmp_path / "workspace",
+        name="rate-limited-score",
+        schedule="  interval: 1h\n",
+        command=f"printf 'completed\\n' >> {run_log}",
+    )
+    manager = _manager(tmp_path)
+    await manager.start()
+    try:
+        immediate = await manager.submit_job(JobRequest(config_path=score_path))
+        await _wait_for_terminal(manager, immediate.job_id)
+        record = await manager._schedule_registry.get("rate-limited-score")
+        adapter = manager._baton_adapter
+        assert record is not None
+        assert adapter is not None
+
+        adapter._baton.inbox.put_nowait(
+            RateLimitHit(
+                instrument="cli",
+                wait_seconds=600.0,
+                job_id=immediate.job_id,
+                sheet_num=1,
             )
         )
-        assert pending.status == "pending"
-        assert manager._job_meta[pending.job_id].status is DaemonJobStatus.PENDING
+        await _wait_until(
+            lambda: (
+                (state := adapter._baton.get_instrument_state("cli")) is not None
+                and state.rate_limited
+            )
+        )
+
+        await _tick(manager, "rate-limited-score", record.next_due_at)
+        await _wait_until(
+            lambda: len(
+                [job_id for job_id in manager._job_meta if "--scheduled--" in job_id]
+            )
+            == 1
+        )
+        held_children = [
+            job_id for job_id in manager._job_meta if "--scheduled--" in job_id
+        ]
+        held_record = await manager._schedule_registry.get("rate-limited-score")
+        assert held_record is not None
+        assert held_record.last_due_at == record.next_due_at
+        assert held_record.last_run_id == held_children[0]
+        assert manager._job_meta[held_children[0]].status is DaemonJobStatus.RUNNING
+        assert run_log.read_text(encoding="utf-8").splitlines() == ["completed"]
+
+        await _tick(manager, "rate-limited-score", record.next_due_at)
+        assert [
+            job_id for job_id in manager._job_meta if "--scheduled--" in job_id
+        ] == held_children
+        assert run_log.read_text(encoding="utf-8").splitlines() == ["completed"]
+
+        cleared = await manager.clear_rate_limits("cli")
+        assert cleared["cleared"] >= 1
+        await _wait_for_terminal(manager, held_children[0])
+        assert run_log.read_text(encoding="utf-8").splitlines() == [
+            "completed",
+            "completed",
+        ]
     finally:
         await manager.shutdown(graceful=False)
 

@@ -1189,7 +1189,7 @@ Available but rarely need changing:
 |-------|------|---------|-------------|-------------|
 | `socket` | `SocketConfig` | *(see sub-config)* | | Unix domain socket configuration |
 | `pid_file` | `Path` | `~/.config/mzt/mzt.pid` | | PID file for daemon process management |
-| `max_concurrent_sheets` | `int` | `10` | `1–100` | Global parallel sheet limit enforced by Baton dispatch. |
+| `max_concurrent_sheets` | `int` | `25` | `1–100` | Global parallel sheet limit enforced by Baton dispatch. |
 | `resource_limits` | `ResourceLimitConfig` | *(see sub-config)* | | Resource constraints |
 | `state_backend_type` | `"sqlite"` | `"sqlite"` | **Reserved — frozen to sqlite.** Changing has no effect. |
 | `state_db_path` | `Path` | `~/.marianne/daemon-state.db` | | Persistent job and recurring-schedule state database path |
@@ -1287,7 +1287,7 @@ Later runs use the same manager, Baton, cancellation, and receipt paths.
 schedule:
   interval: 1h                 # exactly one of interval or five-field cron
   # cron: "30 8 * * 1-5"
-  timezone: Europe/Berlin      # required for local cron meaning; interval is anchored
+  timezone: Europe/Berlin      # optional IANA zone for cron; omitted cron uses UTC
   misfire: latest              # skip (default) or latest, never a replay storm
   overlap: skip                # safe default; active lineage drops the due child
   jitter_seconds: 0
@@ -1295,7 +1295,8 @@ max_wall_seconds: 14400        # optional score cap; stricter of score/daemon ca
 ```
 
 Intervals advance from their scheduled anchor rather than completion time.
-Cron uses the declared IANA timezone (including DST), never the host locale.
+Cron uses the declared IANA timezone (including DST), or UTC when omitted; it
+never uses the host locale.
 Before each due action Marianne re-reads the YAML; deletion disables/removes
 the schedule, and a changed source declaration replaces its projection.
 `max_wall_seconds` is an absolute deadline from first admission, so pause,

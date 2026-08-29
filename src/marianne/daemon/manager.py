@@ -452,12 +452,14 @@ class JobManager:
         pgroup: ProcessGroupManager | None = None,
         wall_clock: Callable[[], float] = time.time,
         monotonic_clock: Callable[[], float] = time.monotonic,
+        recurrence_clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._config = config
         self._start_time = start_time or time.monotonic()
         self._pgroup = pgroup
         self._wall_clock = wall_clock
         self._monotonic_clock = monotonic_clock
+        self._recurrence_clock = recurrence_clock or utc_now
 
         # Phase 3: Centralized learning hub.
         # Single GlobalLearningStore shared across all jobs — pattern
@@ -776,6 +778,7 @@ class JobManager:
             self._baton_adapter.schedule_cron_tick,
             self._baton_adapter.cancel_cron_tick,
             self._is_schedule_active,
+            now=self._recurrence_clock,
         )
         self._baton_adapter.set_cron_handler(recurrence_controller.handle_tick)
         self._recurrence_controller = recurrence_controller
@@ -2480,14 +2483,19 @@ class JobManager:
     @staticmethod
     def _schedule_status(record: ScheduleRecord) -> dict[str, Any]:
         """Return the exact additive public recurrence projection."""
-        return ScheduleStatus(
+        diagnostic = getattr(record, "diagnostic", None)
+        status = ScheduleStatus(
             enabled=record.enabled,
-            next_due_at=record.next_due_at,
+            next_due_at=None if diagnostic is not None else record.next_due_at,
             last_due_at=record.last_due_at,
             last_run_id=record.last_run_id,
             last_outcome=record.last_outcome,
             consecutive_drops=record.consecutive_drops,
+            diagnostic=diagnostic,
         ).model_dump(mode="json")
+        if diagnostic is None:
+            status.pop("diagnostic")
+        return status
 
     @classmethod
     def _schedule_anchor_status(cls, record: ScheduleRecord) -> dict[str, Any]:

@@ -63,6 +63,8 @@ class RecurrenceController:
         """Restore one live timer or one collapsed misfire per enabled schedule."""
         current = self._current_time()
         for record in await self._registry.list():
+            if not record.enabled:
+                continue
             if record.next_due_at <= current.timestamp():
                 await self.handle_tick(
                     CronTick(

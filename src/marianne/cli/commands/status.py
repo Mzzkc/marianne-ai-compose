@@ -814,13 +814,21 @@ def _public_schedule(raw: object) -> dict[str, Any] | None:
         return None
     try:
         schedule = ScheduleStatus.model_validate(raw).model_dump(mode="json")
-        next_due_at = float(schedule["next_due_at"])
-        if not math.isfinite(next_due_at):
-            raise ValueError("next_due_at must be finite")
-        # Platform timestamp ranges differ. Validate with the same conversion
-        # used by human output so a payload accepted for JSON cannot later
-        # crash Rich rendering on this host.
-        datetime.fromtimestamp(next_due_at)
+        diagnostic = schedule.get("diagnostic")
+        next_due = schedule["next_due_at"]
+        if next_due is None:
+            if diagnostic != "registry_data_error" or schedule["enabled"]:
+                raise ValueError("next_due_at must be finite")
+        else:
+            next_due_at = float(next_due)
+            if not math.isfinite(next_due_at):
+                raise ValueError("next_due_at must be finite")
+            # Platform timestamp ranges differ. Validate with the same conversion
+            # used by human output so a payload accepted for JSON cannot later
+            # crash Rich rendering on this host.
+            datetime.fromtimestamp(next_due_at)
+        if diagnostic is None:
+            schedule.pop("diagnostic")
         return schedule
     except (OverflowError, OSError, TypeError, ValueError) as exc:
         _logger.warning(
@@ -832,10 +840,16 @@ def _public_schedule(raw: object) -> dict[str, Any] | None:
 
 def _render_schedule_status(schedule: dict[str, Any]) -> None:
     """Render useful recurrence state without controller internals."""
+    diagnostic = schedule.get("diagnostic")
     state = "ENABLED" if schedule["enabled"] else "PAUSED"
-    due = datetime.fromtimestamp(float(schedule["next_due_at"])).astimezone()
+    if diagnostic == "registry_data_error":
+        state = "DISABLED (registry data error)"
     console.print(f"\n  Recurring schedule: {state}")
-    console.print(f"  Next due: {due.strftime('%Y-%m-%d %H:%M %Z')}")
+    if schedule["next_due_at"] is None:
+        console.print("  Next due: unavailable (durable schedule data damaged)")
+    else:
+        due = datetime.fromtimestamp(float(schedule["next_due_at"])).astimezone()
+        console.print(f"  Next due: {due.strftime('%Y-%m-%d %H:%M %Z')}")
     drops = int(schedule["consecutive_drops"])
     if drops > 0:
         outcome = schedule.get("last_outcome") or "unknown"

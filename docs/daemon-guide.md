@@ -112,8 +112,9 @@ Each scheduled child is an ordinary job with schedule lineage.
 The effective wall limit is the stricter of daemon `job_timeout_seconds` and a
 score's `max_wall_seconds`. The score limit is an absolute admission deadline:
 pending time, pause/resume, and restart consume it rather than extending it.
-`mzt status` exposes schedule last/next due, last child/outcome, lease/overlap
-diagnostics, and configured/effective deadline evidence.
+`mzt status` exposes the public schedule projection: enabled state, last/next
+due, last child/outcome, consecutive-drop decisions, and configured/effective
+deadline evidence. The private durable due lease identity is not exposed.
 
 ### IPC Protocol
 
@@ -221,7 +222,7 @@ See the [Configuration Reference](configuration-reference.md) for the full field
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `state_db_path` | `Path` | `~/.marianne/daemon-state.db` | Job registry database path. Overridden by `--conductor-clone` for clone isolation. |
-| `max_concurrent_sheets` | `int` | `10` | Max concurrent sheets across all jobs (enforced by the baton) |
+| `max_concurrent_sheets` | `int` | `25` | Max concurrent sheets across all jobs (enforced by the baton) |
 | `preflight.token_warning_threshold` | `int` | `50000` | Token count above which to warn during preflight checks. Set higher for large-context instruments. `0` to disable. |
 | `preflight.token_error_threshold` | `int` | `150000` | Token count above which to error during preflight checks. Set higher for large-context instruments (e.g., `800000` for 1M-context models). `0` to disable. |
 

@@ -161,7 +161,10 @@ class ScheduleStatus(BaseModel):
     """Public recurring-score projection returned by status operations."""
 
     enabled: bool = Field(description="Whether future recurring ticks are enabled")
-    next_due_at: float = Field(description="Next durable due time as a Unix epoch")
+    next_due_at: float | None = Field(
+        default=None,
+        description="Next durable due time as a Unix epoch, unavailable for damaged state",
+    )
     last_due_at: float | None = Field(
         default=None,
         description="Most recent handled due time as a Unix epoch",
@@ -177,6 +180,10 @@ class ScheduleStatus(BaseModel):
     consecutive_drops: int = Field(
         ge=0,
         description="Number of consecutive recurring tick drops",
+    )
+    diagnostic: str | None = Field(
+        default=None,
+        description="Safe non-runnable registry diagnostic when durable schedule data is damaged",
     )
 
 

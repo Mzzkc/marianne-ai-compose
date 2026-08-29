@@ -183,6 +183,45 @@ async def test_meta_fallback_omits_malformed_schedule_with_diagnostic(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("json_output", [True, False])
+async def test_disabled_registry_data_diagnostic_is_visible_without_a_fake_due(
+    monkeypatch: pytest.MonkeyPatch,
+    json_output: bool,
+) -> None:
+    """A damaged durable projection remains public rather than becoming 1970 or vanishing."""
+    payload = {
+        "job_id": "damaged-recurring-job",
+        "status": "paused",
+        "config_path": "/scores/damaged.yaml",
+        "schedule": {
+            "enabled": False,
+            "next_due_at": None,
+            "last_due_at": None,
+            "last_run_id": None,
+            "last_outcome": "registry_data_error",
+            "consecutive_drops": 0,
+            "diagnostic": "registry_data_error",
+        },
+    }
+    monkeypatch.setattr(
+        "marianne.daemon.detect.try_daemon_route",
+        AsyncMock(return_value=(True, payload)),
+    )
+
+    with console.capture() as capture:
+        await _status_job("damaged-recurring-job", json_output, None)
+
+    rendered = capture.get()
+    if json_output:
+        schedule = json.loads(rendered)["schedule"]
+        assert schedule["next_due_at"] is None
+        assert schedule["diagnostic"] == "registry_data_error"
+    else:
+        assert "Recurring schedule: DISABLED (registry data error)" in rendered
+        assert "Next due: unavailable" in rendered
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("next_due_at", "json_output"),
     [

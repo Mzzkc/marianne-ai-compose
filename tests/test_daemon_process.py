@@ -312,6 +312,56 @@ class TestDaemonProcess:
         assert signal.SIGHUP in handlers_added
 
     @pytest.mark.asyncio
+    async def test_run_does_not_warn_that_active_state_or_sheet_limits_are_ignored(
+        self,
+        tmp_path: Path,
+    ):
+        """Configured SQLite persistence and Baton sheet limits are real runtime inputs."""
+        from marianne.daemon.config import DaemonConfig, ProfilerConfig, SocketConfig
+
+        config = DaemonConfig(
+            pid_file=tmp_path / "conductor.pid",
+            socket=SocketConfig(path=tmp_path / "conductor.sock"),
+            profiler=ProfilerConfig(enabled=False),
+            state_db_path=tmp_path / "state.db",
+            max_concurrent_sheets=7,
+        )
+        dp = DaemonProcess(config)
+        mock_loop = MagicMock()
+        mock_loop.add_signal_handler = MagicMock()
+
+        with (
+            patch.object(dp._pgroup, "setup"),
+            patch.object(dp._pgroup, "kill_all_children"),
+            patch.object(dp._pgroup, "cleanup_orphans", return_value=[]),
+            patch("marianne.daemon.process._write_pid"),
+            patch("marianne.daemon.ipc.server.DaemonServer") as mock_server_cls,
+            patch("marianne.daemon.manager.JobManager") as mock_mgr_cls,
+            patch("marianne.daemon.monitor.ResourceMonitor") as mock_mon_cls,
+            patch("marianne.daemon.ipc.handler.RequestHandler"),
+            patch("marianne.daemon.health.HealthChecker") as mock_health_cls,
+            patch("marianne.daemon.process._logger.warning") as warning,
+            patch("asyncio.get_running_loop", return_value=mock_loop),
+        ):
+            mock_server_cls.return_value = AsyncMock()
+            mock_mgr = MagicMock(running_count=0, active_job_count=0)
+            mock_mgr.start = AsyncMock()
+            mock_mgr.wait_for_shutdown = AsyncMock()
+            mock_mgr_cls.return_value = mock_mgr
+            mock_mon_cls.return_value = AsyncMock()
+            mock_health = MagicMock()
+            mock_health.start_periodic_checks = AsyncMock()
+            mock_health.stop_periodic_checks = AsyncMock()
+            mock_health_cls.return_value = mock_health
+
+            await dp.run()
+
+        assert not any(
+            call.args and call.args[0] == "config.reserved_field_ignored"
+            for call in warning.call_args_list
+        )
+
+    @pytest.mark.asyncio
     async def test_run_cleans_pid_file_on_crash(self):
         """run() removes PID file even if an exception occurs mid-lifecycle."""
         from marianne.daemon.config import DaemonConfig, SocketConfig
