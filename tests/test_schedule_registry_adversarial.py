@@ -253,6 +253,136 @@ async def test_bulk_list_repairs_raw_schedule_keys_without_public_key_collisions
 
 
 @pytest.mark.adversarial
+@pytest.mark.parametrize(
+    ("operation", "mutation_name"),
+    [
+        ("pause", "set enabled state"),
+        ("resume", "set enabled state"),
+        ("remove", "remove"),
+    ],
+)
+async def test_lifecycle_mutation_cannot_cross_a_concurrent_quarantine(
+    tmp_path: Path,
+    operation: str,
+    mutation_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stale lifecycle preflight cannot mutate a row quarantined by another registry."""
+    db_path = tmp_path / "conductor-state.db"
+    first = ScheduleRegistry(db_path)
+    second = ScheduleRegistry(db_path)
+    await first.open()
+    await second.open()
+    entered_mutation = asyncio.Event()
+    allow_mutation = asyncio.Event()
+    logged = MagicMock()
+    monkeypatch.setattr("marianne.daemon.schedule_registry._logger.error", logged)
+    original_execute = first._execute_mutation
+
+    async def hold_lifecycle_mutation(*args: object, **kwargs: object) -> aiosqlite.Cursor:
+        if args[0] == mutation_name:
+            entered_mutation.set()
+            await allow_mutation.wait()
+        return await original_execute(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(first, "_execute_mutation", hold_lifecycle_mutation)
+    try:
+        await _upsert_due(first)
+        lifecycle = getattr(first, operation)
+        lifecycle_task = asyncio.create_task(lifecycle("daily-report"))
+        await entered_mutation.wait()
+
+        await second._db.execute(
+            "UPDATE schedules SET updated_at = ? WHERE schedule_id = ?",
+            ("not-a-number", "daily-report"),
+        )
+        await second._db.commit()
+        quarantined = await second.list()
+        async with aiosqlite.connect(str(db_path)) as connection:
+            first_write = await (
+                await connection.execute(
+                    "SELECT enabled, last_outcome, updated_at FROM schedules "
+                    "WHERE schedule_id = ?",
+                    ("daily-report",),
+                )
+            ).fetchone()
+
+        allow_mutation.set()
+        with pytest.raises(ScheduleRegistryDataError):
+            await lifecycle_task
+
+        later = await second.list()
+        async with aiosqlite.connect(str(db_path)) as connection:
+            second_write = await (
+                await connection.execute(
+                    "SELECT enabled, last_outcome, updated_at FROM schedules "
+                    "WHERE schedule_id = ?",
+                    ("daily-report",),
+                )
+            ).fetchone()
+    finally:
+        allow_mutation.set()
+        await first.close()
+        await second.close()
+
+    assert quarantined[0].diagnostic == "registry_data_error"
+    assert later[0].diagnostic == "registry_data_error"
+    assert first_write is not None
+    assert first_write[:2] == (0, "registry_data_error")
+    assert first_write == second_write
+    logged.assert_called_once_with(
+        "schedule.registry_data_disabled",
+        schedule_id="daily-report",
+    )
+
+
+@pytest.mark.adversarial
+@pytest.mark.parametrize(
+    ("operation", "mutation_name", "missing_message"),
+    [
+        ("resume", "set enabled state", "enabled-state mutation"),
+        ("remove", "remove", "removal"),
+    ],
+)
+async def test_stale_lifecycle_mutation_reports_a_missing_row_distinctly(
+    tmp_path: Path,
+    operation: str,
+    mutation_name: str,
+    missing_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A zero-row lifecycle write reports deletion, not a data quarantine."""
+    db_path = tmp_path / "conductor-state.db"
+    first = ScheduleRegistry(db_path)
+    second = ScheduleRegistry(db_path)
+    await first.open()
+    await second.open()
+    entered_mutation = asyncio.Event()
+    allow_mutation = asyncio.Event()
+    original_execute = first._execute_mutation
+
+    async def hold_lifecycle_mutation(*args: object, **kwargs: object) -> aiosqlite.Cursor:
+        if args[0] == mutation_name:
+            entered_mutation.set()
+            await allow_mutation.wait()
+        return await original_execute(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(first, "_execute_mutation", hold_lifecycle_mutation)
+    try:
+        await _upsert_due(first)
+        lifecycle_task = asyncio.create_task(getattr(first, operation)("daily-report"))
+        await entered_mutation.wait()
+        await second.remove("daily-report")
+        allow_mutation.set()
+        with pytest.raises(ScheduleRegistryError, match=missing_message):
+            await lifecycle_task
+    finally:
+        allow_mutation.set()
+        await first.close()
+        await second.close()
+
+
+@pytest.mark.adversarial
 @pytest.mark.parametrize("next_due_at", [100.0, 99.0])
 async def test_tick_outcome_rejects_non_advancing_next_due(
     tmp_path: Path, next_due_at: float

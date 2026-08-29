@@ -264,13 +264,21 @@ class ScheduleRegistry:
             )
         cursor = await self._execute_mutation(
             "set enabled state",
-            "UPDATE schedules SET enabled = ?, updated_at = ? WHERE schedule_id = ?",
-            (int(enabled), time.time(), schedule_id),
+            """
+            UPDATE schedules
+            SET enabled = ?, updated_at = ?
+            WHERE schedule_id = ?
+              AND COALESCE(last_outcome, '') != ?
+            """,
+            (int(enabled), time.time(), schedule_id, _REGISTRY_DATA_ERROR),
             schedule_id=schedule_id,
         )
         if cursor.rowcount != 1:
-            raise ScheduleRegistryError(
-                f"Schedule {schedule_id!r} does not exist for enabled-state mutation"
+            await self._raise_lifecycle_mutation_refusal(
+                schedule_id,
+                missing_message=(
+                    f"Schedule {schedule_id!r} does not exist for enabled-state mutation"
+                ),
             )
 
     async def remove(self, schedule_id: str) -> None:
@@ -281,13 +289,18 @@ class ScheduleRegistry:
             )
         cursor = await self._execute_mutation(
             "remove",
-            "DELETE FROM schedules WHERE schedule_id = ?",
-            (schedule_id,),
+            """
+            DELETE FROM schedules
+            WHERE schedule_id = ?
+              AND COALESCE(last_outcome, '') != ?
+            """,
+            (schedule_id, _REGISTRY_DATA_ERROR),
             schedule_id=schedule_id,
         )
         if cursor.rowcount != 1:
-            raise ScheduleRegistryError(
-                f"Schedule {schedule_id!r} does not exist for removal"
+            await self._raise_lifecycle_mutation_refusal(
+                schedule_id,
+                missing_message=f"Schedule {schedule_id!r} does not exist for removal",
             )
 
     async def claim_due(
@@ -417,6 +430,31 @@ class ScheduleRegistry:
             # The original failure is more actionable when BEGIN IMMEDIATE
             # itself could not acquire a writer lock.
             pass
+
+    async def _raise_lifecycle_mutation_refusal(
+        self,
+        schedule_id: str,
+        *,
+        missing_message: str,
+    ) -> None:
+        """Raise the durable reason a lifecycle predicate changed below a stale read."""
+        try:
+            cursor = await self._db.execute(
+                "SELECT last_outcome FROM schedules WHERE schedule_id = ?",
+                (schedule_id,),
+            )
+            row = await cursor.fetchone()
+        except sqlite3.Error as exc:
+            self._raise_database_error(
+                "inspect lifecycle mutation refusal",
+                exc,
+                schedule_id=schedule_id,
+            )
+        if row is not None and row["last_outcome"] == _REGISTRY_DATA_ERROR:
+            raise ScheduleRegistryDataError(
+                f"Schedule {schedule_id!r} is quarantined after registry data corruption"
+            )
+        raise ScheduleRegistryError(missing_message)
 
     @staticmethod
     def _require_claimed_row(rowcount: int, schedule_id: str, due_at: float) -> None:
