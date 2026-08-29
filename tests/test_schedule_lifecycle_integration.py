@@ -2100,10 +2100,10 @@ async def test_submit_that_owns_publication_makes_concurrent_pause_reject(
     release_job = asyncio.Event()
     original_register_job = life.manager._registry.register_job
 
-    async def held_register_job(*args: object, **kwargs: object) -> None:
+    async def held_register_job(*args: object, **kwargs: object) -> Any:
         published.set()
         await release_publish.wait()
-        await original_register_job(*args, **kwargs)  # type: ignore[arg-type]
+        return await original_register_job(*args, **kwargs)  # type: ignore[arg-type]
 
     async def hold_execution(*_args: object, **_kwargs: object) -> None:
         await release_job.wait()
@@ -2219,10 +2219,10 @@ async def test_submit_that_owns_publication_makes_concurrent_cancel_reject(
     release_job = asyncio.Event()
     original_register_job = life.manager._registry.register_job
 
-    async def held_register_job(*args: object, **kwargs: object) -> None:
+    async def held_register_job(*args: object, **kwargs: object) -> Any:
         published.set()
         await release_publish.wait()
-        await original_register_job(*args, **kwargs)  # type: ignore[arg-type]
+        return await original_register_job(*args, **kwargs)  # type: ignore[arg-type]
 
     async def hold_execution(*_args: object, **_kwargs: object) -> None:
         await release_job.wait()
@@ -2293,10 +2293,10 @@ async def test_probe_race_is_closed_by_inside_lock_admission(
         async with original_lock(*schedule_ids):
             yield
 
-    async def held_register_job(*args: object, **kwargs: object) -> None:
+    async def held_register_job(*args: object, **kwargs: object) -> Any:
         publication_entered.set()
         await release_publication.wait()
-        await original_register_job(*args, **kwargs)  # type: ignore[arg-type]
+        return await original_register_job(*args, **kwargs)  # type: ignore[arg-type]
 
     async def hold_execution(*_args: object, **_kwargs: object) -> None:
         await release_job.wait()
@@ -2361,10 +2361,10 @@ async def test_stale_identity_replacement_reserves_old_and_new_schedule_ids(
     release_job = asyncio.Event()
     original_register_job = life.manager._registry.register_job
 
-    async def held_register_job(*args: object, **kwargs: object) -> None:
+    async def held_register_job(*args: object, **kwargs: object) -> Any:
         publication_entered.set()
         await release_publication.wait()
-        await original_register_job(*args, **kwargs)  # type: ignore[arg-type]
+        return await original_register_job(*args, **kwargs)  # type: ignore[arg-type]
 
     async def hold_execution(*_args: object, **_kwargs: object) -> None:
         await release_job.wait()

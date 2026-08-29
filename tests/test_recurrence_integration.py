@@ -186,10 +186,10 @@ async def test_manual_registration_reserves_lineage_before_metadata_publish(
         submitted_at: float | None = None,
         max_wall_seconds: float | None = None,
         wall_deadline_at: float | None = None,
-    ) -> None:
+    ) -> Any:
         metadata_window.set()
         await release_metadata.wait()
-        await original_register_job(
+        return await original_register_job(
             job_id,
             config_path,
             workspace,

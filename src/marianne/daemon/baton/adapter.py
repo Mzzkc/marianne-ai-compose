@@ -42,6 +42,7 @@ import os
 import signal
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -138,6 +139,27 @@ _KILL_GRACE_SECONDS = 2.0
 # long before OOM. The real liveness fixes are timeouts (#309, #310).
 _INBOX_WARN_SIZE = 512
 _INBOX_WARN_INTERVAL = 30.0  # seconds between repeated high-water warnings
+
+
+@dataclass
+class ProcessGroupCleanupResult:
+    """Observable process-group effects of one Baton deregistration."""
+
+    tracked_process_groups: int = 0
+    sigterm_attempted: int = 0
+    sigterm_succeeded: int = 0
+    sigterm_failed: int = 0
+    sigterm_skipped: int = 0
+    escalation_state: str = "not_needed"
+    sigkill_attempted: int = 0
+    sigkill_succeeded: int = 0
+    sigkill_failed: int = 0
+    residual_check_state: str = "unverified"
+    residual_process_groups: int | None = None
+
+    def to_dict(self) -> dict[str, int | str | None]:
+        """Return identifier-free cleanup evidence for status and logs."""
+        return asdict(self)
 
 
 # Phase 2: identity mappings — kept for test backward compat
@@ -535,6 +557,7 @@ class BatonAdapter:
         # dict may then be kept as a fast-path cache or removed entirely.
         # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 3).
         self._active_pids: dict[tuple[str, int], tuple[int, int]] = {}
+        self._last_cleanup_results: dict[str, ProcessGroupCleanupResult] = {}
 
         # Interactive-mode sheets per job. Recorded at dispatch when the
         # sheet's merged instrument_config opts into interactive execution.
@@ -741,6 +764,7 @@ class BatonAdapter:
                 outputs and workspace files at dispatch time.
         """
         self._ensure_job_state_collections()
+        self._last_cleanup_results.pop(job_id, None)
 
         # Store sheets for prompt rendering at dispatch time
         self._job_sheets[job_id] = {s.num: s for s in sheets}
@@ -882,6 +906,20 @@ class BatonAdapter:
         self._ensure_a2a_state()
         return self._a2a_inboxes.get(job_id)
 
+    def get_process_group_cleanup_result(
+        self,
+        job_id: str,
+    ) -> ProcessGroupCleanupResult | None:
+        """Return the live cleanup evidence for a deregistered job.
+
+        The returned result is intentionally live while the SIGTERM grace
+        callback is pending.  Callers can therefore observe the later
+        SIGKILL and residual-process check instead of retaining the initial
+        ``pending`` snapshot forever.
+        """
+        self._ensure_job_state_collections()
+        return self._last_cleanup_results.get(job_id)
+
     def _ensure_a2a_state(self) -> None:
         """Initialize A2A attributes for normal and __new__ test instances."""
         if not hasattr(self, "_a2a_registry"):
@@ -895,6 +933,8 @@ class BatonAdapter:
         """Initialize late-added per-job maps for __new__ test instances."""
         if not hasattr(self, "_job_learning_configs"):
             self._job_learning_configs = {}
+        if not hasattr(self, "_last_cleanup_results"):
+            self._last_cleanup_results = {}
 
     def _register_a2a_job(
         self,
@@ -1024,7 +1064,7 @@ class BatonAdapter:
             )
             await self._publish_baton_observer_event(routed)
 
-    def _kill_active_pgroups(self, job_id: str) -> None:
+    def _kill_active_pgroups(self, job_id: str) -> ProcessGroupCleanupResult:
         """Preempt-kill process groups for all active sheets of a job.
 
         Phase 1 item 5: sends SIGTERM to each tracked ``pgid`` synchronously,
@@ -1046,8 +1086,9 @@ class BatonAdapter:
                 groups torn down.
         """
         keys = [k for k in self._active_pids if k[0] == job_id]
+        result = ProcessGroupCleanupResult(tracked_process_groups=len(keys))
         if not keys:
-            return
+            return result
 
         try:
             daemon_pgid: int | None = os.getpgid(0)
@@ -1072,16 +1113,25 @@ class BatonAdapter:
                         "pgid": pgid,
                     },
                 )
+                result.sigterm_skipped += 1
                 continue
+            result.sigterm_attempted += 1
             try:
-                if _safe_killpg(pgid, signal.SIGTERM, context="adapter.deregister_sigterm"):
+                if _safe_killpg(
+                    pgid,
+                    signal.SIGTERM,
+                    context="adapter.deregister_sigterm",
+                ):
                     sigterm_pgids.append(pgid)
+                    result.sigterm_succeeded += 1
+                else:
+                    result.sigterm_failed += 1
             except (ProcessLookupError, PermissionError):
-                # Process already gone (natural exit, prior kill) — OK.
-                pass
+                result.sigterm_failed += 1
 
         if not sigterm_pgids:
-            return
+            result.escalation_state = "not_scheduled"
+            return result
 
         # Schedule SIGKILL escalation after grace. Fire-and-forget: if the
         # processes already exited (most likely — SIGTERM usually wins),
@@ -1092,21 +1142,68 @@ class BatonAdapter:
             # No running loop — ``deregister_job`` was called from a
             # non-async context (tests, shutdown). SIGTERM alone suffices
             # for those paths; the backend's finally will escalate.
-            return
+            result.escalation_state = "unavailable"
+            return result
+
+        result.escalation_state = "pending"
+        result.residual_check_state = "pending"
 
         def _sigkill_pgroups(
             pgids: list[int] = sigterm_pgids,
             _daemon: int | None = daemon_pgid,
         ) -> None:
+            result.escalation_state = "performed"
+            for pgid in pgids:
+                if pgid == _daemon:
+                    continue
+                result.sigkill_attempted += 1
+                try:
+                    if _safe_killpg(
+                        pgid,
+                        signal.SIGKILL,
+                        context="adapter.deregister_sigkill",
+                    ):
+                        result.sigkill_succeeded += 1
+                    else:
+                        result.sigkill_failed += 1
+                except (ProcessLookupError, PermissionError):
+                    result.sigkill_failed += 1
+
+            residual = 0
+            check_unavailable = False
             for pgid in pgids:
                 if pgid == _daemon:
                     continue
                 try:
-                    _safe_killpg(pgid, signal.SIGKILL, context="adapter.deregister_sigkill")
-                except (ProcessLookupError, PermissionError):
-                    pass
+                    check_sent = _safe_killpg(
+                        pgid,
+                        0,
+                        context="adapter.deregister_residual_check",
+                    )
+                except ProcessLookupError:
+                    continue
+                except PermissionError:
+                    residual += 1
+                except OSError:
+                    check_unavailable = True
+                else:
+                    if check_sent:
+                        residual += 1
+                    else:
+                        check_unavailable = True
+            if check_unavailable:
+                result.residual_check_state = "unverified"
+                result.residual_process_groups = None
+            else:
+                result.residual_check_state = "residual" if residual else "clear"
+                result.residual_process_groups = residual
+            _logger.info(
+                "adapter.deregister.cleanup_verified",
+                extra={"job_id": job_id, **result.to_dict()},
+            )
 
         loop.call_later(_KILL_GRACE_SECONDS, _sigkill_pgroups)
+        return result
 
     def _kill_interactive_sessions(self, job_id: str) -> None:
         """Best-effort tmux cleanup for all interactive sessions of a job.
@@ -1138,7 +1235,7 @@ class BatonAdapter:
                 extra={"job_id": job_id, "sessions": killed, "count": len(killed)},
             )
 
-    def deregister_job(self, job_id: str) -> None:
+    def deregister_job(self, job_id: str) -> ProcessGroupCleanupResult:
         """Remove a job from the adapter and baton.
 
         Cleans up all per-job state including active tasks.
@@ -1156,7 +1253,15 @@ class BatonAdapter:
         # leave the finally stuck. Preempt-SIGTERM forces the process to
         # exit, which unblocks communicate, which runs finally. Belt and
         # suspenders.
-        self._kill_active_pgroups(job_id)
+        cleanup_result = self._kill_active_pgroups(job_id)
+        previous_cleanup = self._last_cleanup_results.get(job_id)
+        if (
+            cleanup_result.tracked_process_groups == 0
+            and previous_cleanup is not None
+        ):
+            cleanup_result = previous_cleanup
+        else:
+            self._last_cleanup_results[job_id] = cleanup_result
         self._kill_interactive_sessions(job_id)
 
         # Cancel active musician tasks for this job
@@ -1221,6 +1326,7 @@ class BatonAdapter:
             }
 
         _logger.info("adapter.job_deregistered", extra={"job_id": job_id})
+        return cleanup_result
 
     # =========================================================================
     # Job Recovery — Step 29: Restart Recovery

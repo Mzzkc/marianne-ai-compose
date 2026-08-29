@@ -55,6 +55,7 @@ from marianne.daemon.types import (
     JobDeadlineStatus,
     JobRequest,
     JobResponse,
+    JobTimeoutCleanupStatus,
     ObserverEvent,
     ScheduleStatus,
 )
@@ -254,7 +255,7 @@ class JobMeta:
     max_wall_seconds: float | None = None
     wall_deadline_at: float | None = None
     terminal_reason: str | None = None
-    timeout_cleanup_outcome: str | None = None
+    timeout_cleanup_outcome: JobTimeoutCleanupStatus | None = None
     deadline_diagnostic: str | None = None
     hook_config: list[dict[str, Any]] | None = field(default=None, repr=False)
     concert_config: dict[str, Any] | None = field(default=None, repr=False)
@@ -1878,21 +1879,9 @@ class JobManager:
                         if max_wall_seconds is not None
                         else None
                     )
-                    meta = JobMeta(
-                        job_id=job_id,
-                        config_path=request.config_path,
-                        workspace=workspace,
-                        submitted_at=registered_at,
-                        chain_depth=request.chain_depth,
-                        schedule_id=request.schedule_id,
-                        max_wall_seconds=max_wall_seconds,
-                        wall_deadline_at=wall_deadline_at,
-                        hook_config=hook_config_list,
-                        concert_config=concert_config_dict,
-                    )
                     # Register in DB first — if this fails, no phantom in-memory entry
                     log_path = self._ensure_workspace_log_path(workspace)
-                    await self._registry.register_job(
+                    committed = await self._registry.register_job(
                         job_id,
                         request.config_path,
                         workspace,
@@ -1900,6 +1889,19 @@ class JobManager:
                         submitted_at=registered_at,
                         max_wall_seconds=max_wall_seconds,
                         wall_deadline_at=wall_deadline_at,
+                    )
+                    meta = JobMeta(
+                        job_id=committed.job_id,
+                        config_path=Path(committed.config_path),
+                        workspace=Path(committed.workspace),
+                        submitted_at=committed.submitted_at,
+                        chain_depth=request.chain_depth,
+                        schedule_id=request.schedule_id,
+                        max_wall_seconds=committed.max_wall_seconds,
+                        wall_deadline_at=committed.wall_deadline_at,
+                        deadline_diagnostic=committed.deadline_diagnostic,
+                        hook_config=hook_config_list,
+                        concert_config=concert_config_dict,
                     )
                     self._job_meta[job_id] = meta
 
@@ -2007,7 +2009,7 @@ class JobManager:
                 else None
             )
             log_path = self._ensure_workspace_log_path(workspace)
-            await self._registry.register_job(
+            committed = await self._registry.register_job(
                 job_id,
                 request.config_path,
                 workspace,
@@ -2017,14 +2019,15 @@ class JobManager:
                 wall_deadline_at=wall_deadline_at,
             )
             self._job_meta[job_id] = JobMeta(
-                job_id=job_id,
-                config_path=request.config_path,
-                workspace=workspace,
-                submitted_at=registered_at,
+                job_id=committed.job_id,
+                config_path=Path(committed.config_path),
+                workspace=Path(committed.workspace),
+                submitted_at=committed.submitted_at,
                 status=DaemonJobStatus.PENDING,
                 schedule_id=request.schedule_id,
-                max_wall_seconds=max_wall_seconds,
-                wall_deadline_at=wall_deadline_at,
+                max_wall_seconds=committed.max_wall_seconds,
+                wall_deadline_at=committed.wall_deadline_at,
+                deadline_diagnostic=committed.deadline_diagnostic,
             )
 
         # Store for auto-start
@@ -2376,6 +2379,12 @@ class JobManager:
             wall_deadline_at = meta.wall_deadline_at
             terminal_reason = meta.terminal_reason
             cleanup_outcome = meta.timeout_cleanup_outcome
+            if cleanup_outcome is not None:
+                cleanup_outcome = self._refresh_timeout_cleanup_outcome(
+                    job_id,
+                    cleanup_outcome,
+                )
+                meta.timeout_cleanup_outcome = cleanup_outcome
             diagnostic = meta.deadline_diagnostic
 
         now_epoch = self._wall_clock()
@@ -4367,6 +4376,37 @@ class JobManager:
         await meta.observer.stop()
         meta.observer = None
 
+    async def _stop_observer_and_unregister(self, job_id: str) -> None:
+        """Settle observer resources after any pre-dispatch boundary."""
+        await self._stop_observer(job_id)
+        if self._observer_recorder is not None:
+            self._observer_recorder.unregister_job(job_id)
+
+    async def _start_observer_with_score_deadline(
+        self,
+        job_id: str,
+        meta: JobMeta,
+    ) -> bool:
+        """Start the observer within the absolute score budget when present."""
+        if meta.wall_deadline_at is None or not self._config.observer.enabled:
+            await self._start_observer(job_id)
+            return True
+        remaining = max(0.0, meta.wall_deadline_at - self._wall_clock())
+        if remaining <= 0:
+            return False
+        try:
+            await asyncio.wait_for(
+                self._start_observer(job_id),
+                timeout=remaining,
+            )
+        except TimeoutError:
+            await self._stop_observer_and_unregister(job_id)
+            return False
+        except BaseException:
+            await self._stop_observer_and_unregister(job_id)
+            raise
+        return True
+
     def _on_state_published(self, state: CheckpointState) -> None:
         """Receive live CheckpointState from a running job's state backend.
 
@@ -4465,26 +4505,65 @@ class JobManager:
             sheet_num=sheet_num,
         )
 
-    def _timeout_cleanup_via_baton(self, job_id: str) -> str:
+    @staticmethod
+    def _cleanup_status_from_baton_result(
+        raw_result: Any,
+        fallback: JobTimeoutCleanupStatus,
+    ) -> JobTimeoutCleanupStatus:
+        """Convert Baton's physical cleanup evidence when it is available."""
+        if raw_result is None:
+            return fallback
+        to_dict = getattr(raw_result, "to_dict", None)
+        if not callable(to_dict):
+            return fallback
+        evidence = to_dict()
+        if not isinstance(evidence, dict):
+            return fallback
+        return JobTimeoutCleanupStatus(
+            cleanup_path="baton.deregister_job",
+            deregistration_state="attempted",
+            **evidence,
+        )
+
+    def _refresh_timeout_cleanup_outcome(
+        self,
+        job_id: str,
+        current: JobTimeoutCleanupStatus,
+    ) -> JobTimeoutCleanupStatus:
+        """Refresh an initial snapshot after Baton's grace callback matures."""
+        adapter = self._baton_adapter
+        if adapter is None:
+            return current
+        get_result = getattr(adapter, "get_process_group_cleanup_result", None)
+        if not callable(get_result):
+            return current
+        return self._cleanup_status_from_baton_result(get_result(job_id), current)
+
+    def _timeout_cleanup_via_baton(self, job_id: str) -> JobTimeoutCleanupStatus:
         """Attempt timeout cleanup only through Baton's deregistration seam."""
         adapter = self._baton_adapter
         if adapter is None:
-            return "not_attempted_adapter_unavailable"
+            return JobTimeoutCleanupStatus(
+                cleanup_path="baton.deregister_job",
+                deregistration_state="unavailable",
+            )
         try:
-            adapter.deregister_job(job_id)
-            residual = adapter.has_job(job_id)
+            raw_result: Any = adapter.deregister_job(job_id)
         except Exception:
             _logger.exception(
                 "job.timeout_cleanup_failed",
                 job_id=job_id,
                 cleanup_path="baton.deregister_job",
             )
-            return "deregister_failed"
-        return (
-            "deregister_attempted_residual_job"
-            if residual
-            else "deregister_attempted_no_residual_job"
+            return JobTimeoutCleanupStatus(
+                cleanup_path="baton.deregister_job",
+                deregistration_state="failed",
+            )
+        fallback = JobTimeoutCleanupStatus(
+            cleanup_path="baton.deregister_job",
+            deregistration_state="attempted",
         )
+        return self._cleanup_status_from_baton_result(raw_result, fallback)
 
     async def _record_job_timeout(
         self,
@@ -4515,8 +4594,7 @@ class JobManager:
             checkpoint_json = live.model_dump_json()
             writer = self._checkpoint_writer
             if writer is not None and writer.running:
-                writer.enqueue(job_id, checkpoint_json)
-                await writer.drain()
+                await writer.write_and_wait(job_id, checkpoint_json)
             else:
                 await self._registry.save_checkpoint(job_id, checkpoint_json)
         self._recent_failures.append(self._monotonic_clock())
@@ -4530,7 +4608,7 @@ class JobManager:
             wall_elapsed_seconds=round(wall_elapsed, 3),
             wall_deadline_at=meta.wall_deadline_at,
             terminal_reason="timed_out",
-            cleanup_outcome=cleanup_outcome,
+            cleanup_outcome=cleanup_outcome.model_dump(mode="json"),
             expired_before_execution=expired_before_execution,
         )
 
@@ -4597,7 +4675,6 @@ class JobManager:
                         self._pause_events[job_id] = pause_event
 
                         meta.started_at = self._wall_clock()
-                        execution_started_at = self._monotonic_clock()
                         await self._set_job_status(
                             job_id,
                             DaemonJobStatus.RUNNING,
@@ -4616,6 +4693,38 @@ class JobManager:
                     )
                     return
 
+                observer_started = await self._start_observer_with_score_deadline(
+                    job_id,
+                    meta,
+                )
+                if not observer_started:
+                    await self._record_job_timeout(
+                        job_id,
+                        meta,
+                        effective_timeout=0.0,
+                        execution_elapsed=0.0,
+                        expired_before_execution=True,
+                    )
+                    return
+
+                if meta.wall_deadline_at is not None:
+                    score_remaining = max(
+                        0.0,
+                        meta.wall_deadline_at - self._wall_clock(),
+                    )
+                    timeout = min(daemon_timeout, score_remaining)
+                    if score_remaining <= 0:
+                        await self._stop_observer_and_unregister(job_id)
+                        await self._record_job_timeout(
+                            job_id,
+                            meta,
+                            effective_timeout=0.0,
+                            execution_elapsed=0.0,
+                            expired_before_execution=True,
+                        )
+                        return
+
+                execution_started_at = self._monotonic_clock()
                 _logger.info(
                     start_event,
                     job_id=job_id,
@@ -4625,9 +4734,6 @@ class JobManager:
                     effective_timeout_seconds=timeout,
                     wall_deadline_at=meta.wall_deadline_at,
                 )
-
-                # Start observer co-task for filesystem/process monitoring
-                await self._start_observer(job_id)
 
                 try:
                     coro_started = True
@@ -4738,9 +4844,7 @@ class JobManager:
 
                 finally:
                     # Stop observer co-task regardless of outcome
-                    await self._stop_observer(job_id)
-                    if self._observer_recorder is not None:
-                        self._observer_recorder.unregister_job(job_id)
+                    await self._stop_observer_and_unregister(job_id)
         finally:
             if not coro_started:
                 coro.close()

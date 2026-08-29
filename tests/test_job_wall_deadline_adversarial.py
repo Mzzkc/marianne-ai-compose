@@ -128,7 +128,10 @@ async def test_active_timeout_reaches_existing_baton_process_group_cleanup(
         assert baton.active_process_groups == set()
         assert meta.status is DaemonJobStatus.FAILED
         assert meta.terminal_reason == "timed_out"
-        assert meta.timeout_cleanup_outcome == "deregister_attempted_no_residual_job"
+        assert meta.timeout_cleanup_outcome is not None
+        assert meta.timeout_cleanup_outcome.deregistration_state == "attempted"
+        assert meta.timeout_cleanup_outcome.residual_check_state == "unverified"
+        assert meta.timeout_cleanup_outcome.residual_process_groups is None
     finally:
         await manager._registry.close()
 
@@ -207,37 +210,6 @@ async def test_daemon_restart_restores_deadline_without_extension(
         assert meta.wall_deadline_at == 3_300.0
     finally:
         await manager.shutdown(graceful=False)
-
-
-@pytest.mark.asyncio
-async def test_repeat_registration_cannot_extend_persisted_deadline(
-    tmp_path: Path,
-) -> None:
-    registry = JobRegistry(tmp_path / "jobs.db")
-    await registry.open()
-    try:
-        await registry.register_job(
-            "repeat",
-            Path("/tmp/old-score.yaml"),
-            Path("/tmp/old-workspace"),
-            submitted_at=3_000.0,
-            max_wall_seconds=300.0,
-        )
-        await registry.register_job(
-            "repeat",
-            Path("/tmp/new-score.yaml"),
-            Path("/tmp/new-workspace"),
-            submitted_at=3_240.0,
-            max_wall_seconds=300.0,
-        )
-
-        record = await registry.get_job("repeat")
-        assert record is not None
-        assert record.config_path == "/tmp/new-score.yaml"
-        assert record.submitted_at == 3_000.0
-        assert record.wall_deadline_at == 3_300.0
-    finally:
-        await registry.close()
 
 
 @pytest.mark.asyncio

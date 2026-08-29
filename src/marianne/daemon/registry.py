@@ -230,8 +230,8 @@ class JobRegistry:
         submitted_at: float | None = None,
         max_wall_seconds: float | None = None,
         wall_deadline_at: float | None = None,
-    ) -> None:
-        """Register a newly submitted job with one absolute score deadline."""
+    ) -> JobRecord:
+        """Commit and return one newly submitted execution authority."""
         registered_at = time.time() if submitted_at is None else submitted_at
         if not math.isfinite(registered_at):
             raise ValueError("submitted_at must be finite")
@@ -244,9 +244,9 @@ class JobRegistry:
             not math.isfinite(wall_deadline_at) or wall_deadline_at <= 0
         ):
             raise ValueError("wall_deadline_at must be finite and positive")
-        # Conflict replacement keeps the original registration timestamp and
-        # deadline columns. Even a duplicate registration therefore cannot
-        # mint fresh wall-clock time or erase a malformed legacy diagnostic.
+        # Reaching this seam means manager admission accepted a new execution.
+        # Continuations never call register_job; an accepted stable-ID rerun
+        # intentionally replaces the prior execution authority atomically.
         await self._db.execute(
             """
             INSERT INTO jobs
@@ -269,6 +269,9 @@ class JobRegistry:
                 checkpoint_json = NULL,
                 hook_config_json = NULL,
                 hook_results_json = NULL,
+                submitted_at = excluded.submitted_at,
+                max_wall_seconds = excluded.max_wall_seconds,
+                wall_deadline_at = excluded.wall_deadline_at,
                 terminal_reason = NULL
             """,
             (
@@ -282,6 +285,10 @@ class JobRegistry:
             ),
         )
         await self._db.commit()
+        committed = await self.get_job(job_id)
+        if committed is None:
+            raise RuntimeError(f"registered job '{job_id}' was not readable")
+        return committed
 
     async def update_status(
         self,

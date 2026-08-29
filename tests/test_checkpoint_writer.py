@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from marianne.daemon.checkpoint_writer import CheckpointWriter
 
 
@@ -109,6 +111,18 @@ class TestCheckpointWriter:
         await writer.drain()
         await writer.stop()
         assert ("j2", "v2") in reg.saves
+
+    async def test_acknowledged_write_surfaces_registry_failure(self) -> None:
+        reg = _FailingOnceRegistry()
+        writer = CheckpointWriter(reg)  # type: ignore[arg-type]
+        writer.start()
+
+        try:
+            with pytest.raises(RuntimeError, match="disk go boom"):
+                await writer.write_and_wait("j1", "terminal")
+            assert writer.running
+        finally:
+            await writer.stop()
 
     async def test_stop_is_idempotent(self) -> None:
         reg = _FakeRegistry()

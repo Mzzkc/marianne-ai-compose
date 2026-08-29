@@ -180,6 +180,26 @@ class ScheduleStatus(BaseModel):
     )
 
 
+class JobTimeoutCleanupStatus(BaseModel):
+    """Truthful, secret-free evidence from Baton's timeout teardown."""
+
+    cleanup_path: str = Field(description="Existing cleanup seam used")
+    deregistration_state: str = Field(
+        description="Whether Baton deregistration was attempted or available",
+    )
+    tracked_process_groups: int = Field(default=0, ge=0)
+    sigterm_attempted: int = Field(default=0, ge=0)
+    sigterm_succeeded: int = Field(default=0, ge=0)
+    sigterm_failed: int = Field(default=0, ge=0)
+    sigterm_skipped: int = Field(default=0, ge=0)
+    escalation_state: str = Field(default="not_needed")
+    sigkill_attempted: int = Field(default=0, ge=0)
+    sigkill_succeeded: int = Field(default=0, ge=0)
+    sigkill_failed: int = Field(default=0, ge=0)
+    residual_check_state: str = Field(default="unverified")
+    residual_process_groups: int | None = Field(default=None, ge=0)
+
+
 class JobDeadlineStatus(BaseModel):
     """Public, secret-free projection of one job's timeout authority."""
 
@@ -206,7 +226,7 @@ class JobDeadlineStatus(BaseModel):
         default=None,
         description="Machine-readable terminal reason",
     )
-    cleanup_outcome: str | None = Field(
+    cleanup_outcome: JobTimeoutCleanupStatus | None = Field(
         default=None,
         description="Observed timeout cleanup result",
     )

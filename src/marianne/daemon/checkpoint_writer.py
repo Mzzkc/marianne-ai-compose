@@ -16,8 +16,10 @@ of truth it is a data-loss bug.
   (each ``CheckpointState`` blob is a full snapshot, so a newer one supersedes
   any older queued one). This both fixes reordering and cuts write amplification
   under bursts.
-- Errors are logged, never raised — a failed persist must not crash the
-  conductor loop (the next snapshot or the shutdown flush re-persists).
+- Best-effort write errors are logged, never raised — a failed persist must not
+  crash the conductor loop (the next snapshot or shutdown flush re-persists).
+- Explicit acknowledged writes report the exact registry save result to their
+  caller; terminal transitions use this path when stale bytes are unacceptable.
 
 It does NOT own durability-at-shutdown: the manager's existing synchronous
 final-flush writes the latest in-memory state for every job before closing the
@@ -29,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from marianne.core.logging import get_logger
@@ -43,12 +46,21 @@ _logger = get_logger("daemon.checkpoint_writer")
 _DEFAULT_MAX_QUEUE = 512
 
 
+@dataclass(frozen=True)
+class _AcknowledgedWrite:
+    job_id: str
+    payload: str
+    completed: asyncio.Future[None]
+
+
 class CheckpointWriter:
     """Serialized, order-preserving writer for registry checkpoint saves."""
 
     def __init__(self, registry: JobRegistry, *, max_queue: int = _DEFAULT_MAX_QUEUE) -> None:
         self._registry = registry
-        self._queue: asyncio.Queue[str] = asyncio.Queue(maxsize=max_queue)
+        self._queue: asyncio.Queue[str | _AcknowledgedWrite] = asyncio.Queue(
+            maxsize=max_queue,
+        )
         self._latest: dict[str, str] = {}
         self._task: asyncio.Task[None] | None = None
 
@@ -77,19 +89,62 @@ class CheckpointWriter:
 
     async def _run(self) -> None:
         while True:
-            job_id = await self._queue.get()
+            item = await self._queue.get()
+            if isinstance(item, _AcknowledgedWrite):
+                acknowledged: _AcknowledgedWrite | None = item
+                job_id = item.job_id
+            else:
+                acknowledged = None
+                job_id = item
             try:
-                payload = self._latest.pop(job_id, None)
+                payload = (
+                    acknowledged.payload
+                    if acknowledged is not None
+                    else (
+                        self._latest.pop(job_id)
+                        if job_id in self._latest
+                        else None
+                    )
+                )
                 if payload is not None:
                     await self._registry.save_checkpoint(job_id, payload)
+                if acknowledged is not None and not acknowledged.completed.done():
+                    acknowledged.completed.set_result(None)
             except asyncio.CancelledError:
+                if acknowledged is not None and not acknowledged.completed.done():
+                    acknowledged.completed.cancel()
                 raise
-            except Exception:
-                _logger.warning(
-                    "checkpoint_writer.write_failed", job_id=job_id, exc_info=True
-                )
+            except Exception as exc:
+                if acknowledged is not None:
+                    if not acknowledged.completed.done():
+                        acknowledged.completed.set_exception(exc)
+                    _logger.error(
+                        "checkpoint_writer.acknowledged_write_failed",
+                        job_id=job_id,
+                        exc_info=True,
+                    )
+                else:
+                    _logger.warning(
+                        "checkpoint_writer.write_failed",
+                        job_id=job_id,
+                        exc_info=True,
+                    )
             finally:
                 self._queue.task_done()
+
+    async def write_and_wait(self, job_id: str, checkpoint_json: str) -> None:
+        """Write one exact snapshot in FIFO order and report its save result."""
+        if not self.running:
+            raise RuntimeError("checkpoint writer is not running")
+        completed = asyncio.get_running_loop().create_future()
+        await self._queue.put(
+            _AcknowledgedWrite(
+                job_id=job_id,
+                payload=checkpoint_json,
+                completed=completed,
+            )
+        )
+        await completed
 
     async def drain(self) -> None:
         """Wait until all queued writes have been processed."""
@@ -106,3 +161,11 @@ class CheckpointWriter:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
+        while not self._queue.empty():
+            item = self._queue.get_nowait()
+            if (
+                isinstance(item, _AcknowledgedWrite)
+                and not item.completed.done()
+            ):
+                item.completed.cancel()
+            self._queue.task_done()
