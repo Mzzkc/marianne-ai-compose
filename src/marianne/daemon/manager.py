@@ -255,6 +255,7 @@ class JobMeta:
     max_wall_seconds: float | None = None
     wall_deadline_at: float | None = None
     terminal_reason: str | None = None
+    cleanup_generation: str | None = None
     timeout_cleanup_outcome: JobTimeoutCleanupStatus | None = None
     deadline_diagnostic: str | None = None
     hook_config: list[dict[str, Any]] | None = field(default=None, repr=False)
@@ -467,6 +468,7 @@ class JobManager:
         self._service: JobService | None = None
         self._jobs: dict[str, asyncio.Task[Any]] = {}
         self._job_meta: dict[str, JobMeta] = {}
+        self._cleanup_generation_counter = 0
         # Admission is reserved synchronously before recurrence I/O so a
         # rejected same-ID request cannot publish autonomous work.
         self._job_admission_reservations: dict[str, _JobAdmissionReservation] = {}
@@ -1904,6 +1906,7 @@ class JobManager:
                         concert_config=concert_config_dict,
                     )
                     self._job_meta[job_id] = meta
+                    self._bind_cleanup_generation(meta, new_execution=True)
 
                     # Persist hook config to registry for restart resilience
                     if hook_config_list:
@@ -2018,7 +2021,7 @@ class JobManager:
                 max_wall_seconds=max_wall_seconds,
                 wall_deadline_at=wall_deadline_at,
             )
-            self._job_meta[job_id] = JobMeta(
+            meta = JobMeta(
                 job_id=committed.job_id,
                 config_path=Path(committed.config_path),
                 workspace=Path(committed.workspace),
@@ -2029,6 +2032,8 @@ class JobManager:
                 wall_deadline_at=committed.wall_deadline_at,
                 deadline_diagnostic=committed.deadline_diagnostic,
             )
+            self._job_meta[job_id] = meta
+            self._bind_cleanup_generation(meta, new_execution=True)
 
         # Store for auto-start
         self._pending_jobs[job_id] = request
@@ -4519,6 +4524,15 @@ class JobManager:
         evidence = to_dict()
         if not isinstance(evidence, dict):
             return fallback
+        evidence = dict(evidence)
+        evidence_generation = evidence.get("cleanup_generation")
+        if evidence_generation is None:
+            evidence["cleanup_generation"] = fallback.cleanup_generation
+        elif (
+            fallback.cleanup_generation is not None
+            and evidence_generation != fallback.cleanup_generation
+        ):
+            return fallback
         return JobTimeoutCleanupStatus(
             cleanup_path="baton.deregister_job",
             deregistration_state="attempted",
@@ -4537,15 +4551,49 @@ class JobManager:
         get_result = getattr(adapter, "get_process_group_cleanup_result", None)
         if not callable(get_result):
             return current
-        return self._cleanup_status_from_baton_result(get_result(job_id), current)
+        raw_result = (
+            get_result(job_id, current.cleanup_generation)
+            if current.cleanup_generation is not None
+            else get_result(job_id)
+        )
+        return self._cleanup_status_from_baton_result(raw_result, current)
+
+    def _bind_cleanup_generation(
+        self,
+        meta: JobMeta,
+        *,
+        new_execution: bool,
+    ) -> str:
+        """Bind runtime cleanup evidence before this execution can wait."""
+        generation = meta.cleanup_generation
+        if new_execution or generation is None:
+            self._cleanup_generation_counter = (
+                getattr(self, "_cleanup_generation_counter", 0) + 1
+            )
+            generation = f"manager-{self._cleanup_generation_counter}"
+            meta.cleanup_generation = generation
+        adapter = self._baton_adapter
+        begin_generation = (
+            getattr(adapter, "begin_cleanup_generation", None)
+            if adapter is not None
+            else None
+        )
+        if callable(begin_generation):
+            begin_generation(meta.job_id, generation)
+        return generation
 
     def _timeout_cleanup_via_baton(self, job_id: str) -> JobTimeoutCleanupStatus:
         """Attempt timeout cleanup only through Baton's deregistration seam."""
+        meta = self._job_meta.get(job_id)
+        cleanup_generation = (
+            meta.cleanup_generation if meta is not None else None
+        )
         adapter = self._baton_adapter
         if adapter is None:
             return JobTimeoutCleanupStatus(
                 cleanup_path="baton.deregister_job",
                 deregistration_state="unavailable",
+                cleanup_generation=cleanup_generation,
             )
         try:
             raw_result: Any = adapter.deregister_job(job_id)
@@ -4558,10 +4606,12 @@ class JobManager:
             return JobTimeoutCleanupStatus(
                 cleanup_path="baton.deregister_job",
                 deregistration_state="failed",
+                cleanup_generation=cleanup_generation,
             )
         fallback = JobTimeoutCleanupStatus(
             cleanup_path="baton.deregister_job",
             deregistration_state="attempted",
+            cleanup_generation=cleanup_generation,
         )
         return self._cleanup_status_from_baton_result(raw_result, fallback)
 
@@ -4641,6 +4691,7 @@ class JobManager:
         coro_started = False
         try:
             meta = self._job_meta[job_id]
+            self._bind_cleanup_generation(meta, new_execution=False)
             daemon_timeout = float(self._config.job_timeout_seconds)
             timeout = daemon_timeout
             execution_started_at: float | None = None
@@ -5117,6 +5168,9 @@ class JobManager:
             skip_when=config.sheet.skip_when or None,  # #360/#119
             code_execution=config.code_execution,  # #209
             agent_card=config.agent_card,
+            cleanup_generation=(
+                meta.cleanup_generation if meta is not None else None
+            ),
         )
 
         # #196: thread the score's retry backoff (base/exp/max + jitter) into

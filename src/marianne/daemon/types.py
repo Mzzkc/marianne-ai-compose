@@ -184,6 +184,10 @@ class JobTimeoutCleanupStatus(BaseModel):
     """Truthful, secret-free evidence from Baton's timeout teardown."""
 
     cleanup_path: str = Field(description="Existing cleanup seam used")
+    cleanup_generation: str | None = Field(
+        default=None,
+        description="Daemon-local execution generation for this evidence",
+    )
     deregistration_state: str = Field(
         description="Whether Baton deregistration was attempted or available",
     )

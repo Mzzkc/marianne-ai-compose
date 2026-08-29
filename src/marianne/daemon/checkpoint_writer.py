@@ -63,11 +63,24 @@ class CheckpointWriter:
         )
         self._latest: dict[str, str] = {}
         self._task: asyncio.Task[None] | None = None
+        self._accepting = False
+        self._stopping = False
+        self._stop_requested = asyncio.Event()
+        self._admissions_idle = asyncio.Event()
+        self._admissions_idle.set()
+        self._active_ack_admissions = 0
+        self._stopped = asyncio.Event()
+        self._stopped.set()
 
     def start(self) -> None:
         """Start the consumer task (idempotent). Must run inside the event loop."""
+        if self._stopping:
+            raise RuntimeError("checkpoint writer is stopping")
         if self._task is None:
+            self._stop_requested.clear()
+            self._stopped.clear()
             self._task = asyncio.create_task(self._run(), name="checkpoint-writer")
+            self._accepting = True
 
     @property
     def running(self) -> bool:
@@ -134,16 +147,45 @@ class CheckpointWriter:
 
     async def write_and_wait(self, job_id: str, checkpoint_json: str) -> None:
         """Write one exact snapshot in FIFO order and report its save result."""
-        if not self.running:
+        if not self._accepting or not self.running:
             raise RuntimeError("checkpoint writer is not running")
         completed = asyncio.get_running_loop().create_future()
-        await self._queue.put(
-            _AcknowledgedWrite(
-                job_id=job_id,
-                payload=checkpoint_json,
-                completed=completed,
-            )
+        request = _AcknowledgedWrite(
+            job_id=job_id,
+            payload=checkpoint_json,
+            completed=completed,
         )
+        self._active_ack_admissions += 1
+        self._admissions_idle.clear()
+        put_task = asyncio.create_task(self._queue.put(request))
+        stop_task = asyncio.create_task(self._stop_requested.wait())
+        try:
+            done, _pending = await asyncio.wait(
+                (put_task, stop_task),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if stop_task in done:
+                if not put_task.done():
+                    put_task.cancel()
+                if not completed.done():
+                    completed.cancel()
+            else:
+                await put_task
+        except asyncio.CancelledError:
+            if not put_task.done():
+                put_task.cancel()
+            if not completed.done():
+                completed.cancel()
+            raise
+        finally:
+            for task in (put_task, stop_task):
+                if not task.done():
+                    task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            self._active_ack_admissions -= 1
+            if self._active_ack_admissions == 0:
+                self._admissions_idle.set()
         await completed
 
     async def drain(self) -> None:
@@ -156,16 +198,30 @@ class CheckpointWriter:
         Pending coalesced snapshots are intentionally NOT flushed here — the
         caller's final synchronous flush of live state supersedes them.
         """
-        if self._task is not None:
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._task
-            self._task = None
-        while not self._queue.empty():
-            item = self._queue.get_nowait()
-            if (
-                isinstance(item, _AcknowledgedWrite)
-                and not item.completed.done()
-            ):
-                item.completed.cancel()
-            self._queue.task_done()
+        if self._stopping:
+            await self._stopped.wait()
+            return
+        self._stopping = True
+        self._accepting = False
+        self._stop_requested.set()
+        try:
+            # Producers that passed the accepting check join shutdown before
+            # the consumer is cancelled and the visible queue is drained.
+            # Therefore no acknowledged item can appear after this drain.
+            await self._admissions_idle.wait()
+            if self._task is not None:
+                self._task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._task
+                self._task = None
+            while not self._queue.empty():
+                item = self._queue.get_nowait()
+                if (
+                    isinstance(item, _AcknowledgedWrite)
+                    and not item.completed.done()
+                ):
+                    item.completed.cancel()
+                self._queue.task_done()
+        finally:
+            self._stopping = False
+            self._stopped.set()
