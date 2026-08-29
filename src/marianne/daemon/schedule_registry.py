@@ -18,6 +18,9 @@ import aiosqlite
 from pydantic import ValidationError
 
 from marianne.core.config import ScheduleConfig
+from marianne.core.logging import get_logger
+
+_logger = get_logger("daemon.schedule_registry")
 
 
 class ScheduleRegistryError(RuntimeError):
@@ -196,13 +199,47 @@ class ScheduleRegistry:
         return self._row_to_record(row)
 
     async def list(self) -> list[ScheduleRecord]:
-        """List schedule projections in stable schedule-ID order."""
+        """List valid projections and disable malformed rows with a safe outcome.
+
+        Startup restoration must not let one damaged durable projection prevent
+        every other schedule from restoring.  ``get()`` remains strict for a
+        caller that explicitly requests that row; the bulk restoration view
+        records the safe disabled state and omits only the malformed schedule.
+        """
         try:
             cursor = await self._db.execute("SELECT * FROM schedules ORDER BY schedule_id")
             rows = await cursor.fetchall()
         except sqlite3.Error as exc:
             self._raise_database_error("list", exc)
-        return [self._row_to_record(row) for row in rows]
+        records: list[ScheduleRecord] = []
+        for row in rows:
+            try:
+                records.append(self._row_to_record(row))
+            except ScheduleRegistryDataError:
+                schedule_id = str(row["schedule_id"])
+                await self._disable_malformed_record(schedule_id)
+                _logger.error(
+                    "schedule.registry_data_disabled",
+                    schedule_id=schedule_id,
+                )
+        return records
+
+    async def _disable_malformed_record(self, schedule_id: str) -> None:
+        """Persist a non-runnable outcome for one row rejected by validation."""
+        cursor = await self._execute_mutation(
+            "disable malformed schedule",
+            """
+            UPDATE schedules
+            SET enabled = 0, last_outcome = ?, updated_at = ?
+            WHERE schedule_id = ?
+            """,
+            ("registry_data_error", time.time(), schedule_id),
+            schedule_id=schedule_id,
+        )
+        if cursor.rowcount != 1:
+            raise ScheduleRegistryError(
+                f"Schedule {schedule_id!r} disappeared while disabling malformed state"
+            )
 
     async def pause(self, schedule_id: str) -> None:
         """Disable future claims for a schedule without deleting its history."""

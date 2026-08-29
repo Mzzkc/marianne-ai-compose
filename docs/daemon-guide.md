@@ -97,8 +97,23 @@ The conductor is composed of several layers:
 - **JobManager** — Tracks jobs as `asyncio.Task` instances. Uses a `Semaphore` to enforce the `max_concurrent_jobs` limit. Jobs exceeding `job_timeout_seconds` are cancelled.
 - **JobService** — Decoupled execution engine (no CLI dependencies). Handles the full run/resume/pause/status lifecycle for individual jobs.
 - **JobRegistry** — SQLite-backed persistent storage. Survives conductor restarts. On startup, orphaned jobs (status `queued` or `running` from a previous conductor) are marked as `failed`.
+- **RecurrenceController + ScheduleRegistry** — Source-owned recurring YAML declarations are projected into the same SQLite state database. The controller arms `CronTick` events through Baton's TimerWheel, leases each `(schedule_id, due_at)` before normal child admission, rereads the source before dispatch, and restores one next or latest action after restart. A missing, changed, or corrupt declaration is removed/replaced/disabled loudly rather than replayed.
 - **EventBus** — Async pub/sub that routes runner callback events (`sheet.started`, `sheet.completed`, `sheet.failed`, `sheet.retrying`, `sheet.validation_passed/failed`, `job.cost_update`, `job.iteration`) to downstream consumers. Bounded deques per subscriber prevent slow consumers from blocking publishers.
 - **SemanticAnalyzer** — Subscribes to `sheet.completed` and `sheet.failed` events via the EventBus. On each event, captures a snapshot of the sheet's execution context (prompt, output, validation results) and sends it to an LLM (configurable model, default Sonnet) for analysis. The LLM response is parsed into structured insights and stored as `SEMANTIC_INSIGHT` patterns in the global learning store. These patterns are automatically picked up by the existing pattern injection pipeline for future sheets. Concurrency is limited by a semaphore (`max_concurrent_analyses`, default 3). Analysis failures never affect running jobs.
+
+### Recurrence, deadlines, and diagnostics
+
+The conductor owns recurrence; no OS cron or second execution engine is
+required. Interval schedules stay anchored to scheduled time, cron schedules
+use their declared IANA timezone across DST, `skip` is the default misfire and
+overlap behavior, and `latest` collapses downtime to one catch-up action.
+Each scheduled child is an ordinary job with schedule lineage.
+
+The effective wall limit is the stricter of daemon `job_timeout_seconds` and a
+score's `max_wall_seconds`. The score limit is an absolute admission deadline:
+pending time, pause/resume, and restart consume it rather than extending it.
+`mzt status` exposes schedule last/next due, last child/outcome, lease/overlap
+diagnostics, and configured/effective deadline evidence.
 
 ### IPC Protocol
 

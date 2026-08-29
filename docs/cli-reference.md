@@ -110,6 +110,16 @@ If the system is under resource pressure, `mzt run` exits with an error:
 Error: System under high pressure — try again later.
 ```
 
+#### Recurring-score lifecycle
+
+For a score with `schedule:`, `mzt run score.yaml` is both trigger-now and
+schedule registration/replacement. Use the existing lifecycle commands against
+the stable schedule/score ID: `mzt status` and `mzt list` show next/last due
+and outcome; `mzt pause ID` stops future ticks (and active lineage), `mzt
+resume ID` re-arms one durable next due, and `mzt cancel ID` removes the
+schedule. After a conductor restart, the registry restores one future timer or
+one `latest` catch-up; it never replays every missed interval.
+
 #### Examples
 
 ```bash
