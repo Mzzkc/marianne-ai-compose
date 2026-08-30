@@ -98,6 +98,14 @@ class InjectionItem(BaseModel):
         description="Category determining prompt placement: "
         "'context' (background), 'skill' (methodology), or 'tool' (actions).",
     )
+    required: bool = Field(
+        default=False,
+        description=(
+            "Fail the sheet before execution when this attachment cannot be read. "
+            "Persistent-agent identity, memory, and active cadenza attachments "
+            "should set this true; legacy optional context remains false by default."
+        ),
+    )
 
     @model_validator(mode="after")
     def exactly_one_source(self) -> InjectionItem:
@@ -900,7 +908,7 @@ class JobConfig(BaseModel):
 
         This eliminates redundant .resolve() calls scattered across consumers.
         """
-        self.workspace = self.workspace.resolve()
+        self.workspace = self.workspace.expanduser().resolve()
         return self
 
     @model_validator(mode="after")
@@ -967,7 +975,7 @@ class JobConfig(BaseModel):
         # the daemon loads a score whose path differs from the daemon's CWD.
         ws_val = data.get("workspace")
         if ws_val:
-            ws = Path(str(ws_val))
+            ws = Path(str(ws_val)).expanduser()
             if not ws.is_absolute():
                 data["workspace"] = str((path.resolve().parent / ws).resolve())
         else:

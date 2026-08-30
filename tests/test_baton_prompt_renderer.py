@@ -8,7 +8,10 @@ preamble assembly, and validation requirements.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
+
+import pytest
 
 from marianne.core.config.execution import ValidationRule
 from marianne.core.config.job import InjectionCategory, InjectionItem, PromptConfig
@@ -382,6 +385,120 @@ class TestInjectionResolution:
         result = renderer.render(sheet, _make_context())
         assert "Injected Context" not in result.prompt
 
+    def test_required_missing_context_fails_loudly(self, tmp_path: Path) -> None:
+        """Modern-agent identity attachments may not disappear silently."""
+        sheet = _make_sheet(
+            workspace=tmp_path,
+            prelude=[
+                InjectionItem(
+                    file=str(tmp_path / "missing-identity.md"),
+                    required=True,
+                    **{"as": InjectionCategory.CONTEXT},
+                )
+            ],
+        )
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        with pytest.raises(FileNotFoundError, match="required injection"):
+            renderer.render(sheet, _make_context())
+
+    @pytest.mark.parametrize("path_template", ["{{ missing }}", "{{"])
+    def test_required_directory_template_fails_without_workspace_leak(
+        self,
+        tmp_path: Path,
+        path_template: str,
+    ) -> None:
+        secret = tmp_path / "secret.txt"
+        secret.write_text("must not be injected")
+        sheet = _make_sheet(
+            workspace=tmp_path,
+            prelude=[
+                InjectionItem(
+                    directory=path_template,
+                    required=True,
+                    **{"as": InjectionCategory.CONTEXT},
+                )
+            ],
+        )
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        with pytest.raises(ValueError, match="required injection directory"):
+            renderer.render(sheet, _make_context())
+
+    def test_raw_prompt_still_enforces_required_attachments(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        sheet = _make_sheet(
+            workspace=tmp_path,
+            prompt_template="echo exact-command",
+            prelude=[
+                InjectionItem(
+                    file=str(tmp_path / "missing-identity.md"),
+                    required=True,
+                    **{"as": InjectionCategory.CONTEXT},
+                )
+            ],
+        )
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        with pytest.raises(FileNotFoundError, match="required injection"):
+            renderer.render(sheet, _make_context(), raw_prompt=True)
+
+    def test_tilde_path_is_expanded_and_receipted(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Portable agent paths resolve to HOME and record exact delivered bytes."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        identity = tmp_path / ".marianne" / "agents" / "canyon" / "identity.md"
+        identity.parent.mkdir(parents=True)
+        identity.write_text("I preserve system structure.\n")
+        sheet = _make_sheet(
+            workspace=tmp_path / "workspace",
+            prelude=[
+                InjectionItem(
+                    file="~/.marianne/agents/canyon/identity.md",
+                    required=True,
+                    **{"as": InjectionCategory.CONTEXT},
+                )
+            ],
+        )
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        result = renderer.render(sheet, _make_context())
+
+        assert "I preserve system structure." in result.prompt
+        assert len(result.context_manifest) == 1
+        delivery = result.context_manifest[0]
+        assert delivery["resolved_path"] == str(identity)
+        assert delivery["category"] == "context"
+        assert delivery["source"] == "prelude"
+        assert delivery["delivered_sha256"] == (
+            "sha256:" + hashlib.sha256(identity.read_bytes()).hexdigest()
+        )
+
 
 # =========================================================================
 # Technique Injection
@@ -435,6 +552,23 @@ class TestTechniqueInjection:
         assert result.prompt.count("Techniques Available") == 1
         assert "Techniques Available This Phase" not in result.prompt
         assert "Record findings." in result.prompt
+
+    def test_named_technique_docs_are_in_delivery_manifest(self) -> None:
+        renderer = PromptRenderer(
+            prompt_config=_make_prompt_config(),
+            total_sheets=1,
+            total_stages=1,
+            parallel_enabled=False,
+        )
+
+        result = renderer.render(
+            _make_sheet(prompt_template="Do work."),
+            _make_context(),
+            technique_skill_docs={"canyon-specialist": "# Canyon\n\nTrace boundaries."},
+        )
+
+        assert result.context_manifest[0]["source"] == "technique:canyon-specialist"
+        assert result.context_manifest[0]["category"] == "skill"
 
 
 # =========================================================================
@@ -590,6 +724,7 @@ class TestRenderedPrompt:
         rp = RenderedPrompt(prompt="test", preamble="preamble")
         assert rp.prompt == "test"
         assert rp.preamble == "preamble"
+        assert rp.context_manifest == ()
 
     def test_full_render_returns_rendered_prompt(self) -> None:
         """Full render produces a RenderedPrompt with both fields."""

@@ -2117,6 +2117,95 @@ class BatonAdapter:
             },
         )
 
+    def _prepare_dispatch_techniques(
+        self,
+        job_id: str,
+        sheet: Sheet,
+        resolved: Any | None,
+    ) -> tuple[str | None, dict[str, str], Path | None, bool, list[Path], bool]:
+        """Prepare all technique/MCP artifacts before acquiring a backend."""
+        technique_manifest: str | None = None
+        technique_skill_docs: dict[str, str] = {}
+        mcp_config_path: Path | None = None
+        mcp_code_bridge_active = False
+        mcp_bind_mounts: list[Path] = []
+        output_router_active = False
+        if resolved is None:
+            return (
+                technique_manifest,
+                technique_skill_docs,
+                mcp_config_path,
+                mcp_code_bridge_active,
+                mcp_bind_mounts,
+                output_router_active,
+            )
+
+        output_router_active = bool(resolved.mcp_servers or resolved.protocols)
+        if resolved.manifest:
+            technique_manifest = resolved.manifest
+        technique_skill_docs.update(resolved.skill_docs)
+        if "a2a" in resolved.protocols:
+            a2a_context = self._render_a2a_context_for_dispatch(job_id)
+            if a2a_context:
+                technique_skill_docs["a2a-runtime-context"] = a2a_context
+        if self._mcp_pool is not None and resolved.mcp_servers:
+            from marianne.execution.interface_gen import (
+                InterfaceGenerator,
+                declarations_from_mcp_servers,
+            )
+
+            mcp_config_path = self._mcp_pool.generate_mcp_config_file(
+                sheet.workspace,
+                server_names=[
+                    str(server_name) for server_name in resolved.mcp_servers.values()
+                ],
+            )
+            runtime_paths = _mcp_runtime_socket_paths(
+                self._mcp_pool,
+                {
+                    str(technique_name): str(server_name)
+                    for technique_name, server_name in resolved.mcp_servers.items()
+                },
+            )
+            if runtime_paths:
+                declarations = declarations_from_mcp_servers(
+                    {
+                        str(technique_name): str(server_name)
+                        for technique_name, server_name in resolved.mcp_servers.items()
+                        if str(technique_name) in runtime_paths
+                    }
+                )
+                generator = InterfaceGenerator()
+                socket_path_strings: dict[str, str] = {}
+                for technique_name, socket_path in runtime_paths.items():
+                    socket_path_strings[technique_name] = str(socket_path)
+                    server_name = str(resolved.mcp_servers.get(technique_name, ""))
+                    if server_name:
+                        socket_path_strings[server_name] = str(socket_path)
+                runtime_source = generator.generate_implementation(
+                    declarations,
+                    socket_paths=socket_path_strings,
+                )
+                if runtime_source:
+                    technique_skill_docs["mcp-code-interfaces"] = (
+                        generator.generate_stubs(declarations)
+                    )
+                    sheet.workspace.mkdir(parents=True, exist_ok=True)
+                    (sheet.workspace / "techniques_rt.py").write_text(
+                        runtime_source,
+                        encoding="utf-8",
+                    )
+                    mcp_code_bridge_active = True
+                    mcp_bind_mounts = _mcp_socket_bind_mounts(runtime_paths)
+        return (
+            technique_manifest,
+            technique_skill_docs,
+            mcp_config_path,
+            mcp_code_bridge_active,
+            mcp_bind_mounts,
+            output_router_active,
+        )
+
     async def _dispatch_callback(
         self,
         job_id: str,
@@ -2172,6 +2261,51 @@ class BatonAdapter:
         # original. Without this, the baton thinks it switched instruments
         # but the backend pool acquires the original instrument's backend.
         effective_instrument = state.instrument_name or ""
+
+        # Resolve required technique documents before reserving a backend.
+        # Missing required context is a dispatch failure, not a pool leak.
+        job_techniques = getattr(self, "_job_techniques", {}).get(job_id)
+        resolved_techniques = None
+        if job_techniques:
+            from marianne.daemon.baton.techniques import resolve_techniques_for_sheet
+
+            phase = str(sheet.movement) if sheet.movement else str(sheet_num)
+            try:
+                resolved_techniques = resolve_techniques_for_sheet(
+                    job_techniques, phase
+                )
+            except Exception as exc:
+                self._send_dispatch_failure(
+                    job_id,
+                    sheet_num,
+                    effective_instrument,
+                    "Required technique resolution failed: "
+                    f"{type(exc).__name__}: {exc}",
+                    state=state,
+                )
+                return
+
+        try:
+            (
+                technique_manifest,
+                technique_skill_docs,
+                mcp_config_path,
+                mcp_code_bridge_active,
+                mcp_bind_mounts,
+                output_router_active,
+            ) = self._prepare_dispatch_techniques(
+                job_id, sheet, resolved_techniques
+            )
+        except Exception as exc:
+            self._send_dispatch_failure(
+                job_id,
+                sheet_num,
+                effective_instrument,
+                "Technique/MCP setup failed before backend acquisition: "
+                f"{type(exc).__name__}: {exc}",
+                state=state,
+            )
+            return
 
         # Interactive-mode request (per-sheet, from the merged instrument
         # config). Tri-state: key absent → None (the pool applies the
@@ -2254,202 +2388,39 @@ class BatonAdapter:
             )
             return
 
-        # #201: capture the prior attempt's failure signals for retry-prompt
-        # enrichment BEFORE the clear below wipes them. This is a pure read of
-        # already-persisted SheetState into an ephemeral per-attempt dict — no
-        # state write, no in-memory/DB drift point. On the first attempt these
-        # are empty, so the helper returns None and the retry preamble stays
-        # generic.
-        prior_failure = self._build_healing_context(state, job_id, sheet_num)
-
-        # Clear stale validation/error details from previous attempts.
-        # Without this, status display shows old validation errors for the
-        # current attempt's failure (misreporting).
-        state.validation_passed = None
-        state.validation_details = None
-        state.error_message = None
-        state.error_code = None
-
-        # Build attempt context
-        attempt_number = state.normal_attempts + state.completion_attempts + 1
-
-        # Keep the legacy `attempt_count` field synced with the baton's view
-        # of "current attempt number" so all consumers (status display,
-        # diagnose, dashboard, MCP, sqlite persistence, escalation gating,
-        # semantic analyzer) report accurate counts. Phase 2 unified
-        # SheetExecutionState with SheetState so `state` is the live
-        # CheckpointState.sheets entry; the legacy mark_sheet_started()
-        # path increments attempt_count via the JSON/SQLite backends'
-        # state_publish hook, but baton-driven sheets bypass that path,
-        # which is why "Attempts" displayed 0 across the board.
-        state.attempt_count = attempt_number
-
-        # Interactive sheets: hand the backend its attempt identity (session
-        # and completion-marker naming) and per-sheet driver knobs, and mark
-        # the sheet so the stale check skips the workspace-mtime idle kill
-        # (the driver owns idle handling — two independent kill-deciders
-        # would race; see docs/specs/2026-06-10-interactive-mode-design.md).
-        # The RESOLVED mode is observable from the backend type — the pool
-        # owns the tri-state resolution (score request vs profile default).
-        from marianne.execution.instruments.interactive import (
-            InteractiveCliBackend,
-        )
-
-        if isinstance(backend, InteractiveCliBackend):
-            backend.set_attempt_identity(job_id, sheet_num, attempt_number)
-            _knobs = sheet.instrument_config if isinstance(_icfg, dict) else {}
-            raw_max = _knobs.get("interactive_max_nudges")
-            raw_msg = _knobs.get("interactive_nudge_message")
-            backend.configure_interactive(
-                max_nudges=int(raw_max) if raw_max is not None else None,
-                nudge_message=str(raw_msg) if raw_msg is not None else None,
-            )
-            self._interactive_sheets.setdefault(job_id, set()).add(sheet_num)
-        else:
-            # Re-dispatch hygiene: an earlier attempt may have run
-            # interactively (e.g. before a fallback degraded to headless) —
-            # the stale-skip must not outlive the mode.
-            sheets_set = self._interactive_sheets.get(job_id)
-            if sheets_set is not None:
-                sheets_set.discard(sheet_num)
-
-        mode = AttemptMode.NORMAL
-        completion_suffix: str | None = None
-
-        if state.completion_attempts > 0 and state.can_complete:
-            mode = AttemptMode.COMPLETION
-            # Build a specific completion suffix that tells the agent exactly
-            # which validations failed. Without this, the agent produces the
-            # same partial output every completion attempt because it has no
-            # feedback about what specifically is missing.
-            completion_suffix = self._build_completion_suffix(state)
-        elif state.healing_attempts > 0:
-            mode = AttemptMode.HEALING
-
-        # F-210: Collect cross-sheet context before building AttemptContext.
-        # This populates previous_outputs and previous_files from completed
-        # sheets' stdout and workspace file patterns, matching the legacy
-        # runner's ContextBuildingMixin._populate_cross_sheet_context().
-        prev_outputs, prev_files = self._collect_cross_sheet_context(
-            job_id, sheet_num
-        )
-
-        context = AttemptContext(
-            attempt_number=attempt_number,
-            mode=mode,
-            completion_prompt_suffix=completion_suffix,
-            previous_outputs=prev_outputs,
-            previous_files=prev_files,
-            # #201: enrich every non-completion retry with the prior attempt's
-            # failure evidence. Completion mode already carries targeted
-            # failed-validation detail in its suffix, so skip it there to avoid
-            # double-injection.
-            healing_context=(
-                prior_failure if mode != AttemptMode.COMPLETION else None
-            ),
-        )
-
-        # Resolve techniques for this sheet's phase before prompt rendering.
-        # Produces a manifest AND skill documents for prompt injection.
-        # Phase is derived from the sheet's movement number (stringified).
-        # Scores that declare techniques with phases=["all"] match regardless;
-        # phase-scoped techniques match only their declared movement.
-        #
-        # Skill-kind techniques auto-discover their documents from known
-        # locations (~/.marianne/techniques/, .marianne/techniques/, or
-        # config.path) and inject the content as skill-category items.
-        # This makes `techniques:` a shorthand injection — name the
-        # technique, content gets wired automatically.
-        technique_manifest: str | None = None
-        technique_skill_docs: list[str] = []
-        mcp_config_path: Path | None = None
-        mcp_code_bridge_active = False
-        mcp_bind_mounts: list[Path] = []
-        output_router_active = False
-        job_techniques = self._job_techniques.get(job_id)
-        if job_techniques:
-            from marianne.daemon.baton.techniques import resolve_techniques_for_sheet
-
-            phase = str(sheet.movement) if sheet.movement else str(sheet_num)
-            resolved = resolve_techniques_for_sheet(job_techniques, phase)
-            output_router_active = bool(resolved.mcp_servers or resolved.protocols)
-            if resolved.manifest:
-                technique_manifest = resolved.manifest
-            # Collect discovered skill documents for injection
-            for _tech_name, doc_content in resolved.skill_docs.items():
-                technique_skill_docs.append(doc_content)
-            if "a2a" in resolved.protocols:
-                a2a_context = self._render_a2a_context_for_dispatch(job_id)
-                if a2a_context:
-                    technique_skill_docs.append(a2a_context)
-            if self._mcp_pool is not None and resolved.mcp_servers:
-                from marianne.execution.interface_gen import (
-                    InterfaceGenerator,
-                    declarations_from_mcp_servers,
-                )
-
-                mcp_config_path = self._mcp_pool.generate_mcp_config_file(
-                    sheet.workspace,
-                    server_names=[
-                        str(server_name)
-                        for server_name in resolved.mcp_servers.values()
-                    ],
-                )
-                runtime_paths = _mcp_runtime_socket_paths(
-                    self._mcp_pool,
-                    {
-                        str(technique_name): str(server_name)
-                        for technique_name, server_name in resolved.mcp_servers.items()
-                    },
-                )
-                if runtime_paths:
-                    declarations = declarations_from_mcp_servers(
-                        {
-                            str(technique_name): str(server_name)
-                            for technique_name, server_name in resolved.mcp_servers.items()
-                            if str(technique_name) in runtime_paths
-                        }
-                    )
-                    generator = InterfaceGenerator()
-                    socket_path_strings: dict[str, str] = {}
-                    for technique_name, socket_path in runtime_paths.items():
-                        socket_path_strings[technique_name] = str(socket_path)
-                        server_name = str(resolved.mcp_servers.get(technique_name, ""))
-                        if server_name:
-                            socket_path_strings[server_name] = str(socket_path)
-                    runtime_source = generator.generate_implementation(
-                        declarations,
-                        socket_paths=socket_path_strings,
-                    )
-                    if runtime_source:
-                        technique_skill_docs.append(generator.generate_stubs(declarations))
-                        sheet.workspace.mkdir(parents=True, exist_ok=True)
-                        (sheet.workspace / "techniques_rt.py").write_text(
-                            runtime_source,
-                            encoding="utf-8",
-                        )
-                        mcp_code_bridge_active = True
-                        mcp_bind_mounts = _mcp_socket_bind_mounts(runtime_paths)
-
-        if mcp_config_path is not None and hasattr(backend, "set_mcp_config"):
-            backend.set_mcp_config(mcp_config_path)
-
-        # Spawn musician task
-        task = asyncio.create_task(
-            self._musician_wrapper(
+        try:
+            task, mode = self._create_musician_task_after_acquire(
                 job_id=job_id,
+                sheet_num=sheet_num,
                 sheet=sheet,
+                state=state,
                 backend=backend,
-                context=context,
                 effective_instrument=effective_instrument,
                 technique_manifest=technique_manifest,
                 technique_skill_docs=technique_skill_docs,
+                mcp_config_path=mcp_config_path,
                 output_router_active=output_router_active,
                 mcp_code_bridge_active=mcp_code_bridge_active,
                 mcp_bind_mounts=mcp_bind_mounts,
-            ),
-            name=f"musician-{job_id}-s{sheet_num}",
-        )
+            )
+        except Exception as exc:
+            if hasattr(backend, "set_mcp_config"):
+                try:
+                    backend.set_mcp_config(None)
+                except Exception:
+                    pass
+            await asyncio.shield(
+                self._backend_pool.release(effective_instrument, backend)
+            )
+            self._send_dispatch_failure(
+                job_id,
+                sheet_num,
+                effective_instrument,
+                "Post-acquisition dispatch setup failed: "
+                f"{type(exc).__name__}: {exc}",
+                state=state,
+            )
+            return
         self._active_tasks[(job_id, sheet_num)] = task
         task.add_done_callback(
             lambda t: self._on_musician_done(job_id, sheet_num, t)
@@ -2462,9 +2433,98 @@ class BatonAdapter:
                 "sheet_num": sheet_num,
                 "instrument": effective_instrument,
                 "primary_instrument": sheet.instrument_name,
-                "attempt": attempt_number,
+                "attempt": state.attempt_count,
                 "mode": mode.value,
             },
+        )
+
+    def _create_musician_task_after_acquire(
+        self,
+        *,
+        job_id: str,
+        sheet_num: int,
+        sheet: Sheet,
+        state: SheetExecutionState,
+        backend: Any,
+        effective_instrument: str,
+        technique_manifest: str | None,
+        technique_skill_docs: dict[str, str],
+        mcp_config_path: Path | None,
+        output_router_active: bool,
+        mcp_code_bridge_active: bool,
+        mcp_bind_mounts: list[Path],
+    ) -> tuple[asyncio.Task[None], AttemptMode]:
+        """Finish all fallible setup while the caller still owns the lease."""
+        prior_failure = self._build_healing_context(state, job_id, sheet_num)
+        state.validation_passed = None
+        state.validation_details = None
+        state.error_message = None
+        state.error_code = None
+
+        attempt_number = state.normal_attempts + state.completion_attempts + 1
+        state.attempt_count = attempt_number
+
+        from marianne.execution.instruments.interactive import InteractiveCliBackend
+
+        if isinstance(backend, InteractiveCliBackend):
+            backend.set_attempt_identity(job_id, sheet_num, attempt_number)
+            knobs = (
+                sheet.instrument_config
+                if isinstance(sheet.instrument_config, dict)
+                else {}
+            )
+            raw_max = knobs.get("interactive_max_nudges")
+            raw_msg = knobs.get("interactive_nudge_message")
+            backend.configure_interactive(
+                max_nudges=int(raw_max) if raw_max is not None else None,
+                nudge_message=str(raw_msg) if raw_msg is not None else None,
+            )
+            self._interactive_sheets.setdefault(job_id, set()).add(sheet_num)
+        else:
+            sheets_set = self._interactive_sheets.get(job_id)
+            if sheets_set is not None:
+                sheets_set.discard(sheet_num)
+
+        mode = AttemptMode.NORMAL
+        completion_suffix: str | None = None
+        if state.completion_attempts > 0 and state.can_complete:
+            mode = AttemptMode.COMPLETION
+            completion_suffix = self._build_completion_suffix(state)
+        elif state.healing_attempts > 0:
+            mode = AttemptMode.HEALING
+
+        prev_outputs, prev_files = self._collect_cross_sheet_context(
+            job_id, sheet_num
+        )
+        context = AttemptContext(
+            attempt_number=attempt_number,
+            mode=mode,
+            completion_prompt_suffix=completion_suffix,
+            previous_outputs=prev_outputs,
+            previous_files=prev_files,
+            healing_context=(
+                prior_failure if mode != AttemptMode.COMPLETION else None
+            ),
+        )
+        if mcp_config_path is not None and hasattr(backend, "set_mcp_config"):
+            backend.set_mcp_config(mcp_config_path)
+        return (
+            asyncio.create_task(
+                self._musician_wrapper(
+                    job_id=job_id,
+                    sheet=sheet,
+                    backend=backend,
+                    context=context,
+                    effective_instrument=effective_instrument,
+                    technique_manifest=technique_manifest,
+                    technique_skill_docs=technique_skill_docs,
+                    output_router_active=output_router_active,
+                    mcp_code_bridge_active=mcp_code_bridge_active,
+                    mcp_bind_mounts=mcp_bind_mounts,
+                ),
+                name=f"musician-{job_id}-s{sheet_num}",
+            ),
+            mode,
         )
 
     async def _musician_wrapper(
@@ -2476,7 +2536,7 @@ class BatonAdapter:
         context: AttemptContext,
         effective_instrument: str | None = None,
         technique_manifest: str | None = None,
-        technique_skill_docs: list[str] | None = None,
+        technique_skill_docs: dict[str, str] | None = None,
         output_router_active: bool = False,
         mcp_code_bridge_active: bool = False,
         mcp_bind_mounts: list[Path] | None = None,
@@ -2593,6 +2653,7 @@ class BatonAdapter:
             renderer = self._job_renderers.get(job_id)
             pre_rendered: str | None = None
             pre_preamble: str | None = None
+            context_delivery = None
             if renderer is not None:
                 # #200: learned-pattern lookup is a sync sqlite query — resolve
                 # it off the event loop (await) BEFORE the synchronous render().
@@ -2604,25 +2665,36 @@ class BatonAdapter:
                     sheet.num,
                     learned_pattern_entries,
                 )
-                rendered = renderer.render(
-                    sheet, context,
-                    patterns=(
-                        [text for _, text in learned_pattern_entries]
-                        if learned_pattern_entries
-                        else None
-                    ),
-                    technique_manifest=technique_manifest,
-                    technique_skill_docs=technique_skill_docs,
-                    failure_history=self._build_failure_history(job_id, sheet.num),
-                    spec_fragments=self._build_spec_fragments(job_id, sheet.num),
-                    raw_prompt=(
-                        getattr(profile, "raw_prompt", False)
-                        if profile is not None
-                        else False
-                    ),
-                )
-                pre_rendered = rendered.prompt
-                pre_preamble = rendered.preamble
+                try:
+                    rendered = renderer.render(
+                        sheet, context,
+                        patterns=(
+                            [text for _, text in learned_pattern_entries]
+                            if learned_pattern_entries
+                            else None
+                        ),
+                        technique_manifest=technique_manifest,
+                        technique_skill_docs=technique_skill_docs,
+                        failure_history=self._build_failure_history(job_id, sheet.num),
+                        spec_fragments=self._build_spec_fragments(job_id, sheet.num),
+                        raw_prompt=(
+                            getattr(profile, "raw_prompt", False)
+                            if profile is not None
+                            else False
+                        ),
+                    )
+                    pre_rendered = rendered.prompt
+                    pre_preamble = rendered.preamble
+                    context_delivery = rendered
+                except Exception as exc:
+                    self._send_dispatch_failure(
+                        job_id,
+                        sheet.num,
+                        actual_instrument,
+                        "Prompt/context assembly failed: "
+                        f"{type(exc).__name__}: {exc}",
+                    )
+                    return
 
             # Resolve profile pricing from instrument registry (F-180)
             cost_input: float | None = None
@@ -2694,6 +2766,7 @@ class BatonAdapter:
                 instrument_override=actual_instrument,
                 technique_router=technique_router,
                 code_executor=code_executor,
+                context_delivery=context_delivery,
             )
         finally:
             # Phase 1 item 4: idempotent clear of the PID/PGID entry. The

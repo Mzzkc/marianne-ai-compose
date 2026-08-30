@@ -575,6 +575,29 @@ class TestWorkspacePathResolution109:
         config = self._load(score_file)
         assert config.workspace == Path("/absolute/path")
 
+    def test_tilde_workspace_expands_before_score_relative_resolution(
+        self,
+        tmp_path: "Path",
+        monkeypatch: "pytest.MonkeyPatch",
+    ) -> None:
+        """A portable HOME path is not treated as a score-relative literal '~'."""
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        monkeypatch.setenv("HOME", str(fake_home))
+        score_file = tmp_path / "score.yaml"
+        score_file.write_text(
+            self._SCORE_TEMPLATE.format(
+                name="portable-agent",
+                workspace="~/.marianne/agents/canyon/workspaces/full-lifecycle",
+            )
+        )
+
+        config = self._load(score_file)
+
+        assert config.workspace == (
+            fake_home / ".marianne/agents/canyon/workspaces/full-lifecycle"
+        ).resolve()
+
     def test_dotdot_path_resolved_correctly(
         self, tmp_path: "Path", monkeypatch: "pytest.MonkeyPatch"
     ) -> None:

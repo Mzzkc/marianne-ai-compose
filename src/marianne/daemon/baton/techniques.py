@@ -222,6 +222,10 @@ def resolve_techniques_for_sheet(
         doc = discover_technique_doc(name, tc.config)
         if doc:
             skill_docs[name] = doc
+        elif tc.required:
+            raise FileNotFoundError(
+                f"required technique document not found for active technique '{name}'"
+            )
 
     return ResolvedTechniques(
         skills=skill_names,

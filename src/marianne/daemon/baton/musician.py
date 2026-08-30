@@ -37,7 +37,7 @@ from __future__ import annotations
 import asyncio
 import time
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import jinja2
 
@@ -63,6 +63,9 @@ from marianne.utils.credential_scanner import redact_credentials
 
 _logger = get_logger("daemon.baton.musician")
 
+if TYPE_CHECKING:
+    from marianne.daemon.baton.prompt import RenderedPrompt
+
 # #202: warn-only preflight — fraction of the effective context window above
 # which the rendered prompt earns an advisory warning. Heuristic estimate, so
 # this only WARNS (never blocks): a wrong over-estimate must never false-reject
@@ -86,6 +89,7 @@ async def sheet_task(
     instrument_override: str | None = None,
     technique_router: TechniqueRouter | None = None,
     code_executor: CodeModeExecutor | None = None,
+    context_delivery: RenderedPrompt | None = None,
 ) -> None:
     """Execute a single sheet attempt and report the result.
 
@@ -128,6 +132,21 @@ async def sheet_task(
     preflight_warnings: list[str] = []
 
     try:
+        # This is the first executable line inside ``sheet_task``.  A receipt
+        # written here proves the rendered bytes crossed the call boundary;
+        # setup failures before this function is invoked produce no receipt.
+        if context_delivery is not None:
+            from marianne.daemon.baton.prompt import write_context_delivery_receipt
+
+            write_context_delivery_receipt(
+                workspace=sheet.workspace,
+                job_id=job_id,
+                sheet_num=sheet.num,
+                attempt=attempt_context.attempt_number,
+                instrument=effective_instrument,
+                rendered=context_delivery,
+            )
+
         # Step 1: Build prompt
         if rendered_prompt is not None:
             # F-104 via PromptRenderer — pre-rendered with all 9 layers.
@@ -540,7 +559,7 @@ def _resolve_injections(
         return injected_context, injected_skills, injected_tools
 
     path_env = jinja2.Environment(
-        undefined=jinja2.Undefined,
+        undefined=jinja2.StrictUndefined,
         autoescape=False,
     )
 
@@ -574,17 +593,29 @@ def _resolve_directory_cadenza(
         tmpl = env.from_string(item.directory)
         expanded_path = tmpl.render(**template_vars)
     except jinja2.TemplateError as e:
+        if item.required:
+            raise ValueError(
+                f"required injection directory template is invalid: {item.directory}"
+            ) from e
         _logger.warning(
             "musician.injection.path_expansion_error",
             extra={"directory": item.directory, "error": str(e)},
         )
         return
+    if not expanded_path.strip():
+        if item.required:
+            raise ValueError("required injection directory resolved to an empty path")
+        return
 
-    dir_path = Path(expanded_path)
-    if not dir_path.is_absolute():
-        dir_path = sheet.workspace / dir_path
+    from marianne.daemon.baton.prompt import resolve_injection_path
+
+    dir_path = resolve_injection_path(expanded_path, sheet.workspace)
 
     if not dir_path.is_dir():
+        if item.required:
+            raise FileNotFoundError(
+                f"required injection directory not found: {dir_path}"
+            )
         if item.as_ == InjectionCategory.CONTEXT:
             _logger.info(
                 "musician.injection.directory_not_found",
@@ -599,6 +630,10 @@ def _resolve_directory_cadenza(
 
     files = sorted(f for f in dir_path.glob("*") if f.is_file())
     if not files:
+        if item.required:
+            raise FileNotFoundError(
+                f"required injection directory is empty: {dir_path}"
+            )
         _logger.info(
             "musician.injection.directory_empty",
             extra={"directory": str(dir_path)},
@@ -627,17 +662,27 @@ def _resolve_file_injection(
         tmpl = env.from_string(item.file)
         expanded_path = tmpl.render(**template_vars)
     except jinja2.TemplateError as e:
+        if item.required:
+            raise ValueError(
+                f"required injection file template is invalid: {item.file}"
+            ) from e
         _logger.warning(
             "musician.injection.path_expansion_error",
             extra={"file": item.file, "error": str(e)},
         )
         return
+    if not expanded_path.strip():
+        if item.required:
+            raise ValueError("required injection file resolved to an empty path")
+        return
 
-    path = Path(expanded_path)
-    if not path.is_absolute():
-        path = sheet.workspace / path
+    from marianne.daemon.baton.prompt import resolve_injection_path
+
+    path = resolve_injection_path(expanded_path, sheet.workspace)
 
     if not path.is_file():
+        if item.required:
+            raise FileNotFoundError(f"required injection file not found: {path}")
         if item.as_ == InjectionCategory.CONTEXT:
             _logger.warning(
                 "musician.injection.file_not_found",

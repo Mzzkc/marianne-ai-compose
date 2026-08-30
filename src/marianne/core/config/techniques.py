@@ -66,6 +66,14 @@ class TechniqueConfig(BaseModel):
         description="Phases where this technique is available. "
         "Empty list means the technique is declared but not active in any phase.",
     )
+    required: bool = Field(
+        default=False,
+        description=(
+            "Fail dispatch when an active skill technique document cannot be "
+            "resolved. Modern persistent-agent specialist techniques should "
+            "set this true; legacy declarations remain optional by default."
+        ),
+    )
     config: dict[str, Any] = Field(
         default_factory=dict,
         description="Kind-specific configuration. "

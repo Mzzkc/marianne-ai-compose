@@ -25,11 +25,17 @@ See: ``docs/plans/2026-03-26-baton-design.md`` — Prompt Assembly
 
 from __future__ import annotations
 
+import hashlib
+import os
+import re
+import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 import jinja2
+import yaml
 
 from marianne.core.config.job import InjectionCategory, InjectionItem, PromptConfig
 from marianne.core.sheet import Sheet
@@ -60,6 +66,9 @@ class RenderedPrompt:
 
     preamble: str
     """Dynamic preamble with positional identity and retry status."""
+
+    context_manifest: tuple[dict[str, object], ...] = ()
+    """Hash-only manifest of context and technique bytes in ``prompt``."""
 
 
 class PromptRenderer:
@@ -101,7 +110,7 @@ class PromptRenderer:
         failure_history: list[HistoricalFailure] | None = None,
         spec_fragments: list[SpecFragment] | None = None,
         technique_manifest: str | None = None,
-        technique_skill_docs: list[str] | None = None,
+        technique_skill_docs: Mapping[str, str] | Sequence[str] | None = None,
         raw_prompt: bool = False,
     ) -> RenderedPrompt:
         """Render a full prompt for a sheet execution.
@@ -124,12 +133,12 @@ class PromptRenderer:
                 text of a skill-kind technique document, injected as a
                 skill-category item alongside the manifest.
             raw_prompt: When True (driven by the instrument profile's
-                ``raw_prompt`` field), skip every wrapping layer:
-                injection resolution, technique injection, completion
-                suffix, and the preamble. The resulting RenderedPrompt
-                carries the rendered Jinja template only, with an empty
-                preamble. Used for instruments like the bash ``cli``
-                profile whose input must be a literal command.
+                ``raw_prompt`` field), verify required attachments but do not
+                deliver their bytes, then skip technique injection, completion
+                suffix, and the preamble. The resulting RenderedPrompt carries
+                the rendered Jinja template only, with an empty preamble. Used
+                for instruments like the bash ``cli`` profile whose input must
+                remain a literal command.
 
         Returns:
             RenderedPrompt with fully rendered prompt and preamble.
@@ -137,22 +146,47 @@ class PromptRenderer:
         # Layer 1: Build SheetContext from Sheet entity (F-210: includes cross-sheet)
         context = self._build_context(sheet, attempt_context)
 
-        if not raw_prompt:
-            # Layer 2-3: Resolve prelude/cadenza injections into the context
-            self._resolve_injections(context, sheet)
+        # Layer 2-3: Resolve prelude/cadenza injections into the context.  Raw
+        # command profiles do not receive these bytes, but ``required`` still
+        # means required: resolve first so a missing/invalid attachment fails
+        # closed instead of being silently bypassed.
+        self._resolve_injections(context, sheet)
 
+        if not raw_prompt:
             # Layer 2.5: Inject technique manifest and skill documents.
             # Skill docs go FIRST (they're the actual knowledge the musician
             # needs), then the manifest (lists what's available). Both are
             # injected as skill-category items so they appear before the
             # template in the assembled prompt.
             if technique_skill_docs:
-                for doc in technique_skill_docs:
+                named_docs = (
+                    technique_skill_docs.items()
+                    if isinstance(technique_skill_docs, Mapping)
+                    else (
+                        (f"document-{index}", doc)
+                        for index, doc in enumerate(technique_skill_docs, 1)
+                    )
+                )
+                for name, doc in named_docs:
                     context.injected_skills.append(doc)
+                    self._record_delivery(
+                        context,
+                        source=f"technique:{name}",
+                        category=InjectionCategory.SKILL,
+                        delivered_content=doc,
+                        delivery_kind="inline-technique",
+                    )
             if technique_manifest and not self._template_contains_technique_manifest(
                 sheet
             ):
                 context.injected_skills.append(technique_manifest)
+                self._record_delivery(
+                    context,
+                    source="technique-manifest",
+                    category=InjectionCategory.SKILL,
+                    delivered_content=technique_manifest,
+                    delivery_kind="inline-technique-manifest",
+                )
 
         # Layer 4-8: Build prompt through PromptBuilder (raw_prompt short-circuits inside)
         prompt = self._build_prompt(
@@ -164,7 +198,7 @@ class PromptRenderer:
             # No completion suffix, no preamble — the instrument receives
             # the rendered template verbatim. Empty preamble is the
             # "no preamble" sentinel.
-            return RenderedPrompt(prompt=prompt, preamble="")
+            return RenderedPrompt(prompt=prompt, preamble="", context_manifest=())
 
         # Layer 9: Completion mode suffix
         if attempt_context.completion_prompt_suffix:
@@ -181,7 +215,11 @@ class PromptRenderer:
             healing_context=attempt_context.healing_context,
         )
 
-        return RenderedPrompt(prompt=prompt, preamble=preamble)
+        return RenderedPrompt(
+            prompt=prompt,
+            preamble=preamble,
+            context_manifest=tuple(context.delivery_manifest),
+        )
 
     def _build_context(
         self,
@@ -290,7 +328,10 @@ class PromptRenderer:
             context: SheetContext to populate with injection content.
             sheet: Sheet entity with prelude/cadenza items.
         """
-        items: list[InjectionItem] = [*sheet.prelude, *sheet.cadenza]
+        items: list[tuple[str, InjectionItem]] = [
+            *(("prelude", item) for item in sheet.prelude),
+            *(("cadenza", item) for item in sheet.cadenza),
+        ]
         if not items:
             return
 
@@ -299,15 +340,29 @@ class PromptRenderer:
         template_vars.update(sheet.variables)
 
         env = jinja2.Environment(
-            undefined=jinja2.Undefined,
+            undefined=jinja2.StrictUndefined,
             autoescape=False,
         )
 
-        for item in items:
+        for source, item in items:
             if item.directory is not None:
-                self._resolve_directory_cadenza(item, context, sheet, env, template_vars)
+                self._resolve_directory_cadenza(
+                    item,
+                    context,
+                    sheet,
+                    env,
+                    template_vars,
+                    source=source,
+                )
             else:
-                self._resolve_file_injection(item, context, sheet, env, template_vars)
+                self._resolve_file_injection(
+                    item,
+                    context,
+                    sheet,
+                    env,
+                    template_vars,
+                    source=source,
+                )
 
     def _resolve_directory_cadenza(
         self,
@@ -316,6 +371,8 @@ class PromptRenderer:
         sheet: Sheet,
         env: jinja2.Environment,
         template_vars: dict[str, object],
+        *,
+        source: str,
     ) -> None:
         """Resolve a directory cadenza injection."""
         assert item.directory is not None  # guaranteed by caller
@@ -323,17 +380,28 @@ class PromptRenderer:
             tmpl = env.from_string(item.directory)
             expanded_path = tmpl.render(**template_vars)
         except jinja2.TemplateError as e:
+            if item.required:
+                raise ValueError(
+                    f"required injection directory template is invalid: {item.directory}"
+                ) from e
             _logger.warning(
                 "prompt_renderer.path_expansion_error",
                 extra={"directory": item.directory, "error": str(e)},
             )
             return
 
-        dir_path = Path(expanded_path)
-        if not dir_path.is_absolute():
-            dir_path = sheet.workspace / dir_path
+        if not expanded_path.strip():
+            if item.required:
+                raise ValueError("required injection directory resolved to an empty path")
+            return
+
+        dir_path = resolve_injection_path(expanded_path, sheet.workspace)
 
         if not dir_path.is_dir():
+            if item.required:
+                raise FileNotFoundError(
+                    f"required injection directory not found: {dir_path}"
+                )
             if item.as_ == InjectionCategory.CONTEXT:
                 _logger.info(
                     "prompt_renderer.directory_not_found",
@@ -348,6 +416,10 @@ class PromptRenderer:
 
         files = sorted(f for f in dir_path.glob("*") if f.is_file())
         if not files:
+            if item.required:
+                raise FileNotFoundError(
+                    f"required injection directory is empty: {dir_path}"
+                )
             _logger.info(
                 "prompt_renderer.directory_empty",
                 extra={"directory": str(dir_path)},
@@ -355,7 +427,14 @@ class PromptRenderer:
             return
 
         for file_path in files:
-            self._inject_single_file(item, context, file_path, from_directory=True)
+            self._inject_single_file(
+                item,
+                context,
+                file_path,
+                from_directory=True,
+                source=source,
+                declared_path=item.directory,
+            )
 
     def _resolve_file_injection(
         self,
@@ -364,6 +443,8 @@ class PromptRenderer:
         sheet: Sheet,
         env: jinja2.Environment,
         template_vars: dict[str, object],
+        *,
+        source: str,
     ) -> None:
         """Resolve a single-file injection."""
         assert item.file is not None  # guaranteed by caller
@@ -371,17 +452,26 @@ class PromptRenderer:
             tmpl = env.from_string(item.file)
             expanded_path = tmpl.render(**template_vars)
         except jinja2.TemplateError as e:
+            if item.required:
+                raise ValueError(
+                    f"required injection file template is invalid: {item.file}"
+                ) from e
             _logger.warning(
                 "prompt_renderer.path_expansion_error",
                 extra={"file": item.file, "error": str(e)},
             )
             return
 
-        path = Path(expanded_path)
-        if not path.is_absolute():
-            path = sheet.workspace / path
+        if not expanded_path.strip():
+            if item.required:
+                raise ValueError("required injection file resolved to an empty path")
+            return
+
+        path = resolve_injection_path(expanded_path, sheet.workspace)
 
         if not path.is_file():
+            if item.required:
+                raise FileNotFoundError(f"required injection file not found: {path}")
             if item.as_ == InjectionCategory.CONTEXT:
                 _logger.warning(
                     "prompt_renderer.file_not_found",
@@ -394,7 +484,13 @@ class PromptRenderer:
                 )
             return
 
-        self._inject_single_file(item, context, path)
+        self._inject_single_file(
+            item,
+            context,
+            path,
+            source=source,
+            declared_path=item.file,
+        )
 
     def _inject_single_file(
         self,
@@ -403,6 +499,8 @@ class PromptRenderer:
         path: Path,
         *,
         from_directory: bool = False,
+        source: str,
+        declared_path: str | None,
     ) -> None:
         """Inject a single file, classifying as text or binary."""
         try:
@@ -421,6 +519,8 @@ class PromptRenderer:
                 f"Path: {path.resolve()}\n"
             )
         except OSError as e:
+            if item.required:
+                raise OSError(f"required injection could not be read: {path}") from e
             _logger.warning(
                 "prompt_renderer.file_read_error",
                 extra={"file": str(path), "error": str(e)},
@@ -433,6 +533,53 @@ class PromptRenderer:
             context.injected_skills.append(full_content)
         elif item.as_ == InjectionCategory.TOOL:
             context.injected_tools.append(full_content)
+
+        try:
+            source_bytes = path.read_bytes()
+        except OSError as exc:
+            if item.required:
+                raise OSError(f"required injection could not be hashed: {path}") from exc
+            source_bytes = None
+        self._record_delivery(
+            context,
+            source=source,
+            category=item.as_,
+            delivered_content=full_content,
+            resolved_path=path,
+            declared_path=declared_path,
+            source_bytes=source_bytes,
+            delivery_kind="directory-inline" if from_directory else "file-inline",
+        )
+
+    @staticmethod
+    def _record_delivery(
+        context: SheetContext,
+        *,
+        source: str,
+        category: InjectionCategory,
+        delivered_content: str,
+        delivery_kind: str,
+        resolved_path: Path | None = None,
+        declared_path: str | None = None,
+        source_bytes: bytes | None = None,
+    ) -> None:
+        """Record provenance without copying private context into the receipt."""
+        delivered_bytes = delivered_content.encode("utf-8")
+        entry: dict[str, object] = {
+            "source": source,
+            "category": category.value,
+            "delivery_kind": delivery_kind,
+            "delivered_sha256": _sha256(delivered_bytes),
+            "delivered_bytes": len(delivered_bytes),
+        }
+        if declared_path is not None:
+            entry["declared_path"] = declared_path
+        if resolved_path is not None:
+            entry["resolved_path"] = str(resolved_path.resolve())
+        if source_bytes is not None:
+            entry["source_sha256"] = _sha256(source_bytes)
+            entry["source_bytes"] = len(source_bytes)
+        context.delivery_manifest.append(entry)
 
     def _build_prompt(
         self,
@@ -490,3 +637,59 @@ class PromptRenderer:
             spec_fragments=spec_fragments if spec_fragments else None,
             raw_prompt=raw_prompt,
         )
+
+
+def write_context_delivery_receipt(
+    *,
+    workspace: Path,
+    job_id: str,
+    sheet_num: int,
+    attempt: int,
+    instrument: str,
+    rendered: RenderedPrompt,
+) -> Path:
+    """Persist proof of the exact prompt context passed to ``sheet_task``."""
+    safe_job = re.sub(r"[^A-Za-z0-9._-]+", "-", job_id).strip("-._") or "job"
+    safe_job = f"{safe_job}-{hashlib.sha256(job_id.encode()).hexdigest()[:10]}"
+    receipt_dir = workspace / ".marianne" / "context-receipts" / safe_job
+    receipt_path = receipt_dir / f"sheet-{sheet_num:04d}-attempt-{attempt:03d}.yaml"
+    document: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "marianne-context-delivery-receipt",
+        "status": "delivered_to_sheet_task",
+        "delivery_boundary": "rendered prompt argument passed to sheet_task",
+        "job_id": job_id,
+        "sheet_num": sheet_num,
+        "attempt": attempt,
+        "instrument": instrument,
+        "prompt_sha256": _sha256(rendered.prompt.encode("utf-8")),
+        "preamble_sha256": _sha256(rendered.preamble.encode("utf-8")),
+        "context_manifest": list(rendered.context_manifest),
+    }
+    _atomic_write_yaml(receipt_path, document)
+    return receipt_path
+
+
+def resolve_injection_path(expanded_path: str, workspace: Path) -> Path:
+    """Resolve one rendered injection path with portable HOME semantics."""
+    path = Path(expanded_path).expanduser()
+    return path if path.is_absolute() else workspace / path
+
+
+def _sha256(value: bytes) -> str:
+    return f"sha256:{hashlib.sha256(value).hexdigest()}"
+
+
+def _atomic_write_yaml(path: Path, document: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, raw_temp = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temp_path = Path(raw_temp)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            yaml.safe_dump(document, handle, sort_keys=False, allow_unicode=True)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()

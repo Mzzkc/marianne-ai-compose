@@ -253,6 +253,37 @@ class TestBuildPromptInjections:
 
         assert "Context for sheet 5" in prompt
 
+    def test_tilde_path_expansion_uses_home(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Legacy preview and runtime rendering share portable path semantics."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        identity = tmp_path / ".marianne" / "agents" / "canyon" / "identity.md"
+        identity.parent.mkdir(parents=True)
+        identity.write_text("Canyon persists.\n")
+        sheet = _make_sheet(
+            workspace=tmp_path / "workspace",
+            prompt_template="Do the work",
+            prelude=[
+                InjectionItem(
+                    file="~/.marianne/agents/canyon/identity.md",
+                    required=True,
+                    as_=InjectionCategory.CONTEXT,
+                ),
+            ],
+        )
+
+        prompt = _build_prompt(
+            sheet,
+            _make_context(),
+            total_sheets=1,
+            total_movements=1,
+        )
+
+        assert "Canyon persists." in prompt
+
     def test_missing_context_file_skipped_gracefully(self, tmp_path: Path) -> None:
         """Missing context files are skipped without error."""
         sheet = _make_sheet(

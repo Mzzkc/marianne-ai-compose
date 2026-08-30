@@ -6,6 +6,7 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import yaml
@@ -25,6 +26,7 @@ def _sheet(
     workspace: Path,
     *,
     instrument_name: str = "claude-code",
+    instrument_config: dict[str, Any] | None = None,
     validations: list[Any] | None = None,
 ) -> Sheet:
     return Sheet(
@@ -33,6 +35,7 @@ def _sheet(
         voice=None,
         voice_count=1,
         instrument_name=instrument_name,
+        instrument_config=instrument_config or {},
         workspace=workspace,
         prompt_template="Use MCP if available",
         validations=validations or [],
@@ -119,12 +122,13 @@ class _BackendPool:
     def __init__(self, backend: Any, registry: Any | None = None) -> None:
         self.backend = backend
         self._registry = registry
+        self.release_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
     async def acquire(self, *args: Any, **kwargs: Any) -> Any:
         return self.backend
 
     async def release(self, *args: Any, **kwargs: Any) -> None:
-        pass
+        self.release_calls.append((args, kwargs))
 
     async def close_all(self) -> None:
         pass
@@ -162,6 +166,16 @@ class _McpPool:
         return self.socket_path
 
 
+class _FailingMcpPool(_McpPool):
+    def generate_mcp_config_file(
+        self,
+        workspace: Path,
+        *,
+        server_names: list[str] | None = None,
+    ) -> Path:
+        raise OSError("injected MCP setup failure")
+
+
 class _Registry:
     def __init__(self, profile: InstrumentProfile) -> None:
         self.profile = profile
@@ -176,6 +190,74 @@ def _load_builtin_profiles() -> list[InstrumentProfile]:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         profiles.append(InstrumentProfile.model_validate(data))
     return profiles
+
+
+@pytest.mark.asyncio
+async def test_mcp_setup_failure_happens_before_backend_acquisition(
+    tmp_path: Path,
+) -> None:
+    from marianne.daemon.baton.adapter import BatonAdapter
+
+    backend_pool = MagicMock()
+    backend_pool.acquire = AsyncMock()
+    adapter = BatonAdapter(max_concurrent_sheets=1)
+    adapter.set_backend_pool(backend_pool)
+    adapter.set_mcp_pool(_FailingMcpPool())  # type: ignore[arg-type]
+    adapter.register_job(
+        "mcp-setup-failure",
+        [_sheet(tmp_path)],
+        {1: []},
+        techniques={
+            "filesystem": TechniqueConfig(
+                kind=TechniqueKind.MCP,
+                phases=["all"],
+                config={"server": "filesystem"},
+            )
+        },
+    )
+    while not adapter.baton.inbox.empty():
+        adapter.baton.inbox.get_nowait()
+    state = adapter.baton._jobs["mcp-setup-failure"].sheets[1]
+
+    await adapter._dispatch_callback("mcp-setup-failure", 1, state)
+
+    backend_pool.acquire.assert_not_awaited()
+    failure = adapter.baton.inbox.get_nowait()
+    assert failure.execution_success is False
+    assert "MCP setup failed before backend acquisition" in failure.error_message
+
+
+@pytest.mark.asyncio
+async def test_post_acquire_interactive_setup_failure_releases_backend(
+    tmp_path: Path,
+) -> None:
+    from marianne.daemon.baton.adapter import BatonAdapter
+    from marianne.execution.instruments.interactive import InteractiveCliBackend
+
+    profile_path = BUILTINS_DIR / "claude-code.yaml"
+    profile = InstrumentProfile.model_validate(yaml.safe_load(profile_path.read_text()))
+    backend = InteractiveCliBackend(profile, working_directory=tmp_path, tmux=MagicMock())
+    pool = _BackendPool(backend)
+    adapter = BatonAdapter(max_concurrent_sheets=1)
+    adapter.set_backend_pool(pool)  # type: ignore[arg-type]
+    sheet = _sheet(
+        tmp_path,
+        instrument_config={
+            "interactive": True,
+            "interactive_max_nudges": "not-an-int",
+        },
+    )
+    adapter.register_job("interactive-setup-failure", [sheet], {1: []})
+    while not adapter.baton.inbox.empty():
+        adapter.baton.inbox.get_nowait()
+    state = adapter.baton._jobs["interactive-setup-failure"].sheets[1]
+
+    await adapter._dispatch_callback("interactive-setup-failure", 1, state)
+
+    assert len(pool.release_calls) == 1
+    failure = adapter.baton.inbox.get_nowait()
+    assert failure.execution_success is False
+    assert "Post-acquisition dispatch setup failed" in failure.error_message
 
 
 @pytest.mark.asyncio

@@ -105,6 +105,8 @@ class SheetContext:
     """Resolved content from 'skill' category injections."""
     injected_tools: list[str] = field(default_factory=list)
     """Resolved content from 'tool' category injections."""
+    delivery_manifest: list[dict[str, Any]] = field(default_factory=list)
+    """Hash-only provenance for bytes assembled into this sheet's prompt."""
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for template rendering.

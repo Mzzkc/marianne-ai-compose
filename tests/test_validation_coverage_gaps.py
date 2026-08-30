@@ -13,6 +13,7 @@ from io import StringIO
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
 from rich.console import Console
 
 from marianne.core.config import JobConfig
@@ -1178,3 +1179,17 @@ class TestHelpers:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         result = resolve_path(rel_path, config_path)
         assert result == tmp_path / "configs" / "relative" / "file.txt"
+
+    def test_resolve_path_expands_home_before_relative_resolution(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        from marianne.validation.checks._helpers import resolve_path
+
+        home = tmp_path / "home"
+        monkeypatch.setenv("HOME", str(home))
+
+        result = resolve_path(
+            Path("~/.marianne/agents/canyon/identity.md"), tmp_path / "score.yaml"
+        )
+
+        assert result == home / ".marianne/agents/canyon/identity.md"

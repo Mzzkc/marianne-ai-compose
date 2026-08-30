@@ -32,6 +32,7 @@ def resolve_path(path: Path, config_path: Path) -> Path:
     Returns:
         Absolute path resolved against config file's parent directory.
     """
-    if path.is_absolute():
-        return path
-    return config_path.parent / path
+    expanded = path.expanduser()
+    if expanded.is_absolute():
+        return expanded
+    return config_path.parent / expanded
