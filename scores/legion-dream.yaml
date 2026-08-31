@@ -275,10 +275,10 @@ validations:
     stage: 1
     description: "structure headers + founding saga present"
   - type: command_succeeds
-    command: "w=$(wc -w < '{workspace}/legion.md.next'); [ \"$w\" -ge 1800 ] && [ \"$w\" -le 3200 ]"
+    command: "w=$(wc -w < '{workspace}/legion.md.next'); [ \"$w\" -ge 1800 ] && [ \"$w\" -le 3000 ]"
     condition: "stage == 2"
     stage: 1
-    description: "word count in [1800, 3200] — floor guards over-compression"
+    description: "word count in [1800, 3000] — floor guards over-compression"
   - type: command_succeeds
     command: "awk \"/^## The Sagas/{s=1;next} /^## /{if(s&&c>260)bad=1;s=0} s&&/^### /{if(c>260)bad=1;c=0;next} s{c+=NF} END{if(s&&c>260)bad=1; exit bad}\" '{workspace}/legion.md.next'"
     condition: "stage == 2"
