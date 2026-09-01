@@ -424,6 +424,34 @@ class TestF158PromptConfigWiring:
 
         call_kwargs = adapter.register_job.call_args.kwargs
         assert call_kwargs.get("parallel_enabled") is True
+        assert call_kwargs.get("parallel_max_concurrent") == 4
+        assert call_kwargs.get("parallel_fail_fast") is False
+        assert call_kwargs.get("stagger_delay_ms") == 250
+
+    @pytest.mark.asyncio
+    async def test_run_via_baton_omits_job_cap_when_parallel_disabled(self) -> None:
+        """Serial scores keep dependency semantics instead of inheriting max=3."""
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
+
+        manager = _make_mock_manager()
+        adapter = manager._baton_adapter
+        adapter.wait_for_completion = AsyncMock(return_value=True)
+        adapter.register_job = MagicMock()
+        adapter.publish_job_event = AsyncMock()
+        adapter.has_completed_sheets = MagicMock(return_value=True)
+        mock_config = _make_mock_config(parallel=False)
+        manager._job_meta["serial"] = JobMeta(
+            job_id="serial",
+            config_path=Path("/tmp/test.yaml"),
+            workspace=Path("/tmp/ws"),
+            status=DaemonJobStatus.RUNNING,
+        )
+        with (
+            patch("marianne.core.sheet.build_sheets", return_value=[_make_sheet()]),
+            patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={1: []}),
+        ):
+            await manager._run_via_baton("serial", mock_config, _make_mock_request())
+        assert adapter.register_job.call_args.kwargs["parallel_max_concurrent"] is None
 
     @pytest.mark.asyncio
     async def test_resume_via_baton_passes_prompt_config(self) -> None:
@@ -450,7 +478,7 @@ class TestF158PromptConfigWiring:
         mock_checkpoint.sheets = {}
         manager._load_checkpoint = AsyncMock(return_value=mock_checkpoint)
 
-        mock_config = _make_mock_config()
+        mock_config = _make_mock_config(parallel=True)
         with (
             patch("marianne.core.config.JobConfig") as MockJobConfig,
             patch("marianne.core.sheet.build_sheets", return_value=[_make_sheet()]),
@@ -462,6 +490,14 @@ class TestF158PromptConfigWiring:
         adapter.recover_job.assert_called_once()
         call_kwargs = adapter.recover_job.call_args.kwargs
         assert call_kwargs.get("prompt_config") is not None
+        assert call_kwargs.get("parallel_enabled") is True
+        assert call_kwargs.get("parallel_max_concurrent") == 4
+        assert call_kwargs.get("parallel_fail_fast") is False
+        assert call_kwargs.get("stagger_delay_ms") == 250
+        assert mock_checkpoint.parallel_enabled is True
+        assert mock_checkpoint.parallel_max_concurrent == 4
+        assert mock_checkpoint.parallel_fail_fast is False
+        assert mock_checkpoint.parallel_stagger_delay_ms == 250
 
 
 # =========================================================================
@@ -523,6 +559,9 @@ def _make_mock_config(parallel: bool = False) -> MagicMock:
 
     # Parallel execution
     config.parallel.enabled = parallel
+    config.parallel.max_concurrent = 4
+    config.parallel.fail_fast = False
+    config.parallel.stagger_delay_ms = 250
 
     return config
 

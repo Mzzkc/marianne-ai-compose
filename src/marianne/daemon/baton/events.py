@@ -563,6 +563,8 @@ class DispatchRetry:
     this event via the timer wheel rather than blocking.
     """
 
+    # Identifies a per-job stagger wake. None remains the legacy/general wake.
+    stagger_job_id: str | None = None
     timestamp: float = field(default_factory=time.time)
 
 

@@ -62,6 +62,8 @@ class DispatchConfig:
             ready sheets dispatch in one cycle, the historical behavior).
         time_fn: Monotonic clock source for the stagger gate. Injectable for
             deterministic tests; defaults to ``time.monotonic``.
+        job_max_concurrent: Per-job ceilings for parallel-enabled jobs only.
+        job_stagger_delay_ms: Per-job same-instrument stagger policy.
     """
 
     max_concurrent_sheets: int = 10
@@ -70,6 +72,8 @@ class DispatchConfig:
     rate_limited_instruments: set[str] = field(default_factory=set)
     open_circuit_breakers: set[str] = field(default_factory=set)
     stagger_delay_ms: int = 0
+    job_max_concurrent: dict[str, int] = field(default_factory=dict)
+    job_stagger_delay_ms: dict[str, int] = field(default_factory=dict)
     time_fn: Callable[[], float] = time.monotonic
 
 
@@ -152,10 +156,11 @@ async def dispatch_ready(
     # #340: dispatch stagger — `now` and the skip flag drive the per-instrument
     # last-dispatch-time gate below.
     now = config.time_fn()
-    stagger_skipped = False
+    stagger_wake_delays: dict[str, float] = {}
 
     # Track running counts per model key (instrument:model or just instrument)
     model_running: dict[str, int] = _count_dispatched_per_model(baton)
+    job_running: dict[str, int] = _count_dispatched_per_job(baton)
     global_running = baton.running_sheet_count
 
     for job_id in list(baton._jobs.keys()):
@@ -202,6 +207,25 @@ async def dispatch_ready(
                     },
                 )
                 return result  # Hard stop — can't dispatch more
+
+            # A score may use fewer slots than the daemon's global ceiling.
+            # Continue to the next job when this one is full so it cannot
+            # consume or strand another job's capacity.
+            job_limit = config.job_max_concurrent.get(job_id)
+            current_job_running = job_running.get(job_id, 0)
+            if job_limit is not None and current_job_running >= job_limit:
+                _record_dispatch_block(
+                    result,
+                    job_id=job_id,
+                    sheet=sheet,
+                    reason="job_concurrency",
+                    skip_key=f"job_concurrency:{job_id}",
+                    details={
+                        "job_running": current_job_running,
+                        "limit": job_limit,
+                    },
+                )
+                continue
 
             # Check per-model concurrency (falls back to per-instrument)
             instrument = sheet.instrument_name or ""
@@ -340,18 +364,25 @@ async def dispatch_ready(
             # simultaneously-ready same-instrument sheets to avoid a
             # same-provider API burst. A sheet arriving more than stagger_delay
             # after the previous dispatch passes immediately (collision-only).
-            if config.stagger_delay_ms > 0:
-                inst_state = baton.get_instrument_state(instrument)
-                if (
-                    inst_state is not None
-                    and now - inst_state.last_dispatch_at
-                    < config.stagger_delay_ms / 1000.0
-                ):
+            has_job_stagger = job_id in config.job_stagger_delay_ms
+            stagger_delay_ms = config.job_stagger_delay_ms.get(
+                job_id, config.stagger_delay_ms
+            )
+            if stagger_delay_ms > 0:
+                if has_job_stagger:
+                    last_dispatch_at = baton._job_last_dispatch_at.get(
+                        (job_id, instrument), 0.0
+                    )
+                else:
+                    inst_state = baton.get_instrument_state(instrument)
+                    last_dispatch_at = inst_state.last_dispatch_at if inst_state else 0.0
+                elapsed = now - last_dispatch_at
+                if elapsed < stagger_delay_ms / 1000.0:
                     remaining_ms = max(
                         0,
                         int(
-                            config.stagger_delay_ms
-                            - (now - inst_state.last_dispatch_at) * 1000.0
+                            stagger_delay_ms
+                            - elapsed * 1000.0
                         ),
                     )
                     _record_dispatch_block(
@@ -362,11 +393,15 @@ async def dispatch_ready(
                         skip_key=f"stagger:{instrument}",
                         details={
                             "instrument": instrument,
-                            "stagger_delay_ms": config.stagger_delay_ms,
+                            "stagger_delay_ms": stagger_delay_ms,
                             "remaining_ms": remaining_ms,
                         },
                     )
-                    stagger_skipped = True
+                    remaining_seconds = max(0.0, stagger_delay_ms / 1000.0 - elapsed)
+                    wake_key = job_id if has_job_stagger else "__legacy__"
+                    previous_delay = stagger_wake_delays.get(wake_key)
+                    if previous_delay is None or remaining_seconds < previous_delay:
+                        stagger_wake_delays[wake_key] = remaining_seconds
                     continue
 
             # Dispatch!
@@ -383,11 +418,17 @@ async def dispatch_ready(
                 ))
                 result.record_dispatch(job_id, sheet.sheet_num)
                 global_running += 1
+                job_running[job_id] = current_job_running + 1
                 model_running[model_key] = model_count + 1
-                # #340: record dispatch time for the per-instrument stagger gate.
-                inst_state = baton.get_instrument_state(instrument)
-                if inst_state is not None:
-                    inst_state.last_dispatch_at = now
+                # Job-configured stagger is isolated. Direct callers that only
+                # use DispatchConfig.stagger_delay_ms retain the historical
+                # shared-instrument behavior.
+                if has_job_stagger:
+                    baton._job_last_dispatch_at[(job_id, instrument)] = now
+                else:
+                    inst_state = baton.get_instrument_state(instrument)
+                    if inst_state is not None:
+                        inst_state.last_dispatch_at = now
             except Exception:
                 _logger.error(
                     "baton.dispatch.callback_failed",
@@ -404,18 +445,22 @@ async def dispatch_ready(
                 return result
 
     # #340: if any sheet was held back purely by the stagger gate, schedule a
-    # single delayed wake so the loop re-evaluates after the window elapses
+    # one delayed wake per affected job so the loop re-evaluates after each
+    # job's own window elapses
     # (liveness — no other event may arrive in an idle system). The gate keeps
     # all sheets in the ready pool (no deferred state), so the wake just re-runs
     # a normal dispatch cycle. Guarded so repeated cycles within a window don't
-    # accumulate timers; the flag clears when the DispatchRetry is handled.
-    if (
-        stagger_skipped
-        and baton._timer is not None
-        and not baton._stagger_wake_pending
-    ):
-        baton._stagger_wake_pending = True
-        baton._timer.schedule(config.stagger_delay_ms / 1000.0, DispatchRetry())
+    # accumulate timers; each job key clears when its DispatchRetry is handled.
+    if baton._timer is not None:
+        for wake_key, delay_seconds in stagger_wake_delays.items():
+            if wake_key in baton._stagger_wake_pending:
+                continue
+            baton._stagger_wake_pending.add(wake_key)
+            event_job_id = None if wake_key == "__legacy__" else wake_key
+            baton._timer.schedule(
+                delay_seconds,
+                DispatchRetry(stagger_job_id=event_job_id),
+            )
 
     if result.dispatched_count > 0:
         _logger.info(
@@ -449,3 +494,14 @@ def _count_dispatched_per_model(baton: BatonCore) -> dict[str, int]:
                 )
                 counts[key] = counts.get(key, 0) + 1
     return counts
+
+
+def _count_dispatched_per_job(baton: BatonCore) -> dict[str, int]:
+    """Count currently dispatched sheets independently for each job."""
+    return {
+        job_id: sum(
+            sheet.status == BatonSheetStatus.DISPATCHED
+            for sheet in job.sheets.values()
+        )
+        for job_id, job in baton._jobs.items()
+    }

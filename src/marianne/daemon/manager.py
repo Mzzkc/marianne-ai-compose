@@ -3436,6 +3436,12 @@ class JobManager:
             total_movements=max((s.movement for s in sheets), default=None),
             escalation_enabled=escalation_enabled,
             self_healing_enabled=request.self_healing,
+            parallel_enabled=config.parallel.enabled,
+            parallel_max_concurrent=(
+                config.parallel.max_concurrent if config.parallel.enabled else 1
+            ),
+            parallel_fail_fast=config.parallel.fail_fast,
+            parallel_stagger_delay_ms=config.parallel.stagger_delay_ms,
             runtime_variables=dict(request.runtime_variables),  # #359 durable
         )
         self._live_states[job_id] = initial_state
@@ -3494,6 +3500,10 @@ class JobManager:
             prompt_config=config.prompt,
             learning_config=config.learning,
             parallel_enabled=config.parallel.enabled,
+            parallel_max_concurrent=(
+                config.parallel.max_concurrent if config.parallel.enabled else None
+            ),
+            parallel_fail_fast=config.parallel.fail_fast,
             cross_sheet=config.cross_sheet,  # F-210
             pacing_seconds=float(config.pause_between_sheets_seconds),
             live_sheets=initial_state.sheets,
@@ -3726,6 +3736,12 @@ class JobManager:
         # from the previous run would cause _compute_elapsed() to calculate
         # (old_completed_at - new_started_at) = negative time.
         checkpoint.completed_at = None
+        checkpoint.parallel_enabled = config.parallel.enabled
+        checkpoint.parallel_max_concurrent = (
+            config.parallel.max_concurrent if config.parallel.enabled else 1
+        )
+        checkpoint.parallel_fail_fast = config.parallel.fail_fast
+        checkpoint.parallel_stagger_delay_ms = config.parallel.stagger_delay_ms
 
         # F-493: Persist the updated started_at immediately so status queries
         # show correct elapsed time even before the first baton persist cycle.
@@ -3777,6 +3793,10 @@ class JobManager:
             prompt_config=config.prompt,
             learning_config=config.learning,
             parallel_enabled=config.parallel.enabled,
+            parallel_max_concurrent=(
+                config.parallel.max_concurrent if config.parallel.enabled else None
+            ),
+            parallel_fail_fast=config.parallel.fail_fast,
             cross_sheet=config.cross_sheet,  # F-210
             pacing_seconds=float(config.pause_between_sheets_seconds),
             live_sheets=checkpoint.sheets,

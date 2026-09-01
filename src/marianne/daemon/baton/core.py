@@ -85,6 +85,12 @@ class _JobRecord:
     self_healing_enabled: bool = False  # Try healing on exhaustion
     pacing_active: bool = False  # Inter-sheet pacing delay in progress
     pacing_seconds: float = 0.0  # pause_between_sheets_seconds from config
+    # Score-owned parallel policy. ``max_concurrent=None`` deliberately means
+    # the score is serial/legacy and the baton's global limit is the only
+    # scheduler ceiling; the dependency graph still controls readiness.
+    max_concurrent: int | None = None
+    fail_fast: bool = False
+    stagger_delay_ms: int = 0
     # #201: workspace + config path for building a healing ErrorContext on
     # exhaustion (the baton drives self-healing off SheetState, which lacks
     # these). Set at register time; immutable for the job's lifetime.
@@ -173,6 +179,9 @@ class BatonCore:
         # The adapter drains these after each event cycle and publishes
         # them to the EventBus for observability (dashboard, learning hub).
         self._fallback_events: list[InstrumentFallback] = []
+        # Canonical skip transitions use the same drain-and-publish pattern,
+        # including scheduler-created dependency/fail-fast skips.
+        self._skip_events: list[SheetSkipped] = []
 
         # Per-model concurrency limits from instrument profiles.
         # Keys: "instrument:model", values: max_concurrent.
@@ -203,11 +212,12 @@ class BatonCore:
         # DispatchRetry pending; it is cleared when the loop handles it.
         self._dispatch_retry_pending: bool = False
 
-        # #340: at most one delayed stagger wake-up DispatchRetry pending at a
-        # time (dispatch_ready may stagger-skip on many cycles within a window;
-        # one delayed wake suffices to re-evaluate). Cleared when a DispatchRetry
-        # is handled, alongside _dispatch_retry_pending.
-        self._stagger_wake_pending: bool = False
+        # #340: one delayed stagger wake per job. A global flag lets a long
+        # delay in one score suppress a shorter wake required by another.
+        self._stagger_wake_pending: set[str] = set()
+        # Per-job stagger custody. A shared InstrumentState timestamp would let
+        # one score delay another score using the same provider.
+        self._job_last_dispatch_at: dict[tuple[str, str], float] = {}
 
         # Inbox-depth observability (#222). The inbox is intentionally UNBOUNDED
         # — dropping a baton event (a completion, rate-limit hit, retry-due,
@@ -255,6 +265,12 @@ class BatonCore:
         """
         events = list(self._fallback_events)
         self._fallback_events.clear()
+        return events
+
+    def drain_skip_events(self) -> list[SheetSkipped]:
+        """Return and clear canonical sheet-skip observer events."""
+        events = list(self._skip_events)
+        self._skip_events.clear()
         return events
 
     @property
@@ -355,6 +371,16 @@ class BatonCore:
             rate_limited_instruments=rate_limited,
             open_circuit_breakers=open_breakers,
             stagger_delay_ms=stagger_delay_ms,
+            job_max_concurrent={
+                job_id: job.max_concurrent
+                for job_id, job in self._jobs.items()
+                if job.max_concurrent is not None
+            },
+            job_stagger_delay_ms={
+                job_id: job.stagger_delay_ms
+                for job_id, job in self._jobs.items()
+                if job.stagger_delay_ms > 0
+            },
         )
 
     def set_job_cost_limit(self, job_id: str, max_cost_usd: float) -> None:
@@ -1077,6 +1103,9 @@ class BatonCore:
         escalation_enabled: bool = False,
         self_healing_enabled: bool = False,
         pacing_seconds: float = 0.0,
+        max_concurrent: int | None = None,
+        fail_fast: bool = False,
+        stagger_delay_ms: int = 0,
         workspace: Path | None = None,
         config_path: Path | None = None,
     ) -> None:
@@ -1091,6 +1120,9 @@ class BatonCore:
             self_healing_enabled: Whether to try healing on exhaustion.
             pacing_seconds: Inter-sheet delay after each completion (from
                 ``pause_between_sheets_seconds``). 0 = no delay.
+            max_concurrent: Per-job ceiling, or None for serial/legacy jobs.
+            fail_fast: Terminalize unstarted work after the first failure.
+            stagger_delay_ms: Per-job spacing between same-instrument launches.
         """
         if job_id in self._jobs:
             _logger.warning(
@@ -1111,6 +1143,9 @@ class BatonCore:
             workspace=workspace,
             config_path=config_path,
             pacing_seconds=pacing_seconds,
+            max_concurrent=max_concurrent,
+            fail_fast=fail_fast,
+            stagger_delay_ms=stagger_delay_ms,
         )
         self._state_dirty = True
 
@@ -1150,6 +1185,12 @@ class BatonCore:
             sheet_keys_to_remove = [key for key in self._sheet_cost_limits if key[0] == job_id]
             for key in sheet_keys_to_remove:
                 del self._sheet_cost_limits[key]
+            for dispatch_key in [
+                key for key in self._job_last_dispatch_at if key[0] == job_id
+            ]:
+                del self._job_last_dispatch_at[dispatch_key]
+            self._stagger_wake_pending.discard(job_id)
+            self._skip_events = [event for event in self._skip_events if event.job_id != job_id]
             self._state_dirty = True
             _logger.info("baton.job_deregistered", extra={"job_id": job_id})
 
@@ -1345,9 +1386,12 @@ class BatonCore:
                     # next cascade can enqueue a fresh wake (#222). Dispatch and
                     # completion checks run in the adapter loop after this.
                     self._dispatch_retry_pending = False
-                    # #340: a stagger wake (also a DispatchRetry) is now consumed
-                    # too — allow the next stagger-skip cycle to schedule one.
-                    self._stagger_wake_pending = False
+                    # #340: allow this score's next stagger-skip cycle to
+                    # schedule a new wake without altering another score.
+                    if event.stagger_job_id is not None:
+                        self._stagger_wake_pending.discard(event.stagger_job_id)
+                    else:
+                        self._stagger_wake_pending.discard("__legacy__")
 
                 case CircuitBreakerRecovery():
                     self._handle_circuit_breaker_recovery(event)
@@ -1620,6 +1664,7 @@ class BatonCore:
             return
         sheet.status = BatonSheetStatus.SKIPPED
         sheet.clear_dispatch_block()
+        self._skip_events.append(event)
         self._state_dirty = True
         _logger.info(
             "baton.sheet.skipped",
@@ -2153,6 +2198,22 @@ class BatonCore:
         if job is None:
             return
 
+        fail_fast_skipped = False
+        if job.fail_fast:
+            for sheet_num, fail_fast_sheet in job.sheets.items():
+                if fail_fast_sheet.status not in _DISPATCHABLE_BATON_STATUSES:
+                    continue
+                reason = f"Fail-fast after sheet {failed_sheet_num} failed"
+                # Reuse the canonical skip transition so terminal guards,
+                # dirty-state persistence, and logging stay on one path.
+                self._handle_sheet_skipped(
+                    SheetSkipped(job_id=job_id, sheet_num=sheet_num, reason=reason)
+                )
+                if fail_fast_sheet.status == BatonSheetStatus.SKIPPED:
+                    fail_fast_sheet.error_message = reason
+                    fail_fast_sheet.error_code = "E999"
+                    fail_fast_skipped = True
+
         # Build a reverse dependency map: sheet_num → list of sheets
         # that depend on it
         dependents: dict[int, list[int]] = {}
@@ -2214,9 +2275,11 @@ class BatonCore:
 
             # At least one dep is terminal and unsatisfied → SKIPPED
             # (not FAILED — the sheet was never attempted, just blocked)
-            sheet.status = BatonSheetStatus.SKIPPED
-            sheet.clear_dispatch_block()
-            sheet.error_message = f"Blocked by failed dependency: sheet {blocking_dep}"
+            reason = f"Blocked by failed dependency: sheet {blocking_dep}"
+            self._handle_sheet_skipped(
+                SheetSkipped(job_id=job_id, sheet_num=current, reason=reason)
+            )
+            sheet.error_message = reason
             sheet.error_code = "E999"
             _logger.info(
                 "baton.sheet.dependency_blocked",
@@ -2232,7 +2295,7 @@ class BatonCore:
                 if downstream not in visited:
                     queue.append(downstream)
 
-        if visited:
+        if visited or fail_fast_skipped:
             self._state_dirty = True
             # Wake the event loop so _check_completions runs. Without this,
             # if failure propagation made all remaining sheets terminal, the
@@ -2298,6 +2361,11 @@ class BatonCore:
                 **status_counts,
             },
             "instruments_used": sorted(instruments_used),
+            "parallel_policy": {
+                "max_concurrent": job.max_concurrent,
+                "fail_fast": job.fail_fast,
+                "stagger_delay_ms": job.stagger_delay_ms,
+            },
             # Inbox depth observability (#222) — the inbox is process-wide, not
             # per-job, but surfacing it here makes a consumer stall visible via
             # `mzt diagnose` without a log grep.

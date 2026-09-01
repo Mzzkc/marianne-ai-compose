@@ -479,9 +479,6 @@ class BatonAdapter:
         self._baton = BatonCore(timer=self._timer_wheel, inbox=inbox)
         self._event_bus = event_bus
         self._max_concurrent_sheets = max_concurrent_sheets
-        # #340: per-instrument dispatch stagger (ms), threaded from the score's
-        # parallel.stagger_delay_ms at register/recover. 0 = no stagger.
-        self._stagger_delay_ms: int = 0
         self._persist_callback = persist_callback
         self._learning_store = learning_store
         self._rate_limit_reporter = rate_limit_reporter
@@ -682,6 +679,8 @@ class BatonAdapter:
         prompt_config: PromptConfig | None = None,
         learning_config: LearningConfig | None = None,
         parallel_enabled: bool = False,
+        parallel_max_concurrent: int | None = None,
+        parallel_fail_fast: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
         pacing_seconds: float = 0.0,
         live_sheets: dict[int, SheetExecutionState] | None = None,
@@ -718,6 +717,10 @@ class BatonAdapter:
                 handles the complete 9-layer prompt assembly pipeline.
             parallel_enabled: Whether parallel execution is enabled
                 (for preamble concurrency warning).
+            parallel_max_concurrent: Score-owned dispatch ceiling when parallel
+                execution is enabled. None preserves legacy/global behavior.
+            parallel_fail_fast: Stop starting new sheets in this job after a
+                failure when parallel execution is enabled.
             cross_sheet: Optional CrossSheetConfig for cross-sheet context
                 (F-210). When provided, the adapter collects previous sheet
                 outputs and workspace files at dispatch time.
@@ -737,10 +740,6 @@ class BatonAdapter:
             self._job_learning_configs[job_id] = learning_config
         else:
             self._job_learning_configs.pop(job_id, None)
-
-        # #340: per-instrument dispatch stagger (adapter-level; last register
-        # wins for concurrent jobs — acceptable v1, most scores share a value).
-        self._stagger_delay_ms = stagger_delay_ms
 
         # Store spec corpus (#204). Only when fragments exist — an empty
         # corpus stores nothing, so _build_spec_fragments returns None.
@@ -821,6 +820,9 @@ class BatonAdapter:
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
             pacing_seconds=pacing_seconds,
+            max_concurrent=parallel_max_concurrent if parallel_enabled else None,
+            fail_fast=parallel_fail_fast if parallel_enabled else False,
+            stagger_delay_ms=stagger_delay_ms,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
@@ -1223,6 +1225,8 @@ class BatonAdapter:
         prompt_config: PromptConfig | None = None,
         learning_config: LearningConfig | None = None,
         parallel_enabled: bool = False,
+        parallel_max_concurrent: int | None = None,
+        parallel_fail_fast: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
         pacing_seconds: float = 0.0,
         live_sheets: dict[int, SheetExecutionState] | None = None,
@@ -1259,6 +1263,8 @@ class BatonAdapter:
             self_healing_enabled: Try self-healing on exhaustion.
             prompt_config: Optional PromptConfig for prompt rendering.
             parallel_enabled: Whether parallel execution is enabled.
+            parallel_max_concurrent: Restored score-owned dispatch ceiling.
+            parallel_fail_fast: Restored score-owned fail-fast policy.
             cross_sheet: Optional CrossSheetConfig for cross-sheet context (F-210).
         """
         self._ensure_job_state_collections()
@@ -1277,10 +1283,6 @@ class BatonAdapter:
             self._job_learning_configs[job_id] = learning_config
         else:
             self._job_learning_configs.pop(job_id, None)
-
-        # #340: per-instrument dispatch stagger (adapter-level; last register
-        # wins for concurrent jobs — acceptable v1, most scores share a value).
-        self._stagger_delay_ms = stagger_delay_ms
 
         # Store spec corpus (#204). Only when fragments exist — an empty
         # corpus stores nothing, so _build_spec_fragments returns None.
@@ -1427,6 +1429,9 @@ class BatonAdapter:
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
             pacing_seconds=pacing_seconds,
+            max_concurrent=parallel_max_concurrent if parallel_enabled else None,
+            fail_fast=parallel_fail_fast if parallel_enabled else False,
+            stagger_delay_ms=stagger_delay_ms,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
@@ -2981,6 +2986,11 @@ class BatonAdapter:
                     exc_info=True,
                 )
 
+    async def _publish_skip_events(self) -> None:
+        """Drain canonical skip transitions and publish observer events."""
+        for event in self._baton.drain_skip_events():
+            await self.publish_sheet_skipped(event)
+
     # =========================================================================
     # Main Loop
     # =========================================================================
@@ -3502,7 +3512,6 @@ class BatonAdapter:
             # (e.g., a completion from another job) triggers dispatch.
             config = self._baton.build_dispatch_config(
                 max_concurrent_sheets=self._max_concurrent_sheets,
-                stagger_delay_ms=self._stagger_delay_ms,  # #340
             )
             initial_result = await dispatch_ready(
                 self._baton, config, self._dispatch_callback
@@ -3524,6 +3533,7 @@ class BatonAdapter:
             for b_job_id, _b_sheet_num in initial_result.blocked_sheets:
                 if self._persist_callback:
                     self._persist_callback(b_job_id)
+            await self._publish_skip_events()
 
             while not self._baton._shutting_down:
                 event = await self._baton.inbox.get()
@@ -3573,7 +3583,6 @@ class BatonAdapter:
                 # Dispatch ready sheets after every event
                 config = self._baton.build_dispatch_config(
                     max_concurrent_sheets=self._max_concurrent_sheets,
-                    stagger_delay_ms=self._stagger_delay_ms,  # #340
                 )
                 dispatch_result = await dispatch_ready(
                     self._baton, config, self._dispatch_callback
@@ -3602,7 +3611,8 @@ class BatonAdapter:
                     if self._persist_callback:
                         self._persist_callback(b_job_id)
 
-                # Publish any fallback events to EventBus
+                # Publish scheduler side-effect events to EventBus.
+                await self._publish_skip_events()
                 await self._publish_fallback_events()
 
                 # Check for job completions after dispatch
