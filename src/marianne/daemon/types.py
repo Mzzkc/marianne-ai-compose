@@ -38,6 +38,9 @@ class JobSubmitParams(TypedDict, total=False):
     dry_run: bool
     chain_depth: int | None
     client_cwd: str | None
+    job_id: str | None
+    schedule_id: str | None
+    scheduled_due_at: float | None
 
 
 class JobIdentifyParams(TypedDict, total=False):
@@ -68,6 +71,19 @@ class JobRequest(BaseModel):
 
     config_path: Path = Field(
         description="Path to the job configuration YAML file",
+    )
+    job_id: str | None = Field(
+        default=None,
+        description="Explicit runtime job identifier. Manual submissions use the "
+        "configuration path stem when omitted.",
+    )
+    schedule_id: str | None = Field(
+        default=None,
+        description="Stable recurring-schedule lineage for overlap detection",
+    )
+    scheduled_due_at: float | None = Field(
+        default=None,
+        description="Exact durable due identity that produced a scheduled child",
     )
     workspace: Path | None = Field(
         default=None,
@@ -138,6 +154,96 @@ class JobResponse(BaseModel):
     message: str | None = Field(
         default=None,
         description="Human-readable detail about the submission result",
+    )
+
+
+class ScheduleStatus(BaseModel):
+    """Public recurring-score projection returned by status operations."""
+
+    enabled: bool = Field(description="Whether future recurring ticks are enabled")
+    next_due_at: float | None = Field(
+        default=None,
+        description="Next durable due time as a Unix epoch, unavailable for damaged state",
+    )
+    last_due_at: float | None = Field(
+        default=None,
+        description="Most recent handled due time as a Unix epoch",
+    )
+    last_run_id: str | None = Field(
+        default=None,
+        description="Most recent scheduled child job identifier",
+    )
+    last_outcome: str | None = Field(
+        default=None,
+        description="Most recent recurring tick outcome",
+    )
+    consecutive_drops: int = Field(
+        ge=0,
+        description="Number of consecutive recurring tick drops",
+    )
+    diagnostic: str | None = Field(
+        default=None,
+        description="Safe non-runnable registry diagnostic when durable schedule data is damaged",
+    )
+
+
+class JobTimeoutCleanupStatus(BaseModel):
+    """Truthful, secret-free evidence from Baton's timeout teardown."""
+
+    cleanup_path: str = Field(description="Existing cleanup seam used")
+    cleanup_generation: str | None = Field(
+        default=None,
+        description="Daemon-local execution generation for this evidence",
+    )
+    deregistration_state: str = Field(
+        description="Whether Baton deregistration was attempted or available",
+    )
+    tracked_process_groups: int = Field(default=0, ge=0)
+    sigterm_attempted: int = Field(default=0, ge=0)
+    sigterm_succeeded: int = Field(default=0, ge=0)
+    sigterm_failed: int = Field(default=0, ge=0)
+    sigterm_skipped: int = Field(default=0, ge=0)
+    escalation_state: str = Field(default="not_needed")
+    sigkill_attempted: int = Field(default=0, ge=0)
+    sigkill_succeeded: int = Field(default=0, ge=0)
+    sigkill_failed: int = Field(default=0, ge=0)
+    residual_check_state: str = Field(default="unverified")
+    residual_process_groups: int | None = Field(default=None, ge=0)
+
+
+class JobDeadlineStatus(BaseModel):
+    """Public, secret-free projection of one job's timeout authority."""
+
+    daemon_limit_seconds: float = Field(
+        description="Configured daemon per-execution timeout",
+    )
+    score_limit_seconds: float | None = Field(
+        default=None,
+        description="Configured score wall-clock limit when valid",
+    )
+    effective_remaining_seconds: float = Field(
+        ge=0,
+        description="Current stricter applicable timeout remainder",
+    )
+    elapsed_seconds: float = Field(
+        ge=0,
+        description="Wall time consumed since the job was first registered",
+    )
+    wall_deadline_at: float | None = Field(
+        default=None,
+        description="Persisted absolute score deadline as a Unix epoch",
+    )
+    terminal_reason: str | None = Field(
+        default=None,
+        description="Machine-readable terminal reason",
+    )
+    cleanup_outcome: JobTimeoutCleanupStatus | None = Field(
+        default=None,
+        description="Observed timeout cleanup result",
+    )
+    diagnostic: str | None = Field(
+        default=None,
+        description="Compatibility diagnostic for malformed legacy fields",
     )
 
 

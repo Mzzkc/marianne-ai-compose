@@ -13,7 +13,7 @@ import re
 import time
 import traceback
 from collections import deque
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -44,12 +44,21 @@ from marianne.daemon.observer_recorder import ObserverRecorder
 from marianne.daemon.output import StructuredOutput
 from marianne.daemon.pgroup import ProcessGroupManager
 from marianne.daemon.rate_coordinator import RateLimitCoordinator
+from marianne.daemon.recurrence import RecurrenceController
 from marianne.daemon.registry import DaemonJobStatus, JobRecord, JobRegistry
+from marianne.daemon.schedule_registry import ScheduleRecord, ScheduleRegistry
 from marianne.daemon.scheduler import GlobalSheetScheduler
 from marianne.daemon.semantic_analyzer import SemanticAnalyzer
 from marianne.daemon.snapshot import SnapshotManager
 from marianne.daemon.task_utils import log_task_exception
-from marianne.daemon.types import JobRequest, JobResponse, ObserverEvent
+from marianne.daemon.types import (
+    JobDeadlineStatus,
+    JobRequest,
+    JobResponse,
+    JobTimeoutCleanupStatus,
+    ObserverEvent,
+    ScheduleStatus,
+)
 from marianne.utils.time import utc_now
 
 _logger = get_logger("daemon.manager")
@@ -242,6 +251,13 @@ class JobMeta:
     error_message: str | None = None
     error_traceback: str | None = None
     chain_depth: int | None = None
+    schedule_id: str | None = None
+    max_wall_seconds: float | None = None
+    wall_deadline_at: float | None = None
+    terminal_reason: str | None = None
+    cleanup_generation: str | None = None
+    timeout_cleanup_outcome: JobTimeoutCleanupStatus | None = None
+    deadline_diagnostic: str | None = None
     hook_config: list[dict[str, Any]] | None = field(default=None, repr=False)
     concert_config: dict[str, Any] | None = field(default=None, repr=False)
     completed_new_work: bool = False
@@ -274,6 +290,12 @@ class JobMeta:
             result["error_traceback"] = self.error_traceback
         if self.chain_depth is not None:
             result["chain_depth"] = self.chain_depth
+        if self.max_wall_seconds is not None:
+            result["max_wall_seconds"] = self.max_wall_seconds
+        if self.wall_deadline_at is not None:
+            result["wall_deadline_at"] = self.wall_deadline_at
+        if self.terminal_reason is not None:
+            result["terminal_reason"] = self.terminal_reason
         return result
 
 
@@ -394,6 +416,25 @@ async def _cleanup_worktree_isolation(
         )
 
 
+@dataclass
+class _JobAdmissionReservation:
+    """One task's reentrant ownership of a job-ID activation boundary."""
+
+    owner: asyncio.Task[Any]
+    depth: int = 1
+    released: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+
+
+@dataclass(frozen=True)
+class _ScheduleIndex:
+    """Prebuilt durable-identity indexes for status and lifecycle lookup."""
+
+    records: tuple[ScheduleRecord, ...]
+    by_id: dict[str, ScheduleRecord]
+    by_path: dict[Path, ScheduleRecord]
+    by_stem: dict[str, ScheduleRecord]
+
+
 class JobManager:
     """Manages concurrent job execution within the daemon.
 
@@ -409,10 +450,16 @@ class JobManager:
         start_time: float | None = None,
         monitor: ResourceMonitor | None = None,
         pgroup: ProcessGroupManager | None = None,
+        wall_clock: Callable[[], float] = time.time,
+        monotonic_clock: Callable[[], float] = time.monotonic,
+        recurrence_clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._config = config
         self._start_time = start_time or time.monotonic()
         self._pgroup = pgroup
+        self._wall_clock = wall_clock
+        self._monotonic_clock = monotonic_clock
+        self._recurrence_clock = recurrence_clock or utc_now
 
         # Phase 3: Centralized learning hub.
         # Single GlobalLearningStore shared across all jobs — pattern
@@ -423,6 +470,20 @@ class JobManager:
         self._service: JobService | None = None
         self._jobs: dict[str, asyncio.Task[Any]] = {}
         self._job_meta: dict[str, JobMeta] = {}
+        self._cleanup_generation_counter = 0
+        # Admission is reserved synchronously before recurrence I/O so a
+        # rejected same-ID request cannot publish autonomous work.
+        self._job_admission_reservations: dict[str, _JobAdmissionReservation] = {}
+        # Recurring lifecycle ownership is keyed by the durable schedule ID,
+        # not by one presentation anchor or scheduled child job ID.  Like job
+        # admission, it is task-owned and reentrant so controller tick calls
+        # can submit their child while holding the recurrence lifecycle lock.
+        self._schedule_admission_reservations: dict[
+            str, _JobAdmissionReservation
+        ] = {}
+        # Manual scheduled submissions reserve their score-name lineage before
+        # recurrence arms a timer and release it only after JobMeta is visible.
+        self._schedule_lineage_reservations: dict[str, int] = {}
         # Live CheckpointState per running job — populated by
         # _PublishingBackend on every state_backend.save() so the
         # conductor can serve status from memory, not disk.
@@ -484,6 +545,8 @@ class JobManager:
         # Persistent job registry — survives daemon restarts.
         db_path = config.state_db_path.expanduser()
         self._registry = JobRegistry(db_path)
+        self._schedule_registry = ScheduleRegistry(db_path)
+        self._recurrence_controller: RecurrenceController | None = None
 
         # Event bus for routing runner and observer events to consumers.
         self._event_bus = EventBus(
@@ -529,6 +592,7 @@ class JobManager:
         """Start daemon subsystems (learning hub, monitor, etc.)."""
         # Open the async registry connection (tables + WAL mode)
         await self._registry.open()
+        await self._schedule_registry.open()
 
         # Recover orphaned jobs (left running/queued from previous daemon).
         # Pause-aware: check each orphan's checkpoint to distinguish truly
@@ -577,6 +641,29 @@ class JobManager:
 
                     hook_config = json.loads(hook_json)
 
+                max_wall_seconds = record.max_wall_seconds
+                wall_deadline_at = record.wall_deadline_at
+                terminal_reason = record.terminal_reason
+                if wall_deadline_at is None and record.checkpoint_json:
+                    try:
+                        restored_checkpoint = CheckpointState.model_validate_json(
+                            record.checkpoint_json
+                        )
+                    except ValueError:
+                        restored_checkpoint = None
+                    if (
+                        restored_checkpoint is not None
+                        and restored_checkpoint.wall_deadline_at is not None
+                    ):
+                        max_wall_seconds = restored_checkpoint.max_wall_seconds
+                        wall_deadline_at = restored_checkpoint.wall_deadline_at
+                        terminal_reason = restored_checkpoint.terminal_reason
+                        _logger.info(
+                            "manager.deadline_restored_from_checkpoint",
+                            job_id=record.job_id,
+                            wall_deadline_at=wall_deadline_at,
+                        )
+
                 self._job_meta[record.job_id] = JobMeta(
                     job_id=record.job_id,
                     config_path=Path(record.config_path),
@@ -585,6 +672,10 @@ class JobManager:
                     started_at=record.started_at,
                     status=record.status,
                     error_message=record.error_message,
+                    max_wall_seconds=max_wall_seconds,
+                    wall_deadline_at=wall_deadline_at,
+                    terminal_reason=terminal_reason,
+                    deadline_diagnostic=record.deadline_diagnostic,
                     hook_config=hook_config,
                 )
         if all_records:
@@ -681,6 +772,17 @@ class JobManager:
         )
         self._baton_adapter.set_backend_pool(BackendPool(registry, pgroup=self._pgroup))
 
+        recurrence_controller = RecurrenceController(
+            self._schedule_registry,
+            self.submit_job,
+            self._baton_adapter.schedule_cron_tick,
+            self._baton_adapter.cancel_cron_tick,
+            self._is_schedule_active,
+            now=self._recurrence_clock,
+        )
+        self._baton_adapter.set_cron_handler(recurrence_controller.handle_tick)
+        self._recurrence_controller = recurrence_controller
+
         if self._config.mcp_pool.servers:
             from marianne.daemon.mcp_pool import McpPoolManager
 
@@ -725,6 +827,10 @@ class JobManager:
         # previous daemon life — kill them. Best-effort: a sweep failure
         # must never block conductor startup.
         await self._sweep_orphan_interactive_sessions()
+
+        # Restore recurring work only after stale interactive sessions are
+        # gone. An overdue latest-policy tick may submit immediately.
+        await recurrence_controller.restore()
 
         # Recover paused orphans through the baton.
         await self._recover_baton_orphans()
@@ -891,6 +997,7 @@ class JobManager:
         error_message: str | None = None,
         pid: int | None = None,
         snapshot_path: str | None = None,
+        terminal_reason: str | None = None,
     ) -> None:
         """Update job status across all three stores atomically.
 
@@ -927,6 +1034,7 @@ class JobManager:
             error_message=error_message,
             pid=pid,
             snapshot_path=snapshot_path,
+            terminal_reason=terminal_reason,
         )
 
         # 2. In-memory metadata (always available for active jobs).
@@ -935,6 +1043,14 @@ class JobManager:
             object.__setattr__(meta, "status", status)
             if error_message is not None:
                 meta.error_message = error_message
+            if status not in {
+                DaemonJobStatus.COMPLETED,
+                DaemonJobStatus.FAILED,
+                DaemonJobStatus.CANCELLED,
+            }:
+                meta.terminal_reason = None
+            elif terminal_reason is not None:
+                meta.terminal_reason = terminal_reason
 
         # 3. Live checkpoint state (may not exist yet for queued jobs).
         live = self._live_states.get(job_id)
@@ -942,6 +1058,14 @@ class JobManager:
             cp_status = _DAEMON_TO_CHECKPOINT_STATUS.get(status)
             if cp_status is not None:
                 object.__setattr__(live, "status", cp_status)
+                if status not in {
+                    DaemonJobStatus.COMPLETED,
+                    DaemonJobStatus.FAILED,
+                    DaemonJobStatus.CANCELLED,
+                }:
+                    live.terminal_reason = None
+                elif terminal_reason is not None:
+                    live.terminal_reason = terminal_reason
             else:
                 # #234: an unmapped status must not silently skip the live
                 # update (which would diverge `mzt status` from `mzt list`).
@@ -1229,12 +1353,28 @@ class JobManager:
                 workspace=str(meta.workspace),
             )
 
-            try:
-                # Create a resume task that will run via the baton
-                task = asyncio.create_task(
-                    self._resume_job_task(job_id, meta.workspace),
-                    name=f"job-recover-{job_id}",
+            if not self._try_reserve_job_admission(job_id):
+                _logger.info(
+                    "baton.orphan_recovery_admission_conflict",
+                    job_id=job_id,
                 )
+                continue
+
+            try:
+                # Publish active status while admission is still owned. The
+                # recovery task may wait at the concurrency gate, but same-ID
+                # submissions must already reject before recurrence mutation.
+                await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
+                resume_coro = self._resume_job_task(job_id, meta.workspace)
+                try:
+                    task = asyncio.create_task(
+                        resume_coro,
+                        name=f"job-recover-{job_id}",
+                    )
+                except Exception:
+                    resume_coro.close()
+                    await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
+                    raise
                 self._jobs[job_id] = task
 
                 def _on_done(
@@ -1252,6 +1392,8 @@ class JobManager:
                     job_id=job_id,
                     exc_info=True,
                 )
+            finally:
+                self._release_job_admission(job_id)
 
         if recovered:
             _logger.info(
@@ -1267,6 +1409,137 @@ class JobManager:
         submission rather than inventing a new ID.
         """
         return base_name
+
+    def _is_schedule_active(self, schedule_id: str) -> bool:
+        """Return whether any queued or running job belongs to this schedule."""
+        if self._schedule_lineage_reservations.get(schedule_id, 0) > 0:
+            return True
+        active_statuses = {
+            DaemonJobStatus.PENDING,
+            DaemonJobStatus.QUEUED,
+            DaemonJobStatus.RUNNING,
+        }
+        return any(
+            meta.schedule_id == schedule_id and meta.status in active_statuses
+            for meta in self._job_meta.values()
+        )
+
+    def _try_reserve_job_admission(
+        self,
+        job_id: str,
+        *,
+        allow_active: bool = False,
+    ) -> bool:
+        """Reserve one job ID before any recurrence projection is published."""
+        current_task = asyncio.current_task()
+        if current_task is None:
+            raise RuntimeError("job admission requires a running asyncio task")
+
+        reservation = self._job_admission_reservations.get(job_id)
+        if reservation is not None:
+            if reservation.owner is not current_task:
+                return False
+            reservation.depth += 1
+            return True
+
+        existing = self._job_meta.get(job_id)
+        if not allow_active and existing is not None and existing.status in {
+            DaemonJobStatus.PENDING,
+            DaemonJobStatus.QUEUED,
+            DaemonJobStatus.RUNNING,
+        }:
+            return False
+        self._job_admission_reservations[job_id] = _JobAdmissionReservation(
+            owner=current_task,
+        )
+        return True
+
+    def _release_job_admission(self, job_id: str) -> None:
+        """Release one counted job-ID reservation without disturbing peers."""
+        reservation = self._job_admission_reservations.get(job_id)
+        current_task = asyncio.current_task()
+        if reservation is None or reservation.owner is not current_task:
+            raise RuntimeError(f"job admission for '{job_id}' released by non-owner")
+        reservation.depth -= 1
+        if reservation.depth == 0:
+            self._job_admission_reservations.pop(job_id)
+            reservation.released.set()
+
+    async def _wait_for_job_admission(self, job_id: str) -> None:
+        """Own a queued job's activation boundary once its current owner leaves.
+
+        Each reservation carries its own release generation. A waiter that
+        wakes after another task has already acquired the job ID re-checks the
+        reservation and waits on the new owner's signal instead of crossing
+        that owner's boundary.
+        """
+        while not self._try_reserve_job_admission(job_id, allow_active=True):
+            reservation = self._job_admission_reservations.get(job_id)
+            if reservation is None:
+                raise RuntimeError(
+                    f"job admission for '{job_id}' unavailable without an owner"
+                )
+            await reservation.released.wait()
+
+    def _schedule_admission_available(self, schedule_ids: Sequence[str]) -> bool:
+        """Return whether this task could claim every schedule without waiting."""
+        current_task = asyncio.current_task()
+        if current_task is None:
+            raise RuntimeError("schedule admission requires a running asyncio task")
+        return all(
+            (reservation := self._schedule_admission_reservations.get(schedule_id))
+            is None
+            or reservation.owner is current_task
+            for schedule_id in schedule_ids
+        )
+
+    def _try_reserve_schedule_admission(
+        self,
+        schedule_ids: Sequence[str],
+    ) -> bool:
+        """Atomically reserve schedule lifecycle publication for this task."""
+        current_task = asyncio.current_task()
+        if current_task is None:
+            raise RuntimeError("schedule admission requires a running asyncio task")
+        normalized = tuple(dict.fromkeys(schedule_ids))
+        if not self._schedule_admission_available(normalized):
+            return False
+        for schedule_id in normalized:
+            reservation = self._schedule_admission_reservations.get(schedule_id)
+            if reservation is None:
+                self._schedule_admission_reservations[schedule_id] = (
+                    _JobAdmissionReservation(owner=current_task)
+                )
+            else:
+                reservation.depth += 1
+        return True
+
+    def _release_schedule_admission(self, schedule_ids: Sequence[str]) -> None:
+        """Release one counted ownership claim for every supplied schedule."""
+        current_task = asyncio.current_task()
+        for schedule_id in reversed(tuple(dict.fromkeys(schedule_ids))):
+            reservation = self._schedule_admission_reservations.get(schedule_id)
+            if reservation is None or reservation.owner is not current_task:
+                raise RuntimeError(
+                    f"schedule admission for '{schedule_id}' released by non-owner"
+                )
+            reservation.depth -= 1
+            if reservation.depth == 0:
+                self._schedule_admission_reservations.pop(schedule_id)
+
+    def _reserve_schedule_lineage(self, schedule_id: str) -> None:
+        """Publish one pending manual run before its schedule timer is armed."""
+        self._schedule_lineage_reservations[schedule_id] = (
+            self._schedule_lineage_reservations.get(schedule_id, 0) + 1
+        )
+
+    def _release_schedule_lineage(self, schedule_id: str) -> None:
+        """Release one pending manual reservation without disturbing peers."""
+        remaining = self._schedule_lineage_reservations.get(schedule_id, 0) - 1
+        if remaining > 0:
+            self._schedule_lineage_reservations[schedule_id] = remaining
+        else:
+            self._schedule_lineage_reservations.pop(schedule_id, None)
 
     def _ensure_workspace_log_path(self, workspace: Path) -> Path | None:
         """Expose the daemon log through the score workspace when configured."""
@@ -1327,7 +1600,7 @@ class JobManager:
                 message="System under high resource pressure — try again later",
             )
 
-        job_id = self._get_job_id(request.config_path.stem)
+        job_id = self._get_job_id(request.job_id or request.config_path.stem)
 
         # Validate config exists and resolve workspace BEFORE acquiring the
         # lock. Config parsing is expensive and doesn't need serialization
@@ -1440,95 +1713,252 @@ class JobManager:
                 ),
             )
 
-        # Serialize only the duplicate-check → register → insert window
-        # to prevent TOCTOU races between concurrent submissions.
-        async with self._id_gen_lock:
-            # Reject if a job with this name is already active
+        # Claim this job ID without awaiting before recurrence can publish a
+        # durable schedule or timer. Contenders reject instead of waiting, so
+        # no manager lock is held while recurrence performs I/O.
+        if not self._try_reserve_job_admission(job_id):
             existing = self._job_meta.get(job_id)
-            if existing and existing.status in (DaemonJobStatus.QUEUED, DaemonJobStatus.RUNNING):
+            if existing is not None and existing.status in {
+                DaemonJobStatus.PENDING,
+                DaemonJobStatus.QUEUED,
+                DaemonJobStatus.RUNNING,
+            }:
+                detail = f"already {existing.status.value}"
+            else:
+                detail = "already being submitted"
+            return JobResponse(
+                job_id=job_id,
+                status="rejected",
+                message=(
+                    f"Job '{job_id}' is {detail}. "
+                    "Use 'mzt pause' or 'mzt cancel' first, or wait for it to finish."
+                ),
+            )
+
+        schedule_admission_claims: list[tuple[str, ...]] = []
+
+        def _claim_schedule_admission(schedule_ids: tuple[str, ...]) -> None:
+            if not self._try_reserve_schedule_admission(schedule_ids):
+                joined = ", ".join(repr(value) for value in schedule_ids)
+                raise JobSubmissionError(
+                    f"Schedule lifecycle for {joined} is already active"
+                )
+            schedule_admission_claims.append(schedule_ids)
+
+        def _probe_schedule_admission(schedule_ids: tuple[str, ...]) -> bool:
+            if not self._schedule_admission_available(schedule_ids):
+                joined = ", ".join(repr(value) for value in schedule_ids)
+                raise JobSubmissionError(
+                    f"Schedule lifecycle for {joined} is already active"
+                )
+            return True
+
+        try:
+            if request.scheduled_due_at is not None and request.schedule_id is not None:
+                try:
+                    _claim_schedule_admission((request.schedule_id,))
+                except JobSubmissionError as exc:
+                    return JobResponse(
+                        job_id=job_id,
+                        status="rejected",
+                        message=str(exc),
+                    )
+
+            # A manual submission refreshes the source-owned schedule before
+            # its immediate run. This lifecycle lock must be acquired before
+            # the manager ID lock; scheduled children skip registration,
+            # preserving that one-way lock order.
+            reservation_id: str | None = None
+            try:
+                if (
+                    request.scheduled_due_at is None
+                    and parsed_config is not None
+                    and self._recurrence_controller is not None
+                ):
+                    if parsed_config.schedule is not None:
+                        reservation_id = parsed_config.name
+                        self._reserve_schedule_lineage(reservation_id)
+                        # A lifecycle command may hold the controller's
+                        # registration lock while mutating this source. Probe
+                        # every currently known source identity before waiting
+                        # so manual submission rejects instead of blocking on
+                        # the cross-subsystem lock.
+                        source_path = request.config_path.resolve(strict=False)
+                        known_ids = {
+                            parsed_config.name,
+                            *(
+                                current.schedule_id
+                                for current in await self._recurrence_controller.describe()
+                                if current.score_path.resolve(strict=False) == source_path
+                            ),
+                        }
+                        _probe_schedule_admission(tuple(sorted(known_ids)))
+                    registered_schedule = await self._recurrence_controller.register(
+                        request.config_path,
+                        parsed_config,
+                        before_wait=_probe_schedule_admission,
+                        before_mutation=_claim_schedule_admission,
+                    )
+                    if registered_schedule is None:
+                        if reservation_id is not None:
+                            self._release_schedule_lineage(reservation_id)
+                        reservation_id = None
+                    else:
+                        if registered_schedule.schedule_id != reservation_id:
+                            self._reserve_schedule_lineage(
+                                registered_schedule.schedule_id
+                            )
+                            if reservation_id is not None:
+                                self._release_schedule_lineage(reservation_id)
+                            reservation_id = registered_schedule.schedule_id
+                        request = request.model_copy(
+                            update={"schedule_id": registered_schedule.schedule_id},
+                        )
+            except JobSubmissionError as exc:
+                if reservation_id is not None:
+                    self._release_schedule_lineage(reservation_id)
                 return JobResponse(
                     job_id=job_id,
                     status="rejected",
-                    message=(
-                        f"Job '{job_id}' is already {existing.status.value}. "
-                        "Use 'mzt pause' or 'mzt cancel' first, or wait for it to finish."
-                    ),
+                    message=str(exc),
                 )
+            except BaseException:
+                if reservation_id is not None:
+                    self._release_schedule_lineage(reservation_id)
+                raise
 
-            # Auto-detect changed score file on re-run (#103).
-            # When a COMPLETED job exists and --fresh wasn't set, check
-            # if the score file was modified after the last run completed.
-            if not request.fresh:
-                record = await self._registry.get_job(job_id)
-                if (
-                    record is not None
-                    and record.status == DaemonJobStatus.COMPLETED
-                    and _should_auto_fresh(request.config_path, record.completed_at)
-                ):
-                    request = request.model_copy(update={"fresh": True})
-                    _logger.info(
-                        "auto_fresh.score_changed",
-                        job_id=job_id,
-                        config_path=str(request.config_path),
-                        message="Score file modified since last completed run — starting fresh",
+            try:
+                # Serialize only the duplicate-check → insert window to prevent
+                # TOCTOU races between concurrent submissions.
+                async with self._id_gen_lock:
+                    # Recheck active metadata after recurrence I/O. The
+                    # admission reservation prevents another submitter from
+                    # reaching this publication window for the same ID.
+                    existing = self._job_meta.get(job_id)
+                    if existing and existing.status in (
+                        DaemonJobStatus.PENDING,
+                        DaemonJobStatus.QUEUED,
+                        DaemonJobStatus.RUNNING,
+                    ):
+                        return JobResponse(
+                            job_id=job_id,
+                            status="rejected",
+                            message=(
+                                f"Job '{job_id}' is already {existing.status.value}. "
+                                "Use 'mzt pause' or 'mzt cancel' first, or wait for it to finish."
+                            ),
+                        )
+
+                    # Auto-detect changed score file on re-run (#103).
+                    # When a COMPLETED job exists and --fresh wasn't set, check
+                    # if the score file was modified after the last run completed.
+                    if not request.fresh:
+                        record = await self._registry.get_job(job_id)
+                        if (
+                            record is not None
+                            and record.status == DaemonJobStatus.COMPLETED
+                            and _should_auto_fresh(
+                                request.config_path,
+                                record.completed_at,
+                            )
+                        ):
+                            request = request.model_copy(update={"fresh": True})
+                            _logger.info(
+                                "auto_fresh.score_changed",
+                                job_id=job_id,
+                                config_path=str(request.config_path),
+                                message=(
+                                    "Score file modified since last completed run — "
+                                    "starting fresh"
+                                ),
+                            )
+
+                    registered_at = self._wall_clock()
+                    max_wall_seconds = (
+                        parsed_config.max_wall_seconds
+                        if parsed_config is not None
+                        else None
                     )
+                    wall_deadline_at = (
+                        registered_at + max_wall_seconds
+                        if max_wall_seconds is not None
+                        else None
+                    )
+                    # Register in DB first — if this fails, no phantom in-memory entry
+                    log_path = self._ensure_workspace_log_path(workspace)
+                    committed = await self._registry.register_job(
+                        job_id,
+                        request.config_path,
+                        workspace,
+                        log_path=log_path,
+                        submitted_at=registered_at,
+                        max_wall_seconds=max_wall_seconds,
+                        wall_deadline_at=wall_deadline_at,
+                    )
+                    meta = JobMeta(
+                        job_id=committed.job_id,
+                        config_path=Path(committed.config_path),
+                        workspace=Path(committed.workspace),
+                        submitted_at=committed.submitted_at,
+                        chain_depth=request.chain_depth,
+                        schedule_id=request.schedule_id,
+                        max_wall_seconds=committed.max_wall_seconds,
+                        wall_deadline_at=committed.wall_deadline_at,
+                        deadline_diagnostic=committed.deadline_diagnostic,
+                        hook_config=hook_config_list,
+                        concert_config=concert_config_dict,
+                    )
+                    self._job_meta[job_id] = meta
+                    self._bind_cleanup_generation(meta, new_execution=True)
 
-            meta = JobMeta(
-                job_id=job_id,
-                config_path=request.config_path,
-                workspace=workspace,
-                chain_depth=request.chain_depth,
-                hook_config=hook_config_list,
-                concert_config=concert_config_dict,
-            )
-            # Register in DB first — if this fails, no phantom in-memory entry
-            log_path = self._ensure_workspace_log_path(workspace)
-            await self._registry.register_job(
-                job_id,
-                request.config_path,
-                workspace,
-                log_path=log_path,
-            )
-            self._job_meta[job_id] = meta
+                    # Persist hook config to registry for restart resilience
+                    if hook_config_list:
+                        import json
 
-            # Persist hook config to registry for restart resilience
-            if hook_config_list:
-                import json
+                        await self._registry.store_hook_config(
+                            job_id,
+                            json.dumps(hook_config_list),
+                        )
+            finally:
+                if reservation_id is not None:
+                    self._release_schedule_lineage(reservation_id)
 
-                await self._registry.store_hook_config(
-                    job_id,
-                    json.dumps(hook_config_list),
+            try:
+                task = asyncio.create_task(
+                    self._run_job_task(job_id, request),
+                    name=f"job-{job_id}",
                 )
+            except RuntimeError:
+                # Clean up metadata if task creation fails
+                # RuntimeError is raised by asyncio when no running event loop
+                self._job_meta.pop(job_id, None)
+                await self._registry.update_status(
+                    job_id,
+                    DaemonJobStatus.FAILED,
+                    error_message="Task creation failed",
+                )
+                raise
+            self._jobs[job_id] = task
+            task.add_done_callback(lambda t: self._on_task_done(job_id, t))
 
-        try:
-            task = asyncio.create_task(
-                self._run_job_task(job_id, request),
-                name=f"job-{job_id}",
+            _logger.info(
+                "job.submitted",
+                job_id=job_id,
+                config_path=str(request.config_path),
             )
-        except RuntimeError:
-            # Clean up metadata if task creation fails
-            # RuntimeError is raised by asyncio when no running event loop
-            self._job_meta.pop(job_id, None)
-            await self._registry.update_status(
-                job_id,
-                DaemonJobStatus.FAILED,
-                error_message="Task creation failed",
+
+            return JobResponse(
+                job_id=job_id,
+                status="accepted",
+                message=(
+                    f"Job queued (concurrency limit: "
+                    f"{self._config.max_concurrent_jobs})"
+                ),
             )
-            raise
-        self._jobs[job_id] = task
-        task.add_done_callback(lambda t: self._on_task_done(job_id, t))
-
-        _logger.info(
-            "job.submitted",
-            job_id=job_id,
-            config_path=str(request.config_path),
-        )
-
-        return JobResponse(
-            job_id=job_id,
-            status="accepted",
-            message=f"Job queued (concurrency limit: {self._config.max_concurrent_jobs})",
-        )
+        finally:
+            for schedule_ids in reversed(schedule_admission_claims):
+                self._release_schedule_admission(schedule_ids)
+            self._release_job_admission(job_id)
 
     async def _queue_pending_job(self, request: JobRequest) -> JobResponse:
         """Accept a job as PENDING during rate-limit backpressure.
@@ -1539,7 +1969,7 @@ class JobManager:
 
         Returns a ``pending`` JobResponse with rate limit timing info.
         """
-        job_id = self._get_job_id(request.config_path.stem)
+        job_id = self._get_job_id(request.job_id or request.config_path.stem)
 
         # Minimal validation: config must exist
         if not request.config_path.exists():
@@ -1565,19 +1995,48 @@ class JobManager:
             job_id,
         )
         if workspace is not None:
+            registered_at = self._wall_clock()
+            max_wall_seconds: float | None = None
+            try:
+                from marianne.core.config import JobConfig
+
+                max_wall_seconds = JobConfig.from_yaml(
+                    request.config_path
+                ).max_wall_seconds
+            except (ValueError, OSError, KeyError, yaml.YAMLError):
+                _logger.debug(
+                    "manager.pending_deadline_config_unavailable",
+                    job_id=job_id,
+                    config_path=str(request.config_path),
+                )
+            wall_deadline_at = (
+                registered_at + max_wall_seconds
+                if max_wall_seconds is not None
+                else None
+            )
             log_path = self._ensure_workspace_log_path(workspace)
-            await self._registry.register_job(
+            committed = await self._registry.register_job(
                 job_id,
                 request.config_path,
                 workspace,
                 log_path=log_path,
+                submitted_at=registered_at,
+                max_wall_seconds=max_wall_seconds,
+                wall_deadline_at=wall_deadline_at,
             )
-            self._job_meta[job_id] = JobMeta(
-                job_id=job_id,
-                config_path=request.config_path,
-                workspace=workspace,
+            meta = JobMeta(
+                job_id=committed.job_id,
+                config_path=Path(committed.config_path),
+                workspace=Path(committed.workspace),
+                submitted_at=committed.submitted_at,
                 status=DaemonJobStatus.PENDING,
+                schedule_id=request.schedule_id,
+                max_wall_seconds=committed.max_wall_seconds,
+                wall_deadline_at=committed.wall_deadline_at,
+                deadline_diagnostic=committed.deadline_diagnostic,
             )
+            self._job_meta[job_id] = meta
+            self._bind_cleanup_generation(meta, new_execution=True)
 
         # Store for auto-start
         self._pending_jobs[job_id] = request
@@ -1661,19 +2120,43 @@ class JobManager:
             if not self._backpressure.should_accept_job():
                 break  # Pressure returned — stop starting jobs
 
-            request = self._pending_jobs.pop(job_id)
-            # Transition status from PENDING → QUEUED across all stores
-            await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
-            _logger.info(
-                "job.pending_started",
-                job_id=job_id,
-                config_path=str(request.config_path),
-            )
+            request = self._pending_jobs.get(job_id)
+            if request is None:
+                continue
+            if not self._try_reserve_job_admission(job_id, allow_active=True):
+                continue
+            schedule_ids = (request.schedule_id,) if request.schedule_id is not None else ()
+            schedule_owned = False
             try:
-                task = asyncio.create_task(
-                    self._run_job_task(job_id, request),
-                    name=f"job-{job_id}",
+                if schedule_ids:
+                    schedule_owned = self._try_reserve_schedule_admission(schedule_ids)
+                    if not schedule_owned:
+                        continue
+
+                # Ownership is complete before the activation becomes visible.
+                # Keep the request pending until the fallible status write has
+                # succeeded, then publish the task without another await.
+                await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
+                self._pending_jobs.pop(job_id, None)
+                _logger.info(
+                    "job.pending_started",
+                    job_id=job_id,
+                    config_path=str(request.config_path),
                 )
+                try:
+                    task = asyncio.create_task(
+                        self._run_job_task(job_id, request),
+                        name=f"job-{job_id}",
+                    )
+                except RuntimeError:
+                    self._pending_jobs[job_id] = request
+                    await self._set_job_status(job_id, DaemonJobStatus.PENDING)
+                    _logger.error(
+                        "pending.task_creation_failed",
+                        job_id=job_id,
+                        exc_info=True,
+                    )
+                    continue
                 self._jobs[job_id] = task
 
                 def _on_pending_done(
@@ -1684,12 +2167,10 @@ class JobManager:
                     self._on_task_done(_jid, t)
 
                 task.add_done_callback(_on_pending_done)
-            except RuntimeError:
-                _logger.error(
-                    "pending.task_creation_failed",
-                    job_id=job_id,
-                    exc_info=True,
-                )
+            finally:
+                if schedule_owned:
+                    self._release_schedule_admission(schedule_ids)
+                self._release_job_admission(job_id)
 
     async def get_job_status(self, job_id: str, workspace: Path | None = None) -> dict[str, Any]:
         """Get full status of a specific job.
@@ -1702,12 +2183,15 @@ class JobManager:
         """
         _ = workspace  # Unused — daemon is the single source of truth
 
+        schedule_record = await self._schedule_for_job(job_id)
         meta = self._job_meta.get(job_id)
         record: JobRecord | None = None
         if meta is None:
             # Check the persistent registry for historical jobs
             record = await self._registry.get_job(job_id)
             if record is None:
+                if schedule_record is not None:
+                    return self._schedule_anchor_status(schedule_record)
                 raise JobSubmissionError(f"Job '{job_id}' not found")
 
         # 1. Live in-memory state for active jobs. Terminal live states are a
@@ -1877,9 +2361,506 @@ class JobManager:
                 snapshot["on_success"] = parsed_config
                 data["config_snapshot"] = snapshot
 
+        data = await self._merge_schedule_status(job_id, data)
+        return await self._merge_deadline_status(job_id, data)
+
+    async def _merge_deadline_status(
+        self,
+        job_id: str,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Attach deadline authority and current remaining time when relevant."""
+        meta = self._job_meta.get(job_id)
+        if meta is None:
+            record = await self._registry.get_job(job_id)
+            if record is None:
+                return data
+            submitted_at = record.submitted_at
+            max_wall_seconds = record.max_wall_seconds
+            wall_deadline_at = record.wall_deadline_at
+            terminal_reason = record.terminal_reason
+            cleanup_outcome = None
+            diagnostic = record.deadline_diagnostic
+        else:
+            submitted_at = meta.submitted_at
+            max_wall_seconds = meta.max_wall_seconds
+            wall_deadline_at = meta.wall_deadline_at
+            terminal_reason = meta.terminal_reason
+            cleanup_outcome = meta.timeout_cleanup_outcome
+            if cleanup_outcome is not None:
+                cleanup_outcome = self._refresh_timeout_cleanup_outcome(
+                    job_id,
+                    cleanup_outcome,
+                )
+                meta.timeout_cleanup_outcome = cleanup_outcome
+            diagnostic = meta.deadline_diagnostic
+
+        now_epoch = self._wall_clock()
+        daemon_limit = float(self._config.job_timeout_seconds)
+        score_remaining = (
+            max(0.0, wall_deadline_at - now_epoch)
+            if wall_deadline_at is not None
+            else None
+        )
+        effective_remaining = max(
+            0.0,
+            min(daemon_limit, score_remaining)
+            if score_remaining is not None
+            else daemon_limit,
+        )
+        elapsed = max(0.0, now_epoch - submitted_at)
+        projection = JobDeadlineStatus(
+            daemon_limit_seconds=daemon_limit,
+            score_limit_seconds=max_wall_seconds,
+            effective_remaining_seconds=effective_remaining,
+            elapsed_seconds=elapsed,
+            wall_deadline_at=wall_deadline_at,
+            terminal_reason=terminal_reason,
+            cleanup_outcome=cleanup_outcome,
+            diagnostic=diagnostic,
+        )
+        if max_wall_seconds is not None:
+            data["max_wall_seconds"] = max_wall_seconds
+        if wall_deadline_at is not None:
+            data["wall_deadline_at"] = wall_deadline_at
+        if terminal_reason is not None:
+            data["terminal_reason"] = terminal_reason
+        data["deadline"] = projection.model_dump(mode="json", exclude_none=True)
         return data
 
+    async def _schedule_for_job(
+        self,
+        job_id: str,
+        *,
+        config_path: Path | None = None,
+        records: Sequence[ScheduleRecord] | None = None,
+        index: _ScheduleIndex | None = None,
+    ) -> ScheduleRecord | None:
+        """Resolve a job or schedule ID to its durable recurrence projection."""
+        controller = getattr(self, "_recurrence_controller", None)
+        if controller is None:
+            return None
+
+        if index is None:
+            schedule_records = (
+                list(records) if records is not None else await controller.describe()
+            )
+            index = self._build_schedule_index(schedule_records)
+
+        meta = self._job_meta.get(job_id)
+        if meta is not None and meta.schedule_id is not None:
+            matched = index.by_id.get(meta.schedule_id)
+            if matched is not None:
+                return matched
+        matched = index.by_id.get(job_id)
+        if matched is not None:
+            return matched
+
+        source_path = config_path or (meta.config_path if meta is not None else None)
+        if source_path is not None:
+            matched = index.by_path.get(source_path.resolve(strict=False))
+            if matched is not None:
+                return matched
+        return index.by_stem.get(job_id)
+
+    @staticmethod
+    def _build_schedule_index(records: Sequence[ScheduleRecord]) -> _ScheduleIndex:
+        """Build stable ID/path indexes once for a status/list operation."""
+        by_id = {record.schedule_id: record for record in records}
+        by_path = {
+            record.score_path.resolve(strict=False): record for record in records
+        }
+        stem_groups: dict[str, list[ScheduleRecord]] = {}
+        for record in records:
+            stem_groups.setdefault(record.score_path.stem, []).append(record)
+        by_stem = {
+            stem: matches[0]
+            for stem, matches in stem_groups.items()
+            if len(matches) == 1
+        }
+        return _ScheduleIndex(tuple(records), by_id, by_path, by_stem)
+
+    @staticmethod
+    def _schedule_status(record: ScheduleRecord) -> dict[str, Any]:
+        """Return the exact additive public recurrence projection."""
+        diagnostic = getattr(record, "diagnostic", None)
+        status = ScheduleStatus(
+            enabled=record.enabled,
+            next_due_at=None if diagnostic is not None else record.next_due_at,
+            last_due_at=record.last_due_at,
+            last_run_id=record.last_run_id,
+            last_outcome=record.last_outcome,
+            consecutive_drops=record.consecutive_drops,
+            diagnostic=diagnostic,
+        ).model_dump(mode="json")
+        if diagnostic is None:
+            status.pop("diagnostic")
+        return status
+
+    @classmethod
+    def _schedule_anchor_status(cls, record: ScheduleRecord) -> dict[str, Any]:
+        """Synthesize a truthful stable anchor when no job row exists."""
+        return {
+            "job_id": record.schedule_id,
+            "status": "scheduled" if record.enabled else "paused",
+            "config_path": str(record.score_path),
+            "submitted_at": record.created_at,
+            "started_at": None,
+            "pid": None,
+            "completed_at": None,
+            "current_sheet": None,
+            "total_sheets": None,
+            "schedule": cls._schedule_status(record),
+        }
+
+    async def _merge_schedule_status(
+        self,
+        job_id: str,
+        data: dict[str, Any],
+        *,
+        records: Sequence[ScheduleRecord] | None = None,
+        index: _ScheduleIndex | None = None,
+    ) -> dict[str, Any]:
+        """Add recurrence status only when this job has a durable schedule."""
+        raw_config_path = data.get("config_path")
+        config_path = Path(raw_config_path) if isinstance(raw_config_path, str) else None
+        record = await self._schedule_for_job(
+            job_id,
+            config_path=config_path,
+            records=records,
+            index=index,
+        )
+        if record is None:
+            return data
+        result = dict(data)
+        result["schedule"] = self._schedule_status(record)
+        return result
+
+    def _schedule_related_meta(self, record: ScheduleRecord) -> list[JobMeta]:
+        """Return every in-memory job whose persisted identity is this schedule."""
+        schedule_path = record.score_path.resolve(strict=False)
+        related: list[JobMeta] = []
+        for meta in self._job_meta.values():
+            if (
+                meta.schedule_id == record.schedule_id
+                or meta.job_id == record.schedule_id
+                or meta.config_path.resolve(strict=False) == schedule_path
+            ):
+                related.append(meta)
+        return related
+
+    @staticmethod
+    def _is_stable_schedule_anchor(job_id: str, record: ScheduleRecord) -> bool:
+        """Identify an anchor from durable identity, never child-ID syntax."""
+        return job_id in {record.schedule_id, record.score_path.stem}
+
+    def _claim_lifecycle_admission(
+        self,
+        claims: list[tuple[str, ...]],
+        schedule_ids: tuple[str, ...],
+    ) -> None:
+        """Claim lifecycle ownership from a controller pre-mutation callback."""
+        if not self._try_reserve_schedule_admission(schedule_ids):
+            joined = ", ".join(repr(value) for value in schedule_ids)
+            raise JobSubmissionError(
+                f"Schedule lifecycle for {joined} is already active"
+            )
+        claims.append(schedule_ids)
+
+    def _release_lifecycle_admission(
+        self,
+        claims: list[tuple[str, ...]],
+    ) -> None:
+        """Release all schedule claims acquired during one manager operation."""
+        for schedule_ids in reversed(claims):
+            self._release_schedule_admission(schedule_ids)
+
+    def _claim_related_job_admissions(
+        self,
+        record: ScheduleRecord,
+        owned_job_ids: list[str],
+    ) -> None:
+        """Atomically own every active child before a lifecycle mutation."""
+        cancellable = {
+            DaemonJobStatus.PENDING,
+            DaemonJobStatus.QUEUED,
+            DaemonJobStatus.RUNNING,
+            DaemonJobStatus.PAUSED,
+            DaemonJobStatus.PAUSED_AT_CHAIN,
+        }
+        acquired: list[str] = []
+        for related in sorted(
+            self._schedule_related_meta(record),
+            key=lambda meta: meta.job_id,
+        ):
+            if related.status not in cancellable:
+                continue
+            if not self._try_reserve_job_admission(
+                related.job_id,
+                allow_active=True,
+            ):
+                for job_id in reversed(acquired):
+                    self._release_job_admission(job_id)
+                raise JobSubmissionError(
+                    f"Score '{related.job_id}' is already being submitted"
+                )
+            acquired.append(related.job_id)
+        owned_job_ids.extend(acquired)
+
+    async def _pause_related_job(
+        self,
+        meta: JobMeta,
+        *,
+        defer_baton_event: bool = False,
+    ) -> None:
+        """Make one scheduled child non-dispatchable and visibly paused."""
+        if meta.status is DaemonJobStatus.PENDING:
+            await self._set_job_status(meta.job_id, DaemonJobStatus.PAUSED)
+            self._pending_jobs.pop(meta.job_id, None)
+            return
+        if meta.status is DaemonJobStatus.QUEUED:
+            task = self._jobs.pop(meta.job_id, None)
+            if task is not None and not task.done():
+                task.cancel(msg=f"schedule pause requested for {meta.job_id}")
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    current_task = asyncio.current_task()
+                    if current_task is not None and current_task.cancelling():
+                        raise
+                except Exception:
+                    pass
+            await self._set_job_status(meta.job_id, DaemonJobStatus.PAUSED)
+            return
+        if meta.status is DaemonJobStatus.RUNNING:
+            await self._pause_active_job(
+                meta.job_id,
+                defer_baton_event=defer_baton_event,
+            )
+
+    async def _re_pause_resumed_jobs(self, resumed: Sequence[JobMeta]) -> None:
+        """Best-effort rollback for a partially resumed schedule lifecycle."""
+        first_error: Exception | None = None
+        for meta in reversed(resumed):
+            try:
+                await self._pause_related_job(meta)
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+        if first_error is not None:
+            raise first_error
+
     async def pause_job(self, job_id: str) -> bool:
+        """Pause recurring ticks and any currently running work."""
+        record = await JobManager._schedule_for_job(self, job_id)
+        if record is None:
+            return await self._pause_active_job(job_id)
+
+        controller = getattr(self, "_recurrence_controller", None)
+        assert controller is not None
+        claims: list[tuple[str, ...]] = []
+        authority: ScheduleRecord | None = None
+        pause_mutation_entered = False
+        owned_job_ids: list[str] = []
+        changed_events: list[asyncio.Event] = []
+        created_signals: list[Path] = []
+        changed_baton: list[tuple[JobMeta, bool, bool]] = []
+        staged_children: list[tuple[JobMeta, DaemonJobStatus]] = []
+        pause_commit_started = False
+
+        def claim(schedule_ids: tuple[str, ...]) -> None:
+            self._claim_lifecycle_admission(claims, schedule_ids)
+
+        def capture_authority(current: ScheduleRecord) -> None:
+            nonlocal authority
+            self._claim_related_job_admissions(current, owned_job_ids)
+            authority = current
+
+        def mark_pause_mutation(_current: ScheduleRecord) -> None:
+            nonlocal pause_mutation_entered
+            pause_mutation_entered = True
+
+        try:
+            current = await controller.pause(
+                record.schedule_id,
+                score_path=record.score_path,
+                before_mutation=claim,
+                on_authority=capture_authority,
+                on_mutation=mark_pause_mutation,
+            )
+            related = self._schedule_related_meta(current)
+
+            def pause_order(meta: JobMeta) -> int:
+                if meta.status is DaemonJobStatus.RUNNING:
+                    baton_has_job = (
+                        self._baton_adapter is not None
+                        and self._baton_adapter.has_job(meta.job_id)
+                    )
+                    # Fallible filesystem pauses precede local signals. A
+                    # later failure therefore cannot strand an earlier local
+                    # dispatch gate in the paused state.
+                    return 1 if baton_has_job or meta.job_id in self._pause_events else 0
+                if meta.status is DaemonJobStatus.QUEUED:
+                    return 2
+                if meta.status is DaemonJobStatus.PENDING:
+                    return 3
+                return 4
+
+            for meta in sorted(related, key=pause_order):
+                if meta.status in {
+                    DaemonJobStatus.PENDING,
+                    DaemonJobStatus.QUEUED,
+                }:
+                    prior_status = meta.status
+                    staged_children.append((meta, prior_status))
+                    await self._set_job_status(meta.job_id, DaemonJobStatus.PAUSED)
+                    continue
+                event = self._pause_events.get(meta.job_id)
+                event_was_set = event.is_set() if event is not None else False
+                signal_path = meta.workspace / f".marianne-pause-{meta.job_id}"
+                signal_existed = signal_path.exists()
+                baton_job = (
+                    self._baton_adapter._baton._jobs.get(meta.job_id)
+                    if self._baton_adapter is not None
+                    and meta.status is DaemonJobStatus.RUNNING
+                    else None
+                )
+                baton_prior = (
+                    (baton_job.paused, baton_job.user_paused)
+                    if baton_job is not None
+                    else None
+                )
+                await self._pause_related_job(
+                    meta,
+                    defer_baton_event=baton_prior is not None,
+                )
+                if baton_prior is not None:
+                    changed_baton.append((meta, *baton_prior))
+                if event is not None and not event_was_set and event.is_set():
+                    changed_events.append(event)
+                if not signal_existed and signal_path.exists():
+                    created_signals.append(signal_path)
+
+            # Every fallible child status transition has succeeded. Commit
+            # pending removal and queued cancellation only now, so an earlier
+            # child can always be restored without recreating detached work.
+            pause_commit_started = True
+            queued_tasks: list[asyncio.Task[Any]] = []
+            for meta, prior_status in staged_children:
+                if prior_status is DaemonJobStatus.PENDING:
+                    self._pending_jobs.pop(meta.job_id, None)
+                    continue
+                task = self._jobs.pop(meta.job_id, None)
+                if task is not None and not task.done():
+                    task.cancel(msg=f"schedule pause requested for {meta.job_id}")
+                    queued_tasks.append(task)
+            if queued_tasks:
+
+                async def settle_queued_tasks() -> None:
+                    await asyncio.gather(*queued_tasks, return_exceptions=True)
+
+                settlement = asyncio.create_task(
+                    settle_queued_tasks(),
+                    name=f"schedule-pause-settle-{current.schedule_id}",
+                )
+                try:
+                    await asyncio.shield(settlement)
+                except asyncio.CancelledError:
+                    # Cancellation remains loud, but every already-cancelled
+                    # queued task settles before lifecycle ownership is lost.
+                    await settlement
+                    raise
+            if changed_baton:
+                from marianne.daemon.baton.events import PauseJob
+
+                adapter = self._baton_adapter
+                assert adapter is not None
+                for meta, _paused, _user_paused in changed_baton:
+                    adapter._baton.inbox.put_nowait(
+                        PauseJob(job_id=meta.job_id)
+                    )
+            return True
+        except BaseException as exc:
+            if pause_commit_started:
+                # The pause is fully committed and all queued tasks have been
+                # joined. Propagate cancellation/failure loudly without
+                # pretending the completed lifecycle transition was undone.
+                raise
+            child_rollback_error: BaseException | None = None
+            for meta, prior_status in reversed(staged_children):
+                try:
+                    await self._set_job_status(meta.job_id, prior_status)
+                except BaseException as rollback_exc:
+                    if child_rollback_error is None:
+                        child_rollback_error = rollback_exc
+            baton_rollback_error: BaseException | None = None
+            for meta, paused, user_paused in reversed(changed_baton):
+                baton_job = (
+                    self._baton_adapter._baton._jobs.get(meta.job_id)
+                    if self._baton_adapter is not None
+                    else None
+                )
+                if baton_job is not None:
+                    baton_job.paused = paused
+                    baton_job.user_paused = user_paused
+                    adapter = self._baton_adapter
+                    assert adapter is not None
+                    adapter._baton._state_dirty = True
+                try:
+                    await self._set_job_status(meta.job_id, DaemonJobStatus.RUNNING)
+                except BaseException as rollback_exc:
+                    if baton_rollback_error is None:
+                        baton_rollback_error = rollback_exc
+            for event in changed_events:
+                event.clear()
+            for signal_path in created_signals:
+                try:
+                    signal_path.unlink(missing_ok=True)
+                except OSError:
+                    _logger.error(
+                        "schedule.pause_signal_rollback_failed",
+                        path=str(signal_path),
+                        exc_info=True,
+                    )
+            if (
+                pause_mutation_entered
+                and authority is not None
+                and authority.enabled
+                and claims
+            ):
+                try:
+                    await controller.resume(
+                        authority.schedule_id,
+                        score_path=authority.score_path,
+                        before_mutation=claim,
+                    )
+                except BaseException as rollback_exc:
+                    raise RuntimeError(
+                        f"Failed to pause active job {job_id!r}; recurrence rollback "
+                        f"also failed: {rollback_exc}"
+                    ) from exc
+            if baton_rollback_error is not None:
+                raise RuntimeError(
+                    f"Failed to pause active job {job_id!r}; baton rollback "
+                    f"also failed: {baton_rollback_error}"
+                ) from exc
+            if child_rollback_error is not None:
+                raise RuntimeError(
+                    f"Failed to pause active job {job_id!r}; child rollback "
+                    f"also failed: {child_rollback_error}"
+                ) from exc
+            raise
+        finally:
+            self._release_lifecycle_admission(claims)
+            for owned_job_id in reversed(owned_job_ids):
+                self._release_job_admission(owned_job_id)
+
+    async def _pause_active_job(
+        self,
+        job_id: str,
+        *,
+        defer_baton_event: bool = False,
+    ) -> bool:
         """Send pause signal to a running job via in-process event.
 
         Prefers the in-process ``_pause_events`` dict (set during
@@ -1902,12 +2883,29 @@ class JobManager:
         # (returns False, no side effect) when the baton doesn't have the job.
         # Trying this before the wrapper-task check below stops a stale-status
         # guard from destructively marking a still-running recovered job FAILED.
+        baton_job = (
+            self._baton_adapter._baton._jobs.get(job_id)
+            if self._baton_adapter is not None
+            else None
+        )
+        baton_prior = (
+            (baton_job.paused, baton_job.user_paused)
+            if baton_job is not None
+            else None
+        )
         if self._baton_adapter is not None and self._baton_adapter._baton.request_pause(job_id):
             from marianne.daemon.baton.events import PauseJob
 
-            await self._baton_adapter._baton.inbox.put(PauseJob(job_id=job_id))
+            try:
+                await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
+            except BaseException:
+                if baton_job is not None and baton_prior is not None:
+                    baton_job.paused, baton_job.user_paused = baton_prior
+                    self._baton_adapter._baton._state_dirty = True
+                raise
+            if not defer_baton_event:
+                self._baton_adapter._baton.inbox.put_nowait(PauseJob(job_id=job_id))
             _logger.info("job.baton_pause_sent", job_id=job_id)
-            await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
             return True
 
         # Non-baton / not-in-baton: verify an actual running task. A job the baton
@@ -1932,6 +2930,205 @@ class JobManager:
         return await self._checked_service.pause_job(meta.job_id, meta.workspace)
 
     async def resume_job(
+        self,
+        job_id: str,
+        workspace: Path | None = None,
+        config_path: Path | None = None,
+        no_reload: bool = False,
+        from_sheet: int | None = None,
+        escalation: bool = False,
+        self_healing: bool = False,
+    ) -> JobResponse:
+        """Enable recurring ticks and resume active work when it is paused."""
+        record = await JobManager._schedule_for_job(self, job_id)
+        if record is None:
+            return await JobManager._resume_active_job(
+                self,
+                job_id,
+                workspace=workspace,
+                config_path=config_path,
+                no_reload=no_reload,
+                from_sheet=from_sheet,
+                escalation=escalation,
+                self_healing=self_healing,
+            )
+
+        controller = getattr(self, "_recurrence_controller", None)
+        assert controller is not None
+        schedule_id = record.schedule_id
+        active_statuses = {
+            DaemonJobStatus.PENDING,
+            DaemonJobStatus.QUEUED,
+            DaemonJobStatus.RUNNING,
+        }
+        schedule_resumable_statuses = {
+            DaemonJobStatus.PAUSED,
+            DaemonJobStatus.PAUSED_AT_CHAIN,
+        }
+        related = self._schedule_related_meta(record)
+        resumable = [
+            meta for meta in related if meta.status in schedule_resumable_statuses
+        ]
+        held_chains = [
+            meta
+            for meta in resumable
+            if meta.status is DaemonJobStatus.PAUSED_AT_CHAIN
+            and meta.held_chain_hook is not None
+        ]
+        if len(held_chains) > 1:
+            return JobResponse(
+                job_id=job_id,
+                status="rejected",
+                message=(
+                    "Schedule has multiple held chains; resume each child "
+                    "explicitly to preserve chain ordering"
+                ),
+            )
+        # A held chain submission is irreversible once accepted. Run ordinary
+        # resumptions first and the sole held chain last, so no later child can
+        # fail after its chained job has been published.
+        resumable.sort(
+            key=lambda meta: meta.status is DaemonJobStatus.PAUSED_AT_CHAIN
+        )
+        requested_meta = self._job_meta.get(job_id)
+        if (
+            requested_meta is not None
+            and requested_meta in related
+            and requested_meta.status
+            in {DaemonJobStatus.FAILED, DaemonJobStatus.CANCELLED}
+        ):
+            resumable.append(requested_meta)
+        active = [meta for meta in related if meta.status in active_statuses]
+        admission_ids = sorted({meta.job_id for meta in resumable})
+        if not admission_ids and not active:
+            admission_ids = [job_id]
+        owned_job_ids: list[str] = []
+        for admission_id in admission_ids:
+            if not self._try_reserve_job_admission(admission_id):
+                for owned_job_id in reversed(owned_job_ids):
+                    self._release_job_admission(owned_job_id)
+                raise JobSubmissionError(
+                    f"Score '{admission_id}' is already being submitted"
+                )
+            owned_job_ids.append(admission_id)
+
+        claims: list[tuple[str, ...]] = []
+        authority: ScheduleRecord | None = None
+        mutation_entered = False
+        lineage_ids: list[str] = []
+        resumed_meta: list[JobMeta] = []
+
+        def claim(schedule_ids: tuple[str, ...]) -> None:
+            self._claim_lifecycle_admission(claims, schedule_ids)
+
+        def capture_authority(current: ScheduleRecord) -> None:
+            nonlocal authority, mutation_entered
+            authority = current
+            mutation_entered = True
+            self._reserve_schedule_lineage(current.schedule_id)
+            lineage_ids.append(current.schedule_id)
+
+        async def compensate(original_exc: BaseException) -> None:
+            """Restore active work and recurrence before surfacing a failed resume."""
+            active_rollback_error: BaseException | None = None
+            deferred_cancellation: asyncio.CancelledError | None = None
+            if resumed_meta:
+                rollback_task = asyncio.create_task(
+                    self._re_pause_resumed_jobs(resumed_meta),
+                    name=(
+                        "schedule-resume-rollback-"
+                        f"{authority.schedule_id if authority is not None else schedule_id}"
+                    ),
+                )
+                try:
+                    await asyncio.shield(rollback_task)
+                except asyncio.CancelledError as cancel_exc:
+                    deferred_cancellation = cancel_exc
+                    try:
+                        await rollback_task
+                    except BaseException as rollback_exc:
+                        active_rollback_error = rollback_exc
+                except BaseException as rollback_exc:
+                    active_rollback_error = rollback_exc
+
+            recurrence_rollback_error: BaseException | None = None
+            if mutation_entered and authority is not None and not authority.enabled:
+                try:
+                    await controller.pause(
+                        authority.schedule_id,
+                        score_path=authority.score_path,
+                        before_mutation=claim,
+                    )
+                except BaseException as rollback_exc:
+                    recurrence_rollback_error = rollback_exc
+
+            if (
+                active_rollback_error is not None
+                or recurrence_rollback_error is not None
+            ):
+                details: list[str] = []
+                if active_rollback_error is not None:
+                    details.append(f"active rollback failed: {active_rollback_error}")
+                if recurrence_rollback_error is not None:
+                    details.append(
+                        f"recurrence rollback failed: {recurrence_rollback_error}"
+                    )
+                raise RuntimeError(
+                    f"Failed to resume active job {job_id!r}; " + "; ".join(details)
+                ) from original_exc
+            if deferred_cancellation is not None:
+                raise deferred_cancellation
+
+        try:
+            try:
+                await controller.resume(
+                    schedule_id,
+                    score_path=record.score_path,
+                    before_mutation=claim,
+                    on_authority=capture_authority,
+                )
+                if not resumable:
+                    return JobResponse(
+                        job_id=job_id,
+                        status="accepted",
+                        message="Recurring schedule resumed",
+                    )
+                response: JobResponse | None = None
+                for resumable_meta in resumable:
+                    is_requested = resumable_meta.job_id == job_id
+                    response = await JobManager._resume_active_job(
+                        self,
+                        resumable_meta.job_id,
+                        workspace=workspace if is_requested else None,
+                        config_path=config_path if is_requested else None,
+                        no_reload=no_reload,
+                        from_sheet=from_sheet if is_requested else None,
+                        escalation=escalation if is_requested else False,
+                        self_healing=self_healing if is_requested else False,
+                    )
+                    if response.status != "accepted":
+                        await compensate(
+                            JobSubmissionError(
+                                response.message
+                                or f"Resume of {resumable_meta.job_id!r} was rejected"
+                            )
+                        )
+                        return response
+                    resumed_meta.append(resumable_meta)
+                assert response is not None
+                return response
+            except BaseException as exc:
+                await compensate(exc)
+                raise
+            finally:
+                for lineage_id in reversed(lineage_ids):
+                    self._release_schedule_lineage(lineage_id)
+        finally:
+            self._release_lifecycle_admission(claims)
+            for owned_job_id in reversed(owned_job_ids):
+                self._release_job_admission(owned_job_id)
+
+    async def _resume_active_job(
         self,
         job_id: str,
         workspace: Path | None = None,
@@ -1970,56 +3167,74 @@ class JobManager:
                 "only PAUSED, PAUSED_AT_CHAIN, FAILED, or CANCELLED scores can be resumed"
             )
 
-        # Capture the pre-resume status NOW, before the QUEUED/RUNNING
-        # transitions below overwrite it. The resume task's intrinsic recovery
-        # (#185) keys off this to decide whether to reset failed/cascade-skipped
-        # sheets (FAILED/CANCELLED) or preserve terminal sheets (PAUSED).
-        pre_resume_status = meta.status
+        # Own this terminal -> active transition before any awaited resume I/O.
+        # Scheduled submission acquires the same synchronous reservation before
+        # recurrence publication, preserving recurrence lifecycle -> manager
+        # admission as the only cross-subsystem lock direction.
+        if not self._try_reserve_job_admission(job_id):
+            raise JobSubmissionError(f"Score '{job_id}' is already being submitted")
 
-        # PAUSED_AT_CHAIN: trigger the held chain instead of normal resume
-        if meta.status == DaemonJobStatus.PAUSED_AT_CHAIN and meta.held_chain_hook:
-            return await self._resume_held_chain(job_id, meta)
+        try:
+            # Capture the pre-resume status NOW, before the QUEUED/RUNNING
+            # transitions below overwrite it. The resume task's intrinsic recovery
+            # (#185) keys off this to decide whether to reset failed/cascade-skipped
+            # sheets (FAILED/CANCELLED) or preserve terminal sheets (PAUSED).
+            pre_resume_status = meta.status
 
-        # Cancel stale task and WAIT for it to finish before creating the
-        # new resume task. Without the await, the old task's CancelledError
-        # handler races with the new task's recover_job() and can deregister
-        # the freshly-recovered baton state.
-        old_task = self._jobs.pop(job_id, None)
-        if old_task is not None and not old_task.done():
-            old_task.cancel(msg=f"stale task replaced by resume of {job_id}")
-            _logger.info("job.resume_cancelled_stale_task", job_id=job_id)
-            try:
-                await old_task
-            except (asyncio.CancelledError, Exception):
-                pass  # Expected — the task was cancelled or may have errored
+            # PAUSED_AT_CHAIN: trigger the held chain instead of normal resume.
+            # Keep admission ownership through every submission and rollback path.
+            if meta.status == DaemonJobStatus.PAUSED_AT_CHAIN and meta.held_chain_hook:
+                return await self._resume_held_chain(job_id, meta)
 
-        # Apply new config path before creating the task (task reads meta.config_path)
-        if config_path is not None:
-            meta.config_path = config_path
+            # Cancel stale task and WAIT for it to finish before creating the
+            # new resume task. Without the await, the old task's CancelledError
+            # handler races with the new task's recover_job() and can deregister
+            # the freshly-recovered baton state.
+            old_task = self._jobs.pop(job_id, None)
+            if old_task is not None and not old_task.done():
+                old_task.cancel(msg=f"stale task replaced by resume of {job_id}")
+                _logger.info("job.resume_cancelled_stale_task", job_id=job_id)
+                try:
+                    await old_task
+                except asyncio.CancelledError:
+                    current_task = asyncio.current_task()
+                    if current_task is not None and current_task.cancelling():
+                        raise
+                    # Expected: the stale child completed its requested
+                    # cancellation while the resume caller remains live.
+                except Exception:
+                    pass  # Expected — the stale task may already have errored
 
-        ws = workspace or meta.workspace
-        await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
+            # Apply new config path before creating the task (task reads
+            # meta.config_path).
+            if config_path is not None:
+                meta.config_path = config_path
 
-        task = asyncio.create_task(
-            self._resume_job_task(
-                job_id,
-                ws,
-                no_reload=no_reload,
-                pre_resume_status=pre_resume_status,
-                from_sheet=from_sheet,
-                escalation=escalation,
-                self_healing=self_healing,
-            ),
-            name=f"job-resume-{job_id}",
-        )
-        self._jobs[job_id] = task
-        task.add_done_callback(lambda t: self._on_task_done(job_id, t))
+            ws = workspace or meta.workspace
+            await self._set_job_status(job_id, DaemonJobStatus.QUEUED)
 
-        return JobResponse(
-            job_id=job_id,
-            status="accepted",
-            message="Job resume queued",
-        )
+            task = asyncio.create_task(
+                self._resume_job_task(
+                    job_id,
+                    ws,
+                    no_reload=no_reload,
+                    pre_resume_status=pre_resume_status,
+                    from_sheet=from_sheet,
+                    escalation=escalation,
+                    self_healing=self_healing,
+                ),
+                name=f"job-resume-{job_id}",
+            )
+            self._jobs[job_id] = task
+            task.add_done_callback(lambda t: self._on_task_done(job_id, t))
+
+            return JobResponse(
+                job_id=job_id,
+                status="accepted",
+                message="Job resume queued",
+            )
+        finally:
+            self._release_job_admission(job_id)
 
     async def _resume_held_chain(
         self,
@@ -2147,6 +3362,135 @@ class JobManager:
             _logger.error("modify.deferred_resume_failed", job_id=job_id, exc_info=True)
 
     async def cancel_job(self, job_id: str, *, source: str = "unknown") -> bool:
+        """Cancel active work and remove its recurrence, when present."""
+        record = await JobManager._schedule_for_job(self, job_id)
+        if record is None:
+            if not self._try_reserve_job_admission(job_id, allow_active=True):
+                raise JobSubmissionError(
+                    f"Score '{job_id}' is already being submitted"
+                )
+            try:
+                return await self._cancel_active_job(job_id, source=source)
+            finally:
+                self._release_job_admission(job_id)
+
+        controller = getattr(self, "_recurrence_controller", None)
+        assert controller is not None
+        claims: list[tuple[str, ...]] = []
+        owned_job_ids: list[str] = []
+        removal_entered = False
+
+        def claim(schedule_ids: tuple[str, ...]) -> None:
+            self._claim_lifecycle_admission(claims, schedule_ids)
+
+        def capture_authority(current: ScheduleRecord) -> None:
+            nonlocal removal_entered
+            self._claim_related_job_admissions(current, owned_job_ids)
+            removal_entered = True
+
+        try:
+            removal_error: BaseException | None = None
+            try:
+                record = await controller.remove(
+                    record.schedule_id,
+                    score_path=record.score_path,
+                    before_mutation=claim,
+                    on_authority=capture_authority,
+                )
+            except BaseException as exc:
+                if not removal_entered:
+                    raise
+                # Removal failure must never leave future autonomous work enabled.
+                # A durable pause is the safe degraded state and the original
+                # removal error remains loud to the caller.
+                try:
+                    await controller.pause(
+                        record.schedule_id,
+                        score_path=record.score_path,
+                        before_mutation=claim,
+                    )
+                except BaseException as safety_exc:
+                    removal_error = RuntimeError(
+                        f"Failed to remove recurrence for {job_id!r}; safety pause "
+                        f"also failed: {safety_exc}"
+                    )
+                    removal_error.__cause__ = exc
+                else:
+                    removal_error = exc
+
+            cleanup = asyncio.create_task(
+                self._cancel_schedule_related(record, source=source),
+                name=f"schedule-cancel-{record.schedule_id}",
+            )
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                # Command cancellation may cancel the waiter, never the safety
+                # work: recurrence is already removed/paused and every child
+                # must reach CANCELLED before schedule admission is released.
+                await cleanup
+                raise
+            if removal_error is not None:
+                raise removal_error
+            return True
+        finally:
+            self._release_lifecycle_admission(claims)
+            for owned_job_id in reversed(owned_job_ids):
+                self._release_job_admission(owned_job_id)
+
+    async def _cancel_schedule_related(
+        self,
+        record: ScheduleRecord,
+        *,
+        source: str,
+    ) -> None:
+        """Cancel every active or paused job carrying one schedule lineage."""
+        cancellable = {
+            DaemonJobStatus.PENDING,
+            DaemonJobStatus.QUEUED,
+            DaemonJobStatus.RUNNING,
+            DaemonJobStatus.PAUSED,
+            DaemonJobStatus.PAUSED_AT_CHAIN,
+        }
+        first_error: Exception | None = None
+        for meta in self._schedule_related_meta(record):
+            if meta.status not in cancellable:
+                continue
+            try:
+                self._pending_jobs.pop(meta.job_id, None)
+                task = self._jobs.pop(meta.job_id, None)
+                if task is not None and not task.done():
+                    task.cancel(
+                        msg=(
+                            f"schedule cancel for {record.schedule_id} "
+                            f"requested by {source}"
+                        )
+                    )
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        current_task = asyncio.current_task()
+                        if current_task is not None and current_task.cancelling():
+                            raise
+                    except Exception:
+                        pass
+                if self._baton_adapter is not None and self._baton_adapter.has_job(
+                    meta.job_id
+                ):
+                    self._baton_adapter.deregister_job(meta.job_id)
+                await self._set_job_status(meta.job_id, DaemonJobStatus.CANCELLED)
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+        if first_error is not None:
+            raise first_error
+
+    async def _cancel_active_job(
+        self,
+        job_id: str,
+        *,
+        source: str = "unknown",
+    ) -> bool:
         """Cancel a running or pending job.
 
         For running jobs: sends the cancel signal and updates in-memory
@@ -2256,6 +3600,14 @@ class JobManager:
         """
         seen: set[str] = set()
         result: list[dict[str, Any]] = []
+        recurrence_controller = getattr(self, "_recurrence_controller", None)
+        schedule_records = (
+            await recurrence_controller.describe()
+            if recurrence_controller is not None
+            else []
+        )
+        schedule_index = self._build_schedule_index(schedule_records)
+        represented_schedules: set[str] = set()
         registry_records = {
             record.job_id: record
             for record in await self._registry.list_jobs()
@@ -2279,13 +3631,43 @@ class JobManager:
                 entry = registry_records[meta.job_id].to_dict()
             else:
                 entry = meta.to_dict()
-            result.append(entry)
+            merged = await self._merge_schedule_status(
+                meta.job_id,
+                entry,
+                index=schedule_index,
+            )
+            result.append(merged)
+            matched = await self._schedule_for_job(meta.job_id, index=schedule_index)
+            if matched is not None and self._is_stable_schedule_anchor(
+                meta.job_id,
+                matched,
+            ):
+                represented_schedules.add(matched.schedule_id)
             seen.add(meta.job_id)
 
         # Historical jobs from registry
         for record in registry_records.values():
             if record.job_id not in seen:
-                result.append(record.to_dict())
+                merged = await self._merge_schedule_status(
+                    record.job_id,
+                    record.to_dict(),
+                    index=schedule_index,
+                )
+                result.append(merged)
+                matched = await self._schedule_for_job(
+                    record.job_id,
+                    config_path=Path(record.config_path),
+                    index=schedule_index,
+                )
+                if matched is not None and self._is_stable_schedule_anchor(
+                    record.job_id,
+                    matched,
+                ):
+                    represented_schedules.add(matched.schedule_id)
+
+        for schedule_record in schedule_index.records:
+            if schedule_record.schedule_id not in represented_schedules:
+                result.append(self._schedule_anchor_status(schedule_record))
 
         return result
 
@@ -2659,6 +4041,18 @@ class JobManager:
         """
         self._shutting_down = True
 
+        # Revoke recurrence-owned handles before waiting for jobs. This blocks
+        # new ticks throughout the shutdown window and, critically, before the
+        # TimerWheel drains non-cancelled events after ShutdownRequested.
+        if self._recurrence_controller is not None:
+            try:
+                await self._recurrence_controller.shutdown()
+            except Exception:
+                _logger.warning(
+                    "manager.recurrence_stop_failed",
+                    exc_info=True,
+                )
+
         if graceful:
             timeout = self._config.shutdown_timeout_seconds
             _logger.info(
@@ -2817,6 +4211,7 @@ class JobManager:
                 skipped=skipped_newer_registry,
             )
 
+        await self._schedule_registry.close()
         await self._registry.close()
         self._shutdown_event.set()
         _logger.info("manager.shutdown_complete")
@@ -2994,6 +4389,37 @@ class JobManager:
         await meta.observer.stop()
         meta.observer = None
 
+    async def _stop_observer_and_unregister(self, job_id: str) -> None:
+        """Settle observer resources after any pre-dispatch boundary."""
+        await self._stop_observer(job_id)
+        if self._observer_recorder is not None:
+            self._observer_recorder.unregister_job(job_id)
+
+    async def _start_observer_with_score_deadline(
+        self,
+        job_id: str,
+        meta: JobMeta,
+    ) -> bool:
+        """Start the observer within the absolute score budget when present."""
+        if meta.wall_deadline_at is None or not self._config.observer.enabled:
+            await self._start_observer(job_id)
+            return True
+        remaining = max(0.0, meta.wall_deadline_at - self._wall_clock())
+        if remaining <= 0:
+            return False
+        try:
+            await asyncio.wait_for(
+                self._start_observer(job_id),
+                timeout=remaining,
+            )
+        except TimeoutError:
+            await self._stop_observer_and_unregister(job_id)
+            return False
+        except BaseException:
+            await self._stop_observer_and_unregister(job_id)
+            raise
+        return True
+
     def _on_state_published(self, state: CheckpointState) -> None:
         """Receive live CheckpointState from a running job's state backend.
 
@@ -3015,6 +4441,11 @@ class JobManager:
             )
         if conductor_key != state.job_id:
             state = state.model_copy(update={"job_id": conductor_key})
+        meta = self._job_meta.get(conductor_key)
+        if meta is not None:
+            state.max_wall_seconds = meta.max_wall_seconds
+            state.wall_deadline_at = meta.wall_deadline_at
+            state.terminal_reason = meta.terminal_reason
         self._live_states[conductor_key] = state
 
         # Persist to registry via the ordered writer (#111 — never block the
@@ -3087,6 +4518,158 @@ class JobManager:
             sheet_num=sheet_num,
         )
 
+    @staticmethod
+    def _cleanup_status_from_baton_result(
+        raw_result: Any,
+        fallback: JobTimeoutCleanupStatus,
+    ) -> JobTimeoutCleanupStatus:
+        """Convert Baton's physical cleanup evidence when it is available."""
+        if raw_result is None:
+            return fallback
+        to_dict = getattr(raw_result, "to_dict", None)
+        if not callable(to_dict):
+            return fallback
+        evidence = to_dict()
+        if not isinstance(evidence, dict):
+            return fallback
+        evidence = dict(evidence)
+        evidence_generation = evidence.get("cleanup_generation")
+        if evidence_generation is None:
+            evidence["cleanup_generation"] = fallback.cleanup_generation
+        elif (
+            fallback.cleanup_generation is not None
+            and evidence_generation != fallback.cleanup_generation
+        ):
+            return fallback
+        return JobTimeoutCleanupStatus(
+            cleanup_path="baton.deregister_job",
+            deregistration_state="attempted",
+            **evidence,
+        )
+
+    def _refresh_timeout_cleanup_outcome(
+        self,
+        job_id: str,
+        current: JobTimeoutCleanupStatus,
+    ) -> JobTimeoutCleanupStatus:
+        """Refresh an initial snapshot after Baton's grace callback matures."""
+        adapter = self._baton_adapter
+        if adapter is None:
+            return current
+        get_result = getattr(adapter, "get_process_group_cleanup_result", None)
+        if not callable(get_result):
+            return current
+        raw_result = (
+            get_result(job_id, current.cleanup_generation)
+            if current.cleanup_generation is not None
+            else get_result(job_id)
+        )
+        return self._cleanup_status_from_baton_result(raw_result, current)
+
+    def _bind_cleanup_generation(
+        self,
+        meta: JobMeta,
+        *,
+        new_execution: bool,
+    ) -> str:
+        """Bind runtime cleanup evidence before this execution can wait."""
+        generation = meta.cleanup_generation
+        if new_execution or generation is None:
+            self._cleanup_generation_counter = (
+                getattr(self, "_cleanup_generation_counter", 0) + 1
+            )
+            generation = f"manager-{self._cleanup_generation_counter}"
+            meta.cleanup_generation = generation
+        adapter = self._baton_adapter
+        begin_generation = (
+            getattr(adapter, "begin_cleanup_generation", None)
+            if adapter is not None
+            else None
+        )
+        if callable(begin_generation):
+            begin_generation(meta.job_id, generation)
+        return generation
+
+    def _timeout_cleanup_via_baton(self, job_id: str) -> JobTimeoutCleanupStatus:
+        """Attempt timeout cleanup only through Baton's deregistration seam."""
+        meta = self._job_meta.get(job_id)
+        cleanup_generation = (
+            meta.cleanup_generation if meta is not None else None
+        )
+        adapter = self._baton_adapter
+        if adapter is None:
+            return JobTimeoutCleanupStatus(
+                cleanup_path="baton.deregister_job",
+                deregistration_state="unavailable",
+                cleanup_generation=cleanup_generation,
+            )
+        try:
+            raw_result: Any = adapter.deregister_job(job_id)
+        except Exception:
+            _logger.exception(
+                "job.timeout_cleanup_failed",
+                job_id=job_id,
+                cleanup_path="baton.deregister_job",
+            )
+            return JobTimeoutCleanupStatus(
+                cleanup_path="baton.deregister_job",
+                deregistration_state="failed",
+                cleanup_generation=cleanup_generation,
+            )
+        fallback = JobTimeoutCleanupStatus(
+            cleanup_path="baton.deregister_job",
+            deregistration_state="attempted",
+            cleanup_generation=cleanup_generation,
+        )
+        return self._cleanup_status_from_baton_result(raw_result, fallback)
+
+    async def _record_job_timeout(
+        self,
+        job_id: str,
+        meta: JobMeta,
+        *,
+        effective_timeout: float,
+        execution_elapsed: float,
+        expired_before_execution: bool,
+    ) -> None:
+        """Persist one machine-readable timeout and its observed cleanup."""
+        cleanup_outcome = self._timeout_cleanup_via_baton(job_id)
+        wall_elapsed = max(0.0, self._wall_clock() - meta.submitted_at)
+        meta.error_traceback = None
+        meta.timeout_cleanup_outcome = cleanup_outcome
+        error_msg = (
+            f"Job exceeded timeout of {effective_timeout:.0f}s "
+            f"(ran for {execution_elapsed:.0f}s)"
+        )
+        await self._set_job_status(
+            job_id,
+            DaemonJobStatus.FAILED,
+            error_message=error_msg,
+            terminal_reason="timed_out",
+        )
+        live = self._live_states.get(job_id)
+        if live is not None:
+            checkpoint_json = live.model_dump_json()
+            writer = self._checkpoint_writer
+            if writer is not None and writer.running:
+                await writer.write_and_wait(job_id, checkpoint_json)
+            else:
+                await self._registry.save_checkpoint(job_id, checkpoint_json)
+        self._recent_failures.append(self._monotonic_clock())
+        _logger.error(
+            "job.timeout",
+            job_id=job_id,
+            daemon_limit_seconds=float(self._config.job_timeout_seconds),
+            score_limit_seconds=meta.max_wall_seconds,
+            effective_timeout_seconds=effective_timeout,
+            execution_elapsed_seconds=round(execution_elapsed, 3),
+            wall_elapsed_seconds=round(wall_elapsed, 3),
+            wall_deadline_at=meta.wall_deadline_at,
+            terminal_reason="timed_out",
+            cleanup_outcome=cleanup_outcome.model_dump(mode="json"),
+            expired_before_execution=expired_before_execution,
+        )
+
     async def _run_managed_task(
         self,
         job_id: str,
@@ -3112,134 +4695,218 @@ class JobManager:
             start_event: Structlog event name for the start log.
             fail_event: Structlog event name for the failure log.
         """
-        meta = self._job_meta[job_id]
-        timeout = self._config.job_timeout_seconds
+        # This wrapper owns the coroutine until wait_for wraps it in a Task.
+        coro_started = False
+        try:
+            meta = self._job_meta[job_id]
+            self._bind_cleanup_generation(meta, new_execution=False)
+            daemon_timeout = float(self._config.job_timeout_seconds)
+            timeout = daemon_timeout
+            execution_started_at: float | None = None
 
-        async with self._concurrency_semaphore:
-            # Create in-process pause event for this job
-            pause_event = asyncio.Event()
-            self._pause_events[job_id] = pause_event
+            async with self._concurrency_semaphore:
+                await self._wait_for_job_admission(job_id)
+                expired_before_execution = False
+                try:
+                    # A lifecycle owner may have staged this queued job while
+                    # its wrapper waited at the concurrency gate. Only QUEUED
+                    # work may cross the activation boundary.
+                    activation_status = meta.status
+                    if activation_status is not DaemonJobStatus.QUEUED:
+                        return
 
-            meta.started_at = time.time()
-            await self._set_job_status(
-                job_id,
-                DaemonJobStatus.RUNNING,
-                pid=os.getpid(),
-            )
-            _logger.info(start_event, job_id=job_id, timeout_seconds=timeout)
-
-            # Start observer co-task for filesystem/process monitoring
-            await self._start_observer(job_id)
-
-            try:
-                result_status = await asyncio.wait_for(coro, timeout=timeout)
-                final_status = (
-                    result_status
-                    if isinstance(result_status, DaemonJobStatus)
-                    else DaemonJobStatus.COMPLETED
-                )
-
-                # Flush observer recorder to ensure JSONL is complete before snapshot
-                if self._observer_recorder is not None:
-                    try:
-                        self._observer_recorder.flush(job_id)
-                    except Exception:
-                        _logger.warning(
-                            "observer_recorder.flush_failed",
-                            job_id=job_id,
-                            exc_info=True,
+                    if meta.wall_deadline_at is not None:
+                        score_remaining = max(
+                            0.0,
+                            meta.wall_deadline_at - self._wall_clock(),
                         )
+                        timeout = min(daemon_timeout, score_remaining)
+                        if score_remaining <= 0:
+                            expired_before_execution = True
 
-                # Capture completion snapshot for terminal statuses
-                snapshot_path: str | None = None
-                if final_status in (DaemonJobStatus.COMPLETED, DaemonJobStatus.FAILED):
-                    snapshot_path = self._snapshot_manager.capture(
+                    if expired_before_execution:
+                        continue_execution = False
+                    else:
+                        continue_execution = True
+
+                        # Create in-process pause event for this job
+                        pause_event = asyncio.Event()
+                        self._pause_events[job_id] = pause_event
+
+                        meta.started_at = self._wall_clock()
+                        await self._set_job_status(
+                            job_id,
+                            DaemonJobStatus.RUNNING,
+                            pid=os.getpid(),
+                        )
+                finally:
+                    self._release_job_admission(job_id)
+
+                if not continue_execution:
+                    await self._record_job_timeout(
                         job_id,
-                        meta.workspace,
-                        config_path=meta.config_path,
+                        meta,
+                        effective_timeout=0.0,
+                        execution_elapsed=0.0,
+                        expired_before_execution=True,
                     )
+                    return
 
-                await self._set_job_status(
+                observer_started = await self._start_observer_with_score_deadline(
                     job_id,
-                    final_status,
-                    snapshot_path=snapshot_path,
+                    meta,
                 )
-                if final_status == DaemonJobStatus.PAUSED:
-                    pause_reason = "unknown"
-                    if self._baton_adapter:
-                        pause_reason = self._baton_adapter._baton.get_job_pause_reason(job_id)
-                    _logger.info(
-                        "job.paused",
-                        job_id=job_id,
-                        reason=pause_reason,
+                if not observer_started:
+                    await self._record_job_timeout(
+                        job_id,
+                        meta,
+                        effective_timeout=0.0,
+                        execution_elapsed=0.0,
+                        expired_before_execution=True,
                     )
-                else:
-                    _logger.info("job.completed", job_id=job_id)
+                    return
 
-            except TimeoutError:
-                elapsed = time.monotonic() - (meta.started_at or 0)
-                error_msg = f"Job exceeded timeout of {timeout:.0f}s (ran for {elapsed:.0f}s)"
-                meta.error_traceback = None
-                await self._set_job_status(
-                    job_id,
-                    DaemonJobStatus.FAILED,
-                    error_message=error_msg,
-                )
-                self._recent_failures.append(time.monotonic())
-                _logger.error(
-                    "job.timeout",
+                if meta.wall_deadline_at is not None:
+                    score_remaining = max(
+                        0.0,
+                        meta.wall_deadline_at - self._wall_clock(),
+                    )
+                    timeout = min(daemon_timeout, score_remaining)
+                    if score_remaining <= 0:
+                        await self._stop_observer_and_unregister(job_id)
+                        await self._record_job_timeout(
+                            job_id,
+                            meta,
+                            effective_timeout=0.0,
+                            execution_elapsed=0.0,
+                            expired_before_execution=True,
+                        )
+                        return
+
+                execution_started_at = self._monotonic_clock()
+                _logger.info(
+                    start_event,
                     job_id=job_id,
                     timeout_seconds=timeout,
-                    elapsed_seconds=round(elapsed, 1),
+                    daemon_limit_seconds=daemon_timeout,
+                    score_limit_seconds=meta.max_wall_seconds,
+                    effective_timeout_seconds=timeout,
+                    wall_deadline_at=meta.wall_deadline_at,
                 )
 
-            except asyncio.CancelledError as cancel_exc:
-                # cancel_job() already called _set_job_status(CANCELLED).
-                # Only update if it wasn't set yet (e.g. external cancel).
-                if meta.status != DaemonJobStatus.CANCELLED:
+                try:
+                    coro_started = True
+                    result_status = await asyncio.wait_for(coro, timeout=timeout)
+                    final_status = (
+                        result_status
+                        if isinstance(result_status, DaemonJobStatus)
+                        else DaemonJobStatus.COMPLETED
+                    )
+
+                    # Flush observer recorder to ensure JSONL is complete before snapshot
+                    if self._observer_recorder is not None:
+                        try:
+                            self._observer_recorder.flush(job_id)
+                        except Exception:
+                            _logger.warning(
+                                "observer_recorder.flush_failed",
+                                job_id=job_id,
+                                exc_info=True,
+                            )
+
+                    # Capture completion snapshot for terminal statuses
+                    snapshot_path: str | None = None
+                    if final_status in (DaemonJobStatus.COMPLETED, DaemonJobStatus.FAILED):
+                        snapshot_path = self._snapshot_manager.capture(
+                            job_id,
+                            meta.workspace,
+                            config_path=meta.config_path,
+                        )
+
                     await self._set_job_status(
                         job_id,
-                        DaemonJobStatus.CANCELLED,
+                        final_status,
+                        snapshot_path=snapshot_path,
                     )
-                cancel_reason = str(cancel_exc) if str(cancel_exc) else "unknown"
-                _logger.error(
-                    "job.cancelled_during_execution",
-                    job_id=job_id,
-                    reason=cancel_reason,
-                )
-                raise
+                    if final_status == DaemonJobStatus.PAUSED:
+                        pause_reason = "unknown"
+                        if self._baton_adapter:
+                            pause_reason = self._baton_adapter._baton.get_job_pause_reason(job_id)
+                        _logger.info(
+                            "job.paused",
+                            job_id=job_id,
+                            reason=pause_reason,
+                        )
+                    else:
+                        _logger.info("job.completed", job_id=job_id)
 
-            except (OSError, ValueError, DaemonError) as exc:
-                # Expected operational errors: workspace issues, config errors,
-                # permission denied, missing directories, etc.
-                meta.error_traceback = traceback.format_exc()
-                await self._set_job_status(
-                    job_id,
-                    DaemonJobStatus.FAILED,
-                    error_message=str(exc),
-                )
-                self._recent_failures.append(time.monotonic())
-                _logger.error(fail_event, job_id=job_id, error=str(exc))
+                except TimeoutError:
+                    timeout_observed_at = self._monotonic_clock()
+                    execution_elapsed = max(
+                        0.0,
+                        timeout_observed_at
+                        - (
+                            execution_started_at
+                            if execution_started_at is not None
+                            else timeout_observed_at
+                        ),
+                    )
+                    await self._record_job_timeout(
+                        job_id,
+                        meta,
+                        effective_timeout=timeout,
+                        execution_elapsed=execution_elapsed,
+                        expired_before_execution=False,
+                    )
 
-            except Exception as exc:
-                # Unexpected programming bugs — log with full traceback
-                meta.error_traceback = traceback.format_exc()
-                await self._set_job_status(
-                    job_id,
-                    DaemonJobStatus.FAILED,
-                    error_message=f"Unexpected internal error: {exc}",
-                )
-                self._recent_failures.append(time.monotonic())
-                _logger.exception(
-                    "job.unexpected_error",
-                    job_id=job_id,
-                )
+                except asyncio.CancelledError as cancel_exc:
+                    # cancel_job() already called _set_job_status(CANCELLED).
+                    # Only update if it wasn't set yet (e.g. external cancel).
+                    if meta.status != DaemonJobStatus.CANCELLED:
+                        await self._set_job_status(
+                            job_id,
+                            DaemonJobStatus.CANCELLED,
+                        )
+                    cancel_reason = str(cancel_exc) if str(cancel_exc) else "unknown"
+                    _logger.error(
+                        "job.cancelled_during_execution",
+                        job_id=job_id,
+                        reason=cancel_reason,
+                    )
+                    raise
 
-            finally:
-                # Stop observer co-task regardless of outcome
-                await self._stop_observer(job_id)
-                if self._observer_recorder is not None:
-                    self._observer_recorder.unregister_job(job_id)
+                except (OSError, ValueError, DaemonError) as exc:
+                    # Expected operational errors: workspace issues, config errors,
+                    # permission denied, missing directories, etc.
+                    meta.error_traceback = traceback.format_exc()
+                    await self._set_job_status(
+                        job_id,
+                        DaemonJobStatus.FAILED,
+                        error_message=str(exc),
+                    )
+                    self._recent_failures.append(time.monotonic())
+                    _logger.error(fail_event, job_id=job_id, error=str(exc))
+
+                except Exception as exc:
+                    # Unexpected programming bugs — log with full traceback
+                    meta.error_traceback = traceback.format_exc()
+                    await self._set_job_status(
+                        job_id,
+                        DaemonJobStatus.FAILED,
+                        error_message=f"Unexpected internal error: {exc}",
+                    )
+                    self._recent_failures.append(time.monotonic())
+                    _logger.exception(
+                        "job.unexpected_error",
+                        job_id=job_id,
+                    )
+
+                finally:
+                    # Stop observer co-task regardless of outcome
+                    await self._stop_observer_and_unregister(job_id)
+        finally:
+            if not coro_started:
+                coro.close()
 
     async def _run_job_task(self, job_id: str, request: JobRequest) -> None:
         """Task coroutine that runs a single job through the baton engine."""
@@ -3425,6 +5092,7 @@ class JobManager:
         # FERMATA-on-exhaustion; healing keeps it as its designed end state.
         # Persisted on the checkpoint so resume/restart recovery inherit it.
         escalation_enabled = request.escalation or request.self_healing
+        meta = self._job_meta.get(job_id)
         initial_state = CheckpointState(
             job_id=job_id,
             job_name=config.name,
@@ -3437,6 +5105,9 @@ class JobManager:
             escalation_enabled=escalation_enabled,
             self_healing_enabled=request.self_healing,
             runtime_variables=dict(request.runtime_variables),  # #359 durable
+            max_wall_seconds=meta.max_wall_seconds if meta is not None else None,
+            wall_deadline_at=meta.wall_deadline_at if meta is not None else None,
+            terminal_reason=meta.terminal_reason if meta is not None else None,
         )
         self._live_states[job_id] = initial_state
 
@@ -3505,6 +5176,9 @@ class JobManager:
             skip_when=config.sheet.skip_when or None,  # #360/#119
             code_execution=config.code_execution,  # #209
             agent_card=config.agent_card,
+            cleanup_generation=(
+                meta.cleanup_generation if meta is not None else None
+            ),
         )
 
         # #196: thread the score's retry backoff (base/exp/max + jitter) into
@@ -3625,6 +5299,19 @@ class JobManager:
                 workspace=str(workspace),
             )
             return DaemonJobStatus.FAILED
+
+        # Registry registration is the primary deadline authority. A valid
+        # checkpoint deadline remains authoritative for databases created by
+        # an intermediate/legacy schema that did not yet have the columns.
+        # Neither path derives a new deadline during resume.
+        if meta.wall_deadline_at is not None:
+            checkpoint.max_wall_seconds = meta.max_wall_seconds
+            checkpoint.wall_deadline_at = meta.wall_deadline_at
+            checkpoint.terminal_reason = meta.terminal_reason
+        elif checkpoint.wall_deadline_at is not None:
+            meta.max_wall_seconds = checkpoint.max_wall_seconds
+            meta.wall_deadline_at = checkpoint.wall_deadline_at
+            meta.terminal_reason = checkpoint.terminal_reason
 
         # #361: inherit the run's persisted escalation/healing options; an
         # explicit resume flag can additionally enable (never disable) them.

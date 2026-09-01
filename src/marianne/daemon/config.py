@@ -406,9 +406,8 @@ class DaemonConfig(BaseModel):
     )
     state_db_path: Path = Field(
         default=DAEMON_STATE_DB_PATH,
-        description="Reserved for future use; not yet implemented. "
-        "Will be the path for daemon state database. "
-        "Tilde is expanded at runtime. Stores job registry and metrics.",
+        description="SQLite path for durable daemon state, including job registry, "
+        "recurring schedules, and checkpoints. Tilde is expanded at runtime.",
     )
     log_level: Literal["debug", "info", "warning", "error"] = Field(
         default="info",

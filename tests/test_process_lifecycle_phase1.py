@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import structlog
 
 from marianne.core.config.instruments import (
     CliCommand,
@@ -885,3 +886,82 @@ class TestDeregisterJobKillsProcessGroups:
         assert any("killpg:200" in c for c in kill_order)
         # Task was removed
         assert ("J", 1) not in adapter._active_tasks
+
+    def test_signal_failure_is_reported_without_residual_claim(self) -> None:
+        """A removed Baton entry cannot masquerade as physical cleanup."""
+        adapter = _make_adapter()
+        adapter._active_pids[("J", 1)] = (100, 200)
+
+        with patch(
+            "marianne.daemon.baton.adapter._safe_killpg",
+            return_value=False,
+        ), patch(
+            "marianne.daemon.baton.adapter.os.getpgid",
+            return_value=999,
+        ), patch.object(adapter, "_kill_interactive_sessions"):
+            result = adapter.deregister_job("J")
+
+        assert result.tracked_process_groups == 1
+        assert result.sigterm_attempted == 1
+        assert result.sigterm_succeeded == 0
+        assert result.sigterm_failed == 1
+        assert result.escalation_state == "not_scheduled"
+        assert result.residual_check_state == "unverified"
+        assert result.residual_process_groups is None
+
+    @pytest.mark.asyncio
+    async def test_post_grace_escalation_records_physical_residual_check(
+        self,
+    ) -> None:
+        adapter = _make_adapter()
+        adapter._active_pids[("J", 1)] = (100, 200)
+        callbacks: list[object] = []
+        loop = asyncio.get_running_loop()
+
+        def capture_later(_delay: float, callback: object) -> MagicMock:
+            callbacks.append(callback)
+            return MagicMock()
+
+        def guarded_signal(_pgid: int, sig: int, *, context: str) -> bool:
+            assert context.startswith("adapter.deregister_")
+            if sig == 0:
+                raise ProcessLookupError
+            return True
+
+        with patch(
+            "marianne.daemon.baton.adapter._safe_killpg",
+            side_effect=guarded_signal,
+        ), patch(
+            "marianne.daemon.baton.adapter.os.getpgid",
+            return_value=999,
+        ), patch.object(
+            loop,
+            "call_later",
+            side_effect=capture_later,
+        ), patch.object(
+            adapter,
+            "_kill_interactive_sessions",
+        ), structlog.testing.capture_logs() as captured_logs:
+            result = adapter.deregister_job("J")
+            assert result.escalation_state == "pending"
+            assert result.residual_check_state == "pending"
+            assert len(callbacks) == 1
+            callback = callbacks[0]
+            assert callable(callback)
+            callback()
+
+        assert result.escalation_state == "performed"
+        assert result.sigkill_attempted == 1
+        assert result.sigkill_succeeded == 1
+        assert result.residual_check_state == "clear"
+        assert result.residual_process_groups == 0
+        verification = [
+            log
+            for log in captured_logs
+            if log.get("event") == "adapter.deregister.cleanup_verified"
+        ]
+        assert len(verification) == 1
+        assert verification[0]["extra"] == {
+            "job_id": "J",
+            **result.to_dict(),
+        }

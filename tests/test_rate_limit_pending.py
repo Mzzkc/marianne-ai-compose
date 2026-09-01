@@ -184,6 +184,8 @@ class TestCancelPendingJob:
             mgr._jobs = {}
             mgr._job_meta = {}
             mgr._live_states = {}
+            mgr._job_admission_reservations = {}
+            mgr._schedule_admission_reservations = {}
             mgr._registry = AsyncMock()
 
             result = await mgr.cancel_job("test-job")
@@ -200,6 +202,8 @@ class TestCancelPendingJob:
             mgr._pending_jobs = {}
             mgr._jobs = {}
             mgr._job_meta = {}
+            mgr._job_admission_reservations = {}
+            mgr._schedule_admission_reservations = {}
             mgr._baton_adapter = None  # #162: cancel now checks the baton
 
             result = await mgr.cancel_job("no-such-job")
@@ -227,6 +231,8 @@ class TestPendingJobAutoStart:
             mgr._jobs = {}
             mgr._job_meta = {}
             mgr._live_states = {}
+            mgr._job_admission_reservations = {}
+            mgr._schedule_admission_reservations = {}
             mgr._registry = AsyncMock()
             mgr._backpressure = MagicMock()
             mgr._backpressure.should_accept_job.return_value = True
@@ -490,6 +496,7 @@ class TestPendingJobVisibility:
             mgr._registry.list_jobs = AsyncMock(return_value=[])
             mgr._config = MagicMock()
             mgr._config.max_concurrent_jobs = 5
+            mgr._wall_clock = lambda: 1_000.0
             mgr._config_name_to_conductor_id = {}
             mgr._rate_coordinator = MagicMock()
             mgr._rate_coordinator.active_limits = {"claude-cli": 60.0}

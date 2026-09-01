@@ -10,7 +10,6 @@ from marianne.core.config.instruments import InstrumentProfile
 from marianne.execution.instruments.cli_backend import PluginCliBackend
 from marianne.instruments.loader import InstrumentProfileLoader
 
-
 BUILTINS_DIR = (
     Path(__file__).parent.parent / "src" / "marianne" / "instruments" / "builtins"
 )

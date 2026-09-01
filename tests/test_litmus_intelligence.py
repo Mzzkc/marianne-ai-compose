@@ -104,8 +104,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from marianne.core.config import PromptConfig, ValidationRule
 from marianne.core.config.spec import SpecFragment
 from marianne.core.sheet import Sheet
@@ -2779,23 +2777,38 @@ class TestBatonEventStubLogging:
         # StaleCheck for a non-existent job is a safe no-op
         await baton.handle_event(StaleCheck(job_id="j1", sheet_num=1))
 
-    async def test_cron_tick_logs_warning(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """CronTick event produces a warning, not silence."""
+    async def test_cron_tick_awaits_injected_handler_once(self) -> None:
+        """CronTick reaches the configured submission seam exactly once."""
         from marianne.daemon.baton.events import CronTick
 
-        baton = BatonCore()
-        await baton.handle_event(
-            CronTick(
-                entry_name="test-cron",
-                score_path="/tmp/test.yaml",
-            )
-        )
+        handled: list[CronTick] = []
 
-        captured = capsys.readouterr()
-        log_output = captured.out + captured.err
-        assert "unimplemented" in log_output or "CronTick" in log_output, (
-            "CronTick should produce a warning log, not silent drop"
+        async def handle_cron(event: CronTick) -> None:
+            handled.append(event)
+
+        event = CronTick(
+            entry_name="test-cron",
+            score_path="/tmp/test.yaml",
+            due_at=1_788_000_000.0,
         )
+        baton = BatonCore(cron_handler=handle_cron)
+        await baton.handle_event(event)
+
+        assert handled == [event]
+
+    def test_adapter_schedules_and_cancels_cron_ticks(self) -> None:
+        """The adapter exposes cron scheduling on the one shared timer wheel."""
+        from marianne.daemon.baton.adapter import BatonAdapter
+        from marianne.daemon.baton.events import CronTick
+
+        adapter = BatonAdapter()
+        event = CronTick(entry_name="test-cron", score_path="/tmp/test.yaml")
+
+        handle = adapter.schedule_cron_tick(60.0, event)
+
+        assert handle.event is event
+        assert adapter.cancel_cron_tick(handle) is True
+        assert adapter.cancel_cron_tick(handle) is False
 
 
 # =========================================================================

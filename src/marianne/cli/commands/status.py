@@ -22,6 +22,7 @@ This module implements job status display commands:
 from __future__ import annotations
 
 import asyncio
+import math
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -48,6 +49,7 @@ from marianne.core.checkpoint import (
 )
 from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
+from marianne.daemon.types import ScheduleStatus
 
 from ..helpers import (
     ErrorMessages,
@@ -274,6 +276,7 @@ async def _status_job(
     ws_str = str(workspace) if workspace else None
 
     params = {"job_id": job_id, "workspace": ws_str}
+    schedule: dict[str, Any] | None = None
     try:
         routed, result = await try_daemon_route("job.status", params)
     except JobSubmissionError:
@@ -303,6 +306,7 @@ async def _status_job(
         # or JobMeta dict for queued jobs before first sheet runs.
         try:
             found_job = CheckpointState.model_validate(result)
+            schedule = _public_schedule(result.get("schedule"))
         except Exception:
             _logger.debug("checkpoint_model_validate_fallback", exc_info=True)
             _output_meta_status(result, json_output)
@@ -337,11 +341,11 @@ async def _status_job(
 
     # Output as JSON if requested
     if json_output:
-        _output_status_json(found_job)
+        _output_status_json(found_job, schedule=schedule)
         return
 
     # Display rich status output
-    _output_status_rich(found_job)
+    _output_status_rich(found_job, schedule=schedule)
 
 
 async def _status_job_watch(
@@ -369,6 +373,7 @@ async def _status_job_watch(
     try:
         while True:
             found_job: CheckpointState | None = None
+            schedule: dict[str, Any] | None = None
 
             # Try conductor first
             ws_str = str(workspace) if workspace else None
@@ -396,6 +401,7 @@ async def _status_job_watch(
             if routed and result:
                 try:
                     found_job = CheckpointState.model_validate(result)
+                    schedule = _public_schedule(result.get("schedule"))
                 except Exception:
                     _logger.debug("watch_checkpoint_model_validate_fallback", exc_info=True)
                     console.clear()
@@ -423,9 +429,9 @@ async def _status_job_watch(
                     )
             else:
                 if json_output:
-                    _output_status_json(found_job)
+                    _output_status_json(found_job, schedule=schedule)
                 else:
-                    _output_status_rich(found_job)
+                    _output_status_rich(found_job, schedule=schedule)
 
                 # Show watch mode indicator
                 now = datetime.now(UTC)
@@ -460,6 +466,14 @@ def _compute_elapsed(job: CheckpointState) -> float:
 
 _ACTIVE_STATUSES = {"queued", "running", "paused"}
 _RECENT_TERMINAL = {"completed", "failed", "cancelled"}
+
+
+def _is_recurring_anchor(job: dict[str, Any]) -> bool:
+    """Return whether a list entry represents the stable recurring score."""
+    return (
+        isinstance(job.get("schedule"), dict)
+        and "--scheduled--" not in str(job.get("job_id", ""))
+    )
 
 
 def protocol_mismatch_warning(daemon_protocol_version: int) -> str | None:
@@ -515,10 +529,16 @@ async def _status_overview(json_output: bool) -> None:
     jobs: list[dict[str, Any]] = jobs_data if isinstance(jobs_data, list) else []
 
     # Split into active and recent
-    active = [j for j in jobs if str(j.get("status", "")).lower() in _ACTIVE_STATUSES]
+    active = [
+        j
+        for j in jobs
+        if str(j.get("status", "")).lower() in _ACTIVE_STATUSES
+        or _is_recurring_anchor(j)
+    ]
     recent = [
         j for j in jobs
         if str(j.get("status", "")).lower() in _RECENT_TERMINAL
+        and not _is_recurring_anchor(j)
     ]
     # Sort recent by submission time descending, limit to 5
     recent.sort(key=lambda j: j.get("submitted_at", 0) or 0, reverse=True)
@@ -591,6 +611,10 @@ def _render_overview_jobs(
 
     for dj in jobs:
         job_id = dj.get("job_id", "?")
+        if isinstance(dj.get("schedule"), dict):
+            job_id = f"{job_id} \\[recurring]"
+            if not dj["schedule"].get("enabled", True):
+                job_id = f"{job_id} \\[paused]"
         raw_status = str(dj.get("status", "unknown")).lower()
         color = _colors.get(raw_status, "white")
         status_str = f"[{color}]{raw_status.upper()}[/{color}]"
@@ -662,7 +686,12 @@ async def _list_jobs(
         target = status_filter.lower()
         jobs = [j for j in jobs if str(j.get("status", "")).lower() == target]
     elif not all_jobs:
-        jobs = [j for j in jobs if str(j.get("status", "")).lower() in _ACTIVE_STATUSES]
+        jobs = [
+            j
+            for j in jobs
+            if str(j.get("status", "")).lower() in _ACTIVE_STATUSES
+            or _is_recurring_anchor(j)
+        ]
 
     # Limit
     jobs = jobs[:limit]
@@ -699,6 +728,11 @@ async def _list_jobs(
     rows: list[tuple[str, str, str, str]] = []
     for dj in jobs:
         raw_status = str(dj.get("status", "unknown"))
+        job_id = str(dj.get("job_id", "?"))
+        if isinstance(dj.get("schedule"), dict):
+            job_id = f"{job_id} \\[recurring]"
+            if not dj["schedule"].get("enabled", True):
+                job_id = f"{job_id} \\[paused]"
 
         # Progress display — show completed/total and percentage
         progress_completed = dj.get("progress_completed", 0) or 0
@@ -718,7 +752,7 @@ async def _list_jobs(
             time_str = "-"
 
         rows.append((
-            dj.get("job_id", "?"),
+            job_id,
             raw_status,
             progress_str,
             time_str,
@@ -774,6 +808,54 @@ def _format_daemon_timestamp(ts: float | None) -> str:
 # =============================================================================
 
 
+def _public_schedule(raw: object) -> dict[str, Any] | None:
+    """Validate and return the exact public recurrence projection."""
+    if raw is None:
+        return None
+    try:
+        schedule = ScheduleStatus.model_validate(raw).model_dump(mode="json")
+        diagnostic = schedule.get("diagnostic")
+        next_due = schedule["next_due_at"]
+        if next_due is None:
+            if diagnostic != "registry_data_error" or schedule["enabled"]:
+                raise ValueError("next_due_at must be finite")
+        else:
+            next_due_at = float(next_due)
+            if not math.isfinite(next_due_at):
+                raise ValueError("next_due_at must be finite")
+            # Platform timestamp ranges differ. Validate with the same conversion
+            # used by human output so a payload accepted for JSON cannot later
+            # crash Rich rendering on this host.
+            datetime.fromtimestamp(next_due_at)
+        if diagnostic is None:
+            schedule.pop("diagnostic")
+        return schedule
+    except (OverflowError, OSError, TypeError, ValueError) as exc:
+        _logger.warning(
+            "schedule_status_invalid",
+            error_type=type(exc).__name__,
+        )
+        return None
+
+
+def _render_schedule_status(schedule: dict[str, Any]) -> None:
+    """Render useful recurrence state without controller internals."""
+    diagnostic = schedule.get("diagnostic")
+    state = "ENABLED" if schedule["enabled"] else "PAUSED"
+    if diagnostic == "registry_data_error":
+        state = "DISABLED (registry data error)"
+    console.print(f"\n  Recurring schedule: {state}")
+    if schedule["next_due_at"] is None:
+        console.print("  Next due: unavailable (durable schedule data damaged)")
+    else:
+        due = datetime.fromtimestamp(float(schedule["next_due_at"])).astimezone()
+        console.print(f"  Next due: {due.strftime('%Y-%m-%d %H:%M %Z')}")
+    drops = int(schedule["consecutive_drops"])
+    if drops > 0:
+        outcome = schedule.get("last_outcome") or "unknown"
+        console.print(f"  Last drop: {outcome} ({drops} consecutive)")
+
+
 def _output_meta_status(meta: dict[str, Any], json_output: bool) -> None:
     """Render basic status from JobMeta when full CheckpointState is unavailable.
 
@@ -781,16 +863,23 @@ def _output_meta_status(meta: dict[str, Any], json_output: bool) -> None:
     hasn't been written yet (job just started) or the workspace path doesn't
     resolve to a loadable state backend.
     """
+    schedule = _public_schedule(meta.get("schedule"))
+    sanitized_meta = dict(meta)
+    if schedule is None:
+        sanitized_meta.pop("schedule", None)
+    else:
+        sanitized_meta["schedule"] = schedule
     if json_output:
-        output_json(meta)
+        output_json(sanitized_meta)
         return
 
     job_id = meta.get("job_id", "unknown")
     status = meta.get("status", "unknown")
     color = {"running": "green", "queued": "blue", "failed": "red"}.get(status, "yellow")
 
+    recurring_label = " \\[recurring]" if schedule is not None else ""
     console.print(Panel(
-        f"[bold]{job_id}[/bold]\n"
+        f"[bold]{job_id}[/bold]{recurring_label}\n"
         f"ID: {job_id}\n"
         f"Status: [{color}]{status.upper()}[/{color}]",
         title="Score Status",
@@ -803,6 +892,8 @@ def _output_meta_status(meta: dict[str, Any], json_output: bool) -> None:
     console.print(f"\n  Config: {config_path}")
     if submitted:
         console.print(f"  Submitted: {_format_daemon_timestamp(submitted)}")
+    if schedule is not None:
+        _render_schedule_status(schedule)
 
     console.print(
         "\n[dim]Full status unavailable — state file not yet written "
@@ -810,7 +901,11 @@ def _output_meta_status(meta: dict[str, Any], json_output: bool) -> None:
     )
 
 
-def _output_status_json(job: CheckpointState) -> None:
+def _output_status_json(
+    job: CheckpointState,
+    *,
+    schedule: dict[str, Any] | None = None,
+) -> None:
     """Output job status as JSON."""
     # Build a clean JSON representation
     # Use last_completed_sheet for progress since it's more reliable than counting sheets dict
@@ -934,6 +1029,9 @@ def _output_status_json(job: CheckpointState) -> None:
     # Add movement grouping when movement data is available (M3 step 31)
     if _has_movement_data(job):
         output["movements"] = _build_movement_groups(job)
+
+    if schedule is not None:
+        output["schedule"] = schedule
 
     output_json(output)
 
@@ -1953,7 +2051,11 @@ def _render_compact_stats(job: CheckpointState) -> None:
         console.print(f"  Completed: {format_relative_time(job.completed_at)}")
 
 
-def _output_status_rich(job: CheckpointState) -> None:
+def _output_status_rich(
+    job: CheckpointState,
+    *,
+    schedule: dict[str, Any] | None = None,
+) -> None:
     """Output job status with rich formatting."""
     status_color = StatusColors.get_job_color(job.status)
 
@@ -1975,7 +2077,8 @@ def _output_status_rich(job: CheckpointState) -> None:
             else:
                 header_lines.append(f"Movement {mv_num} of {total_movements}")
 
-    header_lines.append(f"[bold]{job.job_name}[/bold]")
+    recurring_label = " \\[recurring]" if schedule is not None else ""
+    header_lines.append(f"[bold]{job.job_name}[/bold]{recurring_label}")
     if job.job_id != job.job_name:
         header_lines.append(f"ID: [cyan]{job.job_id}[/cyan]")
     header_lines.append(
@@ -1988,6 +2091,9 @@ def _output_status_rich(job: CheckpointState) -> None:
         title="Score Status",
         border_style=status_color,
     ))
+
+    if schedule is not None:
+        _render_schedule_status(schedule)
 
     # Progress bar
     console.print("\n[bold]Progress[/bold]")

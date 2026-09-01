@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import typer
 
-from marianne.core.constants import DAEMON_STATE_DB_PATH, SHEET_NUM_KEY
+from marianne.core.constants import SHEET_NUM_KEY
 from marianne.core.logging import get_logger
 from marianne.daemon.config import LEGACY_PID_PATH, DaemonConfig, DaemonLoggingConfig
 from marianne.daemon.pgroup import ProcessGroupManager
@@ -496,25 +496,8 @@ class DaemonProcess:
                     self._config.state_backend_type,
                     "sqlite",
                     "config.reserved_field_ignored",
-                    "state_backend_type is reserved for future use and has no "
-                    "effect. Daemon state persistence is not yet implemented.",
-                ),
-                (
-                    "state_db_path",
-                    str(self._config.state_db_path),
-                    str(DAEMON_STATE_DB_PATH),
-                    "config.reserved_field_ignored",
-                    "state_db_path is reserved for future use and has no "
-                    "effect. Daemon state persistence is not yet implemented.",
-                ),
-                (
-                    "max_concurrent_sheets",
-                    self._config.max_concurrent_sheets,
-                    10,
-                    "config.reserved_field_ignored",
-                    "max_concurrent_sheets is reserved for Phase 3 scheduler "
-                    "and has no effect. Jobs currently run monolithically "
-                    "via JobService.",
+                    "state_backend_type is fixed to SQLite; alternative state "
+                    "backends are not supported.",
                 ),
             ]
             for field_name, current, default, event, msg in _unenforced_fields:

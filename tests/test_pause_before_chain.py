@@ -9,6 +9,7 @@ Verifies that:
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -16,6 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from marianne.core.checkpoint import JobStatus
+from marianne.daemon.config import DaemonConfig
+from marianne.daemon.manager import JobManager, JobMeta
 from marianne.daemon.registry import DaemonJobStatus
 
 # ─── Status Enum Tests ──────────────────────────────────────────────
@@ -172,6 +175,73 @@ class TestPauseBeforeChainHookExecution:
 
 class TestResumeHeldChain:
     """Test resuming a job that is PAUSED_AT_CHAIN."""
+
+    async def test_public_resume_allows_same_id_held_chain(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A held self-chain re-enters its own admission without a release gap."""
+        score_path = tmp_path / "cycle.yaml"
+        workspace = tmp_path / "workspace"
+        score_path.write_text(
+            "name: cycle\n"
+            f"workspace: {workspace}\n"
+            "sheet:\n"
+            "  size: 1\n"
+            "  total_items: 1\n"
+            "prompt:\n"
+            "  template: Continue the cycle.\n",
+            encoding="utf-8",
+        )
+        manager = JobManager(
+            DaemonConfig(
+                max_concurrent_jobs=1,
+                pid_file=tmp_path / "daemon.pid",
+                state_db_path=tmp_path / "state.db",
+            )
+        )
+        await manager._registry.open()
+        await manager._registry.register_job("cycle", score_path, workspace)
+        await manager._registry.update_status(
+            "cycle",
+            DaemonJobStatus.PAUSED_AT_CHAIN.value,
+        )
+        manager._job_meta["cycle"] = JobMeta(
+            job_id="cycle",
+            config_path=score_path,
+            workspace=workspace,
+            status=DaemonJobStatus.PAUSED_AT_CHAIN,
+            held_chain_hook={
+                "job_path": str(score_path),
+                "workspace": str(workspace),
+                "fresh": False,
+                "chain_depth": 1,
+            },
+        )
+        execution_entered = asyncio.Event()
+        release_execution = asyncio.Event()
+
+        async def hold_execution(_job_id: str, _request: object) -> None:
+            execution_entered.set()
+            await release_execution.wait()
+
+        monkeypatch.setattr(manager, "_run_job_task", hold_execution)
+
+        execution_task: asyncio.Task[object] | None = None
+        try:
+            response = await manager.resume_job("cycle")
+            assert response.status == "accepted"
+            assert response.job_id == "cycle"
+            execution_task = manager._jobs.get("cycle")
+            await asyncio.wait_for(execution_entered.wait(), timeout=1.0)
+            assert manager._job_meta["cycle"].status is DaemonJobStatus.QUEUED
+            assert manager._job_admission_reservations == {}
+        finally:
+            release_execution.set()
+            if execution_task is not None:
+                await asyncio.gather(execution_task, return_exceptions=True)
+            await manager._registry.close()
 
     async def test_resume_paused_at_chain_submits_chain(self) -> None:
         """Resuming a PAUSED_AT_CHAIN job triggers the held chain."""

@@ -40,6 +40,7 @@ from marianne.core.config.orchestration import (
     ConductorConfig,
     NotificationConfig,
     PostSuccessHookConfig,
+    ScheduleConfig,
 )
 from marianne.core.config.spec import SpecCorpusConfig
 from marianne.core.config.techniques import TechniqueConfig
@@ -886,6 +887,15 @@ class JobConfig(BaseModel):
         default=2,
         ge=0,
         description="Seconds to wait between sheets",
+    )
+    schedule: ScheduleConfig | None = Field(
+        default=None,
+        description="Optional recurring execution declaration for this score.",
+    )
+    max_wall_seconds: float | None = Field(
+        default=None,
+        ge=60.0,
+        description="Maximum wall-clock duration for a scheduled run in seconds.",
     )
 
     @field_validator("movements")
