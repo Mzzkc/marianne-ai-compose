@@ -414,7 +414,7 @@ class TestDispatchCallbackEdgeCases:
 
         # Register with baton
         states = sheets_to_execution_states([sheet])
-        adapter.baton.register_job("j1", states, {1: []})
+        adapter.baton.register_job("j1", states, {1: []}, event_generation=1)
 
         pool = AsyncMock()
         pool.acquire = AsyncMock(return_value=MagicMock())
@@ -441,7 +441,7 @@ class TestDispatchCallbackEdgeCases:
         adapter._completion_events["j1"] = asyncio.Event()
 
         states = sheets_to_execution_states([sheet])
-        adapter.baton.register_job("j1", states, {1: []})
+        adapter.baton.register_job("j1", states, {1: []}, event_generation=1)
 
         pool = AsyncMock()
         pool.acquire = AsyncMock(return_value=MagicMock())

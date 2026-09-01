@@ -252,6 +252,7 @@ async def test_fail_fast_preserves_live_pending_fallback_sibling() -> None:
                 sheet_num=1,
                 instrument_name="other",
                 attempt=1,
+                event_generation=adapter.baton.get_job_generation("fast"),
                 execution_success=False,
                 error_classification="AUTH_FAILURE",
                 error_message="bad auth",
@@ -301,7 +302,7 @@ async def test_stale_acquisition_cannot_dispatch_into_reused_job(
     adapter._create_musician_task_after_acquire = MagicMock(
         return_value=(musician, AttemptMode.NORMAL)
     )
-    old_generation = adapter.baton._jobs["reused"].generation
+    old_token = adapter.baton.get_job_registration_token("reused")
     dispatch_task = asyncio.create_task(
         dispatch_ready(
             adapter.baton,
@@ -320,7 +321,7 @@ async def test_stale_acquisition_cannot_dispatch_into_reused_job(
         parallel_enabled=True,
         parallel_max_concurrent=1,
     )
-    assert adapter.baton._jobs["reused"].generation != old_generation
+    assert adapter.baton.get_job_registration_token("reused") != old_token
 
     pool.acquire_release.set()
     result = await dispatch_task
@@ -644,7 +645,7 @@ async def test_reuse_during_later_callback_cannot_adopt_old_stagger_wake() -> No
     baton = BatonCore(timer=timer)
     baton.register_instrument("claude-code", max_concurrent=10)
     baton.register_job("paced", _states(1), {}, stagger_delay_ms=1000)
-    old_generation = baton.get_job_generation("paced")
+    old_token = baton.get_job_registration_token("paced")
     baton.register_job("trigger", _states(1), {})
     baton._job_last_dispatch_at[("paced", "claude-code")] = 10.0
     config = baton.build_dispatch_config(max_concurrent_sheets=10)
@@ -664,7 +665,7 @@ async def test_reuse_during_later_callback_cannot_adopt_old_stagger_wake() -> No
 
     await dispatch_ready(baton, config, replace_paced)
 
-    assert baton.get_job_generation("paced") != old_generation
+    assert baton.get_job_registration_token("paced") != old_token
     assert "paced" not in baton._stagger_wake_handles
     timer.schedule.assert_not_called()
 
@@ -675,27 +676,31 @@ async def test_old_generation_events_cannot_mutate_reused_job() -> None:
     baton = BatonCore()
     old = _states(1)
     old[1].status = BatonSheetStatus.RETRY_SCHEDULED
-    baton.register_job("reused", old, {}, pacing_seconds=10)
+    baton.register_job(
+        "reused", old, {}, pacing_seconds=10, event_generation=1
+    )
     old_generation = baton.get_job_generation("reused")
     assert old_generation is not None
     baton.deregister_job("reused")
 
     replacement = _states(1, instrument="replacement")
     replacement[1].status = BatonSheetStatus.RETRY_SCHEDULED
-    baton.register_job("reused", replacement, {}, pacing_seconds=10)
+    baton.register_job(
+        "reused", replacement, {}, pacing_seconds=10, event_generation=2
+    )
     baton._jobs["reused"].pacing_active = True
 
     await baton.handle_event(
         RetryDue(
             job_id="reused",
             sheet_num=1,
-            registration_generation=old_generation,
+            event_generation=old_generation,
         )
     )
     await baton.handle_event(
         PacingComplete(
             job_id="reused",
-            registration_generation=old_generation,
+            event_generation=old_generation,
         )
     )
     await baton.handle_event(
@@ -704,12 +709,11 @@ async def test_old_generation_events_cannot_mutate_reused_job() -> None:
             sheet_num=1,
             instrument_name="claude-code",
             attempt=1,
-            registration_generation=old_generation,
+            event_generation=old_generation,
             execution_success=True,
         )
     )
-    # Compatibility constructors without generation fail closed once an ID
-    # has become ambiguous through reuse.
+    # Managed registrations reject generation-less events.
     await baton.handle_event(RetryDue(job_id="reused", sheet_num=1))
     await baton.handle_event(PacingComplete(job_id="reused"))
     await baton.handle_event(
@@ -728,25 +732,27 @@ async def test_old_generation_events_cannot_mutate_reused_job() -> None:
     assert baton._jobs["reused"].pacing_active is True
 
 
-def test_retry_and_pacing_timers_capture_registration_generation() -> None:
+def test_retry_and_pacing_timers_capture_event_generation() -> None:
     """Every production timer constructor binds the current job generation."""
     timer = MagicMock()
     baton = BatonCore(timer=timer)
     sheets = _states(1)
-    baton.register_job("timed", sheets, {}, pacing_seconds=5)
+    baton.register_job(
+        "timed", sheets, {}, pacing_seconds=5, event_generation=7
+    )
     generation = baton.get_job_generation("timed")
     assert generation is not None
 
     baton._schedule_retry("timed", 1, sheets[1])
     retry_event = timer.schedule.call_args_list[-1].args[1]
     assert isinstance(retry_event, RetryDue)
-    assert retry_event.registration_generation == generation
+    assert retry_event.event_generation == generation
 
     sheets[1].status = BatonSheetStatus.COMPLETED
     baton._schedule_pacing("timed")
     pacing_event = timer.schedule.call_args_list[-1].args[1]
     assert isinstance(pacing_event, PacingComplete)
-    assert pacing_event.registration_generation == generation
+    assert pacing_event.event_generation == generation
 
 
 @pytest.mark.asyncio
@@ -778,7 +784,7 @@ async def test_deregister_retains_occupancy_until_cancelled_task_cleanup_finishe
     adapter._active_execution_details[key] = ("old", None)
     old_task.add_done_callback(
         lambda task: adapter._on_musician_done(
-            "reused", 1, task, registration_generation=old_generation
+            "reused", 1, task, event_generation=old_generation
         )
     )
     await asyncio.sleep(0)
@@ -836,7 +842,7 @@ async def test_retiring_task_holds_global_slot_against_unrelated_job() -> None:
     adapter._active_execution_details[key] = ("old", None)
     old_task.add_done_callback(
         lambda task: adapter._on_musician_done(
-            "retiring", 1, task, registration_generation=old_generation
+            "retiring", 1, task, event_generation=old_generation
         )
     )
     await asyncio.sleep(0)

@@ -1819,6 +1819,9 @@ class TestCompletionSignaling:
                     sheet_num=i,
                     instrument_name="claude-code",
                     attempt=1,
+                    event_generation=adapter.baton.get_job_generation(
+                        "signal-test"
+                    ),
                     execution_success=True,
                     validation_pass_rate=100.0,
                 )

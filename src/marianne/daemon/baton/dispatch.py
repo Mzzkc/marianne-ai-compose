@@ -197,7 +197,8 @@ async def dispatch_ready(
                 },
             )
         for sheet in ready:
-            registration_generation = job.generation
+            registration_token = job.registration_token
+            event_generation = job.event_generation
             # A rate-limit/fallback transition may relabel a sheet PENDING while
             # its original musician is still exiting. Never dispatch the same
             # sheet again until physical task authority is released.
@@ -426,7 +427,7 @@ async def dispatch_ready(
                     )
                     remaining_seconds = max(0.0, stagger_delay_ms / 1000.0 - elapsed)
                     wake_key = job_id if has_job_stagger else "__legacy__"
-                    wake_generation = registration_generation if has_job_stagger else 0
+                    wake_generation = registration_token if has_job_stagger else 0
                     previous = stagger_wake_delays.get(wake_key)
                     if previous is None or remaining_seconds < previous[0]:
                         stagger_wake_delays[wake_key] = (
@@ -444,8 +445,8 @@ async def dispatch_ready(
                 # deregistration/reuse during that await must not let the old
                 # callback mark the replacement registration as dispatched.
                 if (
-                    not baton.is_job_generation_current(
-                        job_id, registration_generation
+                    not baton.is_job_registration_current(
+                        job_id, registration_token
                     )
                     or baton.get_sheet_state(job_id, sheet.sheet_num) is not sheet
                 ):
@@ -458,6 +459,7 @@ async def dispatch_ready(
                     job_id=job_id,
                     sheet_num=sheet.sheet_num,
                     instrument=instrument,
+                    event_generation=event_generation,
                 ))
                 result.record_dispatch(job_id, sheet.sheet_num)
                 global_running += 1
@@ -501,7 +503,7 @@ async def dispatch_ready(
             event_job_id = None if wake_key == "__legacy__" else wake_key
             if (
                 event_job_id is not None
-                and not baton.is_job_generation_current(event_job_id, generation)
+                and not baton.is_job_registration_current(event_job_id, generation)
             ):
                 continue
             handle = baton._timer.schedule(

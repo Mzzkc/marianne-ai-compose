@@ -58,10 +58,9 @@ class SheetAttemptResult:
     sheet_num: int
     instrument_name: str
     attempt: int
-    # Immutable baton registration that owned this execution. Production
-    # constructors always populate it. None is retained only for legacy direct
-    # callers and is rejected after a job ID has been reused.
-    registration_generation: int | None = field(default=None, kw_only=True)
+    # Public generation of the managed baton registration that owned this
+    # execution. Direct legacy BatonCore registrations intentionally use None.
+    event_generation: int | None = field(default=None, kw_only=True)
 
     # Execution outcome
     execution_success: bool = True
@@ -151,6 +150,7 @@ class SheetSkipped:
     job_id: str
     sheet_num: int
     reason: str
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -165,6 +165,7 @@ class SheetDispatched:
     job_id: str
     sheet_num: int
     instrument: str
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.monotonic)
 
 
@@ -217,7 +218,7 @@ class RetryDue:
 
     job_id: str
     sheet_num: int
-    registration_generation: int | None = field(default=None, kw_only=True)
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -231,6 +232,7 @@ class StaleCheck:
 
     job_id: str
     sheet_num: int
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -246,6 +248,7 @@ class FermataCheck:
 
     job_id: str
     sheet_num: int
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -271,6 +274,7 @@ class JobTimeout:
     """
 
     job_id: str
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -283,7 +287,7 @@ class PacingComplete:
     """
 
     job_id: str
-    registration_generation: int | None = field(default=None, kw_only=True)
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -303,6 +307,7 @@ class EscalationNeeded:
     job_id: str
     sheet_num: int
     reason: str
+    event_generation: int | None = field(default=None, kw_only=True)
     options: list[str] = field(default_factory=list)
     timestamp: float = field(default_factory=time.time)
 
@@ -318,6 +323,7 @@ class EscalationResolved:
     job_id: str
     sheet_num: int
     decision: str
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -331,6 +337,7 @@ class EscalationTimeout:
 
     job_id: str
     sheet_num: int
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -348,6 +355,7 @@ class PauseJob:
     """
 
     job_id: str
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -362,6 +370,7 @@ class ResumeJob:
 
     job_id: str
     new_config: dict[str, Any] | None = None
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -374,6 +383,7 @@ class CancelJob:
     """
 
     job_id: str
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -387,6 +397,7 @@ class ConfigReloaded:
 
     job_id: str
     new_config: dict[str, Any]
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -420,6 +431,7 @@ class ProcessExited:
     sheet_num: int
     pid: int
     exit_code: int | None = None
+    event_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -659,7 +671,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                     "instrument": event.instrument_name,
                     "model": event.model_used,
                     "attempt": event.attempt,
-                    "registration_generation": event.registration_generation,
+                    "event_generation": event.event_generation,
                     "success": event.execution_success,
                     VALIDATION_PASS_RATE_KEY: event.validation_pass_rate,
                     "cost_usd": event.cost_usd,
@@ -674,7 +686,10 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": event.sheet_num,
                 "event": "baton.sheet.skipped",
-                "data": {"reason": event.reason},
+                "data": {
+                    "reason": event.reason,
+                    "event_generation": event.event_generation,
+                },
                 "timestamp": event.timestamp,
             }
 
@@ -704,7 +719,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": event.sheet_num,
                 "event": "baton.sheet.retry_scheduled",
-                "data": {"registration_generation": event.registration_generation},
+                "data": {"event_generation": event.event_generation},
                 "timestamp": event.timestamp,
             }
 
@@ -713,7 +728,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": event.sheet_num,
                 "event": "baton.sheet.stale_check",
-                "data": {},
+                "data": {"event_generation": event.event_generation},
                 "timestamp": event.timestamp,
             }
 
@@ -722,7 +737,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": event.sheet_num,
                 "event": "baton.sheet.fermata_check",
-                "data": {},
+                "data": {"event_generation": event.event_generation},
                 "timestamp": event.timestamp,
             }
 
@@ -744,7 +759,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": 0,
                 "event": "baton.job.timeout",
-                "data": {},
+                "data": {"event_generation": event.event_generation},
                 "timestamp": event.timestamp,
             }
 
@@ -753,7 +768,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": 0,
                 "event": "baton.pacing.complete",
-                "data": {"registration_generation": event.registration_generation},
+                "data": {"event_generation": event.event_generation},
                 "timestamp": event.timestamp,
             }
 
@@ -765,6 +780,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "data": {
                     "reason": event.reason,
                     "options": event.options,
+                    "event_generation": event.event_generation,
                 },
                 "timestamp": event.timestamp,
             }
@@ -774,7 +790,10 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": event.sheet_num,
                 "event": "baton.fermata.resolved",
-                "data": {"decision": event.decision},
+                "data": {
+                    "decision": event.decision,
+                    "event_generation": event.event_generation,
+                },
                 "timestamp": event.timestamp,
             }
 
@@ -783,7 +802,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": event.sheet_num,
                 "event": "baton.fermata.timeout",
-                "data": {},
+                "data": {"event_generation": event.event_generation},
                 "timestamp": event.timestamp,
             }
 
@@ -792,7 +811,10 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": 0,
                 "event": "baton.job.paused",
-                "data": {"reason": "user"},
+                "data": {
+                    "reason": "user",
+                    "event_generation": event.event_generation,
+                },
                 "timestamp": event.timestamp,
             }
 
@@ -801,7 +823,10 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": 0,
                 "event": "baton.job.resumed",
-                "data": {"config_changed": event.new_config is not None},
+                "data": {
+                    "config_changed": event.new_config is not None,
+                    "event_generation": event.event_generation,
+                },
                 "timestamp": event.timestamp,
             }
 
@@ -810,7 +835,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": 0,
                 "event": "baton.job.cancelled",
-                "data": {},
+                "data": {"event_generation": event.event_generation},
                 "timestamp": event.timestamp,
             }
 
@@ -819,7 +844,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": 0,
                 "event": "baton.config.reloaded",
-                "data": {},
+                "data": {"event_generation": event.event_generation},
                 "timestamp": event.timestamp,
             }
 
@@ -840,6 +865,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "data": {
                     "pid": event.pid,
                     "exit_code": event.exit_code,
+                    "event_generation": event.event_generation,
                 },
                 "timestamp": event.timestamp,
             }

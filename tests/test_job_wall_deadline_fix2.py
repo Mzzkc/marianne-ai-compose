@@ -341,11 +341,10 @@ async def test_old_grace_callback_cannot_overwrite_new_generation() -> None:
 
     assert old.escalation_state == "performed"
     assert old.residual_check_state == "clear"
-    assert adapter.get_process_group_cleanup_result(
-        "race",
-        new_generation,
-    ) is current
+    assert adapter.get_process_group_cleanup_result("race", new_generation) is None
     assert current.escalation_state == "not_needed"
+    assert adapter._cleanup_generations == {}
+    assert adapter._cleanup_results == {}
     verification = [
         log
         for log in captured_logs
@@ -354,7 +353,7 @@ async def test_old_grace_callback_cannot_overwrite_new_generation() -> None:
     assert verification[0]["extra"]["cleanup_generation"] == old_generation
 
 
-def test_same_generation_double_deregister_reuses_physical_result() -> None:
+def test_terminal_cleanup_tracking_is_pruned_before_repeated_deregister() -> None:
     adapter = BatonAdapter()
     generation = adapter.begin_cleanup_generation("double")
     adapter._active_pids[("double", 1)] = (100, 200)
@@ -369,10 +368,13 @@ def test_same_generation_double_deregister_reuses_physical_result() -> None:
         first = adapter.deregister_job("double")
         second = adapter.deregister_job("double")
 
-    assert first is second
-    assert second.cleanup_generation == generation
-    assert second.tracked_process_groups == 1
-    assert second.sigterm_failed == 1
+    assert first.cleanup_generation == generation
+    assert first.tracked_process_groups == 1
+    assert first.sigterm_failed == 1
+    assert second.cleanup_generation != generation
+    assert second.tracked_process_groups == 0
+    assert adapter._cleanup_generations == {}
+    assert adapter._cleanup_results == {}
 
 
 @pytest.mark.asyncio

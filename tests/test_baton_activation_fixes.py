@@ -89,7 +89,7 @@ class TestF152DispatchGuard:
         assert isinstance(event, SheetAttemptResult)
         assert event.job_id == "j1"
         assert event.sheet_num == 1
-        assert event.registration_generation == adapter.baton.get_job_generation("j1")
+        assert event.event_generation == adapter.baton.get_job_generation("j1")
         assert event.execution_success is False
         assert event.instrument_name == "bad-instrument"
         assert event.error_message is not None

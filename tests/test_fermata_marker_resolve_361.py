@@ -68,12 +68,20 @@ def _marker_dir(ws: Path) -> Path:
     return d
 
 
+def _fermata_check(adapter: BatonAdapter) -> FermataCheck:
+    return FermataCheck(
+        job_id="j1",
+        sheet_num=1,
+        event_generation=adapter.baton.get_job_generation("j1"),
+    )
+
+
 class TestMarkerResolution:
     async def test_retry_marker_emits_escalation_resolved(self, tmp_path: Path) -> None:
         adapter, ws = _fermata_adapter(tmp_path)
         (_marker_dir(ws) / "sheet-1.retry").touch()
 
-        await adapter._handle_fermata_check(FermataCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_fermata_check(_fermata_check(adapter))
 
         resolved = _drain_resolved(adapter)
         assert len(resolved) == 1
@@ -86,7 +94,7 @@ class TestMarkerResolution:
         for decision in ("skip", "accept", "fail"):
             adapter, ws = _fermata_adapter(tmp_path / decision)
             (_marker_dir(ws) / f"sheet-1.{decision}").touch()
-            await adapter._handle_fermata_check(FermataCheck(job_id="j1", sheet_num=1))
+            await adapter._handle_fermata_check(_fermata_check(adapter))
             resolved = _drain_resolved(adapter)
             assert [r.decision for r in resolved] == [decision]
 
@@ -94,7 +102,7 @@ class TestMarkerResolution:
         adapter, ws = _fermata_adapter(tmp_path)
         (_marker_dir(ws) / "sheet-1.bogus").touch()
 
-        await adapter._handle_fermata_check(FermataCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_fermata_check(_fermata_check(adapter))
 
         assert _drain_resolved(adapter) == []  # not a valid decision → no resolve
 
@@ -104,7 +112,7 @@ class TestMarkerResolution:
         (d / "sheet-1.retry").touch()
         (d / "sheet-1.fail").touch()
 
-        await adapter._handle_fermata_check(FermataCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_fermata_check(_fermata_check(adapter))
 
         assert _drain_resolved(adapter) == []  # refuse to choose
         # Neither consumed — composer must disambiguate.
@@ -113,7 +121,7 @@ class TestMarkerResolution:
 
     async def test_no_marker_does_not_resolve(self, tmp_path: Path) -> None:
         adapter, _ws = _fermata_adapter(tmp_path)
-        await adapter._handle_fermata_check(FermataCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_fermata_check(_fermata_check(adapter))
         assert _drain_resolved(adapter) == []
 
     async def test_marker_for_non_fermata_sheet_ignored(self, tmp_path: Path) -> None:
@@ -124,7 +132,7 @@ class TestMarkerResolution:
         adapter._fermata_polling.add(_KEY)
         (_marker_dir(ws) / "sheet-1.retry").touch()
 
-        await adapter._handle_fermata_check(FermataCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_fermata_check(_fermata_check(adapter))
 
         assert _drain_resolved(adapter) == []  # not FERMATA → no resolve
         assert _KEY not in adapter._fermata_polling  # polling stopped

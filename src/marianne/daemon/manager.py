@@ -257,6 +257,9 @@ class JobMeta:
     terminal_reason: str | None = None
     cleanup_generation: str | None = None
     timeout_cleanup_outcome: JobTimeoutCleanupStatus | None = None
+    # Live adapter cleanup evidence while a post-SIGTERM grace callback is
+    # pending. Kept on the already-owned JobMeta, not in unbounded adapter maps.
+    timeout_cleanup_result_ref: Any | None = field(default=None, repr=False)
     deadline_diagnostic: str | None = None
     hook_config: list[dict[str, Any]] | None = field(default=None, repr=False)
     concert_config: dict[str, Any] | None = field(default=None, repr=False)
@@ -2664,7 +2667,7 @@ class JobManager:
         owned_job_ids: list[str] = []
         changed_events: list[asyncio.Event] = []
         created_signals: list[Path] = []
-        changed_baton: list[tuple[JobMeta, bool, bool]] = []
+        changed_baton: list[tuple[JobMeta, bool, bool, int | None]] = []
         staged_children: list[tuple[JobMeta, DaemonJobStatus]] = []
         pause_commit_started = False
 
@@ -2726,7 +2729,11 @@ class JobManager:
                     else None
                 )
                 baton_prior = (
-                    (baton_job.paused, baton_job.user_paused)
+                    (
+                        baton_job.paused,
+                        baton_job.user_paused,
+                        baton_job.event_generation,
+                    )
                     if baton_job is not None
                     else None
                 )
@@ -2775,9 +2782,12 @@ class JobManager:
 
                 adapter = self._baton_adapter
                 assert adapter is not None
-                for meta, _paused, _user_paused in changed_baton:
+                for meta, _paused, _user_paused, event_generation in changed_baton:
                     adapter._baton.inbox.put_nowait(
-                        PauseJob(job_id=meta.job_id)
+                        PauseJob(
+                            job_id=meta.job_id,
+                            event_generation=event_generation,
+                        )
                     )
             return True
         except BaseException as exc:
@@ -2794,7 +2804,7 @@ class JobManager:
                     if child_rollback_error is None:
                         child_rollback_error = rollback_exc
             baton_rollback_error: BaseException | None = None
-            for meta, paused, user_paused in reversed(changed_baton):
+            for meta, paused, user_paused, _generation in reversed(changed_baton):
                 baton_job = (
                     self._baton_adapter._baton._jobs.get(meta.job_id)
                     if self._baton_adapter is not None
@@ -2889,7 +2899,7 @@ class JobManager:
             else None
         )
         baton_prior = (
-            (baton_job.paused, baton_job.user_paused)
+            (baton_job.paused, baton_job.user_paused, baton_job.event_generation)
             if baton_job is not None
             else None
         )
@@ -2900,11 +2910,18 @@ class JobManager:
                 await self._set_job_status(job_id, DaemonJobStatus.PAUSED)
             except BaseException:
                 if baton_job is not None and baton_prior is not None:
-                    baton_job.paused, baton_job.user_paused = baton_prior
+                    baton_job.paused, baton_job.user_paused, _generation = baton_prior
                     self._baton_adapter._baton._state_dirty = True
                 raise
             if not defer_baton_event:
-                self._baton_adapter._baton.inbox.put_nowait(PauseJob(job_id=job_id))
+                self._baton_adapter._baton.inbox.put_nowait(
+                    PauseJob(
+                        job_id=job_id,
+                        event_generation=(
+                            baton_job.event_generation if baton_job is not None else None
+                        ),
+                    )
+                )
             _logger.info("job.baton_pause_sent", job_id=job_id)
             return True
 
@@ -4553,18 +4570,29 @@ class JobManager:
         current: JobTimeoutCleanupStatus,
     ) -> JobTimeoutCleanupStatus:
         """Refresh an initial snapshot after Baton's grace callback matures."""
-        adapter = self._baton_adapter
-        if adapter is None:
-            return current
-        get_result = getattr(adapter, "get_process_group_cleanup_result", None)
-        if not callable(get_result):
-            return current
+        meta = self._job_meta.get(job_id)
         raw_result = (
-            get_result(job_id, current.cleanup_generation)
-            if current.cleanup_generation is not None
-            else get_result(job_id)
+            meta.timeout_cleanup_result_ref if meta is not None else None
         )
-        return self._cleanup_status_from_baton_result(raw_result, current)
+        if raw_result is None:
+            adapter = self._baton_adapter
+            if adapter is None:
+                return current
+            get_result = getattr(adapter, "get_process_group_cleanup_result", None)
+            if not callable(get_result):
+                return current
+            raw_result = (
+                get_result(job_id, current.cleanup_generation)
+                if current.cleanup_generation is not None
+                else get_result(job_id)
+            )
+        refreshed = self._cleanup_status_from_baton_result(raw_result, current)
+        if (
+            meta is not None
+            and getattr(raw_result, "escalation_state", None) != "pending"
+        ):
+            meta.timeout_cleanup_result_ref = None
+        return refreshed
 
     def _bind_cleanup_generation(
         self,
@@ -4616,6 +4644,8 @@ class JobManager:
                 deregistration_state="failed",
                 cleanup_generation=cleanup_generation,
             )
+        if meta is not None:
+            meta.timeout_cleanup_result_ref = raw_result
         fallback = JobTimeoutCleanupStatus(
             cleanup_path="baton.deregister_job",
             deregistration_state="attempted",

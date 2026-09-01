@@ -90,7 +90,7 @@ async def sheet_task(
     technique_router: TechniqueRouter | None = None,
     code_executor: CodeModeExecutor | None = None,
     context_delivery: RenderedPrompt | None = None,
-    registration_generation: int | None = None,
+    event_generation: int | None = None,
 ) -> None:
     """Execute a single sheet attempt and report the result.
 
@@ -280,7 +280,7 @@ async def sheet_task(
             sheet_num=sheet.num,
             instrument_name=effective_instrument,
             attempt=attempt_context.attempt_number,
-            registration_generation=registration_generation,
+            event_generation=event_generation,
             execution_success=exec_result.success,
             exit_code=exec_result.exit_code,
             duration_seconds=duration,
@@ -336,7 +336,7 @@ async def sheet_task(
             sheet_num=sheet.num,
             instrument_name=effective_instrument,
             attempt=attempt_context.attempt_number,
-            registration_generation=registration_generation,
+            event_generation=event_generation,
             execution_success=False,
             exit_code=None,
             duration_seconds=duration,

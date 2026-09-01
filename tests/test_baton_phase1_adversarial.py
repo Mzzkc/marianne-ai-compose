@@ -137,7 +137,7 @@ class TestDispatchFailureHandling:
         adapter = BatonAdapter()
         baton = adapter.baton
         # Register job in baton but NOT in adapter's _job_sheets
-        sheets = _register_simple_job(baton, "j1", 1)
+        sheets = _register_simple_job(baton, "j1", 1, event_generation=1)
         # Don't populate adapter._job_sheets
 
         # Run dispatch callback synchronously via event loop
@@ -158,7 +158,7 @@ class TestDispatchFailureHandling:
         """Without a backend pool, dispatch must fail with E505."""
         adapter = BatonAdapter()
         baton = adapter.baton
-        sheets = _register_simple_job(baton, "j1", 1)
+        sheets = _register_simple_job(baton, "j1", 1, event_generation=1)
         adapter._job_sheets["j1"] = {}
         # Create a mock Sheet object
         mock_sheet = MagicMock()
@@ -181,7 +181,7 @@ class TestDispatchFailureHandling:
         """When backend pool raises, dispatch must send failure event."""
         adapter = BatonAdapter()
         baton = adapter.baton
-        sheets = _register_simple_job(baton, "j1", 1)
+        sheets = _register_simple_job(baton, "j1", 1, event_generation=1)
 
         mock_sheet = MagicMock()
         mock_sheet.num = 1
@@ -216,7 +216,7 @@ class TestDispatchFailureHandling:
         state = _make_sheet_state(1)
         state.normal_attempts = 2
         state.completion_attempts = 1
-        baton.register_job("j1", {1: state}, {1: []})
+        baton.register_job("j1", {1: state}, {1: []}, event_generation=1)
 
         # No backend pool → E505 failure
         mock_sheet = MagicMock()

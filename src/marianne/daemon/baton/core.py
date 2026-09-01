@@ -93,7 +93,12 @@ class _JobRecord:
     max_concurrent: int | None = None
     fail_fast: bool = False
     stagger_delay_ms: int = 0
-    generation: int = 0
+    # Always-unique private identity used inside one BatonCore process to
+    # protect await/callback/timer seams from same-job-id ABA.
+    registration_token: int = 0
+    # Public custody identity for adapter-managed jobs. Direct low-level
+    # registrations intentionally keep None for legacy event compatibility.
+    event_generation: int | None = None
     # #201: workspace + config path for building a healing ErrorContext on
     # exhaustion (the baton drives self-healing off SheetState, which lacks
     # these). Set at register time; immutable for the job's lifetime.
@@ -157,11 +162,7 @@ class BatonCore:
         """
         self._inbox: asyncio.Queue[BatonEvent] = inbox or asyncio.Queue()
         self._jobs: dict[str, _JobRecord] = {}
-        self._job_generation: int = 0
-        # Generation-less events are legacy direct-caller compatibility. Once
-        # an ID is reused they fail closed because ownership is ambiguous.
-        self._seen_job_ids: set[str] = set()
-        self._reused_job_ids: set[str] = set()
+        self._registration_token_counter: int = 0
         # Adapter-owned physical task authority. The core keeps this as an
         # injected probe so logical state transitions (notably fallback to
         # PENDING) cannot make a still-running musician look unstarted.
@@ -359,42 +360,45 @@ class BatonCore:
         self._active_execution_probe = probe
 
     def get_job_generation(self, job_id: str) -> int | None:
-        """Return the immutable registration generation for a live job."""
+        """Return the public event generation for a live managed job."""
         job = self._jobs.get(job_id)
-        return job.generation if job is not None else None
+        return job.event_generation if job is not None else None
 
-    def is_job_generation_current(self, job_id: str, generation: int) -> bool:
-        """Whether ``job_id`` still denotes the captured registration."""
+    def get_job_registration_token(self, job_id: str) -> int | None:
+        """Return the always-unique private identity of a live registration."""
         job = self._jobs.get(job_id)
-        return job is not None and job.generation == generation
+        return job.registration_token if job is not None else None
+
+    def is_job_registration_current(self, job_id: str, token: int) -> bool:
+        """Whether ``job_id`` still denotes the captured private identity."""
+        job = self._jobs.get(job_id)
+        return job is not None and job.registration_token == token
 
     def _event_generation_is_current(
         self,
         job_id: str,
-        registration_generation: int | None,
+        event_generation: int | None,
         *,
         event_type: str,
     ) -> bool:
         """Whether a delayed/result event owns the live registration.
 
-        Legacy direct integrations omitted generations. They remain compatible
-        only until that job ID is reused; ambiguity then fails closed.
+        Managed adapter registrations always have an integer public generation
+        and require an exact match. Direct legacy registrations have no public
+        generation and accept generation-less events while that record is live.
         """
         job = self._jobs.get(job_id)
         if job is None:
             return False
-        if registration_generation is None:
-            current = job_id not in getattr(self, "_reused_job_ids", set())
-        else:
-            current = registration_generation == job.generation
+        current = event_generation == job.event_generation
         if not current:
             _logger.warning(
                 "baton.event.stale_registration",
                 extra={
                     "event_type": event_type,
                     "job_id": job_id,
-                    "event_generation": registration_generation,
-                    "current_generation": job.generation,
+                    "event_generation": event_generation,
+                    "current_generation": job.event_generation,
                 },
             )
         return current
@@ -811,7 +815,7 @@ class BatonCore:
             event = RetryDue(
                 job_id=job_id,
                 sheet_num=sheet_num,
-                registration_generation=job.generation,
+                event_generation=job.event_generation,
             )
             self._timer.schedule(delay, event)
             sheet.next_retry_at = time.monotonic() + delay
@@ -943,6 +947,13 @@ class BatonCore:
         if job.self_healing_enabled and sheet.healing_attempts < self._DEFAULT_MAX_HEALING:
             sheet.healing_attempts += 1
             report = await self._run_healing(sheet_num, sheet, job)
+            if (
+                not self.is_job_registration_current(
+                    job_id, job.registration_token
+                )
+                or self.get_sheet_state(job_id, sheet_num) is not sheet
+            ):
+                return
             # Lifecycle re-check: a non-yielding heal can't be interrupted, but
             # stay defensive against a future yielding remedy + concurrent
             # pause/cancel.
@@ -1187,6 +1198,7 @@ class BatonCore:
         max_concurrent: int | None = None,
         fail_fast: bool = False,
         stagger_delay_ms: int = 0,
+        event_generation: int | None = None,
         workspace: Path | None = None,
         config_path: Path | None = None,
     ) -> None:
@@ -1204,6 +1216,8 @@ class BatonCore:
             max_concurrent: Per-job ceiling, or None for serial/legacy jobs.
             fail_fast: Terminalize unstarted work after the first failure.
             stagger_delay_ms: Per-job spacing between same-instrument launches.
+            event_generation: Public custody identity for adapter-managed jobs.
+                Direct low-level callers omit it for legacy events.
         """
         if job_id in self._jobs:
             _logger.warning(
@@ -1215,17 +1229,9 @@ class BatonCore:
         # Auto-register any instruments used by the job's sheets
         self._auto_register_instruments(sheets)
 
-        seen_job_ids = getattr(self, "_seen_job_ids", None)
-        if seen_job_ids is None:
-            seen_job_ids = self._seen_job_ids = set()
-        reused_job_ids = getattr(self, "_reused_job_ids", None)
-        if reused_job_ids is None:
-            reused_job_ids = self._reused_job_ids = set()
-        if job_id in seen_job_ids:
-            reused_job_ids.add(job_id)
-        seen_job_ids.add(job_id)
-
-        self._job_generation += 1
+        self._registration_token_counter = (
+            getattr(self, "_registration_token_counter", 0) + 1
+        )
         self._jobs[job_id] = _JobRecord(
             job_id=job_id,
             sheets=sheets,
@@ -1238,7 +1244,8 @@ class BatonCore:
             max_concurrent=max_concurrent,
             fail_fast=fail_fast,
             stagger_delay_ms=stagger_delay_ms,
-            generation=self._job_generation,
+            registration_token=self._registration_token_counter,
+            event_generation=event_generation,
         )
         self._state_dirty = True
 
@@ -1394,6 +1401,17 @@ class BatonCore:
         The baton continues processing subsequent events.
         """
         try:
+            # Per-job async mutators bind the public generation of their
+            # intended managed registration. Direct-core legacy records use
+            # None and continue accepting generation-less events while live.
+            if hasattr(event, "event_generation"):
+                event_job_id = getattr(event, "job_id", None)
+                if event_job_id is None or not self._event_generation_is_current(
+                    event_job_id,
+                    event.event_generation,
+                    event_type=type(event).__name__,
+                ):
+                    return
             match event:
                 # === Musician events ===
                 case SheetAttemptResult():
@@ -1495,7 +1513,7 @@ class BatonCore:
                         job = self._jobs.get(event.stagger_job_id)
                         if (
                             job is not None
-                            and event.stagger_generation == job.generation
+                            and event.stagger_generation == job.registration_token
                         ):
                             self._stagger_wake_handles.pop(
                                 event.stagger_job_id, None
@@ -1542,10 +1560,11 @@ class BatonCore:
 
         if not self._event_generation_is_current(
             event.job_id,
-            event.registration_generation,
+            event.event_generation,
             event_type=type(event).__name__,
         ):
             return
+        registration_token = job.registration_token
 
         sheet = job.sheets.get(event.sheet_num)
         if sheet is None:
@@ -1679,6 +1698,10 @@ class BatonCore:
                     },
                 )
                 await self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
+                if not self.is_job_registration_current(
+                    event.job_id, registration_token
+                ):
+                    return
             self._check_job_cost_limit(event.job_id)
             return
 
@@ -1751,6 +1774,10 @@ class BatonCore:
         # Check if retries exhausted (record_attempt already incremented)
         if not sheet.can_retry:
             await self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
+            if not self.is_job_registration_current(
+                event.job_id, registration_token
+            ):
+                return
         else:
             # Schedule retry via timer wheel with backoff
             self._schedule_retry(event.job_id, event.sheet_num, sheet)
@@ -1925,7 +1952,7 @@ class BatonCore:
             return
         if not self._event_generation_is_current(
             event.job_id,
-            event.registration_generation,
+            event.event_generation,
             event_type=type(event).__name__,
         ):
             return
@@ -2136,6 +2163,7 @@ class BatonCore:
         job = self._jobs.get(event.job_id)
         if job is None:
             return
+        registration_token = job.registration_token
         sheet = job.sheets.get(event.sheet_num)
         if sheet is not None and sheet.status == BatonSheetStatus.DISPATCHED:
             # F-063: Create a synthetic attempt result for the crash.
@@ -2145,7 +2173,7 @@ class BatonCore:
                 sheet_num=event.sheet_num,
                 instrument_name=sheet.instrument_name or "",
                 attempt=sheet.normal_attempts + 1,
-                registration_generation=job.generation,
+                event_generation=job.event_generation,
                 execution_success=False,
                 exit_code=event.exit_code,
                 duration_seconds=0.0,
@@ -2158,6 +2186,10 @@ class BatonCore:
             self._update_instrument_on_failure(sheet.instrument_name or "")
             if not sheet.can_retry:
                 await self._handle_exhaustion(event.job_id, event.sheet_num, sheet)
+                if not self.is_job_registration_current(
+                    event.job_id, registration_token
+                ):
+                    return
             else:
                 self._schedule_retry(event.job_id, event.sheet_num, sheet)
             self._state_dirty = True
@@ -2245,7 +2277,7 @@ class BatonCore:
         job = self._jobs.get(event.job_id)
         if job is not None and self._event_generation_is_current(
             event.job_id,
-            event.registration_generation,
+            event.event_generation,
             event_type=type(event).__name__,
         ):
             job.pacing_active = False
@@ -2294,7 +2326,7 @@ class BatonCore:
                 job.pacing_seconds,
                 PacingComplete(
                     job_id=job_id,
-                    registration_generation=job.generation,
+                    event_generation=job.event_generation,
                 ),
             )
             _logger.debug(
@@ -2343,7 +2375,12 @@ class BatonCore:
                 # Reuse the canonical skip transition so terminal guards,
                 # dirty-state persistence, and logging stay on one path.
                 self._handle_sheet_skipped(
-                    SheetSkipped(job_id=job_id, sheet_num=sheet_num, reason=reason)
+                    SheetSkipped(
+                        job_id=job_id,
+                        sheet_num=sheet_num,
+                        reason=reason,
+                        event_generation=job.event_generation,
+                    )
                 )
                 if fail_fast_sheet.status == BatonSheetStatus.SKIPPED:
                     fail_fast_sheet.error_message = reason
@@ -2413,7 +2450,12 @@ class BatonCore:
             # (not FAILED — the sheet was never attempted, just blocked)
             reason = f"Blocked by failed dependency: sheet {blocking_dep}"
             self._handle_sheet_skipped(
-                SheetSkipped(job_id=job_id, sheet_num=current, reason=reason)
+                SheetSkipped(
+                    job_id=job_id,
+                    sheet_num=current,
+                    reason=reason,
+                    event_generation=job.event_generation,
+                )
             )
             sheet.error_message = reason
             sheet.error_code = "E999"

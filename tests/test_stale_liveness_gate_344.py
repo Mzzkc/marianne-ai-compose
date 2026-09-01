@@ -102,12 +102,20 @@ def _idle_setup(
     return adapter, task
 
 
+def _stale_check(adapter: BatonAdapter) -> StaleCheck:
+    return StaleCheck(
+        job_id="j1",
+        sheet_num=1,
+        event_generation=adapter.baton.get_job_generation("j1"),
+    )
+
+
 class TestLivenessGate:
     async def test_alive_idle_is_deferred_not_killed(self, tmp_path: Path) -> None:
         adapter, task = _idle_setup(tmp_path, max_idle_checks=3)
         adapter._process_is_alive = lambda pid: True  # type: ignore[assignment]
 
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
 
         assert _KEY not in adapter._stale_markers  # NOT killed
         assert not task.cancelled()
@@ -119,10 +127,10 @@ class TestLivenessGate:
         adapter._process_is_alive = lambda pid: True  # type: ignore[assignment]
 
         # Strikes 1 and 2 defer; strike 3 (== max) kills.
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
+        await adapter._handle_stale_check(_stale_check(adapter))
         assert _KEY not in adapter._stale_markers
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
         assert _KEY in adapter._stale_markers  # backstop kill
 
         await _cancel_and_collect(task)
@@ -132,7 +140,7 @@ class TestLivenessGate:
         adapter, task = _idle_setup(tmp_path, max_idle_checks=3)
         adapter._process_is_alive = lambda pid: False  # process gone/zombie
 
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
 
         assert _KEY in adapter._stale_markers  # dead → kill on first check
         await _cancel_and_collect(task)
@@ -142,7 +150,7 @@ class TestLivenessGate:
         adapter, task = _idle_setup(tmp_path, max_idle_checks=3)
         del adapter._active_pids[_KEY]  # no PID → cannot probe → fail open (alive)
 
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
 
         assert _KEY not in adapter._stale_markers  # fail-open → defer, never false-kill
         assert not task.cancelled()
@@ -152,13 +160,13 @@ class TestLivenessGate:
         adapter, task = _idle_setup(tmp_path, max_idle_checks=3)
         adapter._process_is_alive = lambda pid: True  # type: ignore[assignment]
 
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
         assert adapter._stale_idle_strikes.get(_KEY) == 1
 
         # Fresh write → not idle → strikes must reset.
         ws = adapter._job_sheets["j1"][1].workspace
         (ws / "progress.txt").write_text("more")
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
 
         assert _KEY not in adapter._stale_idle_strikes  # reset
         assert _KEY not in adapter._stale_markers

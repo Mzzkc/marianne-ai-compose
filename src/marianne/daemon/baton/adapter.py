@@ -563,6 +563,7 @@ class BatonAdapter:
         # See docs/specs/2026-04-16-process-lifecycle-design.md (Change 3).
         self._active_pids: dict[tuple[str, int], tuple[int, int]] = {}
         self._cleanup_generation_counter = 0
+        self._event_generation_counter = 0
         self._cleanup_generations: dict[str, str] = {}
         self._cleanup_results: dict[
             tuple[str, str], ProcessGroupCleanupResult
@@ -870,7 +871,9 @@ class BatonAdapter:
                 max_completion=max_completion,
             )
 
-        # Register with baton
+        # Register with baton. Adapter-managed records always expose an integer
+        # event generation; direct BatonCore callers retain legacy None.
+        event_generation = self._next_event_generation()
         self._baton.register_job(
             job_id,
             states,
@@ -885,6 +888,7 @@ class BatonAdapter:
             ),
             fail_fast=parallel_fail_fast if parallel_enabled is True else False,
             stagger_delay_ms=stagger_delay_ms if parallel_enabled is not False else 0,
+            event_generation=event_generation,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
@@ -989,10 +993,27 @@ class BatonAdapter:
             self._job_learning_configs = {}
         if not hasattr(self, "_cleanup_generation_counter"):
             self._cleanup_generation_counter = 0
+        if not hasattr(self, "_event_generation_counter"):
+            self._event_generation_counter = 0
         if not hasattr(self, "_cleanup_generations"):
             self._cleanup_generations = {}
         if not hasattr(self, "_cleanup_results"):
             self._cleanup_results = {}
+
+    def _next_event_generation(self) -> int:
+        """Allocate a public custody identity for one managed registration."""
+        self._ensure_job_state_collections()
+        self._event_generation_counter += 1
+        return self._event_generation_counter
+
+    def _finish_cleanup_tracking(self, job_id: str, cleanup_generation: str) -> None:
+        """Drop cleanup bookkeeping once no grace callback needs ownership."""
+        self._cleanup_results.pop((job_id, cleanup_generation), None)
+        if (
+            self._cleanup_generations.get(job_id) == cleanup_generation
+            and job_id not in self._baton._jobs
+        ):
+            self._cleanup_generations.pop(job_id, None)
 
     def _register_a2a_job(
         self,
@@ -1266,11 +1287,7 @@ class BatonAdapter:
                 "adapter.deregister.cleanup_verified",
                 extra={"job_id": job_id, **result.to_dict()},
             )
-            if self._cleanup_generations.get(job_id) != cleanup_generation:
-                self._cleanup_results.pop(
-                    (job_id, cleanup_generation),
-                    None,
-                )
+            self._finish_cleanup_tracking(job_id, cleanup_generation)
 
         loop.call_later(_KILL_GRACE_SECONDS, _sigkill_pgroups)
         return result
@@ -1360,6 +1377,12 @@ class BatonAdapter:
 
         # Remove from baton
         self._baton.deregister_job(job_id)
+
+        # Only a pending SIGKILL/residual-check callback needs historical
+        # bookkeeping. Terminal cleanup evidence is returned to the caller and
+        # must not accumulate per unique recurrence ID in a long-lived daemon.
+        if cleanup_result.escalation_state != "pending":
+            self._finish_cleanup_tracking(job_id, cleanup_generation)
 
         # Remove sheet mapping, renderer, cross-sheet config, and completion tracking
         self._job_sheets.pop(job_id, None)
@@ -1624,6 +1647,7 @@ class BatonAdapter:
         # `is_job_complete` immediately, and re-FAILs the job — forcing the
         # operator to restart the conductor before recover takes effect.
         self._baton.deregister_job(job_id)
+        event_generation = self._next_event_generation()
         self._baton.register_job(
             job_id,
             states,
@@ -1638,6 +1662,7 @@ class BatonAdapter:
             ),
             fail_fast=parallel_fail_fast if parallel_enabled is True else False,
             stagger_delay_ms=stagger_delay_ms if parallel_enabled is not False else 0,
+            event_generation=event_generation,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
@@ -2313,7 +2338,7 @@ class BatonAdapter:
             sheet_num=sheet_num,
             instrument_name=instrument_name,
             attempt=attempt,
-            registration_generation=self._baton.get_job_generation(job_id),
+            event_generation=self._baton.get_job_generation(job_id),
             execution_success=False,
             error_classification="E505",
             error_message=error_msg,
@@ -2440,8 +2465,9 @@ class BatonAdapter:
             sheet_num: The sheet to dispatch.
             state: The sheet's current execution state.
         """
-        registration_generation = self._baton.get_job_generation(job_id)
-        if registration_generation is None:
+        registration_token = self._baton.get_job_registration_token(job_id)
+        event_generation = self._baton.get_job_generation(job_id)
+        if registration_token is None or event_generation is None:
             return False
 
         sheet = self.get_sheet(job_id, sheet_num)
@@ -2557,7 +2583,7 @@ class BatonAdapter:
                 )
             except ValueError:
                 if not self._is_dispatch_registration_current(
-                    job_id, sheet_num, registration_generation, registered_state
+                    job_id, sheet_num, registration_token, registered_state
                 ):
                     return False
                 if (
@@ -2592,7 +2618,7 @@ class BatonAdapter:
                     raise
         except Exception as exc:
             if not self._is_dispatch_registration_current(
-                job_id, sheet_num, registration_generation, registered_state
+                job_id, sheet_num, registration_token, registered_state
             ):
                 return False
             # F-152: Catch ALL exceptions, not just ValueError/RuntimeError.
@@ -2617,7 +2643,7 @@ class BatonAdapter:
             return True
 
         if not self._is_dispatch_registration_current(
-            job_id, sheet_num, registration_generation, registered_state
+            job_id, sheet_num, registration_token, registered_state
         ):
             await asyncio.shield(
                 self._backend_pool.release(effective_instrument, backend)
@@ -2638,7 +2664,7 @@ class BatonAdapter:
                 output_router_active=output_router_active,
                 mcp_code_bridge_active=mcp_code_bridge_active,
                 mcp_bind_mounts=mcp_bind_mounts,
-                registration_generation=registration_generation,
+                event_generation=event_generation,
             )
         except Exception as exc:
             if hasattr(backend, "set_mcp_config"):
@@ -2650,7 +2676,7 @@ class BatonAdapter:
                 self._backend_pool.release(effective_instrument, backend)
             )
             if not self._is_dispatch_registration_current(
-                job_id, sheet_num, registration_generation, registered_state
+                job_id, sheet_num, registration_token, registered_state
             ):
                 return False
             self._send_dispatch_failure(
@@ -2672,7 +2698,7 @@ class BatonAdapter:
                 job_id,
                 sheet_num,
                 t,
-                registration_generation=registration_generation,
+                event_generation=event_generation,
             )
         )
 
@@ -2693,13 +2719,13 @@ class BatonAdapter:
         self,
         job_id: str,
         sheet_num: int,
-        registration_generation: int,
+        registration_token: int,
         registered_state: SheetExecutionState,
     ) -> bool:
         """Whether an awaited dispatch still owns the exact sheet identity."""
         return (
-            self._baton.is_job_generation_current(
-                job_id, registration_generation
+            self._baton.is_job_registration_current(
+                job_id, registration_token
             )
             and self._baton.get_sheet_state(job_id, sheet_num) is registered_state
         )
@@ -2719,7 +2745,7 @@ class BatonAdapter:
         output_router_active: bool,
         mcp_code_bridge_active: bool,
         mcp_bind_mounts: list[Path],
-        registration_generation: int,
+        event_generation: int,
     ) -> tuple[asyncio.Task[None], AttemptMode]:
         """Finish all fallible setup while the caller still owns the lease."""
         prior_failure = self._build_healing_context(state, job_id, sheet_num)
@@ -2788,7 +2814,7 @@ class BatonAdapter:
                     output_router_active=output_router_active,
                     mcp_code_bridge_active=mcp_code_bridge_active,
                     mcp_bind_mounts=mcp_bind_mounts,
-                    registration_generation=registration_generation,
+                    event_generation=event_generation,
                 ),
                 name=f"musician-{job_id}-s{sheet_num}",
             ),
@@ -2808,7 +2834,7 @@ class BatonAdapter:
         output_router_active: bool = False,
         mcp_code_bridge_active: bool = False,
         mcp_bind_mounts: list[Path] | None = None,
-        registration_generation: int | None = None,
+        event_generation: int | None = None,
     ) -> None:
         """Wrapper around sheet_task that handles backend release.
 
@@ -2902,7 +2928,10 @@ class BatonAdapter:
                     # is narrowed to SheetAttemptResult for sheet_task's contract.
                     await self._baton.inbox.put(
                         SheetSkipped(
-                            job_id=job_id, sheet_num=sheet.num, reason=reason
+                            job_id=job_id,
+                            sheet_num=sheet.num,
+                            reason=reason,
+                            event_generation=event_generation,
                         )
                     )
                     return
@@ -3036,7 +3065,7 @@ class BatonAdapter:
                 technique_router=technique_router,
                 code_executor=code_executor,
                 context_delivery=context_delivery,
-                registration_generation=registration_generation,
+                event_generation=event_generation,
             )
         finally:
             # Phase 1 item 4: idempotent clear of the PID/PGID entry. The
@@ -3094,7 +3123,7 @@ class BatonAdapter:
         sheet_num: int,
         task: asyncio.Task[Any],
         *,
-        registration_generation: int | None = None,
+        event_generation: int | None = None,
     ) -> None:
         """Callback when a musician task completes.
 
@@ -3159,7 +3188,7 @@ class BatonAdapter:
                     sheet_num=sheet_num,
                     instrument_name=state.instrument_name or "",
                     attempt=state.normal_attempts + 1,
-                    registration_generation=registration_generation,
+                    event_generation=event_generation,
                     execution_success=False,
                     error_classification="STALE" if is_stale else "CANCELLED",
                     error_message=(
@@ -3346,12 +3375,17 @@ class BatonAdapter:
         ``check_interval_seconds`` out; the handler reschedules itself.
         """
         state = self._baton.get_sheet_state(job_id, sheet_num)
+        event_generation = self._baton.get_job_generation(job_id)
         timeout = (
             getattr(state, "sheet_timeout_seconds", 1800.0) if state else 1800.0
         )
         self._timer_wheel.schedule(
             timeout + 60.0,
-            StaleCheck(job_id=job_id, sheet_num=sheet_num),
+            StaleCheck(
+                job_id=job_id,
+                sheet_num=sheet_num,
+                event_generation=event_generation,
+            ),
         )
         cfg = self._stale_configs.get(job_id)
         if cfg is not None and cfg.enabled:
@@ -3360,7 +3394,11 @@ class BatonAdapter:
             self._stale_dispatch_time[(job_id, sheet_num)] = time.time()
             self._timer_wheel.schedule(
                 cfg.check_interval_seconds,
-                StaleCheck(job_id=job_id, sheet_num=sheet_num),
+                StaleCheck(
+                    job_id=job_id,
+                    sheet_num=sheet_num,
+                    event_generation=event_generation,
+                ),
             )
 
     @staticmethod
@@ -3427,6 +3465,13 @@ class BatonAdapter:
         Branch C — task alive, idle detection disabled: reschedule at the legacy
         60s interval (a pure no-op for stale detection).
         """
+        if not self._baton._event_generation_is_current(
+            event.job_id,
+            event.event_generation,
+            event_type=type(event).__name__,
+        ):
+            return
+
         key = (event.job_id, event.sheet_num)
         task = self._active_tasks.get(key)
 
@@ -3443,9 +3488,7 @@ class BatonAdapter:
                         sheet_num=event.sheet_num,
                         instrument_name=state.instrument_name or "",
                         attempt=state.normal_attempts + 1,
-                        registration_generation=self._baton.get_job_generation(
-                            event.job_id
-                        ),
+                        event_generation=event.event_generation,
                         execution_success=False,
                         error_classification="STALE",
                         error_message=(
@@ -3466,7 +3509,12 @@ class BatonAdapter:
         # above still applies (a dead musician task is reaped normally).
         if event.sheet_num in self._interactive_sheets.get(event.job_id, set()):
             self._timer_wheel.schedule(
-                60.0, StaleCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+                60.0,
+                StaleCheck(
+                    job_id=event.job_id,
+                    sheet_num=event.sheet_num,
+                    event_generation=event.event_generation,
+                ),
             )
             await self._baton.handle_event(event)
             return
@@ -3511,7 +3559,11 @@ class BatonAdapter:
                         )
                         self._timer_wheel.schedule(
                             cfg.check_interval_seconds,
-                            StaleCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+                            StaleCheck(
+                                job_id=event.job_id,
+                                sheet_num=event.sheet_num,
+                                event_generation=event.event_generation,
+                            ),
                         )
                         await self._baton.handle_event(event)
                         return
@@ -3546,14 +3598,23 @@ class BatonAdapter:
             self._stale_idle_strikes.pop(key, None)
             self._timer_wheel.schedule(
                 cfg.check_interval_seconds,
-                StaleCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+                StaleCheck(
+                    job_id=event.job_id,
+                    sheet_num=event.sheet_num,
+                    event_generation=event.event_generation,
+                ),
             )
             await self._baton.handle_event(event)
             return
 
         # Idle detection disabled — legacy 60s reschedule.
         self._timer_wheel.schedule(
-            60.0, StaleCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+            60.0,
+            StaleCheck(
+                job_id=event.job_id,
+                sheet_num=event.sheet_num,
+                event_generation=event.event_generation,
+            ),
         )
         await self._baton.handle_event(event)
 
@@ -3593,6 +3654,7 @@ class BatonAdapter:
                 if key in self._fermata_polling:
                     continue
                 self._fermata_polling.add(key)
+                registration_token = job.registration_token
                 marker_dir = self._fermata_marker_dir(job_id, sheet_num)
                 await self.publish_job_event(
                     job_id,
@@ -3602,11 +3664,21 @@ class BatonAdapter:
                         "reason": sheet.fermata_reason or "composer decision required",
                         "options": sorted(self._FERMATA_DECISIONS),
                         "marker_dir": str(marker_dir) if marker_dir else "",
+                        "event_generation": job.event_generation,
                     },
                 )
+                if not self._baton.is_job_registration_current(
+                    job_id, registration_token
+                ):
+                    self._fermata_polling.discard(key)
+                    continue
                 self._timer_wheel.schedule(
                     self._FERMATA_POLL_INTERVAL_SECONDS,
-                    FermataCheck(job_id=job_id, sheet_num=sheet_num),
+                    FermataCheck(
+                        job_id=job_id,
+                        sheet_num=sheet_num,
+                        event_generation=job.event_generation,
+                    ),
                 )
                 _logger.info(
                     "adapter.fermata.polling_started",
@@ -3676,7 +3748,11 @@ class BatonAdapter:
             return False, f"Failed to write resolution marker: {exc}"
 
         self._baton.inbox.put_nowait(
-            FermataCheck(job_id=job_id, sheet_num=sheet_num)
+            FermataCheck(
+                job_id=job_id,
+                sheet_num=sheet_num,
+                event_generation=self._baton.get_job_generation(job_id),
+            )
         )
         _logger.info(
             "adapter.fermata.resolved_via_ipc",
@@ -3698,6 +3774,16 @@ class BatonAdapter:
         sheet stays FERMATA; the reconcile loop re-arms a sheet that is still
         FERMATA after this returns without rescheduling.
         """
+        if not self._baton._event_generation_is_current(
+            event.job_id,
+            event.event_generation,
+            event_type=type(event).__name__,
+        ):
+            return
+
+        registration_token = self._baton.get_job_registration_token(event.job_id)
+        if registration_token is None:
+            return
         key = (event.job_id, event.sheet_num)
         state = self._baton.get_sheet_state(event.job_id, event.sheet_num)
         if state is None or state.status != BatonSheetStatus.FERMATA:
@@ -3711,10 +3797,23 @@ class BatonAdapter:
                 None, self._scan_fermata_markers, marker_dir, event.sheet_num
             )
 
+        # The filesystem scan awaited an executor. A deregistration/reuse in
+        # that window must neither reschedule the old poll nor consume its
+        # marker for the replacement.
+        if not self._baton.is_job_registration_current(
+            event.job_id, registration_token
+        ):
+            self._fermata_polling.discard(key)
+            return
+
         def _reschedule() -> None:
             self._timer_wheel.schedule(
                 self._FERMATA_POLL_INTERVAL_SECONDS,
-                FermataCheck(job_id=event.job_id, sheet_num=event.sheet_num),
+                FermataCheck(
+                    job_id=event.job_id,
+                    sheet_num=event.sheet_num,
+                    event_generation=event.event_generation,
+                ),
             )
 
         if len(markers) > 1:
@@ -3748,7 +3847,10 @@ class BatonAdapter:
         self._fermata_polling.discard(key)
         self._baton.inbox.put_nowait(
             EscalationResolved(
-                job_id=event.job_id, sheet_num=event.sheet_num, decision=decision
+                job_id=event.job_id,
+                sheet_num=event.sheet_num,
+                decision=decision,
+                event_generation=event.event_generation,
             )
         )
         _logger.info(
@@ -3879,7 +3981,7 @@ class BatonAdapter:
                         isinstance(event, SheetAttemptResult)
                         and self._baton._event_generation_is_current(
                             event.job_id,
-                            event.registration_generation,
+                            event.event_generation,
                             event_type=type(event).__name__,
                         )
                     ):

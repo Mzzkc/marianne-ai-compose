@@ -61,6 +61,14 @@ def _drain_sars(adapter: BatonAdapter) -> list[SheetAttemptResult]:
     return out
 
 
+def _stale_check(adapter: BatonAdapter) -> StaleCheck:
+    return StaleCheck(
+        job_id="j1",
+        sheet_num=1,
+        event_generation=adapter.baton.get_job_generation("j1"),
+    )
+
+
 def _make_sheet(workspace: Path) -> Sheet:
     return Sheet(
         num=1,
@@ -147,7 +155,7 @@ class TestIdleEscalation:
         adapter._active_pids[_KEY] = (123, 123)
         adapter._process_is_alive = lambda pid: False  # type: ignore[assignment]
 
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
 
         assert _KEY in adapter._stale_markers
         await _cancel_and_collect(task)  # let cancellation settle
@@ -165,7 +173,7 @@ class TestIdleEscalation:
         adapter._active_pids[_KEY] = (123, 123)
         adapter._process_is_alive = lambda pid: False  # type: ignore[assignment]
 
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
         await _cancel_and_collect(task)
 
         # done-callback (normally wired via add_done_callback) injects the result
@@ -190,7 +198,7 @@ class TestIdleEscalation:
         task = _alive_task()
         adapter._active_tasks[_KEY] = task
 
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
 
         assert _KEY not in adapter._stale_markers
         assert not task.cancelled()
@@ -209,7 +217,7 @@ class TestIdleEscalation:
 
         for i in range(5):
             (ws / f"step-{i}.txt").write_text(str(i))  # fresh activity each cycle
-            await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+            await adapter._handle_stale_check(_stale_check(adapter))
             assert not task.cancelled()
 
         assert _KEY not in adapter._stale_markers
@@ -226,7 +234,7 @@ class TestDisabledIsNoOp:
         task = _alive_task()
         adapter._active_tasks[_KEY] = task
 
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
 
         assert _KEY not in adapter._stale_markers
         assert not task.cancelled()
@@ -248,7 +256,7 @@ class TestDisabledIsNoOp:
         task = _alive_task()
         adapter._active_tasks[_KEY] = task
 
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
 
         assert not task.cancelled()
         assert _KEY not in adapter._stale_markers
@@ -275,7 +283,7 @@ class TestKillSequenceClassification:
         """No live task + DISPATCHED state → existing dead→STALE injection."""
         adapter, _, _ = _setup(tmp_path, enabled=True)
         # No entry in _active_tasks → task is None (dead).
-        await adapter._handle_stale_check(StaleCheck(job_id="j1", sheet_num=1))
+        await adapter._handle_stale_check(_stale_check(adapter))
 
         sars = _drain_sars(adapter)
         assert len(sars) == 1
