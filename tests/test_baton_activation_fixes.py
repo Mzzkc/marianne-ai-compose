@@ -429,8 +429,8 @@ class TestF158PromptConfigWiring:
         assert call_kwargs.get("stagger_delay_ms") == 250
 
     @pytest.mark.asyncio
-    async def test_run_via_baton_omits_job_cap_when_parallel_disabled(self) -> None:
-        """Serial scores keep dependency semantics instead of inheriting max=3."""
+    async def test_run_via_baton_sets_serial_cap_when_parallel_disabled(self) -> None:
+        """Serial scores get one slot instead of inheriting parallel max=3."""
         from marianne.daemon.manager import DaemonJobStatus, JobMeta
 
         manager = _make_mock_manager()
@@ -452,7 +452,7 @@ class TestF158PromptConfigWiring:
         ):
             await manager._run_via_baton("serial", mock_config, _make_mock_request())
         call_kwargs = adapter.register_job.call_args.kwargs
-        assert call_kwargs["parallel_max_concurrent"] is None
+        assert call_kwargs["parallel_max_concurrent"] == 1
         assert call_kwargs["stagger_delay_ms"] == 0
 
     @pytest.mark.asyncio
@@ -502,8 +502,8 @@ class TestF158PromptConfigWiring:
         assert mock_checkpoint.parallel_stagger_delay_ms == 250
 
     @pytest.mark.asyncio
-    async def test_resume_via_baton_disables_serial_policy(self) -> None:
-        """Recovery must not re-enable a serial score's cap or stagger."""
+    async def test_resume_via_baton_restores_serial_cap_without_stagger(self) -> None:
+        """Recovery keeps a serial score at one slot and zero stagger."""
         from marianne.daemon.manager import DaemonJobStatus, JobMeta
 
         manager = _make_mock_manager()
@@ -530,7 +530,7 @@ class TestF158PromptConfigWiring:
             MockJobConfig.from_yaml.return_value = config
             await manager._resume_via_baton("serial-resume", Path("/tmp/ws"))
         call_kwargs = adapter.recover_job.call_args.kwargs
-        assert call_kwargs["parallel_max_concurrent"] is None
+        assert call_kwargs["parallel_max_concurrent"] == 1
         assert call_kwargs["stagger_delay_ms"] == 0
 
 

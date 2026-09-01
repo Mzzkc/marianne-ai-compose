@@ -85,9 +85,9 @@ class _JobRecord:
     self_healing_enabled: bool = False  # Try healing on exhaustion
     pacing_active: bool = False  # Inter-sheet pacing delay in progress
     pacing_seconds: float = 0.0  # pause_between_sheets_seconds from config
-    # Score-owned parallel policy. ``max_concurrent=None`` deliberately means
-    # the score is serial/legacy and the baton's global limit is the only
-    # scheduler ceiling; the dependency graph still controls readiness.
+    # Score-owned parallel policy. ``max_concurrent=None`` is reserved for
+    # legacy low-level callers that historically used only the daemon-global
+    # ceiling. Score-facing serial mode is represented explicitly as ``1``.
     max_concurrent: int | None = None
     fail_fast: bool = False
     stagger_delay_ms: int = 0

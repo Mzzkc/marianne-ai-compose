@@ -685,7 +685,7 @@ class BatonAdapter:
         self_healing_enabled: bool = False,
         prompt_config: PromptConfig | None = None,
         learning_config: LearningConfig | None = None,
-        parallel_enabled: bool = False,
+        parallel_enabled: bool | None = None,
         parallel_max_concurrent: int | None = None,
         parallel_fail_fast: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
@@ -722,8 +722,9 @@ class BatonAdapter:
             prompt_config: Optional PromptConfig for full prompt rendering.
                 When provided, creates a PromptRenderer for this job that
                 handles the complete 9-layer prompt assembly pipeline.
-            parallel_enabled: Whether parallel execution is enabled
-                (for preamble concurrency warning).
+            parallel_enabled: Whether parallel execution is enabled. Explicit
+                False enforces the score-facing serial contract; None retains
+                legacy direct-caller scheduling behavior.
             parallel_max_concurrent: Score-owned dispatch ceiling when parallel
                 execution is enabled. None preserves legacy/global behavior.
             parallel_fail_fast: Stop starting new sheets in this job after a
@@ -767,7 +768,7 @@ class BatonAdapter:
                 prompt_config=prompt_config,
                 total_sheets=total_sheets,
                 total_stages=total_stages,
-                parallel_enabled=parallel_enabled,
+                parallel_enabled=bool(parallel_enabled),
             )
 
         # Create completion event for this job
@@ -827,9 +828,13 @@ class BatonAdapter:
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
             pacing_seconds=pacing_seconds,
-            max_concurrent=parallel_max_concurrent if parallel_enabled else None,
-            fail_fast=parallel_fail_fast if parallel_enabled else False,
-            stagger_delay_ms=stagger_delay_ms if parallel_enabled else 0,
+            max_concurrent=(
+                parallel_max_concurrent
+                if parallel_enabled is True
+                else 1 if parallel_enabled is False else None
+            ),
+            fail_fast=parallel_fail_fast if parallel_enabled is True else False,
+            stagger_delay_ms=stagger_delay_ms if parallel_enabled is not False else 0,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
@@ -1232,7 +1237,7 @@ class BatonAdapter:
         self_healing_enabled: bool = False,
         prompt_config: PromptConfig | None = None,
         learning_config: LearningConfig | None = None,
-        parallel_enabled: bool = False,
+        parallel_enabled: bool | None = None,
         parallel_max_concurrent: int | None = None,
         parallel_fail_fast: bool = False,
         cross_sheet: CrossSheetConfig | None = None,
@@ -1270,7 +1275,9 @@ class BatonAdapter:
             escalation_enabled: Enter fermata on exhaustion.
             self_healing_enabled: Try self-healing on exhaustion.
             prompt_config: Optional PromptConfig for prompt rendering.
-            parallel_enabled: Whether parallel execution is enabled.
+            parallel_enabled: Whether parallel execution is enabled. Explicit
+                False restores the score-facing serial contract; None retains
+                legacy direct-caller scheduling behavior.
             parallel_max_concurrent: Restored score-owned dispatch ceiling.
             parallel_fail_fast: Restored score-owned fail-fast policy.
             cross_sheet: Optional CrossSheetConfig for cross-sheet context (F-210).
@@ -1311,7 +1318,7 @@ class BatonAdapter:
                 prompt_config=prompt_config,
                 total_sheets=total_sheets,
                 total_stages=total_stages,
-                parallel_enabled=parallel_enabled,
+                parallel_enabled=bool(parallel_enabled),
             )
 
         # Create completion event
@@ -1437,9 +1444,13 @@ class BatonAdapter:
             escalation_enabled=escalation_enabled,
             self_healing_enabled=self_healing_enabled,
             pacing_seconds=pacing_seconds,
-            max_concurrent=parallel_max_concurrent if parallel_enabled else None,
-            fail_fast=parallel_fail_fast if parallel_enabled else False,
-            stagger_delay_ms=stagger_delay_ms if parallel_enabled else 0,
+            max_concurrent=(
+                parallel_max_concurrent
+                if parallel_enabled is True
+                else 1 if parallel_enabled is False else None
+            ),
+            fail_fast=parallel_fail_fast if parallel_enabled is True else False,
+            stagger_delay_ms=stagger_delay_ms if parallel_enabled is not False else 0,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
@@ -2259,6 +2270,10 @@ class BatonAdapter:
             )
             return True
 
+        registered_state = self._baton.get_sheet_state(job_id, sheet_num)
+        if registered_state is None:
+            return False
+
         if self._backend_pool is None:
             _logger.error(
                 "adapter.dispatch.no_backend_pool",
@@ -2353,8 +2368,8 @@ class BatonAdapter:
                     interactive=interactive_requested,
                 )
             except ValueError:
-                if not self._baton.is_job_generation_current(
-                    job_id, registration_generation
+                if not self._is_dispatch_registration_current(
+                    job_id, sheet_num, registration_generation, registered_state
                 ):
                     return False
                 if (
@@ -2388,8 +2403,8 @@ class BatonAdapter:
                 else:
                     raise
         except Exception as exc:
-            if not self._baton.is_job_generation_current(
-                job_id, registration_generation
+            if not self._is_dispatch_registration_current(
+                job_id, sheet_num, registration_generation, registered_state
             ):
                 return False
             # F-152: Catch ALL exceptions, not just ValueError/RuntimeError.
@@ -2413,8 +2428,8 @@ class BatonAdapter:
             )
             return True
 
-        if not self._baton.is_job_generation_current(
-            job_id, registration_generation
+        if not self._is_dispatch_registration_current(
+            job_id, sheet_num, registration_generation, registered_state
         ):
             await asyncio.shield(
                 self._backend_pool.release(effective_instrument, backend)
@@ -2445,6 +2460,10 @@ class BatonAdapter:
             await asyncio.shield(
                 self._backend_pool.release(effective_instrument, backend)
             )
+            if not self._is_dispatch_registration_current(
+                job_id, sheet_num, registration_generation, registered_state
+            ):
+                return False
             self._send_dispatch_failure(
                 job_id,
                 sheet_num,
@@ -2475,6 +2494,21 @@ class BatonAdapter:
             },
         )
         return True
+
+    def _is_dispatch_registration_current(
+        self,
+        job_id: str,
+        sheet_num: int,
+        registration_generation: int,
+        registered_state: SheetExecutionState,
+    ) -> bool:
+        """Whether an awaited dispatch still owns the exact sheet identity."""
+        return (
+            self._baton.is_job_generation_current(
+                job_id, registration_generation
+            )
+            and self._baton.get_sheet_state(job_id, sheet_num) is registered_state
+        )
 
     def _create_musician_task_after_acquire(
         self,

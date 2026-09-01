@@ -195,6 +195,7 @@ async def dispatch_ready(
                 },
             )
         for sheet in ready:
+            registration_generation = job.generation
             # A rate-limit/fallback transition may relabel a sheet PENDING while
             # its original musician is still exiting. Never dispatch the same
             # sheet again until physical task authority is released.
@@ -432,6 +433,16 @@ async def dispatch_ready(
             try:
                 dispatch_accepted = await callback(job_id, sheet.sheet_num, sheet)
                 if dispatch_accepted is False:
+                    continue
+                # The callback may await backend acquisition or cleanup. A
+                # deregistration/reuse during that await must not let the old
+                # callback mark the replacement registration as dispatched.
+                if (
+                    not baton.is_job_generation_current(
+                        job_id, registration_generation
+                    )
+                    or baton.get_sheet_state(job_id, sheet.sheet_num) is not sheet
+                ):
                     continue
                 sheet.clear_dispatch_block()
                 # Status set through event handler for traceability.

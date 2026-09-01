@@ -69,6 +69,24 @@ class _BlockingBackendPool:
         self.releases.append((instrument, backend))
 
 
+class _BlockingReleaseBackendPool:
+    """Acquire immediately, then hold cleanup at the observable release seam."""
+
+    def __init__(self) -> None:
+        self.backend = object()
+        self.release_entered = asyncio.Event()
+        self.release_allowed = asyncio.Event()
+        self.release_completed = asyncio.Event()
+
+    async def acquire(self, instrument: str, **kwargs: object) -> object:
+        return self.backend
+
+    async def release(self, instrument: str, backend: object) -> None:
+        self.release_entered.set()
+        await self.release_allowed.wait()
+        self.release_completed.set()
+
+
 @pytest.mark.asyncio
 async def test_job_at_its_cap_leaves_global_slots_for_another_job() -> None:
     baton = BatonCore()
@@ -360,6 +378,123 @@ async def test_stale_acquisition_failure_cannot_mutate_reused_job() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("fallback", [False, True])
+async def test_post_acquire_setup_failure_cannot_mutate_reused_job_after_release(
+    fallback: bool,
+) -> None:
+    """Cleanup awaits cannot turn an old setup failure into replacement work."""
+    pool = _BlockingReleaseBackendPool()
+    adapter = BatonAdapter()
+    adapter._backend_pool = pool
+    sheet = _sheets(1, instrument="primary")[0]
+    adapter.register_job(
+        "reused",
+        [sheet],
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=1,
+    )
+    old_state = adapter.baton._jobs["reused"].sheets[1]
+    if fallback:
+        old_state.instrument_name = "fallback"
+        adapter.baton.register_instrument("fallback", max_concurrent=1)
+
+    adapter._create_musician_task_after_acquire = MagicMock(
+        side_effect=RuntimeError("forced post-acquire setup failure")
+    )
+    dispatch_task = asyncio.create_task(
+        dispatch_ready(
+            adapter.baton,
+            adapter._build_dispatch_config(),
+            adapter._dispatch_callback,
+        )
+    )
+    await pool.release_entered.wait()
+
+    adapter.deregister_job("reused")
+    adapter.register_job(
+        "reused",
+        _sheets(1, instrument="replacement"),
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=1,
+    )
+    replacement = adapter.baton._jobs["reused"].sheets[1]
+    pool.release_allowed.set()
+    result = await dispatch_task
+
+    assert result.dispatched_sheets == []
+    assert replacement.status == BatonSheetStatus.PENDING
+    assert pool.release_completed.is_set()
+    queued_events = []
+    while not adapter.baton.inbox.empty():
+        queued_events.append(adapter.baton.inbox.get_nowait())
+    assert not any(isinstance(event, SheetAttemptResult) for event in queued_events)
+
+
+@pytest.mark.asyncio
+async def test_cancel_during_post_acquire_cleanup_cannot_touch_reused_job() -> None:
+    """Cancellation while shielded cleanup drains leaves replacement untouched."""
+    pool = _BlockingReleaseBackendPool()
+    adapter = BatonAdapter()
+    adapter._backend_pool = pool
+    adapter.register_job("reused", _sheets(1, instrument="old"), {})
+    adapter._create_musician_task_after_acquire = MagicMock(
+        side_effect=RuntimeError("forced post-acquire setup failure")
+    )
+    dispatch_task = asyncio.create_task(
+        dispatch_ready(
+            adapter.baton,
+            adapter._build_dispatch_config(),
+            adapter._dispatch_callback,
+        )
+    )
+    await pool.release_entered.wait()
+
+    dispatch_task.cancel()
+    adapter.deregister_job("reused")
+    adapter.register_job("reused", _sheets(1, instrument="replacement"), {})
+    replacement = adapter.baton._jobs["reused"].sheets[1]
+    pool.release_allowed.set()
+    with pytest.raises(asyncio.CancelledError):
+        await dispatch_task
+    await pool.release_completed.wait()
+
+    assert replacement.status == BatonSheetStatus.PENDING
+    queued_events = []
+    while not adapter.baton.inbox.empty():
+        queued_events.append(adapter.baton.inbox.get_nowait())
+    assert not any(isinstance(event, SheetAttemptResult) for event in queued_events)
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_rejects_callback_acceptance_from_replaced_registration() -> None:
+    """The scheduler itself checks identity after its awaited callback."""
+    baton = BatonCore()
+    baton.register_instrument("claude-code", max_concurrent=10)
+    baton.register_job("reused", _states(1), {}, max_concurrent=1)
+
+    async def replace_during_callback(
+        job_id: str,
+        sheet_num: int,
+        state: SheetExecutionState,
+    ) -> bool:
+        baton.deregister_job(job_id)
+        baton.register_job(job_id, _states(1, instrument="replacement"), {}, max_concurrent=1)
+        await asyncio.sleep(0)
+        return True
+
+    result = await dispatch_ready(
+        baton,
+        baton.build_dispatch_config(max_concurrent_sheets=10),
+        replace_during_callback,
+    )
+
+    assert result.dispatched_sheets == []
+    assert baton._jobs["reused"].sheets[1].status == BatonSheetStatus.PENDING
+
+
+@pytest.mark.asyncio
 async def test_cancelled_old_task_callback_cannot_clear_reused_job_task() -> None:
     """A late done callback only cleans the exact task that owned the key."""
     adapter = BatonAdapter()
@@ -544,7 +679,7 @@ def test_adapter_registration_recovery_and_deregister_preserve_policy() -> None:
     assert not any(key[0] == "recovered" for key in adapter.baton._job_last_dispatch_at)
 
 
-def test_parallel_disabled_disables_stagger_on_fresh_and_recovery() -> None:
+def test_parallel_disabled_enforces_serial_policy_on_fresh_and_recovery() -> None:
     adapter = BatonAdapter()
     adapter.register_job(
         "serial-fresh",
@@ -557,7 +692,7 @@ def test_parallel_disabled_disables_stagger_on_fresh_and_recovery() -> None:
     )
     fresh = adapter.baton._jobs["serial-fresh"]
     assert (fresh.max_concurrent, fresh.fail_fast, fresh.stagger_delay_ms) == (
-        None,
+        1,
         False,
         0,
     )
@@ -575,10 +710,65 @@ def test_parallel_disabled_disables_stagger_on_fresh_and_recovery() -> None:
     )
     recovered = adapter.baton._jobs["serial-recovery"]
     assert (recovered.max_concurrent, recovered.fail_fast, recovered.stagger_delay_ms) == (
-        None,
+        1,
         False,
         0,
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("recovery", [False, True])
+async def test_parallel_disabled_dispatches_only_one_independent_sheet(
+    recovery: bool,
+) -> None:
+    """The public score contract stays serial even when its DAG permits a wave."""
+    adapter = BatonAdapter(max_concurrent_sheets=10)
+    sheets = _sheets(2)
+    if recovery:
+        checkpoint = CheckpointState(
+            job_id="serial",
+            job_name="serial",
+            total_sheets=2,
+        )
+        adapter.recover_job(
+            "serial",
+            sheets,
+            {1: [], 2: []},
+            checkpoint,
+            parallel_enabled=False,
+        )
+    else:
+        adapter.register_job(
+            "serial",
+            sheets,
+            {1: [], 2: []},
+            parallel_enabled=False,
+        )
+
+    result = await dispatch_ready(
+        adapter.baton,
+        adapter._build_dispatch_config(),
+        AsyncMock(),
+    )
+
+    assert result.dispatched_sheets == [("serial", 1)]
+    assert adapter.baton._jobs["serial"].sheets[2].status == BatonSheetStatus.PENDING
+
+
+@pytest.mark.asyncio
+async def test_low_level_legacy_registration_without_policy_keeps_global_behavior() -> None:
+    """Only the score-facing enabled flag adds serial custody."""
+    baton = BatonCore()
+    baton.register_instrument("claude-code", max_concurrent=10)
+    baton.register_job("legacy", _states(2), {})
+
+    result = await dispatch_ready(
+        baton,
+        baton.build_dispatch_config(max_concurrent_sheets=10),
+        AsyncMock(),
+    )
+
+    assert result.dispatched_sheets == [("legacy", 1), ("legacy", 2)]
 
 
 def test_checkpoint_parallel_policy_is_backward_compatible_and_serializable() -> None:

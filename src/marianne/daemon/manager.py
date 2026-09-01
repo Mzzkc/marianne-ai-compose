@@ -3501,7 +3501,7 @@ class JobManager:
             learning_config=config.learning,
             parallel_enabled=config.parallel.enabled,
             parallel_max_concurrent=(
-                config.parallel.max_concurrent if config.parallel.enabled else None
+                config.parallel.max_concurrent if config.parallel.enabled else 1
             ),
             parallel_fail_fast=config.parallel.fail_fast,
             cross_sheet=config.cross_sheet,  # F-210
@@ -3796,7 +3796,7 @@ class JobManager:
             learning_config=config.learning,
             parallel_enabled=config.parallel.enabled,
             parallel_max_concurrent=(
-                config.parallel.max_concurrent if config.parallel.enabled else None
+                config.parallel.max_concurrent if config.parallel.enabled else 1
             ),
             parallel_fail_fast=config.parallel.fail_fast,
             cross_sheet=config.cross_sheet,  # F-210
