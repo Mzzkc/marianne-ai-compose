@@ -262,6 +262,7 @@ class TestBatonAdapterA2AWiring:
                 instrument_name="test",
                 attempt=1,
                 validation_pass_rate=100.0,
+                event_generation=adapter.baton.get_job_generation("forge-job"),
                 a2a_requests=[
                     {
                         "target_agent": "canyon",
@@ -314,6 +315,7 @@ class TestBatonAdapterA2AWiring:
                 instrument_name="test",
                 attempt=1,
                 validation_pass_rate=100.0,
+                event_generation=adapter.baton.get_job_generation("forge-job"),
                 a2a_requests=[
                     {
                         "target_agent": "canyon",

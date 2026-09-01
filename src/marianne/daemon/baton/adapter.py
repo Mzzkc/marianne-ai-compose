@@ -1076,9 +1076,15 @@ class BatonAdapter:
         if not event.execution_success or not event.a2a_requests:
             return
 
+        registration_token = self._baton.get_job_registration_token(event.job_id)
+        if not self._event_source_is_current(event, registration_token):
+            return
+
         self._ensure_a2a_state()
         source_agent = self._a2a_job_agents.get(event.job_id, event.job_id)
         for request in event.a2a_requests:
+            if not self._event_source_is_current(event, registration_token):
+                return
             target_agent = str(request.get("target_agent", "")).strip()
             description = str(request.get("task_description", "")).strip()
             if not target_agent or not description:
@@ -1107,6 +1113,11 @@ class BatonAdapter:
                 context=context,
             )
             await self._publish_baton_observer_event(submitted)
+            # Observer publication is an await boundary. The source may have
+            # been deregistered/reused while subscribers ran; stale work must
+            # not cross the registration boundary into another job's inbox.
+            if not self._event_source_is_current(event, registration_token):
+                return
 
             target_job_id = self._a2a_registry.get_job_id_for_agent(target_agent)
             inbox = (
@@ -1142,6 +1153,24 @@ class BatonAdapter:
                 task_id=task.task_id,
             )
             await self._publish_baton_observer_event(routed)
+
+    def _event_source_is_current(
+        self,
+        event: Any,
+        registration_token: int | None,
+    ) -> bool:
+        """Revalidate both private registration and public event custody."""
+        return (
+            registration_token is not None
+            and self._baton.is_job_registration_current(
+                event.job_id, registration_token
+            )
+            and self._baton._event_generation_is_current(
+                event.job_id,
+                event.event_generation,
+                event_type=type(event).__name__,
+            )
+        )
 
     def _kill_active_pgroups(
         self,
@@ -3703,11 +3732,9 @@ class BatonAdapter:
         ]
 
     @staticmethod
-    def _consume_fermata_marker(marker: Path) -> None:
-        """Rename a consumed marker into ``consumed/`` (audit, no re-trigger)."""
-        consumed_dir = marker.parent / "consumed"
-        consumed_dir.mkdir(parents=True, exist_ok=True)
-        marker.rename(consumed_dir / marker.name)
+    def _prepare_fermata_marker_consumption(marker: Path) -> Path:
+        """Calculate the consumed-marker destination without mutating disk."""
+        return marker.parent / "consumed" / marker.name
 
     def resolve_fermata(
         self, job_id: str, sheet_num: int, decision: str
@@ -3835,9 +3862,22 @@ class BatonAdapter:
         marker = markers[0]
         decision = marker.suffix.lstrip(".")
         try:
-            await asyncio.get_running_loop().run_in_executor(
-                None, self._consume_fermata_marker, marker
+            consumed_marker = await asyncio.get_running_loop().run_in_executor(
+                None, self._prepare_fermata_marker_consumption, marker
             )
+        except OSError:
+            _reschedule()  # vanished/raced → retry next poll
+            return
+        # Destination planning yielded to the event loop. Revalidate before
+        # the consequential directory creation, atomic rename, and resolution
+        # enqueue. Keeping them in this no-await admission section prevents a
+        # reused job ID from losing its live marker to an old worker.
+        if not self._event_source_is_current(event, registration_token):
+            self._fermata_polling.discard(key)
+            return
+        try:
+            consumed_marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.rename(consumed_marker)
         except OSError:
             _reschedule()  # vanished/raced → retry next poll
             return
