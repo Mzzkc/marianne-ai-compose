@@ -87,6 +87,7 @@ if TYPE_CHECKING:
     from marianne.core.config.spec import SpecCorpusConfig, SpecFragment
     from marianne.core.config.workspace import CrossSheetConfig
     from marianne.daemon.baton.backend_pool import BackendPool
+    from marianne.daemon.baton.dispatch import DispatchConfig
     from marianne.daemon.baton.prompt import PromptRenderer
     from marianne.daemon.event_bus import EventBus
     from marianne.daemon.mcp_pool import McpPoolManager
@@ -492,6 +493,11 @@ class BatonAdapter:
 
         # Active musician tasks: (job_id, sheet_num) → Task
         self._active_tasks: dict[tuple[str, int], asyncio.Task[Any]] = {}
+        # Acquired instrument/model for each live musician. Sheet state can be
+        # relabelled WAITING or advanced to a fallback before this task exits.
+        self._active_execution_details: dict[
+            tuple[str, int], tuple[str, str | None]
+        ] = {}
 
         # Idle-based stale detection (#349/#350). Per-job config captured at
         # registration; per-sheet dispatch time (wall clock) is the floor for
@@ -822,7 +828,7 @@ class BatonAdapter:
             pacing_seconds=pacing_seconds,
             max_concurrent=parallel_max_concurrent if parallel_enabled else None,
             fail_fast=parallel_fail_fast if parallel_enabled else False,
-            stagger_delay_ms=stagger_delay_ms,
+            stagger_delay_ms=stagger_delay_ms if parallel_enabled else 0,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
@@ -1149,6 +1155,7 @@ class BatonAdapter:
         ]
         for key in keys_to_cancel:
             task = self._active_tasks.pop(key)
+            self._active_execution_details.pop(key, None)
             task.cancel(msg=f"deregister_job({job_id})")
         if keys_to_cancel:
             _logger.info(
@@ -1431,7 +1438,7 @@ class BatonAdapter:
             pacing_seconds=pacing_seconds,
             max_concurrent=parallel_max_concurrent if parallel_enabled else None,
             fail_fast=parallel_fail_fast if parallel_enabled else False,
-            stagger_delay_ms=stagger_delay_ms,
+            stagger_delay_ms=stagger_delay_ms if parallel_enabled else 0,
             workspace=(sheets[0].workspace if sheets else None),  # #201: for healing ErrorContext
         )
 
@@ -2427,6 +2434,10 @@ class BatonAdapter:
             )
             return
         self._active_tasks[(job_id, sheet_num)] = task
+        self._active_execution_details[(job_id, sheet_num)] = (
+            effective_instrument,
+            state.model,
+        )
         task.add_done_callback(
             lambda t: self._on_musician_done(job_id, sheet_num, t)
         )
@@ -2840,6 +2851,11 @@ class BatonAdapter:
             task: The completed task.
         """
         self._active_tasks.pop((job_id, sheet_num), None)
+        self._active_execution_details.pop((job_id, sheet_num), None)
+        # Releasing physical occupancy may make another job dispatchable even
+        # when no further musician/timer event is pending. Wake the loop after
+        # the task authority is gone; coalescing prevents redundant retries.
+        self._baton.enqueue_dispatch_retry()
         # Phase 1 item 4: idempotent clear. The spawn-site finally already
         # runs kill-on-exit; this pop handles the case where no subprocess
         # was ever spawned (HTTP backend, early error) or deregister_job
@@ -2990,6 +3006,25 @@ class BatonAdapter:
         """Drain canonical skip transitions and publish observer events."""
         for event in self._baton.drain_skip_events():
             await self.publish_sheet_skipped(event)
+
+    def _build_dispatch_config(self) -> DispatchConfig:
+        """Build dispatch limits from live task authority and score policy."""
+        active: dict[tuple[str, int], tuple[str, str | None]] = {}
+        for key, task in self._active_tasks.items():
+            if task.done():
+                continue
+            details = self._active_execution_details.get(key)
+            if details is None:
+                job = self._baton._jobs.get(key[0])
+                sheet = job.sheets.get(key[1]) if job is not None else None
+                if sheet is None:
+                    continue
+                details = (sheet.instrument_name or "", sheet.model)
+            active[key] = details
+        return self._baton.build_dispatch_config(
+            max_concurrent_sheets=self._max_concurrent_sheets,
+            active_executions=active,
+        )
 
     # =========================================================================
     # Main Loop
@@ -3510,9 +3545,7 @@ class BatonAdapter:
             # without waiting for the first event. Without this, sheets mapped
             # from WAITING→PENDING on restart sit idle until an unrelated event
             # (e.g., a completion from another job) triggers dispatch.
-            config = self._baton.build_dispatch_config(
-                max_concurrent_sheets=self._max_concurrent_sheets,
-            )
+            config = self._build_dispatch_config()
             initial_result = await dispatch_ready(
                 self._baton, config, self._dispatch_callback
             )
@@ -3581,9 +3614,7 @@ class BatonAdapter:
                     self._baton._state_dirty = False
 
                 # Dispatch ready sheets after every event
-                config = self._baton.build_dispatch_config(
-                    max_concurrent_sheets=self._max_concurrent_sheets,
-                )
+                config = self._build_dispatch_config()
                 dispatch_result = await dispatch_ready(
                     self._baton, config, self._dispatch_callback
                 )
@@ -3652,6 +3683,7 @@ class BatonAdapter:
         for key, task in self._active_tasks.items():
             task.cancel(msg=f"adapter shutdown (job={key[0]}, sheet={key[1]})")
         self._active_tasks.clear()
+        self._active_execution_details.clear()
 
         # Close backend pool
         if self._backend_pool is not None:

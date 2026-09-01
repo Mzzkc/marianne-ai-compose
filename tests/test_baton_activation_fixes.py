@@ -451,7 +451,9 @@ class TestF158PromptConfigWiring:
             patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={1: []}),
         ):
             await manager._run_via_baton("serial", mock_config, _make_mock_request())
-        assert adapter.register_job.call_args.kwargs["parallel_max_concurrent"] is None
+        call_kwargs = adapter.register_job.call_args.kwargs
+        assert call_kwargs["parallel_max_concurrent"] is None
+        assert call_kwargs["stagger_delay_ms"] == 0
 
     @pytest.mark.asyncio
     async def test_resume_via_baton_passes_prompt_config(self) -> None:
@@ -498,6 +500,38 @@ class TestF158PromptConfigWiring:
         assert mock_checkpoint.parallel_max_concurrent == 4
         assert mock_checkpoint.parallel_fail_fast is False
         assert mock_checkpoint.parallel_stagger_delay_ms == 250
+
+    @pytest.mark.asyncio
+    async def test_resume_via_baton_disables_serial_policy(self) -> None:
+        """Recovery must not re-enable a serial score's cap or stagger."""
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
+
+        manager = _make_mock_manager()
+        adapter = manager._baton_adapter
+        adapter.wait_for_completion = AsyncMock(return_value=True)
+        adapter.recover_job = MagicMock()
+        adapter.publish_job_event = AsyncMock()
+        adapter.has_completed_sheets = MagicMock(return_value=True)
+        manager._job_meta["serial-resume"] = JobMeta(
+            job_id="serial-resume",
+            config_path=Path("/tmp/test.yaml"),
+            workspace=Path("/tmp/ws"),
+            status=DaemonJobStatus.RUNNING,
+        )
+        checkpoint = MagicMock()
+        checkpoint.sheets = {}
+        manager._load_checkpoint = AsyncMock(return_value=checkpoint)
+        config = _make_mock_config(parallel=False)
+        with (
+            patch("marianne.core.config.JobConfig") as MockJobConfig,
+            patch("marianne.core.sheet.build_sheets", return_value=[_make_sheet()]),
+            patch("marianne.daemon.baton.adapter.extract_dependencies", return_value={1: []}),
+        ):
+            MockJobConfig.from_yaml.return_value = config
+            await manager._resume_via_baton("serial-resume", Path("/tmp/ws"))
+        call_kwargs = adapter.recover_job.call_args.kwargs
+        assert call_kwargs["parallel_max_concurrent"] is None
+        assert call_kwargs["stagger_delay_ms"] == 0
 
 
 # =========================================================================

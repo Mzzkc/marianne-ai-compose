@@ -3511,7 +3511,9 @@ class JobManager:
             stale_detection=config.stale_detection,
             spec_config=spec_config,  # #204
             spec_tags=config.sheet.spec_tags or None,  # #204
-            stagger_delay_ms=config.parallel.stagger_delay_ms,  # #340
+            stagger_delay_ms=(
+                config.parallel.stagger_delay_ms if config.parallel.enabled else 0
+            ),  # #340
             skip_when=config.sheet.skip_when or None,  # #360/#119
             code_execution=config.code_execution,  # #209
             agent_card=config.agent_card,
@@ -3804,7 +3806,9 @@ class JobManager:
             stale_detection=config.stale_detection,
             spec_config=spec_config,  # #204
             spec_tags=config.sheet.spec_tags or None,  # #204
-            stagger_delay_ms=config.parallel.stagger_delay_ms,  # #340
+            stagger_delay_ms=(
+                config.parallel.stagger_delay_ms if config.parallel.enabled else 0
+            ),  # #340
             skip_when=config.sheet.skip_when or None,  # #360/#119
             code_execution=config.code_execution,  # #209
             agent_card=config.agent_card,

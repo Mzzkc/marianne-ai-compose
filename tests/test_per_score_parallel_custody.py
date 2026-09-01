@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -12,7 +13,9 @@ from marianne.core.sheet import Sheet
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.dispatch import dispatch_ready
+from marianne.daemon.baton.events import RateLimitHit
 from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+from marianne.daemon.baton.timer import TimerWheel
 
 
 def _states(count: int, instrument: str = "claude-code") -> dict[int, SheetExecutionState]:
@@ -62,6 +65,92 @@ async def test_job_at_its_cap_leaves_global_slots_for_another_job() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rate_limit_fallback_keeps_physical_tasks_in_both_ceiling_counts() -> None:
+    """WAITING/PENDING relabels cannot make live musicians disappear."""
+    baton = BatonCore()
+    for instrument in ("claude-code", "gemini-cli", "ollama"):
+        baton.register_instrument(instrument, max_concurrent=10)
+
+    job_a = {
+        1: SheetExecutionState(
+            sheet_num=1,
+            instrument_name="claude-code",
+            fallback_chain=["ollama"],
+            status=BatonSheetStatus.DISPATCHED,
+        ),
+        2: SheetExecutionState(
+            sheet_num=2,
+            instrument_name="gemini-cli",
+            status=BatonSheetStatus.DISPATCHED,
+        ),
+        3: SheetExecutionState(sheet_num=3, instrument_name="gemini-cli"),
+    }
+    job_b = {
+        1: SheetExecutionState(
+            sheet_num=1,
+            instrument_name="claude-code",
+            fallback_chain=["ollama"],
+            status=BatonSheetStatus.DISPATCHED,
+        ),
+        2: SheetExecutionState(sheet_num=2, instrument_name="gemini-cli"),
+    }
+    baton.register_job("job-a", job_a, {}, max_concurrent=2)
+    baton.register_job("job-b", job_b, {}, max_concurrent=2)
+
+    await baton.handle_event(
+        RateLimitHit(
+            instrument="claude-code",
+            wait_seconds=60,
+            job_id="job-a",
+            sheet_num=1,
+        )
+    )
+    assert job_a[1].status == BatonSheetStatus.PENDING
+    assert job_a[1].instrument_name == "ollama"
+    assert job_b[1].status == BatonSheetStatus.PENDING
+
+    physical = {
+        ("job-a", 1): ("claude-code", None),
+        ("job-a", 2): ("gemini-cli", None),
+        ("job-b", 1): ("claude-code", None),
+    }
+    config = baton.build_dispatch_config(
+        max_concurrent_sheets=4,
+        active_executions=physical,
+    )
+    result = await dispatch_ready(baton, config, AsyncMock())
+
+    assert result.dispatched_sheets == [("job-b", 2)]
+    assert job_a[3].dispatch_blocked_reason == "job_concurrency"
+    assert len(physical) + result.dispatched_count == 4
+
+
+@pytest.mark.asyncio
+async def test_adapter_dispatch_config_uses_live_task_authority() -> None:
+    adapter = BatonAdapter(max_concurrent_sheets=4)
+    adapter.register_job(
+        "live",
+        _sheets(1),
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=2,
+    )
+    blocker = asyncio.Event()
+    task = asyncio.create_task(blocker.wait())
+    key = ("live", 1)
+    adapter._active_tasks[key] = task
+    adapter._active_execution_details[key] = ("claude-code", "sonnet")
+    try:
+        config = adapter._build_dispatch_config()
+        assert config.active_executions == {
+            key: ("claude-code", "sonnet"),
+        }
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_one_jobs_stagger_neither_delays_nor_is_updated_by_another_job() -> None:
     baton = BatonCore()
     baton.register_instrument("claude-code", max_concurrent=10)
@@ -100,6 +189,36 @@ async def test_each_jobs_stagger_gets_its_own_wake_deadline() -> None:
 
     delays = sorted(call.args[0] for call in baton._timer.schedule.call_args_list)
     assert delays == pytest.approx([0.1, 1.0])
+
+
+@pytest.mark.asyncio
+async def test_stagger_timer_is_cancelled_and_stale_generation_cannot_clear_reuse() -> None:
+    wheel = TimerWheel(asyncio.Queue())
+    baton = BatonCore(timer=wheel)
+    baton.register_instrument("claude-code", max_concurrent=10)
+    baton.register_job("reused", _states(1), {}, stagger_delay_ms=1000)
+    baton._job_last_dispatch_at[("reused", "claude-code")] = 10.0
+    config = baton.build_dispatch_config(max_concurrent_sheets=10)
+    config.time_fn = lambda: 10.0
+    await dispatch_ready(baton, config, AsyncMock())
+    old_handle = baton._stagger_wake_handles["reused"]
+    old_event = old_handle.event
+    assert wheel.pending_count == 1
+
+    baton.deregister_job("reused")
+    assert wheel.pending_count == 0
+    baton.register_job("reused", _states(1), {}, stagger_delay_ms=1000)
+    baton._job_last_dispatch_at[("reused", "claude-code")] = 10.0
+    config = baton.build_dispatch_config(max_concurrent_sheets=10)
+    config.time_fn = lambda: 10.0
+    await dispatch_ready(baton, config, AsyncMock())
+    new_handle = baton._stagger_wake_handles["reused"]
+    assert new_handle is not old_handle
+    assert wheel.pending_count == 1
+
+    await baton.handle_event(old_event)
+    assert baton._stagger_wake_handles["reused"] is new_handle
+    assert wheel.pending_count == 1
 
 
 def test_fail_fast_terminalizes_only_unstarted_sheets_in_its_job() -> None:
@@ -167,10 +286,45 @@ def test_adapter_registration_recovery_and_deregister_preserve_policy() -> None:
         300,
     )
     adapter.baton._job_last_dispatch_at[("recovered", "claude-code")] = 10.0
-    adapter.baton._stagger_wake_pending.add("recovered")
     adapter.deregister_job("recovered")
     assert not any(key[0] == "recovered" for key in adapter.baton._job_last_dispatch_at)
-    assert "recovered" not in adapter.baton._stagger_wake_pending
+
+
+def test_parallel_disabled_disables_stagger_on_fresh_and_recovery() -> None:
+    adapter = BatonAdapter()
+    adapter.register_job(
+        "serial-fresh",
+        _sheets(1),
+        {},
+        parallel_enabled=False,
+        parallel_max_concurrent=4,
+        parallel_fail_fast=True,
+        stagger_delay_ms=500,
+    )
+    fresh = adapter.baton._jobs["serial-fresh"]
+    assert (fresh.max_concurrent, fresh.fail_fast, fresh.stagger_delay_ms) == (
+        None,
+        False,
+        0,
+    )
+
+    checkpoint = CheckpointState(job_id="serial-recovery", job_name="s", total_sheets=1)
+    adapter.recover_job(
+        "serial-recovery",
+        _sheets(1),
+        {},
+        checkpoint,
+        parallel_enabled=False,
+        parallel_max_concurrent=4,
+        parallel_fail_fast=True,
+        stagger_delay_ms=500,
+    )
+    recovered = adapter.baton._jobs["serial-recovery"]
+    assert (recovered.max_concurrent, recovered.fail_fast, recovered.stagger_delay_ms) == (
+        None,
+        False,
+        0,
+    )
 
 
 def test_checkpoint_parallel_policy_is_backward_compatible_and_serializable() -> None:

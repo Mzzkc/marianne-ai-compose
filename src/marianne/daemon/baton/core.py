@@ -91,6 +91,7 @@ class _JobRecord:
     max_concurrent: int | None = None
     fail_fast: bool = False
     stagger_delay_ms: int = 0
+    generation: int = 0
     # #201: workspace + config path for building a healing ErrorContext on
     # exhaustion (the baton drives self-healing off SheetState, which lacks
     # these). Set at register time; immutable for the job's lifetime.
@@ -153,6 +154,7 @@ class BatonCore:
         """
         self._inbox: asyncio.Queue[BatonEvent] = inbox or asyncio.Queue()
         self._jobs: dict[str, _JobRecord] = {}
+        self._job_generation: int = 0
         self._instruments: dict[str, InstrumentState] = {}
         self._job_cost_limits: dict[str, float] = {}
         self._sheet_cost_limits: dict[tuple[str, int], float] = {}
@@ -212,9 +214,10 @@ class BatonCore:
         # DispatchRetry pending; it is cleared when the loop handles it.
         self._dispatch_retry_pending: bool = False
 
-        # #340: one delayed stagger wake per job. A global flag lets a long
-        # delay in one score suppress a shorter wake required by another.
-        self._stagger_wake_pending: set[str] = set()
+        # #340: one owned TimerHandle per job (plus the legacy scalar key).
+        # Handles are cancelled on deregistration and guarded by registration
+        # generation so stale timer events cannot affect a reused job ID.
+        self._stagger_wake_handles: dict[str, Any] = {}
         # Per-job stagger custody. A shared InstrumentState timestamp would let
         # one score delay another score using the same provider.
         self._job_last_dispatch_at: dict[tuple[str, str], float] = {}
@@ -333,7 +336,13 @@ class BatonCore:
         return self._instruments.get(name)
 
     def build_dispatch_config(
-        self, *, max_concurrent_sheets: int = 10, stagger_delay_ms: int = 0
+        self,
+        *,
+        max_concurrent_sheets: int = 10,
+        stagger_delay_ms: int = 0,
+        active_executions: dict[
+            tuple[str, int], tuple[str, str | None]
+        ] | None = None,
     ) -> DispatchConfig:
         """Build a DispatchConfig from the current instrument state.
 
@@ -371,6 +380,7 @@ class BatonCore:
             rate_limited_instruments=rate_limited,
             open_circuit_breakers=open_breakers,
             stagger_delay_ms=stagger_delay_ms,
+            active_executions=active_executions,
             job_max_concurrent={
                 job_id: job.max_concurrent
                 for job_id, job in self._jobs.items()
@@ -1134,6 +1144,7 @@ class BatonCore:
         # Auto-register any instruments used by the job's sheets
         self._auto_register_instruments(sheets)
 
+        self._job_generation += 1
         self._jobs[job_id] = _JobRecord(
             job_id=job_id,
             sheets=sheets,
@@ -1146,6 +1157,7 @@ class BatonCore:
             max_concurrent=max_concurrent,
             fail_fast=fail_fast,
             stagger_delay_ms=stagger_delay_ms,
+            generation=self._job_generation,
         )
         self._state_dirty = True
 
@@ -1189,7 +1201,9 @@ class BatonCore:
                 key for key in self._job_last_dispatch_at if key[0] == job_id
             ]:
                 del self._job_last_dispatch_at[dispatch_key]
-            self._stagger_wake_pending.discard(job_id)
+            stagger_handle = self._stagger_wake_handles.pop(job_id, None)
+            if stagger_handle is not None and self._timer is not None:
+                self._timer.cancel(stagger_handle)
             self._skip_events = [event for event in self._skip_events if event.job_id != job_id]
             self._state_dirty = True
             _logger.info("baton.job_deregistered", extra={"job_id": job_id})
@@ -1386,12 +1400,20 @@ class BatonCore:
                     # next cascade can enqueue a fresh wake (#222). Dispatch and
                     # completion checks run in the adapter loop after this.
                     self._dispatch_retry_pending = False
-                    # #340: allow this score's next stagger-skip cycle to
-                    # schedule a new wake without altering another score.
+                    # #340: release only the handle belonging to the same job
+                    # registration. Stale events from a cancelled/replaced
+                    # timer cannot clear a reused job ID's live handle.
                     if event.stagger_job_id is not None:
-                        self._stagger_wake_pending.discard(event.stagger_job_id)
-                    else:
-                        self._stagger_wake_pending.discard("__legacy__")
+                        job = self._jobs.get(event.stagger_job_id)
+                        if (
+                            job is not None
+                            and event.stagger_generation == job.generation
+                        ):
+                            self._stagger_wake_handles.pop(
+                                event.stagger_job_id, None
+                            )
+                    elif event.stagger_generation == 0:
+                        self._stagger_wake_handles.pop("__legacy__", None)
 
                 case CircuitBreakerRecovery():
                     self._handle_circuit_breaker_recovery(event)

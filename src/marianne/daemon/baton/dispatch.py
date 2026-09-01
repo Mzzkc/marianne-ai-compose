@@ -64,6 +64,9 @@ class DispatchConfig:
             deterministic tests; defaults to ``time.monotonic``.
         job_max_concurrent: Per-job ceilings for parallel-enabled jobs only.
         job_stagger_delay_ms: Per-job same-instrument stagger policy.
+        active_executions: Physical musician occupancy keyed by job/sheet, with
+            the actual instrument/model acquired for that task. None preserves
+            state-based behavior for direct and legacy callers.
     """
 
     max_concurrent_sheets: int = 10
@@ -74,6 +77,9 @@ class DispatchConfig:
     stagger_delay_ms: int = 0
     job_max_concurrent: dict[str, int] = field(default_factory=dict)
     job_stagger_delay_ms: dict[str, int] = field(default_factory=dict)
+    active_executions: dict[
+        tuple[str, int], tuple[str, str | None]
+    ] | None = None
     time_fn: Callable[[], float] = time.monotonic
 
 
@@ -159,9 +165,10 @@ async def dispatch_ready(
     stagger_wake_delays: dict[str, float] = {}
 
     # Track running counts per model key (instrument:model or just instrument)
-    model_running: dict[str, int] = _count_dispatched_per_model(baton)
-    job_running: dict[str, int] = _count_dispatched_per_job(baton)
-    global_running = baton.running_sheet_count
+    occupied = _occupied_executions(baton, config)
+    model_running = _count_occupied_per_model(occupied)
+    job_running = _count_occupied_per_job(occupied)
+    global_running = len(occupied)
 
     for job_id in list(baton._jobs.keys()):
         job = baton._jobs.get(job_id)
@@ -184,6 +191,19 @@ async def dispatch_ready(
                 },
             )
         for sheet in ready:
+            # A rate-limit/fallback transition may relabel a sheet PENDING while
+            # its original musician is still exiting. Never dispatch the same
+            # sheet again until physical task authority is released.
+            if (job_id, sheet.sheet_num) in occupied:
+                _record_dispatch_block(
+                    result,
+                    job_id=job_id,
+                    sheet=sheet,
+                    reason="active_execution",
+                    skip_key="active_execution",
+                )
+                continue
+
             # Check global concurrency
             if global_running >= config.max_concurrent_sheets:
                 _logger.debug(
@@ -453,14 +473,22 @@ async def dispatch_ready(
     # accumulate timers; each job key clears when its DispatchRetry is handled.
     if baton._timer is not None:
         for wake_key, delay_seconds in stagger_wake_delays.items():
-            if wake_key in baton._stagger_wake_pending:
+            if wake_key in baton._stagger_wake_handles:
                 continue
-            baton._stagger_wake_pending.add(wake_key)
             event_job_id = None if wake_key == "__legacy__" else wake_key
-            baton._timer.schedule(
-                delay_seconds,
-                DispatchRetry(stagger_job_id=event_job_id),
+            generation = (
+                0
+                if event_job_id is None
+                else baton._jobs[event_job_id].generation
             )
+            handle = baton._timer.schedule(
+                delay_seconds,
+                DispatchRetry(
+                    stagger_job_id=event_job_id,
+                    stagger_generation=generation,
+                ),
+            )
+            baton._stagger_wake_handles[wake_key] = handle
 
     if result.dispatched_count > 0:
         _logger.info(
@@ -474,34 +502,52 @@ async def dispatch_ready(
     return result
 
 
-def _count_dispatched_per_model(baton: BatonCore) -> dict[str, int]:
-    """Count sheets currently in 'dispatched' status per model key.
+def _occupied_executions(
+    baton: BatonCore,
+    config: DispatchConfig,
+) -> dict[tuple[str, int], tuple[str, str | None]]:
+    """Return physical occupancy plus transient state-only dispatches.
+
+    The adapter supplies live musician task authority. State-only entries are
+    unioned in because a dispatch may be marked before its failure/result event
+    is consumed. Direct callers retain the historical state-derived behavior.
+    """
+    occupied = dict(config.active_executions or {})
+    for job_id, job in baton._jobs.items():
+        for sheet_num, sheet in job.sheets.items():
+            key = (job_id, sheet_num)
+            if key in occupied:
+                continue
+            if sheet.status in (
+                BatonSheetStatus.DISPATCHED,
+                BatonSheetStatus.IN_PROGRESS,
+            ):
+                occupied[key] = (sheet.instrument_name or "", sheet.model)
+    return occupied
+
+
+def _count_occupied_per_model(
+    occupied: dict[tuple[str, int], tuple[str, str | None]],
+) -> dict[str, int]:
+    """Count physically occupied slots per acquired model key.
 
     Keys are ``"instrument:model"`` when model is known, or just
     ``"instrument"`` when no model is set. This supports per-model
-    concurrency limits while falling back to per-instrument for
-    sheets without model info.
+    concurrency without losing tasks whose sheet state moved to WAITING or
+    advanced to a fallback while the original musician exits.
     """
     counts: dict[str, int] = {}
-    for job in baton._jobs.values():
-        for sheet in job.sheets.values():
-            if sheet.status == BatonSheetStatus.DISPATCHED:
-                inst = sheet.instrument_name or ""
-                key = (
-                    f"{inst}:{sheet.model}"
-                    if sheet.model
-                    else inst
-                )
-                counts[key] = counts.get(key, 0) + 1
+    for instrument, model in occupied.values():
+        key = f"{instrument}:{model}" if model else instrument
+        counts[key] = counts.get(key, 0) + 1
     return counts
 
 
-def _count_dispatched_per_job(baton: BatonCore) -> dict[str, int]:
-    """Count currently dispatched sheets independently for each job."""
-    return {
-        job_id: sum(
-            sheet.status == BatonSheetStatus.DISPATCHED
-            for sheet in job.sheets.values()
-        )
-        for job_id, job in baton._jobs.items()
-    }
+def _count_occupied_per_job(
+    occupied: dict[tuple[str, int], tuple[str, str | None]],
+) -> dict[str, int]:
+    """Count physically occupied slots independently for each job."""
+    counts: dict[str, int] = {}
+    for job_id, _sheet_num in occupied:
+        counts[job_id] = counts.get(job_id, 0) + 1
+    return counts
