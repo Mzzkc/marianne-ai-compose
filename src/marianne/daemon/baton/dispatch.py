@@ -40,8 +40,12 @@ from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
 _logger = get_logger("daemon.baton.dispatch")
 
 # Type alias for the dispatch callback.
-# Signature: async def dispatch(job_id: str, sheet_num: int, state: SheetExecutionState) -> None
-DispatchCallback = Callable[[str, int, SheetExecutionState], Awaitable[None]]
+# ``False`` means the registration became stale before physical dispatch.
+# ``None`` remains success for compatibility with legacy/direct callbacks.
+DispatchCallback = Callable[
+    [str, int, SheetExecutionState],
+    Awaitable[bool | None],
+]
 
 
 @dataclass
@@ -426,7 +430,9 @@ async def dispatch_ready(
 
             # Dispatch!
             try:
-                await callback(job_id, sheet.sheet_num, sheet)
+                dispatch_accepted = await callback(job_id, sheet.sheet_num, sheet)
+                if dispatch_accepted is False:
+                    continue
                 sheet.clear_dispatch_block()
                 # Status set through event handler for traceability.
                 # Called synchronously so concurrency counting works

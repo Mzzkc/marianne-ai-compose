@@ -13,8 +13,12 @@ from marianne.core.sheet import Sheet
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.dispatch import dispatch_ready
-from marianne.daemon.baton.events import RateLimitHit
-from marianne.daemon.baton.state import BatonSheetStatus, SheetExecutionState
+from marianne.daemon.baton.events import RateLimitHit, SheetAttemptResult
+from marianne.daemon.baton.state import (
+    AttemptMode,
+    BatonSheetStatus,
+    SheetExecutionState,
+)
 from marianne.daemon.baton.timer import TimerWheel
 
 
@@ -39,6 +43,30 @@ def _sheets(count: int, instrument: str = "claude-code") -> list[Sheet]:
         )
         for number in range(1, count + 1)
     ]
+
+
+class _BlockingBackendPool:
+    """Controllable backend acquisition/release boundary for race tests."""
+
+    def __init__(self, *, fail_interactive_acquire: bool = False) -> None:
+        self.fail_interactive_acquire = fail_interactive_acquire
+        self.error_after_release: Exception | None = None
+        self.acquire_entered = asyncio.Event()
+        self.acquire_release = asyncio.Event()
+        self.backend = object()
+        self.releases: list[tuple[str, object]] = []
+
+    async def acquire(self, instrument: str, **kwargs: object) -> object:
+        if self.fail_interactive_acquire and kwargs.get("interactive") is True:
+            raise ValueError("interactive unsupported")
+        self.acquire_entered.set()
+        await self.acquire_release.wait()
+        if self.error_after_release is not None:
+            raise self.error_after_release
+        return self.backend
+
+    async def release(self, instrument: str, backend: object) -> None:
+        self.releases.append((instrument, backend))
 
 
 @pytest.mark.asyncio
@@ -148,6 +176,232 @@ async def test_adapter_dispatch_config_uses_live_task_authority() -> None:
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_fail_fast_preserves_live_pending_fallback_sibling() -> None:
+    """A live musician remains running after its sheet is fallback-relabelled."""
+    adapter = BatonAdapter()
+    sheets = _sheets(3, instrument="other")
+    sheets[1] = Sheet(
+        num=2,
+        movement=1,
+        voice=2,
+        voice_count=3,
+        workspace=Path("/tmp/per-score-policy"),
+        instrument_name="primary",
+        instrument_fallbacks=["fallback"],
+        prompt_template="test",
+        timeout_seconds=60.0,
+    )
+    adapter.register_job(
+        "fast",
+        sheets,
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=3,
+        parallel_fail_fast=True,
+    )
+    states = adapter.baton._jobs["fast"].sheets
+    states[1].status = BatonSheetStatus.DISPATCHED
+    states[2].status = BatonSheetStatus.DISPATCHED
+
+    blocker = asyncio.Event()
+    task = asyncio.create_task(blocker.wait())
+    key = ("fast", 2)
+    adapter._active_tasks[key] = task
+    adapter._active_execution_details[key] = ("primary", None)
+    try:
+        await adapter.baton.handle_event(
+            RateLimitHit(
+                instrument="primary",
+                wait_seconds=30,
+                job_id="fast",
+                sheet_num=2,
+            )
+        )
+        assert states[2].status == BatonSheetStatus.PENDING
+        assert not task.done()
+
+        await adapter.baton.handle_event(
+            SheetAttemptResult(
+                job_id="fast",
+                sheet_num=1,
+                instrument_name="other",
+                attempt=1,
+                execution_success=False,
+                error_classification="AUTH_FAILURE",
+                error_message="bad auth",
+            )
+        )
+
+        assert states[1].status == BatonSheetStatus.FAILED
+        assert states[2].status == BatonSheetStatus.PENDING
+        assert not task.done()
+        assert states[3].status == BatonSheetStatus.SKIPPED
+        skip_events = adapter.baton.drain_skip_events()
+        assert {(event.job_id, event.sheet_num) for event in skip_events} == {
+            ("fast", 3)
+        }
+        assert adapter.baton._state_dirty is True
+    finally:
+        adapter._active_tasks.pop(key, None)
+        adapter._active_execution_details.pop(key, None)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fallback_acquire", [False, True])
+async def test_stale_acquisition_cannot_dispatch_into_reused_job(
+    fallback_acquire: bool,
+) -> None:
+    """Every backend-acquire await rechecks immutable job registration identity."""
+    pool = _BlockingBackendPool(fail_interactive_acquire=fallback_acquire)
+    adapter = BatonAdapter()
+    adapter._backend_pool = pool
+    sheet = _sheets(1, instrument="primary")[0]
+    if fallback_acquire:
+        sheet.instrument_config["interactive"] = True
+    adapter.register_job(
+        "reused",
+        [sheet],
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=1,
+    )
+    state = adapter.baton._jobs["reused"].sheets[1]
+    if fallback_acquire:
+        state.instrument_name = "fallback"
+        adapter.baton.register_instrument("fallback", max_concurrent=1)
+
+    musician_gate = asyncio.Event()
+    musician = asyncio.create_task(musician_gate.wait())
+    adapter._create_musician_task_after_acquire = MagicMock(
+        return_value=(musician, AttemptMode.NORMAL)
+    )
+    old_generation = adapter.baton._jobs["reused"].generation
+    dispatch_task = asyncio.create_task(
+        dispatch_ready(
+            adapter.baton,
+            adapter._build_dispatch_config(),
+            adapter._dispatch_callback,
+        )
+    )
+    await pool.acquire_entered.wait()
+
+    adapter.deregister_job("reused")
+    replacement = _sheets(1, instrument="replacement")
+    adapter.register_job(
+        "reused",
+        replacement,
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=1,
+    )
+    assert adapter.baton._jobs["reused"].generation != old_generation
+
+    pool.acquire_release.set()
+    result = await dispatch_task
+    try:
+        assert result.dispatched_sheets == []
+        assert adapter.baton._jobs["reused"].sheets[1].status == BatonSheetStatus.PENDING
+        assert ("reused", 1) not in adapter._active_tasks
+        assert ("reused", 1) not in adapter._active_execution_details
+        assert pool.releases == [("fallback" if fallback_acquire else "primary", pool.backend)]
+    finally:
+        musician.cancel()
+        await asyncio.gather(musician, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_stale_acquisition_failure_cannot_mutate_reused_job() -> None:
+    """A late acquire exception belongs to the old registration, not its reuse."""
+    pool = _BlockingBackendPool()
+    pool.error_after_release = RuntimeError("late pool failure")
+    adapter = BatonAdapter()
+    adapter._backend_pool = pool
+    adapter.register_job(
+        "reused",
+        _sheets(1, instrument="primary"),
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=1,
+    )
+    dispatch_task = asyncio.create_task(
+        dispatch_ready(
+            adapter.baton,
+            adapter._build_dispatch_config(),
+            adapter._dispatch_callback,
+        )
+    )
+    await pool.acquire_entered.wait()
+
+    adapter.deregister_job("reused")
+    adapter.register_job(
+        "reused",
+        _sheets(1, instrument="replacement"),
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=1,
+    )
+    pool.acquire_release.set()
+    result = await dispatch_task
+
+    assert result.dispatched_sheets == []
+    assert adapter.baton._jobs["reused"].sheets[1].status == BatonSheetStatus.PENDING
+    queued_events = []
+    while not adapter.baton.inbox.empty():
+        queued_events.append(adapter.baton.inbox.get_nowait())
+    assert not any(
+        isinstance(event, SheetAttemptResult)
+        for event in queued_events
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancelled_old_task_callback_cannot_clear_reused_job_task() -> None:
+    """A late done callback only cleans the exact task that owned the key."""
+    adapter = BatonAdapter()
+    adapter.register_job("reused", _sheets(1), {})
+    key = ("reused", 1)
+
+    old_gate = asyncio.Event()
+    old_task = asyncio.create_task(old_gate.wait())
+    adapter._active_tasks[key] = old_task
+    adapter._active_execution_details[key] = ("claude-code", None)
+    old_task.add_done_callback(
+        lambda task: adapter._on_musician_done("reused", 1, task)
+    )
+
+    adapter.deregister_job("reused")
+    adapter.register_job("reused", _sheets(1, instrument="replacement"), {})
+    replacement_state = adapter.baton._jobs["reused"].sheets[1]
+    replacement_state.status = BatonSheetStatus.DISPATCHED
+    new_gate = asyncio.Event()
+    new_task = asyncio.create_task(new_gate.wait())
+    adapter._active_tasks[key] = new_task
+    adapter._active_execution_details[key] = ("replacement", None)
+    adapter._active_pids[key] = (123, 123)
+
+    await asyncio.gather(old_task, return_exceptions=True)
+    await asyncio.sleep(0)
+    try:
+        assert adapter._active_tasks[key] is new_task
+        assert adapter._active_execution_details[key] == ("replacement", None)
+        assert adapter._active_pids[key] == (123, 123)
+        assert replacement_state.status == BatonSheetStatus.DISPATCHED
+        queued_events = []
+        while not adapter.baton.inbox.empty():
+            queued_events.append(adapter.baton.inbox.get_nowait())
+        assert not any(
+            isinstance(event, SheetAttemptResult)
+            and event.error_classification == "CANCELLED"
+            for event in queued_events
+        )
+    finally:
+        new_task.cancel()
+        await asyncio.gather(new_task, return_exceptions=True)
 
 
 @pytest.mark.asyncio

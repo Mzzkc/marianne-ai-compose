@@ -155,6 +155,10 @@ class BatonCore:
         self._inbox: asyncio.Queue[BatonEvent] = inbox or asyncio.Queue()
         self._jobs: dict[str, _JobRecord] = {}
         self._job_generation: int = 0
+        # Adapter-owned physical task authority. The core keeps this as an
+        # injected probe so logical state transitions (notably fallback to
+        # PENDING) cannot make a still-running musician look unstarted.
+        self._active_execution_probe: Callable[[str, int], bool] | None = None
         self._instruments: dict[str, InstrumentState] = {}
         self._job_cost_limits: dict[str, float] = {}
         self._sheet_cost_limits: dict[tuple[str, int], float] = {}
@@ -334,6 +338,23 @@ class BatonCore:
     def get_instrument_state(self, name: str) -> InstrumentState | None:
         """Get the tracking state for a specific instrument."""
         return self._instruments.get(name)
+
+    def set_active_execution_probe(
+        self,
+        probe: Callable[[str, int], bool] | None,
+    ) -> None:
+        """Set the physical musician-liveness authority used by transitions."""
+        self._active_execution_probe = probe
+
+    def get_job_generation(self, job_id: str) -> int | None:
+        """Return the immutable registration generation for a live job."""
+        job = self._jobs.get(job_id)
+        return job.generation if job is not None else None
+
+    def is_job_generation_current(self, job_id: str, generation: int) -> bool:
+        """Whether ``job_id`` still denotes the captured registration."""
+        job = self._jobs.get(job_id)
+        return job is not None and job.generation == generation
 
     def build_dispatch_config(
         self,
@@ -2224,6 +2245,11 @@ class BatonCore:
         if job.fail_fast:
             for sheet_num, fail_fast_sheet in job.sheets.items():
                 if fail_fast_sheet.status not in _DISPATCHABLE_BATON_STATUSES:
+                    continue
+                if (
+                    self._active_execution_probe is not None
+                    and self._active_execution_probe(job_id, sheet_num)
+                ):
                     continue
                 reason = f"Fail-fast after sheet {failed_sheet_num} failed"
                 # Reuse the canonical skip transition so terminal guards,
