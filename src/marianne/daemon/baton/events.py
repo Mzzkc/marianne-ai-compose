@@ -58,6 +58,10 @@ class SheetAttemptResult:
     sheet_num: int
     instrument_name: str
     attempt: int
+    # Immutable baton registration that owned this execution. Production
+    # constructors always populate it. None is retained only for legacy direct
+    # callers and is rejected after a job ID has been reused.
+    registration_generation: int | None = field(default=None, kw_only=True)
 
     # Execution outcome
     execution_success: bool = True
@@ -213,6 +217,7 @@ class RetryDue:
 
     job_id: str
     sheet_num: int
+    registration_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -278,6 +283,7 @@ class PacingComplete:
     """
 
     job_id: str
+    registration_generation: int | None = field(default=None, kw_only=True)
     timestamp: float = field(default_factory=time.time)
 
 
@@ -653,6 +659,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                     "instrument": event.instrument_name,
                     "model": event.model_used,
                     "attempt": event.attempt,
+                    "registration_generation": event.registration_generation,
                     "success": event.execution_success,
                     VALIDATION_PASS_RATE_KEY: event.validation_pass_rate,
                     "cost_usd": event.cost_usd,
@@ -697,7 +704,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": event.sheet_num,
                 "event": "baton.sheet.retry_scheduled",
-                "data": {},
+                "data": {"registration_generation": event.registration_generation},
                 "timestamp": event.timestamp,
             }
 
@@ -746,7 +753,7 @@ def to_observer_event(event: BatonEvent) -> ObserverEvent:
                 "job_id": event.job_id,
                 "sheet_num": 0,
                 "event": "baton.pacing.complete",
-                "data": {},
+                "data": {"registration_generation": event.registration_generation},
                 "timestamp": event.timestamp,
             }
 

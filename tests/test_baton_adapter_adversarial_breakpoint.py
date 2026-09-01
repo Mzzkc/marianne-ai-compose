@@ -738,7 +738,7 @@ class TestDeregistrationCleanup:
         assert "j1" not in adapter._job_renderers
 
     def test_deregister_cancels_active_tasks(self) -> None:
-        """Active musician tasks for the job are cancelled."""
+        """Cancelled tasks retain occupancy until their done callback."""
         adapter = _make_adapter()
         sheets = [_make_sheet(num=1)]
         adapter.register_job("j1", sheets, {1: []})
@@ -750,7 +750,7 @@ class TestDeregistrationCleanup:
         adapter.deregister_job("j1")
 
         mock_task.cancel.assert_called_once()
-        assert ("j1", 1) not in adapter._active_tasks
+        assert adapter._active_tasks[("j1", 1)] is mock_task
 
     def test_deregister_nonexistent_job_is_safe(self) -> None:
         """Deregistering a job that doesn't exist doesn't crash."""

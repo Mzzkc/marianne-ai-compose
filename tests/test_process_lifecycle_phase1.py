@@ -882,9 +882,12 @@ class TestDeregisterJobKillsProcessGroups:
         # Task was cancelled
         with pytest.raises(asyncio.CancelledError):
             await task
+        # The real dispatch path installs this callback; the test inserted the
+        # task manually, so invoke the physical-completion boundary explicitly.
+        adapter._on_musician_done("J", 1, task)
         # killpg was called
         assert any("killpg:200" in c for c in kill_order)
-        # Task was removed
+        # Physical completion releases the retained occupancy record.
         assert ("J", 1) not in adapter._active_tasks
 
     def test_signal_failure_is_reported_without_residual_claim(self) -> None:

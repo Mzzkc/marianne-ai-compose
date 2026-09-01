@@ -118,8 +118,11 @@ class TestDispatchGuardExceptionTaxonomy:
         """When state has zero attempts, failure event should be attempt 1."""
         from marianne.daemon.baton.adapter import BatonAdapter
 
-        baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
+        baton = MagicMock(
+            spec=["inbox", "_jobs", "_instruments", "get_job_generation"]
+        )
         baton.inbox = asyncio.Queue()
+        baton.get_job_generation.return_value = 1
         adapter = BatonAdapter.__new__(BatonAdapter)
         adapter._baton = baton
 
@@ -134,8 +137,11 @@ class TestDispatchGuardExceptionTaxonomy:
         """After 3 normal + 2 completion attempts, failure should be attempt 6."""
         from marianne.daemon.baton.adapter import BatonAdapter
 
-        baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
+        baton = MagicMock(
+            spec=["inbox", "_jobs", "_instruments", "get_job_generation"]
+        )
         baton.inbox = asyncio.Queue()
+        baton.get_job_generation.return_value = 1
         adapter = BatonAdapter.__new__(BatonAdapter)
         adapter._baton = baton
 
@@ -149,8 +155,11 @@ class TestDispatchGuardExceptionTaxonomy:
         """When state is None (sheet not found), attempt defaults to 1."""
         from marianne.daemon.baton.adapter import BatonAdapter
 
-        baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
+        baton = MagicMock(
+            spec=["inbox", "_jobs", "_instruments", "get_job_generation"]
+        )
         baton.inbox = asyncio.Queue()
+        baton.get_job_generation.return_value = 1
         adapter = BatonAdapter.__new__(BatonAdapter)
         adapter._baton = baton
 
@@ -163,8 +172,11 @@ class TestDispatchGuardExceptionTaxonomy:
         """All dispatch failures must use E505 classification."""
         from marianne.daemon.baton.adapter import BatonAdapter
 
-        baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
+        baton = MagicMock(
+            spec=["inbox", "_jobs", "_instruments", "get_job_generation"]
+        )
         baton.inbox = asyncio.Queue()
+        baton.get_job_generation.return_value = 1
         adapter = BatonAdapter.__new__(BatonAdapter)
         adapter._baton = baton
 
@@ -179,8 +191,11 @@ class TestDispatchGuardExceptionTaxonomy:
         """Failure event must carry the correct job_id and sheet_num."""
         from marianne.daemon.baton.adapter import BatonAdapter
 
-        baton = MagicMock(spec=["inbox", "_jobs", "_instruments"])
+        baton = MagicMock(
+            spec=["inbox", "_jobs", "_instruments", "get_job_generation"]
+        )
         baton.inbox = asyncio.Queue()
+        baton.get_job_generation.return_value = 1
         adapter = BatonAdapter.__new__(BatonAdapter)
         adapter._baton = baton
 

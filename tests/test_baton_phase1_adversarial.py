@@ -920,7 +920,7 @@ class TestDeregistrationDuringExecution:
     """Deregistering a job while it has active musician tasks."""
 
     def test_deregister_cancels_active_tasks(self) -> None:
-        """Active asyncio tasks for a job must be cancelled on deregistration."""
+        """Cancelled tasks retain physical occupancy until actually done."""
         adapter = BatonAdapter()
         mock_sheets = [MagicMock(num=1, instrument_name="claude-cli", movement=1)]
         adapter.register_job("j1", mock_sheets, {1: []})
@@ -933,7 +933,7 @@ class TestDeregistrationDuringExecution:
         adapter.deregister_job("j1")
 
         mock_task.cancel.assert_called_once()
-        assert ("j1", 1) not in adapter._active_tasks
+        assert adapter._active_tasks[("j1", 1)] is mock_task
 
     def test_deregister_cleans_up_cost_limits(self) -> None:
         """Deregistration must clean up per-job and per-sheet cost limits."""

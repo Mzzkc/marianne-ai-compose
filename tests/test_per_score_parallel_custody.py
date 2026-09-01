@@ -13,7 +13,12 @@ from marianne.core.sheet import Sheet
 from marianne.daemon.baton.adapter import BatonAdapter
 from marianne.daemon.baton.core import BatonCore
 from marianne.daemon.baton.dispatch import dispatch_ready
-from marianne.daemon.baton.events import RateLimitHit, SheetAttemptResult
+from marianne.daemon.baton.events import (
+    PacingComplete,
+    RateLimitHit,
+    RetryDue,
+    SheetAttemptResult,
+)
 from marianne.daemon.baton.state import (
     AttemptMode,
     BatonSheetStatus,
@@ -258,9 +263,7 @@ async def test_fail_fast_preserves_live_pending_fallback_sibling() -> None:
         assert not task.done()
         assert states[3].status == BatonSheetStatus.SKIPPED
         skip_events = adapter.baton.drain_skip_events()
-        assert {(event.job_id, event.sheet_num) for event in skip_events} == {
-            ("fast", 3)
-        }
+        assert {(event.job_id, event.sheet_num) for event in skip_events} == {("fast", 3)}
         assert adapter.baton._state_dirty is True
     finally:
         adapter._active_tasks.pop(key, None)
@@ -371,10 +374,7 @@ async def test_stale_acquisition_failure_cannot_mutate_reused_job() -> None:
     queued_events = []
     while not adapter.baton.inbox.empty():
         queued_events.append(adapter.baton.inbox.get_nowait())
-    assert not any(
-        isinstance(event, SheetAttemptResult)
-        for event in queued_events
-    )
+    assert not any(isinstance(event, SheetAttemptResult) for event in queued_events)
 
 
 @pytest.mark.asyncio
@@ -505,9 +505,7 @@ async def test_cancelled_old_task_callback_cannot_clear_reused_job_task() -> Non
     old_task = asyncio.create_task(old_gate.wait())
     adapter._active_tasks[key] = old_task
     adapter._active_execution_details[key] = ("claude-code", None)
-    old_task.add_done_callback(
-        lambda task: adapter._on_musician_done("reused", 1, task)
-    )
+    old_task.add_done_callback(lambda task: adapter._on_musician_done("reused", 1, task))
 
     adapter.deregister_job("reused")
     adapter.register_job("reused", _sheets(1, instrument="replacement"), {})
@@ -530,8 +528,7 @@ async def test_cancelled_old_task_callback_cannot_clear_reused_job_task() -> Non
         while not adapter.baton.inbox.empty():
             queued_events.append(adapter.baton.inbox.get_nowait())
         assert not any(
-            isinstance(event, SheetAttemptResult)
-            and event.error_classification == "CANCELLED"
+            isinstance(event, SheetAttemptResult) and event.error_classification == "CANCELLED"
             for event in queued_events
         )
     finally:
@@ -608,6 +605,263 @@ async def test_stagger_timer_is_cancelled_and_stale_generation_cannot_clear_reus
     await baton.handle_event(old_event)
     assert baton._stagger_wake_handles["reused"] is new_handle
     assert wheel.pending_count == 1
+
+
+@pytest.mark.asyncio
+async def test_deregister_during_later_callback_drops_stale_stagger_wake() -> None:
+    """A callback await may remove a job that recorded a stagger wake earlier."""
+    timer = MagicMock()
+    baton = BatonCore(timer=timer)
+    baton.register_instrument("claude-code", max_concurrent=10)
+    baton.register_job("paced", _states(1), {}, stagger_delay_ms=1000)
+    baton.register_job("trigger", _states(1), {})
+    baton._job_last_dispatch_at[("paced", "claude-code")] = 10.0
+    config = baton.build_dispatch_config(max_concurrent_sheets=10)
+    config.time_fn = lambda: 10.0
+
+    async def deregister_paced(
+        job_id: str,
+        sheet_num: int,
+        state: SheetExecutionState,
+    ) -> bool:
+        del sheet_num, state
+        assert job_id == "trigger"
+        baton.deregister_job("paced")
+        await asyncio.sleep(0)
+        return True
+
+    result = await dispatch_ready(baton, config, deregister_paced)
+
+    assert result.dispatched_sheets == [("trigger", 1)]
+    assert "paced" not in baton._stagger_wake_handles
+    timer.schedule.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_reuse_during_later_callback_cannot_adopt_old_stagger_wake() -> None:
+    """A replacement registration cannot inherit the old generation's delay."""
+    timer = MagicMock()
+    baton = BatonCore(timer=timer)
+    baton.register_instrument("claude-code", max_concurrent=10)
+    baton.register_job("paced", _states(1), {}, stagger_delay_ms=1000)
+    old_generation = baton.get_job_generation("paced")
+    baton.register_job("trigger", _states(1), {})
+    baton._job_last_dispatch_at[("paced", "claude-code")] = 10.0
+    config = baton.build_dispatch_config(max_concurrent_sheets=10)
+    config.time_fn = lambda: 10.0
+
+    async def replace_paced(
+        job_id: str,
+        sheet_num: int,
+        state: SheetExecutionState,
+    ) -> bool:
+        del sheet_num, state
+        assert job_id == "trigger"
+        baton.deregister_job("paced")
+        baton.register_job("paced", _states(1), {}, stagger_delay_ms=1000)
+        await asyncio.sleep(0)
+        return True
+
+    await dispatch_ready(baton, config, replace_paced)
+
+    assert baton.get_job_generation("paced") != old_generation
+    assert "paced" not in baton._stagger_wake_handles
+    timer.schedule.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_old_generation_events_cannot_mutate_reused_job() -> None:
+    """Attempt, retry, and pacing events remain bound to their registration."""
+    baton = BatonCore()
+    old = _states(1)
+    old[1].status = BatonSheetStatus.RETRY_SCHEDULED
+    baton.register_job("reused", old, {}, pacing_seconds=10)
+    old_generation = baton.get_job_generation("reused")
+    assert old_generation is not None
+    baton.deregister_job("reused")
+
+    replacement = _states(1, instrument="replacement")
+    replacement[1].status = BatonSheetStatus.RETRY_SCHEDULED
+    baton.register_job("reused", replacement, {}, pacing_seconds=10)
+    baton._jobs["reused"].pacing_active = True
+
+    await baton.handle_event(
+        RetryDue(
+            job_id="reused",
+            sheet_num=1,
+            registration_generation=old_generation,
+        )
+    )
+    await baton.handle_event(
+        PacingComplete(
+            job_id="reused",
+            registration_generation=old_generation,
+        )
+    )
+    await baton.handle_event(
+        SheetAttemptResult(
+            job_id="reused",
+            sheet_num=1,
+            instrument_name="claude-code",
+            attempt=1,
+            registration_generation=old_generation,
+            execution_success=True,
+        )
+    )
+    # Compatibility constructors without generation fail closed once an ID
+    # has become ambiguous through reuse.
+    await baton.handle_event(RetryDue(job_id="reused", sheet_num=1))
+    await baton.handle_event(PacingComplete(job_id="reused"))
+    await baton.handle_event(
+        SheetAttemptResult(
+            job_id="reused",
+            sheet_num=1,
+            instrument_name="claude-code",
+            attempt=1,
+            execution_success=True,
+        )
+    )
+
+    assert replacement[1].status == BatonSheetStatus.RETRY_SCHEDULED
+    assert replacement[1].normal_attempts == 0
+    assert replacement[1].completion_attempts == 0
+    assert baton._jobs["reused"].pacing_active is True
+
+
+def test_retry_and_pacing_timers_capture_registration_generation() -> None:
+    """Every production timer constructor binds the current job generation."""
+    timer = MagicMock()
+    baton = BatonCore(timer=timer)
+    sheets = _states(1)
+    baton.register_job("timed", sheets, {}, pacing_seconds=5)
+    generation = baton.get_job_generation("timed")
+    assert generation is not None
+
+    baton._schedule_retry("timed", 1, sheets[1])
+    retry_event = timer.schedule.call_args_list[-1].args[1]
+    assert isinstance(retry_event, RetryDue)
+    assert retry_event.registration_generation == generation
+
+    sheets[1].status = BatonSheetStatus.COMPLETED
+    baton._schedule_pacing("timed")
+    pacing_event = timer.schedule.call_args_list[-1].args[1]
+    assert isinstance(pacing_event, PacingComplete)
+    assert pacing_event.registration_generation == generation
+
+
+@pytest.mark.asyncio
+async def test_deregister_retains_occupancy_until_cancelled_task_cleanup_finishes() -> None:
+    """A replacement cannot over-dispatch while old cleanup still owns a slot."""
+    adapter = BatonAdapter(max_concurrent_sheets=1)
+    adapter.register_job(
+        "reused",
+        _sheets(1, instrument="old"),
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=1,
+    )
+    old_generation = adapter.baton.get_job_generation("reused")
+    assert old_generation is not None
+    cleanup_entered = asyncio.Event()
+    cleanup_allowed = asyncio.Event()
+
+    async def old_task_body() -> None:
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleanup_entered.set()
+            await cleanup_allowed.wait()
+
+    key = ("reused", 1)
+    old_task = asyncio.create_task(old_task_body())
+    adapter._active_tasks[key] = old_task
+    adapter._active_execution_details[key] = ("old", None)
+    old_task.add_done_callback(
+        lambda task: adapter._on_musician_done(
+            "reused", 1, task, registration_generation=old_generation
+        )
+    )
+    await asyncio.sleep(0)
+
+    adapter.deregister_job("reused")
+    await cleanup_entered.wait()
+    adapter.register_job(
+        "reused",
+        _sheets(2, instrument="replacement"),
+        {},
+        parallel_enabled=True,
+        parallel_max_concurrent=2,
+    )
+
+    blocked = await dispatch_ready(
+        adapter.baton,
+        adapter._build_dispatch_config(),
+        AsyncMock(),
+    )
+    assert blocked.dispatched_sheets == []
+    assert adapter._active_tasks[key] is old_task
+
+    cleanup_allowed.set()
+    await asyncio.gather(old_task, return_exceptions=True)
+    await asyncio.sleep(0)
+    callback = AsyncMock(return_value=True)
+    released = await dispatch_ready(
+        adapter.baton,
+        adapter._build_dispatch_config(),
+        callback,
+    )
+    assert released.dispatched_sheets == [("reused", 1)]
+
+
+@pytest.mark.asyncio
+async def test_retiring_task_holds_global_slot_against_unrelated_job() -> None:
+    """Deregistration does not erase physical occupancy from global accounting."""
+    adapter = BatonAdapter(max_concurrent_sheets=1)
+    adapter.register_job("retiring", _sheets(1, instrument="old"), {})
+    old_generation = adapter.baton.get_job_generation("retiring")
+    assert old_generation is not None
+    cleanup_entered = asyncio.Event()
+    cleanup_allowed = asyncio.Event()
+
+    async def old_task_body() -> None:
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleanup_entered.set()
+            await cleanup_allowed.wait()
+
+    key = ("retiring", 1)
+    old_task = asyncio.create_task(old_task_body())
+    adapter._active_tasks[key] = old_task
+    adapter._active_execution_details[key] = ("old", None)
+    old_task.add_done_callback(
+        lambda task: adapter._on_musician_done(
+            "retiring", 1, task, registration_generation=old_generation
+        )
+    )
+    await asyncio.sleep(0)
+
+    adapter.deregister_job("retiring")
+    await cleanup_entered.wait()
+    adapter.register_job("unrelated", _sheets(1, instrument="replacement"), {})
+
+    blocked = await dispatch_ready(
+        adapter.baton,
+        adapter._build_dispatch_config(),
+        AsyncMock(),
+    )
+    assert blocked.dispatched_sheets == []
+    assert blocked.skipped_reasons == {"global_concurrency": 1}
+
+    cleanup_allowed.set()
+    await asyncio.gather(old_task, return_exceptions=True)
+    await asyncio.sleep(0)
+    released = await dispatch_ready(
+        adapter.baton,
+        adapter._build_dispatch_config(),
+        AsyncMock(return_value=True),
+    )
+    assert released.dispatched_sheets == [("unrelated", 1)]
 
 
 def test_fail_fast_terminalizes_only_unstarted_sheets_in_its_job() -> None:

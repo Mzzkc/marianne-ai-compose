@@ -5108,8 +5108,12 @@ class JobManager:
             parallel_max_concurrent=(
                 config.parallel.max_concurrent if config.parallel.enabled else 1
             ),
-            parallel_fail_fast=config.parallel.fail_fast,
-            parallel_stagger_delay_ms=config.parallel.stagger_delay_ms,
+            parallel_fail_fast=(
+                config.parallel.fail_fast if config.parallel.enabled else False
+            ),
+            parallel_stagger_delay_ms=(
+                config.parallel.stagger_delay_ms if config.parallel.enabled else 0
+            ),
             runtime_variables=dict(request.runtime_variables),  # #359 durable
             max_wall_seconds=meta.max_wall_seconds if meta is not None else None,
             wall_deadline_at=meta.wall_deadline_at if meta is not None else None,
@@ -5429,8 +5433,12 @@ class JobManager:
         checkpoint.parallel_max_concurrent = (
             config.parallel.max_concurrent if config.parallel.enabled else 1
         )
-        checkpoint.parallel_fail_fast = config.parallel.fail_fast
-        checkpoint.parallel_stagger_delay_ms = config.parallel.stagger_delay_ms
+        checkpoint.parallel_fail_fast = (
+            config.parallel.fail_fast if config.parallel.enabled else False
+        )
+        checkpoint.parallel_stagger_delay_ms = (
+            config.parallel.stagger_delay_ms if config.parallel.enabled else 0
+        )
 
         # F-493: Persist the updated started_at immediately so status queries
         # show correct elapsed time even before the first baton persist cycle.

@@ -86,7 +86,10 @@ class TimerWheel:
         wheel = TimerWheel(inbox)
 
         # Schedule a retry in 30 seconds
-        handle = wheel.schedule(30.0, RetryDue(job_id="j1", sheet_num=5))
+        handle = wheel.schedule(
+            30.0,
+            RetryDue(job_id="j1", sheet_num=5, registration_generation=1),
+        )
 
         # Cancel if no longer needed
         wheel.cancel(handle)

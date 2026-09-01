@@ -89,6 +89,7 @@ class TestF152DispatchGuard:
         assert isinstance(event, SheetAttemptResult)
         assert event.job_id == "j1"
         assert event.sheet_num == 1
+        assert event.registration_generation == adapter.baton.get_job_generation("j1")
         assert event.execution_success is False
         assert event.instrument_name == "bad-instrument"
         assert event.error_message is not None
@@ -453,7 +454,12 @@ class TestF158PromptConfigWiring:
             await manager._run_via_baton("serial", mock_config, _make_mock_request())
         call_kwargs = adapter.register_job.call_args.kwargs
         assert call_kwargs["parallel_max_concurrent"] == 1
+        assert call_kwargs["parallel_fail_fast"] is False
         assert call_kwargs["stagger_delay_ms"] == 0
+        checkpoint = manager._live_states["serial"]
+        assert checkpoint.parallel_max_concurrent == 1
+        assert checkpoint.parallel_fail_fast is False
+        assert checkpoint.parallel_stagger_delay_ms == 0
 
     @pytest.mark.asyncio
     async def test_resume_via_baton_passes_prompt_config(self) -> None:
@@ -531,7 +537,11 @@ class TestF158PromptConfigWiring:
             await manager._resume_via_baton("serial-resume", Path("/tmp/ws"))
         call_kwargs = adapter.recover_job.call_args.kwargs
         assert call_kwargs["parallel_max_concurrent"] == 1
+        assert call_kwargs["parallel_fail_fast"] is False
         assert call_kwargs["stagger_delay_ms"] == 0
+        assert checkpoint.parallel_max_concurrent == 1
+        assert checkpoint.parallel_fail_fast is False
+        assert checkpoint.parallel_stagger_delay_ms == 0
 
 
 # =========================================================================
@@ -546,6 +556,7 @@ def _make_mock_manager() -> MagicMock:
     manager = MagicMock()
     manager._baton_adapter = BatonAdapter()
     manager._job_meta = {}
+    manager._live_states = {}
     manager._config_name_to_conductor_id = {}
     manager._config = MagicMock()
     manager._config.default_thinking_method = None

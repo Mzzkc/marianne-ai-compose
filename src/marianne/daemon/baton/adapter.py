@@ -1341,13 +1341,13 @@ class BatonAdapter:
             self._cleanup_results[result_key] = cleanup_result
         self._kill_interactive_sessions(job_id)
 
-        # Cancel active musician tasks for this job
+        # Cancel active musician tasks, but retain their occupancy records until
+        # each task is physically done with cancellation cleanup/backend release.
         keys_to_cancel = [
             key for key in self._active_tasks if key[0] == job_id
         ]
         for key in keys_to_cancel:
-            task = self._active_tasks.pop(key)
-            self._active_execution_details.pop(key, None)
+            task = self._active_tasks[key]
             task.cancel(msg=f"deregister_job({job_id})")
         if keys_to_cancel:
             _logger.info(
@@ -2313,6 +2313,7 @@ class BatonAdapter:
             sheet_num=sheet_num,
             instrument_name=instrument_name,
             attempt=attempt,
+            registration_generation=self._baton.get_job_generation(job_id),
             execution_success=False,
             error_classification="E505",
             error_message=error_msg,
@@ -2637,6 +2638,7 @@ class BatonAdapter:
                 output_router_active=output_router_active,
                 mcp_code_bridge_active=mcp_code_bridge_active,
                 mcp_bind_mounts=mcp_bind_mounts,
+                registration_generation=registration_generation,
             )
         except Exception as exc:
             if hasattr(backend, "set_mcp_config"):
@@ -2666,7 +2668,12 @@ class BatonAdapter:
             state.model,
         )
         task.add_done_callback(
-            lambda t: self._on_musician_done(job_id, sheet_num, t)
+            lambda t: self._on_musician_done(
+                job_id,
+                sheet_num,
+                t,
+                registration_generation=registration_generation,
+            )
         )
 
         _logger.info(
@@ -2712,6 +2719,7 @@ class BatonAdapter:
         output_router_active: bool,
         mcp_code_bridge_active: bool,
         mcp_bind_mounts: list[Path],
+        registration_generation: int,
     ) -> tuple[asyncio.Task[None], AttemptMode]:
         """Finish all fallible setup while the caller still owns the lease."""
         prior_failure = self._build_healing_context(state, job_id, sheet_num)
@@ -2780,6 +2788,7 @@ class BatonAdapter:
                     output_router_active=output_router_active,
                     mcp_code_bridge_active=mcp_code_bridge_active,
                     mcp_bind_mounts=mcp_bind_mounts,
+                    registration_generation=registration_generation,
                 ),
                 name=f"musician-{job_id}-s{sheet_num}",
             ),
@@ -2799,6 +2808,7 @@ class BatonAdapter:
         output_router_active: bool = False,
         mcp_code_bridge_active: bool = False,
         mcp_bind_mounts: list[Path] | None = None,
+        registration_generation: int | None = None,
     ) -> None:
         """Wrapper around sheet_task that handles backend release.
 
@@ -3026,6 +3036,7 @@ class BatonAdapter:
                 technique_router=technique_router,
                 code_executor=code_executor,
                 context_delivery=context_delivery,
+                registration_generation=registration_generation,
             )
         finally:
             # Phase 1 item 4: idempotent clear of the PID/PGID entry. The
@@ -3082,6 +3093,8 @@ class BatonAdapter:
         job_id: str,
         sheet_num: int,
         task: asyncio.Task[Any],
+        *,
+        registration_generation: int | None = None,
     ) -> None:
         """Callback when a musician task completes.
 
@@ -3146,6 +3159,7 @@ class BatonAdapter:
                     sheet_num=sheet_num,
                     instrument_name=state.instrument_name or "",
                     attempt=state.normal_attempts + 1,
+                    registration_generation=registration_generation,
                     execution_success=False,
                     error_classification="STALE" if is_stale else "CANCELLED",
                     error_message=(
@@ -3423,18 +3437,23 @@ class BatonAdapter:
                     "adapter.stale_check.task_dead",
                     extra={"job_id": event.job_id, "sheet_num": event.sheet_num},
                 )
-                self._baton.inbox.put_nowait(SheetAttemptResult(
-                    job_id=event.job_id,
-                    sheet_num=event.sheet_num,
-                    instrument_name=state.instrument_name or "",
-                    attempt=state.normal_attempts + 1,
-                    execution_success=False,
-                    error_classification="STALE",
-                    error_message=(
-                        f"Sheet {event.sheet_num}: musician task dead "
-                        f"with no result reported"
-                    ),
-                ))
+                self._baton.inbox.put_nowait(
+                    SheetAttemptResult(
+                        job_id=event.job_id,
+                        sheet_num=event.sheet_num,
+                        instrument_name=state.instrument_name or "",
+                        attempt=state.normal_attempts + 1,
+                        registration_generation=self._baton.get_job_generation(
+                            event.job_id
+                        ),
+                        execution_success=False,
+                        error_classification="STALE",
+                        error_message=(
+                            f"Sheet {event.sheet_num}: musician task dead "
+                            f"with no result reported"
+                        ),
+                    )
+                )
             await self._baton.handle_event(event)
             return
 
@@ -3856,7 +3875,14 @@ class BatonAdapter:
                     # (FERMATA) sheet — its own handler, not the baton's.
                     await self._handle_fermata_check(event)
                 else:
-                    if isinstance(event, SheetAttemptResult):
+                    if (
+                        isinstance(event, SheetAttemptResult)
+                        and self._baton._event_generation_is_current(
+                            event.job_id,
+                            event.registration_generation,
+                            event_type=type(event).__name__,
+                        )
+                    ):
                         await self._route_a2a_requests(event)
                     await self._baton.handle_event(event)
 

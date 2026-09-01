@@ -166,7 +166,9 @@ async def dispatch_ready(
     # #340: dispatch stagger — `now` and the skip flag drive the per-instrument
     # last-dispatch-time gate below.
     now = config.time_fn()
-    stagger_wake_delays: dict[str, float] = {}
+    # Wake requests retain the generation that encountered the gate because a
+    # later callback can deregister or replace the job before timer scheduling.
+    stagger_wake_delays: dict[str, tuple[float, int]] = {}
 
     # Track running counts per model key (instrument:model or just instrument)
     occupied = _occupied_executions(baton, config)
@@ -424,9 +426,13 @@ async def dispatch_ready(
                     )
                     remaining_seconds = max(0.0, stagger_delay_ms / 1000.0 - elapsed)
                     wake_key = job_id if has_job_stagger else "__legacy__"
-                    previous_delay = stagger_wake_delays.get(wake_key)
-                    if previous_delay is None or remaining_seconds < previous_delay:
-                        stagger_wake_delays[wake_key] = remaining_seconds
+                    wake_generation = registration_generation if has_job_stagger else 0
+                    previous = stagger_wake_delays.get(wake_key)
+                    if previous is None or remaining_seconds < previous[0]:
+                        stagger_wake_delays[wake_key] = (
+                            remaining_seconds,
+                            wake_generation,
+                        )
                     continue
 
             # Dispatch!
@@ -489,15 +495,15 @@ async def dispatch_ready(
     # a normal dispatch cycle. Guarded so repeated cycles within a window don't
     # accumulate timers; each job key clears when its DispatchRetry is handled.
     if baton._timer is not None:
-        for wake_key, delay_seconds in stagger_wake_delays.items():
+        for wake_key, (delay_seconds, generation) in stagger_wake_delays.items():
             if wake_key in baton._stagger_wake_handles:
                 continue
             event_job_id = None if wake_key == "__legacy__" else wake_key
-            generation = (
-                0
-                if event_job_id is None
-                else baton._jobs[event_job_id].generation
-            )
+            if (
+                event_job_id is not None
+                and not baton.is_job_generation_current(event_job_id, generation)
+            ):
+                continue
             handle = baton._timer.schedule(
                 delay_seconds,
                 DispatchRetry(

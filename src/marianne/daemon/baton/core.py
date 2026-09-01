@@ -158,6 +158,10 @@ class BatonCore:
         self._inbox: asyncio.Queue[BatonEvent] = inbox or asyncio.Queue()
         self._jobs: dict[str, _JobRecord] = {}
         self._job_generation: int = 0
+        # Generation-less events are legacy direct-caller compatibility. Once
+        # an ID is reused they fail closed because ownership is ambiguous.
+        self._seen_job_ids: set[str] = set()
+        self._reused_job_ids: set[str] = set()
         # Adapter-owned physical task authority. The core keeps this as an
         # injected probe so logical state transitions (notably fallback to
         # PENDING) cannot make a still-running musician look unstarted.
@@ -363,6 +367,37 @@ class BatonCore:
         """Whether ``job_id`` still denotes the captured registration."""
         job = self._jobs.get(job_id)
         return job is not None and job.generation == generation
+
+    def _event_generation_is_current(
+        self,
+        job_id: str,
+        registration_generation: int | None,
+        *,
+        event_type: str,
+    ) -> bool:
+        """Whether a delayed/result event owns the live registration.
+
+        Legacy direct integrations omitted generations. They remain compatible
+        only until that job ID is reused; ambiguity then fails closed.
+        """
+        job = self._jobs.get(job_id)
+        if job is None:
+            return False
+        if registration_generation is None:
+            current = job_id not in getattr(self, "_reused_job_ids", set())
+        else:
+            current = registration_generation == job.generation
+        if not current:
+            _logger.warning(
+                "baton.event.stale_registration",
+                extra={
+                    "event_type": event_type,
+                    "job_id": job_id,
+                    "event_generation": registration_generation,
+                    "current_generation": job.generation,
+                },
+            )
+        return current
 
     def build_dispatch_config(
         self,
@@ -770,7 +805,14 @@ class BatonCore:
         delay = self.calculate_retry_delay(attempt_index)
 
         if self._timer is not None:
-            event = RetryDue(job_id=job_id, sheet_num=sheet_num)
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            event = RetryDue(
+                job_id=job_id,
+                sheet_num=sheet_num,
+                registration_generation=job.generation,
+            )
             self._timer.schedule(delay, event)
             sheet.next_retry_at = time.monotonic() + delay
             _logger.info(
@@ -1173,6 +1215,16 @@ class BatonCore:
         # Auto-register any instruments used by the job's sheets
         self._auto_register_instruments(sheets)
 
+        seen_job_ids = getattr(self, "_seen_job_ids", None)
+        if seen_job_ids is None:
+            seen_job_ids = self._seen_job_ids = set()
+        reused_job_ids = getattr(self, "_reused_job_ids", None)
+        if reused_job_ids is None:
+            reused_job_ids = self._reused_job_ids = set()
+        if job_id in seen_job_ids:
+            reused_job_ids.add(job_id)
+        seen_job_ids.add(job_id)
+
         self._job_generation += 1
         self._jobs[job_id] = _JobRecord(
             job_id=job_id,
@@ -1486,6 +1538,13 @@ class BatonCore:
                 "baton.attempt_result.unknown_job",
                 extra={"job_id": event.job_id, SHEET_NUM_KEY: event.sheet_num},
             )
+            return
+
+        if not self._event_generation_is_current(
+            event.job_id,
+            event.registration_generation,
+            event_type=type(event).__name__,
+        ):
             return
 
         sheet = job.sheets.get(event.sheet_num)
@@ -1864,6 +1923,12 @@ class BatonCore:
         job = self._jobs.get(event.job_id)
         if job is None:
             return
+        if not self._event_generation_is_current(
+            event.job_id,
+            event.registration_generation,
+            event_type=type(event).__name__,
+        ):
+            return
         sheet = job.sheets.get(event.sheet_num)
         if sheet is not None and sheet.status == BatonSheetStatus.RETRY_SCHEDULED:
             sheet.status = BatonSheetStatus.PENDING
@@ -2080,6 +2145,7 @@ class BatonCore:
                 sheet_num=event.sheet_num,
                 instrument_name=sheet.instrument_name or "",
                 attempt=sheet.normal_attempts + 1,
+                registration_generation=job.generation,
                 execution_success=False,
                 exit_code=event.exit_code,
                 duration_seconds=0.0,
@@ -2177,7 +2243,11 @@ class BatonCore:
     def _handle_pacing_complete(self, event: PacingComplete) -> None:
         """Inter-sheet pacing delay elapsed — allow dispatch for this job."""
         job = self._jobs.get(event.job_id)
-        if job is not None:
+        if job is not None and self._event_generation_is_current(
+            event.job_id,
+            event.registration_generation,
+            event_type=type(event).__name__,
+        ):
             job.pacing_active = False
             self._state_dirty = True
             _logger.debug(
@@ -2222,7 +2292,10 @@ class BatonCore:
         if self._timer is not None:
             self._timer.schedule(
                 job.pacing_seconds,
-                PacingComplete(job_id=job_id),
+                PacingComplete(
+                    job_id=job_id,
+                    registration_generation=job.generation,
+                ),
             )
             _logger.debug(
                 "baton.pacing.scheduled",
