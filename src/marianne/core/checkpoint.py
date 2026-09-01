@@ -1234,6 +1234,14 @@ class CheckpointState(BaseModel):
         default=1,
         description="Maximum concurrent sheets when parallel mode is enabled",
     )
+    parallel_fail_fast: bool = Field(
+        default=True,
+        description="Whether a sheet failure prevents new sheets from starting",
+    )
+    parallel_stagger_delay_ms: int = Field(
+        default=0,
+        description="Per-job delay between same-instrument parallel launches",
+    )
     parallel_batches_executed: int = Field(
         default=0,
         description="Number of parallel batches executed so far",

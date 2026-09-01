@@ -87,6 +87,13 @@ class _JobRecord:
     self_healing_enabled: bool = False  # Try healing on exhaustion
     pacing_active: bool = False  # Inter-sheet pacing delay in progress
     pacing_seconds: float = 0.0  # pause_between_sheets_seconds from config
+    # Score-owned parallel policy. ``max_concurrent=None`` is reserved for
+    # legacy low-level callers that historically used only the daemon-global
+    # ceiling. Score-facing serial mode is represented explicitly as ``1``.
+    max_concurrent: int | None = None
+    fail_fast: bool = False
+    stagger_delay_ms: int = 0
+    generation: int = 0
     # #201: workspace + config path for building a healing ErrorContext on
     # exhaustion (the baton drives self-healing off SheetState, which lacks
     # these). Set at register time; immutable for the job's lifetime.
@@ -150,6 +157,11 @@ class BatonCore:
         """
         self._inbox: asyncio.Queue[BatonEvent] = inbox or asyncio.Queue()
         self._jobs: dict[str, _JobRecord] = {}
+        self._job_generation: int = 0
+        # Adapter-owned physical task authority. The core keeps this as an
+        # injected probe so logical state transitions (notably fallback to
+        # PENDING) cannot make a still-running musician look unstarted.
+        self._active_execution_probe: Callable[[str, int], bool] | None = None
         self._instruments: dict[str, InstrumentState] = {}
         self._job_cost_limits: dict[str, float] = {}
         self._sheet_cost_limits: dict[tuple[str, int], float] = {}
@@ -177,6 +189,9 @@ class BatonCore:
         # The adapter drains these after each event cycle and publishes
         # them to the EventBus for observability (dashboard, learning hub).
         self._fallback_events: list[InstrumentFallback] = []
+        # Canonical skip transitions use the same drain-and-publish pattern,
+        # including scheduler-created dependency/fail-fast skips.
+        self._skip_events: list[SheetSkipped] = []
 
         # Per-model concurrency limits from instrument profiles.
         # Keys: "instrument:model", values: max_concurrent.
@@ -207,11 +222,13 @@ class BatonCore:
         # DispatchRetry pending; it is cleared when the loop handles it.
         self._dispatch_retry_pending: bool = False
 
-        # #340: at most one delayed stagger wake-up DispatchRetry pending at a
-        # time (dispatch_ready may stagger-skip on many cycles within a window;
-        # one delayed wake suffices to re-evaluate). Cleared when a DispatchRetry
-        # is handled, alongside _dispatch_retry_pending.
-        self._stagger_wake_pending: bool = False
+        # #340: one owned TimerHandle per job (plus the legacy scalar key).
+        # Handles are cancelled on deregistration and guarded by registration
+        # generation so stale timer events cannot affect a reused job ID.
+        self._stagger_wake_handles: dict[str, Any] = {}
+        # Per-job stagger custody. A shared InstrumentState timestamp would let
+        # one score delay another score using the same provider.
+        self._job_last_dispatch_at: dict[tuple[str, str], float] = {}
 
         # Inbox-depth observability (#222). The inbox is intentionally UNBOUNDED
         # — dropping a baton event (a completion, rate-limit hit, retry-due,
@@ -263,6 +280,12 @@ class BatonCore:
         """
         events = list(self._fallback_events)
         self._fallback_events.clear()
+        return events
+
+    def drain_skip_events(self) -> list[SheetSkipped]:
+        """Return and clear canonical sheet-skip observer events."""
+        events = list(self._skip_events)
+        self._skip_events.clear()
         return events
 
     @property
@@ -324,8 +347,31 @@ class BatonCore:
         """Get the tracking state for a specific instrument."""
         return self._instruments.get(name)
 
+    def set_active_execution_probe(
+        self,
+        probe: Callable[[str, int], bool] | None,
+    ) -> None:
+        """Set the physical musician-liveness authority used by transitions."""
+        self._active_execution_probe = probe
+
+    def get_job_generation(self, job_id: str) -> int | None:
+        """Return the immutable registration generation for a live job."""
+        job = self._jobs.get(job_id)
+        return job.generation if job is not None else None
+
+    def is_job_generation_current(self, job_id: str, generation: int) -> bool:
+        """Whether ``job_id`` still denotes the captured registration."""
+        job = self._jobs.get(job_id)
+        return job is not None and job.generation == generation
+
     def build_dispatch_config(
-        self, *, max_concurrent_sheets: int = 10, stagger_delay_ms: int = 0
+        self,
+        *,
+        max_concurrent_sheets: int = 10,
+        stagger_delay_ms: int = 0,
+        active_executions: dict[
+            tuple[str, int], tuple[str, str | None]
+        ] | None = None,
     ) -> DispatchConfig:
         """Build a DispatchConfig from the current instrument state.
 
@@ -363,6 +409,17 @@ class BatonCore:
             rate_limited_instruments=rate_limited,
             open_circuit_breakers=open_breakers,
             stagger_delay_ms=stagger_delay_ms,
+            active_executions=active_executions,
+            job_max_concurrent={
+                job_id: job.max_concurrent
+                for job_id, job in self._jobs.items()
+                if job.max_concurrent is not None
+            },
+            job_stagger_delay_ms={
+                job_id: job.stagger_delay_ms
+                for job_id, job in self._jobs.items()
+                if job.stagger_delay_ms > 0
+            },
         )
 
     def set_job_cost_limit(self, job_id: str, max_cost_usd: float) -> None:
@@ -1085,6 +1142,9 @@ class BatonCore:
         escalation_enabled: bool = False,
         self_healing_enabled: bool = False,
         pacing_seconds: float = 0.0,
+        max_concurrent: int | None = None,
+        fail_fast: bool = False,
+        stagger_delay_ms: int = 0,
         workspace: Path | None = None,
         config_path: Path | None = None,
     ) -> None:
@@ -1099,6 +1159,9 @@ class BatonCore:
             self_healing_enabled: Whether to try healing on exhaustion.
             pacing_seconds: Inter-sheet delay after each completion (from
                 ``pause_between_sheets_seconds``). 0 = no delay.
+            max_concurrent: Per-job ceiling, or None for serial/legacy jobs.
+            fail_fast: Terminalize unstarted work after the first failure.
+            stagger_delay_ms: Per-job spacing between same-instrument launches.
         """
         if job_id in self._jobs:
             _logger.warning(
@@ -1110,6 +1173,7 @@ class BatonCore:
         # Auto-register any instruments used by the job's sheets
         self._auto_register_instruments(sheets)
 
+        self._job_generation += 1
         self._jobs[job_id] = _JobRecord(
             job_id=job_id,
             sheets=sheets,
@@ -1119,6 +1183,10 @@ class BatonCore:
             workspace=workspace,
             config_path=config_path,
             pacing_seconds=pacing_seconds,
+            max_concurrent=max_concurrent,
+            fail_fast=fail_fast,
+            stagger_delay_ms=stagger_delay_ms,
+            generation=self._job_generation,
         )
         self._state_dirty = True
 
@@ -1158,6 +1226,14 @@ class BatonCore:
             sheet_keys_to_remove = [key for key in self._sheet_cost_limits if key[0] == job_id]
             for key in sheet_keys_to_remove:
                 del self._sheet_cost_limits[key]
+            for dispatch_key in [
+                key for key in self._job_last_dispatch_at if key[0] == job_id
+            ]:
+                del self._job_last_dispatch_at[dispatch_key]
+            stagger_handle = self._stagger_wake_handles.pop(job_id, None)
+            if stagger_handle is not None and self._timer is not None:
+                self._timer.cancel(stagger_handle)
+            self._skip_events = [event for event in self._skip_events if event.job_id != job_id]
             self._state_dirty = True
             _logger.info("baton.job_deregistered", extra={"job_id": job_id})
 
@@ -1360,9 +1436,20 @@ class BatonCore:
                     # next cascade can enqueue a fresh wake (#222). Dispatch and
                     # completion checks run in the adapter loop after this.
                     self._dispatch_retry_pending = False
-                    # #340: a stagger wake (also a DispatchRetry) is now consumed
-                    # too — allow the next stagger-skip cycle to schedule one.
-                    self._stagger_wake_pending = False
+                    # #340: release only the handle belonging to the same job
+                    # registration. Stale events from a cancelled/replaced
+                    # timer cannot clear a reused job ID's live handle.
+                    if event.stagger_job_id is not None:
+                        job = self._jobs.get(event.stagger_job_id)
+                        if (
+                            job is not None
+                            and event.stagger_generation == job.generation
+                        ):
+                            self._stagger_wake_handles.pop(
+                                event.stagger_job_id, None
+                            )
+                    elif event.stagger_generation == 0:
+                        self._stagger_wake_handles.pop("__legacy__", None)
 
                 case CircuitBreakerRecovery():
                     self._handle_circuit_breaker_recovery(event)
@@ -1635,6 +1722,7 @@ class BatonCore:
             return
         sheet.status = BatonSheetStatus.SKIPPED
         sheet.clear_dispatch_block()
+        self._skip_events.append(event)
         self._state_dirty = True
         _logger.info(
             "baton.sheet.skipped",
@@ -2168,6 +2256,27 @@ class BatonCore:
         if job is None:
             return
 
+        fail_fast_skipped = False
+        if job.fail_fast:
+            for sheet_num, fail_fast_sheet in job.sheets.items():
+                if fail_fast_sheet.status not in _DISPATCHABLE_BATON_STATUSES:
+                    continue
+                if (
+                    self._active_execution_probe is not None
+                    and self._active_execution_probe(job_id, sheet_num)
+                ):
+                    continue
+                reason = f"Fail-fast after sheet {failed_sheet_num} failed"
+                # Reuse the canonical skip transition so terminal guards,
+                # dirty-state persistence, and logging stay on one path.
+                self._handle_sheet_skipped(
+                    SheetSkipped(job_id=job_id, sheet_num=sheet_num, reason=reason)
+                )
+                if fail_fast_sheet.status == BatonSheetStatus.SKIPPED:
+                    fail_fast_sheet.error_message = reason
+                    fail_fast_sheet.error_code = "E999"
+                    fail_fast_skipped = True
+
         # Build a reverse dependency map: sheet_num → list of sheets
         # that depend on it
         dependents: dict[int, list[int]] = {}
@@ -2229,9 +2338,11 @@ class BatonCore:
 
             # At least one dep is terminal and unsatisfied → SKIPPED
             # (not FAILED — the sheet was never attempted, just blocked)
-            sheet.status = BatonSheetStatus.SKIPPED
-            sheet.clear_dispatch_block()
-            sheet.error_message = f"Blocked by failed dependency: sheet {blocking_dep}"
+            reason = f"Blocked by failed dependency: sheet {blocking_dep}"
+            self._handle_sheet_skipped(
+                SheetSkipped(job_id=job_id, sheet_num=current, reason=reason)
+            )
+            sheet.error_message = reason
             sheet.error_code = "E999"
             _logger.info(
                 "baton.sheet.dependency_blocked",
@@ -2247,7 +2358,7 @@ class BatonCore:
                 if downstream not in visited:
                     queue.append(downstream)
 
-        if visited:
+        if visited or fail_fast_skipped:
             self._state_dirty = True
             # Wake the event loop so _check_completions runs. Without this,
             # if failure propagation made all remaining sheets terminal, the
@@ -2313,6 +2424,11 @@ class BatonCore:
                 **status_counts,
             },
             "instruments_used": sorted(instruments_used),
+            "parallel_policy": {
+                "max_concurrent": job.max_concurrent,
+                "fail_fast": job.fail_fast,
+                "stagger_delay_ms": job.stagger_delay_ms,
+            },
             # Inbox depth observability (#222) — the inbox is process-wide, not
             # per-job, but surfacing it here makes a consumer stall visible via
             # `mzt diagnose` without a log grep.
