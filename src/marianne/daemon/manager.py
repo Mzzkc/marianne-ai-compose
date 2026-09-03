@@ -262,6 +262,7 @@ class JobMeta:
     timeout_cleanup_result_ref: Any | None = field(default=None, repr=False)
     deadline_diagnostic: str | None = None
     hook_config: list[dict[str, Any]] | None = field(default=None, repr=False)
+    failure_hook_config: list[dict[str, Any]] | None = field(default=None, repr=False)
     concert_config: dict[str, Any] | None = field(default=None, repr=False)
     completed_new_work: bool = False
     observer: JobObserver | None = field(default=None, repr=False)
@@ -472,6 +473,7 @@ class JobManager:
         # Deferred to start() where the learning hub's store is available.
         self._service: JobService | None = None
         self._jobs: dict[str, asyncio.Task[Any]] = {}
+        self._failure_hook_tasks: dict[str, asyncio.Task[Any]] = {}
         self._job_meta: dict[str, JobMeta] = {}
         self._cleanup_generation_counter = 0
         # Admission is reserved synchronously before recurrence I/O so a
@@ -644,6 +646,15 @@ class JobManager:
 
                     hook_config = json.loads(hook_json)
 
+                failure_hook_config: list[dict[str, Any]] | None = None
+                failure_hook_json = await self._registry.get_failure_hook_config(
+                    record.job_id,
+                )
+                if failure_hook_json:
+                    import json
+
+                    failure_hook_config = json.loads(failure_hook_json)
+
                 max_wall_seconds = record.max_wall_seconds
                 wall_deadline_at = record.wall_deadline_at
                 terminal_reason = record.terminal_reason
@@ -680,6 +691,7 @@ class JobManager:
                     terminal_reason=terminal_reason,
                     deadline_diagnostic=record.deadline_diagnostic,
                     hook_config=hook_config,
+                    failure_hook_config=failure_hook_config,
                 )
         if all_records:
             _logger.info(
@@ -837,6 +849,13 @@ class JobManager:
 
         # Recover paused orphans through the baton.
         await self._recover_baton_orphans()
+
+        # A conductor may restart after the registry committed FAILED but
+        # before the in-process callback claimed its failure hooks. Reconcile
+        # those unclaimed terminal failures after all execution services exist.
+        for record in all_records:
+            if record.status is DaemonJobStatus.FAILED:
+                self._schedule_failure_hooks(record.job_id)
 
         # #203: judgment client — automated FERMATA decider. Started AFTER
         # orphan recovery so its startup reconciliation sees restart-recovered
@@ -1079,6 +1098,9 @@ class JobManager:
                     job_id=job_id,
                     status=status.value,
                 )
+
+        if status is DaemonJobStatus.FAILED:
+            self._schedule_failure_hooks(job_id)
 
     @staticmethod
     def _classify_orphan(orphan: JobRecord) -> DaemonJobStatus:
@@ -1605,6 +1627,20 @@ class JobManager:
 
         job_id = self._get_job_id(request.job_id or request.config_path.stem)
 
+        # A failure hook can still be producing external side effects after
+        # the score itself becomes terminal. Reusing the stable job ID during
+        # that window would reset its durable claim beneath the live hook.
+        failure_hook_task = self._failure_hook_tasks.get(job_id)
+        if failure_hook_task is not None and not failure_hook_task.done():
+            return JobResponse(
+                job_id=job_id,
+                status="rejected",
+                message=(
+                    f"Job '{job_id}' is still running terminal failure hooks. "
+                    "Wait for those hooks to finish before submitting it again."
+                ),
+            )
+
         # Validate config exists and resolve workspace BEFORE acquiring the
         # lock. Config parsing is expensive and doesn't need serialization
         # — it's idempotent and job-independent.
@@ -1686,9 +1722,12 @@ class JobManager:
 
         # Extract hook config from parsed config for daemon-owned execution.
         hook_config_list: list[dict[str, Any]] | None = None
+        failure_hook_config_list: list[dict[str, Any]] | None = None
         concert_config_dict: dict[str, Any] | None = None
         if parsed_config and parsed_config.on_success:
             hook_config_list = [h.model_dump(mode="json") for h in parsed_config.on_success]
+        if parsed_config and parsed_config.on_failure:
+            failure_hook_config_list = [h.model_dump(mode="json") for h in parsed_config.on_failure]
         if parsed_config and parsed_config.concert.enabled:
             concert_config_dict = parsed_config.concert.model_dump(mode="json")
 
@@ -1909,6 +1948,7 @@ class JobManager:
                         wall_deadline_at=committed.wall_deadline_at,
                         deadline_diagnostic=committed.deadline_diagnostic,
                         hook_config=hook_config_list,
+                        failure_hook_config=failure_hook_config_list,
                         concert_config=concert_config_dict,
                     )
                     self._job_meta[job_id] = meta
@@ -1921,6 +1961,13 @@ class JobManager:
                         await self._registry.store_hook_config(
                             job_id,
                             json.dumps(hook_config_list),
+                        )
+                    if failure_hook_config_list:
+                        import json
+
+                        await self._registry.store_failure_hook_config(
+                            job_id,
+                            json.dumps(failure_hook_config_list),
                         )
             finally:
                 if reservation_id is not None:
@@ -2363,6 +2410,61 @@ class JobManager:
                 snapshot = dict(snapshot)
                 snapshot["on_success"] = parsed_config
                 data["config_snapshot"] = snapshot
+
+        failure_config: list[dict[str, Any]] | None = None
+        try:
+            failure_config_json = await self._registry.get_failure_hook_config(job_id)
+            if failure_config_json:
+                import json
+
+                raw_failure_config = json.loads(failure_config_json)
+                if isinstance(raw_failure_config, list):
+                    failure_config = raw_failure_config
+        except (OSError, ValueError, TypeError):
+            _logger.debug(
+                "get_job_status.failure_hook_config_merge_failed",
+                job_id=job_id,
+                exc_info=True,
+            )
+
+        if failure_config is None:
+            meta = self._job_meta.get(job_id)
+            if meta is not None and meta.failure_hook_config:
+                failure_config = meta.failure_hook_config
+
+        if failure_config:
+            snapshot = data.get("config_snapshot")
+            if not isinstance(snapshot, dict):
+                snapshot = {}
+            if not snapshot.get("on_failure"):
+                snapshot = dict(snapshot)
+                snapshot["on_failure"] = failure_config
+                data["config_snapshot"] = snapshot
+
+        try:
+            failure_results_json = await self._registry.get_failure_hook_results(job_id)
+            if failure_results_json:
+                import json
+
+                failure_results = json.loads(failure_results_json)
+                if isinstance(failure_results, list):
+                    data["failure_hook_results"] = failure_results
+        except (OSError, ValueError, TypeError):
+            _logger.debug(
+                "get_job_status.failure_hook_results_merge_failed",
+                job_id=job_id,
+                exc_info=True,
+            )
+
+        record = await self._registry.get_job(job_id)
+        if record is not None and (
+            record.failure_hooks_started_at is not None
+            or record.failure_hooks_completed_at is not None
+        ):
+            data["failure_hook_state"] = {
+                "started_at": record.failure_hooks_started_at,
+                "completed_at": record.failure_hooks_completed_at,
+            }
 
         data = await self._merge_schedule_status(job_id, data)
         return await self._merge_deadline_status(job_id, data)
@@ -4115,6 +4217,8 @@ class JobManager:
                             error_type=type(result).__name__,
                         )
 
+        await self._settle_failure_hook_tasks(graceful=graceful)
+
         # Deregister all known jobs from the scheduler to clean up
         # heap entries, running-sheet tracking, and dependency data.
         # Uses _job_meta (not _jobs) because task done-callbacks may
@@ -5665,6 +5769,158 @@ class JobManager:
             fail_event="job.resume_failed",
         )
 
+    async def _settle_failure_hook_tasks(self, *, graceful: bool) -> None:
+        """Finish or cancel failure-hook tasks before registry shutdown."""
+        pending = [task for task in self._failure_hook_tasks.values() if not task.done()]
+        if graceful and pending:
+            _, still_pending = await asyncio.wait(
+                pending,
+                timeout=self._config.shutdown_timeout_seconds,
+            )
+            pending = list(still_pending)
+        for task in pending:
+            task.cancel(msg="conductor shutdown during failure hooks")
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        self._failure_hook_tasks.clear()
+
+    def _schedule_failure_hooks(self, job_id: str) -> None:
+        """Schedule one durably claimed failure-hook sequence when eligible."""
+        meta = self._job_meta.get(job_id)
+        if (
+            meta is None
+            or meta.status is not DaemonJobStatus.FAILED
+            or not meta.failure_hook_config
+        ):
+            return
+        existing = self._failure_hook_tasks.get(job_id)
+        if existing is not None and not existing.done():
+            return
+
+        task = asyncio.create_task(
+            self._execute_failure_hooks_task(job_id),
+            name=f"failure-hooks-{job_id}",
+        )
+        self._failure_hook_tasks[job_id] = task
+
+        def _on_failure_hooks_done(completed: asyncio.Task[Any]) -> None:
+            if self._failure_hook_tasks.get(job_id) is completed:
+                self._failure_hook_tasks.pop(job_id, None)
+            log_task_exception(
+                completed,
+                _logger,
+                "failure_hooks.task_failed",
+            )
+
+        task.add_done_callback(_on_failure_hooks_done)
+
+    async def _execute_failure_hooks_task(self, job_id: str) -> None:
+        """Run terminal-failure hooks once without changing the failed job."""
+        import json
+
+        meta = self._job_meta.get(job_id)
+        if (
+            meta is None
+            or meta.status is not DaemonJobStatus.FAILED
+            or not meta.failure_hook_config
+        ):
+            return
+        if not await self._registry.claim_failure_hooks(job_id):
+            _logger.info(
+                "failure_hooks.already_claimed",
+                job_id=job_id,
+            )
+            return
+
+        hooks = meta.failure_hook_config
+        results: list[dict[str, Any]] = []
+        _logger.info(
+            "failure_hooks.daemon_executing",
+            job_id=job_id,
+            terminal_status=DaemonJobStatus.FAILED.value,
+            hook_count=len(hooks),
+        )
+
+        for index, hook in enumerate(hooks):
+            hook_type = hook.get("type", "unknown")
+            result: dict[str, Any] = {
+                "hook_type": hook_type,
+                "description": hook.get("description"),
+                "success": False,
+                "trigger": "failure",
+                "job_id": job_id,
+                "terminal_status": DaemonJobStatus.FAILED.value,
+            }
+            try:
+                if hook_type == "run_job":
+                    if hook.get("pause_before_chain", False):
+                        result["error_message"] = (
+                            "pause_before_chain is not valid for terminal-failure hooks"
+                        )
+                    else:
+                        executed = await self._execute_hook_run_job(
+                            job_id,
+                            hook,
+                            meta.concert_config,
+                            meta,
+                        )
+                        result.update(executed)
+                elif hook_type == "run_command":
+                    result.update(
+                        await self._execute_hook_command(
+                            hook,
+                            meta,
+                            use_shell=True,
+                            job_status=DaemonJobStatus.FAILED.value,
+                        )
+                    )
+                elif hook_type == "run_script":
+                    result.update(
+                        await self._execute_hook_command(
+                            hook,
+                            meta,
+                            use_shell=False,
+                            job_status=DaemonJobStatus.FAILED.value,
+                        )
+                    )
+                else:
+                    result["error_message"] = f"Unknown hook type: {hook_type}"
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                result["error_message"] = f"Exception: {exc}"
+                _logger.error(
+                    "failure_hook.daemon_exception",
+                    job_id=job_id,
+                    hook_index=index + 1,
+                    hook_type=hook_type,
+                    error=str(exc),
+                    exc_info=True,
+                )
+
+            # update() above may replace common keys, so bind failure identity
+            # after the action returns.
+            result["trigger"] = "failure"
+            result["job_id"] = job_id
+            result["terminal_status"] = DaemonJobStatus.FAILED.value
+            results.append(result)
+
+            if not result.get("success") and hook.get("on_failure", "continue") == "abort":
+                break
+
+        await self._registry.store_failure_hook_results(
+            job_id,
+            json.dumps(results),
+        )
+        await self._registry.complete_failure_hooks(job_id)
+        _logger.info(
+            "failure_hooks.daemon_completed",
+            job_id=job_id,
+            total=len(results),
+            succeeded=sum(1 for result in results if result.get("success")),
+            failed=sum(1 for result in results if not result.get("success")),
+        )
+
     async def _execute_hooks_task(self, job_id: str) -> None:
         """Execute post-success hooks for a completed job.
 
@@ -5959,6 +6215,7 @@ class JobManager:
         meta: JobMeta,
         *,
         use_shell: bool = True,
+        job_status: str | None = None,
     ) -> dict[str, Any]:
         """Execute a run_command or run_script hook.
 
@@ -5980,15 +6237,24 @@ class JobManager:
             result["error_message"] = f"command is required for {hook_type} hooks"
             return result
 
+        effective_job_status = job_status or meta.status.value
         command = self._expand_hook_vars(
             command,
             meta.workspace,
             meta.job_id,
+            job_status=effective_job_status,
             for_shell=use_shell,
         )
         self._validate_hook_command(command, hook_type=hook_type)
         cwd = hook.get("working_directory") or str(meta.workspace)
         timeout = hook.get("timeout_seconds", 300.0)
+        hook_env = os.environ.copy()
+        hook_env.update(
+            {
+                "MARIANNE_JOB_ID": meta.job_id,
+                "MARIANNE_JOB_STATUS": effective_job_status,
+            }
+        )
 
         try:
             if use_shell:
@@ -5997,6 +6263,7 @@ class JobManager:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                     cwd=cwd,
+                    env=hook_env,
                 )
             else:
                 args = shlex.split(command)
@@ -6005,6 +6272,7 @@ class JobManager:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                     cwd=cwd,
+                    env=hook_env,
                 )
 
             try:
@@ -6034,6 +6302,7 @@ class JobManager:
         workspace: Path,
         job_id: str,
         *,
+        job_status: str | None = None,
         for_shell: bool = False,
     ) -> str:
         """Expand template variables in hook paths/commands.
@@ -6047,6 +6316,7 @@ class JobManager:
             template,
             workspace=workspace,
             job_id=job_id,
+            job_status=job_status,
             for_shell=for_shell,
         )
 

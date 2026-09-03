@@ -82,6 +82,8 @@ class JobRecord:
     wall_deadline_at: float | None = None
     terminal_reason: str | None = None
     deadline_diagnostic: str | None = field(default=None, repr=False)
+    failure_hooks_started_at: float | None = None
+    failure_hooks_completed_at: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for JSON-RPC responses."""
@@ -202,6 +204,10 @@ class JobRegistry:
             ("checkpoint_json", "TEXT"),
             ("hook_config_json", "TEXT"),
             ("hook_results_json", "TEXT"),
+            ("failure_hook_config_json", "TEXT"),
+            ("failure_hook_results_json", "TEXT"),
+            ("failure_hooks_started_at", "REAL"),
+            ("failure_hooks_completed_at", "REAL"),
             ("max_wall_seconds", "REAL"),
             ("wall_deadline_at", "REAL"),
             ("terminal_reason", "TEXT"),
@@ -269,6 +275,10 @@ class JobRegistry:
                 checkpoint_json = NULL,
                 hook_config_json = NULL,
                 hook_results_json = NULL,
+                failure_hook_config_json = NULL,
+                failure_hook_results_json = NULL,
+                failure_hooks_started_at = NULL,
+                failure_hooks_completed_at = NULL,
                 submitted_at = excluded.submitted_at,
                 max_wall_seconds = excluded.max_wall_seconds,
                 wall_deadline_at = excluded.wall_deadline_at,
@@ -462,6 +472,76 @@ class JobRegistry:
             return None
         result: str | None = row["hook_results_json"]
         return result
+
+    async def store_failure_hook_config(self, job_id: str, config_json: str) -> None:
+        """Store terminal-failure hook configuration for restart recovery."""
+        await self._db.execute(
+            "UPDATE jobs SET failure_hook_config_json = ? WHERE job_id = ?",
+            (config_json, job_id),
+        )
+        await self._db.commit()
+
+    async def get_failure_hook_config(self, job_id: str) -> str | None:
+        """Load terminal-failure hook configuration for a job."""
+        cursor = await self._db.execute(
+            "SELECT failure_hook_config_json FROM jobs WHERE job_id = ?",
+            (job_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        result: str | None = row["failure_hook_config_json"]
+        return result
+
+    async def store_failure_hook_results(self, job_id: str, results_json: str) -> None:
+        """Store terminal-failure hook results without replacing job failure data."""
+        await self._db.execute(
+            "UPDATE jobs SET failure_hook_results_json = ? WHERE job_id = ?",
+            (results_json, job_id),
+        )
+        await self._db.commit()
+
+    async def get_failure_hook_results(self, job_id: str) -> str | None:
+        """Load terminal-failure hook results for diagnostics."""
+        cursor = await self._db.execute(
+            "SELECT failure_hook_results_json FROM jobs WHERE job_id = ?",
+            (job_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        result: str | None = row["failure_hook_results_json"]
+        return result
+
+    async def claim_failure_hooks(self, job_id: str) -> bool:
+        """Atomically claim a failed job's hook execution exactly once."""
+        cursor = await self._db.execute(
+            """
+            UPDATE jobs
+            SET failure_hooks_started_at = ?
+            WHERE job_id = ?
+              AND status = 'failed'
+              AND failure_hook_config_json IS NOT NULL
+              AND failure_hooks_started_at IS NULL
+            """,
+            (time.time(), job_id),
+        )
+        await self._db.commit()
+        return cursor.rowcount == 1
+
+    async def complete_failure_hooks(self, job_id: str) -> None:
+        """Persist completion of a previously claimed failure-hook sequence."""
+        await self._db.execute(
+            """
+            UPDATE jobs
+            SET failure_hooks_completed_at = ?
+            WHERE job_id = ?
+              AND failure_hooks_started_at IS NOT NULL
+              AND failure_hooks_completed_at IS NULL
+            """,
+            (time.time(), job_id),
+        )
+        await self._db.commit()
 
     async def get_job(self, job_id: str) -> JobRecord | None:
         """Get a single job by ID."""
@@ -658,4 +738,6 @@ class JobRegistry:
             wall_deadline_at=wall_deadline_at,
             terminal_reason=terminal_reason,
             deadline_diagnostic=deadline_diagnostic,
+            failure_hooks_started_at=row["failure_hooks_started_at"],
+            failure_hooks_completed_at=row["failure_hooks_completed_at"],
         )

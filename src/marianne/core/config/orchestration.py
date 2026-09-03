@@ -244,7 +244,7 @@ class PostSuccessHookConfig(BaseModel):
     command: str | None = Field(
         default=None,
         description="Shell command (run_command) or script path (run_script). "
-        "Supports {workspace}, {job_id}, {sheet_count} templates.",
+        "Supports {workspace}, {job_id}, {job_status}, {sheet_count} templates.",
     )
     working_directory: Path | None = Field(
         default=None,

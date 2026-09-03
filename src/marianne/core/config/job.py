@@ -869,6 +869,11 @@ class JobConfig(BaseModel):
         description="Hooks to run after successful job completion. "
         "Enables chaining jobs into a Concert.",
     )
+    on_failure: list[PostSuccessHookConfig] = Field(
+        default_factory=list,
+        description="Hooks to run after terminal job failure. Uses the same actions "
+        "and continue-or-abort hook failure policy as on_success hooks.",
+    )
     concert: ConcertConfig = Field(
         default_factory=ConcertConfig,
         description="Configuration for concert orchestration (job chaining)",

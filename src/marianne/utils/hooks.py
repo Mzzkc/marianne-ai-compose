@@ -18,7 +18,7 @@ from marianne.core.logging import get_logger
 _logger = get_logger("hooks")
 
 
-_KNOWN_HOOK_VARS = frozenset({"workspace", "job_id", "sheet_count"})
+_KNOWN_HOOK_VARS = frozenset({"workspace", "job_id", "job_status", "sheet_count"})
 
 
 def expand_hook_variables(
@@ -26,18 +26,21 @@ def expand_hook_variables(
     *,
     workspace: str | Path,
     job_id: str,
+    job_status: str | None = None,
     sheet_count: int | None = None,
     for_shell: bool = False,
 ) -> str:
     """Expand template variables in hook paths/commands.
 
-    Known variables: ``{workspace}``, ``{job_id}``, ``{sheet_count}``.
+    Known variables: ``{workspace}``, ``{job_id}``, ``{job_status}``,
+    ``{sheet_count}``.
     Warns on unrecognized ``{var}`` patterns that remain after expansion.
 
     Args:
         template: Template string with ``{variable}`` placeholders.
         workspace: Workspace path to substitute.
         job_id: Job identifier to substitute.
+        job_status: Optional terminal job status to substitute.
         sheet_count: Optional sheet count to substitute.
         for_shell: When True, apply ``shlex.quote()`` to variable values
             before substitution. Use this when the expanded result will
@@ -52,6 +55,9 @@ def expand_hook_variables(
         jid_str = shlex.quote(jid_str)
 
     result = template.replace("{workspace}", ws_str).replace("{job_id}", jid_str)
+    if job_status is not None:
+        status_str = shlex.quote(job_status) if for_shell else job_status
+        result = result.replace("{job_status}", status_str)
     if sheet_count is not None:
         sc_str = str(sheet_count)
         if for_shell:
