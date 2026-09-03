@@ -7,7 +7,7 @@ to `"1"`, which no longer matches the int key `1` → `UndefinedError`, crashing
 every fan-out instance (~80ms) and cascading via fail_fast — with the real
 cause only in the conductor log.
 
-Per the 4-model lab (unanimous on CORRELATED detection): V304 (WARNING) resolves
+Per the 4-model lab (unanimous on CORRELATED detection): V102 (WARNING) resolves
 the subscript's base Name to `config.prompt.variables`, and warns ONLY when that
 variable is a dict whose keys are ALL integers after normalization (int, or
 int-normalizable strings). `| string` is correct for genuinely string-keyed
@@ -60,7 +60,7 @@ _LENSES_INT_STRING = (
 class TestFanOutStringFilterCheck:
     def test_properties(self) -> None:
         c = FanOutStringFilterCheck()
-        assert c.check_id == "V304"
+        assert c.check_id == "V102"
         assert c.severity == ValidationSeverity.WARNING
         assert c.description
 
@@ -68,7 +68,7 @@ class TestFanOutStringFilterCheck:
         yaml_str = _score("{{ lenses[instance | string].name }}", _LENSES_INT_STRING)
         issues = _run(yaml_str, tmp_path)
         assert len(issues) == 1
-        assert issues[0].check_id == "V304"
+        assert issues[0].check_id == "V102"
         assert issues[0].severity == ValidationSeverity.WARNING
         assert issues[0].suggestion is not None
         assert issues[0].metadata.get("variable") == "lenses"

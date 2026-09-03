@@ -6128,9 +6128,11 @@ class JobManager:
             result["error_message"] = "job_path is required for run_job hooks"
             return result
 
-        # Expand template variables
+        # Expand template variables. getattr: duck-typed metas (older test
+        # doubles, partial fakes) may not carry config_path.
+        meta_config_path = getattr(meta, "config_path", None)
         score_dir = (
-            meta.config_path.parent if meta.config_path is not None else None
+            meta_config_path.parent if meta_config_path is not None else None
         )
         job_path_str = self._expand_hook_vars(
             job_path_str,
@@ -6301,7 +6303,7 @@ class JobManager:
             meta.job_id,
             job_status=effective_job_status,
             score_dir=(
-                meta.config_path.parent if meta.config_path is not None else None
+                meta_config_path.parent if meta_config_path is not None else None
             ),
             for_shell=use_shell,
         )

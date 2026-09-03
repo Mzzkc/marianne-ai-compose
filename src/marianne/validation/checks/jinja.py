@@ -344,7 +344,7 @@ class JinjaUndefinedVariableCheck:
 
 
 class FanOutStringFilterCheck:
-    """Detect `dict[X | string]` on int-normalized variable dicts (V304, #132).
+    """Detect `dict[X | string]` on int-normalized variable dicts (V102, #132).
 
     A per-instance dict with int-like string keys (``{"1": ...}``) has its keys
     normalized to integers at render time (``_normalize_dict_keys``). A template
@@ -419,7 +419,7 @@ class FanOutStringFilterCheck:
                 seen.add(key)
                 issues.append(
                     ValidationIssue(
-                        check_id="V304",
+                        check_id=self.check_id,
                         severity=ValidationSeverity.WARNING,
                         message=(
                             f"'{var_name}[... | string]' will fail at render time: "

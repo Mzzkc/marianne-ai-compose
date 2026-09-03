@@ -1,9 +1,9 @@
-"""V212: warn when a score's instrument chain has nothing installed here.
+"""V215: warn when a score's instrument chain has nothing installed here.
 
 The unknown-system onboarding guard. The deep fallback chain skips uninstalled
 instruments at dispatch, so a chain that resolves to zero installed CLI binaries
 would advance straight to HTTP fallbacks (which need a server/key) or exhaust.
-V212 surfaces that at validate time with an actionable, free-path-first message.
+V215 surfaces that at validate time with an actionable, free-path-first message.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ class TestNoUsableInstrument:
         issues = _run(_config(instrument="ghost-instrument-xyz"))
         assert len(issues) == 1
         assert issues[0].severity.value == "warning"
-        assert issues[0].check_id == "V212"
+        assert issues[0].check_id == "V215"
         assert "ollama" in (issues[0].suggestion or "").lower()
 
     def test_http_only_chain_warns_about_endpoints(self) -> None:
