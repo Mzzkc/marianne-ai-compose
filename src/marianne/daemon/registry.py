@@ -522,6 +522,23 @@ class JobRegistry:
         )
         await self._db.commit()
 
+    async def store_concert_context(
+        self,
+        job_id: str,
+        config_json: str | None,
+        chain_depth: int | None,
+    ) -> None:
+        """Persist the concert policy and current depth in one update."""
+        await self._db.execute(
+            """
+            UPDATE jobs
+            SET concert_config_json = ?, chain_depth = ?
+            WHERE job_id = ?
+            """,
+            (config_json, chain_depth, job_id),
+        )
+        await self._db.commit()
+
     async def get_concert_config(self, job_id: str) -> str | None:
         """Load concert context used by durable run_job hooks."""
         cursor = await self._db.execute(

@@ -1945,12 +1945,6 @@ class JobManager:
                             submitted_at=registered_at,
                             max_wall_seconds=max_wall_seconds,
                             wall_deadline_at=wall_deadline_at,
-                            concert_config_json=(
-                                json.dumps(concert_config_dict)
-                                if concert_config_dict is not None
-                                else None
-                            ),
-                            chain_depth=request.chain_depth,
                         )
                     except FailureHooksInProgressError as exc:
                         return JobResponse(
@@ -1974,6 +1968,17 @@ class JobManager:
                     )
                     self._job_meta[job_id] = meta
                     self._bind_cleanup_generation(meta, new_execution=True)
+
+                    if concert_config_dict is not None or request.chain_depth is not None:
+                        await self._registry.store_concert_context(
+                            job_id,
+                            (
+                                json.dumps(concert_config_dict)
+                                if concert_config_dict is not None
+                                else None
+                            ),
+                            request.chain_depth,
+                        )
 
                     # Persist hook config to registry for restart resilience
                     if hook_config_list:
@@ -2091,7 +2096,6 @@ class JobManager:
                     submitted_at=registered_at,
                     max_wall_seconds=max_wall_seconds,
                     wall_deadline_at=wall_deadline_at,
-                    chain_depth=request.chain_depth,
                 )
             except FailureHooksInProgressError as exc:
                 return JobResponse(
@@ -2112,6 +2116,12 @@ class JobManager:
             )
             self._job_meta[job_id] = meta
             self._bind_cleanup_generation(meta, new_execution=True)
+            if request.chain_depth is not None:
+                await self._registry.store_concert_context(
+                    job_id,
+                    None,
+                    request.chain_depth,
+                )
 
         # Store for auto-start
         self._pending_jobs[job_id] = request
