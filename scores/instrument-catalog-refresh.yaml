@@ -25,7 +25,7 @@
 # ║    mzt run scores/instrument-catalog-refresh.yaml --fresh                   ║
 # ║                                                                             ║
 # ║  Suggested cron: monthly                                                    ║
-# ║    0 4 1 * *  cd /home/emzi/Projects/marianne-ai-compose && \              ║
+# ║    0 4 1 * *  cd /path/to/marianne-ai-compose && \                          ║
 # ║               source .venv/bin/activate && \                                ║
 # ║               mzt run scores/instrument-catalog-refresh.yaml --fresh        ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -131,12 +131,14 @@ on_success:
 
 prompt:
   variables:
-    catalog_yaml_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
-    catalog_md_path:   "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
-    catalog_changelog_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md"
-    thinking_lab_path: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab.yaml"
-    refresh_fold_path: "/home/emzi/Projects/marianne-ai-compose/scores/instrument-catalog-refresh-fold.yaml"
-    lab_input_dir:     "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+    # Repo-relative paths resolve against the project root (the agents'
+    # working directory); lab locations anchor under the workspace root.
+    catalog_yaml_path: "plugins/marianne/docs/ref/instrument-catalog.yaml"
+    catalog_md_path:   "plugins/marianne/docs/ref/instrument-catalog.md"
+    catalog_changelog_path: "plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md"
+    thinking_lab_path: "scores/thinking-lab.yaml"
+    refresh_fold_path: "scores/instrument-catalog-refresh-fold.yaml"
+    lab_input_dir:     "~/workspaces/thinking-lab-input"
 
   template: |
     {% if stage == 1 %}
@@ -155,7 +157,7 @@ prompt:
     ```yaml
     installed_instruments:
       - id: claude-code
-        path: /home/emzi/.local/bin/claude
+        path: /path/to/claude
         available: true
       - id: codex-cli
         path: ...

@@ -24,7 +24,8 @@ pass after the fix that sets ``prompt_flag: -i`` and
 The end-to-end test exercises the real goose binary against z.ai — it
 is marked ``slow`` and skips when goose is not installed.
 
-See: ``docs/handoffs/2026-04-18-goose-fallback-debug-handoff.md``.
+Design history: the goose-fallback-debug handoff (2026-04-18), preserved
+in the project's private handoff archive.
 """
 
 from __future__ import annotations

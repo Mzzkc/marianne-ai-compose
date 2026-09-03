@@ -304,7 +304,7 @@ and left sheets 6-12 on the score default.
 
 | | |
 |---|---|
-| **Score & stage** | `/home/emzi/Projects/hoard-mill/scores/post-mill.yaml`, stage 9 composer-facing report after a Buffer rate-limit deferral. |
+| **Score & stage** | `~/Projects/hoard-mill/scores/post-mill.yaml`, stage 9 composer-facing report after a Buffer rate-limit deferral. |
 | **The claim** | The report summarizes the stage artifacts truthfully, including counts such as scheduled posts, failed posts, archived clips, and staged clips left untouched. |
 | **Why current validation can't catch it** | Existing validations can require that a report file exists and contains section headers or a completion marker. They cannot assert that numbers in prose match source artifacts or live filesystem state. In the incident, the JSON artifacts correctly said `posted_count=0`, `moved_count=0`, and the filesystem had 165 staging directories untouched, but the LLM report stated "17 clips remain in staging" after confusing planned entries with all staged clips. Content checks passed because the marker and headings were present. |
 | **Suggested capability** | A report consistency validator that compares declared prose/table counts to source artifacts, or a structured-report pattern where the report stage first writes machine-readable `report-facts.json` and validations check exact fields before prose is generated. For operational reports, prefer deterministic CLI rendering from artifacts when feasible. |

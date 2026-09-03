@@ -8,9 +8,9 @@ profile-driven execution system; retained as design history, not runtime truth.
 
 ## 1. What This Is
 
-A compilation system that takes high-level semantic descriptions — agent identities, patterns, techniques, instrument assignments — and produces complete Mozart score YAML. The compiler programs minds. It takes a representation of what an orchestrated system should be and expands it into executable scores that configure LLM execution with full identity, cognitive method, coordination, and tooling.
+A compilation system that takes high-level semantic descriptions — agent identities, patterns, techniques, instrument assignments — and produces complete Marianne score YAML. The compiler programs minds. It takes a representation of what an orchestrated system should be and expands it into executable scores that configure LLM execution with full identity, cognitive method, coordination, and tooling.
 
-The agent generator (`scripts/generate-agent-scores.py`) becomes one module of this compiler. The iterative dev loop generator (`scripts/generate-iterative-dev-loop.py`) is another. New modules handle technique wiring, instrument resolution, validation generation, and identity seeding. Together they form the backend of a composition pipeline that can produce anything from a single-agent investigation to a full company-in-a-box fleet.
+The pre-compiler generators (agent-score generation and the iterative dev loop, archived when this compiler landed) were folded in as modules. New modules handle technique wiring, instrument resolution, validation generation, and identity seeding. Together they form the backend of a composition pipeline that can produce anything from a single-agent investigation to a full company-in-a-box fleet.
 
 This spec covers two things:
 1. **The compiler itself** — what it takes as input, what it produces, how it's structured
@@ -237,7 +237,7 @@ agents:
 - `~/.mzt/agents/{name}/recent.md` (L3: starts empty or seeded from existing memory)
 - `~/.mzt/agents/{name}/growth.md` (L4: autonomous development trajectory)
 
-For agents migrating from the v3 orchestra, existing memories and meditations in `workspaces/v1-beta-v3/memory/` and `workspaces/v1-beta-v3/meditations/` inform the seed — distilled into the identity format, not copied wholesale.
+For agents migrating from the v3 orchestra, existing memories and meditations (preserved in the project's private history archive under `workspaces/v1-beta-v3/`) inform the seed — distilled into the identity format, not copied wholesale.
 
 **Sheet Composer** — Takes the agent definition and produces the sheet structure:
 - Phase 1 (sequential): Recon → Plan → Work

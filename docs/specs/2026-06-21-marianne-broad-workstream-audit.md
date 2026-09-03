@@ -73,7 +73,7 @@ before commit because the worktree is active.
   dependency drill, and the bounded single-agent proof12 live cycle were tested
   instead.
 - Backyard Capitalism 9000 now has an ignored prefixed fleet workspace at
-  `/home/emzi/Projects/backyard-capitalism-9000/workspaces/marianne-bc9k-fleet`.
+  `~/Projects/backyard-capitalism-9000/workspaces/marianne-bc9k-fleet`.
   It was generated with `mzt compile --preset generic-fleet --pause-before-chain
   --job-prefix bc9k-`, seeded with BC9K target directives in `shared/active/`,
   audited for no Kimi/Llama, portable bounded hooks, unprefixed agent identity,
@@ -124,12 +124,12 @@ before commit because the worktree is active.
 - Gemini CLI shared-MCP live dispatch remains blocked by the provider's current
   `UNSUPPORTED_CLIENT` / tier eligibility response on this machine; config-file
   shape and cleanup are tested.
-- Hoard-mill was audited side-effect-free from `/home/emzi/Projects/hoard-mill`
+- Hoard-mill was audited side-effect-free from `~/Projects/hoard-mill`
   on 2026-06-23. `mzt validate` passed for `scores/post-mill.yaml` (9 sheets,
   22 validations), `scores/verify-mill.yaml` (4 sheets, 9 validations), and
   `scores/clip-mill.yaml` (56 sheets, 14 validations). The `/mnt/e` directory
   exists but is not mounted in WSL, Windows-side `cmd.exe` checks found no
-  `E:\clip-hoard`, and searches under `/mnt/c`, `/mnt/d`, and `/home/emzi`
+  `E:\clip-hoard`, and searches under `/mnt/c`, `/mnt/d`, and the home directory
   found no real `clip-hoard` project root. Live staging/archive directory counts
   and cadence files therefore could not be re-read. Local authoritative
   artifacts show the June 22/23 post-mill run planned 20 pairs across Instagram
@@ -171,5 +171,5 @@ before commit because the worktree is active.
 - Dashboard focused + Playwright tests
 - `cd compiler && pytest -q`
 - `pytest -q tests/`
-- Hoard-mill score validations from `/home/emzi/Projects/hoard-mill`
+- Hoard-mill score validations from `~/Projects/hoard-mill`
 - Clip-stage-reviewer browser/keyboard/filesystem smoke if that project is in scope for the commit

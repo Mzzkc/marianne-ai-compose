@@ -571,9 +571,9 @@ Mateship happens naturally. Agent A commits code. Agent B's gather pattern sees 
 
 ```yaml
 name: flowspec-build
-workspace: /home/emzi/Projects/flowspec/workspaces/build
-spec_dir: /home/emzi/Projects/flowspec/.flowspec/spec/
-playspace: /home/emzi/Projects/claude-compositions
+workspace: ~/workspaces/flowspec-build
+spec_dir: ~/Projects/flowspec/.flowspec/spec/
+playspace: ~/Projects/claude-compositions
 
 agents:
   - name: foundry
@@ -631,7 +631,7 @@ backend:
 
 # Prelude files (loaded for every agent, every sheet)
 prelude:
-  - file: /home/emzi/Projects/flowspec/CLAUDE.md
+  - file: ~/Projects/flowspec/CLAUDE.md
     as: context
 
 # Play routing temperature thresholds
@@ -774,7 +774,7 @@ sheet:
 ```yaml
 # Build flowspec
 name: flowspec-build
-spec_dir: /home/emzi/Projects/flowspec/.flowspec/spec/
+spec_dir: ~/Projects/flowspec/.flowspec/spec/
 validations:
   - command: "cargo build"
   - command: "cargo test --all"

@@ -67,7 +67,7 @@ Before composing a score, you must read these files. They are the banks of the r
 
 | File | Purpose | Why You Need It |
 |------|---------|----------------|
-| `scores-internal/v1-beta/generate-v3.py` | The v3 orchestra score generator (706 sheets) | The established pattern for: stage map building, fan-out computation, cadenza generation, instrument_map, validation generation, YAML emission with ruamel.yaml. This is what your assembler script should look like. |
+| `compiler/src/marianne_compiler/presets.py` (submodule) | The compiler's fleet presets — the modern successor to hand-written score assemblers | The established pattern for preset composition, agent identity seeding, technique wiring, and deterministic YAML emission. The compiler generates scores now. |
 
 ### Phase 6: Know the Skills (invoke before writing YAML or running scores)
 
@@ -82,16 +82,15 @@ These are not files to read — they are skills to invoke. They provide detailed
 
 | File | Purpose | Why You Need It |
 |------|---------|----------------|
-| `docs/plans/2026-04-04-instrument-fallbacks-spec.md` | Per-sheet instrument fallback design | A feature being added — understand it so your compositions can use it |
-| `docs/plans/compose-system/00-system-overview.md` | The compose system's 10-stage pipeline | If your work feeds into `marianne compose`, understand the pipeline |
+| `configuration-reference.md` | Per-sheet instrument fallbacks and all score config | Know which knobs exist before designing fallback chains |
+| `docs/INDEX.yaml` | Master documentation index | Find the right reference for the subsystem your score touches |
 | `CLAUDE.md` | Project conventions, operational gotchas | Cadenza syntax (`{{ }}` vs `{}`), pipe exit codes, Jinja dict methods, preflight thresholds |
 
 ### What You Are NOT Required To Read
 
-- The full spec corpus for other projects (`.marianne/spec/` is marianne's own)
-- Memory bank files (`memory-bank/`) — these are session-specific
-- Internal scores (`scores-internal/`) other than `generate-v3.py`
-- Design docs (`docs/plans/`) other than what's listed above
+- Anything outside this repository's tracked tree — planning docs, session
+  memory, internal scores, and handoffs live outside the repo on the
+  developer's machine and are not part of composition context
 
 ---
 
@@ -300,7 +299,7 @@ If a sheet needs content to do its work, INJECT it. No exceptions.
 
 ### Structure (deterministic — assembler script)
 
-Sheet count, fan-out, dependencies, instrument assignments, cadenzas, validations. Computed from the composition design and manifest data. Follow the pattern in `scores-internal/v1-beta/generate-v3.py`.
+Sheet count, fan-out, dependencies, instrument assignments, cadenzas, validations. Computed from the composition design and manifest data. Follow the pattern in the compiler's preset composition.
 
 The assembler:
 - Reads a manifest (from a recon score or static config)

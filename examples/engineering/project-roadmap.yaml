@@ -73,7 +73,7 @@
 name: "project-roadmap"
 description: "Multi-perspective project audit → prioritized roadmap + task list"
 
-workspace: "/home/emzi/Projects/marianne-ai-compose/workspaces/project-roadmap-workspace"
+# Workspace auto-derives to ~/workspaces/project-roadmap (#58).
 
 instrument: claude-code
 instrument_fallbacks: [gemini-cli, opencode]
@@ -193,7 +193,7 @@ prompt:
     # ─────────────────────────────────────────────
     # CONFIGURE THESE for your project
     # ─────────────────────────────────────────────
-    project_root: "/home/emzi/Projects/marianne-ai-compose"
+    project_root: "."
     project_name: "Marianne AI Compose"
     project_description: >-
       Orchestration infrastructure for collaborative intelligence.
@@ -226,16 +226,10 @@ prompt:
 
     # Optional: related projects/repos that inform the roadmap
     related_projects:
-      - path: "/home/emzi/Projects/flowspec"
-        relationship: "structural code analyzer — integrated as tooling"
-      - path: "/home/emzi/Projects/backyard-capitalism-9000"
-        relationship: "shared agent infrastructure (RLF prototype)"
-      - path: "/home/emzi/Projects/mozart-orchestra-live"
-        relationship: "public website (mzt.dev)"
-      - path: "/home/emzi/Projects/score-compiler"
-        relationship: "composition compiler — bundled as submodule"
-      - path: "/home/emzi/Projects/recursive-light"
-        relationship: "AI personhood layer — reference integration"
+      - path: "~/Projects/<related-project>"
+        relationship: "<how this project relates to the one being audited>"
+      - path: "~/Projects/<another-project>"
+        relationship: "<e.g., shared infrastructure, sister service, website>"
 
     # ─────────────────────────────────────────────
     # Immune Cascade sweep partitions

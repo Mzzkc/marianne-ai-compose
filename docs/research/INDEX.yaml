@@ -2,7 +2,7 @@ description: "Research findings and analysis"
 context: |
   Research documents covering provider analysis, token compression,
   convergence analysis, and API research. Three files relocated from
-  docs/plans/ during the 2026-04-13 reorganization.
+  the internal planning archive during the 2026-04-13 reorganization.
 status: active
 
 files:
@@ -18,15 +18,15 @@ files:
   - name: 2026-03-26-multi-provider-abstraction-research.md
     purpose: "Multi-provider abstraction research — abstracting across AI backends"
     status: completed
-    source: "docs/plans/ (relocated)"
+    source: relocated from the internal planning archive
   - name: 2026-03-26-universal-instrument-api-research.md
     purpose: "Universal instrument API research — unified backend interface"
     status: completed
-    source: "docs/plans/ (relocated)"
+    source: relocated from the internal planning archive
   - name: 2026-03-26-provider-compliance.md
     purpose: "Provider compliance — API compatibility and requirements"
     status: completed
-    source: "docs/plans/ (relocated)"
+    source: relocated from the internal planning archive
   - name: 2026-04-13-free-model-code-generation-research.md
     purpose: "Free model evaluation — code generation capabilities of free OpenRouter models for instrument use"
     status: completed

@@ -32,7 +32,8 @@ Design decisions:
 - The adapter does NOT own the baton's main loop — the manager runs it.
 - Concert support: sequential score submission (option 1 from wiring analysis).
 
-See: ``workspaces/v1-beta-v3/movement-2/step-28-wiring-analysis.md``
+Wiring analysis: ``step-28-wiring-analysis.md`` from the v1-beta-v3
+movement-2 workspace (preserved in the project's private history archive).
 """
 
 from __future__ import annotations

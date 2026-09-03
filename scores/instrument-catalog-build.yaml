@@ -103,12 +103,14 @@ on_success:
 
 prompt:
   variables:
-    catalog_yaml_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
-    catalog_md_path:   "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
-    thinking_lab_path: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab.yaml"
-    fold_path:         "/home/emzi/Projects/marianne-ai-compose/scores/instrument-catalog-build-fold.yaml"
-    lab_input_dir:     "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
-    lab_workspace:     "/home/emzi/Projects/marianne-ai-compose/workspaces/thinking-lab"
+    # Repo-relative paths resolve against the project root (the agents'
+    # working directory); lab locations anchor under the workspace root.
+    catalog_yaml_path: "plugins/marianne/docs/ref/instrument-catalog.yaml"
+    catalog_md_path:   "plugins/marianne/docs/ref/instrument-catalog.md"
+    thinking_lab_path: "scores/thinking-lab.yaml"
+    fold_path:         "scores/instrument-catalog-build-fold.yaml"
+    lab_input_dir:     "~/workspaces/thinking-lab-input"
+    lab_workspace:     "{{ workspace }}/lab"
 
   template: |
     {% if stage == 1 %}
@@ -278,7 +280,7 @@ validations:
   # Stage 4 — lab input directory is correctly staged
   - type: command_succeeds
     command: |
-      LAB_INPUT="/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+      LAB_INPUT="$HOME/workspaces/thinking-lab-input"
       test -f "$LAB_INPUT/prompt.md" || { echo "prompt.md missing in lab input" >&2; exit 1; }
       test -f "$LAB_INPUT/instrument-catalog.yaml" || { echo "catalog yaml missing in lab input" >&2; exit 1; }
       test -s "$LAB_INPUT/prompt.md" || { echo "prompt.md empty" >&2; exit 1; }

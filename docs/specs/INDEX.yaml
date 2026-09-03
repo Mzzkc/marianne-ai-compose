@@ -1,7 +1,7 @@
 description: "Design specifications — detailed technical specs for major features"
 context: |
   Specifications that define the detailed design of significant features.
-  Relocated from docs/superpowers/specs/ during the 2026-04-13 reorganization.
+  Relocated from the internal planning archive during the 2026-04-13 reorganization.
 status: active
 
 files:

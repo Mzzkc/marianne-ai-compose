@@ -72,8 +72,9 @@ investigation-results/
 debug-*.yaml
 temp-scores/
 
-# Internal planning and scripts
+# Internal planning docs (live outside the repo now; guard stays)
 docs/plans/
+# Legacy top-level scripts/ (test-coupled helpers moved to tests/scripts/)
 /scripts/
 
 # Marianne state files (generated during job execution)
@@ -87,9 +88,9 @@ marianne-opus-evolution-v*.yaml
 
 # Project-specific context (personal, not for public repo)
 .marianne/
-CLAUDE.md
 memory-bank/
 STATUS.md
+CLAUDE.local.md
 .claude
 .playwright*
 
@@ -115,9 +116,3 @@ flowspec*
 .DS_Store
 Thumbs.db
 .aider*
-
-# Local/private thinking-lab input captures
-scores/prep/thinking-lab-input/current-*.html
-scores/prep/thinking-lab-input/*-guide.md
-scores/prep/thinking-lab-input/*-dossier.md
-scores/prep/thinking-lab-input/*-voice-context.md

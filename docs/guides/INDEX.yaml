@@ -10,7 +10,7 @@ files:
   - name: score-composition-guide.md
     purpose: "Score composition guide — patterns, anti-patterns, and best practices for score authoring"
     status: active
-    source: "Promoted from scores-internal/rosetta-modernize/"
+    source: promoted from the internal scores archive
   - name: technique-guide.md
     purpose: "Technique system — skill/MCP/protocol kinds, config schema, phase filtering"
     status: active

@@ -360,10 +360,10 @@ Marianne becomes a substrate for collaborative intelligence emergence.
 
 ## References
 
-- `/home/emzi/Projects/recursive-light/` - RLF API source
-- `/home/emzi/Projects/recursive-light/api/src/personhood/` - Personhood implementation
-- `/home/emzi/Projects/recursive-light/api/src/autonomous_judgement.rs` - Judgment module
-- `/home/emzi/Projects/recursive-light/PERSONHOOD-FLOW-ARCHITECTURE.md` - Person-centric design
+- `recursive-light` — RLF API source (private project)
+  - `api/src/personhood/` — Personhood implementation
+  - `api/src/autonomous_judgement.rs` — Judgment module
+  - `PERSONHOOD-FLOW-ARCHITECTURE.md` — Person-centric design
 
 ---
 

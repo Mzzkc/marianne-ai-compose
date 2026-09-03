@@ -1,9 +1,13 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  Thinking Lab — Multi-Model Cross Review                                    ║
 # ║                                                                              ║
-# ║  Drop your prompt + context files into scores/prep/thinking-lab-input/       ║
-# ║  Run: mzt run scores/prep/thinking-lab.yaml                                  ║
-# ║  Read: workspaces/thinking-lab/review-{1,2,3,4}.md                           ║
+# ║  Drop your prompt + context files into ~/workspaces/thinking-lab-input/      ║
+# ║  Run: mzt run scores/thinking-lab.yaml                                       ║
+# ║  Read: ~/workspaces/thinking-lab/review-{1,2,3,4}.md                         ║
+# ║                                                                              ║
+# ║  Workspace auto-derives to ~/workspaces/thinking-lab (#58); the input        ║
+# ║  directory lives beside it, under the workspace root, so archived runs       ║
+# ║  never take your staged inputs with them.                                    ║
 # ║                                                                              ║
 # ║  Reviewers, in order:                                                        ║
 # ║    1. Claude Opus 4.7    (Anthropic, claude-code)        → review-1.md      ║
@@ -20,7 +24,6 @@
 
 name: "thinking-lab"
 description: "4 parallel independent reviews from Opus, Gemini Pro, GLM, GPT-5.5"
-workspace: "/home/emzi/Projects/marianne-ai-compose/workspaces/thinking-lab"
 
 workspace_lifecycle:
   archive_on_fresh: true
@@ -83,16 +86,16 @@ sheet:
 
   cadenzas:
     2:
-      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+      - directory: "~/workspaces/thinking-lab-input"
         as: context
     3:
-      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+      - directory: "~/workspaces/thinking-lab-input"
         as: context
     4:
-      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+      - directory: "~/workspaces/thinking-lab-input"
         as: context
     5:
-      - directory: "/home/emzi/Projects/marianne-ai-compose/scores/prep/thinking-lab-input"
+      - directory: "~/workspaces/thinking-lab-input"
         as: context
 
 parallel:

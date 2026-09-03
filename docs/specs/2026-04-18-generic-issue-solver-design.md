@@ -779,7 +779,7 @@ The existing `examples/engineering/issue-solver.yaml` is replaced. Users of the 
 
 To solve the 9 correctness bugs identified in the beta review:
 
-1. Edit `issue-triage.yaml` variables: set `repo: "Mzzkc/marianne-ai-compose"`, `issue_label: "bug"`, `project_root: "/home/emzi/Projects/marianne-ai-compose"`
+1. Edit `issue-triage.yaml` variables: set `repo: "Mzzkc/marianne-ai-compose"`, `issue_label: "bug"`, `project_root: "."`
 2. Run triage: `mzt run examples/engineering/issue-triage.yaml`
 3. Review the DAG: `cat workspaces/issue-triage/issue-dag.yaml`
 4. Edit `issue-solver.yaml` variables: set `triage_workspace`, `repo`, `project_root`

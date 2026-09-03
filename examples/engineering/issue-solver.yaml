@@ -42,12 +42,15 @@
 #        mzt run examples/engineering/issue-triage.yaml
 #        mzt wait issue-triage
 #
-#   2. Set on_success.job_path below to the ABSOLUTE path of this file
-#      (the conductor CWD is not this score's directory).
+#   2. The self-chain stages itself: Stage 1 copies this score (found via the
+#      `score_relpath` variable, resolved from the project root) into the run
+#      workspace as `self-chain.yaml`, and on_success chains to that copy —
+#      no absolute paths anywhere.
 #
-#   3. Set `triage_workspace` variable to the ABSOLUTE path of the triage
-#      workspace (e.g., /abs/path/to/workspaces/issue-triage-workspace).
-#      Relative paths break across self-chain iterations.
+#   3. `triage_workspace` defaults to ~/workspaces/issue-triage-workspace
+#      (the workspace-root convention). It must be a STABLE path outside this
+#      score's fresh-per-iteration workspace — relative paths break across
+#      self-chain iterations.
 #
 #   4. Run the solver:
 #        mzt run examples/engineering/issue-solver.yaml
@@ -64,9 +67,10 @@
 #
 # How to Adapt:
 #   1. Set `repo` to the owner/repo format of your project
-#   2. Set `triage_workspace` to the ABSOLUTE path of the triage workspace
+#   2. Set `triage_workspace` to a stable absolute path you control
+#      (default: ~/workspaces/issue-triage-workspace)
 #   3. Set `project_root` to "." when running from the project root
-#   4. Update on_success.job_path to the absolute path of this score
+#   4. Set `score_relpath` if you rename or relocate this example
 #
 # Output (in ../workspaces/issue-solver-workspace/, fresh per iteration):
 #   01-selected-issue.md     — Selection from DAG (or NO_ISSUES_REMAINING)
@@ -218,7 +222,8 @@ retry:
 prompt:
   variables:
     repo: "Mzzkc/marianne-ai-compose"
-    triage_workspace: "/home/emzi/Projects/marianne-ai-compose/workspaces/quality-triage-workspace"
+    score_relpath: "examples/engineering/issue-solver.yaml"
+    triage_workspace: "~/workspaces/issue-triage-workspace"
     project_root: "."
     preamble: |
       ╔══════════════════════════════════════════════════════════════════════════╗
@@ -273,6 +278,11 @@ prompt:
     fi
     echo $ITER > {{ workspace }}/.iteration
     echo "=== ISSUE SOLVER ITERATION $ITER ==="
+    ```
+
+    **Step 1.5: Stage the self-chain copy (required for on_success)**
+    ```bash
+    cp "{{ score_relpath }}" "{{ workspace }}/self-chain.yaml" || { echo "FATAL: could not stage self-chain copy from {{ score_relpath }} — run from the project root"; exit 1; }
     ```
 
     **Step 2: Verify triage artifacts exist and match this repo**
@@ -1843,12 +1853,12 @@ validations:
     condition: "sheet_num == 19"
 
 # Self-chain to solve the next issue from the DAG.
-# IMPORTANT: job_path MUST be an absolute path — relative paths resolve from
-# the conductor's CWD, not this score's directory. On each iteration the
-# previous workspace is archived (archive_on_fresh) and a fresh one is created.
+# job_path expands {workspace} to an absolute path at run time — Stage 1.5
+# stages the self-chain copy there. On each iteration the previous workspace
+# is archived (archive_on_fresh) and a fresh one is created.
 on_success:
   - type: run_job
-    job_path: "/home/emzi/Projects/marianne-ai-compose/examples/engineering/issue-solver.yaml"
+    job_path: "{workspace}/self-chain.yaml"
     description: "Chain to solve next issue from the DAG"
     detached: true
     fresh: true

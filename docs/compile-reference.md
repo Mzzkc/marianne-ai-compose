@@ -2,7 +2,7 @@
 
 ## Overview
 
-`mzt compile` takes semantic agent definitions and produces complete Mozart
+`mzt compile` takes semantic agent definitions and produces complete Marianne
 score YAML files. It is the CLI entry point for the composition compiler
 (`marianne-compiler` package).
 

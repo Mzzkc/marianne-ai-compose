@@ -360,7 +360,7 @@ Conductor (manages fallback, rate limits, cost tracking across backends)
 
 ## What Marianne Already Has Right
 
-Reviewing `/home/emzi/Projects/marianne-ai-compose/src/marianne/backends/base.py`:
+Reviewing `src/marianne/backends/base.py`:
 
 - **`Backend` ABC with `execute()` + `health_check()`** — clean abstract interface, similar to LangChain's `BaseChatModel` but simpler
 - **`ExecutionResult` with token tracking** — already captures `input_tokens`, `output_tokens`, `model`, `rate_limited`

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-INSTRUMENTS_DIR = Path("scripts/instruments")
+INSTRUMENTS_DIR = Path("tests/scripts/instruments")
 
 
 @pytest.fixture

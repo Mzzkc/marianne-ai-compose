@@ -48,7 +48,7 @@ def sanitize_workspace_name(name: str) -> str:
 def default_workspace_for(name: str) -> Path:
     """The auto-derived workspace for a score that omits ``workspace:`` (#58).
 
-    ``<workspace-root>/<sanitized-name>`` — e.g. ``~/workspaces/legion-dream``.
+    ``<workspace-root>/<sanitized-name>`` — e.g. ``~/workspaces/my-score``.
     """
     return resolve_workspace_root() / sanitize_workspace_name(name)
 

@@ -74,11 +74,13 @@ stale_detection:
 
 prompt:
   variables:
-    catalog_yaml_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
-    catalog_md_path:   "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
-    catalog_changelog_path: "/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md"
-    refresh_workspace: "/home/emzi/Projects/marianne-ai-compose/workspaces/instrument-catalog-refresh"
-    lab_workspace:     "/home/emzi/Projects/marianne-ai-compose/workspaces/instrument-catalog-refresh/lab"
+    # Repo-relative paths resolve against the project root (the agents'
+    # working directory); refresh + lab ran under the refresh run's tree.
+    catalog_yaml_path: "plugins/marianne/docs/ref/instrument-catalog.yaml"
+    catalog_md_path:   "plugins/marianne/docs/ref/instrument-catalog.md"
+    catalog_changelog_path: "plugins/marianne/docs/ref/CHANGELOG-instrument-catalog.md"
+    refresh_workspace: "workspaces/instrument-catalog-refresh"
+    lab_workspace:     "workspaces/instrument-catalog-refresh/lab"
 
   template: |
     {% if stage == 1 %}
@@ -167,9 +169,12 @@ validations:
     stage: 1
   - type: command_succeeds
     command: |
+      REPO_ROOT="$(cd {workspace}/../../.. && pwd)"
+      export REPO_ROOT
       python3 - <<'PY'
+      import os
       import yaml
-      d = yaml.safe_load(open("/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"))
+      d = yaml.safe_load(open(os.path.join(os.environ["REPO_ROOT"], "plugins/marianne/docs/ref/instrument-catalog.yaml")))
       declared = set()
       for dim in ['tier','task','modality','constraint']:
           declared |= set(d['dimensions'][dim].keys())
@@ -186,8 +191,9 @@ validations:
 
   - type: command_succeeds
     command: |
-      MD="/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.md"
-      YML="/home/emzi/Projects/marianne-ai-compose/plugins/marianne/docs/ref/instrument-catalog.yaml"
+      REPO_ROOT="$(cd {workspace}/../../.. && pwd)"
+      MD="$REPO_ROOT/plugins/marianne/docs/ref/instrument-catalog.md"
+      YML="$REPO_ROOT/plugins/marianne/docs/ref/instrument-catalog.yaml"
       python3 - <<PY
       import yaml
       d = yaml.safe_load(open("$YML"))

@@ -25,7 +25,7 @@ def run_bootstrap(
     return subprocess.run(
         [
             sys.executable,
-            "scripts/bootstrap-agent-identity.py",
+            "tests/scripts/bootstrap-agent-identity.py",
             "--agents-dir",
             str(agent_dir),
             "--name",
