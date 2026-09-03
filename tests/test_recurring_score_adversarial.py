@@ -420,6 +420,14 @@ async def test_rate_limited_scheduled_child_uses_real_baton_dispatch_and_one_due
         assert held_record is not None
         assert held_record.last_due_at == record.next_due_at
         assert held_record.last_run_id == held_children[0]
+        # Wait for the exact claimed state: submission (the _wait_until above)
+        # only proves QUEUED; dispatch to RUNNING can land a beat later on a
+        # loaded runner (CI flake 2026-09-03, docs-only commit — timing, not
+        # behavior).
+        await _wait_until(
+            lambda: manager._job_meta[held_children[0]].status
+            is DaemonJobStatus.RUNNING
+        )
         assert manager._job_meta[held_children[0]].status is DaemonJobStatus.RUNNING
         assert run_log.read_text(encoding="utf-8").splitlines() == ["completed"]
 
