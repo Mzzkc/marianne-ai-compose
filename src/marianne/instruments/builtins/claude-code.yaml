@@ -171,10 +171,12 @@ cli:
   # Claude Code v2.1.172 (see docs/specs/2026-06-10-interactive-mode-design.md).
   interactive:
     # Trust-folder dialog appears on first launch in a new directory.
-    # Option 1 ("Yes, I trust this folder") is pre-selected; Enter accepts.
+    # Current claude-code renders "No, exit" as the pre-selected first
+    # option, so accepting trust requires Down+Enter (live repro:
+    # the-rosetta-score sheet 1, 2026-09-03 — Enter alone exited).
     startup_gates:
       - pattern: "Is this a project you created or one you trust"
-        keys: ["Enter"]
+        keys: ["Down", "Enter"]
       # First-ever --dangerously-skip-permissions use shows an acceptance
       # dialog; "Yes, I accept" is reached with Down+Enter on v2.x.
       - pattern: "Bypass Permissions mode"
