@@ -6297,6 +6297,8 @@ class JobManager:
             return result
 
         effective_job_status = job_status or meta.status.value
+        # getattr: duck-typed metas (older test doubles) may lack config_path.
+        meta_config_path = getattr(meta, "config_path", None)
         command = self._expand_hook_vars(
             command,
             meta.workspace,
