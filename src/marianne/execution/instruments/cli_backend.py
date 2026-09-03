@@ -89,7 +89,7 @@ async def _drain_stream(
             on_chunk(chunk)
 
 
-async def _kill_process_group_if_alive(
+async def kill_process_group_if_alive(
     proc: asyncio.subprocess.Process | None,
     pgid: int | None,
 ) -> None:
@@ -147,6 +147,11 @@ async def _kill_process_group_if_alive(
                 pass
         except ProcessLookupError:
             pass
+
+
+# Backward-compatible private name for callers/tests written before this
+# lifecycle primitive was shared with daemon-owned hook subprocesses.
+_kill_process_group_if_alive = kill_process_group_if_alive
 
 # System env vars that are always passed through to instrument subprocesses,
 # regardless of required_env filtering. These are needed for basic process

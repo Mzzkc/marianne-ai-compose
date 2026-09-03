@@ -59,6 +59,10 @@ _ACTIVE_STATUSES = frozenset(
 )
 
 
+class FailureHooksInProgressError(RuntimeError):
+    """Raised when a stable job ID still owns an unsettled hook claim."""
+
+
 @dataclass
 class JobRecord:
     """A single job's registry entry."""
@@ -84,6 +88,7 @@ class JobRecord:
     deadline_diagnostic: str | None = field(default=None, repr=False)
     failure_hooks_started_at: float | None = None
     failure_hooks_completed_at: float | None = None
+    chain_depth: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for JSON-RPC responses."""
@@ -208,6 +213,8 @@ class JobRegistry:
             ("failure_hook_results_json", "TEXT"),
             ("failure_hooks_started_at", "REAL"),
             ("failure_hooks_completed_at", "REAL"),
+            ("concert_config_json", "TEXT"),
+            ("chain_depth", "INTEGER"),
             ("max_wall_seconds", "REAL"),
             ("wall_deadline_at", "REAL"),
             ("terminal_reason", "TEXT"),
@@ -236,6 +243,8 @@ class JobRegistry:
         submitted_at: float | None = None,
         max_wall_seconds: float | None = None,
         wall_deadline_at: float | None = None,
+        concert_config_json: str | None = None,
+        chain_depth: int | None = None,
     ) -> JobRecord:
         """Commit and return one newly submitted execution authority."""
         registered_at = time.time() if submitted_at is None else submitted_at
@@ -253,12 +262,13 @@ class JobRegistry:
         # Reaching this seam means manager admission accepted a new execution.
         # Continuations never call register_job; an accepted stable-ID rerun
         # intentionally replaces the prior execution authority atomically.
-        await self._db.execute(
+        cursor = await self._db.execute(
             """
             INSERT INTO jobs
                 (job_id, config_path, workspace, status, submitted_at, log_path,
-                 max_wall_seconds, wall_deadline_at, terminal_reason)
-            VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, NULL)
+                 max_wall_seconds, wall_deadline_at, terminal_reason,
+                 concert_config_json, chain_depth)
+            VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, NULL, ?, ?)
             ON CONFLICT(job_id) DO UPDATE SET
                 config_path = excluded.config_path,
                 workspace = excluded.workspace,
@@ -279,10 +289,14 @@ class JobRegistry:
                 failure_hook_results_json = NULL,
                 failure_hooks_started_at = NULL,
                 failure_hooks_completed_at = NULL,
+                concert_config_json = excluded.concert_config_json,
+                chain_depth = excluded.chain_depth,
                 submitted_at = excluded.submitted_at,
                 max_wall_seconds = excluded.max_wall_seconds,
                 wall_deadline_at = excluded.wall_deadline_at,
                 terminal_reason = NULL
+            WHERE jobs.failure_hooks_started_at IS NULL
+               OR jobs.failure_hooks_completed_at IS NOT NULL
             """,
             (
                 job_id,
@@ -292,8 +306,15 @@ class JobRegistry:
                 str(log_path) if log_path is not None else None,
                 max_wall_seconds,
                 wall_deadline_at,
+                concert_config_json,
+                chain_depth,
             ),
         )
+        if cursor.rowcount != 1:
+            await self._db.rollback()
+            raise FailureHooksInProgressError(
+                f"Job '{job_id}' is still running terminal failure hooks"
+            )
         await self._db.commit()
         committed = await self.get_job(job_id)
         if committed is None:
@@ -493,6 +514,26 @@ class JobRegistry:
         result: str | None = row["failure_hook_config_json"]
         return result
 
+    async def store_concert_config(self, job_id: str, config_json: str) -> None:
+        """Store concert context used by durable run_job hooks."""
+        await self._db.execute(
+            "UPDATE jobs SET concert_config_json = ? WHERE job_id = ?",
+            (config_json, job_id),
+        )
+        await self._db.commit()
+
+    async def get_concert_config(self, job_id: str) -> str | None:
+        """Load concert context used by durable run_job hooks."""
+        cursor = await self._db.execute(
+            "SELECT concert_config_json FROM jobs WHERE job_id = ?",
+            (job_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        result: str | None = row["concert_config_json"]
+        return result
+
     async def store_failure_hook_results(self, job_id: str, results_json: str) -> None:
         """Store terminal-failure hook results without replacing job failure data."""
         await self._db.execute(
@@ -540,6 +581,20 @@ class JobRegistry:
               AND failure_hooks_completed_at IS NULL
             """,
             (time.time(), job_id),
+        )
+        await self._db.commit()
+
+    async def settle_failure_hooks(self, job_id: str, results_json: str) -> None:
+        """Atomically record hook results and settle their durable claim."""
+        await self._db.execute(
+            """
+            UPDATE jobs
+            SET failure_hook_results_json = ?, failure_hooks_completed_at = ?
+            WHERE job_id = ?
+              AND failure_hooks_started_at IS NOT NULL
+              AND failure_hooks_completed_at IS NULL
+            """,
+            (results_json, time.time(), job_id),
         )
         await self._db.commit()
 
@@ -740,4 +795,5 @@ class JobRegistry:
             deadline_diagnostic=deadline_diagnostic,
             failure_hooks_started_at=row["failure_hooks_started_at"],
             failure_hooks_completed_at=row["failure_hooks_completed_at"],
+            chain_depth=row["chain_depth"],
         )

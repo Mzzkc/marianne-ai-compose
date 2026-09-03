@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shlex
 import sys
 from collections.abc import AsyncIterator
@@ -178,6 +179,33 @@ class TestFailureHookRegistryLifecycle:
         finally:
             await registry.close()
 
+    async def test_incomplete_claim_atomically_blocks_stable_id_replacement(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        registry = JobRegistry(tmp_path / "registry.db")
+        await registry.open()
+        try:
+            score = tmp_path / "score.yaml"
+            workspace = tmp_path / "workspace"
+            await registry.register_job("score", score, workspace)
+            old_hooks = '[{"type":"run_script","command":"old-hook"}]'
+            await registry.store_failure_hook_config("score", old_hooks)
+            await registry.update_status("score", DaemonJobStatus.FAILED.value)
+            assert await registry.claim_failure_hooks("score") is True
+
+            with pytest.raises(RuntimeError, match="failure hooks"):
+                await registry.register_job("score", score, workspace)
+
+            record = await registry.get_job("score")
+            assert record is not None
+            assert record.status is DaemonJobStatus.FAILED
+            assert record.failure_hooks_started_at is not None
+            assert record.failure_hooks_completed_at is None
+            assert await registry.get_failure_hook_config("score") == old_hooks
+        finally:
+            await registry.close()
+
 
 class TestFailureHookManagerLifecycle:
     """Terminal failure hooks are wired to manager status transitions."""
@@ -248,6 +276,52 @@ class TestFailureHookManagerLifecycle:
 
         assert task.cancelled()
         assert manager._failure_hook_tasks == {}
+
+    async def test_shutdown_kills_hook_process_group_and_records_settlement(
+        self,
+        manager: JobManager,
+        tmp_path: Path,
+    ) -> None:
+        pid_path = tmp_path / "hook.pid"
+        script = tmp_path / "blocking-hook.py"
+        script.write_text(
+            "import os, pathlib, time\n"
+            f"pathlib.Path({str(pid_path)!r}).write_text(str(os.getpid()))\n"
+            "time.sleep(300)\n"
+        )
+        meta = await _register_job_with_failure_hooks(
+            manager,
+            tmp_path,
+            [{
+                "type": "run_script",
+                "command": f"{shlex.quote(sys.executable)} {shlex.quote(str(script))}",
+            }],
+            job_id="cancelled-hook-score",
+        )
+        await manager._set_job_status(
+            meta.job_id,
+            DaemonJobStatus.FAILED,
+            error_message="original failure",
+        )
+        deadline = asyncio.get_running_loop().time() + 5
+        while not pid_path.exists() and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.01)
+        assert pid_path.exists()
+        pid = int(pid_path.read_text())
+
+        await manager._settle_failure_hook_tasks(graceful=False)
+
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
+        record = await manager._registry.get_job(meta.job_id)
+        assert record is not None
+        assert record.status is DaemonJobStatus.FAILED
+        assert record.error_message == "original failure"
+        assert record.failure_hooks_completed_at is not None
+        results_json = await manager._registry.get_failure_hook_results(meta.job_id)
+        assert results_json is not None
+        results = json.loads(results_json)
+        assert results[-1]["settlement"] == "cancelled"
 
     async def test_failed_status_runs_hook_with_deterministic_identity(
         self,
@@ -584,6 +658,97 @@ class TestFailureHookRestartRecovery:
             assert record.failure_hooks_completed_at is None
             assert record.status is DaemonJobStatus.FAILED
             assert record.error_message == "original claimed failure"
+        finally:
+            await restarted.shutdown()
+
+    async def test_restart_rejects_resubmit_without_erasing_incomplete_claim(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        config = DaemonConfig(state_db_path=tmp_path / "restart.db")
+        score = tmp_path / "claimed.yaml"
+        score.write_text(
+            "name: claimed-score\n"
+            "sheet:\n  size: 1\n  total_items: 1\n"
+            "prompt:\n  template: test prompt\n"
+        )
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        registry = JobRegistry(config.state_db_path)
+        await registry.open()
+        old_hooks = '[{"type":"run_script","command":"old-hook"}]'
+        await registry.register_job("claimed", score, workspace)
+        await registry.store_failure_hook_config("claimed", old_hooks)
+        await registry.update_status("claimed", DaemonJobStatus.FAILED.value)
+        assert await registry.claim_failure_hooks("claimed") is True
+        await registry.close()
+
+        restarted = JobManager(config)
+        await restarted.start()
+        try:
+            response = await restarted.submit_job(
+                JobRequest(job_id="claimed", config_path=score, workspace=workspace)
+            )
+
+            assert response.status == "rejected"
+            assert "failure hooks" in (response.message or "").lower()
+            record = await restarted._registry.get_job("claimed")
+            assert record is not None
+            assert record.status is DaemonJobStatus.FAILED
+            assert record.failure_hooks_started_at is not None
+            assert record.failure_hooks_completed_at is None
+            assert await restarted._registry.get_failure_hook_config("claimed") == old_hooks
+        finally:
+            await restarted.shutdown()
+
+    async def test_restart_restores_concert_context_for_failure_run_job(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        config = DaemonConfig(state_db_path=tmp_path / "restart.db")
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        next_score = tmp_path / "next.yaml"
+        next_score.write_text(
+            "name: next\n"
+            "sheet:\n  size: 1\n  total_items: 1\n"
+            "prompt:\n  template: test prompt\n"
+        )
+        hooks = [{"type": "run_job", "job_path": str(next_score)}]
+        concert = {
+            "enabled": True,
+            "max_chain_depth": 3,
+            "cooldown_between_jobs_seconds": 0,
+            "inherit_workspace": True,
+        }
+        registry = JobRegistry(config.state_db_path)
+        await registry.open()
+        await registry.register_job(
+            "parent",
+            tmp_path / "parent.yaml",
+            workspace,
+            chain_depth=3,
+        )
+        await registry.store_failure_hook_config("parent", json.dumps(hooks))
+        await registry.store_concert_config("parent", json.dumps(concert))
+        await registry.update_status(
+            "parent",
+            DaemonJobStatus.FAILED.value,
+            error_message="original failure",
+        )
+        await registry.close()
+
+        restarted = JobManager(config)
+        await restarted.start()
+        try:
+            await _wait_for_failure_hooks(restarted, "parent")
+            meta = restarted._job_meta["parent"]
+            assert meta.chain_depth == 3
+            assert meta.concert_config == concert
+            assert "next" not in restarted._job_meta
+            results_json = await restarted._registry.get_failure_hook_results("parent")
+            assert results_json is not None
+            assert "depth limit" in json.loads(results_json)[0]["output"].lower()
         finally:
             await restarted.shutdown()
 

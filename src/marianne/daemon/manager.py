@@ -45,7 +45,12 @@ from marianne.daemon.output import StructuredOutput
 from marianne.daemon.pgroup import ProcessGroupManager
 from marianne.daemon.rate_coordinator import RateLimitCoordinator
 from marianne.daemon.recurrence import RecurrenceController
-from marianne.daemon.registry import DaemonJobStatus, JobRecord, JobRegistry
+from marianne.daemon.registry import (
+    DaemonJobStatus,
+    FailureHooksInProgressError,
+    JobRecord,
+    JobRegistry,
+)
 from marianne.daemon.schedule_registry import ScheduleRecord, ScheduleRegistry
 from marianne.daemon.scheduler import GlobalSheetScheduler
 from marianne.daemon.semantic_analyzer import SemanticAnalyzer
@@ -642,8 +647,6 @@ class JobManager:
                     record.job_id,
                 )
                 if hook_json:
-                    import json
-
                     hook_config = json.loads(hook_json)
 
                 failure_hook_config: list[dict[str, Any]] | None = None
@@ -651,9 +654,12 @@ class JobManager:
                     record.job_id,
                 )
                 if failure_hook_json:
-                    import json
-
                     failure_hook_config = json.loads(failure_hook_json)
+
+                concert_config: dict[str, Any] | None = None
+                concert_json = await self._registry.get_concert_config(record.job_id)
+                if concert_json:
+                    concert_config = json.loads(concert_json)
 
                 max_wall_seconds = record.max_wall_seconds
                 wall_deadline_at = record.wall_deadline_at
@@ -692,6 +698,8 @@ class JobManager:
                     deadline_diagnostic=record.deadline_diagnostic,
                     hook_config=hook_config,
                     failure_hook_config=failure_hook_config,
+                    concert_config=concert_config,
+                    chain_depth=record.chain_depth,
                 )
         if all_records:
             _logger.info(
@@ -1928,15 +1936,28 @@ class JobManager:
                     )
                     # Register in DB first — if this fails, no phantom in-memory entry
                     log_path = self._ensure_workspace_log_path(workspace)
-                    committed = await self._registry.register_job(
-                        job_id,
-                        request.config_path,
-                        workspace,
-                        log_path=log_path,
-                        submitted_at=registered_at,
-                        max_wall_seconds=max_wall_seconds,
-                        wall_deadline_at=wall_deadline_at,
-                    )
+                    try:
+                        committed = await self._registry.register_job(
+                            job_id,
+                            request.config_path,
+                            workspace,
+                            log_path=log_path,
+                            submitted_at=registered_at,
+                            max_wall_seconds=max_wall_seconds,
+                            wall_deadline_at=wall_deadline_at,
+                            concert_config_json=(
+                                json.dumps(concert_config_dict)
+                                if concert_config_dict is not None
+                                else None
+                            ),
+                            chain_depth=request.chain_depth,
+                        )
+                    except FailureHooksInProgressError as exc:
+                        return JobResponse(
+                            job_id=job_id,
+                            status="rejected",
+                            message=str(exc),
+                        )
                     meta = JobMeta(
                         job_id=committed.job_id,
                         config_path=Path(committed.config_path),
@@ -1956,15 +1977,11 @@ class JobManager:
 
                     # Persist hook config to registry for restart resilience
                     if hook_config_list:
-                        import json
-
                         await self._registry.store_hook_config(
                             job_id,
                             json.dumps(hook_config_list),
                         )
                     if failure_hook_config_list:
-                        import json
-
                         await self._registry.store_failure_hook_config(
                             job_id,
                             json.dumps(failure_hook_config_list),
@@ -2065,15 +2082,23 @@ class JobManager:
                 else None
             )
             log_path = self._ensure_workspace_log_path(workspace)
-            committed = await self._registry.register_job(
-                job_id,
-                request.config_path,
-                workspace,
-                log_path=log_path,
-                submitted_at=registered_at,
-                max_wall_seconds=max_wall_seconds,
-                wall_deadline_at=wall_deadline_at,
-            )
+            try:
+                committed = await self._registry.register_job(
+                    job_id,
+                    request.config_path,
+                    workspace,
+                    log_path=log_path,
+                    submitted_at=registered_at,
+                    max_wall_seconds=max_wall_seconds,
+                    wall_deadline_at=wall_deadline_at,
+                    chain_depth=request.chain_depth,
+                )
+            except FailureHooksInProgressError as exc:
+                return JobResponse(
+                    job_id=job_id,
+                    status="rejected",
+                    message=str(exc),
+                )
             meta = JobMeta(
                 job_id=committed.job_id,
                 config_path=Path(committed.config_path),
@@ -5886,6 +5911,20 @@ class JobManager:
                 else:
                     result["error_message"] = f"Unknown hook type: {hook_type}"
             except asyncio.CancelledError:
+                result.update(
+                    {
+                        "settlement": "cancelled",
+                        "error_message": "Conductor shutdown cancelled failure hook",
+                        "trigger": "failure",
+                        "job_id": job_id,
+                        "terminal_status": DaemonJobStatus.FAILED.value,
+                    }
+                )
+                results.append(result)
+                await self._registry.settle_failure_hooks(
+                    job_id,
+                    json.dumps(results),
+                )
                 raise
             except Exception as exc:
                 result["error_message"] = f"Exception: {exc}"
@@ -5908,11 +5947,7 @@ class JobManager:
             if not result.get("success") and hook.get("on_failure", "continue") == "abort":
                 break
 
-        await self._registry.store_failure_hook_results(
-            job_id,
-            json.dumps(results),
-        )
-        await self._registry.complete_failure_hooks(job_id)
+        await self._registry.settle_failure_hooks(job_id, json.dumps(results))
         _logger.info(
             "failure_hooks.daemon_completed",
             job_id=job_id,
@@ -6225,6 +6260,10 @@ class JobManager:
         """
         import shlex
 
+        from marianne.execution.instruments.cli_backend import (
+            kill_process_group_if_alive,
+        )
+
         hook_type = "run_command" if use_shell else "run_script"
         result: dict[str, Any] = {
             "hook_type": hook_type,
@@ -6256,6 +6295,8 @@ class JobManager:
             }
         )
 
+        proc: asyncio.subprocess.Process | None = None
+        pgid: int | None = None
         try:
             if use_shell:
                 proc = await asyncio.create_subprocess_shell(  # noqa: S604
@@ -6264,6 +6305,7 @@ class JobManager:
                     stderr=asyncio.subprocess.STDOUT,
                     cwd=cwd,
                     env=hook_env,
+                    start_new_session=True,
                 )
             else:
                 args = shlex.split(command)
@@ -6273,7 +6315,14 @@ class JobManager:
                     stderr=asyncio.subprocess.STDOUT,
                     cwd=cwd,
                     env=hook_env,
+                    start_new_session=True,
                 )
+
+            if proc.pid is not None:
+                try:
+                    pgid = os.getpgid(proc.pid)
+                except ProcessLookupError:
+                    pgid = None
 
             try:
                 stdout_bytes, _ = await asyncio.wait_for(
@@ -6285,14 +6334,14 @@ class JobManager:
                 result["success"] = proc.returncode == 0
                 result["output"] = stdout[-2000:] if stdout else None
             except TimeoutError:
-                proc.kill()
-                await proc.wait()
                 result["error_message"] = f"Timeout after {timeout}s"
 
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             result["error_message"] = str(exc)
+        finally:
+            await kill_process_group_if_alive(proc, pgid)
 
         return result
 
