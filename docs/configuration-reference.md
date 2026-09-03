@@ -372,12 +372,14 @@ sheet:
 
 *Source: `src/marianne/core/config/job.py` — `InjectionItem`*
 
-A single injection item referencing a file with a category. Used in `prelude` (all sheets) and `cadenzas` (per-sheet) to inject file content into prompts at category-appropriate locations.
+A single injection item referencing a file **or a directory** with a category. Used in `prelude` (all sheets) and `cadenzas` (per-sheet) to inject file content into prompts at category-appropriate locations. Exactly one of `file` or `directory` must be specified.
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `file` | `str` | **required** | | Path to the file to inject. Supports Jinja templating (e.g., `{{ workspace }}/context.md`). `{{ score_dir }}` anchors to the score file's directory. |
+| `file` | `str \| None` | `None` | mutually exclusive with `directory` | Path to a single file to inject. Supports Jinja templating (e.g., `{{ workspace }}/context.md`). `{{ score_dir }}` anchors to the score file's directory. |
+| `directory` | `str \| None` | `None` | mutually exclusive with `file` | Path to a directory whose files are ALL injected (directory cadenza). Text files inject inline; binary files inject as structured read instructions with absolute paths. Supports Jinja templating. NOT recursive — only immediate children are injected; flatten or list subdirectories as separate items. |
 | `as` | `InjectionCategory` | **required** | `"context"`, `"skill"`, or `"tool"` | Category determining prompt placement. See InjectionCategory below. |
+| `required` | `bool` | `false` | | Fail the sheet **before execution** when this attachment cannot be read. Persistent-agent identity, memory, and every load-bearing cadenza attachment should set this `true` — missing context then fails loudly instead of silently running degraded. Runtime context-delivery receipts record the resolved paths and hashes actually assembled into the prompt. |
 
 **InjectionCategory values:**
 
@@ -392,10 +394,11 @@ sheet:
   prelude:
     - file: docs/architecture.md
       as: context
+    - directory: "{{ score_dir }}/inputs"   # every file in the directory
+      as: context
     - file: .claude/skills/debugging.md
       as: skill
-    - file: tools/lint.sh
-      as: tool
+      required: true
   cadenzas:
     3:
       - file: "{{ workspace }}/02-output.md"
@@ -403,10 +406,44 @@ sheet:
 ```
 
 **Key behaviors:**
-- Files are read at **sheet execution time**, not config parse time — so dynamic outputs from earlier sheets are available via Jinja-templated paths.
-- Missing files for `context` category log a warning and are skipped.
-- Missing files for `skill` or `tool` category log an error and are skipped.
+- Items are read at **sheet execution time**, not config parse time — so dynamic outputs from earlier sheets are available via Jinja-templated paths.
+- A common pattern: a small `cli` preflight stage curates/copies relevant files into one flat directory that a later sheet's `directory:` cadenza points at.
+- Missing files for `context` category log a warning and are skipped — unless `required: true`, which fails the sheet before execution.
+- Missing files for `skill` or `tool` category log an error and are skipped — set `required: true` to make the failure terminal.
 - `mzt validate` checks static file paths (V108 warning) but skips Jinja-templated paths that can't be resolved at validation time.
+
+---
+
+## techniques
+
+*Source: `src/marianne/core/config/techniques.py` — `TechniqueConfig`*
+
+ECS-style technique components attached to a score or agent. The baton resolves active techniques for a sheet during agent-cycle phases; the compiler's technique wirer reads these declarations and injects the appropriate manifests, MCP access, and protocol config into each phase's cadenza context. Techniques are composable — multiple kinds may be attached simultaneously.
+
+```yaml
+techniques:
+  a2a:
+    kind: protocol
+    phases: [recon, plan, work, integration, inspect, aar]
+  github:
+    kind: mcp
+    phases: [recon, work, integration]
+    config:
+      server: github
+      transport: stdio
+  mateship:
+    kind: skill
+    phases: [plan, aar]
+    config:
+      path: techniques/mateship.md
+```
+
+| Field | Type | Default | Constraints | Description |
+|-------|------|---------|-------------|-------------|
+| `kind` | `TechniqueKind` | **required** | `skill`, `mcp`, or `protocol` | Component kind. `skill` — text-based methodology (memory protocol, mateship, coordination). `mcp` — MCP server tools via the shared pool. `protocol` — communication protocols (A2A, coordination). |
+| `phases` | `list[str]` | **required** | | Phases where the technique is available (e.g., recon, plan, work, integration, inspect, aar). Empty list = declared but not active in any phase. |
+| `required` | `bool` | `false` | | Fail dispatch when an active `skill` technique document cannot be resolved. Modern persistent-agent specialist techniques should set this `true`. |
+| `config` | `dict` | `{}` | | Kind-specific configuration. `mcp`: server name, transport. `skill`: path to the skill document. `protocol`: protocol-specific settings. |
 
 ---
 
