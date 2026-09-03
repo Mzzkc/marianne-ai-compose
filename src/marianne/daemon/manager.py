@@ -5339,6 +5339,7 @@ class JobManager:
             deps,
             max_cost_usd=max_cost,
             max_retries=max_retries,
+            max_completion=config.retry.max_completion_attempts,
             escalation_enabled=escalation_enabled,  # #361: decoupled from healing
             self_healing_enabled=request.self_healing,
             prompt_config=config.prompt,
@@ -5654,6 +5655,7 @@ class JobManager:
             checkpoint,
             max_cost_usd=max_cost,
             max_retries=max_retries,
+            max_completion=config.retry.max_completion_attempts,
             escalation_enabled=effective_escalation,  # #361: inherited+flags
             self_healing_enabled=effective_self_healing,
             prompt_config=config.prompt,
