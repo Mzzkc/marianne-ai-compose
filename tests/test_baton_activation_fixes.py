@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from marianne.core.config import JobConfig
 from marianne.core.sheet import Sheet
 from marianne.daemon.baton.events import SheetAttemptResult
 from marianne.daemon.baton.state import BatonSheetStatus
@@ -545,6 +546,235 @@ class TestF158PromptConfigWiring:
 
 
 # =========================================================================
+# Max completion attempts: manager-to-adapter propagation
+# =========================================================================
+
+
+class TestMaxCompletionPropagation:
+    """Score completion budgets must cross both manager registration paths."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "configured",
+        [0, 2, 5],
+        ids=["zero", "non-default", "default"],
+    )
+    async def test_run_via_baton_forwards_configured_max_completion(
+        self,
+        configured: int,
+    ) -> None:
+        """Fresh registration must explicitly forward even the default value."""
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
+
+        manager = _make_mock_manager()
+        adapter = manager._baton_adapter
+        adapter.wait_for_completion = AsyncMock(return_value=True)
+        adapter.register_job = MagicMock()
+        adapter.publish_job_event = AsyncMock()
+        adapter.has_completed_sheets = MagicMock(return_value=True)
+        config = _make_completion_config(configured)
+        manager._job_meta["fresh-budget"] = JobMeta(
+            job_id="fresh-budget",
+            config_path=Path("/tmp/fresh-budget.yaml"),
+            workspace=Path("/tmp/fresh-budget"),
+            status=DaemonJobStatus.RUNNING,
+        )
+
+        with (
+            patch(
+                "marianne.core.sheet.build_sheets",
+                return_value=[_make_sheet(num=1), _make_sheet(num=2)],
+            ),
+            patch(
+                "marianne.daemon.baton.adapter.extract_dependencies",
+                return_value={1: [], 2: []},
+            ),
+        ):
+            await manager._run_via_baton(
+                "fresh-budget",
+                config,
+                _make_mock_request(),
+            )
+
+        kwargs = adapter.register_job.call_args.kwargs
+        assert "max_completion" in kwargs
+        assert kwargs["max_completion"] == configured
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "configured",
+        [0, 2, 5],
+        ids=["zero", "non-default", "default"],
+    )
+    async def test_resume_via_baton_forwards_effective_max_completion(
+        self,
+        configured: int,
+    ) -> None:
+        """Recovery must forward the value from the effective reloaded config."""
+        from marianne.core.checkpoint import CheckpointState, SheetState
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
+
+        manager = _make_mock_manager()
+        adapter = manager._baton_adapter
+        adapter.wait_for_completion = AsyncMock(return_value=True)
+        adapter.recover_job = MagicMock()
+        adapter.publish_job_event = AsyncMock()
+        adapter.has_completed_sheets = MagicMock(return_value=True)
+        manager._job_meta["resume-budget"] = JobMeta(
+            job_id="resume-budget",
+            config_path=Path("/tmp/resume-budget.yaml"),
+            workspace=Path("/tmp/resume-budget"),
+            status=DaemonJobStatus.RUNNING,
+        )
+        checkpoint = CheckpointState(
+            job_id="resume-budget",
+            job_name="resume-budget",
+            total_sheets=2,
+            sheets={1: SheetState(sheet_num=1), 2: SheetState(sheet_num=2)},
+        )
+        manager._load_checkpoint = AsyncMock(return_value=checkpoint)
+        config = _make_completion_config(configured)
+
+        with (
+            patch("marianne.core.config.JobConfig") as mock_job_config,
+            patch(
+                "marianne.core.sheet.build_sheets",
+                return_value=[_make_sheet(num=1), _make_sheet(num=2)],
+            ),
+            patch(
+                "marianne.daemon.baton.adapter.extract_dependencies",
+                return_value={1: [], 2: []},
+            ),
+        ):
+            mock_job_config.from_yaml.return_value = config
+            await manager._resume_via_baton(
+                "resume-budget",
+                Path("/tmp/resume-budget"),
+            )
+
+        kwargs = adapter.recover_job.call_args.kwargs
+        assert "max_completion" in kwargs
+        assert kwargs["max_completion"] == configured
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "configured",
+        [0, 2, 5],
+        ids=["zero", "non-default", "default"],
+    )
+    async def test_run_via_baton_applies_budget_to_every_live_sheet(
+        self,
+        configured: int,
+    ) -> None:
+        """The fresh manager path must drive two real adapter sheet states."""
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
+
+        manager = _make_mock_manager()
+        adapter = manager._baton_adapter
+        adapter.wait_for_completion = AsyncMock(return_value=True)
+        adapter.publish_job_event = AsyncMock()
+        adapter.has_completed_sheets = MagicMock(return_value=True)
+        register_job = MagicMock(wraps=adapter.register_job)
+        adapter.register_job = register_job
+        config = _make_completion_config(configured)
+        manager._job_meta["fresh-live-budget"] = JobMeta(
+            job_id="fresh-live-budget",
+            config_path=Path("/tmp/fresh-live-budget.yaml"),
+            workspace=Path("/tmp/fresh-live-budget"),
+            status=DaemonJobStatus.RUNNING,
+        )
+
+        try:
+            with (
+                patch(
+                    "marianne.core.sheet.build_sheets",
+                    return_value=[_make_sheet(num=1), _make_sheet(num=2)],
+                ),
+                patch(
+                    "marianne.daemon.baton.adapter.extract_dependencies",
+                    return_value={1: [], 2: []},
+                ),
+            ):
+                await manager._run_via_baton(
+                    "fresh-live-budget",
+                    config,
+                    _make_mock_request(),
+                )
+
+            live_sheets = manager._live_states["fresh-live-budget"].sheets
+            assert set(live_sheets) == {1, 2}
+            assert [live_sheets[num].max_completion for num in (1, 2)] == [
+                configured,
+                configured,
+            ]
+        finally:
+            adapter.deregister_job("fresh-live-budget")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "configured",
+        [0, 2, 5],
+        ids=["zero", "non-default", "default"],
+    )
+    async def test_resume_via_baton_applies_budget_to_every_live_sheet(
+        self,
+        configured: int,
+    ) -> None:
+        """The recovery manager path must drive two real adapter sheet states."""
+        from marianne.core.checkpoint import CheckpointState, SheetState
+        from marianne.daemon.manager import DaemonJobStatus, JobMeta
+
+        manager = _make_mock_manager()
+        adapter = manager._baton_adapter
+        adapter.wait_for_completion = AsyncMock(return_value=True)
+        adapter.publish_job_event = AsyncMock()
+        adapter.has_completed_sheets = MagicMock(return_value=True)
+        recover_job = MagicMock(wraps=adapter.recover_job)
+        adapter.recover_job = recover_job
+        manager._job_meta["resume-live-budget"] = JobMeta(
+            job_id="resume-live-budget",
+            config_path=Path("/tmp/resume-live-budget.yaml"),
+            workspace=Path("/tmp/resume-live-budget"),
+            status=DaemonJobStatus.RUNNING,
+        )
+        checkpoint = CheckpointState(
+            job_id="resume-live-budget",
+            job_name="resume-live-budget",
+            total_sheets=2,
+            sheets={1: SheetState(sheet_num=1), 2: SheetState(sheet_num=2)},
+        )
+        manager._load_checkpoint = AsyncMock(return_value=checkpoint)
+        config = _make_completion_config(configured)
+
+        try:
+            with (
+                patch("marianne.core.config.JobConfig") as mock_job_config,
+                patch(
+                    "marianne.core.sheet.build_sheets",
+                    return_value=[_make_sheet(num=1), _make_sheet(num=2)],
+                ),
+                patch(
+                    "marianne.daemon.baton.adapter.extract_dependencies",
+                    return_value={1: [], 2: []},
+                ),
+            ):
+                mock_job_config.from_yaml.return_value = config
+                await manager._resume_via_baton(
+                    "resume-live-budget",
+                    Path("/tmp/resume-live-budget"),
+                )
+
+            live_sheets = manager._live_states["resume-live-budget"].sheets
+            assert set(live_sheets) == {1, 2}
+            assert [live_sheets[num].max_completion for num in (1, 2)] == [
+                configured,
+                configured,
+            ]
+        finally:
+            adapter.deregister_job("resume-live-budget")
+
+
+# =========================================================================
 # Test helpers
 # =========================================================================
 
@@ -558,6 +788,7 @@ def _make_mock_manager() -> MagicMock:
     manager._job_meta = {}
     manager._live_states = {}
     manager._config_name_to_conductor_id = {}
+    manager._job_worktrees = None
     manager._config = MagicMock()
     manager._config.default_thinking_method = None
 
@@ -609,6 +840,19 @@ def _make_mock_config(parallel: bool = False) -> MagicMock:
     config.parallel.stagger_delay_ms = 250
 
     return config
+
+
+def _make_completion_config(max_completion_attempts: int) -> JobConfig:
+    """Build a complete score-facing config with an explicit completion budget."""
+    return JobConfig.model_validate(
+        {
+            "name": "completion-budget",
+            "workspace": "/tmp/completion-budget",
+            "sheet": {"size": 1, "total_items": 2},
+            "prompt": {"template": "{{ sheet_num }}"},
+            "retry": {"max_completion_attempts": max_completion_attempts},
+        }
+    )
 
 
 def _make_mock_request() -> MagicMock:
