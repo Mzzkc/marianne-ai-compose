@@ -38,9 +38,12 @@ env/
 # See .marianne/spec/conventions.yaml (Repository Structure) for full rules
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Workspaces — all job workspaces live under workspaces/ (or legacy dot-prefixed)
+# Workspaces — all job workspaces live under workspaces/ (or legacy dot-prefixed).
+# Contents are ignored; the tracked README.md scaffold keeps the directory
+# present on fresh clones (path validation V002 expects it).
 .worktrees/
-workspaces/
+workspaces/*
+!workspaces/README.md
 *-workspace/
 *-workspace-*/
 *workspace-*/

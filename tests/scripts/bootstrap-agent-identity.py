@@ -18,7 +18,6 @@ from pathlib import Path
 
 import yaml
 
-
 DEFAULT_AGENTS_DIR = Path.home() / ".mzt" / "agents"
 
 

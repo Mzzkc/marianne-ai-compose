@@ -180,10 +180,16 @@ class TestSelfChainConfigured:
         hook = config.on_success[0]
         assert hook.type == "run_job"
 
-    def test_on_success_points_to_self(self, config: JobConfig) -> None:
+    def test_on_success_points_to_staged_self_chain(self, config: JobConfig) -> None:
+        """The self-chain targets the workspace-staged copy, not an absolute path.
+
+        Stage 1.5 of the template copies this score (via ``score_relpath``)
+        into ``{workspace}/self-chain.yaml``; on_success chains to that copy
+        so the example carries no machine-specific paths.
+        """
         hook = config.on_success[0]
         assert hook.job_path is not None
-        assert "issue-solver.yaml" in str(hook.job_path)
+        assert str(hook.job_path) == "{workspace}/self-chain.yaml"
 
     def test_on_success_is_detached(self, config: JobConfig) -> None:
         hook = config.on_success[0]

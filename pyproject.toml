@@ -51,7 +51,7 @@ dependencies = [
     "structlog>=24.1.0",
 
     # Security minimum versions — transitive deps with known CVEs (F-061, F-137)
-    "cryptography>=48.0.1",   # GHSA-537c-gmf6-5ccf, CVE-2026-34073 (F-061)
+    "cryptography>=50.0.0",   # GHSA-537c-gmf6-5ccf, CVE-2026-34073 (F-061); PYSEC-2026-3552
     "pyjwt>=2.12.0",          # CVE-2026-32597 (F-061)
     "requests>=2.33.0",       # CVE-2026-25645 (F-061)
     "pygments>=2.20.0",       # CVE-2026-4539 (F-137)

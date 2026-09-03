@@ -39,7 +39,12 @@ class _CloseCountingCoroutine(
         self.close_calls = 0
 
     def __await__(self) -> Generator[Any, None, DaemonJobStatus | None]:
-        return self
+        # Delegate to the wrapped coroutine's iterator: returning ``self``
+        # violates the awaitable protocol (``__await__`` must yield an
+        # iterator). Python 3.11 never noticed because its ``wait_for``
+        # drives coroutines via send/throw; 3.12 awaits directly and a
+        # non-iterator return surfaces as TypeError.
+        return self.coro.__await__()
 
     def send(self, value: Any) -> Any:
         return self.coro.send(value)
