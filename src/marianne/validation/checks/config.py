@@ -512,7 +512,7 @@ class InteractiveSupportCheck:
 
     @property
     def check_id(self) -> str:
-        return "V211"
+        return "V213"
 
     @property
     def severity(self) -> ValidationSeverity:
@@ -1006,7 +1006,7 @@ class NoUsableInstrumentCheck:
 
     @property
     def check_id(self) -> str:
-        return "V212"
+        return "V215"
 
     @property
     def severity(self) -> ValidationSeverity:

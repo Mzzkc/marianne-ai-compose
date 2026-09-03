@@ -1201,7 +1201,7 @@ class TestInteractiveLaunchInheritance:
 
 
 # =============================================================================
-# V211 pre-execution validation
+# V213 pre-execution validation (InteractiveSupportCheck)
 # =============================================================================
 
 
@@ -1249,7 +1249,7 @@ instrument_config:
         errors = [i for i in self._check(yaml_text) if i.severity.value == "error"]
         assert len(errors) == 1
         assert "crush" in errors[0].message
-        assert errors[0].check_id == "V211"
+        assert errors[0].check_id == "V213"
 
     def test_interactive_alias_resolution(self) -> None:
         yaml_text = self.BASE + """

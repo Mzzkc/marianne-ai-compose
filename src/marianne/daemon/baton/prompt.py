@@ -255,6 +255,9 @@ class PromptRenderer:
             start_item=start_item,
             end_item=end_item,
             workspace=sheet.workspace,
+            score_dir=(
+                str(sheet.score_path.parent) if sheet.score_path is not None else ""
+            ),
             instrument_name=sheet.instrument_name,
         )
 

@@ -364,7 +364,7 @@ class FanOutStringFilterCheck:
 
     @property
     def check_id(self) -> str:
-        return "V304"
+        return "V102"
 
     @property
     def severity(self) -> ValidationSeverity:

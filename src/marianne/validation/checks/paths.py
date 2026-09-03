@@ -190,6 +190,119 @@ class WorkspaceParentExistsCheck:
         return issues
 
 
+class AbsoluteHomePathCheck:
+    """Flag machine-absolute paths under the user's home (V004).
+
+    Absolute ``/home/<user>/...`` (or equivalent) paths make scores
+    non-portable and leak personal layout into shared artifacts. The
+    portable forms are ``~``-relative, ``{workspace}``/``{score_dir}``
+    templates, and relative paths.
+
+    Judged against the RAW YAML, not the model: the model pre-resolves a
+    ``~/`` workspace into an absolute-under-home Path at load time, which
+    would false-positive the explicitly-portable tilde form.
+    """
+
+    @property
+    def check_id(self) -> str:
+        return "V004"
+
+    @property
+    def severity(self) -> ValidationSeverity:
+        return ValidationSeverity.ERROR
+
+    @property
+    def description(self) -> str:
+        return "Rejects absolute paths under the current user's home directory"
+
+    def check(
+        self,
+        config: JobConfig,
+        config_path: Path,
+        raw_yaml: str,
+    ) -> list[ValidationIssue]:
+        """Check workspace, prelude/cadenza paths, hook job_paths, variables."""
+        import yaml as _yaml
+
+        try:
+            data = _yaml.safe_load(raw_yaml)
+        except _yaml.YAMLError:
+            return []
+        if not isinstance(data, dict):
+            return []
+
+        home_prefix = str(Path.home())
+        issues: list[ValidationIssue] = []
+
+        def _is_home_absolute(value: str) -> bool:
+            return value.startswith(home_prefix)
+
+        def _flag(field: str, value: str) -> None:
+            issues.append(
+                ValidationIssue(
+                    check_id=self.check_id,
+                    severity=self.severity,
+                    message=(
+                        f"Absolute home path in {field}: {value}. Scores must "
+                        "stay portable — use ~, {score_dir}, {workspace}, or "
+                        "a relative path."
+                    ),
+                    line=find_line_in_yaml(raw_yaml, value),
+                    suggestion=(
+                        f"Replace the absolute path in {field} with a "
+                        "portable form (~/, {score_dir}/, {workspace}/, or "
+                        "score-relative)."
+                    ),
+                    metadata={"field": field, "path": value},
+                )
+            )
+
+        def _scan_items(items: object, field: str) -> None:
+            if not isinstance(items, list):
+                return
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                for key in ("file", "directory"):
+                    val = item.get(key)
+                    if isinstance(val, str) and _is_home_absolute(val):
+                        _flag(f"{field}.{key}", val)
+
+        # workspace — judged from raw (model pre-resolves ~/ to absolute)
+        ws = data.get("workspace")
+        if isinstance(ws, str) and _is_home_absolute(ws):
+            _flag("workspace", ws)
+
+        sheet_cfg = data.get("sheet")
+        if isinstance(sheet_cfg, dict):
+            _scan_items(sheet_cfg.get("prelude"), "prelude")
+            cadenzas = sheet_cfg.get("cadenzas")
+            if isinstance(cadenzas, dict):
+                for items in cadenzas.values():
+                    _scan_items(items, "cadenzas")
+
+        prompt_cfg = data.get("prompt")
+        if isinstance(prompt_cfg, dict):
+            variables = prompt_cfg.get("variables")
+            if isinstance(variables, dict):
+                for key, val in variables.items():
+                    values = val if isinstance(val, list) else [val]
+                    for v in values:
+                        if isinstance(v, str) and _is_home_absolute(v):
+                            _flag(f"prompt.variables.{key}", v)
+
+        hooks = data.get("on_success")
+        if isinstance(hooks, list):
+            for hook in hooks:
+                if not isinstance(hook, dict):
+                    continue
+                job_path = hook.get("job_path")
+                if isinstance(job_path, str) and _is_home_absolute(job_path):
+                    _flag("on_success.job_path", job_path)
+
+        return issues
+
+
 class TemplateFileExistsCheck:
     """Check that template_file exists if specified (V003)."""
 

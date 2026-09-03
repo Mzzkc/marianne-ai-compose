@@ -18,7 +18,9 @@ from marianne.core.logging import get_logger
 _logger = get_logger("hooks")
 
 
-_KNOWN_HOOK_VARS = frozenset({"workspace", "job_id", "job_status", "sheet_count"})
+_KNOWN_HOOK_VARS = frozenset(
+    {"workspace", "job_id", "job_status", "sheet_count", "score_dir"}
+)
 
 
 def expand_hook_variables(
@@ -28,12 +30,13 @@ def expand_hook_variables(
     job_id: str,
     job_status: str | None = None,
     sheet_count: int | None = None,
+    score_dir: str | Path | None = None,
     for_shell: bool = False,
 ) -> str:
     """Expand template variables in hook paths/commands.
 
     Known variables: ``{workspace}``, ``{job_id}``, ``{job_status}``,
-    ``{sheet_count}``.
+    ``{sheet_count}``, ``{score_dir}``.
     Warns on unrecognized ``{var}`` patterns that remain after expansion.
 
     Args:
@@ -63,6 +66,11 @@ def expand_hook_variables(
         if for_shell:
             sc_str = shlex.quote(sc_str)
         result = result.replace("{sheet_count}", sc_str)
+    if score_dir is not None:
+        sd_str = str(score_dir)
+        if for_shell:
+            sd_str = shlex.quote(sd_str)
+        result = result.replace("{score_dir}", sd_str)
     # Warn about unrecognized template variables
     for match in re.finditer(r"\{(\w+)\}", result):
         var_name = match.group(1)

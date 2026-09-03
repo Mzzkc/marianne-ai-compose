@@ -552,7 +552,6 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 | V001 | Jinja syntax errors in templates |
 | V002 | Workspace parent directory missing |
 | V003 | Template file missing |
-| V004 | System prompt file missing |
 | V005 | Working directory invalid |
 | V007 | Invalid regex patterns in validations |
 | V008 | Validation rules missing required fields |
@@ -566,6 +565,7 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 | Code | Description |
 |------|-------------|
 | V101 | Undefined template variables |
+| V102 | Fan-out template uses string filters Jinja cannot apply |
 | V103 | Very short timeout (< 60s) |
 | V106 | Empty pattern in validation rule |
 | V107 | Referenced skill files missing |
@@ -576,10 +576,13 @@ Performs comprehensive validation including YAML syntax, Pydantic schema validat
 | V208 | User variable shadows a built-in template variable |
 | V210 | Instrument name not found in known profiles |
 | V211 | Instrument fallback name not found in known profiles |
+| V213 | `interactive: true` set on an instrument without interactive support |
 | V212 | `skip_when` keys reference out-of-range sheets |
 | V307 | Raw shell sheet can fall back to non-raw LLM-style instruments |
 | V308 | Fan-out movement has partial concrete instrument assignment coverage |
 | V309 | Exact section-label validation is absent from the prompt template |
+| V004 | Absolute path under the user's home directory (use `~`, `{score_dir}`, `{workspace}`, or relative) |
+| V215 | No usable instrument after fallback resolution |
 
 **Info** (suggestions):
 

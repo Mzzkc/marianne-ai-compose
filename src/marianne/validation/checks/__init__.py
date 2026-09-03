@@ -41,6 +41,7 @@ from marianne.validation.checks.jinja import (
     JinjaUndefinedVariableCheck,
 )
 from marianne.validation.checks.paths import (
+    AbsoluteHomePathCheck,
     CadenzaOrderingCheck,
     PreludeCadenzaFileCheck,
     SkillFilesExistCheck,
@@ -66,6 +67,7 @@ __all__ = [
     "PromptValidationContractCheck",
     # Path checks
     "WorkspaceParentExistsCheck",
+    "AbsoluteHomePathCheck",
     "TemplateFileExistsCheck",
     "PreludeCadenzaFileCheck",
     "SkillFilesExistCheck",

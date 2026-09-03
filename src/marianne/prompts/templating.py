@@ -78,6 +78,11 @@ class SheetContext:
     start_item: int
     end_item: int
     workspace: Path
+    # Directory holding the score file this sheet was built from. Exposed as
+    # {{ score_dir }} — the portable anchor for repo-relative references.
+    # Empty string when the score has no file: templates render "" rather
+    # than Undefined (matches how instrument_name defaults).
+    score_dir: str = ""
     # Resolved instrument name (e.g. "claude-code", "musician-ember"). Exposed
     # as {{ instrument_name }} — a documented core template variable (#336).
     instrument_name: str = ""
@@ -123,6 +128,7 @@ class SheetContext:
             "start_item": self.start_item,
             "end_item": self.end_item,
             "workspace": str(self.workspace),
+            "score_dir": self.score_dir,
             "instrument_name": self.instrument_name,
             # Old terminology (backward compat)
             "stage": effective_stage,

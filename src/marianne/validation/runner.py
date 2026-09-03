@@ -9,6 +9,7 @@ from pathlib import Path
 from marianne.core.config import JobConfig
 from marianne.validation.base import ValidationCheck, ValidationIssue, ValidationSeverity
 from marianne.validation.checks import (
+    AbsoluteHomePathCheck,
     BashArrayLengthCheck,
     CadenzaOrderingCheck,
     CliRawPromptBashCheck,
@@ -154,6 +155,7 @@ def create_default_checks() -> list[ValidationCheck]:
         PreludeCadenzaFileCheck(),
         CadenzaOrderingCheck(),
         ValidationPathScopeCheck(),
+        AbsoluteHomePathCheck(),
         # Config checks
         RegexPatternCheck(),
         ValidationTypeCheck(),

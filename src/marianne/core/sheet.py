@@ -79,6 +79,12 @@ class Sheet(BaseModel):
         description="Human-readable label for status display",
     )
     workspace: Path = Field(description="Execution working directory")
+    score_path: Path | None = Field(
+        default=None,
+        description="Absolute path of the score file this Sheet was built from. "
+        "Anchors the score_dir template variable; None for scores built "
+        "without a file (no anchor is better than a bogus one).",
+    )
 
     # --- Instrument ---
     instrument_name: str = Field(
@@ -186,6 +192,13 @@ class Sheet(BaseModel):
             "fan_count": self.voice_count,
             "total_stages": total_movements,
         })
+
+        # Score-location anchor: the resolved directory holding this score
+        # file. Prompts, validations, and hooks use it to reference repo
+        # files and sibling scores portably. Emitted ONLY when the Sheet
+        # knows its score file — never a bogus default.
+        if self.score_path is not None:
+            tvars["score_dir"] = str(self.score_path.parent)
 
         return tvars
 
@@ -346,6 +359,7 @@ def build_sheets(config: JobConfig) -> list[Sheet]:
                 voice_count=voice_count,
                 description=description,
                 workspace=config.workspace,
+                score_path=config.source_path,
                 instrument_name=instrument_name,
                 instrument_config=instrument_config,
                 instrument_fallbacks=resolved_fallbacks,

@@ -376,7 +376,7 @@ A single injection item referencing a file with a category. Used in `prelude` (a
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| `file` | `str` | **required** | | Path to the file to inject. Supports Jinja templating (e.g., `{{ workspace }}/context.md`). |
+| `file` | `str` | **required** | | Path to the file to inject. Supports Jinja templating (e.g., `{{ workspace }}/context.md`). `{{ score_dir }}` anchors to the score file's directory. |
 | `as` | `InjectionCategory` | **required** | `"context"`, `"skill"`, or `"tool"` | Category determining prompt placement. See InjectionCategory below. |
 
 **InjectionCategory values:**

@@ -887,6 +887,13 @@ class JobConfig(BaseModel):
         default=None,
         description="Path for state storage (default: workspace/.marianne-state)",
     )
+    source_path: Path | None = Field(
+        default=None,
+        exclude=True,
+        description="Absolute path of the YAML file this config was loaded from. "
+        "Set by from_yaml() only; anchors the score_dir template/hook variable. "
+        "Excluded from serialization — state files never record it.",
+    )
 
     pause_between_sheets_seconds: int = Field(
         default=2,
@@ -997,7 +1004,9 @@ class JobConfig(BaseModel):
             # A loaded score that omits workspace gets a conductor-managed one
             # under ~/workspaces/<name> (#58) — workspaces "just work".
             _apply_default_workspace(data)
-        return cls.model_validate(data)
+        config = cls.model_validate(data)
+        config.source_path = path.resolve()
+        return config
 
     @classmethod
     def from_yaml_string(cls, yaml_str: str) -> JobConfig:

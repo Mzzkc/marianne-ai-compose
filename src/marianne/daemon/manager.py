@@ -6129,10 +6129,14 @@ class JobManager:
             return result
 
         # Expand template variables
+        score_dir = (
+            meta.config_path.parent if meta.config_path is not None else None
+        )
         job_path_str = self._expand_hook_vars(
             job_path_str,
             meta.workspace,
             parent_job_id,
+            score_dir=score_dir,
         )
         if "{" in job_path_str or "}" in job_path_str:
             result["error_message"] = (
@@ -6140,6 +6144,10 @@ class JobManager:
             )
             return result
         job_path = Path(job_path_str)
+        # Relative job_paths anchor to the submitting score's directory —
+        # the conductor process CWD is an accident, not a contract.
+        if not job_path.is_absolute() and score_dir is not None:
+            job_path = (score_dir / job_path).resolve()
 
         if not job_path.exists():
             result["error_message"] = f"Job config not found: {job_path}"
@@ -6292,6 +6300,9 @@ class JobManager:
             meta.workspace,
             meta.job_id,
             job_status=effective_job_status,
+            score_dir=(
+                meta.config_path.parent if meta.config_path is not None else None
+            ),
             for_shell=use_shell,
         )
         self._validate_hook_command(command, hook_type=hook_type)
@@ -6362,6 +6373,7 @@ class JobManager:
         job_id: str,
         *,
         job_status: str | None = None,
+        score_dir: Path | None = None,
         for_shell: bool = False,
     ) -> str:
         """Expand template variables in hook paths/commands.
@@ -6376,6 +6388,7 @@ class JobManager:
             workspace=workspace,
             job_id=job_id,
             job_status=job_status,
+            score_dir=score_dir,
             for_shell=for_shell,
         )
 
