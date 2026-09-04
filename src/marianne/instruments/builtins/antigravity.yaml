@@ -15,31 +15,32 @@
 #   agy models                         lists configured models
 #   workspace .agents/mcp_config.json  initializes configured MCP servers
 #
-# Model set refreshed 2026-08-17 against `agy models` on agy 1.1.13. The eleven
+# Model set refreshed 2026-09-04 against `agy models` on agy 1.1.26. The
 # Gemini slugs span four model families; the AGY effort suffix (-high /
 # -medium / -low) is a selection tier over each family:
-#   gemini-3.7-flash  (high / medium / low)   <- current default family
+#   gemini-3.8-flash  (high / medium / low)   <- current default family
+#   gemini-3.7-flash  (high / medium / low)
 #   gemini-3.6-flash  (high / medium / low)
 #   gemini-3.5-flash  (high / medium / low)
 #   gemini-3.1-pro    (high / low)
-# Stale unsuffixed aliases (gemini-3.5-flash, gemini-3.5-flash-lite,
-# gemini-3.5-pro) were removed — they no longer resolve in `agy models`.
+# agy 1.1.26 also brokers cross-vendor models (claude-sonnet-4-6,
+# claude-opus-4-6-thinking, gpt-oss-120b-medium) through the same CLI; they
+# are listed below as selectable models.
 #
-# This profile defaults to interactive tmux mode. Print mode is kept for
-# explicit callers, but daemon-run print mode is not treated as reliable until
-# Antigravity stops requiring a controlling TTY for print-mode failures.
+# This profile defaults to interactive tmux mode. Print mode re-verified
+# 2026-09-04 on agy 1.1.26: `agy -p` from a non-TTY context returns output
+# with exit 0 (earlier Bubble Tea TTY failures not reproduced). The crash
+# classifiers for TTY errors are retained — treat their reappearance as a
+# signal, not noise.
 #
-# Gemini 3.7 Flash is stable/GA (released 2026-08-13), accepts text, image,
-# video, audio, and PDF input, emits text, and supports low/medium/high thinking;
-# `minimal` returns an error. Relevant API capabilities include function calling,
-# structured output, caching, code execution, search grounding, URL context,
-# file search, and preview computer use. Official facts verified 2026-08-17:
-#   https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash
-#   https://ai.google.dev/gemini-api/docs/latest-model
-#   https://ai.google.dev/gemini-api/docs/changelog
+# Gemini 3.8 Flash (September 2026) accepts text, image, video, audio, and
+# PDF input, emits text, and supports low/medium/high thinking; `minimal`
+# returns an error. Official limits verified 2026-09-04:
+# 1,048,576 input / 65,536 output.
+#   https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
 #
 # Cost model: per-token costs are zero because this profile models the installed
-# subscription-backed CLI capacity, not direct API billing. Gemini 3.7 uses the
+# subscription-backed CLI capacity, not direct API billing. Gemini 3.8 uses the
 # official 1,048,576 context / 65,536 output limits; older retained families keep
 # their prior conservative metadata as explicit fallbacks/history.
 #
@@ -68,7 +69,7 @@ capabilities:
   - session_resume
   - thinking
 
-default_model: gemini-3.7-flash-medium
+default_model: gemini-3.8-flash-medium
 default_timeout_seconds: 1800
 
 # Marianne enforces max_concurrent per exact (instrument, model-slug) pair.
@@ -76,7 +77,50 @@ default_timeout_seconds: 1800
 # so each tier has its own baton limit; score- and daemon-level ceilings remain
 # the outer aggregate guard. Flash tiers use 6 and Pro tiers use 4.
 models:
-  # ── gemini-3.7-flash tier (current stable/default family) ──
+  # ── gemini-3.8-flash tier (current default family, September 2026) ──
+  - name: gemini-3.8-flash-high
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-3.8-flash-medium
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: gemini-3.8-flash-low
+    context_window: 1048576
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+
+  # ── agy-brokered cross-vendor models (agy 1.1.26 `agy models`) ──
+  # Selectable through the same Google subscription seat; metadata mirrors
+  # the direct-vendor profiles where they exist. Conservative where not
+  # officially documented through agy.
+  - name: claude-sonnet-4-6
+    context_window: 200000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 64000
+    max_concurrent: 6
+  - name: claude-opus-4-6-thinking
+    context_window: 200000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 32000
+    max_concurrent: 4
+  - name: gpt-oss-120b-medium
+    context_window: 131072
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 32768
+    max_concurrent: 6
+
+  # ── gemini-3.7-flash tier (previous stable family) ──
   - name: gemini-3.7-flash-high
     context_window: 1048576
     cost_per_1k_input: 0.0

@@ -13,6 +13,12 @@
 #
 # Default provider: OpenRouter (free-tier models)
 # Headless mode: -p flag for non-interactive, -f json for structured output
+#
+# Z.AI Coding Plan route: this machine's paid coding-plan seat serves the
+# zai-coding-plan/* models below (verified 2026-09-04 via `opencode models`
+# on the live credential store). Per-token cost is zero — the plan is a
+# flat subscription, not API billing. Scores that want the subscription
+# route pin these explicitly; the default stays a free-tier model.
 
 name: opencode
 display_name: "OpenCode"
@@ -31,6 +37,55 @@ default_model: "qwen/qwen3-coder:free"
 default_timeout_seconds: 1800
 
 models:
+  # ═══════════════════════════════════════════════════════════════════
+  # Z.AI Coding Plan (paid subscription seat — glm-5.3 is current)
+  # ═══════════════════════════════════════════════════════════════════
+  # glm-5.3 runs at 1M context on this seat (same engine as the
+  # Anthropic-compatible gateway's glm-5.3[1m] route); flash/highspeed
+  # variants carry conservative output caps until officially documented.
+  - name: "zai-coding-plan/glm-5.3"
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 131072
+    max_concurrent: 4
+  - name: "zai-coding-plan/glm-5.3-flash"
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: "zai-coding-plan/glm-5.3-highspeed"
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: "zai-coding-plan/glm-5.2"
+    context_window: 200000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 4
+  - name: "zai-coding-plan/glm-5.2-highspeed"
+    context_window: 200000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: "zai-coding-plan/glm-5-turbo"
+    context_window: 1000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 6
+  - name: "zai-coding-plan/glm-4.7"
+    context_window: 200000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    max_output_tokens: 65536
+    max_concurrent: 8
+
   # ═══════════════════════════════════════════════════════════════════
   # Coding — models optimized for code generation, TDD, refactoring
   # ═══════════════════════════════════════════════════════════════════

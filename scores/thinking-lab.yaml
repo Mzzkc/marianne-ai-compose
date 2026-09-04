@@ -23,7 +23,7 @@
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: "thinking-lab"
-description: "4 parallel independent reviews from Opus, Gemini Pro, GLM, GPT-5.5"
+description: "4 parallel independent reviews from Claude (gateway), Gemini Flash, GLM, GPT-5.6"
 
 workspace_lifecycle:
   archive_on_fresh: true
@@ -39,19 +39,20 @@ instruments:
   reviewer-opus:
     profile: claude-code
     config:
-      model: claude-opus-4-7
+      timeout_seconds: 1500  # default model: gateway Opus slot on this host
   reviewer-gemini:
-    profile: gemini-cli
+    profile: antigravity
     config:
-      model: "gemini-3.1-pro-preview"
+      model: "gemini-3.8-flash-medium"
+      timeout_seconds: 1500
   reviewer-glm:
     profile: opencode
     config:
-      model: "zai-coding-plan/glm-5.2"
+      model: "zai-coding-plan/glm-5.3"
   reviewer-codex:
     profile: codex-cli
     config:
-      model: "gpt-5.5"
+      model: "gpt-5.6-sol"
 
 stale_detection:
   enabled: true
@@ -71,7 +72,7 @@ movements:
     name: "Review: GLM"
     instrument: reviewer-glm
   5:
-    name: "Review: GPT-5.5"
+    name: "Review: GPT-5.6"
     instrument: reviewer-codex
 
 sheet:
