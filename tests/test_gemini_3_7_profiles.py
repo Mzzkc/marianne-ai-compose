@@ -1,4 +1,4 @@
-"""Contracts for the current built-in Gemini 3.7 Flash profiles."""
+"""Contracts for the built-in Gemini Flash profiles (3.8 current, 3.7 retained)."""
 
 from __future__ import annotations
 
@@ -35,10 +35,28 @@ def test_gemini_cli_defaults_to_stable_3_7() -> None:
     assert "UNSUPPORTED_CLIENT" in profile.execution_status_detail
 
 
-def test_antigravity_exposes_exact_3_7_effort_family() -> None:
+def test_antigravity_defaults_to_current_3_8_effort_family() -> None:
     profile = load_builtin("antigravity")
 
-    assert profile.default_model == "gemini-3.7-flash-medium"
+    assert profile.default_model == "gemini-3.8-flash-medium"
+    family = {
+        model.name: model
+        for model in profile.models
+        if model.name.startswith("gemini-3.8-flash-")
+    }
+    assert set(family) == {
+        "gemini-3.8-flash-high",
+        "gemini-3.8-flash-medium",
+        "gemini-3.8-flash-low",
+    }
+    for model in family.values():
+        assert model.context_window == 1_048_576
+        assert model.max_output_tokens == 65_536
+
+
+def test_antigravity_retains_3_7_family_as_fallback() -> None:
+    profile = load_builtin("antigravity")
+
     family = {
         model.name: model
         for model in profile.models

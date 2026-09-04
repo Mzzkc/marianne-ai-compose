@@ -283,11 +283,14 @@ class TestProfileDetails:
 # =============================================================================
 
 
-# The eleven Gemini slugs reported by `agy models` on AGY 1.1.13 (2026-08-17).
-# Four model families; the -high/-medium/-low suffix is an AGY effort tier
-# over each family, not a distinct model.
+# The fourteen Gemini slugs reported by `agy models` on AGY 1.1.26
+# (2026-09-04). Four model families; the -high/-medium/-low suffix is an AGY
+# effort tier over each family, not a distinct model.
 ANTIGRAVITY_EXPECTED_SLUGS: frozenset[str] = frozenset(
     {
+        "gemini-3.8-flash-high",
+        "gemini-3.8-flash-medium",
+        "gemini-3.8-flash-low",
         "gemini-3.7-flash-high",
         "gemini-3.7-flash-medium",
         "gemini-3.7-flash-low",
@@ -299,6 +302,17 @@ ANTIGRAVITY_EXPECTED_SLUGS: frozenset[str] = frozenset(
         "gemini-3.5-flash-low",
         "gemini-3.1-pro-high",
         "gemini-3.1-pro-low",
+    }
+)
+
+# AGY 1.1.26 also brokers cross-vendor models through the same Google
+# subscription seat (verified via `agy models` 2026-09-04; full catalog fold
+# deferred to the next refresh).
+ANTIGRAVITY_CROSS_VENDOR_SLUGS: frozenset[str] = frozenset(
+    {
+        "claude-sonnet-4-6",
+        "claude-opus-4-6-thinking",
+        "gpt-oss-120b-medium",
     }
 )
 
@@ -328,12 +342,13 @@ class TestAntigravityModelSet:
     costs are intentionally zero.
     """
 
-    def test_exactly_eleven_gemini_slugs(self) -> None:
-        """The profile exposes exactly the eleven AGY 1.1.13 Gemini slugs."""
+    def test_exact_model_slug_set(self) -> None:
+        """The profile exposes exactly the AGY 1.1.26 slugs (Gemini + brokers)."""
         profile = _load_antigravity_profile()
         model_names = {m.name for m in profile.models}
-        assert model_names == set(ANTIGRAVITY_EXPECTED_SLUGS), (
-            f"Antigravity model set drifted from `agy models` (AGY 1.1.13).\n"
+        expected = ANTIGRAVITY_EXPECTED_SLUGS | ANTIGRAVITY_CROSS_VENDOR_SLUGS
+        assert model_names == expected, (
+            f"Antigravity model set drifted from `agy models` (AGY 1.1.26).\n"
             f"  expected: {sorted(ANTIGRAVITY_EXPECTED_SLUGS)}\n"
             f"  actual:   {sorted(model_names)}\n"
             f"  missing:  {sorted(ANTIGRAVITY_EXPECTED_SLUGS - model_names)}\n"
@@ -341,16 +356,16 @@ class TestAntigravityModelSet:
         )
 
     def test_balanced_default_is_medium_flash(self) -> None:
-        """The balanced current default is gemini-3.7-flash-medium."""
+        """The balanced current default is gemini-3.8-flash-medium."""
         profile = _load_antigravity_profile()
-        assert profile.default_model == "gemini-3.7-flash-medium", (
+        assert profile.default_model == "gemini-3.8-flash-medium", (
             f"Default model is {profile.default_model!r}, expected "
-            f"'gemini-3.7-flash-medium' (balanced current tier)."
+            f"'gemini-3.8-flash-medium' (balanced current tier)."
         )
         # The default must also be a declared model.
         declared = {m.name for m in profile.models}
-        assert "gemini-3.7-flash-medium" in declared, (
-            "Default model gemini-3.7-flash-medium is not in the declared "
+        assert "gemini-3.8-flash-medium" in declared, (
+            "Default model gemini-3.8-flash-medium is not in the declared "
             "model set."
         )
 
@@ -381,12 +396,27 @@ class TestAntigravityModelSet:
             )
 
     def test_capacity_metadata_matches_current_and_historical_contracts(self) -> None:
-        """3.7 uses official capacity; retained families keep prior metadata."""
+        """3.8/3.7 use official capacity; retained families keep prior metadata."""
         profile = _load_antigravity_profile()
+        cross_vendor_output = {
+            "claude-sonnet-4-6": 64_000,
+            "claude-opus-4-6-thinking": 32_000,
+            "gpt-oss-120b-medium": 32_768,
+        }
         for model in profile.models:
+            if model.name in ANTIGRAVITY_CROSS_VENDOR_SLUGS:
+                assert model.context_window == 200_000 or model.name == "gpt-oss-120b-medium", (
+                    f"{model.name} context_window={model.context_window}, "
+                    f"expected the direct-vendor contract."
+                )
+                assert model.max_output_tokens == cross_vendor_output[model.name], (
+                    f"{model.name} max_output_tokens={model.max_output_tokens}, "
+                    f"expected {cross_vendor_output[model.name]} (direct-vendor profile)."
+                )
+                continue
             expected_context = (
                 1_048_576
-                if model.name.startswith("gemini-3.7-flash-")
+                if model.name.startswith(("gemini-3.8-flash-", "gemini-3.7-flash-"))
                 else 1_000_000
             )
             assert model.context_window == expected_context, (
@@ -417,5 +447,7 @@ class TestAntigravityModelSet:
 
         resolved = registry.get("antigravity")
         assert resolved is not None, "antigravity did not resolve through the registry"
-        assert resolved.default_model == "gemini-3.7-flash-medium"
-        assert {m.name for m in resolved.models} == set(ANTIGRAVITY_EXPECTED_SLUGS)
+        assert resolved.default_model == "gemini-3.8-flash-medium"
+        assert {m.name for m in resolved.models} == set(
+        ANTIGRAVITY_EXPECTED_SLUGS | ANTIGRAVITY_CROSS_VENDOR_SLUGS
+    )
